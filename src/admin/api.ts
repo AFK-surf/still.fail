@@ -693,7 +693,7 @@ async function saveUpload(req: IncomingMessage, workspace: string, name: string)
     for await (const chunk of req) {
       size += (chunk as Buffer).length;
       if (size > MAX_UPLOAD) throw new HttpError(413, "文件太大了，最多 50 MB");
-      if (!out.write(chunk)) await new Promise((r) => out.once("drain", r));
+      if (!out.write(chunk)) await new Promise<void>((r) => out.once("drain", () => r()));
     }
     await new Promise<void>((resolveDone, reject) => out.end((error?: Error | null) => (error ? reject(error) : resolveDone())));
   } catch (error) {
