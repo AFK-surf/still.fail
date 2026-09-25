@@ -411,3 +411,22 @@ test("connects, sessions and chats remember who created them", async () => {
     t.close();
   }
 });
+
+test("a session has one chat, made by its first message from the page", async () => {
+  const t = await setup();
+  try {
+    await t.hub.accept("ds", message({ text: "<@UBOT> hi" }));
+    await settle();
+    const [summary] = (await t.call("GET", "/sessions")).body;
+    const say = (text: string) => t.call("POST", `/sessions/${encodeURIComponent(summary.key)}/messages`, { text });
+    const first = await say("first");
+    const second = await say("second");
+    assert.equal(first.body.threadTs, second.body.threadTs);
+    const detail = await t.call("GET", `/sessions/${encodeURIComponent(summary.key)}`);
+    assert.equal(detail.body.chats.length, 1);
+    assert.deepEqual(detail.body.chats[0].messages.map((m: any) => m.text), ["first", "second"]);
+    assert.equal((await say("  ")).status, 400);
+  } finally {
+    t.close();
+  }
+});

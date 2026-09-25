@@ -172,6 +172,13 @@ export class AdminApi {
       const title = typeof input.title === "string" && input.title.trim() ? input.title.trim().slice(0, 80) : null;
       return send(res, 200, { threadTs: this.#deps.hub.openChat(id, viewerId(viewer), title) });
     }
+    if (resource === "sessions" && id && action === "messages" && method === "POST") {
+      const input = await body(req);
+      const text = String(input.text ?? "").trim();
+      if (!text) throw new HttpError(400, "消息是空的");
+      if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
+      return send(res, 200, { threadTs: await this.#deps.hub.sayToSession(id, viewerId(viewer), text) });
+    }
     if (resource === "chats" && id && action === "messages" && method === "POST") {
       const input = await body(req);
       const text = String(input.text ?? "").trim();

@@ -171,6 +171,17 @@ export class Hub {
     return this.#internal.open(sessionKey, createdBy, title).threadTs;
   }
 
+  /**
+   * A person's message to a session from the admin page. Each session has one
+   * such chat, made on its first message; earlier sessions may have several,
+   * of which the first is used.
+   */
+  async sayToSession(sessionKey: string, user: string, text: string): Promise<string> {
+    const threadTs = this.#store.listChats(sessionKey)[0]?.threadTs ?? this.openChat(sessionKey, user);
+    await this.sayInChat(threadTs, user, text);
+    return threadTs;
+  }
+
   /** A person's message in an admin-page chat: recorded there and delivered to the chat's session like any chat message. */
   async sayInChat(threadTs: string, user: string, text: string): Promise<void> {
     if (!this.#internal) throw new Error("ember chat is not available");
