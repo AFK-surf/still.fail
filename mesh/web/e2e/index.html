@@ -9,7 +9,7 @@ try {
   const relay = new URLSearchParams(location.search).get("relay");
   const mesh = await Mesh.create(new Uint8Array(), relay);
   say(`device ${mesh.id().slice(0, 12)}`);
-  const g = await (await fetch(`http://127.0.0.1:8788/grant?device=${mesh.id()}`)).json();
+  const g = await (await fetch(`http://127.0.0.1:8787/__dev/grant?device=${mesh.id()}`)).json();
   const t0 = performance.now();
   const link = await mesh.connect(g.station, g.relay_url, g.grant);
   say(`connected ${link.accepted()} in ${Math.round(performance.now() - t0)}ms`);
@@ -33,7 +33,7 @@ try {
   say(`events ${events.head()} first=${JSON.stringify((await read(events, 1)).slice(0, 20))}`);
   const outside = await link.request(JSON.stringify({ method: "GET", path: "/admin/index.html", headers: {} }), new Uint8Array());
   say(`outside ${outside.head()}`);
-  const renewed = await (await fetch(`http://127.0.0.1:8788/grant?device=${mesh.id()}`)).json();
+  const renewed = await (await fetch(`http://127.0.0.1:8787/__dev/grant?device=${mesh.id()}`)).json();
   say(`renew ${await link.renew(renewed.grant)}`);
   say("DONE");
 } catch (e) {
