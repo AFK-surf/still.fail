@@ -76,7 +76,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
           )}
           <p className="identity-sub">
             {station.name && <span className="station-tag">{station.name}</span>}
-            <span className="kind-tag">Slack</span>
+            <span className="kind-tag"><SlackLogo size={13} />Slack</span>
             <span>{modeText(connect.mode, connect.requireMention)}</span>
             <span>{connectSubtitle(connect, overview.profiles)}</span>
             <span className="owner-line">所属 <OwnerLabel owner={connect.createdBy} /></span>
