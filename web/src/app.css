@@ -546,7 +546,7 @@
 .invite-card { width: min(460px, 90vw); text-align: left; }
 .session-kind { display: inline-grid; flex: none; }
 .session-kind .kind-icon { width: 14px; height: 14px; }
-.nav-session-meta .nav-time { margin-left: 0; }
+.nav-session-meta .nav-time { margin-left: auto; }
 
 /* ── waiting ─────────────────────────────────────────────────────────── */
 .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-sm); animation: appear 0s linear 200ms both; }

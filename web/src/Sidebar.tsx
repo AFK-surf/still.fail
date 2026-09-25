@@ -100,9 +100,8 @@ export function SessionRow({ session: s, connect, station }: { session: SessionS
         <span className="nav-session-meta">
           <Tip label={connect ? `来自 ${connect.name}` : "来自连接"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>
           {station && <span className="station-tag small">{station}</span>}
-          <span className="nav-time">{relativeTime(s.lastActiveAt)}</span>
-          <span className="nav-text" />
           <PeopleStack people={s.participants} />
+          <span className="nav-time">{relativeTime(s.lastActiveAt)}</span>
         </span>
       </span>
       {marker && (
