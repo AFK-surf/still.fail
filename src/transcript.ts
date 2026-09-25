@@ -16,6 +16,8 @@ export interface TimelineEntry {
   tool?: string;
   /** For tool_result: false when the tool reported an error. */
   ok?: boolean;
+  /** Links a tool_call to its tool_result. */
+  callId?: string;
   /** Produced by a subagent rather than the main conversation. */
   subagent?: boolean;
 }
@@ -75,8 +77,11 @@ function claudeTimeline(records: Record<string, any>[]): TimelineEntry[] {
     for (const block of Array.isArray(content) ? content : []) {
       if (block.type === "text" && block.text) out.push({ ...base, kind: r.type, text: clip(block.text) });
       else if (block.type === "thinking" && block.thinking) out.push({ ...base, kind: "thinking", text: clip(block.thinking) });
-      else if (block.type === "tool_use") out.push({ ...base, kind: "tool_call", tool: String(block.name), text: clip(JSON.stringify(block.input, null, 2)) });
-      else if (block.type === "tool_result") out.push({ ...base, kind: "tool_result", ok: !block.is_error, text: clip(toText(block.content)) });
+      else if (block.type === "tool_use") {
+        out.push({ ...base, kind: "tool_call", tool: String(block.name), text: clip(JSON.stringify(block.input, null, 2)), ...(block.id ? { callId: String(block.id) } : {}) });
+      } else if (block.type === "tool_result") {
+        out.push({ ...base, kind: "tool_result", ok: !block.is_error, text: clip(toText(block.content)), ...(block.tool_use_id ? { callId: String(block.tool_use_id) } : {}) });
+      }
     }
   }
   return out;
@@ -105,11 +110,11 @@ function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
       } catch {
         // not JSON (custom tools take free text); show as is
       }
-      out.push({ at, kind: "tool_call", tool: String(p.name), text: clip(args) });
+      out.push({ at, kind: "tool_call", tool: String(p.name), text: clip(args), ...(p.call_id ? { callId: String(p.call_id) } : {}) });
     } else if (p.type === "function_call_output" || p.type === "custom_tool_call_output") {
       const text = toText(p.output);
       const failed = /Process exited with code [1-9]/.test(text);
-      out.push({ at, kind: "tool_result", ok: !failed, text: clip(text) });
+      out.push({ at, kind: "tool_result", ok: !failed, text: clip(text), ...(p.call_id ? { callId: String(p.call_id) } : {}) });
     }
   }
   return out;

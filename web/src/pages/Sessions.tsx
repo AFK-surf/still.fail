@@ -153,18 +153,58 @@ function Fact({ term, children }: { term: string; children: ReactNode }) {
   return <div className="fact"><dt>{term}</dt><dd>{children}</dd></div>;
 }
 
+type Item =
+  | { type: "entry"; entry: TimelineEntry }
+  | { type: "tool"; call: TimelineEntry; result: TimelineEntry | null };
+
+/** Pairs each tool call with its result (by call id, else the latest open call). */
+function toItems(entries: TimelineEntry[]): Item[] {
+  const items: Item[] = [];
+  const open = new Map<string, Extract<Item, { type: "tool" }>>();
+  let lastOpen: Extract<Item, { type: "tool" }> | null = null;
+  for (const entry of entries) {
+    if (entry.kind === "tool_call") {
+      const item = { type: "tool" as const, call: entry, result: null };
+      items.push(item);
+      if (entry.callId) open.set(entry.callId, item);
+      lastOpen = item;
+    } else if (entry.kind === "tool_result") {
+      const item = (entry.callId && open.get(entry.callId)) || (lastOpen && !lastOpen.result ? lastOpen : null);
+      if (item) {
+        item.result = entry;
+        if (entry.callId) open.delete(entry.callId);
+      } else {
+        items.push({ type: "entry", entry });
+      }
+    } else {
+      items.push({ type: "entry", entry });
+    }
+  }
+  return items;
+}
+
+/** `<@U123>` → `@name` for known users (the bots), `@U123` otherwise. */
+function useMentions(): (text: string) => string {
+  const overview = useOverview();
+  const names = useMemo(() => new Map((overview.data?.bots ?? []).flatMap((b) =>
+    b.connection.state === "connected" || b.connection.state === "reconnecting" ? [[b.connection.botUserId, b.name] as const] : [])), [overview.data]);
+  return (text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${names.get(id) ?? id}`);
+}
+
 function Timeline({ entries }: { entries: TimelineEntry[] }) {
+  const mentions = useMentions();
   if (entries.length === 0) return <p className="note">记录里还没有内容。</p>;
   return (
     <div className="timeline">
-      {entries.map((entry, i) => <Entry key={i} entry={entry} />)}
+      {toItems(entries).map((item, i) => item.type === "tool"
+        ? <ToolItem key={i} call={item.call} result={item.result} />
+        : <Entry key={i} entry={item.entry} mentions={mentions} />)}
     </div>
   );
 }
 
-function Entry({ entry }: { entry: TimelineEntry }) {
+function Entry({ entry, mentions }: { entry: TimelineEntry; mentions: (text: string) => string }) {
   const sub = entry.subagent ? " entry-subagent" : "";
-  const who = entry.subagent ? "子 agent" : "agent";
   switch (entry.kind) {
     case "user": {
       const { messages, note } = parsePrompt(entry.text);
@@ -179,7 +219,7 @@ function Entry({ entry }: { entry: TimelineEntry }) {
           {messages.map((m) => (
             <div key={m.ts} className={`entry entry-user${sub}`}>
               <div className="entry-who">{m.user}{entry.at ? `，${absoluteTime(Date.parse(entry.at))}` : ""}</div>
-              <div className="entry-text">{m.text}</div>
+              <div className="entry-text">{mentions(m.text)}</div>
             </div>
           ))}
         </>
@@ -187,8 +227,8 @@ function Entry({ entry }: { entry: TimelineEntry }) {
     }
     case "assistant":
       return (
-        <div className={`entry entry-assistant${sub}`}>
-          <div className="entry-who">{who}</div>
+        <div className={`entry entry-aside${sub}`}>
+          <div className="entry-who">{entry.subagent ? "子 agent" : "agent"}的内部说明，没有发到 Slack</div>
           <div className="entry-text">{entry.text}</div>
         </div>
       );
@@ -199,14 +239,7 @@ function Entry({ entry }: { entry: TimelineEntry }) {
           <div className="entry-text note">{entry.text}</div>
         </details>
       );
-    case "tool_call":
-      return (
-        <details className={`entry fold${sub}`}>
-          <summary><span className="tool-name">{toolLabel(entry.tool)}</span> {toolHint(entry.text)}</summary>
-          <pre className="code">{entry.text}</pre>
-        </details>
-      );
-    case "tool_result":
+    default:
       return (
         <details className={`entry fold${sub}`} data-failed={entry.ok === false}>
           <summary>{entry.ok === false ? "工具报错" : "工具输出"}</summary>
@@ -216,21 +249,60 @@ function Entry({ entry }: { entry: TimelineEntry }) {
   }
 }
 
-function toolLabel(tool: string | undefined): string {
-  if (!tool) return "工具";
-  const mcp = /^mcp__ember__(.+)$/.exec(tool);
-  if (mcp) return { chat_post: "发到 Slack", chat_state: "声明状态", chat_history: "读 thread 历史" }[mcp[1]!] ?? mcp[1]!;
-  return tool;
+const STATE_TEXT: Record<string, string> = { final: "已完成", block: "等你回复" };
+
+function ToolItem({ call, result }: { call: TimelineEntry; result: TimelineEntry | null }) {
+  const sub = call.subagent ? " entry-subagent" : "";
+  const args = parseArgs(call.text);
+  const name = (call.tool ?? "").replace(/^mcp__ember__|^ember__|^mcp__ember_/, "");
+  const failed = result?.ok === false;
+
+  if (name === "chat_post" && typeof args?.text === "string") {
+    const kind = typeof args.kind === "string" ? args.kind : null;
+    return (
+      <div className={`entry entry-post${sub}`} data-failed={failed}>
+        <div className="entry-who">
+          发到 Slack{kind && STATE_TEXT[kind] ? <span className="post-state" data-kind={kind}>{STATE_TEXT[kind]}</span> : null}
+          {failed && "，发送失败"}
+        </div>
+        <div className="entry-text">{args.text}</div>
+        {failed && result && <pre className="code">{result.text}</pre>}
+      </div>
+    );
+  }
+  if (name === "chat_state" && typeof args?.kind === "string") {
+    return <div className={`entry entry-marker${sub}`}>标记为{STATE_TEXT[args.kind] ?? args.kind}</div>;
+  }
+  return (
+    <details className={`entry fold${sub}`} data-failed={failed}>
+      <summary>
+        <span className="tool-name">{toolLabel(name || call.tool)}</span> {toolHint(args, call.text)}
+        {!result && <span className="note">，等待结果</span>}
+        {failed && "，报错"}
+      </summary>
+      <pre className="code">{call.text}</pre>
+      {result && <pre className="code" data-failed={failed}>{result.text}</pre>}
+    </details>
+  );
 }
 
-/** One line that says what the call did: the command, the file, or the message. */
-function toolHint(args: string): string {
+function parseArgs(text: string): Record<string, unknown> | null {
   try {
-    const value = JSON.parse(args) as Record<string, unknown>;
-    const hint = value.command ?? value.cmd ?? value.file_path ?? value.path ?? value.pattern ?? value.text ?? value.kind ?? value.description;
-    if (typeof hint === "string") return hint.split("\n")[0]!.slice(0, 120);
+    const value = JSON.parse(text) as unknown;
+    return value && typeof value === "object" ? value as Record<string, unknown> : null;
   } catch {
-    // free-form arguments
+    return null;
   }
-  return args.split("\n")[0]!.slice(0, 120);
+}
+
+function toolLabel(tool: string | undefined): string {
+  if (!tool) return "工具";
+  return { chat_history: "读 thread 历史", exec_command: "命令" }[tool] ?? tool;
+}
+
+/** One line that says what the call did: the command, the file, or the pattern. */
+function toolHint(args: Record<string, unknown> | null, raw: string): string {
+  const hint = args ? args.command ?? args.cmd ?? args.file_path ?? args.path ?? args.pattern ?? args.url ?? args.description : raw;
+  const text = typeof hint === "string" ? hint : Array.isArray(hint) ? hint.join(" ") : "";
+  return text.split("\n")[0]!.slice(0, 140);
 }

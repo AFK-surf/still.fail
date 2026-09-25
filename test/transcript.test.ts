@@ -15,12 +15,14 @@ function file(lines: unknown[]): string {
 test("claude transcripts become a timeline, subagent work marked", () => {
   const timeline = readTimeline("claude", file([
     { type: "user", timestamp: "t1", message: { content: "fix it" } },
-    { type: "assistant", message: { content: [{ type: "thinking", thinking: "hmm" }, { type: "text", text: "on it" }, { type: "tool_use", name: "Bash", input: { command: "ls" } }] } },
-    { type: "user", message: { content: [{ type: "tool_result", is_error: true, content: [{ type: "text", text: "boom" }] }] } },
+    { type: "assistant", message: { content: [{ type: "thinking", thinking: "hmm" }, { type: "text", text: "on it" }, { type: "tool_use", id: "tu1", name: "Bash", input: { command: "ls" } }] } },
+    { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "tu1", is_error: true, content: [{ type: "text", text: "boom" }] }] } },
     { type: "assistant", isSidechain: true, message: { content: [{ type: "text", text: "sub" }] } },
     { type: "user", isMeta: true, message: { content: "injected" } },
     { type: "attachment" },
   ]));
+  assert.equal(timeline[3]!.callId, "tu1");
+  assert.equal(timeline[4]!.callId, "tu1");
   assert.deepEqual(timeline.map((e) => [e.kind, e.text, e.ok, e.subagent]), [
     ["user", "fix it", undefined, undefined],
     ["thinking", "hmm", undefined, undefined],
@@ -38,8 +40,8 @@ test("codex rollouts become a timeline without injected context", () => {
     { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "<environment_context>…" }] } },
     { type: "response_item", timestamp: "t2", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "count files" }] } },
     { type: "response_item", payload: { type: "reasoning", summary: [], content: [{ type: "reasoning_text", text: "easy" }] } },
-    { type: "response_item", payload: { type: "function_call", name: "exec_command", arguments: "{\"cmd\":\"ls\"}" } },
-    { type: "response_item", payload: { type: "function_call_output", output: "Process exited with code 2\nOutput:\nnope" } },
+    { type: "response_item", payload: { type: "function_call", name: "exec_command", call_id: "c1", arguments: "{\"cmd\":\"ls\"}" } },
+    { type: "response_item", payload: { type: "function_call_output", call_id: "c1", output: "Process exited with code 2\nOutput:\nnope" } },
     { type: "response_item", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "5" }] } },
   ]));
   assert.deepEqual(timeline.map((e) => [e.kind, e.tool, e.ok]), [
@@ -50,6 +52,7 @@ test("codex rollouts become a timeline without injected context", () => {
     ["assistant", undefined, undefined],
   ]);
   assert.equal(timeline[0]!.at, "t2");
+  assert.deepEqual([timeline[2]!.callId, timeline[3]!.callId], ["c1", "c1"]);
 });
 
 test("transcripts are found where each runtime keeps them", () => {
