@@ -3,10 +3,11 @@
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 import { useState } from "react";
-import { api, type SlackIdentity } from "./api.ts";
+import { useApi, type SlackIdentity } from "./api.ts";
 import { Button, Field, ICON } from "./ui.tsx";
 
 export function CreateAppSteps({ name }: { name: string }) {
+  const api = useApi();
   const open = useMutation({
     mutationFn: () => api.createAppUrl(name.trim() || "ember"),
     onSuccess: ({ url }) => window.open(url, "_blank", "noopener"),
@@ -40,6 +41,7 @@ export const emptyTokens: TokenState = { appToken: "", botToken: "", verified: n
 export function TokenFields({ value, onChange, connect, masked }: {
   value: TokenState; onChange(value: TokenState): void; connect?: string; masked?: { appToken: string; botToken: string };
 }) {
+  const api = useApi();
   const [errors, setErrors] = useState<string[]>([]);
   const verify = useMutation({
     mutationFn: () => api.verifySlack({ ...(connect ? { connect } : {}), appToken: value.appToken, botToken: value.botToken }),

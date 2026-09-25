@@ -2,10 +2,11 @@
 // permissions are written into the app's manifest with the workspace's app
 // configuration token. When permissions change, Slack asks a person to approve
 // them; that is the only step left in Slack.
+import { useStation } from "../station.tsx";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, ImageUp, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { api, keys, type ConnectView, type SlackAppLinks, type SlackAppSettings, type SlackGroup } from "../api.ts";
+import { useApi, keys, type ConnectView, type SlackAppLinks, type SlackAppSettings, type SlackGroup } from "../api.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Field, ICON, Section, SwitchRow } from "../ui.tsx";
 
@@ -23,7 +24,9 @@ const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
 };
 
 export function SlackAppSection({ connect }: { connect: ConnectView }) {
-  const app = useQuery({ queryKey: keys.slackApp(connect.id), queryFn: () => api.slackApp(connect.id), staleTime: 60_000 });
+  const api = useApi();
+  const station = useStation();
+  const app = useQuery({ queryKey: keys.slackApp(station.id, connect.id), queryFn: () => api.slackApp(connect.id), staleTime: 60_000 });
   const links = app.data?.links;
   return (
     <Section title="Slack app" description="在这里改 app 的名字、图标和权限，ember 会写进 Slack 的 app 配置。"
@@ -53,6 +56,7 @@ function ConfigTokenCard() {
 }
 
 function ConfigTokenForm({ replacing }: { replacing?: boolean }) {
+  const api = useApi();
   const client = useQueryClient();
   const toast = useToast();
   const [token, setToken] = useState("");
@@ -98,6 +102,8 @@ async function toIcon(file: File): Promise<string> {
 }
 
 function AppForm({ connect, settings, links }: { connect: ConnectView; settings: SlackAppSettings; links: SlackAppLinks }) {
+  const api = useApi();
+  const station = useStation();
   const toast = useToast();
   const client = useQueryClient();
   const [draft, setDraft] = useState(settings);
@@ -119,7 +125,7 @@ function AppForm({ connect, settings, links }: { connect: ConnectView; settings:
       setIconError(result.iconError);
       setApprove(result.permissionsUpdated);
       toast(result.permissionsUpdated ? "已更新，还需要在 Slack 同意新权限" : "已更新 Slack app");
-      void client.invalidateQueries({ queryKey: keys.slackApp(connect.id) });
+      void client.invalidateQueries({ queryKey: keys.slackApp(station.id, connect.id) });
     },
   });
   const set = <K extends keyof SlackAppSettings>(key: K, value: SlackAppSettings[K]) => setDraft({ ...draft, [key]: value });

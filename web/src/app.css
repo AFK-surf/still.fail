@@ -488,3 +488,10 @@
 .steps li { min-width: 0; }
 .steps .command { width: 100%; min-width: 0; }
 .dialog .command code { min-width: 0; }
+.nav-error { color: var(--red); }
+.station-group + .station-group { margin-top: 2px; }
+.station-heading { display: inline-flex; align-items: center; gap: 6px; }
+.menu-account { display: flex; align-items: center; gap: 6px; }
+.menu-empty { padding: 4px 10px 8px; font-size: var(--text-xs); color: var(--subtle); }
+.menu-check { margin-left: auto; }
+.menu-item .ws-mark { width: 20px; height: 20px; font-size: 11px; }

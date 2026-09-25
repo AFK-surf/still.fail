@@ -1,10 +1,11 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
+import { useStation, useLink } from "../station.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { MessageCircle, Pencil, Power, RefreshCw, Slack, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, keys, useOverview, useSessions, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
+import { useApi, keys, useOverview, useSessions, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
 import { connectionText, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, slug, STATUS_LABEL, statusTone } from "../format.ts";
 import { SlackAppSection } from "./SlackApp.tsx";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
@@ -23,10 +24,12 @@ export function ConnectPage() {
 }
 
 function useSaveConnect(id: string) {
+  const api = useApi();
+  const station = useStation();
   const client = useQueryClient();
   return useMutation({
     mutationFn: (input: ConnectInput) => api.putConnect(id, input),
-    onSuccess: (data: Overview) => client.setQueryData(keys.overview, data),
+    onSuccess: (data: Overview) => client.setQueryData(keys.overview(station.id), data),
   });
 }
 
@@ -36,6 +39,9 @@ export function connectSubtitle(c: ConnectView, profiles: ProfileView[]): string
 }
 
 function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: Overview }) {
+  const api = useApi();
+  const station = useStation();
+  const link = useLink();
   const navigate = useNavigate();
   const toast = useToast();
   const client = useQueryClient();
@@ -45,7 +51,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
   const [deleting, setDeleting] = useState(false);
   const remove = useMutation({
     mutationFn: () => api.deleteConnect(connect.id),
-    onSuccess: (data) => { client.setQueryData(keys.overview, data); toast("已删除连接"); navigate("/sessions"); },
+    onSuccess: (data) => { client.setQueryData(keys.overview(station.id), data); toast("已删除连接"); navigate(link("/sessions")); },
   });
   const rename = () => {
     setEditingName(false);
@@ -54,7 +60,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
 
   return (
     <div className="page page-narrow">
-      <MobileBack to="/sessions" label="返回" />
+      <MobileBack to={link("/sessions")} label="返回" />
       <header className="identity">
         <ConnectKindIcon kind={connect.kind} size={22} tile />
         <div className="identity-text">
@@ -96,6 +102,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
 }
 
 function SlackSection({ connect }: { connect: ConnectView }) {
+  const api = useApi();
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const [replacing, setReplacing] = useState(false);
@@ -235,6 +242,7 @@ function ModeDialog({ connect, onClose }: { connect: ConnectView; onClose(): voi
 
 /** A single-session connect's session: the one its messages go into, which people can switch or start afresh. */
 function BoundSession({ connect }: { connect: ConnectView }) {
+  const link = useLink();
   const sessions = useSessions().data ?? [];
   const [choosing, setChoosing] = useState(false);
   const bound = sessions.find((s) => s.key === connect.session);
@@ -242,7 +250,7 @@ function BoundSession({ connect }: { connect: ConnectView }) {
     <Section title="当前会话" description="单会话模式下，消息都进这个会话。可以换成另一个会话，或者新开一个。"
       actions={<Button onClick={() => setChoosing(true)}>换一个会话</Button>}>
       {bound ? (
-        <Link className="card card-row card-link" to={`/sessions/${encodeURIComponent(bound.key)}`}>
+        <Link className="card card-row card-link" to={link(`/sessions/${encodeURIComponent(bound.key)}`)}>
           <div className="card-row-text">
             <strong>{sessionTitle(bound, connect.name)}</strong>
             <span className="muted">{RUNTIME_LABEL[bound.runtime]} · {bound.turns} 轮 · 最近活动 {relativeTime(bound.lastActiveAt)}</span>
@@ -258,6 +266,7 @@ function BoundSession({ connect }: { connect: ConnectView }) {
 }
 
 function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
+  const api = useApi();
   const toast = useToast();
   const client = useQueryClient();
   const all = useSessions().data ?? [];
@@ -351,6 +360,7 @@ function BindSection({ connect, overview }: { connect: ConnectView; overview: Ov
 }
 
 function ConnectSessions({ connect }: { connect: ConnectView }) {
+  const link = useLink();
   const sessions = (useSessions().data ?? []).filter((s) => s.connect === connect.id).sort((a, b) => b.lastActiveAt - a.lastActiveAt).slice(0, 12);
   return (
     <Section title="最近的会话">
@@ -360,7 +370,7 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
             const status = sessionStatus(s);
             return (
               <li key={s.key}>
-                <Link className="list-row" to={`/sessions/${encodeURIComponent(s.key)}`}>
+                <Link className="list-row" to={link(`/sessions/${encodeURIComponent(s.key)}`)}>
                   <span className="list-row-title">{sessionTitle(s, connect.name)}</span>
                   <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
                   <span className="muted list-row-time">{relativeTime(s.lastActiveAt)}</span>
@@ -380,6 +390,9 @@ const KINDS = [
 ];
 
 export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): void }) {
+  const api = useApi();
+  const station = useStation();
+  const link = useLink();
   const overview = useOverview();
   const client = useQueryClient();
   const navigate = useNavigate();
@@ -412,10 +425,10 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
       ...(withTokens ? { slack: { appToken: tokens.appToken, botToken: tokens.botToken } } : {}),
     }),
     onSuccess: (data, withTokens) => {
-      client.setQueryData(keys.overview, data);
+      client.setQueryData(keys.overview(station.id), data);
       toast(withTokens ? "已添加连接，正在连接 Slack" : "已添加连接");
       close();
-      navigate(`/connects/${connectId}`);
+      navigate(link(`/connects/${connectId}`));
     },
   });
 

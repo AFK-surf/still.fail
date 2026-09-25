@@ -1,6 +1,7 @@
 // A session: its execution history is the page; what can be done to it sits
 // with the history. A chat can be opened beside it: ember's own chat, which
 // reaches the agent the way a Slack thread does.
+import { useStation, useLink } from "../station.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, MessageSquarePlus, MessagesSquare, Square, Unplug, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
@@ -8,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { useParams, useSearchParams } from "react-router";
 import remarkGfm from "remark-gfm";
-import { api, keys, useOverview, useSession, useSessions, type ConnectView, type SessionDetail } from "../api.ts";
+import { useApi, keys, useOverview, useSession, useSessions, type ConnectView, type SessionDetail } from "../api.ts";
 import { History } from "../History.tsx";
 import {
   absoluteTime, PROCESS_LABEL, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, STATUS_LABEL, statusTone, threadNamer, turnResult,
@@ -41,6 +42,9 @@ function workspaceUrl(connect: ConnectView | undefined): string | null {
 }
 
 function SessionView({ sessionKey }: { sessionKey: string }) {
+  const api = useApi();
+  const station = useStation();
+  const link = useLink();
   const detail = useSession(sessionKey);
   const overview = useOverview();
   const client = useQueryClient();
@@ -51,7 +55,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const create = useMutation({
     mutationFn: () => api.openChat(sessionKey),
     onSuccess: async ({ threadTs }) => {
-      await client.invalidateQueries({ queryKey: keys.session(sessionKey) });
+      await client.invalidateQueries({ queryKey: keys.session(station.id, sessionKey) });
       setChat(threadTs);
     },
   });
@@ -72,7 +76,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   return (
     <div className="session-page">
       <header className="page-bar">
-        <MobileBack to="/sessions" label="会话" />
+        <MobileBack to={link("/sessions")} label="会话" />
         <div className="page-bar-title">
           <h1>{sessionTitle(session, name)}</h1>
           <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
@@ -104,6 +108,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
 
 /** What can be done to the session right now, at the foot of its history. */
 function Operations({ detail }: { detail: SessionDetail }) {
+  const api = useApi();
   const toast = useToast();
   const { session } = detail;
   const stop = useMutation({ mutationFn: () => api.stop(session.key), onSuccess: () => toast("已请求停止") });
@@ -165,13 +170,15 @@ function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | nu
 function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating }: {
   detail: SessionDetail; threadTs: string; name: string; onClose(): void; onSwitch(threadTs: string): void; onNew(): void; creating: boolean;
 }) {
+  const api = useApi();
+  const station = useStation();
   const client = useQueryClient();
   const chat = detail.chats.find((c) => c.threadTs === threadTs)!;
   const [text, setText] = useState("");
   const list = useRef<HTMLDivElement>(null);
   const send = useMutation({
     mutationFn: (value: string) => api.sayInChat(threadTs, value),
-    onSuccess: () => { setText(""); void client.invalidateQueries({ queryKey: keys.session(detail.session.key) }); },
+    onSuccess: () => { setText(""); void client.invalidateQueries({ queryKey: keys.session(station.id, detail.session.key) }); },
   });
   useEffect(() => {
     if (list.current) list.current.scrollTop = list.current.scrollHeight;

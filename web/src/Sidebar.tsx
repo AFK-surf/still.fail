@@ -1,39 +1,38 @@
 import { ArrowLeft, KeyRound, Plus, Settings } from "lucide-react";
+import { useLink } from "./station.tsx";
 import { useMemo, useState } from "react";
 import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
 import { connectionText, dayLabel, modeShort, presence, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
 import { NewConnectDialog } from "./pages/Connect.tsx";
-import { FrameSwitcher, useFrame } from "./cloud/switcher.tsx";
 import { ConnectKindIcon, ICON, IconButton, StatusDot, Tip } from "./ui.tsx";
 
 export function Sidebar() {
-  const frame = useFrame();
   const settings = useLocation().pathname.startsWith("/settings");
   return (
     <nav className="sidebar" aria-label="导航">
-      {frame ? <div className="account-slot frame-slot"><FrameSwitcher /></div> : (
-        <div className="brand">
-          <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={22} height={22} />
-          <span className="brand-word">ember</span>
-        </div>
-      )}
+      <div className="brand">
+        <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={22} height={22} />
+        <span className="brand-word">ember</span>
+      </div>
       {settings ? <SettingsNav /> : <MainNav />}
     </nav>
   );
 }
 
 function SettingsNav() {
+  const link = useLink();
   return (
     <div className="nav-scroll">
-      <NavLink className="nav-row" to="/sessions"><ArrowLeft {...ICON} />返回会话</NavLink>
+      <NavLink className="nav-row" to={link("/sessions")}><ArrowLeft {...ICON} />返回会话</NavLink>
       <div className="nav-heading">设置</div>
-      <NavLink className="nav-row" to="/settings/accounts"><KeyRound {...ICON} />运行时账号</NavLink>
+      <NavLink className="nav-row" to={link("/settings/accounts")}><KeyRound {...ICON} />运行时账号</NavLink>
     </div>
   );
 }
 
 function MainNav() {
+  const link = useLink();
   const overview = useOverview();
   const sessions = useSessions();
   const [adding, setAdding] = useState(false);
@@ -70,7 +69,7 @@ function MainNav() {
         </div>
         {connects.length === 0 && <p className="nav-empty">还没有连接。</p>}
         {connects.map((c) => (
-          <NavLink key={c.id} className="nav-row" to={`/connects/${c.id}`}>
+          <NavLink key={c.id} className="nav-row" to={link(`/connects/${c.id}`)}>
             <ConnectKindIcon kind={c.kind} />
             <span className="nav-text">{c.name}</span>
             <span className="nav-note">{c.connection.state === "connected" ? modeShort(c.mode) : connectionText(c.connection)}</span>
@@ -79,25 +78,27 @@ function MainNav() {
         ))}
       </section>
       <div className="nav-foot">
-        <NavLink className="nav-row" to="/settings"><Settings {...ICON} />设置</NavLink>
+        <NavLink className="nav-row" to={link("/settings")}><Settings {...ICON} />设置</NavLink>
       </div>
       <NewConnectDialog open={adding} onClose={() => setAdding(false)} />
     </>
   );
 }
 
-function SessionRow({ session: s, connect }: { session: SessionSummary; connect: { id: string; name: string } | undefined }) {
+/** A session in a list. `station` names the station it runs on, where several share one list. */
+export function SessionRow({ session: s, connect, station }: { session: SessionSummary; connect: { id: string; name: string } | undefined; station?: string }) {
+  const link = useLink();
   const name = connect?.name ?? s.connect;
   const { key } = useParams();
   const status = sessionStatus(s);
   const marker = status === "running" || status === "queued" ? "running"
     : status === "block" ? "attention" : status === "failed" || status === "unexpected" ? "problem" : null;
   return (
-    <NavLink className="nav-row nav-session" to={`/sessions/${encodeURIComponent(s.key)}`} aria-current={key === s.key ? "page" : undefined}>
+    <NavLink className="nav-row nav-session" to={link(`/sessions/${encodeURIComponent(s.key)}`)} aria-current={key === s.key ? "page" : undefined}>
       <span className="nav-session-text">
         <span className="nav-session-title">{sessionTitle(s, name)}</span>
         <span className="nav-session-meta">
-          <span className="nav-text">{s.scope === "all" ? `${name} · 单会话` : name}</span>
+          <span className="nav-text">{station ? `${station} · ` : ""}{s.scope === "all" ? `${name} · 单会话` : name}</span>
           <span className="nav-time">{relativeTime(s.lastActiveAt)}</span>
         </span>
       </span>

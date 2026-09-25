@@ -13,11 +13,9 @@ const root = createRoot(document.getElementById("app")!);
 // Built twice: served by a station at /admin (talks to it directly), and as
 // ember cloud's web app at / (sign-in, workspaces; stations over iroh).
 if (import.meta.env.MODE === "cloud") {
-  const station = /^\/w\/([0-9A-HJKMNP-TV-Z]{26})\/s\/([0-9a-f]{64})(\/|$)/.exec(location.pathname);
-  if (station) {
-    const { StationFrame } = await import("./cloud/frame.tsx");
-    root.render(<StrictMode><StationFrame ws={station[1]!} station={station[2]!} /></StrictMode>);
-  } else {
+  const { CloudApp } = await import("./cloud/CloudApp.tsx");
+  root.render(<StrictMode><CloudApp /></StrictMode>);
+} else {
     const { CloudApp } = await import("./cloud/CloudApp.tsx");
     root.render(<StrictMode><CloudApp /></StrictMode>);
   }

@@ -6,12 +6,13 @@ import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient
 import { Check, ChevronsUpDown, Copy, LogOut, Plus, Trash2, UserPlus } from "lucide-react";
 import { DropdownMenu, Tooltip } from "radix-ui";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate, useParams } from "react-router";
+import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router";
 import { relativeTime, timeUntil } from "../format.ts";
 import { ToastProvider, useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
-import { completeSignIn, signIn, signOut, type Account } from "./accounts.ts";
+import { completeSignIn, signIn, type Account } from "./accounts.ts";
 import { Avatar, online, SignInPage, useAccounts } from "./gate.tsx";
+import { NewWorkspaceDialog, useWorkspaces, WorkspaceShell, type WorkspaceEntry } from "./workspace.tsx";
 import { cloud, CloudError, type Role, type StationView, type WorkspaceView } from "./api.ts";
 
 const ROLE_LABEL: Record<Role, string> = { owner: "Owner", admin: "管理员", member: "成员" };
@@ -20,19 +21,6 @@ const ROLE_HINT: Record<Role, string> = {
   admin: "邀请成员、添加和移除 station",
   member: "使用 workspace 里的 station",
 };
-
-/** Every workspace of every signed-in account, each with the account that reaches it. */
-export function useWorkspaces() {
-  const list = useAccounts();
-  return useQuery({
-    queryKey: ["cloud", "me", list.map((a) => a.sub).join(",")],
-    queryFn: async () => {
-      const results = await Promise.all(list.map(async (account) => ({ account, me: await cloud.me(account.sub).catch(() => null) })));
-      return results.flatMap(({ account, me }) => (me?.workspaces ?? []).map((w) => ({ ...w, account, relay: me!.relay_url })));
-    },
-    enabled: list.length > 0,
-  });
-}
 
 const client = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, retry: (n, e) => !(e instanceof CloudError && e.status < 500) && n < 2 } } });
 
@@ -72,148 +60,51 @@ function Home() {
   const list = useAccounts();
   if (list.length === 0) return <SignInPage />;
   return (
-    <div className="shell">
-      <CloudSidebar />
-      <main className="main">
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/w/:ws" element={<WorkspacePage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
-    </div>
-  );
-}
-
-function AccountMenu() {
-  const list = useAccounts();
-  const toast = useToast();
-  const first = list[0]!;
-  return (
-    <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger asChild>
-        <button type="button" className="account-trigger" aria-label="账号">
-          <Avatar account={first} size={26} />
-          <span className="account-text">
-            <span className="account-name">{list.length > 1 ? `${list.length} 个账号` : first.name || first.email}</span>
-            <span className="account-email">{list.length > 1 ? list.map((a) => a.email.split("@")[0]).join("、") : first.email}</span>
-          </span>
-          <ChevronsUpDown {...ICON} size={14} />
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content className="popover menu-list account-menu" align="start" sideOffset={4}>
-          <DropdownMenu.Label className="menu-label">已登录的账号</DropdownMenu.Label>
-          {list.map((a) => (
-            <DropdownMenu.Sub key={a.sub}>
-              <DropdownMenu.SubTrigger className="menu-item">
-                <Avatar account={a} size={22} />
-                <span className="thread-item"><span>{a.name || a.email}</span><span className="muted">{a.email}</span></span>
-              </DropdownMenu.SubTrigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.SubContent className="popover menu-list" sideOffset={6}>
-                  <DropdownMenu.Item className="menu-item" data-danger onSelect={() => void signOut(a.sub).then(() => toast(`已退出 ${a.email}`))}>
-                    <LogOut {...ICON} />退出这个账号
-                  </DropdownMenu.Item>
-                </DropdownMenu.SubContent>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Sub>
-          ))}
-          <DropdownMenu.Separator className="menu-sep" />
-          <DropdownMenu.Item className="menu-item" onSelect={() => void signIn()}><UserPlus {...ICON} />添加另一个账号</DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
-function CloudSidebar() {
-  const workspaces = useWorkspaces();
-  const list = useAccounts();
-  const [creating, setCreating] = useState(false);
-  const many = list.length > 1;
-  return (
-    <nav className="sidebar" aria-label="导航">
-      <div className="brand"><img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={22} height={22} /><span className="brand-word">ember</span></div>
-      <div className="account-slot"><AccountMenu /></div>
-      <div className="nav-scroll">
-        <div className="nav-heading nav-heading-action">
-          <span>Workspace</span>
-          <button type="button" className="icon-btn" aria-label="新建 workspace" onClick={() => setCreating(true)}><Plus {...ICON} /></button>
-        </div>
-        {workspaces.data?.length === 0 && <p className="nav-empty">还没有 workspace。新建一个，或者让别人邀请你。</p>}
-        {workspaces.data?.map((w) => (
-          <NavLink key={`${w.account.sub}:${w.id}`} className="nav-row nav-session" to={`/w/${w.id}`}>
-            <span className="ws-mark" aria-hidden="true">{([...w.name][0] ?? "?").toUpperCase()}</span>
-            <span className="nav-session-text">
-              <span className="nav-session-title">{w.name}</span>
-              <span className="nav-session-meta">
-                <span className="nav-text">{w.stations} 台 station · {w.members} 人{many ? ` · ${w.account.email}` : ""}</span>
-              </span>
-            </span>
-          </NavLink>
-        ))}
-      </div>
-      <NewWorkspaceDialog open={creating} onClose={() => setCreating(false)} />
-    </nav>
-  );
-}
-
-function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void }) {
-  const list = useAccounts();
-  const navigate = useNavigate();
-  const queries = useQueryClient();
-  const [name, setName] = useState("");
-  const [owner, setOwner] = useState(list[0]?.sub ?? "");
-  const create = useMutation({
-    mutationFn: () => cloud.createWorkspace(owner || list[0]!.sub, name),
-    onSuccess: (w) => { void queries.invalidateQueries({ queryKey: ["cloud"] }); setName(""); onClose(); navigate(`/w/${w.id}`); },
-  });
-  return (
-    <Dialog open={open} onClose={onClose} title="新建 workspace" description="workspace 是一组人和他们共用的 station。你会成为它的 owner。"
-      footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="primary" disabled={!name.trim()} busy={create.isPending} onClick={() => create.mutate()}>新建</Button></>}>
-      <Field label="名字" htmlFor="ws-name">
-        <input id="ws-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="例如：Cue 团队" maxLength={80}
-          onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); }} />
-      </Field>
-      {list.length > 1 && (
-        <Field label="属于哪个账号" htmlFor="ws-owner">
-          <Select id="ws-owner" value={owner} onChange={setOwner} options={list.map((a) => ({ value: a.sub, label: a.email }))} />
-        </Field>
-      )}
-      {create.error && <p className="field-error" role="alert">{create.error.message}</p>}
-    </Dialog>
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/w/:ws/settings" element={<WorkspaceRoute settings />} />
+      <Route path="/w/:ws/*" element={<WorkspaceRoute />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
 function Landing() {
   const workspaces = useWorkspaces();
+  const [creating, setCreating] = useState(false);
   if (workspaces.isPending) return null;
   const first = workspaces.data?.[0];
   if (first) return <Navigate to={`/w/${first.id}`} replace />;
   return (
-    <Empty>
-      <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={36} height={36} />
-      <h2>还没有 workspace</h2>
-      <p>点左侧「Workspace」旁边的 + 新建一个；别人邀请你的话，打开邀请链接即可加入。</p>
-    </Empty>
+    <div className="gate">
+      <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={44} height={44} />
+      <h1>还没有 workspace</h1>
+      <p>workspace 是一组人和他们共用的 station。新建一个，或者打开别人发来的邀请链接加入。</p>
+      <Button variant="primary" icon={Plus} onClick={() => setCreating(true)}>新建 workspace</Button>
+      <NewWorkspaceDialog open={creating} onClose={() => setCreating(false)} />
+    </div>
   );
 }
 
-function WorkspacePage() {
+/** A workspace by id, through whichever signed-in account belongs to it. */
+function WorkspaceRoute({ settings }: { settings?: boolean }) {
   const { ws = "" } = useParams();
   const workspaces = useWorkspaces();
+  if (workspaces.isPending) return null;
   const entry = workspaces.data?.find((w) => w.id === ws);
-  const view = useQuery({
-    queryKey: ["cloud", "workspace", ws, entry?.account.sub],
-    queryFn: () => cloud.workspace(entry!.account.sub, ws),
-    enabled: Boolean(entry),
-    refetchInterval: 30_000,
-  });
-  if (workspaces.isPending || (entry && view.isPending)) return <div className="page" />;
-  if (!entry) return <Empty><p>你登录的账号里没有这个 workspace。</p></Empty>;
+  if (!entry) return <div className="gate"><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className="btn btn-secondary" href="/">回到 ember</a></div>;
+  return (
+    <WorkspaceShell key={`${entry.account.sub}/${ws}`} entry={entry}>
+      {settings ? <WorkspaceSettings entry={entry} /> : undefined}
+    </WorkspaceShell>
+  );
+}
+
+function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
+  const view = useQuery({ queryKey: ["cloud", "workspace", entry.id, entry.account.sub], queryFn: () => cloud.workspace(entry.account.sub, entry.id) });
+  if (view.isPending) return <div className="page" />;
   if (view.isError) return <Empty><p>{view.error.message}</p></Empty>;
-  return <WorkspaceDetail key={ws} view={view.data!} account={entry.account} />;
+  return <WorkspaceDetail view={view.data} account={entry.account} />;
 }
 
 function WorkspaceDetail({ view, account }: { view: WorkspaceView; account: Account }) {
@@ -230,7 +121,7 @@ function WorkspaceDetail({ view, account }: { view: WorkspaceView; account: Acco
 
   return (
     <div className="page page-narrow">
-      <MobileBack to="/" label="Workspace" />
+      <MobileBack to={`/w/${view.id}`} label="会话" />
       <header className="identity">
         <span className="ws-mark ws-mark-lg" aria-hidden="true">{([...view.name][0] ?? "?").toUpperCase()}</span>
         <div className="identity-text">
@@ -280,7 +171,7 @@ function Stations({ view, account, manager }: { view: WorkspaceView; account: Ac
                   {s.version ? ` · ember-mesh ${s.version}` : ""} · <span className="mono">{s.id.slice(0, 12)}</span>
                 </span>
               </span>
-              <a className="btn btn-secondary" href={`/w/${view.id}/s/${s.id}/sessions`}>打开</a>
+              <Link className="btn btn-ghost" to={`/w/${view.id}/s/${s.id}/settings/accounts`}>运行时账号</Link>
               {manager && <Menu items={[
                 { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.mutate({ id: s.id, name: n.trim() }); } },
                 { label: "从 workspace 移除", icon: Trash2, danger: true, onSelect: () => setRemoving(s) },

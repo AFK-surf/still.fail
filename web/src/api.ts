@@ -1,7 +1,8 @@
 // Talking to ember's admin API. Types come straight from the server code.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { transport } from "./transport.ts";
+import { useEffect, useMemo } from "react";
+import { useStation } from "./station.tsx";
+import type { Transport } from "./transport.ts";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
 import type { ConnectInput, LoginJob, Overview, ProfileCheck, ProfileInput, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
@@ -24,13 +25,19 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const { status, data } = await transport().request(method, path, body);
+async function call<T>(t: Transport, method: string, path: string, body?: unknown): Promise<T> {
+  const { status, data } = await t.request(method, path, body);
   if (status < 200 || status >= 300) throw new ApiError(status, (data as { error?: string })?.error ?? `请求失败（${status}）`);
   return data as T;
 }
 
-export const api = {
+/** The admin API of one station. */
+export function makeApi(t: Transport) {
+  const request = <T,>(method: string, path: string, body?: unknown) => call<T>(t, method, path, body);
+  return {
+  overview: () => request<Overview>("GET", "/overview"),
+  sessions: () => request<SessionSummary[]>("GET", "/sessions"),
+  session: (key: string) => request<SessionDetail>("GET", `/sessions/${encodeURIComponent(key)}`),
   stop: (key: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/stop`),
   evict: (key: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/evict`),
   putConnect: (id: string, input: ConnectInput) => request<Overview>("PUT", `/connects/${encodeURIComponent(id)}`, input),
@@ -56,60 +63,77 @@ export const api = {
   deleteConfigToken: () => request<{ configured: boolean; teamId: string | null }>("DELETE", "/slack/config-token"),
   deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${encodeURIComponent(id)}`),
   createAppUrl: (name: string) => request<{ url: string }>("GET", `/slack/create-app-url?name=${encodeURIComponent(name)}`),
-};
+  };
+}
 
+export type Api = ReturnType<typeof makeApi>;
+
+/** The admin API of the station in context. */
+export function useApi(): Api {
+  const station = useStation();
+  return useMemo(() => makeApi(station.transport), [station.transport]);
+}
+
+/** Cache keys, per station: two stations' sessions never mix. */
 export const keys = {
-  overview: ["overview"] as const,
-  sessions: ["sessions"] as const,
-  session: (key: string) => ["session", key] as const,
-  slackApp: (connect: string) => ["slack-app", connect] as const,
+  overview: (station: string) => ["overview", station] as const,
+  sessions: (station: string) => ["sessions", station] as const,
+  session: (station: string, key: string) => ["session", station, key] as const,
+  slackApp: (station: string, connect: string) => ["slack-app", station, connect] as const,
 };
 
 export function useOverview() {
+  const station = useStation();
   // Connection states and process memory change without events; refresh them now and then.
-  return useQuery({ queryKey: keys.overview, queryFn: () => request<Overview>("GET", "/overview"), refetchInterval: 10_000 });
+  return useQuery({ queryKey: keys.overview(station.id), queryFn: () => makeApi(station.transport).overview(), refetchInterval: 10_000, enabled: station.online });
 }
 
 export function useSessions() {
-  return useQuery({ queryKey: keys.sessions, queryFn: () => request<SessionSummary[]>("GET", "/sessions") });
+  const station = useStation();
+  return useQuery({ queryKey: keys.sessions(station.id), queryFn: () => makeApi(station.transport).sessions(), enabled: station.online });
 }
 
 export function useSession(key: string | undefined) {
+  const station = useStation();
   return useQuery({
-    queryKey: keys.session(key ?? ""),
-    queryFn: () => request<SessionDetail>("GET", `/sessions/${encodeURIComponent(key!)}`),
-    enabled: Boolean(key),
+    queryKey: keys.session(station.id, key ?? ""),
+    queryFn: () => makeApi(station.transport).session(key!),
+    enabled: Boolean(key) && station.online,
   });
 }
 
 /**
- * Follows ember's event stream: a changed session invalidates the list and that
- * session; a config edit invalidates the overview. Bursts are coalesced.
+ * Follows the station's event stream: a changed session invalidates its list
+ * and that session; a config edit invalidates the overview. Bursts are coalesced.
  */
 export function useLiveUpdates(enabled: boolean): void {
   const client = useQueryClient();
+  const station = useStation();
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !station.online) return;
     const dirty = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const flush = () => {
       timer = undefined;
-      void client.invalidateQueries({ queryKey: keys.sessions });
-      void client.invalidateQueries({ queryKey: keys.overview });
-      for (const key of dirty) void client.invalidateQueries({ queryKey: keys.session(key) });
+      void client.invalidateQueries({ queryKey: keys.sessions(station.id) });
+      void client.invalidateQueries({ queryKey: keys.overview(station.id) });
+      for (const key of dirty) void client.invalidateQueries({ queryKey: keys.session(station.id, key) });
       dirty.clear();
     };
-    const stop = transport().events((name, data) => {
+    const stop = station.transport.events((name, data) => {
       if (name === "session") {
         dirty.add((JSON.parse(data) as { key: string }).key);
         timer ??= setTimeout(flush, 400);
       } else {
-        void client.invalidateQueries({ queryKey: keys.overview });
+        void client.invalidateQueries({ queryKey: keys.overview(station.id) });
       }
-    }, () => void client.invalidateQueries()); // after a reconnect, anything may have changed
+    }, () => {
+      // After a reconnect, anything of this station may have changed.
+      for (const kind of ["overview", "sessions", "session", "slack-app"]) void client.invalidateQueries({ queryKey: [kind, station.id] });
+    });
     return () => {
       stop();
       if (timer) clearTimeout(timer);
     };
-  }, [enabled, client]);
+  }, [enabled, client, station]);
 }

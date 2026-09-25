@@ -1,9 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useStation, useLink } from "../station.tsx";
 import { ChevronDown, ChevronRight, ExternalLink, KeyRound, LogIn, Pencil, Plus, RefreshCw, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
 import { Collapsible } from "radix-ui";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, keys, useOverview, type AccessKind, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
+import { useApi, keys, useOverview, type AccessKind, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Choices, ConnectKindIcon, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
@@ -30,18 +31,20 @@ function AccessMark({ kind, size = 32 }: { kind: AccessKind; size?: number }) {
 }
 
 function useApply() {
+  const station = useStation();
   const client = useQueryClient();
-  return (data: Overview) => client.setQueryData(keys.overview, data);
+  return (data: Overview) => client.setQueryData(keys.overview(station.id), data);
 }
 
 export function AccountsPage() {
+  const link = useLink();
   const overview = useOverview();
   const [adding, setAdding] = useState(false);
   const profiles = overview.data?.profiles ?? [];
   const groups = (["claude", "codex"] as RuntimeKind[]).map((runtime) => ({ runtime, items: profiles.filter((p) => p.runtime === runtime) }));
   return (
     <div className="page page-narrow">
-      <MobileBack to="/sessions" label="会话" />
+      <MobileBack to={link("/sessions")} label="会话" />
       <header className="page-head">
         <div>
           <h1>运行时账号</h1>
@@ -58,7 +61,7 @@ export function AccountsPage() {
               const tone = checkTone(p.check);
               return (
                 <li key={p.id}>
-                  <Link className="list-row account-row" to={`/settings/accounts/${p.id}`}>
+                  <Link className="list-row account-row" to={link(`/settings/accounts/${p.id}`)}>
                     <AccessMark kind={p.access.kind} />
                     <span className="list-row-text">
                       <span className="list-row-title">{p.name}</span>
@@ -79,6 +82,8 @@ export function AccountsPage() {
 }
 
 function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void }) {
+  const api = useApi();
+  const link = useLink();
   const overview = useOverview();
   const navigate = useNavigate();
   const apply = useApply();
@@ -92,7 +97,7 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
   const close = () => { setName(""); setKey(""); setKind("subscription"); onClose(); };
   const add = useMutation({
     mutationFn: () => api.putProfile(id, { name: name.trim() || `${RUNTIME_LABEL[runtime]} · ${ACCESS[kind].label}`, runtime, access: { kind, key } }),
-    onSuccess: (data) => { apply(data); toast("已添加账号，正在检查"); close(); navigate(`/settings/accounts/${id}`); },
+    onSuccess: (data) => { apply(data); toast("已添加账号，正在检查"); close(); navigate(link(`/settings/accounts/${id}`)); },
   });
   return (
     <Dialog open={open} onClose={close} title="添加运行时账号"
@@ -135,6 +140,8 @@ export function AccountPage() {
 }
 
 function AccountView({ profile, overview }: { profile: ProfileView; overview: Overview }) {
+  const api = useApi();
+  const link = useLink();
   const navigate = useNavigate();
   const apply = useApply();
   const toast = useToast();
@@ -143,7 +150,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
   const save = useMutation({ mutationFn: (input: Parameters<typeof api.putProfile>[1]) => api.putProfile(profile.id, input), onSuccess: apply });
   const remove = useMutation({
     mutationFn: () => api.deleteProfile(profile.id),
-    onSuccess: (data) => { apply(data); toast("已删除账号"); navigate("/settings/accounts"); },
+    onSuccess: (data) => { apply(data); toast("已删除账号"); navigate(link("/settings/accounts")); },
   });
   const check = useMutation({ mutationFn: () => api.checkProfile(profile.id) });
   const rename = () => {
@@ -158,7 +165,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
 
   return (
     <div className="page page-narrow">
-      <MobileBack to="/settings/accounts" label="运行时账号" />
+      <MobileBack to={link("/settings/accounts")} label="运行时账号" />
       <header className="identity">
         <AccessMark kind={profile.access.kind} size={48} />
         <div className="identity-text">
@@ -202,7 +209,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
         {users.length === 0 ? <p className="muted">还没有连接使用这个账号。</p> : (
           <ul className="list">
             {users.map((c) => (
-              <li key={c.id}><Link className="list-row" to={`/connects/${c.id}`}><ConnectKindIcon kind={c.kind} /><span className="list-row-title">{c.name}</span><span className="muted">{c.bind.model ?? profile.model ?? "默认模型"}</span></Link></li>
+              <li key={c.id}><Link className="list-row" to={link(`/connects/${c.id}`)}><ConnectKindIcon kind={c.kind} /><span className="list-row-title">{c.name}</span><span className="muted">{c.bind.model ?? profile.model ?? "默认模型"}</span></Link></li>
             ))}
           </ul>
         )}
@@ -308,12 +315,14 @@ function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(inpu
  * runtime's login on its own machine and this panel relays the browser steps.
  */
 function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) {
+  const api = useApi();
+  const station = useStation();
   const client = useQueryClient();
   const toast = useToast();
   const [code, setCode] = useState("");
   const [manual, setManual] = useState(false);
   const job = profile.login;
-  const refresh = () => void client.invalidateQueries({ queryKey: keys.overview });
+  const refresh = () => void client.invalidateQueries({ queryKey: keys.overview(station.id) });
   const start = useMutation({ mutationFn: () => api.startLogin(profile.id), onSuccess: refresh });
   const cancel = useMutation({ mutationFn: () => api.cancelLogin(profile.id), onSuccess: refresh });
   const send = useMutation({ mutationFn: () => api.loginCode(profile.id, code), onSuccess: () => { setCode(""); refresh(); } });
