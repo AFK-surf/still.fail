@@ -23,8 +23,8 @@ const dataDir = mkdtempSync(join(tmpdir(), "ember-e2e-"));
 const config = parseConfig({
   http: { port: 0 },
   connects: [
-    { id: "claude", bind: { runtime: "claude", profiles: ["claude-ocg"], model: MODEL } },
-    { id: "codex", bind: { runtime: "codex", profiles: ["codex-ocg"], model: MODEL } },
+    { id: "claude", bind: { runtime: "claude", profiles: ["claude-ocg"], model: MODEL, ...(process.env.EMBER_E2E_EFFORT ? { effort: process.env.EMBER_E2E_EFFORT } : {}) } },
+    { id: "codex", bind: { runtime: "codex", profiles: ["codex-ocg"], model: MODEL, ...(process.env.EMBER_E2E_EFFORT ? { effort: process.env.EMBER_E2E_EFFORT } : {}) } },
   ],
   maxWarmClaude: 0,
   warmMinutes: 0,
