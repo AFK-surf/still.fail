@@ -24,6 +24,8 @@ export interface Profile {
 
 export interface Config {
   dataDir: string;
+  /** Shared MEMORY.md and skills/ linked into every profile home. */
+  agentHome: string;
   http: { host: string; port: number };
   slack: { appToken: string; botToken: string };
   defaults: { runtime: RuntimeKind; model?: string };
@@ -39,6 +41,7 @@ export interface Config {
 }
 
 interface RawConfig {
+  agentHome?: string;
   http?: { host?: string; port?: number };
   slack?: { appToken?: string; botToken?: string };
   defaults?: { runtime?: RuntimeKind; model?: string };
@@ -70,8 +73,10 @@ export function parseConfig(raw: RawConfig, dataDir: string, env: NodeJS.Process
     ids.add(p.id);
   }
   const runtime = raw.defaults?.runtime ?? profiles[0]?.runtime ?? "claude";
+  const agentHome = raw.agentHome ?? "agent";
   return {
     dataDir,
+    agentHome: isAbsolute(agentHome) ? agentHome : join(dataDir, agentHome),
     http: { host: raw.http?.host ?? "127.0.0.1", port: raw.http?.port ?? 4750 },
     slack: { appToken, botToken },
     defaults: { runtime, ...(raw.defaults?.model ? { model: raw.defaults.model } : {}) },

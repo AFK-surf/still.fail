@@ -18,6 +18,7 @@ export interface SessionDeps {
   profile(id: string): Profile | undefined;
   mcpUrl: string;
   reposDir: string;
+  memoryPath: string;
   maxNudges: number;
 }
 
@@ -188,7 +189,7 @@ export class SessionActor {
       ...(row.model ? { model: row.model } : {}),
       instructions: sessionInstructions({
         botUserId: this.#deps.chat.botUserId, channel: row.channel, threadTs: row.threadTs,
-        workspace: row.workspace, reposDir: this.#deps.reposDir,
+        workspace: row.workspace, reposDir: this.#deps.reposDir, memoryPath: this.#deps.memoryPath,
       }),
       mcpToken: row.token,
       mcpUrl: this.#deps.mcpUrl,

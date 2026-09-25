@@ -3,6 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { agentHomePaths } from "./agent-home.ts";
 import { profileFor, RUNTIMES, type Config, type RuntimeKind } from "./config.ts";
 import type { ChatSurface, InboundMessage } from "./chat/types.ts";
 import { log } from "./log.ts";
@@ -201,6 +202,7 @@ export class Hub {
         profile: (id) => this.#config.profiles.find((p) => p.id === id),
         mcpUrl: this.#mcpUrl,
         reposDir: this.reposDir,
+        memoryPath: agentHomePaths(this.#config.agentHome).memory,
         maxNudges: this.#config.maxNudges,
       }, options);
       this.#actors.set(key, actor);

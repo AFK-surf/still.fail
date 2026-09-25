@@ -73,6 +73,8 @@ export class ClaudeDriver implements AgentDriver {
     Object.assign(env, expandRoute(options.profile.env, options.route), {
       CLAUDE_CONFIG_DIR: options.profile.home,
       [MCP_TOKEN_VAR]: options.mcpToken,
+      // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
+      EMBER_RUNTIME_SESSION_ID: sessionId,
     });
 
     let busy = false;

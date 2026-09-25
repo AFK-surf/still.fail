@@ -1,6 +1,7 @@
 // ember entry point: node src/main.ts
 import { createServer } from "node:http";
 import { join } from "node:path";
+import { linkAgentHome } from "./agent-home.ts";
 import { SlackSurface } from "./chat/slack.ts";
 import { loadConfig } from "./config.ts";
 import { Hub } from "./hub.ts";
@@ -14,6 +15,7 @@ import { Store } from "./store.ts";
 const config = loadConfig();
 if (config.profiles.length === 0) throw new Error("no profiles configured; see docs/operations.md");
 const store = new Store(join(config.dataDir, "ember.db"));
+linkAgentHome(config.agentHome, config.profiles);
 
 const reaped = await reapStaleGroups(store);
 if (reaped > 0) log.warn("reaped runtime processes left by a previous run", { count: reaped });
