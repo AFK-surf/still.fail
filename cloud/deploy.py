@@ -127,7 +127,9 @@ def main() -> None:
             write_private(path, values)
             wrangler("secret", "bulk", str(path), "--config", str(local), env=env)
 
-    with urllib.request.urlopen(f"{origin}/healthz", timeout=30) as response:
+    # Cloudflare turns away urllib's default User-Agent.
+    request = urllib.request.Request(f"{origin}/healthz", headers={"user-agent": "ember-deploy"})
+    with urllib.request.urlopen(request, timeout=30) as response:
         print("healthz", response.status, response.read().decode())
 
 
