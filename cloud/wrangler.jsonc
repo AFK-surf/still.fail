@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Template; deploy.py copies it to the ignored wrangler.local.json with the account id.
+  "name": "ember-cloud",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [{ "pattern": "ember.3720.org", "custom_domain": true }],
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": {
+    "PUBLIC_ORIGIN": "https://ember.3720.org",
+    "GOOGLE_CLIENT_ID": "",
+  },
+  // The web app; API, relay and discovery paths reach the Worker first.
+  "assets": {
+    "directory": "../dist/cloud-app",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/v1/*", "/relay", "/pkarr/*", "/healthz", "/ping", "/.well-known/*"],
+  },
+  "containers": [{ "class_name": "Relay", "image": "./Dockerfile", "max_instances": 1, "instance_type": "lite" }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "RELAY_BUDGET", "class_name": "RelayBudget" },
+      { "name": "RELAY", "class_name": "Relay" },
+      { "name": "RECORDS", "class_name": "DiscoveryRecord" },
+      { "name": "ACCOUNTS", "class_name": "Account" },
+      { "name": "DIRECTORY", "class_name": "Directory" },
+      { "name": "LOGINS", "class_name": "LoginAttempt" },
+      { "name": "LOGIN_LIMITS", "class_name": "LoginLimiter" },
+    ],
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Relay", "DiscoveryRecord", "Account", "Directory", "LoginAttempt", "LoginLimiter", "RelayBudget"] },
+  ],
+}
