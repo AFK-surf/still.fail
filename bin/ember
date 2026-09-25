@@ -1,0 +1,13 @@
+#!/bin/sh
+# ember command line. So far: joining a workspace in ember cloud.
+#   ember station enroll <ember-cloud-origin> <token>
+#   ember station id
+set -eu
+here=$(cd "$(dirname "$0")/.." && pwd)
+data=${EMBER_DATA:-$HOME/.ember}
+mesh=${EMBER_MESH_BIN:-$here/mesh/target/release/ember-mesh}
+case "${1:-} ${2:-}" in
+  "station enroll") shift 2; exec "$mesh" enroll "$@" --data "$data" ;;
+  "station id") exec "$mesh" id --data "$data" ;;
+  *) echo "usage: ember station enroll <ember-cloud-origin> <token> | ember station id" >&2; exit 2 ;;
+esac

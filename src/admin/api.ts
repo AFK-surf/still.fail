@@ -7,6 +7,7 @@ import type { Connections } from "../connections.ts";
 import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from "../config.ts";
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
+import type { MeshStatus } from "../mesh.ts";
 import { INTERNAL_CONNECT } from "../chat/internal.ts";
 import { appIdOf, applySettings, rotateConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
 import { log } from "../log.ts";
@@ -14,7 +15,7 @@ import type { Settings } from "../settings.ts";
 import type { Store } from "../store.ts";
 import { checkProfile, loginCommand, type ProfileCheck } from "../profiles.ts";
 import { readTimeline, readUsage, transcriptPath } from "../transcript.ts";
-import { AccessDenied, AccessGate, type Viewer } from "./access.ts";
+import { AccessDenied, AccessGate, viewerId, type Viewer } from "./access.ts";
 import { verifySlackTokens } from "../chat/slack.ts";
 import { createAppUrl, slackManifest } from "./slack-manifest.ts";
 import type { Overview, SessionDetail, SessionSummary } from "./types.ts";
@@ -27,6 +28,10 @@ export interface AdminDeps {
   hub: Hub;
   connections: Connections;
   logins: LoginManager;
+  /** Display names of people seen through ember cloud, by email; shared with ember's own chat. */
+  names: Map<string, string>;
+  /** ember-mesh's shared secret, and its state for the page. */
+  mesh?: { secret(): string | null; status(): MeshStatus };
   /** How a profile is checked; tests replace it so no real CLI runs. */
   checkProfile?: typeof checkProfile;
   /** Slack's app API; defaults to one using the configuration token in the config. */
@@ -92,7 +97,7 @@ export class AdminApi {
 
   constructor(deps: AdminDeps) {
     this.#deps = deps;
-    this.#gate = deps.gate ?? new AccessGate(() => deps.settings.config.adminAccess);
+    this.#gate = deps.gate ?? new AccessGate(() => deps.settings.config.adminAccess, undefined, () => deps.mesh?.secret() ?? null);
     this.#apps = deps.slackApps ?? new SlackApps(
       () => deps.settings.config.slackConfigToken,
       (token) => deps.settings.update((raw) => {
@@ -119,6 +124,7 @@ export class AdminApi {
         if (error instanceof AccessDenied) throw new HttpError(403, error.message);
         throw error;
       }
+      if (viewer.via === "mesh" && viewer.name) this.#deps.names.set(viewer.email, viewer.name);
       await this.#route(req, res, url, path, viewer);
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;
@@ -151,7 +157,7 @@ export class AdminApi {
       const input = await body(req);
       const target = typeof input.session === "string" && input.session ? input.session : null;
       const key = this.#deps.hub.bindSingle(id, target, typeof input.title === "string" ? input.title : undefined);
-      log.info("single-session binding changed from the admin page", { connect: id, session: key, by: viewer.via === "access" ? viewer.email : "local" });
+      log.info("single-session binding changed from the admin page", { connect: id, session: key, by: viewerId(viewer) });
       return send(res, 200, { session: key });
     }
     if (resource === "sessions" && id && action === "chats" && method === "POST") {
@@ -194,7 +200,7 @@ export class AdminApi {
       }
       if (method === "POST") {
         if (profile.access.kind !== "subscription") throw new HttpError(400, "只有订阅账号需要登录");
-        log.info("login started from the admin page", { profile: id, by: viewer.via === "access" ? viewer.email : "local" });
+        log.info("login started from the admin page", { profile: id, by: viewerId(viewer) });
         return send(res, 200, { job: this.#deps.logins.start(profile) });
       }
     }
@@ -232,7 +238,7 @@ export class AdminApi {
         if (!refresh.startsWith("xoxe-")) throw new HttpError(400, "Refresh token 应该以 xoxe- 开头（不是 xoxe.xoxp- 开头的那个）");
         const token = await rotateConfigToken(refresh).catch((error) => { throw new HttpError(400, `Slack 没接受这个 token：${error instanceof Error ? error.message : String(error)}`); });
         this.#deps.settings.update((raw) => ({ ...raw, slackConfigToken: token }));
-        log.info("slack configuration token set", { team: token.teamId, by: viewer.via === "access" ? viewer.email : "local" });
+        log.info("slack configuration token set", { team: token.teamId, by: viewerId(viewer) });
         return send(res, 200, this.#configTokenView());
       }
       if (method === "DELETE") {
@@ -321,7 +327,7 @@ export class AdminApi {
           : slackError(error);
       }
     }
-    log.info("slack app updated from the admin page", { connect: connectId, appId, permissionsUpdated, by: viewer.via === "access" ? viewer.email : "local" });
+    log.info("slack app updated from the admin page", { connect: connectId, appId, permissionsUpdated, by: viewerId(viewer) });
     return { permissionsUpdated, iconError, links: slackAppLinks(appId) };
   }
 
@@ -353,6 +359,7 @@ export class AdminApi {
     const memory = processMemory(processes.map((p) => p.pgid));
     return {
       viewer,
+      mesh: this.#deps.mesh?.status() ?? null,
       connects: config.connects.map((c) => ({
         id: c.id, name: c.name, enabled: c.enabled, kind: c.kind, mode: c.mode, requireMention: c.requireMention,
         bind: { runtime: c.bind.runtime, profiles: c.bind.profiles, model: c.bind.model ?? null },
@@ -399,6 +406,7 @@ export class AdminApi {
     const summary = this.#summary(key);
     const inbound = this.#deps.store.listInbound(key);
     // Names come from the connect each message arrived through.
+    const internalNames = { userName: async (user: string) => this.#deps.names.get(user) ?? (user === "local" ? "管理员" : user), channelName: async () => null };
     const chatOf = (connect: string) => connect === INTERNAL_CONNECT ? internalNames : this.#deps.connections.chats.get(connect) ?? this.#deps.connections.chats.get(summary.connect);
     const people: Record<string, string> = {};
     const channels: Record<string, string> = {};
@@ -448,7 +456,7 @@ export class AdminApi {
     } catch (error) {
       throw new HttpError(400, error instanceof Error ? error.message : String(error));
     }
-    log.info("config changed from the admin page", { what, by: viewer.via === "access" ? viewer.email : "local" });
+    log.info("config changed from the admin page", { what, by: viewerId(viewer) });
     return this.#overview(viewer);
   }
 
@@ -558,12 +566,4 @@ function slackError(error: unknown): string {
   return [known[error.code] ?? error.code, details].filter(Boolean).join("：");
 }
 
-function viewerId(viewer: Viewer): string {
-  return viewer.via === "access" ? viewer.email : "local";
-}
 
-/** Names of admin-page chat users, in the shape of a chat surface's lookups. */
-const internalNames = {
-  userName: async (user: string) => (user === "local" ? "管理员" : user),
-  channelName: async () => null,
-};

@@ -12,6 +12,7 @@ import { log } from "./log.ts";
 import { LoginManager } from "./login.ts";
 import { InternalChat } from "./chat/internal.ts";
 import { McpEndpoint } from "./mcp.ts";
+import { MeshSupervisor } from "./mesh.ts";
 import { ClaudeDriver } from "./runtime/claude.ts";
 import { CodexDriver } from "./runtime/codex.ts";
 import { reapStaleGroups } from "./runtime/process.ts";
@@ -19,6 +20,8 @@ import { Settings } from "./settings.ts";
 import { Store } from "./store.ts";
 
 const settings = Settings.load();
+/** Display names of people who reached this station through ember cloud, by email. */
+const names = new Map<string, string>();
 const store = new Store(join(settings.dataDir, "ember.db"));
 linkAgentHome(settings.config.agentHome, settings.config.profiles);
 
@@ -35,13 +38,14 @@ const hub: Hub = new Hub({
   config: () => settings.config,
   store,
   chats: connections.chats,
-  internal: new InternalChat(store),
+  internal: new InternalChat(store, (user) => names.get(user) ?? (user === "local" ? "管理员" : user)),
   mcpUrl,
   drivers: { claude: new ClaudeDriver(store), codex: new CodexDriver(store) },
 });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
 const logins = new LoginManager(settings.config.dataDir);
-const admin = new AdminApi({ settings, store, hub, connections, logins });
+const mesh = new MeshSupervisor({ dataDir: settings.config.dataDir, admin: `http://127.0.0.1:${settings.config.adminHttp.port}` });
+const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh });
 
 settings.onChange((config) => {
   linkAgentHome(config.agentHome, config.profiles);
@@ -110,6 +114,7 @@ log.info("ember listening", { mcpUrl, admin: `http://${adminHost}:${adminPort}/a
 await connections.reconcile(settings.config);
 if (connections.chats.size === 0) log.warn("no connect is connected; add or enable one on the admin page");
 await hub.recover();
+mesh.start();
 const evictTimer = setInterval(() => hub.evictIdle(), 60_000);
 
 let stopping = false;
@@ -119,6 +124,7 @@ async function shutdown(signal: string): Promise<void> {
   log.info("shutting down", { signal });
   clearInterval(evictTimer);
   logins.stopAll();
+  await mesh.stop();
   await connections.stopAll();
   await hub.shutdown();
   server.close();

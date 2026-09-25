@@ -104,7 +104,7 @@ const slackApps = {
   setIcon: async () => {},
 } as unknown as SlackApps;
 const api = new AdminApi({
-  settings, store, hub, connections, slackApps,
+  settings, store, hub, connections, slackApps, names: new Map(),
   logins: new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin }),
   checkProfile: async (p) => (p.kind === "subscription"
     ? { state: "login", detail: "还没有登录", models: null, checkedAt: Date.now() }

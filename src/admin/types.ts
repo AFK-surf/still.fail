@@ -4,10 +4,12 @@ import type { ConnectKind, ConnectMode } from "../config.ts";
 import type { ConnectState } from "../connections.ts";
 import type { LoginJob, LoginState } from "../login.ts";
 import type { ChatMessageRow, ChatRow } from "../store.ts";
+import type { MeshStatus } from "../mesh.ts";
+import type { Viewer } from "./access.ts";
 import type { AccessKind, ProfileCheck } from "../profiles.ts";
 import type { TimelineEntry, TranscriptUsage } from "../transcript.ts";
 
-export type { ChatMessageRow, ChatRow, LoginJob, LoginState };
+export type { ChatMessageRow, ChatRow, LoginJob, LoginState, MeshStatus };
 export type { AccessKind, ConnectKind, ConnectMode, ConnectState, ProfileCheck, RuntimeKind, TimelineEntry, TranscriptUsage };
 
 export type ProcessState = "running" | "warm" | "cold";
@@ -64,11 +66,13 @@ export interface ProcessView {
 
 export interface Overview {
   /** Who is looking: a local visit, or the Cloudflare Access identity. */
-  viewer: { via: "local" } | { via: "access"; email: string };
+  viewer: Viewer;
   connects: ConnectView[];
   profiles: ProfileView[];
   processes: ProcessView[];
   counts: { sessions: number; running: number; warm: number };
+  /** This station's link to ember cloud; null where ember-mesh is not managed. */
+  mesh: MeshStatus | null;
 }
 
 export interface TurnSummary {

@@ -102,7 +102,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
   const hub: Hub = new Hub({ config: () => settings.config, store, chats: conns.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x" });
   settings.onChange((config) => void conns.reconcile(config));
   await conns.reconcile(settings.config);
-  const api = new AdminApi({ settings, store, hub, connections: conns, logins, slackApps: slackApps as unknown as SlackApps, checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks) });
+  const api = new AdminApi({ settings, store, hub, connections: conns, logins, names: new Map(), slackApps: slackApps as unknown as SlackApps, checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks) });
   const server = createServer((req, res) => void api.handle(req, res));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/admin/api`;
