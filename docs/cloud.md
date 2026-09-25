@@ -10,6 +10,11 @@ station ──(iroh：relay 或直连)─────────┘
 
 参照 zork 的做法（`deploy/cloudflare`），代码从那里分出来，单独部署：Worker 名 `ember-cloud`，和 zork 同一个 Cloudflare 账号。
 
+## 什么存在哪
+
+- **控制面**：和人有关的一切——账号、workspace、成员与角色、邀请、station 名单、访问授权。
+- **station**：station 自己的东西——连接、运行时账号、会话、对话、agent 的记忆和 skills。station 只用邮箱记"谁"（连接的添加人、对话的发送人、会话的发起人），名字和头像由网页版从控制面的成员名单里取。
+
 ## 对象
 
 | 对象 | 是什么 | 标识 |
