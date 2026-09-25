@@ -5,7 +5,7 @@
     python3 deploy.py --check    # only report what is missing
 
 Inputs (none of them in the repository):
-  --google  Google "Web application" OAuth client JSON (default: zork's, ~/zork-deploy/google-oauth.json;
+  --google  Google "Web application" OAuth client JSON (default ~/ember-deploy/google-oauth.json;
             its redirect URIs must include <origin>/v1/auth/google/callback)
   keys      ~/ember-deploy/keys.json, created on first run: session signing key, admin token and
             the Ed25519 key that signs station grants. Keep it; losing it logs everyone out and makes
@@ -97,7 +97,7 @@ def docker_env():
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--google", type=Path, default=Path.home() / "zork-deploy" / "google-oauth.json")
+    parser.add_argument("--google", type=Path, default=DEPLOY / "google-oauth.json")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--skip-build", action="store_true", help="deploy the web app already in dist/cloud-app")
     args = parser.parse_args()
