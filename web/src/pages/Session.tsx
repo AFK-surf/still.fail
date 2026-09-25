@@ -2,7 +2,7 @@
 // with the history. A chat can be opened beside it: ember's own chat, which
 // reaches the agent the way a Slack thread does.
 import { useIsMine, useLink, usePerson, useStation } from "../station.tsx";
-import { CreatorText } from "../components.tsx";
+import { CreatorText, Participants } from "../components.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, MessageSquarePlus, MessagesSquare, Square, Unplug, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
@@ -86,6 +86,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
           <h1>{sessionTitle(session, name)}</h1>
           <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
           <CreatorText creator={session.creator} verb="发起" />
+          <Participants people={session.participants} />
         </div>
         <div className="page-bar-actions">
           {slackThreads.length > 1

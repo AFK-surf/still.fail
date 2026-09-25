@@ -141,7 +141,6 @@ function WorkspaceSidebar({ entry, stations }: { entry: WorkspaceEntry; stations
   const sessions = useQueries({ queries: live.map((s) => ({ queryKey: keys.sessions(s.id), queryFn: () => makeApi(s.transport).sessions() })) });
   const overviews = useQueries({ queries: live.map((s) => ({ queryKey: keys.overview(s.id), queryFn: () => makeApi(s.transport).overview(), refetchInterval: 10_000 })) });
   const [onlyMine] = useOnlyMine();
-  const many = stations.length > 1;
   const rows = useMemo(() => live.flatMap((station, i) =>
     (sessions[i]?.data ?? []).map((session) => ({ session, station, overview: overviews[i]?.data as Overview | undefined }))), [live, sessions, overviews]);
   const groups = useSessionGroups(rows);
@@ -161,7 +160,7 @@ function WorkspaceSidebar({ entry, stations }: { entry: WorkspaceEntry; stations
             <div className="nav-heading">{group.label}</div>
             {group.items.map(({ session, station, overview }) => (
               <StationContext.Provider key={`${station.id}/${session.key}`} value={station}>
-                <SessionRow session={session} connect={overview?.connects.find((c) => c.id === session.connect)} {...(many ? { station: station.name } : {})} />
+                <SessionRow session={session} connect={overview?.connects.find((c) => c.id === session.connect)} station={station.name} />
               </StationContext.Provider>
             ))}
           </section>

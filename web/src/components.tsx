@@ -92,3 +92,36 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
     </div>
   );
 }
+
+/** A small stack of people's avatars; names in the tooltip. */
+export function PeopleStack({ people, max = 3 }: { people: Creator[] | undefined; max?: number }) {
+  const person = usePerson();
+  const isMine = useIsMine();
+  if (!people?.length) return null;
+  const name = (c: Creator) => (isMine(c) ? "你" : person(c.email)?.name || c.name || c.email || c.id);
+  return (
+    <span className="people-stack" title={`参与：${people.map(name).join("、")}`}>
+      {people.slice(0, max).map((c) => {
+        const picture = person(c.email)?.picture;
+        return picture
+          ? <img key={c.id} className="person" src={picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
+          : <span key={c.id} className="person person-letter" aria-hidden="true">{([...name(c)][0] ?? "?").toUpperCase()}</span>;
+      })}
+      {people.length > max && <span className="people-more">+{people.length - max}</span>}
+    </span>
+  );
+}
+
+/** "参与：A、B、C" with avatars, for a session's header. */
+export function Participants({ people }: { people: Creator[] | undefined }) {
+  const person = usePerson();
+  const isMine = useIsMine();
+  if (!people?.length) return null;
+  const name = (c: Creator) => (isMine(c) ? "你" : person(c.email)?.name || c.name || c.email || c.id);
+  return (
+    <span className="participants">
+      <PeopleStack people={people} max={4} />
+      <span className="participants-names">{people.slice(0, 4).map(name).join("、")}{people.length > 4 ? ` 等 ${people.length} 人` : ""}</span>
+    </span>
+  );
+}

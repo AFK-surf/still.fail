@@ -519,3 +519,13 @@
 .quota-compact { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .quota-compact .quota-track { width: 48px; }
 .quota-note { margin: 0; font-size: var(--text-sm); }
+.station-tag.small { padding: 0 5px; font-size: 10.5px; border-radius: 5px; flex: none; }
+.people-stack { display: inline-flex; align-items: center; flex: none; margin-left: auto; }
+.people-stack > * { margin-left: -4px; box-shadow: 0 0 0 1.5px var(--sidebar); }
+.people-stack > :first-child { margin-left: 0; }
+.people-stack .person-letter { width: 16px; height: 16px; font-size: 9px; }
+.people-more { font-size: 10px; color: var(--muted); padding-left: 6px; box-shadow: none !important; }
+.nav-session-meta .people-stack + .nav-time { margin-left: 6px; }
+.participants { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: var(--text-xs); color: var(--muted); }
+.participants .people-stack { margin-left: 0; }
+.participants .people-stack > * { box-shadow: 0 0 0 1.5px var(--canvas); }

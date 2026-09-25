@@ -1,7 +1,7 @@
 import { ArrowLeft, KeyRound, Plug, Settings } from "lucide-react";
 import { useIsMine, useLink } from "./station.tsx";
 import { useMemo } from "react";
-import { MineFilter, useOnlyMine } from "./components.tsx";
+import { MineFilter, PeopleStack, useOnlyMine } from "./components.tsx";
 import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
 import { dayLabel, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
@@ -96,7 +96,9 @@ export function SessionRow({ session: s, connect, station }: { session: SessionS
       <span className="nav-session-text">
         <span className="nav-session-title">{sessionTitle(s, name)}</span>
         <span className="nav-session-meta">
-          <span className="nav-text">{station ? `${station} · ` : ""}{s.scope === "all" ? `${name} · 单会话` : name}</span>
+          {station && <span className="station-tag small">{station}</span>}
+          <span className="nav-text">{s.scope === "all" ? `${name} · 单会话` : name}</span>
+          <PeopleStack people={s.participants} />
           <span className="nav-time">{relativeTime(s.lastActiveAt)}</span>
         </span>
       </span>
