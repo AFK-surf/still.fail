@@ -202,3 +202,12 @@ export function threadNamer(detail: SessionDetail) {
   };
 }
 
+
+export function modeShort(mode: ConnectMode): string {
+  return mode === "multi-session" ? "多会话" : "单会话";
+}
+
+/** What a session is called in lists: its given title, else its first message. */
+export function sessionTitle(s: { title: string | null; firstText: string | null; scope: string }, connectName: string): string {
+  return s.title || cleanText(s.firstText) || (s.scope === "all" ? `${connectName} 的会话` : "（没有消息）");
+}

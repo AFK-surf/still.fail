@@ -2,10 +2,18 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
-import type { ConnectInput, Overview, ProfileCheck, ProfileInput, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type { ConnectInput, LoginJob, Overview, ProfileCheck, ProfileInput, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
 
 export type * from "../../src/admin/types.ts";
-export type { SlackIdentity };
+export type { SlackAppSettings, SlackGroup, SlackIdentity };
+
+export interface SlackAppLinks { settings: string; install: string; appToken: string; oauth: string }
+export type SlackAppView =
+  | { state: "no_app"; appId: null; links: null; settings: null; groups: SlackGroup[] }
+  | { state: "no_config_token"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[] }
+  | { state: "ok"; appId: string; links: SlackAppLinks; settings: SlackAppSettings; groups: SlackGroup[] }
+  | { state: "error"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[]; error: string };
 
 export class ApiError extends Error {
   readonly status: number;
@@ -37,6 +45,18 @@ export const api = {
   checkProfile: (id: string) => request<ProfileCheck>("POST", `/profiles/${encodeURIComponent(id)}/check`),
   verifySlack: (input: { connect?: string; appToken?: string; botToken?: string }) =>
     request<{ identity: SlackIdentity | null; errors: string[] }>("POST", "/slack/verify", input),
+  bindSession: (connect: string, session: string | null, title?: string) =>
+    request<{ session: string }>("POST", `/connects/${encodeURIComponent(connect)}/session`, { session, ...(title ? { title } : {}) }),
+  setTitle: (key: string, title: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/title`, { title }),
+  startLogin: (profile: string) => request<{ job: LoginJob }>("POST", `/profiles/${encodeURIComponent(profile)}/login`),
+  cancelLogin: (profile: string) => request<{ job: LoginJob | null }>("DELETE", `/profiles/${encodeURIComponent(profile)}/login`),
+  loginCode: (profile: string, code: string) => request<{ job: LoginJob }>("POST", `/profiles/${encodeURIComponent(profile)}/login-code`, { code }),
+  slackApp: (connect: string) => request<SlackAppView>("GET", `/connects/${encodeURIComponent(connect)}/slack-app`),
+  putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }) =>
+    request<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>("PUT", `/connects/${encodeURIComponent(connect)}/slack-app`, input),
+  configToken: () => request<{ configured: boolean; teamId: string | null }>("GET", "/slack/config-token"),
+  putConfigToken: (refreshToken: string) => request<{ configured: boolean; teamId: string | null }>("PUT", "/slack/config-token", { refreshToken }),
+  deleteConfigToken: () => request<{ configured: boolean; teamId: string | null }>("DELETE", "/slack/config-token"),
   deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${encodeURIComponent(id)}`),
   createAppUrl: (name: string) => request<{ url: string }>("GET", `/slack/create-app-url?name=${encodeURIComponent(name)}`),
 };
@@ -45,6 +65,7 @@ export const keys = {
   overview: ["overview"] as const,
   sessions: ["sessions"] as const,
   session: (key: string) => ["session", key] as const,
+  slackApp: (connect: string) => ["slack-app", connect] as const,
 };
 
 export function useOverview() {
@@ -87,6 +108,7 @@ export function useLiveUpdates(enabled: boolean): void {
       timer ??= setTimeout(flush, 400);
     });
     source.addEventListener("config", () => void client.invalidateQueries({ queryKey: keys.overview }));
+    source.addEventListener("login", () => void client.invalidateQueries({ queryKey: keys.overview }));
     // After a reconnect, anything may have changed while we were away.
     source.addEventListener("open", () => void client.invalidateQueries());
     return () => {

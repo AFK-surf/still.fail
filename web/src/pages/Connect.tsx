@@ -1,15 +1,16 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageCircle, Pencil, Power, RefreshCw, Send, Slack, Trash2 } from "lucide-react";
+import { MessageCircle, Pencil, Power, RefreshCw, Slack, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, keys, useOverview, useSessions, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
-import { cleanText, connectionText, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, slug, STATUS_LABEL, statusTone } from "../format.ts";
+import { connectionText, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, slug, STATUS_LABEL, statusTone } from "../format.ts";
+import { SlackAppSection } from "./SlackApp.tsx";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
 import {
-  Avatar, Button, Choices, Confirm, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select, StatusDot, SwitchRow,
+  Button, Choices, ConnectKindIcon, Confirm, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select, StatusDot, SwitchRow,
 } from "../ui.tsx";
 
 export function ConnectPage() {
@@ -55,7 +56,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
     <div className="page page-narrow">
       <MobileBack to="/sessions" label="返回" />
       <header className="identity">
-        <Avatar id={connect.id} name={connect.name} size={52} />
+        <ConnectKindIcon kind={connect.kind} size={22} tile />
         <div className="identity-text">
           {editingName ? (
             <input className="input identity-name-input" value={name} autoFocus aria-label="名称"
@@ -65,7 +66,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
             <h1 className="identity-name">{connect.name}<IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
           )}
           <p className="identity-sub">
-            <span className="kind-tag"><SlackGlyph />Slack</span>
+            <span className="kind-tag">Slack</span>
             <span>{modeText(connect.mode, connect.requireMention)}</span>
             <span>{connectSubtitle(connect, overview.profiles)}</span>
           </p>
@@ -82,7 +83,9 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
 
       <SlackSection connect={connect} />
       <ModeSection connect={connect} />
+      {connect.mode === "single-session" && <BoundSession connect={connect} />}
       <BindSection connect={connect} overview={overview} />
+      <SlackAppSection connect={connect} />
       <ConnectSessions connect={connect} />
 
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.isPending} onConfirm={() => remove.mutate()}
@@ -90,10 +93,6 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
         description={`Slack 连接会断开${connect.sessions ? `；它的 ${connect.sessions} 个会话的记录会保留，但不再接收消息` : ""}。Slack 里的 app 需要你自己去删除。`} />
     </div>
   );
-}
-
-export function SlackGlyph() {
-  return <Slack {...ICON} size={13} />;
 }
 
 function SlackSection({ connect }: { connect: ConnectView }) {
@@ -152,7 +151,7 @@ function SlackSection({ connect }: { connect: ConnectView }) {
 
 /** The mode picker, shared by the connect page and the new-connect dialog. */
 export function ModeChoices({ mode, requireMention, onChange, disabled }:
-  { mode: ConnectMode; requireMention: boolean; onChange(next: { mode: ConnectMode; requireMention: boolean }): void; disabled?: boolean }) {
+  { mode: ConnectMode; requireMention: boolean; onChange(next: { mode: ConnectMode; requireMention: boolean }): void; disabled?: boolean | undefined }) {
   return (
     <Choices label="会话方式" value={mode} onChange={(m) => onChange({ mode: m, requireMention: m === "multi-session" ? true : requireMention })}
       options={(["multi-session", "single-session"] as const).map((m) => ({
@@ -167,13 +166,137 @@ export function ModeChoices({ mode, requireMention, onChange, disabled }:
 }
 
 function ModeSection({ connect }: { connect: ConnectView }) {
+  const [changing, setChanging] = useState(false);
+  return (
+    <Section title="会话方式" actions={<Button onClick={() => setChanging(true)}>更改会话方式</Button>}>
+      <div className="card card-row">
+        <div className="card-row-text">
+          <strong>{MODE[connect.mode].label}</strong>
+          <span className="muted">
+            {MODE[connect.mode].description}
+            {connect.mode === "single-session" && (connect.requireMention ? "只在被 @ 时唤醒。" : "它能看到的每条消息都会送进会话。")}
+          </span>
+        </div>
+      </div>
+      {changing && <ModeDialog connect={connect} onClose={() => setChanging(false)} />}
+    </Section>
+  );
+}
+
+/** What switching to `next` does to this connect's conversations, in plain words. */
+function consequences(connect: ConnectView, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
+  const out: string[] = [];
+  if (connect.mode === "multi-session" && next.mode === "single-session") {
+    out.push("之后它收到的消息都进同一个会话；已有的每个 thread 的会话不再收到新消息，包括这些 thread 里的回复。记录会保留。");
+    out.push(connect.session ? "会接着使用之前绑定的单会话。" : "下一条消息会开始一个新的单会话；也可以在切换后选一个已有会话。");
+    if (!next.requireMention) out.push("不需要 @：它能看到的所有频道和私信里的每条消息都会送给 agent，消耗会明显增加。");
+  } else if (connect.mode === "single-session" && next.mode === "multi-session") {
+    out.push("当前绑定的会话不再收到新消息。之后每个 thread 被 @ 时各开一个新会话。");
+    out.push("在单会话里进行过的 thread，要继续就需要重新 @，会开一个新会话，不带之前的上下文。");
+    out.push("以后切回单会话，会接着用原来的那个会话。");
+  } else if (next.requireMention !== connect.requireMention) {
+    out.push(next.requireMention
+      ? "之后只有被 @ 的 thread 会进会话；已经进来的 thread 里的回复仍然会送到。"
+      : "不需要 @：它能看到的所有频道和私信里的每条消息都会送给 agent，消耗会明显增加。");
+  }
+  if (running > 0) out.push(`现在有 ${running} 个会话正在运行，它们会跑完当前这一轮。`);
+  return out;
+}
+
+function ModeDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
+  const sessions = useSessions().data ?? [];
+  const [next, setNext] = useState({ mode: connect.mode, requireMention: connect.requireMention });
+  const changed = next.mode !== connect.mode || (next.mode === "single-session" && next.requireMention !== connect.requireMention);
+  const running = sessions.filter((s) => (s.connect === connect.id || s.boundTo.includes(connect.id)) && s.process === "running").length;
+  const effects = changed ? consequences(connect, next, running) : [];
   return (
-    <Section title="会话方式" description="改动只影响之后的新消息；已有的会话保留原样。无论哪种方式，agent 都能看到每条消息来自哪个 thread，并回到那个 thread。">
-      <ModeChoices mode={connect.mode} requireMention={connect.requireMention} disabled={save.isPending}
-        onChange={(next) => save.mutate(next, { onSuccess: () => toast("已保存会话方式") })} />
+    <Dialog open onClose={onClose} wide title="更改会话方式"
+      description="这会改变之后每条消息进哪个会话。已经开始的对话可能因此断开，请看清下面的影响再确认。"
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>取消</Button>
+        <Button variant="primary" disabled={!changed} busy={save.isPending}
+          onClick={() => save.mutate(next, { onSuccess: () => { toast("已更改会话方式"); onClose(); } })}>
+          {next.mode === connect.mode ? "确认更改" : `改为${next.mode === "single-session" ? "单会话" : "多会话"}`}
+        </Button>
+      </>}>
+      <ModeChoices mode={next.mode} requireMention={next.requireMention} onChange={setNext} />
+      {effects.length > 0 && (
+        <div className="callout" data-tone="amber" role="note">
+          <strong>更改之后</strong>
+          <ul>{effects.map((e) => <li key={e}>{e}</li>)}</ul>
+        </div>
+      )}
+      {save.error && <p className="field-error" role="alert">{save.error.message}</p>}
+    </Dialog>
+  );
+}
+
+/** A single-session connect's session: the one its messages go into, which people can switch or start afresh. */
+function BoundSession({ connect }: { connect: ConnectView }) {
+  const sessions = useSessions().data ?? [];
+  const [choosing, setChoosing] = useState(false);
+  const bound = sessions.find((s) => s.key === connect.session);
+  return (
+    <Section title="当前会话" description="单会话模式下，消息都进这个会话。可以换成另一个会话，或者新开一个。"
+      actions={<Button onClick={() => setChoosing(true)}>换一个会话</Button>}>
+      {bound ? (
+        <Link className="card card-row card-link" to={`/sessions/${encodeURIComponent(bound.key)}`}>
+          <div className="card-row-text">
+            <strong>{sessionTitle(bound, connect.name)}</strong>
+            <span className="muted">{RUNTIME_LABEL[bound.runtime]} · {bound.turns} 轮 · 最近活动 {relativeTime(bound.lastActiveAt)}</span>
+          </div>
+          <Pill tone={statusTone(sessionStatus(bound))}>{STATUS_LABEL[sessionStatus(bound)]}</Pill>
+        </Link>
+      ) : (
+        <div className="card card-row"><span className="muted">还没有会话；下一条消息会开始一个新的。</span></div>
+      )}
+      {choosing && <ChooseSessionDialog connect={connect} onClose={() => setChoosing(false)} />}
     </Section>
+  );
+}
+
+function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
+  const toast = useToast();
+  const client = useQueryClient();
+  const all = useSessions().data ?? [];
+  const overview = useOverview().data;
+  const candidates = all.filter((s) => s.runtime === connect.bind.runtime).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+  const [choice, setChoice] = useState<string>(connect.session ?? "new");
+  const [title, setTitle] = useState("");
+  const bind = useMutation({
+    mutationFn: () => api.bindSession(connect.id, choice === "new" ? null : choice, title),
+    onSuccess: () => {
+      void client.invalidateQueries();
+      toast(choice === "new" ? "已新建会话" : "已换成这个会话");
+      onClose();
+    },
+  });
+  const nameOf = (id: string) => overview?.connects.find((c) => c.id === id)?.name ?? id;
+  return (
+    <Dialog open onClose={onClose} wide title="选择会话"
+      description={`之后「${connect.name}」收到的消息都进选中的会话。原来的会话保留，但不再收到这个连接的新消息。`}
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>取消</Button>
+        <Button variant="primary" busy={bind.isPending} disabled={choice === connect.session}
+          onClick={() => bind.mutate()}>{choice === "new" ? "新建并使用" : "使用这个会话"}</Button>
+      </>}>
+      <div className="session-choices">
+        <Choices label="会话" value={choice} onChange={setChoice} options={[
+          {
+            value: "new", title: "新建会话", description: "从空白上下文开始。",
+            extra: <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="给它起个名字（可选），例如：值班" aria-label="新会话的名字" />,
+          },
+          ...candidates.map((s) => ({
+            value: s.key,
+            title: <>{sessionTitle(s, nameOf(s.connect))}{s.key === connect.session && <span className="choice-badge">当前</span>}</>,
+            description: `${s.scope === "all" ? "单会话" : "来自一个 thread"} · ${nameOf(s.connect)} · ${s.turns} 轮 · ${relativeTime(s.lastActiveAt)}${s.boundTo.filter((c) => c !== connect.id).length ? ` · 也被 ${s.boundTo.filter((c) => c !== connect.id).map(nameOf).join("、")} 使用` : ""}`,
+          })),
+        ]} />
+      </div>
+      {bind.error && <p className="field-error" role="alert">{bind.error.message}</p>}
+    </Dialog>
   );
 }
 
@@ -238,7 +361,7 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
             return (
               <li key={s.key}>
                 <Link className="list-row" to={`/sessions/${encodeURIComponent(s.key)}`}>
-                  <span className="list-row-title">{s.scope === "all" ? `${connect.name} 的会话` : cleanText(s.firstText) || "（没有消息）"}</span>
+                  <span className="list-row-title">{sessionTitle(s, connect.name)}</span>
                   <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
                   <span className="muted list-row-time">{relativeTime(s.lastActiveAt)}</span>
                 </Link>
@@ -254,7 +377,6 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
 const KINDS = [
   { value: "slack", title: "Slack", description: "一个 Slack app，用 Socket Mode 连接，不需要公网地址。", icon: <span className="mark"><Slack {...ICON} size={16} /></span> },
   { value: "wechat", title: "微信", description: "即将支持。", disabled: true, icon: <span className="mark"><MessageCircle {...ICON} size={16} /></span> },
-  { value: "telegram", title: "Telegram", description: "即将支持。", disabled: true, icon: <span className="mark"><Send {...ICON} size={16} /></span> },
 ];
 
 export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): void }) {

@@ -2,9 +2,9 @@ import { ArrowLeft, KeyRound, Plus, Settings } from "lucide-react";
 import { useMemo, useState } from "react";
 import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
-import { cleanText, connectionText, dayLabel, presence, relativeTime, sessionStatus } from "./format.ts";
+import { connectionText, dayLabel, modeShort, presence, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
 import { NewConnectDialog } from "./pages/Connect.tsx";
-import { Avatar, ICON, IconButton, StatusDot, Tip } from "./ui.tsx";
+import { ConnectKindIcon, ICON, IconButton, StatusDot, Tip } from "./ui.tsx";
 
 export function Sidebar() {
   const settings = useLocation().pathname.startsWith("/settings");
@@ -50,7 +50,7 @@ function MainNav() {
     <>
       <div className="nav-scroll">
         {groups.length === 0 && !sessions.isPending && (
-          <p className="nav-empty">{connects.length ? "在 Slack 里 @ 它，会话就会出现在这里。" : "先添加一个连接。"}</p>
+          <p className="nav-empty">{connects.length ? "在 Slack 里 @ 它，会话就会出现在这里。" : "先在下面添加一个连接。"}</p>
         )}
         {groups.map((group) => (
           <section key={group.label} aria-label={group.label}>
@@ -58,19 +58,22 @@ function MainNav() {
             {group.items.map((s) => <SessionRow key={s.key} session={s} connect={byId.get(s.connect)} />)}
           </section>
         ))}
+      </div>
+      <section className="nav-connects" aria-label="连接">
         <div className="nav-heading nav-heading-action">
-          连接
+          <span>连接</span>
           <IconButton label="添加连接" icon={Plus} onClick={() => setAdding(true)} />
         </div>
+        {connects.length === 0 && <p className="nav-empty">还没有连接。</p>}
         {connects.map((c) => (
           <NavLink key={c.id} className="nav-row" to={`/connects/${c.id}`}>
-            <Avatar id={c.id} name={c.name} />
+            <ConnectKindIcon kind={c.kind} />
             <span className="nav-text">{c.name}</span>
-            {c.connection.state !== "connected" && <span className="nav-note">{connectionText(c.connection)}</span>}
+            <span className="nav-note">{c.connection.state === "connected" ? modeShort(c.mode) : connectionText(c.connection)}</span>
             <StatusDot state={presence(c.connection)} label={connectionText(c.connection)} />
           </NavLink>
         ))}
-      </div>
+      </section>
       <div className="nav-foot">
         <NavLink className="nav-row" to="/settings"><Settings {...ICON} />设置</NavLink>
       </div>
@@ -88,10 +91,9 @@ function SessionRow({ session: s, connect }: { session: SessionSummary; connect:
   return (
     <NavLink className="nav-row nav-session" to={`/sessions/${encodeURIComponent(s.key)}`} aria-current={key === s.key ? "page" : undefined}>
       <span className="nav-session-text">
-        <span className="nav-session-title">{s.scope === "all" ? `${name} 的会话` : cleanText(s.firstText) || "（没有消息）"}</span>
+        <span className="nav-session-title">{sessionTitle(s, name)}</span>
         <span className="nav-session-meta">
-          <Avatar id={s.connect} name={name} size={14} />
-          <span className="nav-text">{s.scope === "all" ? "所有 thread" : name}</span>
+          <span className="nav-text">{s.scope === "all" ? `${name} · 单会话` : name}</span>
           <span className="nav-time">{relativeTime(s.lastActiveAt)}</span>
         </span>
       </span>

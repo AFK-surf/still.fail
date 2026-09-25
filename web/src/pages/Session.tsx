@@ -8,7 +8,7 @@ import remarkGfm from "remark-gfm";
 import { api, useOverview, useSession, useSessions, type ConnectView, type SessionDetail } from "../api.ts";
 import { History, parseArgs, toolName } from "../History.tsx";
 import {
-  absoluteTime, botUserIdOf, cleanText, parsePrompt, relativeTime, sessionStatus, slackThreadUrl, splitThread, turnResult, threadNamer,
+  absoluteTime, botUserIdOf, parsePrompt, sessionTitle, relativeTime, sessionStatus, slackThreadUrl, splitThread, turnResult, threadNamer,
 } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { Avatar, Button, Empty, ICON, IconButton, Menu, MobileBack, Pill, Tip } from "../ui.tsx";
@@ -54,7 +54,7 @@ function Conversation({ sessionKey }: { sessionKey: string }) {
   const name = connect?.name ?? session.connect;
   const base = workspaceUrl(connect);
   const toggleHistory = () => setParams({ history: historyOpen ? "0" : "1" }, { replace: true });
-  const title = session.scope === "all" ? `${name} 的会话` : cleanText(session.firstText) || "（没有消息）";
+  const title = sessionTitle(session, name);
   const single = threads.length <= 1 ? threads[0] : undefined;
   const singleUrl = single ? slackThreadUrl(base, single.channel, single.threadTs) : null;
 
@@ -64,7 +64,6 @@ function Conversation({ sessionKey }: { sessionKey: string }) {
         <header className="page-bar">
           <MobileBack to="/sessions" label="会话" />
           <div className="page-bar-title">
-            <Avatar id={session.connect} name={name} size={22} />
             <h1>{title}</h1>
             {session.scope === "all" && <Pill>{threads.length} 个 thread</Pill>}
           </div>

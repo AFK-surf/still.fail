@@ -1,7 +1,7 @@
 // Shared controls on Radix primitives (focus, keyboard, layering and
 // dismissal come from Radix), styled with ember's tokens. Pages compose these
 // instead of styling their own buttons, fields or menus.
-import { Check, ChevronDown, ChevronLeft, Copy, MoreHorizontal, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, Copy, MessageCircle, MoreHorizontal, Slack, X } from "lucide-react";
 import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
@@ -280,4 +280,13 @@ export function Section({ title, actions, children, description }: { title: Reac
       {children}
     </section>
   );
+}
+
+const KIND_ICON = { slack: Slack, wechat: MessageCircle } as const;
+
+/** What a connect connects to, as an icon: its kind, not its identity. */
+export function ConnectKindIcon({ kind, size = 16, tile }: { kind: string; size?: number; tile?: boolean }) {
+  const Icon = KIND_ICON[kind as keyof typeof KIND_ICON] ?? MessageCircle;
+  const icon = <Icon size={size} strokeWidth={1.7} aria-hidden="true" />;
+  return tile ? <span className="mark kind-mark" style={{ width: size * 2.4, height: size * 2.4 }}>{icon}</span> : <span className="kind-icon">{icon}</span>;
 }

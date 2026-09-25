@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, KeyRound, Pencil, Plus, RefreshCw, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, KeyRound, LogIn, Pencil, Plus, RefreshCw, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
 import { Collapsible } from "radix-ui";
-import { useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, keys, useOverview, type AccessKind, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Avatar, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
+import { Button, Choices, ConnectKindIcon, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
 function OpenCodeMark({ size = 16 }: { size?: number; strokeWidth?: number }) {
@@ -150,7 +150,8 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
     setEditingName(false);
     if (name.trim() && name.trim() !== profile.name) save.mutate({ name: name.trim() }, { onSuccess: () => toast("已改名") });
   };
-  const latest = check.data ?? profile.check;
+  // The server checks again after a sign-in; take whichever check is newer.
+  const latest = check.data && (!profile.check || check.data.checkedAt >= profile.check.checkedAt) ? check.data : profile.check;
   const tone = checkTone(latest);
   const users = profile.usedBy.map((id) => overview.connects.find((c) => c.id === id)).filter((c) => c !== undefined);
   const [deleting, setDeleting] = useState(false);
@@ -185,12 +186,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
             {latest && <span className="muted">{relativeTime(latest.checkedAt)}检查</span>}
           </div>
         </div>
-        {latest?.state === "login" && (
-          <div className="card">
-            <p className="card-lead">在运行 ember 的机器上执行这条命令登录，然后回来点「重新检查」：</p>
-            <CopyCommand text={profile.loginCommand} />
-          </div>
-        )}
+        {profile.access.kind === "subscription" && <SignIn profile={profile} needed={latest?.state === "login"} />}
       </section>
 
       <AccessSection profile={profile} onSave={(input, done) => save.mutate(input, { onSuccess: () => { toast("已保存，正在检查"); done(); } })} busy={save.isPending} />
@@ -206,7 +202,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
         {users.length === 0 ? <p className="muted">还没有连接使用这个账号。</p> : (
           <ul className="list">
             {users.map((c) => (
-              <li key={c.id}><Link className="list-row" to={`/connects/${c.id}`}><Avatar id={c.id} name={c.name} /><span className="list-row-title">{c.name}</span><span className="muted">{c.bind.model ?? profile.model ?? "默认模型"}</span></Link></li>
+              <li key={c.id}><Link className="list-row" to={`/connects/${c.id}`}><ConnectKindIcon kind={c.kind} /><span className="list-row-title">{c.name}</span><span className="muted">{c.bind.model ?? profile.model ?? "默认模型"}</span></Link></li>
             ))}
           </ul>
         )}
@@ -304,5 +300,91 @@ function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(inpu
       </div>
       </Collapsible.Content>
     </Collapsible.Root>
+  );
+}
+
+/**
+ * Signing a subscription account in without a terminal: ember runs the
+ * runtime's login on its own machine and this panel relays the browser steps.
+ */
+function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) {
+  const client = useQueryClient();
+  const toast = useToast();
+  const [code, setCode] = useState("");
+  const [manual, setManual] = useState(false);
+  const job = profile.login;
+  const refresh = () => void client.invalidateQueries({ queryKey: keys.overview });
+  const start = useMutation({ mutationFn: () => api.startLogin(profile.id), onSuccess: refresh });
+  const cancel = useMutation({ mutationFn: () => api.cancelLogin(profile.id), onSuccess: refresh });
+  const send = useMutation({ mutationFn: () => api.loginCode(profile.id, code), onSuccess: () => { setCode(""); refresh(); } });
+  const active = job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
+  const provider = profile.runtime === "claude" ? "Claude" : "ChatGPT";
+  // Announce a sign-in finishing while the page is open, not one that finished earlier.
+  const previous = useRef(job?.state);
+  useEffect(() => {
+    if (job?.state === "done" && previous.current && previous.current !== "done") toast("登录成功");
+    previous.current = job?.state;
+  }, [job?.state, toast]);
+
+  if (!active) {
+    return (
+      <div className="card">
+        <div className="card-row">
+          <div className="card-row-text">
+            <strong>{needed ? `还没登录 ${provider} 账号` : `${provider} 订阅登录`}</strong>
+            <span className="muted">
+              {job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : "登录在运行 ember 的机器上完成，你只需要在浏览器里授权。"}
+            </span>
+          </div>
+          <Button variant={needed ? "primary" : "secondary"} icon={LogIn} busy={start.isPending} onClick={() => start.mutate()}>
+            {job?.state === "done" || !needed ? "重新登录" : "登录"}
+          </Button>
+        </div>
+        {start.error && <p className="field-error" role="alert">{start.error.message}</p>}
+        <button type="button" className="text-toggle" onClick={() => setManual(!manual)}>{manual ? "收起" : "也可以在服务器上手动登录"}</button>
+        {manual && <CopyCommand text={profile.loginCommand} />}
+      </div>
+    );
+  }
+
+  return (
+    <div className="card sign-in" aria-live="polite">
+      <div className="card-row">
+        <div className="card-row-text"><strong>正在登录 {provider}</strong><span className="muted">15 分钟内完成，过期会自动取消。</span></div>
+        <Button variant="ghost" busy={cancel.isPending} onClick={() => cancel.mutate()}>取消</Button>
+      </div>
+      {job.state === "starting" && <p className="muted"><span className="activity-pulse inline" aria-hidden="true" />正在生成登录链接…</p>}
+      {job.state === "needs_code" && job.url && (
+        <ol className="steps">
+          <li>
+            <span>打开授权页面，用要给 ember 使用的 Claude 账号登录并同意。</span>
+            <a className="btn btn-primary" href={job.url} target="_blank" rel="noopener"><ExternalLink {...ICON} />打开授权页面</a>
+          </li>
+          <li>
+            <span>同意后页面上会显示一段授权码，复制过来：</span>
+            <div className="input-row">
+              <input className="input mono" spellCheck={false} autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder="粘贴授权码" aria-label="授权码"
+                onKeyDown={(e) => { if (e.key === "Enter" && code.trim()) send.mutate(); }} />
+              <Button variant="primary" disabled={!code.trim()} busy={send.isPending} onClick={() => send.mutate()}>完成登录</Button>
+            </div>
+            {send.error && <p className="field-error" role="alert">{send.error.message}</p>}
+          </li>
+        </ol>
+      )}
+      {job.state === "needs_approval" && job.url && job.userCode && (
+        <ol className="steps">
+          <li>
+            <span>打开 OpenAI 的设备登录页面，用要给 ember 使用的 ChatGPT 账号登录。</span>
+            <a className="btn btn-primary" href={job.url} target="_blank" rel="noopener"><ExternalLink {...ICON} />打开登录页面</a>
+          </li>
+          <li>
+            <span>输入这个一次性代码：</span>
+            <CopyCommand text={job.userCode} />
+          </li>
+          <li className="muted"><span className="activity-pulse inline" aria-hidden="true" />输入后这里会自动完成，不用回来点。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</li>
+        </ol>
+      )}
+      {job.state === "verifying" && <p className="muted"><span className="activity-pulse inline" aria-hidden="true" />正在完成登录…</p>}
+    </div>
   );
 }
