@@ -82,7 +82,7 @@ test("secrets are masked in the overview", async () => {
   try {
     const { body } = await t.call("GET", "/overview");
     assert.equal(body.bots[0].slack.botToken, "xoxb-…bbbb");
-    assert.equal(body.bots[0].connection.state, "starting"); // the fake has no bot user id
+    assert.equal(body.bots[0].connection.state, "connected");
     const env = Object.fromEntries(body.profiles[0].env.map((e: any) => [e.key, e]));
     assert.equal(env.ANTHROPIC_API_KEY.secret, true);
     assert.equal(env.ANTHROPIC_API_KEY.value, "sk-ve…alue");
