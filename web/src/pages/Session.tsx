@@ -42,17 +42,39 @@ function workspaceUrl(connect: ConnectView | undefined): string | null {
   return c && (c.state === "connected" || c.state === "reconnecting") ? c.workspace?.url ?? null : null;
 }
 
+/** Tabs the right-hand panel can hold. A browser for the station's services comes later. */
+const TAB_LABEL: Record<string, string> = { history: "执行历史" };
+
 function SessionView({ sessionKey }: { sessionKey: string }) {
   const station = useStation();
   const link = useLink();
   const detail = useSession(sessionKey);
   const overview = useOverview();
-  // The side panel stays open on wide screens unless closed; on narrow ones it opens on demand, over the chat.
-  const [panel, setPanel] = useState<boolean>(() => localStorage.getItem("ember.sidePanel") !== "0" && window.matchMedia("(min-width: 1101px)").matches);
-  const togglePanel = (open: boolean) => {
-    setPanel(open);
-    localStorage.setItem("ember.sidePanel", open ? "1" : "0");
+  // Open tabs on the right; each can be closed, and with none open the panel goes away.
+  // On narrow screens nothing opens by itself, since the panel would cover the chat.
+  const [tabs, setTabs] = useState<string[]>(() => {
+    if (!window.matchMedia("(min-width: 1101px)").matches) return [];
+    try {
+      return (JSON.parse(localStorage.getItem("ember.sideTabs") ?? "[\"history\"]") as string[]).filter((t) => t in TAB_LABEL);
+    } catch {
+      return ["history"];
+    }
+  });
+  const [active, setActive] = useState(tabs[0] ?? "history");
+  const saveTabs = (next: string[]) => {
+    setTabs(next);
+    localStorage.setItem("ember.sideTabs", JSON.stringify(next));
   };
+  const openTab = (tab: string) => {
+    if (!tabs.includes(tab)) saveTabs([...tabs, tab]);
+    setActive(tab);
+  };
+  const closeTab = (tab: string) => {
+    const next = tabs.filter((t) => t !== tab);
+    saveTabs(next);
+    if (active === tab && next.length) setActive(next.at(-1)!);
+  };
+  const panel = tabs.length > 0;
   if (detail.isPending) return <Loading label={station.name ? `正在从 ${station.name} 读取会话…` : "正在读取会话…"} />;
   if (detail.isError) return <Empty><p>读不到这个会话：{detail.error.message}</p></Empty>;
   const { session, threads, chats } = detail.data;
@@ -83,20 +105,23 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
                 <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
               </Tip>
             )}
-          <IconButton label={panel ? "收起侧栏" : "执行历史与详情"} icon={panel ? PanelRightClose : PanelRightOpen} aria-pressed={panel} onClick={() => togglePanel(!panel)} />
+          <IconButton label={tabs.includes("history") ? "关闭执行历史" : "执行历史"} icon={tabs.includes("history") ? PanelRightClose : PanelRightOpen}
+            aria-pressed={tabs.includes("history")} onClick={() => (tabs.includes("history") ? closeTab("history") : openTab("history"))} />
         </div>
       </header>
       {/* The chat is the page; the session's history sits in a tab set that takes the whole right side. */}
-      <ChatPanel detail={detail.data} chat={chat} />
+      <ChatPanel detail={detail.data} chat={chat} onOpenHistory={() => openTab("history")} />
       </div>
         {panel && (
-          <Tabs.Root className="side-panel" value="history">
-            <div className="side-tabs">
-              <Tabs.List className="side-tab-list" aria-label="会话侧栏">
-                <Tabs.Trigger className="side-tab" value="history">执行历史</Tabs.Trigger>
-              </Tabs.List>
-              <IconButton label="收起侧栏" icon={X} onClick={() => togglePanel(false)} />
-            </div>
+          <Tabs.Root className="side-panel" value={tabs.includes(active) ? active : tabs[0]!} onValueChange={setActive}>
+            <Tabs.List className="side-tab-list" aria-label="会话侧栏">
+              {tabs.map((t) => (
+                <span key={t} className="side-tab-wrap">
+                  <Tabs.Trigger className="side-tab" value={t}>{TAB_LABEL[t]}</Tabs.Trigger>
+                  <button type="button" className="side-tab-close" aria-label={`关闭${TAB_LABEL[t]}`} onClick={() => closeTab(t)}><X size={12} strokeWidth={2} /></button>
+                </span>
+              ))}
+            </Tabs.List>
             <Tabs.Content className="side-content" value="history">
               <History detail={detail.data} connect={connect} actions={<SessionActions detail={detail.data} />}
                 details={<SessionDetails detail={detail.data} connect={connect} base={base} />} />
@@ -222,7 +247,7 @@ function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | nu
 }
 
 /** ember's own chat with the session: what people type reaches the agent like a Slack message; it answers with chat_post. */
-function ChatPanel({ detail, chat }: { detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined }) {
+function ChatPanel({ detail, chat, onOpenHistory }: { detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; onOpenHistory(): void }) {
   const list = useRef<HTMLDivElement>(null);
   const messages = chat?.messages ?? [];
   useEffect(() => {
@@ -252,7 +277,7 @@ function ChatPanel({ detail, chat }: { detail: SessionDetail; chat: SessionDetai
         ) : (
           <div key={m.ts} className="msg msg-bot">
             <div className="msg-head">
-              <span className="msg-name">{agent}</span>
+              <button type="button" className="msg-name msg-agent" onClick={onOpenHistory} title="打开执行历史">{agent}</button>
               <span className="msg-time" title={absoluteTime(m.createdAt)}>{relativeTime(m.createdAt)}</span>
             </div>
             <div className="markdown"><Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown></div>

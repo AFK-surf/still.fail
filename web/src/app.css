@@ -655,3 +655,13 @@
   .session-page[data-panel="true"] { grid-template-columns: minmax(0, 1fr); }
   .session-page[data-panel="true"] .side-panel { position: fixed; inset: 0 0 0 auto; width: min(460px, 100vw); z-index: 30; box-shadow: -12px 0 32px var(--shadow); }
 }
+
+.side-tab-list { display: flex; align-items: center; gap: 2px; height: 44px; padding: 0 8px; border-bottom: 1px solid var(--line); flex: none; }
+.side-tab-wrap { display: inline-flex; align-items: center; border-radius: 10px; }
+.side-tab-wrap:hover { background: var(--hover); }
+.side-tab-wrap:has(.side-tab[data-state="active"]) { background: var(--selected); }
+.side-tab-wrap .side-tab { background: none !important; padding-right: 4px; }
+.side-tab-close { display: grid; place-items: center; width: 20px; height: 20px; margin-right: 6px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.side-tab-close:hover { background: var(--line); color: var(--text); }
+.msg-agent { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--text); cursor: pointer; }
+.msg-agent:hover { text-decoration: underline; }
