@@ -1,6 +1,7 @@
 // Keeps one chat connection per enabled bot, following config edits: a new or
 // re-tokened bot is (re)connected, a removed or disabled one disconnected, the
 // rest left alone.
+import type { SlackIdentity } from "./chat/slack.ts";
 import type { ChatSurface, InboundMessage } from "./chat/types.ts";
 import type { Bot, Config } from "./config.ts";
 import { log } from "./log.ts";
@@ -9,11 +10,12 @@ export type BotState =
   | { state: "disabled" }
   | { state: "no_tokens" }
   | { state: "starting" }
-  | { state: "connected" | "reconnecting"; botUserId: string; lastError: string | null }
+  | { state: "connected" | "reconnecting"; botUserId: string; lastError: string | null; workspace: SlackIdentity | null }
   | { state: "error"; error: string };
 
 export interface Connection extends ChatSurface {
   readonly status: { connected: boolean; lastError: string | null };
+  readonly identity: SlackIdentity | null;
 }
 
 export class BotConnections {
@@ -43,7 +45,10 @@ export class BotConnections {
     if (error) return { state: "error", error };
     const chat = this.chats.get(bot.id);
     if (!chat || !chat.botUserId) return { state: "starting" };
-    return { state: chat.status.connected ? "connected" : "reconnecting", botUserId: chat.botUserId, lastError: chat.status.lastError };
+    return {
+      state: chat.status.connected ? "connected" : "reconnecting",
+      botUserId: chat.botUserId, lastError: chat.status.lastError, workspace: chat.identity,
+    };
   }
 
   async stopAll(): Promise<void> {

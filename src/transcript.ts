@@ -41,16 +41,61 @@ export function transcriptPath(runtime: RuntimeKind, home: string, runtimeSessio
   return match ? join(match.parentPath, match.name) : undefined;
 }
 
-export function readTimeline(runtime: RuntimeKind, path: string): TimelineEntry[] {
-  const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
-  const records = lines.flatMap((line) => {
+export interface TranscriptUsage {
+  /** Model requests with reported usage. */
+  modelCalls: number;
+  /** Input tokens, cached ones included. */
+  inputTokens: number;
+  cachedTokens: number;
+  outputTokens: number;
+  /** The model the runtime last reported, if any. */
+  model: string | null;
+}
+
+function records(path: string): Record<string, any>[] {
+  return readFileSync(path, "utf8").split("\n").filter(Boolean).flatMap((line) => {
     try {
       return [JSON.parse(line) as Record<string, any>];
     } catch {
       return []; // a line still being written
     }
   });
-  return runtime === "claude" ? claudeTimeline(records) : codexTimeline(records);
+}
+
+export function readTimeline(runtime: RuntimeKind, path: string): TimelineEntry[] {
+  return runtime === "claude" ? claudeTimeline(records(path)) : codexTimeline(records(path));
+}
+
+/** Token usage summed over the transcript's model requests. */
+export function readUsage(runtime: RuntimeKind, path: string): TranscriptUsage {
+  const usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
+  if (runtime === "claude") {
+    // One API response is split over several lines that share message.id and usage.
+    const seen = new Set<string>();
+    for (const r of records(path)) {
+      const m = r.type === "assistant" ? r.message : undefined;
+      if (!m?.usage || !m.id || seen.has(m.id)) continue;
+      seen.add(m.id);
+      const cached = (m.usage.cache_read_input_tokens ?? 0) + (m.usage.cache_creation_input_tokens ?? 0);
+      usage.modelCalls++;
+      usage.inputTokens += (m.usage.input_tokens ?? 0) + cached;
+      usage.cachedTokens += m.usage.cache_read_input_tokens ?? 0;
+      usage.outputTokens += m.usage.output_tokens ?? 0;
+      if (typeof m.model === "string" && m.model !== "<synthetic>") usage.model = m.model;
+    }
+    return usage;
+  }
+  for (const r of records(path)) {
+    const p = r.payload ?? {};
+    if (r.type === "turn_context" && typeof p.model === "string") usage.model = p.model;
+    const last = r.type === "event_msg" && p.type === "token_count" ? p.info?.last_token_usage : undefined;
+    if (!last) continue;
+    usage.modelCalls++;
+    usage.inputTokens += last.input_tokens ?? 0;
+    usage.cachedTokens += last.cached_input_tokens ?? 0;
+    usage.outputTokens += last.output_tokens ?? 0;
+  }
+  return usage;
 }
 
 function clip(text: string): string {

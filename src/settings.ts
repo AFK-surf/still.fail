@@ -34,6 +34,11 @@ export class Settings {
     return this.#raw;
   }
 
+  /** Tells listeners that derived state changed although the config did not (e.g. a profile check finished). */
+  touch(): void {
+    for (const listener of this.#listeners) listener(this.#config);
+  }
+
   onChange(listener: (config: Config) => void): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);

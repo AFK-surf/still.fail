@@ -15,6 +15,7 @@ import { FakeChat, FakeDriver, message, settle } from "./fakes.ts";
 
 class FakeConnection extends FakeChat implements Connection {
   readonly status = { connected: true, lastError: null };
+  readonly identity = { team: "Cue", teamId: "T1", url: "https://cue.slack.com/", botUserId: "UBOT", botName: "ember" };
   started = 0;
   stopped = 0;
   override async start(): Promise<void> {
@@ -197,6 +198,25 @@ test("profile env: strings set, null removes, omitted keys stay", async () => {
     assert.equal((await t.call("PUT", "/profiles/cc", { env: { "BAD NAME": "x" } })).status, 400);
     await t.call("PUT", "/profiles/new-one", { runtime: "codex" });
     assert.equal(t.settings.config.profiles.at(-1)!.home, join(t.dataDir, "homes/new-one"));
+  } finally {
+    t.close();
+  }
+});
+
+test("editing a profile's access keeps a blank key but never carries it to another kind", async () => {
+  const t = await setup();
+  try {
+    assert.equal((await t.call("PUT", "/profiles/cx", { access: { kind: "opencode-go", key: "ocg-key-123456" } })).status, 200);
+    assert.equal(t.settings.config.profiles.find((p) => p.id === "cx")!.env.OPENCODE_GO_KEY, "ocg-key-123456");
+    await t.call("PUT", "/profiles/cx", { name: "Codex OCG", access: { kind: "opencode-go", key: "" } });
+    const cx = t.settings.config.profiles.find((p) => p.id === "cx")!;
+    assert.equal(cx.access.key, "ocg-key-123456");
+    assert.equal(cx.name, "Codex OCG");
+    const switched = await t.call("PUT", "/profiles/cx", { access: { kind: "subscription", key: "" } });
+    assert.equal(switched.status, 200);
+    assert.equal(t.settings.config.profiles.find((p) => p.id === "cx")!.access.key, "");
+    const { body } = await t.call("GET", "/overview");
+    assert.equal(body.profiles.find((p: any) => p.id === "cx").loginCommand, `CODEX_HOME=${join(t.dataDir, "homes/cx")} codex login`);
   } finally {
     t.close();
   }

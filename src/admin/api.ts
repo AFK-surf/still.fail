@@ -9,8 +9,10 @@ import type { Hub } from "../hub.ts";
 import { log } from "../log.ts";
 import type { Settings } from "../settings.ts";
 import type { Store } from "../store.ts";
-import { readTimeline, transcriptPath } from "../transcript.ts";
+import { checkProfile, loginCommand, type ProfileCheck } from "../profiles.ts";
+import { readTimeline, readUsage, transcriptPath } from "../transcript.ts";
 import { AccessDenied, AccessGate, type Viewer } from "./access.ts";
+import { verifySlackTokens } from "../chat/slack.ts";
 import { createAppUrl } from "./slack-manifest.ts";
 import type { Overview, SessionDetail, SessionSummary } from "./types.ts";
 
@@ -76,6 +78,7 @@ function processMemory(pgids: number[]): Map<number, number> {
 export class AdminApi {
   readonly #deps: AdminDeps;
   readonly #gate: AccessGate;
+  readonly #checks = new Map<string, ProfileCheck>();
 
   constructor(deps: AdminDeps) {
     this.#deps = deps;
@@ -127,8 +130,21 @@ export class AdminApi {
       await this.#deps.bots.reconcile(this.#deps.settings.config);
       return send(res, 200, { ok: true });
     }
-    if (resource === "profiles" && id && !action && method === "PUT") return send(res, 200, this.#putProfile(id, await body(req), viewer));
+    if (resource === "profiles" && id && !action && method === "PUT") {
+      const overview = this.#putProfile(id, await body(req), viewer);
+      this.#check(id).catch((error) => log.warn("profile check failed", { profile: id, error })); // report the new state once known
+      return send(res, 200, overview);
+    }
+    if (resource === "profiles" && id && action === "check" && method === "POST") return send(res, 200, await this.#check(id));
     if (resource === "profiles" && id && !action && method === "DELETE") return send(res, 200, this.#deleteProfile(id, viewer));
+    if (method === "POST" && path === "/slack/verify") {
+      // Blank tokens fall back to the stored ones of `bot`, so replacing one token can be checked alone.
+      const input = await body(req);
+      const stored = typeof input.bot === "string" ? this.#deps.settings.config.bots.find((b) => b.id === input.bot)?.slack : undefined;
+      const pick = (field: "appToken" | "botToken") =>
+        typeof input[field] === "string" && input[field].trim() ? input[field].trim() : stored?.[field] ?? "";
+      return send(res, 200, await verifySlackTokens({ appToken: pick("appToken"), botToken: pick("botToken") }));
+    }
     if (method === "GET" && path === "/slack/create-app-url") {
       const name = url.searchParams.get("name")?.trim();
       if (!name) throw new HttpError(400, "name is required");
@@ -153,9 +169,12 @@ export class AdminApi {
         sessions: sessions.filter((s) => s.bot === bot.id).length,
       })),
       profiles: config.profiles.map((p) => ({
-        id: p.id, runtime: p.runtime, home: p.home, homeExists: existsSync(p.home), model: p.model ?? null,
-        env: Object.entries(p.env).map(([key, value]) => ({ key, secret: SECRET_KEY.test(key), value: SECRET_KEY.test(key) ? mask(value) : value })),
+        id: p.id, name: p.name, runtime: p.runtime, access: { kind: p.access.kind, key: mask(p.access.key) },
+        home: p.home, homeExists: existsSync(p.home), model: p.model ?? null,
+        env: Object.entries(p.customEnv).map(([key, value]) => ({ key, secret: SECRET_KEY.test(key), value: SECRET_KEY.test(key) ? mask(value) : value })),
         usedBy: config.bots.filter((b) => b.profiles.includes(p.id)).map((b) => b.id),
+        loginCommand: loginCommand(p.runtime, p.home),
+        check: this.#checks.get(p.id) ?? null,
       })),
       processes: processes.map((p) => ({ ...p, rssMb: memory.has(p.pgid) ? Math.round(memory.get(p.pgid)! / 1024) : null })),
       counts: {
@@ -186,7 +205,7 @@ export class AdminApi {
       session: summary,
       turns: this.#deps.store.listTurns(key),
       inbound: this.#deps.store.listInbound(key),
-      transcript: path ? { path, timeline: readTimeline(summary.runtime, path) } : null,
+      transcript: path ? { path, timeline: readTimeline(summary.runtime, path), usage: readUsage(summary.runtime, path) } : null,
     };
   }
 
@@ -259,9 +278,16 @@ export class AdminApi {
         if (value === null) delete env[key];
         else if (typeof value === "string") env[key] = value;
       }
+      const kind = input.access?.kind ?? existing?.access?.kind;
+      const givenKey = typeof input.access?.key === "string" ? input.access.key.trim() : "";
+      const keepKey = kind === existing?.access?.kind ? existing?.access?.key : undefined;
+      const key = givenKey || keepKey;
+      const name = typeof input.name === "string" ? input.name.trim() : existing?.name;
       const next: RawProfile = {
         id,
+        ...(name ? { name } : {}),
         runtime: (input.runtime ?? existing?.runtime) as RuntimeKind,
+        ...(kind ? { access: { kind, ...(key ? { key } : {}) } } : {}),
         home: typeof input.home === "string" && input.home.trim() ? input.home.trim() : existing?.home ?? `homes/${id}`,
         env,
       };
@@ -272,6 +298,15 @@ export class AdminApi {
       }
       return { ...raw, profiles: existing ? profiles.map((p) => (p.id === id ? next : p)) : [...profiles, next] };
     });
+  }
+
+  async #check(id: string): Promise<ProfileCheck> {
+    const profile = this.#deps.settings.config.profiles.find((p) => p.id === id);
+    if (!profile) throw new HttpError(404, `unknown profile ${id}`);
+    const check = await checkProfile({ runtime: profile.runtime, kind: profile.access.kind, key: profile.access.key, home: profile.home, env: process.env });
+    this.#checks.set(id, check);
+    this.#deps.settings.touch();
+    return check;
   }
 
   #deleteProfile(id: string, viewer: Viewer) {

@@ -7,21 +7,28 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import { ACCESS_KINDS, accessEnv, KEYED, type AccessKind } from "./profiles.ts";
 
 export type RuntimeKind = "claude" | "codex";
 export const RUNTIMES: readonly RuntimeKind[] = ["claude", "codex"];
 
 export interface Profile {
   id: string;
+  /** Shown instead of the id. */
+  name: string;
   runtime: RuntimeKind;
+  /** How the runtime reaches its models; `key` is set for keyed kinds. */
+  access: { kind: AccessKind; key: string };
   /** The runtime's config home: CLAUDE_CONFIG_DIR or CODEX_HOME. */
   home: string;
   /**
-   * Extra environment for this profile's processes. In values, `{route}` is
-   * replaced with a per-session routing id (claude) or the profile id (codex,
-   * whose app-server is shared), e.g. for provider session-affinity headers.
+   * The environment for this profile's processes: what the access kind needs
+   * plus `customEnv`. In values, `{route}` is replaced with a per-session
+   * routing id (claude) or the profile id (codex, whose app-server is shared).
    */
   env: Record<string, string>;
+  /** Variables set by hand; they win over derived ones. */
+  customEnv: Record<string, string>;
   model?: string;
 }
 
@@ -71,7 +78,9 @@ export interface RawBot {
 
 export interface RawProfile {
   id: string;
+  name?: string;
   runtime: RuntimeKind;
+  access?: { kind: AccessKind; key?: string };
   home: string;
   env?: Record<string, string>;
   model?: string;
@@ -102,7 +111,16 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
     if (typeof p.home !== "string" || !p.home) throw new Error(`profile ${p.id}: home is required`);
     if (!RUNTIMES.includes(p.runtime)) throw new Error(`profile ${p.id}: unknown runtime ${String(p.runtime)}`);
     const home = isAbsolute(p.home) ? p.home : join(dataDir, p.home);
-    return { id: p.id, runtime: p.runtime, home, env: p.env ?? {}, ...(p.model ? { model: p.model } : {}) };
+    const kind = p.access?.kind ?? "env";
+    if (!ACCESS_KINDS[p.runtime].includes(kind)) throw new Error(`profile ${p.id}: ${p.runtime} cannot use access ${String(kind)}`);
+    const key = p.access?.key?.trim() ?? "";
+    if (KEYED.has(kind) && !key) throw new Error(`profile ${p.id}: access ${kind} needs a key`);
+    const customEnv = p.env ?? {};
+    return {
+      id: p.id, name: p.name?.trim() || p.id, runtime: p.runtime, access: { kind, key }, home,
+      env: { ...accessEnv(p.runtime, kind, key, p.model), ...customEnv }, customEnv,
+      ...(p.model ? { model: p.model } : {}),
+    };
   });
   unique("profile", profiles.map((p) => p.id));
 

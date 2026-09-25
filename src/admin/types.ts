@@ -1,9 +1,10 @@
 // Shapes of the admin API responses, shared with the web client (type-only imports).
 import type { RuntimeKind } from "../config.ts";
 import type { BotState } from "../bots.ts";
-import type { TimelineEntry } from "../transcript.ts";
+import type { AccessKind, ProfileCheck } from "../profiles.ts";
+import type { TimelineEntry, TranscriptUsage } from "../transcript.ts";
 
-export type { BotState, RuntimeKind, TimelineEntry };
+export type { AccessKind, BotState, ProfileCheck, RuntimeKind, TimelineEntry, TranscriptUsage };
 
 export type ProcessState = "running" | "warm" | "cold";
 
@@ -29,12 +30,19 @@ export interface EnvView {
 
 export interface ProfileView {
   id: string;
+  name: string;
   runtime: RuntimeKind;
+  access: { kind: AccessKind; key: string };
   home: string;
   homeExists: boolean;
   model: string | null;
+  /** Hand-set variables only; the ones an access kind derives are not listed. */
   env: EnvView[];
   usedBy: string[];
+  /** Run on the ember host to sign a subscription profile in. */
+  loginCommand: string;
+  /** Latest check, if one ran since ember started. */
+  check: ProfileCheck | null;
 }
 
 export interface ProcessView {
@@ -102,7 +110,7 @@ export interface SessionDetail {
   session: SessionSummary;
   turns: TurnRecord[];
   inbound: InboundView[];
-  transcript: { path: string; timeline: TimelineEntry[] } | null;
+  transcript: { path: string; timeline: TimelineEntry[]; usage: TranscriptUsage } | null;
 }
 
 /** PUT /bots/:id. Blank or missing tokens keep the stored ones. */
@@ -115,9 +123,11 @@ export interface BotInput {
   slack?: { appToken?: string; botToken?: string };
 }
 
-/** PUT /profiles/:id. env: a string sets, null removes, an omitted key is kept. */
+/** PUT /profiles/:id. env: a string sets, null removes, an omitted key is kept. A blank access key keeps the stored one. */
 export interface ProfileInput {
+  name?: string;
   runtime?: RuntimeKind;
+  access?: { kind: AccessKind; key?: string };
   home?: string;
   model?: string;
   env?: Record<string, string | null>;

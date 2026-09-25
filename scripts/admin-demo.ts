@@ -67,9 +67,10 @@ seeds.forEach((seed, i) => {
   states.set(key, seed.process);
 });
 
+const demoWorkspace = (botUserId: string, botName: string) => ({ team: "Cue", teamId: "T0DEMO", url: "https://cue.slack.com/", botUserId, botName });
 const hub = { processState: (key: string) => states.get(key) ?? "cold", stop: async () => {}, evict: async () => {} } as unknown as Hub;
 const bots = {
-  state: (bot: { enabled: boolean; id: string }) => (!bot.enabled ? { state: "disabled" } : bot.id === "gpt" ? { state: "reconnecting", botUserId: "UGPT", lastError: "socket closed" } : { state: "connected", botUserId: "U0C4KHKPWTC", lastError: null }),
+  state: (bot: { enabled: boolean; id: string }) => (!bot.enabled ? { state: "disabled" } : bot.id === "gpt" ? { state: "reconnecting", botUserId: "UGPT", lastError: "socket closed", workspace: demoWorkspace("UGPT", "ember-gpt") } : { state: "connected", botUserId: "U0C4KHKPWTC", lastError: null, workspace: demoWorkspace("U0C4KHKPWTC", "ember") }),
   reconcile: async () => {},
 } as unknown as BotConnections;
 const api = new AdminApi({ settings, store, hub, bots });
