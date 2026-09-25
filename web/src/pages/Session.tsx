@@ -46,7 +46,8 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const client = useQueryClient();
   const [params, setParams] = useSearchParams();
   const openChat = params.get("chat");
-  const setChat = (threadTs: string | null) => setParams(threadTs ? { chat: threadTs } : {}, { replace: true });
+  // "0" means the reader closed the chat; without a choice the latest chat opens.
+  const setChat = (threadTs: string | null) => setParams({ chat: threadTs ?? "0" }, { replace: true });
   const create = useMutation({
     mutationFn: () => api.openChat(sessionKey),
     onSuccess: async ({ threadTs }) => {
@@ -65,7 +66,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const single = slackThreads.length === 1 ? slackThreads[0] : undefined;
   const singleUrl = single ? slackThreadUrl(base, single.channel, single.threadTs) : null;
   const status = sessionStatus(session);
-  const chat = chats.find((c) => c.threadTs === openChat);
+  const chat = openChat === "0" ? undefined : chats.find((c) => c.threadTs === openChat) ?? chats.at(-1);
   const latestChat = chats.at(-1);
 
   return (
