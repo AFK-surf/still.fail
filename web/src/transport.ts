@@ -16,7 +16,7 @@ export const localTransport: Transport = {
       method,
       credentials: "same-origin",
       headers: body === undefined ? {} : { "content-type": body instanceof Uint8Array ? "application/octet-stream" : "application/json" },
-      ...(body === undefined ? {} : { body: body instanceof Uint8Array ? body : JSON.stringify(body) }),
+      ...(body === undefined ? {} : { body: body instanceof Uint8Array ? new Blob([body as Uint8Array<ArrayBuffer>]) : JSON.stringify(body) }),
     });
     return { status: response.status, data: await response.json().catch(() => ({})) };
   },
