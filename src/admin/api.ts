@@ -26,6 +26,8 @@ export interface AdminDeps {
   hub: Hub;
   connections: Connections;
   logins: LoginManager;
+  /** How a profile is checked; tests replace it so no real CLI runs. */
+  checkProfile?: typeof checkProfile;
   /** Slack's app API; defaults to one using the configuration token in the config. */
   slackApps?: SlackApps;
   /** Decides who may use the API; defaults to Cloudflare Access per the config. */
@@ -493,7 +495,7 @@ export class AdminApi {
   async #check(id: string): Promise<ProfileCheck> {
     const profile = this.#deps.settings.config.profiles.find((p) => p.id === id);
     if (!profile) throw new HttpError(404, `unknown profile ${id}`);
-    const check = await checkProfile({ runtime: profile.runtime, kind: profile.access.kind, key: profile.access.key, home: profile.home, env: process.env });
+    const check = await (this.#deps.checkProfile ?? checkProfile)({ runtime: profile.runtime, kind: profile.access.kind, key: profile.access.key, home: profile.home, env: process.env });
     this.#checks.set(id, check);
     this.#deps.settings.touch();
     return check;
