@@ -9,7 +9,7 @@ import { Link, NavLink, useNavigate } from "react-router";
 import { keys, makeApi } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, checkTone, relativeTime, RUNTIME_LABEL, timeUntil } from "../format.ts";
-import { QuotaBars } from "../components.tsx";
+import { DeviceCard, QuotaBars } from "../components.tsx";
 import type { Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Confirm, Loading, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
@@ -185,12 +185,12 @@ export function MembersSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
+export function StationsSettings({ entry, stations }: { entry: WorkspaceEntry; stations: Station[] }) {
   const { view, manager } = useWorkspace(entry);
   if (!view) return <Loading label="正在读取 workspace…" />;
   return (
     <Page title="Station" lead="每台 station 是一台运行 ember 的机器：它的连接、会话和Profile都在那台机器上。" back={`/w/${entry.id}/settings`}>
-      <Stations view={view} account={entry.account} manager={manager} />
+      <Stations view={view} account={entry.account} manager={manager} live={stations} />
     </Page>
   );
 }
@@ -243,7 +243,10 @@ export function RuntimeSettings({ entry, stations }: { entry: WorkspaceEntry; st
   );
 }
 
-function Stations({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
+function Stations({ view, account, manager, live }: { view: WorkspaceView; account: Account; manager: boolean; live: Station[] }) {
+  const reachable = live.filter((s) => s.online);
+  const hosts = useQueries({ queries: reachable.map((s) => ({ queryKey: keys.host(s.id), queryFn: () => makeApi(s.transport).host(), refetchInterval: 15_000 })) });
+  const overviews = useQueries({ queries: reachable.map((s) => ({ queryKey: keys.overview(s.id), queryFn: () => makeApi(s.transport).overview(), refetchInterval: 10_000 })) });
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<StationView | null>(null);
   const queries = useQueryClient();
@@ -259,7 +262,7 @@ function Stations({ view, account, manager }: { view: WorkspaceView; account: Ac
       ) : (
         <ul className="list">
           {view.stations.map((s) => (
-            <li key={s.id} className="list-row station-row">
+            <li key={s.id} className="station-item"><div className="list-row station-row">
               <StatusDot state={online(s) ? "online" : "offline"} label={online(s) ? "在线" : "离线"} />
               <span className="list-row-text">
                 <span className="list-row-title">{s.name}</span>
@@ -273,6 +276,12 @@ function Stations({ view, account, manager }: { view: WorkspaceView; account: Ac
                 { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.mutate({ id: s.id, name: n.trim() }); } },
                 { label: "从 workspace 移除", icon: Trash2, danger: true, onSelect: () => setRemoving(s) },
               ]} />}
+            </div>
+              {online(s) && reachable.some((r) => r.id === s.id) && (
+                <div className="station-device">
+                  <DeviceCard host={hosts[reachable.findIndex((r) => r.id === s.id)]?.data} processes={overviews[reachable.findIndex((r) => r.id === s.id)]?.data?.processes} />
+                </div>
+              )}
             </li>
           ))}
         </ul>

@@ -4,6 +4,7 @@ import { ApiError, useLiveUpdates, useOverview } from "./api.ts";
 import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
 import { ConnectsPage } from "./pages/Connects.tsx";
+import { DevicePage } from "./pages/Device.tsx";
 import { SessionPage } from "./pages/Session.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
@@ -45,6 +46,7 @@ export function App() {
             <Route path="/bots/:id" element={<LegacyBot />} />
             <Route path="/settings" element={<Navigate to="/settings/connects" replace />} />
             <Route path="/settings/connects" element={<ConnectsPage />} />
+            <Route path="/settings/device" element={<DevicePage />} />
             <Route path="/settings/accounts" element={<AccountsPage />} />
             <Route path="/settings/accounts/:id" element={<AccountPage />} />
             <Route path="*" element={<Navigate to="/sessions" replace />} />

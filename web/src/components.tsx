@@ -1,6 +1,6 @@
 // Small pieces the station client and ember cloud share.
 import { useEffect, useState } from "react";
-import type { Creator, ProfileQuota } from "./api.ts";
+import type { Creator, HostInfo, ProcessView, ProfileQuota } from "./api.ts";
 import { readOnlyMine, useIsMine, usePerson, writeOnlyMine } from "./station.tsx";
 import { Segmented } from "./ui.tsx";
 
@@ -123,5 +123,53 @@ export function Participants({ people }: { people: Creator[] | undefined }) {
       <PeopleStack people={people} max={4} />
       <span className="participants-names">{people.slice(0, 4).map(name).join("、")}{people.length > 4 ? ` 等 ${people.length} 人` : ""}</span>
     </span>
+  );
+}
+
+const gb = (bytes: number) => `${(bytes / 2 ** 30).toFixed(bytes >= 100 * 2 ** 30 ? 0 : 1)} GB`;
+
+function uptime(sec: number): string {
+  const days = Math.floor(sec / 86400);
+  const hours = Math.floor((sec % 86400) / 3600);
+  return days ? `${days} 天 ${hours} 小时` : `${hours} 小时`;
+}
+
+function Meter({ label, percent, value, note }: { label: string; percent: number; value: string; note?: string }) {
+  const p = Math.max(0, Math.min(100, Math.round(percent)));
+  return (
+    <div className="quota-row device-row">
+      <span className="quota-label">{label}</span>
+      <span className="quota-track"><span className="quota-fill" data-level={p >= 90 ? "red" : p >= 75 ? "amber" : "ok"} style={{ width: `${p}%` }} /></span>
+      <span className="device-value">{value}</span>
+      <span className="quota-reset">{note ?? ""}</span>
+    </div>
+  );
+}
+
+/** The machine a station runs on: what it is, and how loaded. `processes` are the agents ember started. */
+export function DeviceCard({ host, processes }: { host: HostInfo | undefined; processes?: ProcessView[] }) {
+  if (!host) return <div className="device muted">正在读取设备信息…</div>;
+  const mem = host.memory;
+  const agentMb = (processes ?? []).reduce((sum, p) => sum + (p.rssMb ?? 0), 0);
+  const used = host.disk.totalBytes - host.disk.freeBytes;
+  return (
+    <div className="device">
+      <div className="device-facts">
+        <span>{host.hostname}</span>
+        <span>{host.os}</span>
+        <span>{host.arch} · {host.cpus} 核</span>
+        <span>已运行 {uptime(host.uptimeSec)}</span>
+      </div>
+      <div className="quota">
+        <Meter label="CPU 负载" percent={host.load * 100} value={`${Math.round(host.load * 100)}%`} note={host.cpuModel} />
+        <Meter label="内存" percent={(mem.usedBytes / mem.totalBytes) * 100} value={`${gb(mem.usedBytes)} / ${gb(mem.totalBytes)}`}
+          note={mem.swapUsedBytes ? `swap ${gb(mem.swapUsedBytes)}` : undefined} />
+        <Meter label="磁盘" percent={host.disk.totalBytes ? (used / host.disk.totalBytes) * 100 : 0} value={`剩 ${gb(host.disk.freeBytes)} / ${gb(host.disk.totalBytes)}`} />
+      </div>
+      <div className="device-facts muted">
+        <span>ember {Math.round(host.emberRssBytes / 2 ** 20)} MB</span>
+        <span>{processes?.length ? `${processes.length} 个 agent 进程 ${agentMb >= 1024 ? `${(agentMb / 1024).toFixed(1)} GB` : `${agentMb} MB`}` : "没有运行中的 agent 进程"}</span>
+      </div>
+    </div>
   );
 }

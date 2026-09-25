@@ -1,4 +1,4 @@
-import { ArrowLeft, KeyRound, Plug, Settings } from "lucide-react";
+import { ArrowLeft, KeyRound, Monitor, Plug, Settings } from "lucide-react";
 import { useIsMine, useLink } from "./station.tsx";
 import { useMemo } from "react";
 import { MineFilter, PeopleStack, useOnlyMine } from "./components.tsx";
@@ -30,6 +30,7 @@ function SettingsNav() {
       <div className="nav-heading">设置</div>
       <NavLink className="nav-row" to={link("/settings/connects")} aria-current={connectOpen ? "page" : undefined}><Plug {...ICON} />连接</NavLink>
       <NavLink className="nav-row" to={link("/settings/accounts")}><KeyRound {...ICON} />Profile</NavLink>
+      <NavLink className="nav-row" to={link("/settings/device")}><Monitor {...ICON} />设备</NavLink>
     </div>
   );
 }

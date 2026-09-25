@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useStation } from "./station.tsx";
 import type { Transport } from "./transport.ts";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
-import type { ConnectInput, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type { ConnectInput, HostInfo, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
 
 export type * from "../../src/admin/types.ts";
@@ -36,6 +36,7 @@ export function makeApi(t: Transport) {
   const request = <T,>(method: string, path: string, body?: unknown) => call<T>(t, method, path, body);
   return {
   overview: () => request<Overview>("GET", "/overview"),
+  host: () => request<HostInfo>("GET", "/host"),
   sessions: () => request<SessionSummary[]>("GET", "/sessions"),
   session: (key: string) => request<SessionDetail>("GET", `/sessions/${encodeURIComponent(key)}`),
   stop: (key: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/stop`),
@@ -82,6 +83,7 @@ export const keys = {
   sessions: (station: string) => ["sessions", station] as const,
   session: (station: string, key: string) => ["session", station, key] as const,
   slackApp: (station: string, connect: string) => ["slack-app", station, connect] as const,
+  host: (station: string) => ["host", station] as const,
 };
 
 export function useOverview() {
@@ -138,4 +140,9 @@ export function useLiveUpdates(enabled: boolean): void {
       if (timer) clearTimeout(timer);
     };
   }, [enabled, client, station]);
+}
+
+export function useHost() {
+  const station = useStation();
+  return useQuery({ queryKey: keys.host(station.id), queryFn: () => makeApi(station.transport).host(), refetchInterval: 15_000, enabled: station.online });
 }

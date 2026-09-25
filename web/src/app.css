@@ -563,3 +563,12 @@
 .nav-connecting { display: flex; align-items: center; gap: 8px; margin: 8px 10px; font-size: var(--text-xs); color: var(--muted); }
 .nav-connecting .spinner { width: 12px; height: 12px; border-width: 1.5px; }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } .skeleton-row span { animation: none; } }
+
+.device { display: grid; gap: 12px; }
+.device-facts { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: var(--text-sm); }
+.device-facts.muted { font-size: var(--text-xs); }
+.device-row { grid-template-columns: 5.5em minmax(80px, 1fr) 11em minmax(6em, auto); }
+.device-value { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; font-size: var(--text-sm); white-space: nowrap; }
+.station-item + .station-item { border-top: 1px solid var(--line); }
+.list .station-item { display: block; }
+.station-device { padding: 4px 16px 16px 36px; }
