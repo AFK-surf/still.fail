@@ -6,7 +6,7 @@ import { api, keys, useOverview, useSessions, type BotView, type Overview } from
 import { cleanText, connectionText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, STATUS_LABEL } from "../format.ts";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
-import { Avatar, Button, Dialog, Empty, Field, IconButton, Menu, Pill, StatusDot } from "../ui.tsx";
+import { Avatar, Button, Dialog, Empty, Field, IconButton, Menu, MobileBack, Pill, StatusDot } from "../ui.tsx";
 
 export function BotPage() {
   const { id } = useParams();
@@ -45,6 +45,7 @@ function BotView({ bot, overview }: { bot: BotView; overview: Overview }) {
 
   return (
     <div className="page page-narrow">
+      <MobileBack to="/sessions" label="返回" />
       <header className="identity">
         <Avatar id={bot.id} name={bot.name} size={48} />
         <div className="identity-text">

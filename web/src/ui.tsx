@@ -1,6 +1,7 @@
 // Shared controls. Pages compose these instead of styling their own buttons,
 // fields or menus, the way Zork's pages compose zork-ui.
-import { Check, Copy, MoreHorizontal, X } from "lucide-react";
+import { Check, ChevronLeft, Copy, MoreHorizontal, X } from "lucide-react";
+import { Link } from "react-router";
 import {
   useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentType, type ReactNode,
 } from "react";
@@ -155,6 +156,11 @@ export function CopyCommand({ text }: { text: string }) {
         onClick={() => void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); })} />
     </div>
   );
+}
+
+/** A back link that only phones show, where an opened page hides the sidebar. */
+export function MobileBack({ to, label }: { to: string; label: string }) {
+  return <Link className="mobile-back" to={to}><ChevronLeft {...ICON} />{label}</Link>;
 }
 
 export function Empty({ children }: { children: ReactNode }) {

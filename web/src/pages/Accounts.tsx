@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { api, keys, useOverview, type AccessKind, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Avatar, Button, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, Pill, Segmented } from "../ui.tsx";
+import { Avatar, Button, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Segmented } from "../ui.tsx";
 import { slug } from "./NewBot.tsx";
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
@@ -158,6 +158,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
 
   return (
     <div className="page page-narrow">
+      <MobileBack to="/settings/accounts" label="运行时账号" />
       <header className="identity">
         <AccessMark kind={profile.access.kind} size={48} />
         <div className="identity-text">

@@ -8,7 +8,7 @@ import { api, useOverview, useSession, useSessions, type BotView, type SessionDe
 import { History, parseArgs, toolName } from "../History.tsx";
 import { absoluteTime, cleanText, parsePrompt, relativeTime, sessionStatus, turnResult } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Avatar, Button, Empty, IconButton, Menu, Pill } from "../ui.tsx";
+import { Avatar, Button, Empty, IconButton, Menu, MobileBack, Pill } from "../ui.tsx";
 
 export function SessionPage() {
   const { key } = useParams();
@@ -57,6 +57,7 @@ function Conversation({ sessionKey }: { sessionKey: string }) {
     <div className="conversation-layout" data-history={historyOpen}>
       <section className="conversation" aria-label="会话">
         <header className="page-bar">
+          <MobileBack to="/sessions" label="会话" />
           <div className="page-bar-title">
             <Avatar id={session.bot} name={botName} size={22} />
             <h1>{cleanText(session.firstText) || "（没有消息）"}</h1>

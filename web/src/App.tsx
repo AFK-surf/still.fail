@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router";
+import { Navigate, Route, Routes, useLocation } from "react-router";
 import { ApiError, useLiveUpdates, useOverview } from "./api.ts";
 import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
 import { BotPage } from "./pages/Bot.tsx";
@@ -6,8 +6,15 @@ import { SessionPage } from "./pages/Session.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
 
+/** On phones the sidebar is the home screen; any opened item takes the whole screen. */
+function useDetailOpen(): boolean {
+  const path = useLocation().pathname;
+  return /^\/(sessions\/.+|bots\/.+|settings\/accounts\/.+)/.test(path);
+}
+
 export function App() {
   const overview = useOverview();
+  const detail = useDetailOpen();
   useLiveUpdates(overview.isSuccess);
 
   if (overview.isPending) return null;
@@ -24,7 +31,7 @@ export function App() {
 
   return (
     <ToastProvider>
-      <div className="shell">
+      <div className="shell" data-detail={detail}>
         <Sidebar />
         <main className="main">
           <Routes>
