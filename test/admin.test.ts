@@ -9,6 +9,8 @@ import { AccessGate } from "../src/admin/access.ts";
 import { AdminApi } from "../src/admin/api.ts";
 import { Connections, type Connection } from "../src/connections.ts";
 import { Hub } from "../src/hub.ts";
+import { slackManifest } from "../src/admin/slack-manifest.ts";
+import { SlackApiError, type SlackApps } from "../src/chat/slack-apps.ts";
 import { LoginManager } from "../src/login.ts";
 import { Settings } from "../src/settings.ts";
 import { Store } from "../src/store.ts";
@@ -55,7 +57,28 @@ function jwt(claims: Record<string, unknown>, kid = "k1"): string {
   return `${head}.${sign("RSA-SHA256", Buffer.from(head), privateKey).toString("base64url")}`;
 }
 
+/** Records what ember asks of Slack's app API. */
+class FakeSlackApps {
+  configured = true;
+  manifest: any = slackManifest("ember");
+  updates: any[] = [];
+  icons = 0;
+  async exportManifest() { return structuredClone(this.manifest); }
+  async updateManifest(_appId: string, manifest: any) {
+    const before = [...this.manifest.oauth_config.scopes.bot].sort().join();
+    this.updates.push(manifest);
+    this.manifest = manifest;
+    return { permissionsUpdated: before !== [...manifest.oauth_config.scopes.bot].sort().join() };
+  }
+  async createApp() { return { appId: "A0NEW", oauthAuthorizeUrl: "" }; }
+  async setIcon() {
+    this.icons++;
+    throw new SlackApiError("apps.icon.set", "app_not_owned_by_manager_app");
+  }
+}
+
 async function setup(options: { access?: { teamDomain: string; aud: string } } = {}) {
+  const slackApps = new FakeSlackApps();
   const dataDir = mkdtempSync(join(tmpdir(), "ember-admin-"));
   const path = join(dataDir, "config.json");
   writeFileSync(path, JSON.stringify({
@@ -64,7 +87,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
       { id: "cc", runtime: "claude", home: "homes/cc", env: { ANTHROPIC_API_KEY: "sk-very-secret-value", ANTHROPIC_BASE_URL: "https://example" } },
       { id: "cx", runtime: "codex", home: "homes/cx" },
     ],
-    connects: [{ id: "ds", name: "ember", kind: "slack", mode: "multi-session", bind: { runtime: "claude", profiles: ["cc"] }, slack: { appToken: "xapp-1-aaaaaaaaaaaa", botToken: "xoxb-bbbbbbbbbbbb" } }],
+    connects: [{ id: "ds", name: "ember", kind: "slack", mode: "multi-session", bind: { runtime: "claude", profiles: ["cc"] }, slack: { appToken: "xapp-1-aaaaaaaaaaaa", botToken: "xoxb-bbbbbbbbbbbb", appId: "A0DS" } }],
   }));
   const settings = new Settings(path, dataDir);
   const store = new Store(":memory:");
@@ -78,7 +101,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
   const hub: Hub = new Hub({ config: () => settings.config, store, chats: conns.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x" });
   settings.onChange((config) => void conns.reconcile(config));
   await conns.reconcile(settings.config);
-  const api = new AdminApi({ settings, store, hub, connections: conns, logins: new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin }), gate: new AccessGate(() => settings.config.adminAccess, jwks) });
+  const api = new AdminApi({ settings, store, hub, connections: conns, logins: new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin }), slackApps: slackApps as unknown as SlackApps, gate: new AccessGate(() => settings.config.adminAccess, jwks) });
   const server = createServer((req, res) => void api.handle(req, res));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/admin/api`;
@@ -90,7 +113,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
     });
     return { status: response.status, headers: response.headers, body: await response.json() as any };
   };
-  return { dataDir, path, settings, store, hub, conns, claude, connections, call, base, close: () => server.close() };
+  return { slackApps, dataDir, path, settings, store, hub, conns, claude, connections, call, base, close: () => server.close() };
 }
 
 test("local visits need no sign-in", async () => {
@@ -330,6 +353,28 @@ test("a subscription sign-in runs on the ember host and relays the link, the cod
     await wait("cxs", "done");
     const { body } = await t.call("GET", "/overview");
     assert.equal(body.profiles.find((p: any) => p.id === "cxs").login.state, "done");
+  } finally {
+    t.close();
+  }
+});
+
+test("a connect's Slack app is edited through its manifest; new permissions need approval in Slack", async () => {
+  const t = await setup();
+  try {
+    const app = await t.call("GET", "/connects/ds/slack-app");
+    assert.equal(app.body.state, "ok");
+    assert.equal(app.body.settings.name, "ember");
+    assert.equal(app.body.links.install, "https://api.slack.com/apps/A0DS/install-on-team");
+    const renamed = await t.call("PUT", "/connects/ds/slack-app", { name: "ember-ds", description: "DS agent" });
+    assert.equal(renamed.body.permissionsUpdated, false);
+    assert.equal(t.slackApps.manifest.display_information.name, "ember-ds");
+    const fewer = await t.call("PUT", "/connects/ds/slack-app", { groups: { files: false }, icon: "data:image/png;base64,AAAA" });
+    assert.equal(fewer.body.permissionsUpdated, true);
+    assert.match(fewer.body.iconError, /API 创建/);
+    assert.equal((await t.call("PUT", "/connects/ds/slack-app", { backgroundColor: "red" })).status, 400);
+    // Token edits keep the app id ember learned.
+    await t.call("PUT", "/connects/ds", { slack: { botToken: "xoxb-new-token-123" } });
+    assert.equal(t.settings.config.connects[0]!.slack.appId, "A0DS");
   } finally {
     t.close();
   }

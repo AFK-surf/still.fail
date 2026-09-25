@@ -5,6 +5,7 @@
 // Each connect is bound to one model (runtime + account + model) and decides
 // how conversations map to sessions. Profiles are the runtime accounts
 // connects draw from; connects may share them.
+import type { ConfigToken } from "./chat/slack-apps.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
@@ -64,7 +65,8 @@ export interface Connect {
   mode: ConnectMode;
   /** single-session only: whether starting on a new thread needs an @mention. */
   requireMention: boolean;
-  slack: { appToken: string; botToken: string };
+  /** appId is known once ember created the app or looked it up. */
+  slack: { appToken: string; botToken: string; appId?: string };
   bind: Binding;
 }
 
@@ -74,6 +76,8 @@ export interface Config {
   adminHttp: { host: string; port: number };
   /** Cloudflare Access application guarding the public admin page; null refuses tunneled requests. */
   adminAccess: { teamDomain: string; aud: string } | null;
+  /** The Slack app configuration token pair, for editing apps' manifests from ember. */
+  slackConfigToken: ConfigToken | null;
   /** Shared MEMORY.md and skills/ linked into every profile home. */
   agentHome: string;
   http: { host: string; port: number };
@@ -94,7 +98,7 @@ export interface RawConnect {
   kind?: ConnectKind;
   mode?: ConnectMode;
   requireMention?: boolean;
-  slack?: { appToken?: string; botToken?: string };
+  slack?: { appToken?: string; botToken?: string; appId?: string };
   bind: { runtime: RuntimeKind; profiles?: string[]; model?: string };
 }
 
@@ -126,6 +130,7 @@ export interface RawConfig {
   admin?: { host?: string; port?: number; access?: { teamDomain?: string; aud?: string } };
   http?: { host?: string; port?: number };
   connects?: RawConnect[];
+  slackConfigToken?: ConfigToken;
   /** Legacy; read as multi-session Slack connects and rewritten by upgradeRawConfig. */
   bots?: LegacyBot[];
   profiles?: RawProfile[];
@@ -198,7 +203,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
       kind,
       mode,
       requireMention: mode === "multi-session" ? true : c.requireMention ?? true,
-      slack: { appToken: c.slack?.appToken ?? "", botToken: c.slack?.botToken ?? "" },
+      slack: { appToken: c.slack?.appToken ?? "", botToken: c.slack?.botToken ?? "", ...(c.slack?.appId ? { appId: c.slack.appId } : {}) },
       bind: { runtime, profiles: ids, ...(c.bind.model ? { model: c.bind.model } : {}) },
     };
   });
@@ -211,6 +216,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
     adminAccess: raw.admin?.access?.teamDomain && raw.admin.access.aud
       ? { teamDomain: raw.admin.access.teamDomain, aud: raw.admin.access.aud }
       : null,
+    slackConfigToken: raw.slackConfigToken?.refreshToken ? raw.slackConfigToken : null,
     agentHome: isAbsolute(agentHome) ? agentHome : join(dataDir, agentHome),
     http: { host: raw.http?.host ?? "127.0.0.1", port: raw.http?.port ?? 4750 },
     connects,

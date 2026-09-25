@@ -7,6 +7,7 @@ import type { Connections } from "../connections.ts";
 import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from "../config.ts";
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
+import { appIdOf, applySettings, rotateConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
 import { log } from "../log.ts";
 import type { Settings } from "../settings.ts";
 import type { Store } from "../store.ts";
@@ -14,7 +15,7 @@ import { checkProfile, loginCommand, type ProfileCheck } from "../profiles.ts";
 import { readTimeline, readUsage, transcriptPath } from "../transcript.ts";
 import { AccessDenied, AccessGate, type Viewer } from "./access.ts";
 import { verifySlackTokens } from "../chat/slack.ts";
-import { createAppUrl } from "./slack-manifest.ts";
+import { createAppUrl, slackManifest } from "./slack-manifest.ts";
 import type { Overview, SessionDetail, SessionSummary } from "./types.ts";
 
 const SECRET_KEY = /KEY|TOKEN|SECRET|PASSWORD|AUTH/i;
@@ -25,6 +26,8 @@ export interface AdminDeps {
   hub: Hub;
   connections: Connections;
   logins: LoginManager;
+  /** Slack's app API; defaults to one using the configuration token in the config. */
+  slackApps?: SlackApps;
   /** Decides who may use the API; defaults to Cloudflare Access per the config. */
   gate?: AccessGate;
 }
@@ -81,10 +84,19 @@ export class AdminApi {
   readonly #deps: AdminDeps;
   readonly #gate: AccessGate;
   readonly #checks = new Map<string, ProfileCheck>();
+  readonly #apps: SlackApps;
+  readonly #appIds = new Map<string, string>();
 
   constructor(deps: AdminDeps) {
     this.#deps = deps;
     this.#gate = deps.gate ?? new AccessGate(() => deps.settings.config.adminAccess);
+    this.#apps = deps.slackApps ?? new SlackApps(
+      () => deps.settings.config.slackConfigToken,
+      (token) => deps.settings.update((raw) => {
+        const { slackConfigToken: _old, ...rest } = raw;
+        return token ? { ...rest, slackConfigToken: token } : rest;
+      }),
+    );
     // A finished sign-in changes what the profile can do; check it again right away.
     deps.logins.changes.on("change", (id: string) => {
       if (deps.logins.get(id)?.state === "done") void this.#check(id).catch((error) => log.warn("check after login failed", { profile: id, error }));
@@ -186,12 +198,117 @@ export class AdminApi {
         typeof input[field] === "string" && input[field].trim() ? input[field].trim() : stored?.[field] ?? "";
       return send(res, 200, await verifySlackTokens({ appToken: pick("appToken"), botToken: pick("botToken") }));
     }
+    if (path === "/slack/config-token") {
+      if (method === "GET") return send(res, 200, this.#configTokenView());
+      if (method === "PUT") {
+        const input = await body(req);
+        const refresh = String(input.refreshToken ?? "").trim();
+        if (!refresh.startsWith("xoxe-")) throw new HttpError(400, "Refresh token 应该以 xoxe- 开头（不是 xoxe.xoxp- 开头的那个）");
+        const token = await rotateConfigToken(refresh).catch((error) => { throw new HttpError(400, `Slack 没接受这个 token：${error instanceof Error ? error.message : String(error)}`); });
+        this.#deps.settings.update((raw) => ({ ...raw, slackConfigToken: token }));
+        log.info("slack configuration token set", { team: token.teamId, by: viewer.via === "access" ? viewer.email : "local" });
+        return send(res, 200, this.#configTokenView());
+      }
+      if (method === "DELETE") {
+        this.#deps.settings.update((raw) => {
+          const { slackConfigToken: _old, ...rest } = raw;
+          return rest;
+        });
+        return send(res, 200, this.#configTokenView());
+      }
+    }
+    if (resource === "connects" && id && action === "slack-app") {
+      if (method === "GET") return send(res, 200, await this.#slackApp(id));
+      if (method === "PUT") return send(res, 200, await this.#putSlackApp(id, await body(req), viewer));
+      if (method === "POST") return send(res, 200, await this.#createSlackApp(id, await body(req), viewer));
+    }
     if (method === "GET" && path === "/slack/create-app-url") {
       const name = url.searchParams.get("name")?.trim();
       if (!name) throw new HttpError(400, "name is required");
       return send(res, 200, { url: createAppUrl(name) });
     }
     throw new HttpError(404, `no route ${method} ${path}`);
+  }
+
+  // ── Slack apps ──────────────────────────────────────────────────────────
+
+  #configTokenView() {
+    const token = this.#deps.settings.config.slackConfigToken;
+    return { configured: Boolean(token), teamId: token?.teamId ?? null };
+  }
+
+  async #appId(connectId: string): Promise<string | null> {
+    const connect = this.#deps.settings.config.connects.find((c) => c.id === connectId);
+    if (!connect) throw new HttpError(404, `unknown connect ${connectId}`);
+    if (connect.slack.appId) return connect.slack.appId;
+    const cached = this.#appIds.get(connectId);
+    if (cached) return cached;
+    if (!connect.slack.botToken) return null;
+    const appId = await appIdOf(connect.slack.botToken);
+    this.#appIds.set(connectId, appId);
+    return appId;
+  }
+
+  async #slackApp(connectId: string) {
+    const appId = await this.#appId(connectId);
+    if (!appId) return { state: "no_app" as const, appId: null, links: null, settings: null, groups: SLACK_GROUP_IDS };
+    const links = slackAppLinks(appId);
+    if (!this.#apps.configured) return { state: "no_config_token" as const, appId, links, settings: null, groups: SLACK_GROUP_IDS };
+    try {
+      return { state: "ok" as const, appId, links, settings: settingsOf(await this.#apps.exportManifest(appId)), groups: SLACK_GROUP_IDS };
+    } catch (error) {
+      return { state: "error" as const, appId, links, settings: null, groups: SLACK_GROUP_IDS, error: slackError(error) };
+    }
+  }
+
+  async #putSlackApp(connectId: string, input: Record<string, any>, viewer: Viewer) {
+    const appId = await this.#appId(connectId);
+    if (!appId) throw new HttpError(400, "这个连接还没有 Slack app");
+    const edit: Partial<SlackAppSettings> = {};
+    for (const field of ["name", "displayName", "description", "longDescription", "backgroundColor"] as const) {
+      if (typeof input[field] === "string") edit[field] = input[field];
+    }
+    if (input.groups && typeof input.groups === "object") edit.groups = input.groups;
+    if (edit.name !== undefined && !edit.name.trim()) throw new HttpError(400, "名字不能为空");
+    if (edit.backgroundColor && !/^#[0-9a-fA-F]{6}$/.test(edit.backgroundColor.trim())) throw new HttpError(400, "背景色要写成 #RRGGBB");
+    let permissionsUpdated = false;
+    try {
+      const current = await this.#apps.exportManifest(appId);
+      ({ permissionsUpdated } = await this.#apps.updateManifest(appId, applySettings(current, edit)));
+    } catch (error) {
+      throw new HttpError(400, `Slack 没接受这次修改：${slackError(error)}`);
+    }
+    let iconError: string | null = null;
+    if (typeof input.icon === "string" && input.icon) {
+      try {
+        await this.#apps.setIcon(appId, Buffer.from(input.icon.replace(/^data:image\/png;base64,/, ""), "base64"));
+      } catch (error) {
+        iconError = error instanceof SlackApiError && error.code === "app_not_owned_by_manager_app"
+          ? "Slack 只允许给用 API 创建的 app 换图标。这个 app 是在 Slack 网页上建的，请在 Slack 的 app 设置页上传图标。"
+          : slackError(error);
+      }
+    }
+    log.info("slack app updated from the admin page", { connect: connectId, appId, permissionsUpdated, by: viewer.via === "access" ? viewer.email : "local" });
+    return { permissionsUpdated, iconError, links: slackAppLinks(appId) };
+  }
+
+  /** Creates the connect's Slack app with the configuration token, so only installing it is left to do in Slack. */
+  async #createSlackApp(connectId: string, input: Record<string, any>, viewer: Viewer) {
+    const connect = this.#deps.settings.config.connects.find((c) => c.id === connectId);
+    if (!connect) throw new HttpError(404, `unknown connect ${connectId}`);
+    if (await this.#appId(connectId)) throw new HttpError(400, "这个连接已经有 Slack app 了");
+    const name = typeof input.name === "string" && input.name.trim() ? input.name.trim() : connect.name;
+    let appId: string;
+    try {
+      ({ appId } = await this.#apps.createApp(slackManifest(name)));
+    } catch (error) {
+      throw new HttpError(400, `Slack 没能创建 app：${slackError(error)}`);
+    }
+    this.#save(viewer, `create slack app for ${connectId}`, (raw) => ({
+      ...raw,
+      connects: (raw.connects ?? []).map((c) => (c.id === connectId ? { ...c, slack: { ...c.slack, appId } } : c)),
+    }));
+    return { appId, links: slackAppLinks(appId) };
   }
 
   // ── reads ───────────────────────────────────────────────────────────────
@@ -320,7 +437,9 @@ export class AdminApi {
         kind: input.kind ?? existing?.kind ?? "slack",
         mode: (input.mode ?? existing?.mode ?? "multi-session") as ConnectMode,
         requireMention: typeof input.requireMention === "boolean" ? input.requireMention : existing?.requireMention ?? true,
-        ...(appToken || botToken ? { slack: { ...(appToken ? { appToken } : {}), ...(botToken ? { botToken } : {}) } } : {}),
+        ...(appToken || botToken || existing?.slack?.appId
+          ? { slack: { ...(appToken ? { appToken } : {}), ...(botToken ? { botToken } : {}), ...(existing?.slack?.appId ? { appId: existing.slack.appId } : {}) } }
+          : {}),
         bind: {
           runtime: (bind.runtime ?? existing?.bind.runtime) as RuntimeKind,
           profiles: Array.isArray(bind.profiles) ? bind.profiles.map(String) : existing?.bind.profiles ?? [],
@@ -388,4 +507,19 @@ export class AdminApi {
       return { ...raw, profiles: raw.profiles.filter((p) => p.id !== id) };
     });
   }
+}
+
+/** Slack's error codes in words people can act on. */
+function slackError(error: unknown): string {
+  if (!(error instanceof SlackApiError)) return error instanceof Error ? error.message : String(error);
+  const known: Record<string, string> = {
+    invalid_auth: "配置 token 无效，请重新填写",
+    token_expired: "配置 token 过期了，请重新填写",
+    invalid_refresh_token: "refresh token 已失效，请重新生成配置 token",
+    not_allowed_token_type: "这不是 App 配置 token",
+    app_not_found: "Slack 找不到这个 app；配置 token 可能属于别的工作区",
+    invalid_manifest: "manifest 不合法",
+  };
+  const details = Array.isArray(error.details) ? (error.details as { message?: string; pointer?: string }[]).map((d) => `${d.pointer ?? ""} ${d.message ?? ""}`.trim()).join("；") : "";
+  return [known[error.code] ?? error.code, details].filter(Boolean).join("：");
 }
