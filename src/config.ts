@@ -47,8 +47,16 @@ export type ConnectMode = "multi-session" | "single-session";
 export const CONNECT_MODES: readonly ConnectMode[] = ["multi-session", "single-session"];
 
 /** The model a connect runs: a runtime, the accounts it may use, and a model. */
+/** Reasoning effort each runtime accepts. */
+export const EFFORTS: Record<RuntimeKind, readonly string[]> = {
+  claude: ["low", "medium", "high", "xhigh", "max"],
+  codex: ["minimal", "low", "medium", "high", "xhigh"],
+};
+
 export interface Binding {
   runtime: RuntimeKind;
+  /** How hard the model thinks; the runtime's default when absent. */
+  effort?: string;
   /** Accounts in order of preference; all of `runtime`. */
   profiles: string[];
   model?: string;
@@ -102,7 +110,7 @@ export interface RawConnect {
   requireMention?: boolean;
   slack?: { appToken?: string; botToken?: string; appId?: string };
   createdBy?: { id: string; name: string };
-  bind: { runtime: RuntimeKind; profiles?: string[]; model?: string };
+  bind: { runtime: RuntimeKind; profiles?: string[]; model?: string; effort?: string };
 }
 
 /** The previous config shape: one Slack app per bot, always multi-session. */
@@ -192,6 +200,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
     if (!CONNECT_MODES.includes(mode)) throw new Error(`connect ${c.id}: unknown mode ${String(mode)}`);
     const runtime = c.bind?.runtime;
     if (!RUNTIMES.includes(runtime)) throw new Error(`connect ${c.id}: unknown runtime ${String(runtime)}`);
+    if (c.bind.effort && !EFFORTS[runtime].includes(c.bind.effort)) throw new Error(`connect ${c.id}: ${runtime} has no effort ${c.bind.effort}; use ${EFFORTS[runtime].join(", ")}`);
     const ids = c.bind.profiles ?? [];
     if (ids.length === 0) throw new Error(`connect ${c.id}: bind at least one account`);
     for (const id of ids) {
@@ -207,7 +216,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
       mode,
       requireMention: mode === "multi-session" ? true : c.requireMention ?? true,
       slack: { appToken: c.slack?.appToken ?? "", botToken: c.slack?.botToken ?? "", ...(c.slack?.appId ? { appId: c.slack.appId } : {}) },
-      bind: { runtime, profiles: ids, ...(c.bind.model ? { model: c.bind.model } : {}) },
+      bind: { runtime, profiles: ids, ...(c.bind.model ? { model: c.bind.model } : {}), ...(c.bind.effort ? { effort: c.bind.effort } : {}) },
       ...(c.createdBy?.id ? { createdBy: { id: c.createdBy.id, name: c.createdBy.name ?? "" } } : {}),
     };
   });

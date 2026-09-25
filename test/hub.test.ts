@@ -18,7 +18,7 @@ function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinu
       { id: "cx", runtime: "codex", home: "homes/cx" },
     ],
     connects: [
-      { id: "cl", name: "Claude bot", bind: { runtime: "claude", profiles: ["cc"], model: "opus" } },
+      { id: "cl", name: "Claude bot", bind: { runtime: "claude", profiles: ["cc"], model: "opus", effort: "high" } },
       { id: "gpt", bind: { runtime: "codex", profiles: ["cx"] } },
       { id: "team", mode: "single-session", requireMention: team?.requireMention ?? true, bind: { runtime: "claude", profiles: ["cc"] } },
     ],
@@ -171,6 +171,7 @@ test("a connect's runtime, profile and model decide the session", async () => {
   await accept(n);
   await settle();
   assert.equal(store.getSession(sessionKey("cl", "C1", n.threadTs))?.model, "opus");
+  assert.equal(claude.last.options.effort, "high", "the connect's effort reaches the runtime");
   assert.match(claude.last.options.instructions, /You are Claude bot/);
 });
 

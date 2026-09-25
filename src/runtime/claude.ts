@@ -65,6 +65,7 @@ export class ClaudeDriver implements AgentDriver {
       "--dangerously-skip-permissions",
       ...(options.resume ? ["--resume", sessionId] : ["--session-id", sessionId]),
       ...(model ? ["--model", model] : []),
+      ...(options.effort ? ["--effort", options.effort] : []),
       "--append-system-prompt", options.instructions,
       "--mcp-config", JSON.stringify(mcpConfig),
     ];

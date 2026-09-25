@@ -30,6 +30,8 @@ export interface SessionRow {
   runtime: RuntimeKind;
   profile: string;
   model: string | null;
+  /** Reasoning effort, as the connect set it when the session started; null for the runtime's default. */
+  effort: string | null;
   runtimeSessionId: string | null;
   workspace: string;
   token: string;
@@ -84,7 +86,7 @@ export type TurnKind = "input" | "nudge" | "resume";
  * Bump on schema changes and add a step to MIGRATIONS that brings the
  * previous version up. Versions without a migration path are refused.
  */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 const MIGRATIONS: Record<number, string> = {
   // v2 → v3: bots became connects; sessions may span all threads; messages remember their thread.
@@ -105,6 +107,8 @@ const MIGRATIONS: Record<number, string> = {
   4: "",
   // v5 → v6: who started a session.
   5: "ALTER TABLE sessions ADD COLUMN created_by TEXT;",
+  // v6 → v7: the reasoning effort a session runs with.
+  6: "ALTER TABLE sessions ADD COLUMN effort TEXT;",
 };
 
 const SCHEMA = `
@@ -124,7 +128,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_active_at INTEGER NOT NULL,
   scope TEXT NOT NULL DEFAULT 'thread',
   title TEXT,
-  created_by TEXT
+  created_by TEXT,
+  effort TEXT
 );
 CREATE TABLE IF NOT EXISTS chats (
   thread_ts TEXT PRIMARY KEY,
@@ -191,6 +196,7 @@ function toSession(row: Row): SessionRow {
     runtime: row.runtime as RuntimeKind,
     profile: row.profile as string,
     model: (row.model as string | null) ?? null,
+    effort: (row.effort as string | null | undefined) ?? null,
     runtimeSessionId: (row.runtime_session_id as string | null) ?? null,
     workspace: row.workspace as string,
     token: row.token as string,
@@ -263,10 +269,10 @@ export class Store {
     return (this.#db.prepare("SELECT * FROM sessions ORDER BY last_active_at DESC").all() as Row[]).map(toSession);
   }
 
-  insertSession(s: Omit<SessionRow, "running" | "runtimeSessionId" | "title" | "createdBy"> & { title?: string | null; createdBy?: string | null }): void {
-    this.#db.prepare(`INSERT INTO sessions (key, connect, scope, title, created_by, channel, thread_ts, runtime, profile, model, workspace, token, created_at, last_active_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(s.key, s.connect, s.scope, s.title ?? null, s.createdBy ?? null, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.workspace, s.token, s.createdAt, s.lastActiveAt);
+  insertSession(s: Omit<SessionRow, "running" | "runtimeSessionId" | "title" | "createdBy" | "effort"> & { title?: string | null; createdBy?: string | null; effort?: string | null }): void {
+    this.#db.prepare(`INSERT INTO sessions (key, connect, scope, title, created_by, channel, thread_ts, runtime, profile, model, effort, workspace, token, created_at, last_active_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(s.key, s.connect, s.scope, s.title ?? null, s.createdBy ?? null, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.effort ?? null, s.workspace, s.token, s.createdAt, s.lastActiveAt);
     this.notify(s.key);
   }
 

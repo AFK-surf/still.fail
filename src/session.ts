@@ -214,6 +214,7 @@ export class SessionActor {
       profile,
       cwd: row.workspace,
       ...(row.model ? { model: row.model } : {}),
+      ...(row.effort ? { effort: row.effort } : {}),
       instructions: sessionInstructions({
         name: this.#deps.name(connect),
         mention: botUserId ? `<@${botUserId}>` : null,

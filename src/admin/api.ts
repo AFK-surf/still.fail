@@ -369,7 +369,7 @@ export class AdminApi {
       mesh: this.#deps.mesh?.status() ?? null,
       connects: config.connects.map((c) => ({
         id: c.id, name: c.name, enabled: c.enabled, kind: c.kind, mode: c.mode, requireMention: c.requireMention,
-        bind: { runtime: c.bind.runtime, profiles: c.bind.profiles, model: c.bind.model ?? null },
+        bind: { runtime: c.bind.runtime, profiles: c.bind.profiles, model: c.bind.model ?? null, effort: c.bind.effort ?? null },
         slack: { appToken: mask(c.slack.appToken), botToken: mask(c.slack.botToken) },
         connection: this.#deps.connections.state(c),
         createdBy: c.createdBy ?? null,
@@ -516,6 +516,7 @@ export class AdminApi {
       const botToken = token("botToken");
       const bind = input.bind ?? {};
       const model = bind.model === undefined ? existing?.bind.model : bind.model;
+      const effort = bind.effort === undefined ? existing?.bind.effort : bind.effort;
       const next: RawConnect = {
         id,
         ...ownerOf(existing?.createdBy, input.owner, viewer),
@@ -531,6 +532,7 @@ export class AdminApi {
           runtime: (bind.runtime ?? existing?.bind.runtime) as RuntimeKind,
           profiles: Array.isArray(bind.profiles) ? bind.profiles.map(String) : existing?.bind.profiles ?? [],
           ...(typeof model === "string" && model.trim() ? { model: model.trim() } : {}),
+          ...(typeof effort === "string" && effort.trim() ? { effort: effort.trim() } : {}),
         },
       };
       return { ...raw, connects: existing ? connects.map((c) => (c.id === id ? next : c)) : [...connects, next] };

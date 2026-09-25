@@ -333,7 +333,7 @@ export class Hub {
     const now = Date.now();
     this.#store.insertSession({
       key, connect: connect.id, scope, title, createdBy, channel: message?.channel ?? "", threadTs: message?.threadTs ?? "",
-      runtime: connect.bind.runtime, profile: profile.id, model: connect.bind.model ?? null,
+      runtime: connect.bind.runtime, profile: profile.id, model: connect.bind.model ?? null, effort: connect.bind.effort ?? null,
       workspace, token: randomBytes(24).toString("base64url"), createdAt: now, lastActiveAt: now,
     });
     log.info("session created", { session: key, connect: connect.id, scope, runtime: connect.bind.runtime, profile: profile.id });

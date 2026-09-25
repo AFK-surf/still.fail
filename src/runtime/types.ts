@@ -15,6 +15,8 @@ export interface OpenOptions {
   /** Runtime-native session id to resume; a new session when absent. */
   resume?: string;
   model?: string;
+  /** Reasoning effort, in the runtime's own terms. */
+  effort?: string;
   /** Appended to the runtime's own system prompt. */
   instructions: string;
   /** Bearer token the session presents to ember's MCP endpoint. */

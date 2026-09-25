@@ -59,3 +59,9 @@ test("usage sums model requests; claude's split responses count once", () => {
     { type: "event_msg", payload: { type: "token_count", info: { last_token_usage: { input_tokens: 20, cached_input_tokens: 0, output_tokens: 3 } } } },
   ])), { modelCalls: 2, inputTokens: 30, cachedTokens: 4, outputTokens: 5, model: "gpt-5" });
 });
+
+test("a connect's effort must be one its runtime knows", () => {
+  const profiles = [{ id: "cc", runtime: "claude" as const, home: "h" }];
+  assert.throws(() => parseConfig({ profiles, connects: [{ id: "a", bind: { runtime: "claude", profiles: ["cc"], effort: "minimal" } }] }, "/d"), /has no effort minimal/);
+  assert.equal(parseConfig({ profiles, connects: [{ id: "a", bind: { runtime: "claude", profiles: ["cc"], effort: "max" } }] }, "/d").connects[0]!.bind.effort, "max");
+});

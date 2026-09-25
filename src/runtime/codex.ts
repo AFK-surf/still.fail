@@ -154,6 +154,7 @@ export class CodexDriver implements AgentDriver {
       config: {
         "mcp_servers.ember.url": options.mcpUrl,
         "mcp_servers.ember.http_headers": { Authorization: `Bearer ${options.mcpToken}` },
+        ...(options.effort ? { model_reasoning_effort: options.effort } : {}),
       },
     };
     const opened = options.resume
