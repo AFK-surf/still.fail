@@ -578,3 +578,34 @@
 .session-state[data-state="block"] { color: var(--blue); }
 .session-state[data-state="failed"], .session-state[data-state="unexpected"] { color: var(--red); }
 .session-state .history-sep { margin: 0 2px; }
+.runtime-mark { width: 32px; height: 32px; background: var(--paper); }
+.runtime-logo { flex: none; display: block; }
+.group-head .runtime-logo { align-self: center; }
+
+/* ── composer (Zork's) ─────────────────────────────────────────────── */
+.composer-wrap { flex: none; padding: 12px 32px 16px; }
+.composer-bare { border-top: 0; background: transparent; }
+.composer-wrap > * { max-width: 760px; margin-left: auto; margin-right: auto; }
+.composer-box {
+  display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 12px;
+  border: 1px solid var(--line-strong); border-radius: 999px; background: var(--canvas); cursor: text;
+  transition: border-color var(--dur) var(--ease-out), border-radius var(--dur) var(--ease-out);
+}
+.composer-box:focus-within { border-color: var(--field-focus); }
+.composer-box[data-multiline] { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; border-radius: 32px; }
+.composer-text {
+  flex: 1; min-height: 20px; max-height: 160px; padding: 6px 8px 4px; border: 0; outline: none; resize: none;
+  background: transparent; font: inherit; font-size: var(--text-body); line-height: 1.5; color: var(--text);
+}
+.composer-box[data-multiline] .composer-text { padding: 8px 8px 0; }
+.composer-text::placeholder { color: var(--subtle); }
+.composer-toolbar { display: flex; justify-content: flex-end; flex: none; }
+.send-btn {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--primary); color: var(--on-primary); cursor: pointer; transition: background var(--dur) var(--ease-out);
+}
+.send-btn:hover:not(:disabled) { background: var(--primary-hover); }
+.send-btn:disabled { background: var(--line-strong); color: var(--canvas); cursor: default; }
+.send-btn .spinner { width: 14px; height: 14px; border-color: color-mix(in oklch, var(--on-primary) 35%, transparent); border-top-color: var(--on-primary); }
+.chat .composer, .chat .composer-wrap { border-top: 0; }
+@media (max-width: 700px) { .composer-wrap { padding: 8px 12px 12px; } }

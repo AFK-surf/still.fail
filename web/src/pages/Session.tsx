@@ -4,7 +4,7 @@
 import { useIsMine, useLink, usePerson, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack } from "../components.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Square, Unplug } from "lucide-react";
+import { ArrowUp, Square, Unplug } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
@@ -204,27 +204,42 @@ function ChatPanel({ detail, chat }: { detail: SessionDetail; chat: SessionDetai
   );
 }
 
-/** Where people write to the session; the first message makes its chat. */
+/** Where people write to the session; the first message makes its chat. Zork's composer: a soft frame that grows with the text, and a round send button. */
 function Composer({ sessionKey, className }: { sessionKey: string; className?: string }) {
   const api = useApi();
   const station = useStation();
   const client = useQueryClient();
   const [text, setText] = useState("");
+  const input = useRef<HTMLTextAreaElement>(null);
   const send = useMutation({
     mutationFn: (value: string) => api.sayToSession(sessionKey, value),
     onSuccess: () => { setText(""); void client.invalidateQueries({ queryKey: keys.session(station.id, sessionKey) }); },
   });
+  // Grow with the text up to the frame's limit; the frame is never resized by hand.
+  useEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [text]);
+  const ready = Boolean(text.trim()) && !send.isPending;
   const submit = () => {
-    const value = text.trim();
-    if (value && !send.isPending) send.mutate(value);
+    if (ready) send.mutate(text.trim());
   };
   return (
     <div className={`composer-wrap${className ? ` ${className}` : ""}`}>
-      <form className="composer" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        <textarea className="input composer-input" rows={2} value={text} placeholder="给这个会话发消息（Enter 发送，Shift+Enter 换行）"
-          onChange={(e) => setText(e.target.value)} aria-label="消息"
+      <form className="composer-box" data-multiline={text.includes("\n") || text.length > 60 || undefined}
+        onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}>
+        <textarea ref={input} className="composer-text" rows={1} value={text} placeholder="给这个会话发消息" aria-label="消息"
+          onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
-        <Button variant="primary" type="submit" disabled={!text.trim()} busy={send.isPending}>发送</Button>
+        <div className="composer-toolbar">
+          <Tip label="发送">
+            <button type="submit" className="send-btn" disabled={!ready} aria-label="发送" aria-busy={send.isPending || undefined}>
+              {send.isPending ? <span className="spinner" aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
+            </button>
+          </Tip>
+        </div>
       </form>
       {send.error && <p className="field-error chat-error" role="alert">{send.error.message}</p>}
     </div>

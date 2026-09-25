@@ -12,7 +12,7 @@ import { ACCESS, checkTone, relativeTime, RUNTIME_LABEL, timeUntil } from "../fo
 import { DeviceCard, QuotaBars } from "../components.tsx";
 import type { Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
-import { Button, Confirm, Loading, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
+import { RuntimeLogo, Button, Confirm, Loading, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
 import { accessToken, signOut, type Account } from "./accounts.ts";
 import { cloud, type Role, type StationView, type WorkspaceView } from "./api.ts";
 import { Avatar, online } from "./gate.tsx";
@@ -224,6 +224,7 @@ export function RuntimeSettings({ entry, stations }: { entry: WorkspaceEntry; st
                     return (
                       <li key={p.id}>
                         <Link className="list-row" to={`${station.base}/settings/accounts/${p.id}`}>
+                          <span className="mark runtime-mark"><RuntimeLogo runtime={p.runtime} size={18} /></span>
                           <span className="list-row-text">
                             <span className="list-row-title">{p.name}</span>
                             <span className="muted">{RUNTIME_LABEL[p.runtime]} · {ACCESS[p.access.kind].label}{p.usedBy.length ? ` · ${p.usedBy.length} 个连接在用` : ""}</span>

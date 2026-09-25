@@ -8,7 +8,7 @@ import { useApi, keys, useOverview, type AccessKind, type Overview, type Profile
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
-import { Button, Choices, Loading, ConnectKindIcon, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
+import { RuntimeLogo, Button, Choices, Loading, ConnectKindIcon, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
 function OpenCodeMark({ size = 16 }: { size?: number; strokeWidth?: number }) {
@@ -56,14 +56,14 @@ export function AccountsPage() {
       {profiles.length === 0 && <Empty><p>还没有 Profile。连接至少需要一个 Profile 才能运行。</p></Empty>}
       {groups.filter((g) => g.items.length).map((g) => (
         <section key={g.runtime} className="section" aria-label={RUNTIME_LABEL[g.runtime]}>
-          <div className="group-head"><strong>{RUNTIME_LABEL[g.runtime]}</strong><span className="muted">{g.items.length} 个</span></div>
+          <div className="group-head"><RuntimeLogo runtime={g.runtime} size={14} /><strong>{RUNTIME_LABEL[g.runtime]}</strong><span className="muted">{g.items.length} 个</span></div>
           <ul className="list">
             {g.items.map((p) => {
               const tone = checkTone(p.check);
               return (
                 <li key={p.id}>
                   <Link className="list-row account-row" to={link(`/settings/accounts/${p.id}`)}>
-                    <AccessMark kind={p.access.kind} />
+                    <span className="mark runtime-mark"><RuntimeLogo runtime={p.runtime} size={18} /></span>
                     <span className="list-row-text">
                       <span className="list-row-title">{p.name}</span>
                       <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.data!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
@@ -169,7 +169,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
     <div className="page page-narrow">
       <MobileBack to={link("/settings/accounts")} label="Profile" />
       <header className="identity">
-        <AccessMark kind={profile.access.kind} size={48} />
+        <span className="mark runtime-mark" style={{ width: 48, height: 48 }}><RuntimeLogo runtime={profile.runtime} size={26} /></span>
         <div className="identity-text">
           {editingName ? (
             <input className="input identity-name-input" value={name} autoFocus aria-label="名称" onChange={(e) => setName(e.target.value)} onBlur={rename}
