@@ -89,7 +89,7 @@ export class Hub {
     if (!wanted) return; // chatter this connect is not part of
     if (!exists) {
       try {
-        this.#createSession(key, connect, single ? "all" : "thread", message);
+        this.#createSession(key, connect, single ? "all" : "thread", message, null, `slack:${connect.id}:${message.user}`);
         if (single) this.#store.setBinding(connect.id, key);
       } catch (error) {
         log.error("cannot create session", { session: key, error });
@@ -147,12 +147,12 @@ export class Hub {
    * session on the same runtime, whichever connect started it) or, with
    * `null`, a new empty one. Returns the bound session's key.
    */
-  bindSingle(connectId: string, target: string | null, title?: string): string {
+  bindSingle(connectId: string, target: string | null, title?: string, createdBy: string | null = null): string {
     const connect = this.#connect(connectId);
     if (connect.mode !== "single-session") throw new Error(`connect ${connectId} is not single-session`);
     if (target === null) {
       const key = newSingleSessionKey(connect.id);
-      this.#createSession(key, connect, "all", null, title?.trim() || null);
+      this.#createSession(key, connect, "all", null, title?.trim() || null, createdBy);
       this.#store.setBinding(connect.id, key);
       return key;
     }
@@ -324,7 +324,7 @@ export class Hub {
     return false;
   }
 
-  #createSession(key: string, connect: Connect, scope: SessionScope, message: InboundMessage | null, title: string | null = null): void {
+  #createSession(key: string, connect: Connect, scope: SessionScope, message: InboundMessage | null, title: string | null = null, createdBy: string | null = null): void {
     const profile = profileFor(this.#config, connect);
     const dir = scope === "all" ? key.slice(connect.id.length + 1) : `${message!.channel}-${message!.threadTs.replace(".", "-")}`;
     const workspace = join(this.#config.dataDir, "sessions", connect.id, dir, "workspace");
@@ -332,7 +332,7 @@ export class Hub {
     mkdirSync(this.reposDir, { recursive: true });
     const now = Date.now();
     this.#store.insertSession({
-      key, connect: connect.id, scope, title, channel: message?.channel ?? "", threadTs: message?.threadTs ?? "",
+      key, connect: connect.id, scope, title, createdBy, channel: message?.channel ?? "", threadTs: message?.threadTs ?? "",
       runtime: connect.bind.runtime, profile: profile.id, model: connect.bind.model ?? null,
       workspace, token: randomBytes(24).toString("base64url"), createdAt: now, lastActiveAt: now,
     });

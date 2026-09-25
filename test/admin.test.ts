@@ -380,3 +380,26 @@ test("a connect's Slack app is edited through its manifest; new permissions need
     t.close();
   }
 });
+
+test("connects, sessions and chats remember who created them", async () => {
+  const t = await setup();
+  try {
+    await t.call("PUT", "/connects/fresh", { bind: { runtime: "claude", profiles: ["cc"] } });
+    assert.deepEqual(t.settings.config.connects.find((c) => c.id === "fresh")!.createdBy, { id: "local", name: "本机管理页" });
+    await t.call("PUT", "/connects/fresh", { name: "renamed" });
+    assert.equal(t.settings.config.connects.find((c) => c.id === "fresh")!.createdBy?.id, "local", "editing keeps the creator");
+    const { body } = await t.call("GET", "/overview");
+    assert.equal(body.connects.find((c: any) => c.id === "ds").createdBy, null, "older connects have none");
+
+    await t.hub.accept("ds", message({ text: "<@UBOT> hi", user: "U42" }));
+    await settle();
+    const [summary] = (await t.call("GET", "/sessions")).body;
+    assert.deepEqual(summary.creator, { id: "slack:ds:U42", name: "U42", email: null, via: "slack" });
+    const chat = await t.call("POST", `/sessions/${encodeURIComponent(summary.key)}/chats`, {});
+    const detail = await t.call("GET", `/sessions/${encodeURIComponent(summary.key)}`);
+    assert.equal(detail.body.chats[0].threadTs, chat.body.threadTs);
+    assert.equal(detail.body.chats[0].creator.via, "local");
+  } finally {
+    t.close();
+  }
+});

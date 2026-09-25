@@ -69,7 +69,7 @@ export class SlackSurface implements ChatSurface {
   readonly #appToken: string;
   readonly #botToken: string;
   #identity: SlackIdentity | null = null;
-  readonly #names = new Map<string, Promise<string | null>>();
+  readonly #names = new Map<string, Promise<{ name: string; email: string } | null>>();
   readonly #channels = new Map<string, Promise<string | null>>();
   #socket: WebSocket | undefined;
   #stopped = false;
@@ -114,21 +114,30 @@ export class SlackSurface implements ChatSurface {
   }
 
   /** Display name via users.info, cached for the connection's lifetime. */
-  userName(userId: string): Promise<string | null> {
-    let name = this.#names.get(userId);
-    if (!name) {
-      name = this.#api("users.info", { user: userId }, this.#botToken)
+  async userName(userId: string): Promise<string | null> {
+    return (await this.#profile(userId))?.name || null;
+  }
+
+  /** The person's email (users:read.email), which ties a Slack user to an ember cloud account. */
+  async userEmail(userId: string): Promise<string | null> {
+    return (await this.#profile(userId))?.email || null;
+  }
+
+  #profile(userId: string): Promise<{ name: string; email: string } | null> {
+    let profile = this.#names.get(userId);
+    if (!profile) {
+      profile = this.#api("users.info", { user: userId }, this.#botToken)
         .then((r) => {
           const u = r.user ?? {};
-          return String(u.profile?.display_name || u.real_name || u.name || "") || null;
+          return { name: String(u.profile?.display_name || u.real_name || u.name || ""), email: String(u.profile?.email ?? "").toLowerCase() };
         })
         .catch(() => {
           this.#names.delete(userId); // retry next time rather than caching a failure
           return null;
         });
-      this.#names.set(userId, name);
+      this.#names.set(userId, profile);
     }
-    return name;
+    return profile;
   }
 
   /** Channel name via conversations.info (null for DMs), cached for the connection's lifetime. */

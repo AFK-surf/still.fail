@@ -25,6 +25,8 @@ export interface ConnectView {
   /** Masked; empty when unset. */
   slack: { appToken: string; botToken: string };
   connection: ConnectState;
+  /** Who added it from the admin page (an email, or "local"); null for older ones. */
+  createdBy: { id: string; name: string } | null;
   sessions: number;
   /** The session a single-session connect delivers into; null until its first message or after "new session". */
   session: string | null;
@@ -92,6 +94,8 @@ export interface SessionSummary {
   title: string | null;
   /** Single-session connects currently delivering into it. */
   boundTo: string[];
+  /** Who started it, resolved for people; filled in lists and details. */
+  creator?: Creator | null;
   channel: string;
   threadTs: string;
   runtime: RuntimeKind;
@@ -132,7 +136,7 @@ export interface SessionDetail {
   /** Channel names by id, where known; direct messages have none. */
   channels: Record<string, string>;
   /** Chats opened on this session from the admin page, with their messages. */
-  chats: (ChatRow & { messages: ChatMessageRow[] })[];
+  chats: (ChatRow & { creator: Creator | null; messages: ChatMessageRow[] })[];
   /** The threads the session has messages from, most recent first. */
   threads: { channel: string; threadTs: string; messages: number; lastTs: string }[];
   turns: TurnRecord[];
@@ -159,4 +163,13 @@ export interface ProfileInput {
   home?: string;
   model?: string;
   env?: Record<string, string | null>;
+}
+
+/** Who started a session or chat, or added a connect. `email` ties them to an ember cloud account. */
+export interface Creator {
+  /** "local", an email, or "slack:<connect>:<user>". */
+  id: string;
+  name: string;
+  email: string | null;
+  via: "local" | "cloud" | "slack";
 }

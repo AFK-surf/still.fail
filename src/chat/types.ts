@@ -32,6 +32,8 @@ export interface ChatSurface {
   post(thread: ThreadRef, markdown: string): Promise<void>;
   /** A person's display name, or null if unknown. Optional: not every platform can say. */
   userName?(userId: string): Promise<string | null>;
+  /** A person's email, where the platform shares it. */
+  userEmail?(userId: string): Promise<string | null>;
   /** A channel's name without the #, where the platform says; null for direct messages. */
   channelName?(channelId: string): Promise<string | null>;
   /** Messages in the thread strictly before `before` (all when absent), oldest first, at most `limit`. */

@@ -17,6 +17,11 @@ export interface SessionRow {
   /** A name people gave it, for choosing among single-session sessions. */
   title: string | null;
   /**
+   * Who started it: "slack:<connect>:<user>" for a chat message, an email for
+   * someone on ember cloud, "local" for the station's own page; null if unknown.
+   */
+  createdBy: string | null;
+  /**
    * The thread of the session's first message; empty for a session created
    * before any message. ember's own notices go to the latest thread instead.
    */
@@ -79,7 +84,7 @@ export type TurnKind = "input" | "nudge" | "resume";
  * Bump on schema changes and add a step to MIGRATIONS that brings the
  * previous version up. Versions without a migration path are refused.
  */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 const MIGRATIONS: Record<number, string> = {
   // v2 → v3: bots became connects; sessions may span all threads; messages remember their thread.
@@ -98,6 +103,8 @@ const MIGRATIONS: Record<number, string> = {
   `,
   // v4 → v5: ember's own chat, opened on a session from the admin page. Tables only, created below.
   4: "",
+  // v5 → v6: who started a session.
+  5: "ALTER TABLE sessions ADD COLUMN created_by TEXT;",
 };
 
 const SCHEMA = `
@@ -116,7 +123,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at INTEGER NOT NULL,
   last_active_at INTEGER NOT NULL,
   scope TEXT NOT NULL DEFAULT 'thread',
-  title TEXT
+  title TEXT,
+  created_by TEXT
 );
 CREATE TABLE IF NOT EXISTS chats (
   thread_ts TEXT PRIMARY KEY,
@@ -177,6 +185,7 @@ function toSession(row: Row): SessionRow {
     connect: row.connect as string,
     scope: (row.scope as SessionScope | undefined) ?? "thread",
     title: (row.title as string | null | undefined) ?? null,
+    createdBy: (row.created_by as string | null | undefined) ?? null,
     channel: row.channel as string,
     threadTs: row.thread_ts as string,
     runtime: row.runtime as RuntimeKind,
@@ -254,10 +263,10 @@ export class Store {
     return (this.#db.prepare("SELECT * FROM sessions ORDER BY last_active_at DESC").all() as Row[]).map(toSession);
   }
 
-  insertSession(s: Omit<SessionRow, "running" | "runtimeSessionId" | "title"> & { title?: string | null }): void {
-    this.#db.prepare(`INSERT INTO sessions (key, connect, scope, title, channel, thread_ts, runtime, profile, model, workspace, token, created_at, last_active_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(s.key, s.connect, s.scope, s.title ?? null, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.workspace, s.token, s.createdAt, s.lastActiveAt);
+  insertSession(s: Omit<SessionRow, "running" | "runtimeSessionId" | "title" | "createdBy"> & { title?: string | null; createdBy?: string | null }): void {
+    this.#db.prepare(`INSERT INTO sessions (key, connect, scope, title, created_by, channel, thread_ts, runtime, profile, model, workspace, token, created_at, last_active_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(s.key, s.connect, s.scope, s.title ?? null, s.createdBy ?? null, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.workspace, s.token, s.createdAt, s.lastActiveAt);
     this.notify(s.key);
   }
 

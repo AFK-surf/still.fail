@@ -21,6 +21,11 @@ export interface MeshViewer { via: "mesh"; sub: string; email: string; name: str
 
 export type Viewer = { via: "local" } | { via: "access"; email: string } | MeshViewer;
 
+/** Who did something, for people: a name, else the email. */
+export function viewerName(viewer: Viewer): string {
+  return viewer.via === "local" ? "本机管理页" : viewer.via === "mesh" ? viewer.name || viewer.email : viewer.email;
+}
+
 /** Who did something, for logs and records: an email, or "local" on the station itself. */
 export function viewerId(viewer: Viewer): string {
   return viewer.via === "local" ? "local" : viewer.email;

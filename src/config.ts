@@ -67,6 +67,8 @@ export interface Connect {
   requireMention: boolean;
   /** appId is known once ember created the app or looked it up. */
   slack: { appToken: string; botToken: string; appId?: string };
+  /** Who added it from the admin page: an email, or "local"; absent for older or hand-written ones. */
+  createdBy?: { id: string; name: string };
   bind: Binding;
 }
 
@@ -99,6 +101,7 @@ export interface RawConnect {
   mode?: ConnectMode;
   requireMention?: boolean;
   slack?: { appToken?: string; botToken?: string; appId?: string };
+  createdBy?: { id: string; name: string };
   bind: { runtime: RuntimeKind; profiles?: string[]; model?: string };
 }
 
@@ -205,6 +208,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
       requireMention: mode === "multi-session" ? true : c.requireMention ?? true,
       slack: { appToken: c.slack?.appToken ?? "", botToken: c.slack?.botToken ?? "", ...(c.slack?.appId ? { appId: c.slack.appId } : {}) },
       bind: { runtime, profiles: ids, ...(c.bind.model ? { model: c.bind.model } : {}) },
+      ...(c.createdBy?.id ? { createdBy: { id: c.createdBy.id, name: c.createdBy.name ?? "" } } : {}),
     };
   });
   unique("connect", connects.map((c) => c.id));

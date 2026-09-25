@@ -15,10 +15,10 @@ import type { Settings } from "../settings.ts";
 import type { Store } from "../store.ts";
 import { checkProfile, loginCommand, type ProfileCheck } from "../profiles.ts";
 import { readTimeline, readUsage, transcriptPath } from "../transcript.ts";
-import { AccessDenied, AccessGate, viewerId, type Viewer } from "./access.ts";
+import { AccessDenied, AccessGate, viewerId, viewerName, type Viewer } from "./access.ts";
 import { verifySlackTokens } from "../chat/slack.ts";
 import { createAppUrl, slackManifest } from "./slack-manifest.ts";
-import type { Overview, SessionDetail, SessionSummary } from "./types.ts";
+import type { Creator, Overview, SessionDetail, SessionSummary } from "./types.ts";
 
 const SECRET_KEY = /KEY|TOKEN|SECRET|PASSWORD|AUTH/i;
 
@@ -141,7 +141,7 @@ export class AdminApi {
 
     if (method === "GET" && path === "/overview") return send(res, 200, this.#overview(viewer));
     if (method === "GET" && path === "/events") return this.#events(req, res);
-    if (method === "GET" && path === "/sessions") return send(res, 200, this.#sessions(url.searchParams.get("connect")));
+    if (method === "GET" && path === "/sessions") return send(res, 200, await this.#sessions(url.searchParams.get("connect")));
     if (resource === "sessions" && id && !action && method === "GET") return send(res, 200, await this.#session(id));
     if (resource === "sessions" && id && action === "stop" && method === "POST") {
       await this.#deps.hub.stop(id);
@@ -156,7 +156,7 @@ export class AdminApi {
     if (resource === "connects" && id && action === "session" && method === "POST") {
       const input = await body(req);
       const target = typeof input.session === "string" && input.session ? input.session : null;
-      const key = this.#deps.hub.bindSingle(id, target, typeof input.title === "string" ? input.title : undefined);
+      const key = this.#deps.hub.bindSingle(id, target, typeof input.title === "string" ? input.title : undefined, viewerId(viewer));
       log.info("single-session binding changed from the admin page", { connect: id, session: key, by: viewerId(viewer) });
       return send(res, 200, { session: key });
     }
@@ -365,6 +365,7 @@ export class AdminApi {
         bind: { runtime: c.bind.runtime, profiles: c.bind.profiles, model: c.bind.model ?? null },
         slack: { appToken: mask(c.slack.appToken), botToken: mask(c.slack.botToken) },
         connection: this.#deps.connections.state(c),
+        createdBy: c.createdBy ?? null,
         sessions: sessions.filter((s) => s.connect === c.id).length,
         session: c.mode === "single-session" ? this.#deps.store.binding(c.id) ?? null : null,
       })),
@@ -396,10 +397,24 @@ export class AdminApi {
     };
   }
 
-  #sessions(connect: string | null): SessionSummary[] {
+  async #sessions(connect: string | null): Promise<SessionSummary[]> {
     const stats = this.#deps.store.sessionStats();
     const bindings = this.#deps.store.listBindings();
-    return this.#deps.store.listSessions().filter((s) => !connect || s.connect === connect).map((s) => this.#summary(s.key, stats, bindings));
+    const summaries = this.#deps.store.listSessions().filter((s) => !connect || s.connect === connect).map((s) => this.#summary(s.key, stats, bindings));
+    return Promise.all(summaries.map(async (s) => ({ ...s, creator: await this.#creator(s.createdBy) })));
+  }
+
+  /** A creator reference in words: who, and their email where known (to match an ember cloud account). */
+  async #creator(ref: string | null): Promise<Creator | null> {
+    if (!ref) return null;
+    if (ref === "local") return { id: "local", name: "本机管理页", email: null, via: "local" };
+    const slack = /^slack:([^:]+):(.+)$/.exec(ref);
+    if (slack) {
+      const chat = this.#deps.connections.chats.get(slack[1]!);
+      const [name, email] = await Promise.all([chat?.userName?.(slack[2]!) ?? null, chat?.userEmail?.(slack[2]!) ?? null]);
+      return { id: ref, name: name ?? slack[2]!, email, via: "slack" };
+    }
+    return { id: ref, name: this.#deps.names.get(ref) ?? ref, email: ref, via: "cloud" };
   }
 
   async #session(key: string): Promise<SessionDetail> {
@@ -419,11 +434,13 @@ export class AdminApi {
     const profile = this.#deps.settings.config.profiles.find((p) => p.id === summary.profile);
     const path = profile && summary.runtimeSessionId ? transcriptPath(summary.runtime, profile.home, summary.runtimeSessionId) : undefined;
     return {
-      session: summary,
+      session: { ...summary, creator: await this.#creator(summary.createdBy) },
       people,
       channels,
       threads: this.#deps.store.listThreads(key),
-      chats: this.#deps.store.listChats(key).map((c) => ({ ...c, messages: this.#deps.store.chatMessages(c.threadTs) })),
+      chats: await Promise.all(this.#deps.store.listChats(key).map(async (c) => ({
+        ...c, creator: await this.#creator(c.createdBy), messages: this.#deps.store.chatMessages(c.threadTs),
+      }))),
       turns: this.#deps.store.listTurns(key),
       inbound,
       transcript: path ? { path, timeline: readTimeline(summary.runtime, path), usage: readUsage(summary.runtime, path) } : null,
@@ -474,6 +491,7 @@ export class AdminApi {
       const model = bind.model === undefined ? existing?.bind.model : bind.model;
       const next: RawConnect = {
         id,
+        createdBy: existing ? existing.createdBy : { id: viewerId(viewer), name: viewerName(viewer) },
         name: typeof input.name === "string" && input.name.trim() ? input.name.trim() : existing?.name ?? id,
         enabled: typeof input.enabled === "boolean" ? input.enabled : existing?.enabled ?? true,
         kind: input.kind ?? existing?.kind ?? "slack",
