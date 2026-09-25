@@ -13,6 +13,8 @@ export class SlackSurface implements ChatSurface {
   #botUserId = "";
   #socket: WebSocket | undefined;
   #stopped = false;
+  #connected = false;
+  #lastError: string | null = null;
 
   constructor(tokens: { appToken: string; botToken: string }) {
     if (!tokens.appToken.startsWith("xapp-")) throw new Error("slack.appToken must be an app-level token (xapp-…)");
@@ -23,6 +25,11 @@ export class SlackSurface implements ChatSurface {
 
   get botUserId(): string {
     return this.#botUserId;
+  }
+
+  /** For the admin page: whether the socket is up, and the last connection error. */
+  get status(): { connected: boolean; lastError: string | null } {
+    return { connected: this.#connected, lastError: this.#lastError };
   }
 
   async start(handler: (message: InboundMessage) => Promise<void>): Promise<void> {
@@ -67,6 +74,7 @@ export class SlackSurface implements ChatSurface {
         await this.#runSocket(String(url), handler);
         backoff = 1000;
       } catch (error) {
+        this.#lastError = error instanceof Error ? error.message : String(error);
         log.warn("slack socket failed", { error, retryInMs: backoff });
         await new Promise((r) => setTimeout(r, backoff));
         backoff = Math.min(backoff * 2, 60_000);
@@ -79,7 +87,14 @@ export class SlackSurface implements ChatSurface {
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(url);
       this.#socket = socket;
-      socket.addEventListener("close", () => resolve());
+      socket.addEventListener("open", () => {
+        this.#connected = true;
+        this.#lastError = null;
+      });
+      socket.addEventListener("close", () => {
+        this.#connected = false;
+        resolve();
+      });
       socket.addEventListener("error", () => reject(new Error("slack socket error")));
       socket.addEventListener("message", (event) => {
         void (async () => {

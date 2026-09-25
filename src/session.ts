@@ -59,6 +59,12 @@ export class SessionActor {
     return this.#row.runtime;
   }
 
+  /** running: a turn is in progress; warm: a runtime process is waiting for input; cold: none. */
+  get processState(): "running" | "warm" | "cold" {
+    if (this.#turn || this.#agent?.busy) return "running";
+    return this.#agent ? "warm" : "cold";
+  }
+
   /** How long the runtime process has sat idle, or null if there is none or it is working. */
   idleMs(now = Date.now()): number | null {
     if (!this.#agent || this.#agent.busy || this.#turn) return null;
@@ -103,6 +109,7 @@ export class SessionActor {
       const agent = this.#agent;
       this.#agent = undefined;
       await agent.dispose();
+      this.#deps.store.notify(this.key);
     });
   }
 
@@ -206,6 +213,7 @@ export class SessionActor {
         if (this.#agent === agent) {
           log.info("session runtime closed", { session: this.key, reason });
           this.#agent = undefined;
+          this.#deps.store.notify(this.key);
         }
       }),
     };

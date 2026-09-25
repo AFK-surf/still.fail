@@ -26,7 +26,7 @@ function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinu
   const gptChat = new FakeChat("UGPT");
   const claude = new FakeDriver("claude");
   const codex = new FakeDriver("codex");
-  const hub = new Hub({ config, store, chats: new Map([["cl", chat], ["gpt", gptChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp" });
+  const hub = new Hub({ config: () => config, store, chats: new Map([["cl", chat], ["gpt", gptChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp" });
   const tools = Object.fromEntries(hub.tools().map((t) => [t.name, t]));
   const call = (key: string, name: string, args: Record<string, unknown>) => tools[name]!.run(key, args);
   const accept = (m: ReturnType<typeof message>, bot = "cl") => hub.accept(bot, m);
@@ -203,7 +203,7 @@ test("after a restart a cut-off turn is resumed", async () => {
 
   // Same store, new hub and drivers: what a restart looks like.
   const claude = new FakeDriver("claude");
-  const hub = new Hub({ config: first.config, store: first.store, chats: new Map([["cl", first.chat]]), drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x" });
+  const hub = new Hub({ config: () => first.config, store: first.store, chats: new Map([["cl", first.chat]]), drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x" });
   await hub.recover();
   await settle();
   assert.equal(claude.last.options.resume, runtimeId);

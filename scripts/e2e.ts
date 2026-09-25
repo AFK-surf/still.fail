@@ -68,7 +68,7 @@ const drivers = { claude: new ClaudeDriver(store), codex: new CodexDriver(store)
 const server = createServer((req, res) => void mcp.handle(req, res));
 await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 const mcpUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`;
-const hub = new Hub({ config, store, chats: new Map([["claude", chat], ["codex", chat]]), drivers, mcpUrl });
+const hub = new Hub({ config: () => config, store, chats: new Map([["claude", chat], ["codex", chat]]), drivers, mcpUrl });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
 
 /** Waits until the session has been idle (no running turn, nothing pending) for a few seconds. */

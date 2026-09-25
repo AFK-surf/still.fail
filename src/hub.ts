@@ -23,26 +23,34 @@ export function isStopCommand(text: string): boolean {
 }
 
 export class Hub {
-  readonly #config: Config;
+  readonly #getConfig: () => Config;
   readonly #store: Store;
   readonly #chats: ReadonlyMap<string, ChatSurface>;
   readonly #drivers: Record<RuntimeKind, AgentDriver>;
   readonly #mcpUrl: string;
   readonly #actors = new Map<string, SessionActor>();
 
-  /** `chats` holds the connected bots, by bot id; configured bots without one are offline. */
+  /**
+   * `config` is read on every use, so edits apply to the next decision.
+   * `chats` holds the connected bots by id and may change while running;
+   * configured bots without an entry are offline.
+   */
   constructor(options: {
-    config: Config;
+    config: () => Config;
     store: Store;
     chats: ReadonlyMap<string, ChatSurface>;
     drivers: Record<RuntimeKind, AgentDriver>;
     mcpUrl: string;
   }) {
-    this.#config = options.config;
+    this.#getConfig = options.config;
     this.#store = options.store;
     this.#chats = options.chats;
     this.#drivers = options.drivers;
     this.#mcpUrl = options.mcpUrl;
+  }
+
+  get #config(): Config {
+    return this.#getConfig();
   }
 
   get reposDir(): string {
@@ -107,6 +115,23 @@ export class Hub {
       void actor.evict();
       excess--;
     }
+  }
+
+  /** Live process state of a session, for the admin page. */
+  processState(key: string): "running" | "warm" | "cold" {
+    return this.#actors.get(key)?.processState ?? "cold";
+  }
+
+  /** Interrupts the session's running turn, as `-stop` in the thread would. */
+  stop(key: string): Promise<void> {
+    const row = this.#store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    return this.#actor(row).stop();
+  }
+
+  /** Ends the session's runtime process if it is idle; the conversation resumes on the next message. */
+  evict(key: string): Promise<void> {
+    return this.#actors.get(key)?.evict() ?? Promise.resolve();
   }
 
   async shutdown(): Promise<void> {

@@ -1,5 +1,6 @@
 // All durable ember state, in one SQLite file. Runtime transcripts stay in the
 // runtimes' own homes; this only records what ember needs to route and resume.
+import { EventEmitter } from "node:events";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -119,6 +120,8 @@ function toInbound(row: Row): InboundRow {
 
 export class Store {
   readonly #db: DatabaseSync;
+  /** Emits "session" with a session key whenever anything about that session changes. */
+  readonly changes = new EventEmitter();
 
   constructor(path: string) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
@@ -135,6 +138,11 @@ export class Store {
 
   close(): void {
     this.#db.close();
+  }
+
+  /** Announces a change ember keeps outside the database (e.g. a runtime process ending). */
+  notify(sessionKey: string): void {
+    this.changes.emit("session", sessionKey);
   }
 
   // ── sessions ────────────────────────────────────────────────────────────
@@ -157,14 +165,17 @@ export class Store {
     this.#db.prepare(`INSERT INTO sessions (key, bot, channel, thread_ts, runtime, profile, model, workspace, token, created_at, last_active_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(s.key, s.bot, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.workspace, s.token, s.createdAt, s.lastActiveAt);
+    this.notify(s.key);
   }
 
   setRuntimeSessionId(key: string, id: string): void {
     this.#db.prepare("UPDATE sessions SET runtime_session_id = ? WHERE key = ?").run(id, key);
+    this.notify(key);
   }
 
   setRunning(key: string, running: boolean): void {
     this.#db.prepare("UPDATE sessions SET running = ?, last_active_at = ? WHERE key = ?").run(running ? 1 : 0, Date.now(), key);
+    this.notify(key);
   }
 
   // ── inbound messages ───────────────────────────────────────────────────
@@ -173,6 +184,7 @@ export class Store {
   insertInbound(m: Omit<InboundRow, "status">): boolean {
     const result = this.#db.prepare(`INSERT OR IGNORE INTO inbound (bot, channel, ts, session_key, user, text, status, received_at)
       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`).run(m.bot, m.channel, m.ts, m.sessionKey, m.user, m.text, m.receivedAt);
+    if (result.changes > 0) this.notify(m.sessionKey);
     return result.changes > 0;
   }
 
@@ -184,6 +196,7 @@ export class Store {
   markDelivered(rows: readonly InboundRow[]): void {
     const stmt = this.#db.prepare("UPDATE inbound SET status = 'delivered' WHERE bot = ? AND channel = ? AND ts = ?");
     for (const r of rows) stmt.run(r.bot, r.channel, r.ts);
+    for (const key of new Set(rows.map((r) => r.sessionKey))) this.notify(key);
   }
 
   sessionsWithPendingInbound(): string[] {
@@ -195,18 +208,46 @@ export class Store {
 
   startTurn(id: string, sessionKey: string, kind: TurnKind): void {
     this.#db.prepare("INSERT INTO turns (id, session_key, kind, started_at) VALUES (?, ?, ?, ?)").run(id, sessionKey, kind, Date.now());
+    this.notify(sessionKey);
   }
 
   endTurn(id: string, outcome: string, detail: string | null, declared: string | null): void {
     this.#db.prepare("UPDATE turns SET ended_at = ?, outcome = ?, detail = ?, declared = ? WHERE id = ?")
       .run(Date.now(), outcome, detail, declared, id);
+    const row = this.#db.prepare("SELECT session_key FROM turns WHERE id = ?").get(id) as Row | undefined;
+    if (row) this.notify(row.session_key as string);
   }
 
-  listTurns(sessionKey: string): { id: string; kind: TurnKind; outcome: string | null; detail: string | null; declared: string | null }[] {
+  listTurns(sessionKey: string): { id: string; kind: TurnKind; outcome: string | null; detail: string | null; declared: string | null; startedAt: number; endedAt: number | null }[] {
     return (this.#db.prepare("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at").all(sessionKey) as Row[]).map((r) => ({
       id: r.id as string, kind: r.kind as TurnKind, outcome: (r.outcome as string | null) ?? null,
       detail: (r.detail as string | null) ?? null, declared: (r.declared as string | null) ?? null,
+      startedAt: r.started_at as number, endedAt: (r.ended_at as number | null) ?? null,
     }));
+  }
+
+  /** Per session: turn count, the latest turn, and undelivered messages. For listings. */
+  sessionStats(): Map<string, { turns: number; pending: number; lastTurn: { kind: string; outcome: string | null; declared: string | null; detail: string | null; startedAt: number; endedAt: number | null } | null }> {
+    const rows = this.#db.prepare(`
+      SELECT s.key,
+        (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
+        (SELECT COUNT(*) FROM inbound i WHERE i.session_key = s.key AND i.status = 'pending') AS pending,
+        l.kind, l.outcome, l.declared, l.detail, l.started_at, l.ended_at
+      FROM sessions s
+      LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
+    `).all() as Row[];
+    return new Map(rows.map((r) => [r.key as string, {
+      turns: r.turns as number,
+      pending: r.pending as number,
+      lastTurn: r.started_at == null ? null : {
+        kind: r.kind as string, outcome: (r.outcome as string | null) ?? null, declared: (r.declared as string | null) ?? null,
+        detail: (r.detail as string | null) ?? null, startedAt: r.started_at as number, endedAt: (r.ended_at as number | null) ?? null,
+      },
+    }]));
+  }
+
+  listInbound(sessionKey: string): InboundRow[] {
+    return (this.#db.prepare("SELECT * FROM inbound WHERE session_key = ? ORDER BY ts").all(sessionKey) as Row[]).map(toInbound);
   }
 
   // ── runtime process groups ─────────────────────────────────────────────
