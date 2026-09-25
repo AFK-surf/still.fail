@@ -8,7 +8,7 @@ const hex = (bytes: ArrayBuffer) => Buffer.from(bytes).toString("hex");
 /** An iroh-style identity: an Ed25519 key whose public half, in hex, is the endpoint id. */
 async function key() {
   const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
-  const id = hex(await crypto.subtle.exportKey("raw", pair.publicKey));
+  const id = hex((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer);
   const sign = async (message: string) => hex(await crypto.subtle.sign("Ed25519", pair.privateKey, new TextEncoder().encode(message)));
   return { id, sign };
 }

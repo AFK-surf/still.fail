@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ulid } from "ulid";
-import { ACCESS_TTL_SEC, bearerToken, nowSeconds, randomSecret, signToken, validLoopbackRedirect, verifyToken } from "../src/auth.ts";
+import { ACCESS_TTL_SEC, bearerToken, nowSeconds, randomSecret, signToken, validRedirect, verifyToken } from "../src/auth.ts";
 import type { Env } from "../src/env.ts";
 
 const env = { AUTH_SIGNING_KEY: randomSecret(), PUBLIC_ORIGIN: "https://relay.example" } as Env;
-test("only explicit loopback OAuth callbacks are accepted", () => {
-  assert.equal(validLoopbackRedirect("http://127.0.0.1:43025/oauth/callback"), true);
-  for (const url of ["http://127.0.0.1/oauth/callback", "https://127.0.0.1:43025/oauth/callback", "http://evil.example/oauth/callback", "http://127.0.0.1:43025/oauth/callback?next=https://x", "http://user@127.0.0.1:1234/oauth/callback"]) assert.equal(validLoopbackRedirect(url), false);
+test("only loopback callbacks and this origin's web callback are accepted", () => {
+  assert.equal(validRedirect(env, "http://127.0.0.1:43025/oauth/callback"), true);
+  assert.equal(validRedirect(env, "https://relay.example/auth/callback"), true);
+  for (const url of ["http://127.0.0.1/oauth/callback", "https://127.0.0.1:43025/oauth/callback", "http://evil.example/oauth/callback", "http://127.0.0.1:43025/oauth/callback?next=https://x", "http://user@127.0.0.1:1234/oauth/callback", "https://relay.example/auth/callback?x=1", "https://evil.example/auth/callback"]) assert.equal(validRedirect(env, url), false);
 });
 test("JWTs separate access/refresh, audience, signature, expiry and malformed inputs", async () => {
   const claims = { sub: "google-sub", email: "user@example.test", sid: ulid() };
