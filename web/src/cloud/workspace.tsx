@@ -82,7 +82,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/members" element={<MembersSettings entry={entry} />} />
             <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} stations={stations} />} />
-            <Route path="settings/runtime" element={<RuntimeSettings entry={entry} stations={stations} />} />
+            <Route path="settings/profiles" element={<RuntimeSettings entry={entry} stations={stations} />} />
             <Route path="s/:station/*" element={<StationPages stations={stations} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>

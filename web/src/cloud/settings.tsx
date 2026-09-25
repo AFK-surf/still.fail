@@ -8,7 +8,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
 import { keys, makeApi } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
-import { relativeTime, timeUntil } from "../format.ts";
+import { ACCESS, checkTone, relativeTime, RUNTIME_LABEL, timeUntil } from "../format.ts";
+import { QuotaBars } from "../components.tsx";
 import type { Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
@@ -46,7 +47,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
       <NavLink className="nav-row" to={`${base}/members`}><Users {...ICON} />成员</NavLink>
       <NavLink className="nav-row" to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
       <NavLink className="nav-row" to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>
-      <NavLink className="nav-row" to={`${base}/runtime`}><KeyRound {...ICON} />运行时账号</NavLink>
+      <NavLink className="nav-row" to={`${base}/profiles`}><KeyRound {...ICON} />Profile</NavLink>
     </div>
   );
 }
@@ -188,7 +189,7 @@ export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
   if (!view) return <div className="page" />;
   return (
-    <Page title="Station" lead="每台 station 是一台运行 ember 的机器：它的连接、会话和运行时账号都在那台机器上。" back={`/w/${entry.id}/settings`}>
+    <Page title="Station" lead="每台 station 是一台运行 ember 的机器：它的连接、会话和Profile都在那台机器上。" back={`/w/${entry.id}/settings`}>
       <Stations view={view} account={entry.account} manager={manager} />
     </Page>
   );
@@ -202,21 +203,42 @@ export function ConnectsSettings({ entry, stations }: { entry: WorkspaceEntry; s
 }
 
 export function RuntimeSettings({ entry, stations }: { entry: WorkspaceEntry; stations: Station[] }) {
+  const live = stations.filter((s) => s.online);
+  const overviews = useQueries({ queries: live.map((s) => ({ queryKey: keys.overview(s.id), queryFn: () => makeApi(s.transport).overview(), refetchInterval: 30_000 })) });
   return (
-    <Page title="运行时账号" lead="每台 station 用自己的 Claude Code / Codex 账号运行 agent。选一台 station 管理它的账号。" back={`/w/${entry.id}/settings`}>
-      {stations.length === 0 ? <Empty><p>还没有 station。</p></Empty> : (
-        <ul className="list">
-          {stations.map((s) => (
-            <li key={s.id}>
-              <Link className="list-row" to={`${s.base}/settings/accounts`}>
-                <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
-                <span className="list-row-title">{s.name}</span>
-                <span className="muted">{s.online ? "管理运行时账号" : "离线"}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+    <Page title="Profile" lead="每台 station 有自己的 Profile：用哪份订阅、或者接到哪个模型服务来运行 Claude Code 和 Codex。额度每几分钟更新一次。" back={`/w/${entry.id}/settings`}>
+      {stations.length === 0 && <Empty><p>还没有 station。</p></Empty>}
+      {stations.map((station) => {
+        const overview = station.online ? overviews[live.indexOf(station)]?.data : undefined;
+        return (
+          <Section key={station.id}
+            title={<span className="station-heading"><StatusDot state={station.online ? "online" : "offline"} label={station.online ? "在线" : "离线"} />{station.name}</span>}
+            actions={station.online && <Link className="btn btn-secondary" to={`${station.base}/settings/accounts`}>管理</Link>}>
+            {!station.online ? <div className="card"><p className="muted card-foot">离线，暂时看不到它的 Profile。</p></div>
+              : !overview ? <div className="card"><p className="muted card-foot">正在读取…</p></div>
+              : overview.profiles.length === 0 ? <div className="card"><p className="muted card-foot">还没有 Profile。</p></div>
+              : (
+                <ul className="list">
+                  {overview.profiles.map((p) => {
+                    const tone = checkTone(p.check);
+                    return (
+                      <li key={p.id}>
+                        <Link className="list-row" to={`${station.base}/settings/accounts/${p.id}`}>
+                          <span className="list-row-text">
+                            <span className="list-row-title">{p.name}</span>
+                            <span className="muted">{RUNTIME_LABEL[p.runtime]} · {ACCESS[p.access.kind].label}{p.usedBy.length ? ` · ${p.usedBy.length} 个连接在用` : ""}</span>
+                          </span>
+                          <QuotaBars quota={p.quota} compact />
+                          <Pill tone={tone.tone}>{tone.label}</Pill>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+          </Section>
+        );
+      })}
     </Page>
   );
 }
@@ -246,7 +268,7 @@ function Stations({ view, account, manager }: { view: WorkspaceView; account: Ac
                   {s.version ? ` · ember-mesh ${s.version}` : ""} · <span className="mono">{s.id.slice(0, 12)}</span>
                 </span>
               </span>
-              <Link className="btn btn-ghost" to={`/w/${view.id}/s/${s.id}/settings/accounts`}>运行时账号</Link>
+              <Link className="btn btn-ghost" to={`/w/${view.id}/s/${s.id}/settings/accounts`}>Profile</Link>
               {manager && <Menu items={[
                 { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.mutate({ id: s.id, name: n.trim() }); } },
                 { label: "从 workspace 移除", icon: Trash2, danger: true, onSelect: () => setRemoving(s) },

@@ -507,3 +507,15 @@
 .owner { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text); white-space: nowrap; }
 .owner-none { color: var(--subtle); }
 .owner-line { display: inline-flex; align-items: center; gap: 6px; }
+.quota { display: grid; gap: 10px; }
+.quota-row { display: grid; grid-template-columns: 5.5em minmax(80px, 1fr) 3.2em minmax(7em, auto); align-items: center; gap: 10px; font-size: var(--text-sm); }
+.quota-label { color: var(--muted); }
+.quota-value { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.quota-reset { font-size: var(--text-xs); color: var(--subtle); }
+.quota-track { position: relative; display: block; height: 6px; border-radius: 999px; background: var(--neutral-bg); overflow: hidden; }
+.quota-fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--green); }
+.quota-fill[data-level="amber"] { background: var(--amber); }
+.quota-fill[data-level="red"] { background: var(--red); }
+.quota-compact { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.quota-compact .quota-track { width: 48px; }
+.quota-note { margin: 0; font-size: var(--text-sm); }

@@ -29,7 +29,7 @@ function SettingsNav() {
       <NavLink className="nav-row" to={link("/sessions")}><ArrowLeft {...ICON} />返回会话</NavLink>
       <div className="nav-heading">设置</div>
       <NavLink className="nav-row" to={link("/settings/connects")} aria-current={connectOpen ? "page" : undefined}><Plug {...ICON} />连接</NavLink>
-      <NavLink className="nav-row" to={link("/settings/accounts")}><KeyRound {...ICON} />运行时账号</NavLink>
+      <NavLink className="nav-row" to={link("/settings/accounts")}><KeyRound {...ICON} />Profile</NavLink>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { useApi, keys, useOverview, type AccessKind, type Overview, type ProfileInput, type ProfileView, type RuntimeKind } from "../api.ts";
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
 import { useToast } from "../toast.tsx";
+import { QuotaBars } from "../components.tsx";
 import { Button, Choices, ConnectKindIcon, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
@@ -47,15 +48,15 @@ export function AccountsPage() {
       <MobileBack to={link("/sessions")} label="会话" />
       <header className="page-head">
         <div>
-          <h1>运行时账号</h1>
-          <p className="page-sub">连接通过这些账号运行 Claude Code 或 Codex：用哪份订阅，或者接到哪个模型服务。</p>
+          <h1>Profile</h1>
+          <p className="page-sub">Profile 决定 agent 用什么运行 Claude Code 或 Codex：用哪份订阅，或者接到哪个模型服务。</p>
         </div>
-        <Button icon={Plus} onClick={() => setAdding(true)}>添加账号</Button>
+        <Button icon={Plus} onClick={() => setAdding(true)}>添加 Profile</Button>
       </header>
-      {profiles.length === 0 && <Empty><p>还没有账号。连接至少需要一个账号才能运行。</p></Empty>}
+      {profiles.length === 0 && <Empty><p>还没有 Profile。连接至少需要一个 Profile 才能运行。</p></Empty>}
       {groups.filter((g) => g.items.length).map((g) => (
         <section key={g.runtime} className="section" aria-label={RUNTIME_LABEL[g.runtime]}>
-          <div className="group-head"><strong>{RUNTIME_LABEL[g.runtime]}</strong><span className="muted">{g.items.length} 个账号</span></div>
+          <div className="group-head"><strong>{RUNTIME_LABEL[g.runtime]}</strong><span className="muted">{g.items.length} 个</span></div>
           <ul className="list">
             {g.items.map((p) => {
               const tone = checkTone(p.check);
@@ -67,6 +68,7 @@ export function AccountsPage() {
                       <span className="list-row-title">{p.name}</span>
                       <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.data!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
                     </span>
+                    <QuotaBars quota={p.quota} compact />
                     <Pill tone={tone.tone}>{tone.label}</Pill>
                     <ChevronRight {...ICON} className="list-row-chevron" />
                   </Link>
@@ -97,10 +99,10 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
   const close = () => { setName(""); setKey(""); setKind("subscription"); onClose(); };
   const add = useMutation({
     mutationFn: () => api.putProfile(id, { name: name.trim() || `${RUNTIME_LABEL[runtime]} · ${ACCESS[kind].label}`, runtime, access: { kind, key } }),
-    onSuccess: (data) => { apply(data); toast("已添加账号，正在检查"); close(); navigate(link(`/settings/accounts/${id}`)); },
+    onSuccess: (data) => { apply(data); toast("已添加 Profile，正在检查"); close(); navigate(link(`/settings/accounts/${id}`)); },
   });
   return (
-    <Dialog open={open} onClose={close} title="添加运行时账号"
+    <Dialog open={open} onClose={close} title="添加 Profile"
       footer={<>
         <Button variant="ghost" onClick={close}>取消</Button>
         <Button variant="primary" disabled={taken || (KEYED.has(kind) && !key.trim())} busy={add.isPending} onClick={() => add.mutate()}>添加</Button>
@@ -121,7 +123,7 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
           <input id="account-key" className="input mono" spellCheck={false} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())} />
         </Field>
       )}
-      <Field label="名称" htmlFor="account-name" error={taken ? "已经有同名的账号了" : undefined}
+      <Field label="名称" htmlFor="account-name" error={taken ? "已经有同名的 Profile 了" : undefined}
         hint={kind === "subscription" ? "添加后按页面上的命令在服务器上登录一次。" : undefined}>
         <input id="account-name" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={`${RUNTIME_LABEL[runtime]} · ${ACCESS[kind].label}`} />
       </Field>
@@ -135,7 +137,7 @@ export function AccountPage() {
   const overview = useOverview();
   const profile = overview.data?.profiles.find((p) => p.id === id);
   if (!overview.data) return null;
-  if (!profile) return <Empty><p>没有 ID 为 {id} 的账号。</p></Empty>;
+  if (!profile) return <Empty><p>没有 ID 为 {id} 的 Profile。</p></Empty>;
   return <AccountView key={profile.id} profile={profile} overview={overview.data} />;
 }
 
@@ -150,7 +152,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
   const save = useMutation({ mutationFn: (input: ProfileInput) => api.putProfile(profile.id, input), onSuccess: apply });
   const remove = useMutation({
     mutationFn: () => api.deleteProfile(profile.id),
-    onSuccess: (data) => { apply(data); toast("已删除账号"); navigate(link("/settings/accounts")); },
+    onSuccess: (data) => { apply(data); toast("已删除 Profile"); navigate(link("/settings/accounts")); },
   });
   const check = useMutation({ mutationFn: () => api.checkProfile(profile.id) });
   const rename = () => {
@@ -165,7 +167,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
 
   return (
     <div className="page page-narrow">
-      <MobileBack to={link("/settings/accounts")} label="运行时账号" />
+      <MobileBack to={link("/settings/accounts")} label="Profile" />
       <header className="identity">
         <AccessMark kind={profile.access.kind} size={48} />
         <div className="identity-text">
@@ -177,7 +179,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
           )}
           <p className="identity-sub">{RUNTIME_LABEL[profile.runtime]} · {ACCESS[profile.access.kind].label} · <span className="mono">{profile.id}</span></p>
         </div>
-        <Menu items={[{ label: profile.usedBy.length ? "删除账号（还有连接在用）" : "删除账号", icon: Trash2, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
+        <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash2, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>
       {(save.error || remove.error) && <p className="field-error" role="alert">{(save.error ?? remove.error)!.message}</p>}
 
@@ -196,6 +198,8 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
         {profile.access.kind === "subscription" && <SignIn profile={profile} needed={latest?.state === "login"} />}
       </section>
 
+      <QuotaSection profile={profile} />
+
       <AccessSection profile={profile} onSave={(input, done) => save.mutate(input, { onSuccess: () => { toast("已保存，正在检查"); done(); } })} busy={save.isPending} />
 
       {latest?.models && latest.models.length > 0 && (
@@ -206,7 +210,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
       )}
 
       <Section title="使用它的连接">
-        {users.length === 0 ? <p className="muted">还没有连接使用这个账号。</p> : (
+        {users.length === 0 ? <p className="muted">还没有连接使用这个 Profile。</p> : (
           <ul className="list">
             {users.map((c) => (
               <li key={c.id}><Link className="list-row" to={link(`/connects/${c.id}`)}><ConnectKindIcon kind={c.kind} /><span className="list-row-title">{c.name}</span><span className="muted">{c.bind.model ?? profile.model ?? "默认模型"}</span></Link></li>
@@ -217,7 +221,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
 
       <Advanced profile={profile} onSave={(input) => save.mutate(input, { onSuccess: () => toast("已保存") })} busy={save.isPending} />
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.isPending} onConfirm={() => remove.mutate()}
-        title={`删除「${profile.name}」？`} action="删除账号" description="只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。" />
+        title={`删除「${profile.name}」？`} action="删除 Profile" description="只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。" />
     </div>
   );
 }
@@ -395,5 +399,17 @@ function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) 
       )}
       {job.state === "verifying" && <p className="muted"><span className="activity-pulse inline" aria-hidden="true" />正在完成登录…</p>}
     </div>
+  );
+}
+
+function QuotaSection({ profile }: { profile: ProfileView }) {
+  const api = useApi();
+  const refresh = useMutation({ mutationFn: () => api.refreshQuota(profile.id) });
+  const quota = refresh.data ?? profile.quota;
+  return (
+    <Section title="额度" description={quota?.checkedAt ? `${relativeTime(quota.checkedAt)}查询；每几分钟自动更新。` : undefined}
+      actions={<Button icon={RefreshCw} busy={refresh.isPending} onClick={() => refresh.mutate()}>刷新</Button>}>
+      <div className="card"><QuotaBars quota={quota} /></div>
+    </Section>
   );
 }

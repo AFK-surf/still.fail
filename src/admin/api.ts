@@ -409,7 +409,26 @@ export class AdminApi {
     const stats = this.#deps.store.sessionStats();
     const bindings = this.#deps.store.listBindings();
     const summaries = this.#deps.store.listSessions().filter((s) => !connect || s.connect === connect).map((s) => this.#summary(s.key, stats, bindings));
-    return Promise.all(summaries.map(async (s) => ({ ...s, creator: await this.#creator(s.createdBy) })));
+    const participants = this.#deps.store.participants();
+    return Promise.all(summaries.map(async (s) => ({
+      ...s,
+      creator: await this.#creator(s.createdBy),
+      participants: await this.#people(participants.get(s.key) ?? []),
+    })));
+  }
+
+  /** Several people, once each: one person may write through Slack and ember's chat under the same email. */
+  async #people(refs: string[]): Promise<Creator[]> {
+    const seen = new Set<string>();
+    const out: Creator[] = [];
+    for (const person of await Promise.all(refs.map((r) => this.#creator(r)))) {
+      if (!person) continue;
+      const id = person.email ?? person.id;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(person);
+    }
+    return out;
   }
 
   /** A creator reference in words: who, and their email where known (to match an ember cloud account). */
@@ -442,7 +461,7 @@ export class AdminApi {
     const profile = this.#deps.settings.config.profiles.find((p) => p.id === summary.profile);
     const path = profile && summary.runtimeSessionId ? transcriptPath(summary.runtime, profile.home, summary.runtimeSessionId) : undefined;
     return {
-      session: { ...summary, creator: await this.#creator(summary.createdBy) },
+      session: { ...summary, creator: await this.#creator(summary.createdBy), participants: await this.#people(this.#deps.store.participants().get(key) ?? []) },
       people,
       channels,
       threads: this.#deps.store.listThreads(key),

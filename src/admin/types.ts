@@ -100,6 +100,8 @@ export interface SessionSummary {
   boundTo: string[];
   /** Who started it, resolved for people; filled in lists and details. */
   creator?: Creator | null;
+  /** Everyone who wrote in it (Slack and ember's chat), once each, earliest first. */
+  participants?: Creator[];
   channel: string;
   threadTs: string;
   runtime: RuntimeKind;

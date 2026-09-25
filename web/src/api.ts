@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useStation } from "./station.tsx";
 import type { Transport } from "./transport.ts";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
-import type { ConnectInput, LoginJob, Overview, ProfileCheck, ProfileInput, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type { ConnectInput, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
 
 export type * from "../../src/admin/types.ts";
@@ -44,6 +44,7 @@ export function makeApi(t: Transport) {
   deleteConnect: (id: string) => request<Overview>("DELETE", `/connects/${encodeURIComponent(id)}`),
   reconnect: (id: string) => request<{ ok: true }>("POST", `/connects/${encodeURIComponent(id)}/reconnect`),
   putProfile: (id: string, input: ProfileInput) => request<Overview>("PUT", `/profiles/${encodeURIComponent(id)}`, input),
+  refreshQuota: (id: string) => request<ProfileQuota | null>("POST", `/profiles/${encodeURIComponent(id)}/quota`),
   checkProfile: (id: string) => request<ProfileCheck>("POST", `/profiles/${encodeURIComponent(id)}/check`),
   verifySlack: (input: { connect?: string; appToken?: string; botToken?: string }) =>
     request<{ identity: SlackIdentity | null; errors: string[] }>("POST", "/slack/verify", input),

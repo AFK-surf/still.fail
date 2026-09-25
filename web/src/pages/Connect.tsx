@@ -345,7 +345,7 @@ function BindSection({ connect, overview }: { connect: ConnectView; overview: Ov
           <Field label="运行时">
             <p className="static-value">{RUNTIME_LABEL[connect.bind.runtime]}</p>
           </Field>
-          <Field label="运行时账号" htmlFor="bind-account">
+          <Field label="Profile" htmlFor="bind-account">
             <Select id="bind-account" value={account} onChange={(v) => { setAccount(v); setModel(""); }}
               options={accounts.map((p) => ({ value: p.id, label: p.name }))} />
           </Field>
@@ -485,8 +485,8 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
               options={[{ value: "claude", label: "Claude Code" }, { value: "codex", label: "Codex" }]} />
           </Field>
           <div className="field-grid">
-            <Field label="运行时账号" htmlFor="new-connect-account"
-              error={accounts.length === 0 ? `还没有 ${RUNTIME_LABEL[runtime]} 账号，先到「设置 → 运行时账号」添加。` : undefined}>
+            <Field label="Profile" htmlFor="new-connect-account"
+              error={accounts.length === 0 ? `还没有 ${RUNTIME_LABEL[runtime]} 的 Profile，先到「设置 → Profile」添加。` : undefined}>
               <Select id="new-connect-account" value={chosen?.id ?? ""} onChange={(v) => { setAccount(v); setModel(""); }} disabled={accounts.length === 0}
                 options={accounts.map((p) => ({ value: p.id, label: p.name }))} placeholder="没有可用账号" />
             </Field>

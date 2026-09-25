@@ -340,6 +340,18 @@ export class Store {
     for (const key of new Set(rows.map((r) => r.sessionKey))) this.notify(key);
   }
 
+  /** Everyone who wrote in each session, as creator references, earliest first. */
+  participants(): Map<string, string[]> {
+    const out = new Map<string, string[]>();
+    const rows = this.#db.prepare("SELECT session_key, connect, user, MIN(CAST(ts AS REAL)) AS first FROM inbound GROUP BY session_key, connect, user ORDER BY first").all() as Row[];
+    for (const r of rows) {
+      const ref = r.connect === "ember" ? r.user as string : `slack:${r.connect as string}:${r.user as string}`;
+      const key = r.session_key as string;
+      out.set(key, [...(out.get(key) ?? []), ref]);
+    }
+    return out;
+  }
+
   /** The session's most recent message: where ember's own notices go. */
   latestInbound(sessionKey: string): InboundRow | undefined {
     const row = this.#db.prepare("SELECT * FROM inbound WHERE session_key = ? ORDER BY CAST(ts AS REAL) DESC LIMIT 1").get(sessionKey) as Row | undefined;

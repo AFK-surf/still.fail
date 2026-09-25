@@ -399,10 +399,14 @@ test("connects, sessions and chats remember who created them", async () => {
     await settle();
     const [summary] = (await t.call("GET", "/sessions")).body;
     assert.deepEqual(summary.creator, { id: "slack:ds:U42", name: "U42", email: null, via: "slack" });
+    assert.deepEqual(summary.participants.map((p: any) => p.id), ["slack:ds:U42"]);
     const chat = await t.call("POST", `/sessions/${encodeURIComponent(summary.key)}/chats`, {});
     const detail = await t.call("GET", `/sessions/${encodeURIComponent(summary.key)}`);
     assert.equal(detail.body.chats[0].threadTs, chat.body.threadTs);
     assert.equal(detail.body.chats[0].creator.via, "local");
+    await t.call("POST", `/chats/${chat.body.threadTs}/messages`, { text: "hello from the page" });
+    const after = await t.call("GET", `/sessions/${encodeURIComponent(summary.key)}`);
+    assert.deepEqual(after.body.session.participants.map((p: any) => p.id), ["slack:ds:U42", "local"]);
   } finally {
     t.close();
   }
