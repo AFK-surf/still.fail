@@ -13,6 +13,7 @@ import { LoginManager } from "./login.ts";
 import { InternalChat } from "./chat/internal.ts";
 import { McpEndpoint } from "./mcp.ts";
 import { MeshSupervisor } from "./mesh.ts";
+import { checkQuota } from "./quota.ts";
 import { ClaudeDriver } from "./runtime/claude.ts";
 import { CodexDriver } from "./runtime/codex.ts";
 import { reapStaleGroups } from "./runtime/process.ts";
@@ -34,18 +35,19 @@ const connections: Connections = new Connections(
   (connect) => new SlackSurface(connect.slack),
   (connectId, message): Promise<void> => hub.accept(connectId, message),
 );
+const codex = new CodexDriver(store);
 const hub: Hub = new Hub({
   config: () => settings.config,
   store,
   chats: connections.chats,
   internal: new InternalChat(store, (user) => names.get(user) ?? (user === "local" ? "管理员" : user)),
   mcpUrl,
-  drivers: { claude: new ClaudeDriver(store), codex: new CodexDriver(store) },
+  drivers: { claude: new ClaudeDriver(store), codex },
 });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
 const logins = new LoginManager(settings.config.dataDir);
 const mesh = new MeshSupervisor({ dataDir: settings.config.dataDir, admin: `http://127.0.0.1:${settings.config.adminHttp.port}` });
-const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh });
+const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)) });
 
 settings.onChange((config) => {
   linkAgentHome(config.agentHome, config.profiles);

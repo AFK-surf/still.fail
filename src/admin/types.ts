@@ -5,11 +5,12 @@ import type { ConnectState } from "../connections.ts";
 import type { LoginJob, LoginState } from "../login.ts";
 import type { ChatMessageRow, ChatRow } from "../store.ts";
 import type { MeshStatus } from "../mesh.ts";
+import type { ProfileQuota, QuotaWindow } from "../quota.ts";
 import type { Viewer } from "./access.ts";
 import type { AccessKind, ProfileCheck } from "../profiles.ts";
 import type { TimelineEntry, TranscriptUsage } from "../transcript.ts";
 
-export type { ChatMessageRow, ChatRow, LoginJob, LoginState, MeshStatus };
+export type { ChatMessageRow, ChatRow, LoginJob, LoginState, MeshStatus, ProfileQuota, QuotaWindow };
 export type { AccessKind, ConnectKind, ConnectMode, ConnectState, ProfileCheck, RuntimeKind, TimelineEntry, TranscriptUsage };
 
 export type ProcessState = "running" | "warm" | "cold";
@@ -56,6 +57,8 @@ export interface ProfileView {
   check: ProfileCheck | null;
   /** The sign-in started from the admin page, running or last finished. */
   login: LoginJob | null;
+  /** How much of the allowance is used, where the provider says; refreshed every few minutes. */
+  quota: ProfileQuota | null;
 }
 
 export interface ProcessView {

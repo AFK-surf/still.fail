@@ -234,6 +234,12 @@ export class CodexDriver implements AgentDriver {
     };
   }
 
+  /** The account's rate-limit windows, as the profile's app-server reports them (ChatGPT subscriptions). */
+  async rateLimits(profile: Profile): Promise<unknown> {
+    const host = await this.#host(profile);
+    return host.request("account/rateLimits/read", {});
+  }
+
   async shutdown(): Promise<void> {
     await Promise.all([...this.#hosts.values()].map((host) => host.kill()));
     this.#hosts.clear();

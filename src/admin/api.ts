@@ -8,6 +8,8 @@ import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
 import type { MeshStatus } from "../mesh.ts";
+import type { ProfileQuota } from "../quota.ts";
+import type { Profile } from "../config.ts";
 import { INTERNAL_CONNECT } from "../chat/internal.ts";
 import { appIdOf, applySettings, rotateConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
 import { log } from "../log.ts";
@@ -32,6 +34,8 @@ export interface AdminDeps {
   names: Map<string, string>;
   /** ember-mesh's shared secret, and its state for the page. */
   mesh?: { secret(): string | null; status(): MeshStatus };
+  /** A profile's allowance; absent where nobody can ask (tests). */
+  quota?: (profile: Profile) => Promise<ProfileQuota>;
   /** How a profile is checked; tests replace it so no real CLI runs. */
   checkProfile?: typeof checkProfile;
   /** Slack's app API; defaults to one using the configuration token in the config. */
@@ -92,6 +96,8 @@ export class AdminApi {
   readonly #deps: AdminDeps;
   readonly #gate: AccessGate;
   readonly #checks = new Map<string, ProfileCheck>();
+  readonly #quotas = new Map<string, ProfileQuota>();
+  readonly #quotaPending = new Set<string>();
   readonly #apps: SlackApps;
   readonly #appIds = new Map<string, string>();
 
@@ -190,6 +196,7 @@ export class AdminApi {
       return send(res, 200, overview);
     }
     if (resource === "profiles" && id && action === "check" && method === "POST") return send(res, 200, await this.#check(id));
+    if (resource === "profiles" && id && action === "quota" && method === "POST") return send(res, 200, await this.#refreshQuota(id));
     if (resource === "profiles" && id && action === "login") {
       const profile = this.#deps.settings.config.profiles.find((p) => p.id === id);
       if (!profile) throw new HttpError(404, `unknown profile ${id}`);
@@ -377,6 +384,7 @@ export class AdminApi {
         loginCommand: loginCommand(p.runtime, p.home),
         check: this.#checks.get(p.id) ?? null,
         login: this.#deps.logins.get(p.id),
+        quota: this.#quotaFor(p),
       })),
       processes: processes.map((p) => ({ ...p, rssMb: memory.has(p.pgid) ? Math.round(memory.get(p.pgid)! / 1024) : null })),
       counts: {
@@ -548,6 +556,28 @@ export class AdminApi {
       }
       return { ...raw, profiles: existing ? profiles.map((p) => (p.id === id ? next : p)) : [...profiles, next] };
     });
+  }
+
+  /** The cached allowance; asks again in the background once it is five minutes old. */
+  #quotaFor(profile: Profile): ProfileQuota | null {
+    const cached = this.#quotas.get(profile.id);
+    if (this.#deps.quota && (!cached || Date.now() - cached.checkedAt > 5 * 60_000)) void this.#refreshQuota(profile.id).catch(() => undefined);
+    return cached ?? null;
+  }
+
+  async #refreshQuota(id: string): Promise<ProfileQuota | null> {
+    const profile = this.#deps.settings.config.profiles.find((p) => p.id === id);
+    if (!profile) throw new HttpError(404, `unknown profile ${id}`);
+    if (!this.#deps.quota || this.#quotaPending.has(id)) return this.#quotas.get(id) ?? null;
+    this.#quotaPending.add(id);
+    try {
+      const quota = await this.#deps.quota(profile);
+      this.#quotas.set(id, quota);
+      this.#deps.settings.touch(); // pages refresh the overview
+      return quota;
+    } finally {
+      this.#quotaPending.delete(id);
+    }
   }
 
   async #check(id: string): Promise<ProfileCheck> {
