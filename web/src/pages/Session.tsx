@@ -66,7 +66,8 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   // One chat per session; older sessions may have several, of which the first is the one.
   const chat = chats[0];
   return (
-    <div className="session-page">
+    <div className="session-page" data-panel={panel}>
+      <div className="session-main">
       <header className="page-bar">
         <MobileBack to={link("/sessions")} label="会话" />
         <div className="page-bar-title">
@@ -85,9 +86,9 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
           <IconButton label={panel ? "收起侧栏" : "执行历史与详情"} icon={panel ? PanelRightClose : PanelRightOpen} aria-pressed={panel} onClick={() => togglePanel(!panel)} />
         </div>
       </header>
-      {/* The chat is the page; the session's history and details sit in a tab set on the right. */}
-      <div className="session-body" data-panel={panel}>
-        <ChatPanel detail={detail.data} chat={chat} />
+      {/* The chat is the page; the session's history sits in a tab set that takes the whole right side. */}
+      <ChatPanel detail={detail.data} chat={chat} />
+      </div>
         {panel && (
           <Tabs.Root className="side-panel" value="history">
             <div className="side-tabs">
@@ -102,7 +103,6 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
             </Tabs.Content>
           </Tabs.Root>
         )}
-      </div>
     </div>
   );
 }
