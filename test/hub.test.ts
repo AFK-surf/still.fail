@@ -34,7 +34,7 @@ function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinu
 }
 
 test("a mention starts a session and prompts the runtime with the message", async () => {
-  const { hub, claude, store } = setup();
+  const { claude, store, accept } = setup();
   const m = message({ text: "<@UBOT> fix the build" });
   await accept(m);
   await settle();
@@ -46,21 +46,21 @@ test("a mention starts a session and prompts the runtime with the message", asyn
 });
 
 test("thread chatter without a session is ignored", async () => {
-  const { hub, claude } = setup();
+  const { claude, accept } = setup();
   await accept(message({ addressed: false, text: "just talking" }));
   await settle();
   assert.equal(claude.sessions.length, 0);
 });
 
 test("a mention inside an existing thread tells the agent about earlier messages", async () => {
-  const { hub, claude } = setup();
+  const { claude, accept } = setup();
   await accept(message({ threadTs: "1.000001", ts: "5.000001" }));
   await settle();
   assert.match(claude.last.prompts[0]!, /already had messages/);
 });
 
 test("a message during a running turn is steered into it", async () => {
-  const { hub, claude } = setup();
+  const { claude, accept } = setup();
   const first = message();
   await accept(first);
   await settle();
@@ -71,7 +71,7 @@ test("a message during a running turn is steered into it", async () => {
 });
 
 test("the same message delivered twice is handled once", async () => {
-  const { hub, claude } = setup();
+  const { claude, accept } = setup();
   const m = message();
   await accept(m);
   await accept({ ...m });
@@ -80,7 +80,7 @@ test("the same message delivered twice is handled once", async () => {
 });
 
 test("a turn ending without final/block is nudged, then reported after maxNudges", async () => {
-  const { hub, claude, chat } = setup({ maxNudges: 1 });
+  const { claude, chat, accept } = setup({ maxNudges: 1 });
   await accept(message());
   await settle();
   claude.last.end();
@@ -94,7 +94,7 @@ test("a turn ending without final/block is nudged, then reported after maxNudges
 });
 
 test("chat_post with kind final posts and settles the turn without a nudge", async () => {
-  const { hub, claude, chat, call } = setup();
+  const { claude, chat, call, accept } = setup();
   const m = message();
   await accept(m);
   await settle();
@@ -107,14 +107,14 @@ test("chat_post with kind final posts and settles the turn without a nudge", asy
 });
 
 test("chat_state rejects kinds other than final and block", async () => {
-  const { hub, call } = setup();
+  const { call, accept } = setup();
   const m = message();
   await accept(m);
   await assert.rejects(call(sessionKey("cl", "C1", m.threadTs), "chat_state", { kind: "wait" }), /final" or "block/);
 });
 
 test("-stop aborts the running turn and confirms once it ends", async () => {
-  const { hub, claude, chat } = setup();
+  const { claude, chat, accept } = setup();
   const m = message();
   await accept(m);
   await settle();
@@ -129,7 +129,7 @@ test("-stop aborts the running turn and confirms once it ends", async () => {
 });
 
 test("a failed turn is reported to the thread and not nudged", async () => {
-  const { hub, claude, chat } = setup();
+  const { claude, chat, accept } = setup();
   await accept(message());
   await settle();
   claude.last.end({ kind: "failed", reason: "auth", message: "401 Missing API key" });
@@ -139,7 +139,7 @@ test("a failed turn is reported to the thread and not nudged", async () => {
 });
 
 test("messages that arrive while a turn cannot take them go in the next turn", async () => {
-  const { hub, claude } = setup();
+  const { claude, accept } = setup();
   const m = message();
   await accept(m);
   await settle();
@@ -211,7 +211,7 @@ test("after a restart a cut-off turn is resumed", async () => {
 });
 
 test("when the runtime session cannot be resumed, a new one starts and is told to catch up", async () => {
-  const { hub, claude } = setup();
+  const { claude, accept } = setup();
   const m = message();
   await accept(m);
   await settle();
@@ -228,7 +228,7 @@ test("when the runtime session cannot be resumed, a new one starts and is told t
 });
 
 test("idle claude processes beyond the warm limit are evicted, oldest first", async () => {
-  const { hub, claude } = setup({ maxWarmClaude: 1, warmMinutes: 0 });
+  const { hub, claude, accept } = setup({ maxWarmClaude: 1, warmMinutes: 0 });
   const a = message({ ts: "1.1", threadTs: "1.1" });
   const b = message({ ts: "2.1", threadTs: "2.1" });
   await accept(a);
@@ -245,7 +245,7 @@ test("idle claude processes beyond the warm limit are evicted, oldest first", as
 });
 
 test("a running turn is never evicted", async () => {
-  const { hub, claude } = setup({ maxWarmClaude: 0, warmMinutes: 0 });
+  const { hub, claude, accept } = setup({ maxWarmClaude: 0, warmMinutes: 0 });
   await accept(message());
   await settle();
   hub.evictIdle(Date.now() + 10_000_000);
