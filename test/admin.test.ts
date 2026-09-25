@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync, sign } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { AccessGate } from "../src/admin/access.ts";
 import { AdminApi } from "../src/admin/api.ts";
 import { BotConnections, type Connection } from "../src/bots.ts";
 import { Hub } from "../src/hub.ts";
@@ -23,11 +25,20 @@ class FakeConnection extends FakeChat implements Connection {
   }
 }
 
-async function setup() {
+const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const jwks = async () => ({ keys: [{ ...publicKey.export({ format: "jwk" }), kid: "k1" }] });
+
+function jwt(claims: Record<string, unknown>, kid = "k1"): string {
+  const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const head = `${part({ alg: "RS256", kid })}.${part(claims)}`;
+  return `${head}.${sign("RSA-SHA256", Buffer.from(head), privateKey).toString("base64url")}`;
+}
+
+async function setup(options: { access?: { teamDomain: string; aud: string } } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), "ember-admin-"));
   const path = join(dataDir, "config.json");
   writeFileSync(path, JSON.stringify({
-    admin: { token: "secret-admin-token" },
+    ...(options.access ? { admin: { access: options.access } } : {}),
     profiles: [
       { id: "cc", runtime: "claude", home: "homes/cc", env: { ANTHROPIC_API_KEY: "sk-very-secret-value", ANTHROPIC_BASE_URL: "https://example" } },
       { id: "cx", runtime: "codex", home: "homes/cx" },
@@ -46,14 +57,14 @@ async function setup() {
   const hub: Hub = new Hub({ config: () => settings.config, store, chats: bots.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x" });
   settings.onChange((config) => void bots.reconcile(config));
   await bots.reconcile(settings.config);
-  const api = new AdminApi({ settings, store, hub, bots });
+  const api = new AdminApi({ settings, store, hub, bots, gate: new AccessGate(() => settings.config.adminAccess, jwks) });
   const server = createServer((req, res) => void api.handle(req, res));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/admin/api`;
-  const call = async (method: string, route: string, bodyValue?: unknown, auth: string | null = "secret-admin-token") => {
+  const call = async (method: string, route: string, bodyValue?: unknown, headers: Record<string, string> = {}) => {
     const response = await fetch(`${base}${route}`, {
       method,
-      headers: { "content-type": "application/json", ...(auth ? { authorization: `Bearer ${auth}` } : {}) },
+      headers: { "content-type": "application/json", ...headers },
       ...(bodyValue === undefined ? {} : { body: JSON.stringify(bodyValue) }),
     });
     return { status: response.status, headers: response.headers, body: await response.json() as any };
@@ -61,17 +72,50 @@ async function setup() {
   return { dataDir, path, settings, store, hub, bots, claude, connections, call, base, close: () => server.close() };
 }
 
-test("the admin API requires the token; login trades it for a cookie", async () => {
+test("local visits need no sign-in", async () => {
   const t = await setup();
   try {
-    assert.equal((await t.call("GET", "/overview", undefined, null)).status, 401);
-    assert.equal((await t.call("GET", "/overview", undefined, "wrong")).status, 401);
-    assert.equal((await t.call("POST", "/login", { token: "nope" }, null)).status, 401);
-    const login = await t.call("POST", "/login", { token: "secret-admin-token" }, null);
-    const cookie = login.headers.get("set-cookie")!;
-    assert.match(cookie, /ember_admin=secret-admin-token; HttpOnly; SameSite=Strict; Path=\/admin/);
-    const overview = await fetch(`${t.base}/overview`, { headers: { cookie: cookie.split(";")[0]! } });
-    assert.equal(overview.status, 200);
+    const { status, body } = await t.call("GET", "/overview");
+    assert.equal(status, 200);
+    assert.deepEqual(body.viewer, { via: "local" });
+  } finally {
+    t.close();
+  }
+});
+
+test("tunneled visits are refused until Cloudflare Access is configured", async () => {
+  const t = await setup();
+  try {
+    const { status, body } = await t.call("GET", "/overview", undefined, { "cf-connecting-ip": "203.0.113.9" });
+    assert.equal(status, 403);
+    assert.match(body.error, /Cloudflare Access/);
+  } finally {
+    t.close();
+  }
+});
+
+test("tunneled visits need a valid Access token for this team and application", async () => {
+  const access = { teamDomain: "afk", aud: "app-aud" };
+  const t = await setup({ access });
+  const good = { iss: "https://afk.cloudflareaccess.com", aud: ["app-aud"], email: "dev@example.com", exp: Date.now() / 1000 + 600 };
+  const via = (token?: string) => ({ "cf-connecting-ip": "203.0.113.9", ...(token ? { "cf-access-jwt-assertion": token } : {}) });
+  try {
+    const ok = await t.call("GET", "/overview", undefined, via(jwt(good)));
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.body.viewer, { via: "access", email: "dev@example.com" });
+    const cases: [Record<string, string>, RegExp][] = [
+      [via(), /缺少/],
+      [via(jwt({ ...good, aud: ["other"] })), /不属于这个应用/],
+      [via(jwt({ ...good, iss: "https://evil.cloudflareaccess.com" })), /别的团队/],
+      [via(jwt({ ...good, exp: Date.now() / 1000 - 3600 })), /过期/],
+      [via(jwt(good).replace(/\.[^.]+$/, ".AAAA")), /签名无效/],
+      [via(jwt(good, "unknown-kid")), /签名无效/],
+    ];
+    for (const [headers, message] of cases) {
+      const denied = await t.call("GET", "/overview", undefined, headers);
+      assert.equal(denied.status, 403);
+      assert.match(denied.body.error, message);
+    }
   } finally {
     t.close();
   }
@@ -87,7 +131,7 @@ test("secrets are masked in the overview", async () => {
     assert.equal(env.ANTHROPIC_API_KEY.secret, true);
     assert.equal(env.ANTHROPIC_API_KEY.value, "sk-ve…alue");
     assert.equal(env.ANTHROPIC_BASE_URL.value, "https://example");
-    assert.doesNotMatch(JSON.stringify(body), /very-secret|bbbbbbbbbbbb|secret-admin-token/);
+    assert.doesNotMatch(JSON.stringify(body), /very-secret|bbbbbbbbbbbb/);
   } finally {
     t.close();
   }
@@ -182,11 +226,4 @@ test("session detail includes turns, messages and the runtime transcript", async
   } finally {
     t.close();
   }
-});
-
-test("a generated admin token is saved on first start", () => {
-  const dataDir = mkdtempSync(join(tmpdir(), "ember-admin-"));
-  const settings = new Settings(join(dataDir, "config.json"), dataDir);
-  assert.ok(settings.config.adminToken.length >= 24);
-  assert.equal(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8")).admin.token, settings.config.adminToken);
 });

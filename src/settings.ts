@@ -1,7 +1,6 @@
 // The configuration as a live, editable document. config.json stays the source
 // of truth: edits are validated by parseConfig, written atomically (mode 600,
 // it holds secrets), and then announced to whoever applies them.
-import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -19,12 +18,6 @@ export class Settings {
     this.dataDir = dataDir;
     this.#raw = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) as RawConfig : {};
     this.#config = parseConfig(this.#raw, dataDir);
-    if (!this.#raw.admin?.token) {
-      // Generated once and kept in config.json; read it there to sign in to the admin page.
-      this.#raw = { ...this.#raw, admin: { ...this.#raw.admin, token: randomBytes(24).toString("base64url") } };
-      this.#write();
-      this.#config = parseConfig(this.#raw, dataDir);
-    }
   }
 
   static load(env: NodeJS.ProcessEnv = process.env): Settings {

@@ -1,7 +1,7 @@
 // Serves the admin client over a throwaway data dir seeded with sessions in
 // every state, reusing real runtime transcripts found on this machine (read
 // only). For working on the UI without touching a live ember.
-// Usage: node scripts/admin-demo.ts [port]   (then open /admin, token "demo")
+// Usage: node scripts/admin-demo.ts [port]   (then open /admin)
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -26,7 +26,6 @@ const codexIds = transcripts(join(codexHome, "sessions"), (n) => n.startsWith("r
 
 const dataDir = mkdtempSync(join(tmpdir(), "ember-admin-demo-"));
 writeFileSync(join(dataDir, "config.json"), JSON.stringify({
-  admin: { token: "demo" },
   profiles: [
     { id: "claude-ocg", runtime: "claude", home: claudeHome, env: { ANTHROPIC_API_KEY: "sk-demo-not-a-real-key-1234", ANTHROPIC_BASE_URL: "https://opencode.ai/zen/go", ANTHROPIC_CUSTOM_HEADERS: "x-opencode-session: {route}" } },
     { id: "codex-ocg", runtime: "codex", home: codexHome, env: { OPENCODE_GO_KEY: "demo-key-abcdefgh", OPENCODE_SESSION: "ember-{route}" } },
@@ -83,4 +82,4 @@ createServer((req, res) => {
   void readFile(join(ui, extname(rel) ? rel : "index.html"))
     .then((body) => res.writeHead(200, { "content-type": { ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" }[extname(rel)] ?? "text/html" }).end(body))
     .catch(() => res.writeHead(404).end());
-}).listen(port, "127.0.0.1", () => console.log(`admin demo on http://127.0.0.1:${port}/admin (token: demo), data ${dataDir}; claude transcripts ${claudeIds.length}, codex ${codexIds.length}`));
+}).listen(port, "127.0.0.1", () => console.log(`admin demo on http://127.0.0.1:${port}/admin, data ${dataDir}; claude transcripts ${claudeIds.length}, codex ${codexIds.length}`));

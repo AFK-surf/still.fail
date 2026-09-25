@@ -71,7 +71,7 @@ a { color: inherit; }
 .rail-link:hover { background: var(--ash-raised); color: var(--soot); }
 .rail-link[aria-current="page"] { background: var(--ash-raised); color: var(--soot); font-weight: 600; }
 .rail-spacer { flex: 1; }
-.rail-button { border: 0; background: none; cursor: pointer; }
+.rail-viewer { width: 64px; font-size: 11px; color: var(--soot-faint); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .page { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 
@@ -259,7 +259,7 @@ a { color: inherit; }
     grid-row: 2; flex-direction: row; justify-content: space-around; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
     border-right: 0; border-top: 1px solid var(--ash-line); background: var(--ash);
   }
-  .rail-mark, .rail-spacer { display: none; }
+  .rail-mark, .rail-spacer, .rail-viewer { display: none; }
   .split, .settings { grid-template-columns: 1fr; }
   .split[data-detail="true"] .list-pane, .settings[data-detail="true"] .list-pane { display: none; }
   .split:not([data-detail="true"]) .detail-pane, .settings:not([data-detail="true"]) .detail-pane { display: none; }

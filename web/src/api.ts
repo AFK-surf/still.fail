@@ -26,8 +26,6 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  login: (token: string) => request<{ ok: true }>("POST", "/login", { token }),
-  logout: () => request<{ ok: true }>("POST", "/logout"),
   stop: (key: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/stop`),
   evict: (key: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/evict`),
   putBot: (id: string, input: BotInput) => request<Overview>("PUT", `/bots/${encodeURIComponent(id)}`, input),

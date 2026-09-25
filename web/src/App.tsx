@@ -1,7 +1,5 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router";
-import { api, ApiError, useLiveUpdates, useOverview } from "./api.ts";
+import { ApiError, useLiveUpdates, useOverview, type Overview } from "./api.ts";
 import { ToastProvider } from "./toast.tsx";
 import { BotsPage } from "./pages/Bots.tsx";
 import { ProfilesPage } from "./pages/Profiles.tsx";
@@ -9,17 +7,26 @@ import { SessionsPage } from "./pages/Sessions.tsx";
 
 export function App() {
   const overview = useOverview();
-  const signedOut = overview.error instanceof ApiError && overview.error.status === 401;
   useLiveUpdates(overview.isSuccess);
 
-  if (signedOut) return <SignIn />;
   if (overview.isPending) return null;
-  if (overview.isError) return <div className="empty"><p>连不上 ember：{overview.error.message}</p></div>;
+  if (overview.isError) {
+    const denied = overview.error instanceof ApiError && overview.error.status === 403;
+    return (
+      <div className="signin">
+        <div className="signin-box">
+          <img src="/admin/ember.svg" alt="" />
+          <h1>{denied ? "没有访问权限" : "连不上 ember"}</h1>
+          <p>{overview.error.message}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ToastProvider>
       <div className="frame">
-        <Rail />
+        <Rail viewer={overview.data.viewer} />
         <main className="page">
           <Routes>
             <Route path="/" element={<Navigate to="/sessions" replace />} />
@@ -34,12 +41,7 @@ export function App() {
   );
 }
 
-function Rail() {
-  const client = useQueryClient();
-  const signOut = async () => {
-    await api.logout();
-    await client.invalidateQueries();
-  };
+function Rail({ viewer }: { viewer: Overview["viewer"] }) {
   return (
     <nav className="rail" aria-label="主导航">
       <img className="rail-mark" src="/admin/ember.svg" alt="ember" />
@@ -47,39 +49,9 @@ function Rail() {
       <NavLink className="rail-link" to="/bots">Bot</NavLink>
       <NavLink className="rail-link" to="/profiles">账号</NavLink>
       <span className="rail-spacer" />
-      <button type="button" className="rail-link rail-button" onClick={() => void signOut()}>退出</button>
+      <span className="rail-viewer" title={viewer.via === "access" ? `通过 Cloudflare Access 登录：${viewer.email}` : "在运行 ember 的机器上本地访问"}>
+        {viewer.via === "access" ? viewer.email.split("@")[0] : "本机"}
+      </span>
     </nav>
-  );
-}
-
-function SignIn() {
-  const client = useQueryClient();
-  const [token, setToken] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    try {
-      await api.login(token.trim());
-      await client.invalidateQueries();
-    } catch (e) {
-      setError(e instanceof ApiError && e.status === 401 ? "token 不对。它在 ember 数据目录的 config.json 里，admin.token 字段。" : String(e));
-    }
-  };
-  return (
-    <div className="signin">
-      <form className="signin-box" onSubmit={(e) => void submit(e)}>
-        <img src="/admin/ember.svg" alt="" />
-        <h1>登录 ember</h1>
-        <p>输入管理 token。登录状态会保留 30 天。</p>
-        <div className="field">
-          <label htmlFor="token">管理 token</label>
-          <input id="token" className="input" type="password" autoComplete="current-password" value={token}
-            onChange={(e) => setToken(e.target.value)} autoFocus />
-        </div>
-        <button className="button button-primary" type="submit" disabled={!token.trim()}>登录</button>
-        {error && <p className="error" role="alert">{error}</p>}
-      </form>
-    </div>
   );
 }

@@ -8,7 +8,7 @@ pnpm build              # 构建管理页（web/ → dist/admin）
 node src/main.ts        # Node 24；PATH 里需要 claude 和 codex
 ```
 
-数据目录默认 `~/.ember`（`EMBER_DATA` 可改），配置文件是其中的 `config.json`（`EMBER_CONFIG` 可改）。第一次启动会生成管理 token，写在 `config.json` 的 `admin.token`。
+数据目录默认 `~/.ember`（`EMBER_DATA` 可改），配置文件是其中的 `config.json`（`EMBER_CONFIG` 可改）。
 
 两个端口，都只监听本机：
 
@@ -21,7 +21,15 @@ node src/main.ts        # Node 24；PATH 里需要 claude 和 codex
 
 ## 管理页
 
-用管理 token 登录。在管理页里可以：
+在运行 ember 的机器上直接打开 `http://127.0.0.1:4760/admin`，不需要登录。从公网访问时，把 Cloudflare tunnel 指向 4760，并在 Cloudflare 上为这个域名配置 Access；再把 Access 应用的团队域名和 AUD 写进配置：
+
+```json
+{ "admin": { "access": { "teamDomain": "<团队>", "aud": "<Access 应用的 AUD tag>" } } }
+```
+
+ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团队、AUD、有效期），页面上显示访问者的邮箱，配置改动也按邮箱记日志。没有配置 `admin.access` 时，经过 tunnel 的请求一律拒绝。
+
+在管理页里可以：
 
 - 实时看所有会话的状态和对话过程，停止正在运行的任务，释放空闲的运行时进程；
 - 增删改 **bot**：一个 bot 对应一个 Slack app，绑定一种运行时（Claude Code / Codex）、一组账号和一个模型。页面上的「在 Slack 创建 app」会打开预填好 manifest 的 Slack 新建页；
@@ -35,7 +43,7 @@ node src/main.ts        # Node 24；PATH 里需要 claude 和 codex
 
 ```json
 {
-  "admin": { "token": "…", "port": 4760 },
+  "admin": { "port": 4760, "access": { "teamDomain": "…", "aud": "…" } },
   "bots": [
     { "id": "ds", "name": "ember", "runtime": "claude", "profiles": ["claude-ocg"], "model": "deepseek-flash",
       "slack": { "appToken": "xapp-…", "botToken": "xoxb-…" } },
@@ -82,5 +90,5 @@ node src/main.ts        # Node 24；PATH 里需要 claude 和 codex
 
 - `pnpm test`、`pnpm typecheck`（前后端都检查）。
 - `pnpm dev:web`：管理页的热更新开发服务器，API 代理到本机 4760。
-- `node scripts/admin-demo.ts`：用一份临时数据（各种状态的会话）起一个管理页，token 是 `demo`。
+- `node scripts/admin-demo.ts`：用一份临时数据（各种状态的会话）起一个管理页。
 - `node scripts/e2e.ts`：用真实的 Claude Code 和 Codex 跑一遍端到端，需要 `~/.config/ember-spike/opencode-go.env`。

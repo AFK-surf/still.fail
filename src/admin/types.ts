@@ -46,6 +46,8 @@ export interface ProcessView {
 }
 
 export interface Overview {
+  /** Who is looking: a local visit, or the Cloudflare Access identity. */
+  viewer: { via: "local" } | { via: "access"; email: string };
   bots: BotView[];
   profiles: ProfileView[];
   processes: ProcessView[];

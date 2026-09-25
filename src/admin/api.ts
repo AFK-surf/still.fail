@@ -1,7 +1,6 @@
-// The admin API behind /admin. Every route but login requires the admin token,
-// as a cookie (set by login) or an Authorization: Bearer header.
+// The admin API behind /admin. Local visits are trusted; visits through the
+// Cloudflare tunnel must carry a valid Access identity (see access.ts).
 import { execFileSync } from "node:child_process";
-import { timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { BotConnections } from "../bots.ts";
@@ -11,10 +10,10 @@ import { log } from "../log.ts";
 import type { Settings } from "../settings.ts";
 import type { Store } from "../store.ts";
 import { readTimeline, transcriptPath } from "../transcript.ts";
+import { AccessDenied, AccessGate, type Viewer } from "./access.ts";
 import { createAppUrl } from "./slack-manifest.ts";
 import type { Overview, SessionDetail, SessionSummary } from "./types.ts";
 
-const COOKIE = "ember_admin";
 const SECRET_KEY = /KEY|TOKEN|SECRET|PASSWORD|AUTH/i;
 
 export interface AdminDeps {
@@ -22,6 +21,8 @@ export interface AdminDeps {
   store: Store;
   hub: Hub;
   bots: BotConnections;
+  /** Decides who may use the API; defaults to Cloudflare Access per the config. */
+  gate?: AccessGate;
 }
 
 class HttpError extends Error {
@@ -35,24 +36,6 @@ class HttpError extends Error {
 export function mask(value: string): string {
   if (!value) return "";
   return value.length <= 8 ? "••••" : `${value.slice(0, 5)}…${value.slice(-4)}`;
-}
-
-function sameToken(given: string, expected: string): boolean {
-  const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  return a.length === b.length && expected.length > 0 && timingSafeEqual(a, b);
-}
-
-function cookieToken(req: IncomingMessage): string {
-  for (const part of (req.headers.cookie ?? "").split(";")) {
-    const [name, ...rest] = part.trim().split("=");
-    if (name === COOKIE) return decodeURIComponent(rest.join("="));
-  }
-  return "";
-}
-
-function isHttps(req: IncomingMessage): boolean {
-  return req.headers["x-forwarded-proto"] === "https" || req.headers["cf-visitor"]?.includes("https") === true;
 }
 
 async function body(req: IncomingMessage): Promise<Record<string, any>> {
@@ -92,9 +75,11 @@ function processMemory(pgids: number[]): Map<number, number> {
 
 export class AdminApi {
   readonly #deps: AdminDeps;
+  readonly #gate: AccessGate;
 
   constructor(deps: AdminDeps) {
     this.#deps = deps;
+    this.#gate = deps.gate ?? new AccessGate(() => deps.settings.config.adminAccess);
   }
 
   /** Handles /admin/api/*; returns false for other paths. */
@@ -103,22 +88,14 @@ export class AdminApi {
     if (!url.pathname.startsWith("/admin/api/")) return false;
     const path = url.pathname.slice("/admin/api".length);
     try {
-      if (path === "/login" && req.method === "POST") {
-        const { token } = await body(req);
-        if (typeof token !== "string" || !sameToken(token, this.#deps.settings.config.adminToken)) throw new HttpError(401, "wrong token");
-        const secure = isHttps(req) ? "; Secure" : "";
-        res.setHeader("set-cookie", `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/admin; Max-Age=2592000${secure}`);
-        send(res, 200, { ok: true });
-        return true;
+      let viewer: Viewer;
+      try {
+        viewer = await this.#gate.check(req);
+      } catch (error) {
+        if (error instanceof AccessDenied) throw new HttpError(403, error.message);
+        throw error;
       }
-      if (path === "/logout" && req.method === "POST") {
-        res.setHeader("set-cookie", `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/admin; Max-Age=0`);
-        send(res, 200, { ok: true });
-        return true;
-      }
-      const bearer = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
-      if (!sameToken(cookieToken(req) || bearer, this.#deps.settings.config.adminToken)) throw new HttpError(401, "sign in required");
-      await this.#route(req, res, url, path);
+      await this.#route(req, res, url, path, viewer);
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;
       if (status === 500) log.error("admin request failed", { path, error });
@@ -127,12 +104,12 @@ export class AdminApi {
     return true;
   }
 
-  async #route(req: IncomingMessage, res: ServerResponse, url: URL, path: string): Promise<void> {
+  async #route(req: IncomingMessage, res: ServerResponse, url: URL, path: string, viewer: Viewer): Promise<void> {
     const method = req.method ?? "GET";
     const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
     const [resource, id, action] = parts;
 
-    if (method === "GET" && path === "/overview") return send(res, 200, this.#overview());
+    if (method === "GET" && path === "/overview") return send(res, 200, this.#overview(viewer));
     if (method === "GET" && path === "/events") return this.#events(req, res);
     if (method === "GET" && path === "/sessions") return send(res, 200, this.#sessions(url.searchParams.get("bot")));
     if (resource === "sessions" && id && !action && method === "GET") return send(res, 200, this.#session(id));
@@ -144,14 +121,14 @@ export class AdminApi {
       await this.#deps.hub.evict(id);
       return send(res, 200, { ok: true });
     }
-    if (resource === "bots" && id && !action && method === "PUT") return send(res, 200, this.#putBot(id, await body(req)));
-    if (resource === "bots" && id && !action && method === "DELETE") return send(res, 200, this.#deleteBot(id));
+    if (resource === "bots" && id && !action && method === "PUT") return send(res, 200, this.#putBot(id, await body(req), viewer));
+    if (resource === "bots" && id && !action && method === "DELETE") return send(res, 200, this.#deleteBot(id, viewer));
     if (resource === "bots" && id && action === "reconnect" && method === "POST") {
       await this.#deps.bots.reconcile(this.#deps.settings.config);
       return send(res, 200, { ok: true });
     }
-    if (resource === "profiles" && id && !action && method === "PUT") return send(res, 200, this.#putProfile(id, await body(req)));
-    if (resource === "profiles" && id && !action && method === "DELETE") return send(res, 200, this.#deleteProfile(id));
+    if (resource === "profiles" && id && !action && method === "PUT") return send(res, 200, this.#putProfile(id, await body(req), viewer));
+    if (resource === "profiles" && id && !action && method === "DELETE") return send(res, 200, this.#deleteProfile(id, viewer));
     if (method === "GET" && path === "/slack/create-app-url") {
       const name = url.searchParams.get("name")?.trim();
       if (!name) throw new HttpError(400, "name is required");
@@ -162,12 +139,13 @@ export class AdminApi {
 
   // ── reads ───────────────────────────────────────────────────────────────
 
-  #overview(): Overview {
+  #overview(viewer: Viewer): Overview {
     const { config } = this.#deps.settings;
     const sessions = this.#deps.store.listSessions();
     const processes = this.#deps.store.listProcesses();
     const memory = processMemory(processes.map((p) => p.pgid));
     return {
+      viewer,
       bots: config.bots.map((bot) => ({
         id: bot.id, name: bot.name, enabled: bot.enabled, runtime: bot.runtime, profiles: bot.profiles, model: bot.model ?? null,
         slack: { appToken: mask(bot.slack.appToken), botToken: mask(bot.slack.botToken) },
@@ -229,17 +207,18 @@ export class AdminApi {
 
   // ── writes ──────────────────────────────────────────────────────────────
 
-  #save(edit: (raw: RawConfig) => RawConfig): Overview {
+  #save(viewer: Viewer, what: string, edit: (raw: RawConfig) => RawConfig): Overview {
     try {
       this.#deps.settings.update(edit);
     } catch (error) {
       throw new HttpError(400, error instanceof Error ? error.message : String(error));
     }
-    return this.#overview();
+    log.info("config changed from the admin page", { what, by: viewer.via === "access" ? viewer.email : "local" });
+    return this.#overview(viewer);
   }
 
-  #putBot(id: string, input: Record<string, any>) {
-    return this.#save((raw) => {
+  #putBot(id: string, input: Record<string, any>, viewer: Viewer) {
+    return this.#save(viewer, `bot ${id}`, (raw) => {
       const bots = raw.bots ?? [];
       const existing = bots.find((b) => b.id === id);
       const token = (field: "appToken" | "botToken"): string | undefined => {
@@ -262,15 +241,15 @@ export class AdminApi {
     });
   }
 
-  #deleteBot(id: string) {
-    return this.#save((raw) => {
+  #deleteBot(id: string, viewer: Viewer) {
+    return this.#save(viewer, `delete bot ${id}`, (raw) => {
       if (!raw.bots?.some((b) => b.id === id)) throw new Error(`unknown bot ${id}`);
       return { ...raw, bots: raw.bots.filter((b) => b.id !== id) };
     });
   }
 
-  #putProfile(id: string, input: Record<string, any>) {
-    return this.#save((raw) => {
+  #putProfile(id: string, input: Record<string, any>, viewer: Viewer) {
+    return this.#save(viewer, `profile ${id}`, (raw) => {
       const profiles = raw.profiles ?? [];
       const existing = profiles.find((p) => p.id === id);
       // env: a string sets the value; null removes the key; an omitted key keeps it (so masked secrets survive edits).
@@ -295,8 +274,8 @@ export class AdminApi {
     });
   }
 
-  #deleteProfile(id: string) {
-    return this.#save((raw) => {
+  #deleteProfile(id: string, viewer: Viewer) {
+    return this.#save(viewer, `delete profile ${id}`, (raw) => {
       const users = (raw.bots ?? []).filter((b) => (b.profiles ?? [b.profile]).includes(id)).map((b) => b.id);
       if (users.length > 0) throw new Error(`profile ${id} is used by ${users.join(", ")}`);
       if (!raw.profiles?.some((p) => p.id === id)) throw new Error(`unknown profile ${id}`);
