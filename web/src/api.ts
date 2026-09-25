@@ -10,7 +10,7 @@ export type { SlackAppSettings, SlackGroup, SlackIdentity };
 
 export interface SlackAppLinks { settings: string; install: string; appToken: string; oauth: string }
 export type SlackAppView =
-  | { state: "no_app"; appId: null; links: null; settings: null; groups: SlackGroup[] }
+  | { state: "no_app"; appId: null; links: null; settings: null; groups: SlackGroup[]; error?: string }
   | { state: "no_config_token"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[] }
   | { state: "ok"; appId: string; links: SlackAppLinks; settings: SlackAppSettings; groups: SlackGroup[] }
   | { state: "error"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[]; error: string };

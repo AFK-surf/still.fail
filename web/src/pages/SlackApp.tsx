@@ -30,7 +30,7 @@ export function SlackAppSection({ connect }: { connect: ConnectView }) {
       actions={links && <a className="btn btn-ghost" href={links.settings} target="_blank" rel="noopener"><ExternalLink {...ICON} />在 Slack 打开</a>}>
       {app.isPending ? <div className="card"><p className="muted">正在读取 Slack 上的配置…</p></div>
         : app.isError ? <div className="card"><p className="field-error">{app.error.message}</p></div>
-        : app.data.state === "no_app" ? <div className="card"><p className="muted">连上 Slack 之后，就可以在这里修改它的 app。</p></div>
+        : app.data.state === "no_app" ? <div className="card"><p className="muted">{app.data.error ? `找不到这个连接的 Slack app（${app.data.error}）。换上有效的 token 后再来。` : "连上 Slack 之后，就可以在这里修改它的 app。"}</p></div>
         : app.data.state === "no_config_token" ? <ConfigTokenCard />
         : app.data.state === "error" ? (
           <div className="card">

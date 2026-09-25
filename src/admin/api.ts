@@ -252,7 +252,14 @@ export class AdminApi {
   }
 
   async #slackApp(connectId: string) {
-    const appId = await this.#appId(connectId);
+    let appId: string | null;
+    try {
+      appId = await this.#appId(connectId);
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      // The bot token no longer works, so the app cannot be looked up; the Slack section says why.
+      return { state: "no_app" as const, appId: null, links: null, settings: null, groups: SLACK_GROUP_IDS, error: slackError(error) };
+    }
     if (!appId) return { state: "no_app" as const, appId: null, links: null, settings: null, groups: SLACK_GROUP_IDS };
     const links = slackAppLinks(appId);
     if (!this.#apps.configured) return { state: "no_config_token" as const, appId, links, settings: null, groups: SLACK_GROUP_IDS };

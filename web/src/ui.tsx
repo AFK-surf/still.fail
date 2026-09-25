@@ -189,7 +189,9 @@ export function Dialog({ open, title, description, onClose, children, footer, wi
     <RDialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <RDialog.Portal>
         <RDialog.Overlay className="overlay" />
-        <RDialog.Content className={`dialog${wide ? " dialog-wide" : ""}`}>
+        {/* Focus the dialog itself rather than its first button, so the close button's tooltip does not pop up on open. */}
+        <RDialog.Content className={`dialog${wide ? " dialog-wide" : ""}`} tabIndex={-1}
+          onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}>
           <div className="dialog-head">
             <RDialog.Title className="dialog-title">{title}</RDialog.Title>
             <RDialog.Close asChild><IconButton label="关闭" icon={X} /></RDialog.Close>
