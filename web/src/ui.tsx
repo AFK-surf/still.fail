@@ -14,7 +14,7 @@ export const ICON = { size: 16, strokeWidth: 1.7 } as const;
 type IconType = ComponentType<{ size?: number; strokeWidth?: number }>;
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "danger-solid";
 
-export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; icon?: IconType; busy?: boolean }>(
+export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; icon?: IconType; busy?: boolean | undefined }>(
   function Button({ variant = "secondary", icon: Icon, busy, children, className, ...rest }, ref) {
     return (
       <button ref={ref} type="button" {...rest} aria-busy={busy || undefined} disabled={rest.disabled || busy}
@@ -66,12 +66,12 @@ export function Field({ label, hint, error, children, htmlFor, aside }:
 
 /** A small set of exclusive options shown side by side. */
 export function Segmented<T extends string>({ options, value, onChange, label }:
-  { options: { value: T; label: ReactNode; disabled?: boolean }[]; value: T; onChange(value: T): void; label: string }) {
+  { options: { value: T; label: ReactNode; disabled?: boolean | undefined }[]; value: T; onChange(value: T): void; label: string }) {
   return (
     <ToggleGroup.Root type="single" className="segmented" aria-label={label} value={value}
       onValueChange={(v) => { if (v) onChange(v as T); }}>
       {options.map((o) => (
-        <ToggleGroup.Item key={o.value} value={o.value} disabled={o.disabled} className="segmented-option">{o.label}</ToggleGroup.Item>
+        <ToggleGroup.Item key={o.value} value={o.value} disabled={o.disabled ?? false} className="segmented-option">{o.label}</ToggleGroup.Item>
       ))}
     </ToggleGroup.Root>
   );
@@ -79,12 +79,12 @@ export function Segmented<T extends string>({ options, value, onChange, label }:
 
 /** Exclusive options that need a sentence each: bordered cards with a radio mark. */
 export function Choices<T extends string>({ options, value, onChange, label }:
-  { options: { value: T; title: ReactNode; description?: ReactNode; icon?: ReactNode; disabled?: boolean; extra?: ReactNode }[]; value: T; onChange(value: T): void; label: string }) {
+  { options: { value: T; title: ReactNode; description?: ReactNode; icon?: ReactNode; disabled?: boolean | undefined; extra?: ReactNode }[]; value: T; onChange(value: T): void; label: string }) {
   return (
     <RadioGroup.Root className="choices" aria-label={label} value={value} onValueChange={(v) => onChange(v as T)}>
       {options.map((o) => (
         <div key={o.value} className="choice" data-checked={o.value === value || undefined} data-disabled={o.disabled || undefined}>
-          <RadioGroup.Item value={o.value} disabled={o.disabled} className="choice-hit" aria-label={typeof o.title === "string" ? o.title : undefined}>
+          <RadioGroup.Item value={o.value} disabled={o.disabled ?? false} className="choice-hit" aria-label={typeof o.title === "string" ? o.title : undefined}>
             {o.icon}
             <span className="choice-text">
               <strong>{o.title}</strong>
@@ -99,9 +99,9 @@ export function Choices<T extends string>({ options, value, onChange, label }:
   );
 }
 
-export function Switch({ checked, onChange, label, disabled, id }: { checked: boolean; onChange(checked: boolean): void; label?: string; disabled?: boolean; id?: string }) {
+export function Switch({ checked, onChange, label, disabled, id }: { checked: boolean; onChange(checked: boolean): void; label?: string; disabled?: boolean | undefined; id?: string }) {
   return (
-    <RSwitch.Root id={id} className="switch" checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={label}>
+    <RSwitch.Root id={id} className="switch" checked={checked} onCheckedChange={onChange} disabled={disabled ?? false} aria-label={label}>
       <RSwitch.Thumb className="switch-thumb" />
     </RSwitch.Root>
   );
@@ -109,7 +109,7 @@ export function Switch({ checked, onChange, label, disabled, id }: { checked: bo
 
 /** A setting row: what it is on the left, its switch on the right. */
 export function SwitchRow({ title, description, checked, onChange, disabled }:
-  { title: ReactNode; description?: ReactNode; checked: boolean; onChange(checked: boolean): void; disabled?: boolean }) {
+  { title: ReactNode; description?: ReactNode; checked: boolean; onChange(checked: boolean): void; disabled?: boolean | undefined }) {
   const id = useId();
   return (
     <div className="switch-row">
@@ -117,7 +117,7 @@ export function SwitchRow({ title, description, checked, onChange, disabled }:
         <span>{title}</span>
         {description && <span className="muted">{description}</span>}
       </Label.Root>
-      <Switch id={id} checked={checked} onChange={onChange} disabled={disabled} />
+      <Switch id={id} checked={checked} onChange={onChange} disabled={disabled ?? false} />
     </div>
   );
 }
@@ -126,13 +126,13 @@ const NONE = "__none__";
 
 /** A dropdown of choices. An option with value "" is allowed and stands for "not set". */
 export function Select({ value, onChange, options, id, placeholder, disabled, label }: {
-  value: string; onChange(value: string): void; id?: string; placeholder?: string; disabled?: boolean; label?: string;
+  value: string; onChange(value: string): void; id?: string; placeholder?: string; disabled?: boolean | undefined; label?: string;
   options: { value: string; label: ReactNode; hint?: ReactNode }[];
 }) {
   // Radix reserves "" for "no selection", so an empty option travels under a stand-in value.
   const encode = (v: string) => (v === "" ? NONE : v);
   return (
-    <RSelect.Root value={encode(value)} onValueChange={(v) => onChange(v === NONE ? "" : v)} disabled={disabled}>
+    <RSelect.Root value={encode(value)} onValueChange={(v) => onChange(v === NONE ? "" : v)} disabled={disabled ?? false}>
       <RSelect.Trigger id={id} className="select" aria-label={label}>
         <RSelect.Value placeholder={placeholder} />
         <RSelect.Icon className="select-icon"><ChevronDown {...ICON} size={14} /></RSelect.Icon>
@@ -205,7 +205,7 @@ export function Dialog({ open, title, description, onClose, children, footer, wi
 
 /** Asks before something that cannot be undone. `action` names what happens, e.g. "删除连接". */
 export function Confirm({ open, title, description, action, onConfirm, onClose, busy }:
-  { open: boolean; title: ReactNode; description: ReactNode; action: string; onConfirm(): void; onClose(): void; busy?: boolean }) {
+  { open: boolean; title: ReactNode; description: ReactNode; action: string; onConfirm(): void; onClose(): void; busy?: boolean | undefined }) {
   return (
     <RAlert.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <RAlert.Portal>
@@ -215,7 +215,7 @@ export function Confirm({ open, title, description, action, onConfirm, onClose, 
           <RAlert.Description className="dialog-lead">{description}</RAlert.Description>
           <div className="dialog-foot">
             <RAlert.Cancel asChild><Button variant="ghost">取消</Button></RAlert.Cancel>
-            <Button variant="danger-solid" busy={busy} onClick={onConfirm}>{action}</Button>
+            <Button variant="danger-solid" busy={busy ?? false} onClick={onConfirm}>{action}</Button>
           </div>
         </RAlert.Content>
       </RAlert.Portal>
@@ -223,7 +223,7 @@ export function Confirm({ open, title, description, action, onConfirm, onClose, 
   );
 }
 
-export interface MenuItem { label: string; icon?: IconType; danger?: boolean; disabled?: boolean; onSelect(): void }
+export interface MenuItem { label: string; icon?: IconType; danger?: boolean; disabled?: boolean | undefined; onSelect(): void }
 
 /** "…" menu: a list of actions on the thing it sits beside. */
 export function Menu({ label = "更多操作", items }: { label?: string; items: (MenuItem | "separator")[] }) {
@@ -234,7 +234,7 @@ export function Menu({ label = "更多操作", items }: { label?: string; items:
         <DropdownMenu.Content className="popover menu-list" align="end" sideOffset={4} collisionPadding={8}>
           {items.map((item, i) => item === "separator" ? <DropdownMenu.Separator key={i} className="menu-sep" /> : (
             <DropdownMenu.Item key={item.label} className="menu-item" data-danger={item.danger || undefined}
-              disabled={item.disabled} onSelect={item.onSelect}>
+              disabled={item.disabled ?? false} onSelect={item.onSelect}>
               {item.icon && <item.icon {...ICON} />}
               {item.label}
             </DropdownMenu.Item>

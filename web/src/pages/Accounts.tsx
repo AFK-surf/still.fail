@@ -105,7 +105,7 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
           options={[{ value: "claude", label: "Claude Code" }, { value: "codex", label: "Codex" }]} />
       </Field>
       <Field label="接入方式">
-        <Choices label="接入方式" value={kind} onChange={setKind}
+        <Choices label="接入方式" value={kind} onChange={(v) => setKind(v as AccessKind)}
           options={ACCESS_KINDS[runtime].map((k) => ({
             value: k, icon: <AccessMark kind={k} size={28} />, description: ACCESS[k].description,
             title: k === "subscription" ? (runtime === "claude" ? "Claude 订阅" : "ChatGPT 订阅") : ACCESS[k].label,
