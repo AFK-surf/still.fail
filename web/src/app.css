@@ -707,3 +707,26 @@
 .history-details .details { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 16px; }
 .history-details .detail-row { grid-template-columns: 4.5em minmax(0, 1fr); gap: 8px; font-size: var(--text-xs); min-height: 22px; }
 .history-details .detail-row dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Draggable column widths: the sidebar and the session's tab set. */
+@media (min-width: 701px) { .shell { grid-template-columns: var(--sidebar-w, 240px) minmax(0, 1fr); } .sidebar { position: relative; } }
+@media (min-width: 1101px) {
+  .session-body[data-panel="true"] { grid-template-columns: minmax(0, 1fr) var(--panel-w, minmax(360px, 38%)); }
+  .side-panel { position: relative; }
+}
+.resize-handle { position: absolute; top: 0; bottom: 0; width: 7px; z-index: 5; cursor: col-resize; touch-action: none; }
+.resize-handle[data-edge="right"] { right: -4px; }
+.resize-handle[data-edge="left"] { left: -4px; }
+.resize-handle::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent; transition: background var(--dur) var(--ease-out); }
+.resize-handle:hover::after, body[data-resizing] .resize-handle::after { background: var(--field-focus); }
+body[data-resizing] { cursor: col-resize; user-select: none; }
+@media (max-width: 1100px) { .side-panel .resize-handle { display: none; } }
+@media (max-width: 700px) { .resize-handle { display: none; } }
+
+/* Where a message came from or went: platform mark and name, a link when there is somewhere to go. */
+.h-place {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; margin: 0 2px; border: 0; border-radius: 6px;
+  background: var(--neutral-bg); color: var(--text); font: inherit; font-size: var(--text-xs); font-weight: 500; text-decoration: none; vertical-align: 1px;
+}
+a.h-place, button.h-place { cursor: pointer; }
+a.h-place:hover, button.h-place:hover { background: var(--hover); text-decoration: underline; }

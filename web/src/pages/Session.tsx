@@ -16,7 +16,7 @@ import {
   PROCESS_LABEL, RUNTIME_LABEL, STATUS_LABEL, absoluteTime, agentLabel, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusTone, threadNamer, turnResult,
 } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Button, ConnectKindIcon, Empty, ICON, IconButton, Loading, Menu, MobileBack, Pill, RuntimeLogo, SlackLogo, Tip } from "../ui.tsx";
+import { Button, ConnectKindIcon, Empty, ICON, IconButton, Loading, Menu, MobileBack, Pill, ResizeHandle, RuntimeLogo, SlackLogo, Tip } from "../ui.tsx";
 
 export function SessionPage() {
   const { key } = useParams();
@@ -114,6 +114,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
       </div>
         {panel && (
           <Tabs.Root className="side-panel" value={tabs.includes(active) ? active : tabs[0]!} onValueChange={setActive}>
+            <ResizeHandle variable="--panel-w" edge="left" min={320} max={960} label="调整侧栏宽度" />
             <Tabs.List className="side-tab-list" aria-label="会话侧栏">
               {tabs.map((t) => (
                 <span key={t} className="side-tab-wrap">
@@ -123,7 +124,8 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
               ))}
             </Tabs.List>
             <Tabs.Content className="side-content" value="history">
-              <History detail={detail.data} connect={connect} actions={<SessionActions detail={detail.data} />}
+              <History detail={detail.data} connect={connect} actions={<SessionActions detail={detail.data} />} slackBase={base}
+                onOpenChat={() => (document.querySelector(".composer-text") as HTMLTextAreaElement | null)?.focus()}
                 details={<SessionDetails detail={detail.data} connect={connect} base={base} />} />
             </Tabs.Content>
           </Tabs.Root>

@@ -5,13 +5,14 @@ import { MineFilter, PeopleStack, useOnlyMine } from "./components.tsx";
 import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
 import { dayLabel, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
-import { ConnectKindIcon, ICON, SkeletonRows, Tip } from "./ui.tsx";
+import { ConnectKindIcon, ICON, ResizeHandle, SkeletonRows, Tip } from "./ui.tsx";
 
 export function Sidebar() {
   const path = useLocation().pathname;
   const settings = path.startsWith("/settings") || path.startsWith("/connects");
   return (
     <nav className="sidebar" aria-label="导航">
+      <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className="brand">
         <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={22} height={22} />
         <span className="brand-word">ember</span>

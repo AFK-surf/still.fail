@@ -6,8 +6,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ConnectView, SessionDetail, TimelineEntry } from "./api.ts";
-import { agentLabel, botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, splitThread, threadNamer } from "./format.ts";
-import { Avatar, ICON, Pill } from "./ui.tsx";
+import { agentLabel, botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, slackThreadUrl, splitThread, threadNamer } from "./format.ts";
+import { Avatar, ICON, Pill, SlackLogo } from "./ui.tsx";
 import { usePerson } from "./station.tsx";
 
 export function parseArgs(text: string): Record<string, unknown> | null {
@@ -121,14 +121,33 @@ function toItems(entries: TimelineEntry[]): Item[] {
  * stands (in the header line) and `actions` what can
  * be done to it right now (stop a turn, release the process).
  */
-export function History({ detail, connect, state, actions, details }: { detail: SessionDetail; connect: ConnectView | undefined; state?: ReactNode; actions?: ReactNode; details?: ReactNode }) {
+export function History({ detail, connect, state, actions, details, slackBase, onOpenChat }: {
+  detail: SessionDetail; connect: ConnectView | undefined; state?: ReactNode; actions?: ReactNode; details?: ReactNode;
+  /** The Slack workspace URL, for links to threads. */
+  slackBase?: string | null | undefined;
+  /** Brings ember's own chat into view. */
+  onOpenChat?: (() => void) | undefined;
+}) {
   const botUserId = botUserIdOf(connect);
   const member = usePerson();
   const threadName = threadNamer(detail);
-  // Only worth saying which thread when there is more than one.
-  const where = (address: string | null | undefined) => {
-    const t = address && (detail.threads.length > 1 || address.startsWith("EMBER/")) ? splitThread(address) : null;
-    return t ? threadName(t.channel, t.threadTs).where : null;
+  // A thread address as a place: its platform's mark, its name, and a way there.
+  const where = (address: string | null | undefined): ReactNode => {
+    const t = address ? splitThread(address) : null;
+    if (!t) return null;
+    const name = threadName(t.channel, t.threadTs).where;
+    if (t.channel === "EMBER") {
+      return (
+        <button type="button" className="h-place" onClick={onOpenChat} title="打开对话">
+          <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={13} height={13} />{name}
+        </button>
+      );
+    }
+    const url = slackThreadUrl(slackBase, t.channel, t.threadTs);
+    const inner = <><SlackLogo size={13} />{name}</>;
+    return url
+      ? <a className="h-place" href={url} target="_blank" rel="noopener" title="在 Slack 中打开">{inner}</a>
+      : <span className="h-place">{inner}</span>;
   };
   const [usageOpen, setUsageOpen] = useState(false);
   const body = useRef<HTMLDivElement>(null);
@@ -198,7 +217,7 @@ export function History({ detail, connect, state, actions, details }: { detail: 
   );
 }
 
-function HistoryItem({ item, mention, person, where }: { item: Item; mention(text: string): string; person(id: string): string; where(address: string | null | undefined): string | null }) {
+function HistoryItem({ item, mention, person, where }: { item: Item; mention(text: string): string; person(id: string): string; where(address: string | null | undefined): ReactNode }) {
   switch (item.type) {
     case "received": {
       const { messages, note } = parsePrompt(item.entry.text);
@@ -219,7 +238,7 @@ function HistoryItem({ item, mention, person, where }: { item: Item; mention(tex
         <div className="h-post" data-failed={failed}>
           <div className="h-post-head">
             <Send {...ICON} size={14} />
-            发送到 {where(typeof args.to === "string" ? args.to : null) ?? "Slack"}
+            发送到 {where(typeof args.to === "string" ? args.to : null) ?? <span className="h-place"><SlackLogo size={13} />Slack</span>}
             {kind === "final" && <Pill tone="green">已完成</Pill>}
             {kind === "block" && <Pill tone="blue">等你回复</Pill>}
             {failed && <Pill tone="red">发送失败</Pill>}
@@ -235,12 +254,12 @@ function HistoryItem({ item, mention, person, where }: { item: Item; mention(tex
   }
 }
 
-function Received({ from, text, place }: { from: string; text: string; place?: string | null }) {
+function Received({ from, text, place }: { from: string; text: string; place?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const long = text.length > 280 || text.split("\n").length > 5;
   return (
     <div className="h-received">
-      <div className="h-label"><ArrowDownToLine {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "ember" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <span className="h-place">{place}</span>}</div>
+      <div className="h-label"><ArrowDownToLine {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "ember" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <> · {place}</>}</div>
       <blockquote className="h-quote" data-clamped={long && !open}>{text}</blockquote>
       {long && <button type="button" className="text-toggle" onClick={() => setOpen(!open)}>{open ? "收起" : "展开更多"}</button>}
     </div>

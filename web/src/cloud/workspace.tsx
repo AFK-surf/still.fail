@@ -17,7 +17,7 @@ import { MineFilter, useOnlyMine } from "../components.tsx";
 import { AccountSettings, ConnectsSettings, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
 import { MeContext, PeopleContext, StationContext, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
-import { Button, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Loading, Select, SkeletonRows, StatusDot } from "../ui.tsx";
+import { Button, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Loading, ResizeHandle, Select, SkeletonRows, StatusDot } from "../ui.tsx";
 import { signIn, signOut, type Account } from "./accounts.ts";
 import { cloud, type PendingInvitation, type WorkspaceView } from "./api.ts";
 export type { PendingInvitation };
@@ -89,7 +89,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
       <div className="shell" data-detail={detail}>
         {stations.filter((s) => s.online).map((s) => <Live key={s.id} station={s} />)}
         {settings
-          ? <nav className="sidebar" aria-label="设置"><div className="account-slot"><WorkspaceSwitcher current={entry} /></div><SettingsNav entry={entry} /></nav>
+          ? <nav className="sidebar" aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className="account-slot"><WorkspaceSwitcher current={entry} /></div><SettingsNav entry={entry} /></nav>
           : <WorkspaceSidebar entry={entry} stations={stations} loading={view.isPending} />}
         <main className="main">
           <Routes>
@@ -169,6 +169,7 @@ function WorkspaceSidebar({ entry, stations, loading }: { entry: WorkspaceEntry;
 
   return (
     <nav className="sidebar" aria-label="导航">
+      <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className="account-slot"><WorkspaceSwitcher current={entry} /></div>
       <MineFilter label="会话" />
       <div className="nav-scroll">
