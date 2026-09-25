@@ -9,7 +9,7 @@ import { ToastProvider } from "./toast.tsx";
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
 function useDetailOpen(): boolean {
   const path = useLocation().pathname;
-  return /^\/(sessions\/.+|bots\/.+|settings\/accounts\/.+)/.test(path);
+  return /^\/(sessions\/.+|bots\/.+|settings(\/.*)?$)/.test(path);
 }
 
 export function App() {

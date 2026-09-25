@@ -41,6 +41,7 @@ export function AccountsPage() {
   const groups = (["claude", "codex"] as RuntimeKind[]).map((runtime) => ({ runtime, items: profiles.filter((p) => p.runtime === runtime) }));
   return (
     <div className="page page-narrow">
+      <MobileBack to="/sessions" label="会话" />
       <header className="page-head">
         <div>
           <h1>运行时账号</h1>
