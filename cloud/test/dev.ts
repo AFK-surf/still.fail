@@ -15,8 +15,10 @@ const h = await harness({ origin, relayUrl: process.env.RELAY ?? "http://127.0.0
 const app = join(import.meta.dirname, "..", "..", "dist", "cloud-app");
 const alice = h.as(await h.login("alice"));
 const workspace = await (await alice("POST", "/v1/workspaces", { name: "Dev" })).json() as { id: string };
-const enrollment = await (await alice("POST", `/v1/workspaces/${workspace.id}/enrollments`, { name: "dev-station" })).json() as { command: string };
-console.log(`ENROLL ${enrollment.command}`);
+for (const name of ["studio", "mac-mini"]) {
+  const enrollment = await (await alice("POST", `/v1/workspaces/${workspace.id}/enrollments`, { name })).json() as { command: string };
+  console.log(`ENROLL ${enrollment.command}`);
+}
 
 const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".wasm": "application/wasm", ".woff2": "font/woff2" };
 
