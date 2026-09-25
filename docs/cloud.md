@@ -26,6 +26,8 @@ station ──(iroh：relay 或直连)─────────┘
 
 - 一个账号可以创建多个 workspace（成为 owner），也可以接受邀请加入别人的。
 - owner / admin 可以邀请成员、登记 station、移除成员和 station；owner 还可以改角色、删除 workspace。workspace 至少保留一个 owner。
+- 邀请按邮箱发出：对方用这个邮箱登录 ember，就会在 workspace 切换菜单里看到邀请，点「加入」即可，不需要传链接。
+- 没有 workspace 的账号登录后会自动得到一个自己的 workspace；没有单独的 workspace 列表页，切换都在左上角。
 - 客户端里每个已登录的账号各自持有会话（access / refresh token），互不影响；切换账号不需要重新登录。
 
 ## 登录
@@ -60,6 +62,8 @@ station 端由 `ember-mesh`（Rust，iroh 1.0.3）负责：ember 启动并看护
 - **cloud 模式**：从 ember cloud 打开，先登录。左上角切换的是 workspace（标明属于哪个账号，账号的添加和退出也在这里）。一个 workspace 的页面同时连着它所有在线的 station：侧栏把各台 station 的会话按时间合在一起、每条标出 station，连接按 station 分组；打开的会话、对话、连接和运行时账号都直接和它所在的 station 通信。所有请求都经浏览器里的 iroh（wasm，只能走 relay）送到各自的 station。
 
   「设置」分两部分：**账号**（当前 workspace 所用的账号：资料、在哪些地方登录了、退出）和 **workspace**（通用、成员与邀请、Station、连接、各 station 的运行时账号）。连接不在侧栏里，在 workspace 设置下，按 station 标注。
+
+  会话页：执行历史是主体；没有对话时历史下面就是输入框，发出第一条消息就建好这个会话唯一的对话，之后对话在中间、执行历史在右边。agent 没有名字，显示为「模型 · 思考深度」；思考深度是连接的一项设置（Claude Code 的 `--effort`、Codex 的 `model_reasoning_effort`），会话记下创建时的值。会话列表第二行叠放参与者的头像和所在 station。Profile（原来的"运行时账号"）按 station 分组，显示额度：OpenCode Go 的 5 小时 / 每周 / 每月用量、ChatGPT 订阅的限额窗口、Claude 订阅的 5 小时 / 每周用量。
 
   连接、会话、管理页对话都记录创建人：连接和对话是添加它的人（ember cloud 账号的邮箱，本机页面记为"本机管理页"）；Slack 发起的会话是发起的 Slack 用户，用 Slack 资料里的邮箱和 ember cloud 账号对应。会话列表和连接列表可以只看"我创建的"；打开会话时默认进入自己最近的对话。
 
