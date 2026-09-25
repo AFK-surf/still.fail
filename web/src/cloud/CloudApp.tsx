@@ -12,7 +12,7 @@ import { ToastProvider, useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
 import { completeSignIn, signIn, type Account } from "./accounts.ts";
 import { Avatar, online, SignInPage, useAccounts } from "./gate.tsx";
-import { NewWorkspaceDialog, useWorkspaces, WorkspaceShell } from "./workspace.tsx";
+import { useInvitations, useWorkspaces, WorkspaceShell } from "./workspace.tsx";
 import { ROLE_LABEL } from "./settings.tsx";
 import { cloud, CloudError, type Role, type StationView, type WorkspaceView } from "./api.ts";
 
@@ -62,21 +62,44 @@ function Home() {
   );
 }
 
+/** Straight into a workspace: the first one, or, for an account with none and no invitations, a new one of its own. */
 function Landing() {
   const workspaces = useWorkspaces();
-  const [creating, setCreating] = useState(false);
-  if (workspaces.isPending) return null;
+  const invitations = useInvitations();
+  const list = useAccounts();
+  const navigate = useNavigate();
+  const queries = useQueryClient();
+  const create = useMutation({
+    mutationFn: () => cloud.createWorkspace(list[0]!.sub, `${list[0]!.name || list[0]!.email.split("@")[0]} 的 workspace`),
+    onSuccess: (w) => { void queries.invalidateQueries({ queryKey: ["cloud"] }); navigate(`/w/${w.id}`, { replace: true }); },
+  });
+  const accept = useMutation({
+    mutationFn: (i: { sub: string; id: string }) => cloud.acceptInvitationById(i.sub, i.id),
+    onSuccess: (w) => { void queries.invalidateQueries({ queryKey: ["cloud"] }); navigate(`/w/${w.id}`, { replace: true }); },
+  });
   const first = workspaces.data?.[0];
+  const pending = invitations.data ?? [];
+  const ready = !workspaces.isPending && !invitations.isPending;
+  useEffect(() => {
+    if (ready && !first && pending.length === 0 && !create.isPending && !create.isSuccess && !create.isError) create.mutate();
+  }, [ready, first, pending.length]); // eslint-disable-line react-hooks/exhaustive-deps
   if (first) return <Navigate to={`/w/${first.id}`} replace />;
-  return (
-    <div className="gate">
-      <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={44} height={44} />
-      <h1>还没有 workspace</h1>
-      <p>workspace 是一组人和他们共用的 station。新建一个，或者打开别人发来的邀请链接加入。</p>
-      <Button variant="primary" icon={Plus} onClick={() => setCreating(true)}>新建 workspace</Button>
-      <NewWorkspaceDialog open={creating} onClose={() => setCreating(false)} />
-    </div>
-  );
+  if (ready && pending.length > 0) {
+    return (
+      <div className="gate invite-page">
+        <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={44} height={44} />
+        <h1>你收到了邀请</h1>
+        {pending.map((i) => (
+          <div key={i.id} className="card card-row invite-card">
+            <div className="card-row-text"><strong>{i.name}</strong><span className="muted">{i.inviter || "有人"}邀请 {i.account.email} 以{ROLE_LABEL[i.role]}身份加入</span></div>
+            <Button variant="primary" busy={accept.isPending && accept.variables?.id === i.id} onClick={() => accept.mutate({ sub: i.account.sub, id: i.id })}>加入</Button>
+          </div>
+        ))}
+        <Button variant="ghost" busy={create.isPending} onClick={() => create.mutate()}>不加入，建一个自己的 workspace</Button>
+      </div>
+    );
+  }
+  return <div className="gate"><h1>{create.isError ? "没能建好 workspace" : "正在进入…"}</h1>{create.error && <p>{create.error.message}</p>}</div>;
 }
 
 /** A workspace by id, through whichever signed-in account belongs to it. */

@@ -537,3 +537,10 @@
 /* Section titles and their actions share a centre line. */
 .section-head { align-items: center; }
 .group-head { margin-left: 0; margin-right: 0; }
+.invite-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.menu-invite { display: flex; align-items: center; gap: 10px; padding: 6px 10px; font-size: var(--text-sm); }
+.menu-invite .thread-item { flex: 1; min-width: 0; }
+.menu-invite-actions { display: flex; gap: 4px; flex: none; }
+.menu-invite-btn { height: 28px; padding: 0 12px; outline: none; }
+.menu-invite-btn[data-highlighted] { filter: brightness(0.95); }
+.invite-card { width: min(460px, 90vw); text-align: left; }

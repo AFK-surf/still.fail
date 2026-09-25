@@ -383,31 +383,27 @@ function InviteDialog({ view, account, onClose }: { view: WorkspaceView; account
   const queries = useQueryClient();
   const [role, setRole] = useState<Role>("member");
   const [email, setEmail] = useState("");
-  const [copied, setCopied] = useState(false);
   const invite = useMutation({ mutationFn: () => cloud.invite(account.sub, view.id, role, email.trim()), onSuccess: () => void queries.invalidateQueries({ queryKey: ["cloud", "workspace"] }) });
   const roles: Role[] = view.role === "owner" ? ["member", "admin", "owner"] : ["member", "admin"];
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   return (
-    <Dialog open onClose={onClose} title="邀请成员" description={`生成一个加入「${view.name}」的链接，发给对方。链接 7 天内有效，只能用一次。`}
+    <Dialog open onClose={onClose} title="邀请成员" description={`对方用这个邮箱登录 ember，就会看到加入「${view.name}」的邀请。邀请 7 天内有效。`}
       footer={invite.isSuccess ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
         <Button variant="ghost" onClick={onClose}>取消</Button>
-        <Button variant="primary" busy={invite.isPending} onClick={() => invite.mutate()}>生成链接</Button>
+        <Button variant="primary" disabled={!valid} busy={invite.isPending} onClick={() => invite.mutate()}>邀请</Button>
       </>}>
       {!invite.isSuccess ? (
         <>
+          <Field label="邮箱" htmlFor="invite-email" hint="对方登录 ember 用的 Google 账号邮箱。">
+            <input id="invite-email" className="input" type="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com"
+              onKeyDown={(e) => { if (e.key === "Enter" && valid) invite.mutate(); }} />
+          </Field>
           <Field label="角色" hint={ROLE_HINT[role]}>
             <Select value={role} onChange={(r) => setRole(r as Role)} label="角色" options={roles.map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
           </Field>
-          <Field label="只允许这个邮箱接受（可选）" htmlFor="invite-email" hint="留空则任何拿到链接的人都能用它加入。">
-            <input id="invite-email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
-          </Field>
         </>
       ) : (
-        <div className="command">
-          <code>{invite.data.url}</code>
-          <button type="button" className="icon-btn" aria-label="复制链接" onClick={() => void navigator.clipboard.writeText(invite.data.url).then(() => setCopied(true))}>
-            {copied ? <Check {...ICON} /> : <Copy {...ICON} />}
-          </button>
-        </div>
+        <div className="callout" data-tone="green"><Check {...ICON} /><span>已邀请 {email.trim()}。对方用这个邮箱登录 ember 就能看到邀请并加入。</span></div>
       )}
       {invite.error && <p className="field-error" role="alert">{invite.error.message}</p>}
     </Dialog>

@@ -19,23 +19,41 @@ import { MeContext, PeopleContext, StationContext, type Station } from "../stati
 import { useToast } from "../toast.tsx";
 import { Button, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Select, StatusDot } from "../ui.tsx";
 import { signIn, signOut, type Account } from "./accounts.ts";
-import { cloud, type WorkspaceView } from "./api.ts";
+import { cloud, type PendingInvitation, type WorkspaceView } from "./api.ts";
+export type { PendingInvitation };
 import { Avatar, online, useAccounts } from "./gate.tsx";
 import { StationTransport } from "./link.ts";
 
 export interface WorkspaceEntry { id: string; name: string; account: Account; relay: string; stations: number; members: number }
 
-/** Every workspace of every signed-in account, each with the account that reaches it. */
-export function useWorkspaces() {
+export interface InvitationEntry extends PendingInvitation { account: Account }
+
+/** What every signed-in account can reach, and the invitations waiting for their emails. */
+function useMe() {
   const list = useAccounts();
   return useQuery({
     queryKey: ["cloud", "me", list.map((a) => a.sub).join(",")],
-    queryFn: async (): Promise<WorkspaceEntry[]> => {
+    queryFn: async () => {
       const results = await Promise.all(list.map(async (account) => ({ account, me: await cloud.me(account.sub).catch(() => null) })));
-      return results.flatMap(({ account, me }) => (me?.workspaces ?? []).map((w) => ({ id: w.id, name: w.name, stations: w.stations, members: w.members, account, relay: me!.relay_url })));
+      return {
+        workspaces: results.flatMap(({ account, me }) => (me?.workspaces ?? []).map((w): WorkspaceEntry => ({ id: w.id, name: w.name, stations: w.stations, members: w.members, account, relay: me!.relay_url }))),
+        invitations: results.flatMap(({ account, me }) => (me?.invitations ?? []).map((i): InvitationEntry => ({ ...i, account }))),
+      };
     },
     enabled: list.length > 0,
+    refetchInterval: 60_000,
   });
+}
+
+/** Every workspace of every signed-in account, each with the account that reaches it. */
+export function useWorkspaces() {
+  const me = useMe();
+  return { ...me, data: me.data?.workspaces };
+}
+
+export function useInvitations() {
+  const me = useMe();
+  return { ...me, data: me.data?.invitations };
 }
 
 // One link per station for the page's lifetime, whichever component asks.
@@ -176,10 +194,21 @@ function WorkspaceSidebar({ entry, stations }: { entry: WorkspaceEntry; stations
 /** The sidebar's header: the workspace in view, which account it belongs to, and the others. */
 function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
   const workspaces = useWorkspaces();
+  const invitations = useInvitations();
   const list = useAccounts();
   const navigate = useNavigate();
   const toast = useToast();
+  const queries = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const respond = useMutation({
+    mutationFn: ({ invite, accept }: { invite: InvitationEntry; accept: boolean }) =>
+      accept ? cloud.acceptInvitationById(invite.account.sub, invite.id) : cloud.declineInvitation(invite.account.sub, invite.id).then(() => null),
+    onSuccess: (joined, { invite }) => {
+      void queries.invalidateQueries({ queryKey: ["cloud"] });
+      if (joined) { toast(`已加入「${invite.name}」`); navigate(`/w/${joined.id}`); } else toast("已忽略邀请");
+    },
+  });
+  const pending = invitations.data ?? [];
   const byAccount = list.map((a) => ({ account: a, items: (workspaces.data ?? []).filter((w) => w.account.sub === a.sub) }));
   return (
     <>
@@ -191,11 +220,30 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
               <span className="account-name">{current.name}</span>
               <span className="account-email">{current.account.email}</span>
             </span>
+            {pending.length > 0 && <span className="invite-dot" role="img" aria-label={`${pending.length} 个邀请`} />}
             <ChevronsUpDown {...ICON} size={14} />
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content className="popover menu-list account-menu" align="start" sideOffset={4}>
+            {pending.length > 0 && (
+              <>
+                <DropdownMenu.Label className="menu-label">邀请</DropdownMenu.Label>
+                {pending.map((invite) => (
+                  <div key={invite.id} className="menu-invite">
+                    <span className="thread-item">
+                      <span>{invite.inviter || "有人"}邀请你加入「{invite.name}」</span>
+                      <span className="muted">{invite.account.email}{list.length > 1 ? "" : ""}</span>
+                    </span>
+                    <span className="menu-invite-actions">
+                      <DropdownMenu.Item className="btn btn-primary menu-invite-btn" onSelect={() => respond.mutate({ invite, accept: true })}>加入</DropdownMenu.Item>
+                      <DropdownMenu.Item className="btn btn-ghost menu-invite-btn" onSelect={() => respond.mutate({ invite, accept: false })}>忽略</DropdownMenu.Item>
+                    </span>
+                  </div>
+                ))}
+                <DropdownMenu.Separator className="menu-sep" />
+              </>
+            )}
             {byAccount.map(({ account, items }, i) => (
               <div key={account.sub}>
                 {i > 0 && <DropdownMenu.Separator className="menu-sep" />}
