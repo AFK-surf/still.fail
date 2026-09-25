@@ -33,6 +33,9 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
 
 - 实时看所有会话的状态和对话过程，停止正在运行的任务，释放空闲的运行时进程；
 - 增删改 **连接**（connect）：人找到 ember 的地方。目前只有 Slack 连接（一个 Slack app），以后会有微信。每个连接绑定一个模型（运行时 Claude Code / Codex、一组账号和一个模型），并选一种会话方式（见下文）。页面上的「在 Slack 创建 app」会打开预填好 manifest 的 Slack 新建页；
+- 单会话连接可以在连接页「当前会话」里换成任意一个同运行时的已有会话，或新建一个（可以起名）；更改会话方式要在弹窗里确认，弹窗会说明对进行中的对话有什么影响；
+- 订阅账号可以直接在账号页登录：ember 在自己的机器上运行 `claude auth login` / `codex login --device-auth`，页面给出授权链接（Claude 需要把浏览器里显示的授权码粘贴回来，Codex 输入页面给的一次性代码后自动完成）；
+- 连接页的「Slack app」可以改 app 的名字、简介、背景色、图标和权限，点「应用到 Slack」写进 app 的 manifest；权限有变化时，按提示去 Slack 同意一次。这需要一次性填入工作区的 App 配置 token（api.slack.com/apps 页面底部生成，填 Refresh Token），ember 会自动续期。Slack 只允许给用 API 创建的 app 换图标；
 - 增删改 **账号**：运行时的配置目录（`CLAUDE_CONFIG_DIR` / `CODEX_HOME`）和启动时注入的环境变量。
 
 改动立即写回 `config.json`（权限 600）并生效：新增或换了 token 的连接会重新连接，停用或删除的连接会断开。token 和密钥类环境变量在页面上只显示打码后的值，留空即保持不变。
