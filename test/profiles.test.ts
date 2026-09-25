@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { parseConfig } from "../src/config.ts";
-import { prepareCodexHome } from "../src/profiles.ts";
+import { codexOverrides } from "../src/profiles.ts";
 import { readUsage } from "../src/transcript.ts";
 
 const parse = (profiles: unknown[]) => parseConfig({ profiles: profiles as never }, "/data");
@@ -32,17 +32,12 @@ test("access kinds are checked against the runtime and need their key", () => {
   assert.throws(() => parse([{ id: "a", runtime: "claude", home: "h", access: { kind: "opencode-go" } }]), /needs a key/);
 });
 
-test("the codex provider config is written, updated, but never over a hand-written file", () => {
-  const home = mkdtempSync(join(tmpdir(), "ember-codex-"));
-  assert.equal(prepareCodexHome(home, "opencode-go", "deepseek-flash"), true);
-  assert.match(readFileSync(join(home, "config.toml"), "utf8"), /model_provider = "opencode-go"/);
-  assert.equal(prepareCodexHome(home, "opencode-go", "deepseek-flash"), false, "unchanged");
-  assert.equal(prepareCodexHome(home, "opencode-go", "glm-5"), true);
-  assert.match(readFileSync(join(home, "config.toml"), "utf8"), /model = "glm-5"/);
-  writeFileSync(join(home, "config.toml"), "model = \"mine\"\n");
-  assert.equal(prepareCodexHome(home, "opencode-go", "deepseek-flash"), false);
-  assert.equal(readFileSync(join(home, "config.toml"), "utf8"), "model = \"mine\"\n");
-  assert.equal(prepareCodexHome(home, "subscription", undefined), false);
+test("codex gets its provider as config overrides, so config.toml stays the user's", () => {
+  const overrides = codexOverrides("opencode-go", "glm-5");
+  assert.equal(overrides.model_provider, `"opencode-go"`);
+  assert.equal(overrides.model, `"glm-5"`);
+  assert.equal(overrides["model_providers.opencode-go.env_http_headers"], `{"x-opencode-session"="OPENCODE_SESSION"}`);
+  assert.deepEqual(codexOverrides("subscription", undefined), {});
 });
 
 test("usage sums model requests; claude's split responses count once", () => {

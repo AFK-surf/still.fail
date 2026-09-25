@@ -9,6 +9,7 @@
 import { mkdirSync } from "node:fs";
 import { expandRoute, type Profile } from "../config.ts";
 import { log } from "../log.ts";
+import { codexOverrides } from "../profiles.ts";
 import { spawnGroup, type GroupProcess, type ProcessRegistry } from "./process.ts";
 import type { AgentDriver, AgentSession, FailureReason, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
 
@@ -34,14 +35,18 @@ class Host {
   #nextId = 1;
   alive = true;
   readonly ready: Promise<void>;
+  /** What the process was started with; a profile edit that changes it needs a new process. */
+  readonly signature: string;
 
   constructor(profile: Profile, command: string, registry: ProcessRegistry, onExit: () => void) {
     mkdirSync(profile.home, { recursive: true });
     const env: NodeJS.ProcessEnv = { ...process.env };
     for (const name of SCRUBBED) delete env[name];
     Object.assign(env, expandRoute(profile.env, profile.id), { CODEX_HOME: profile.home });
+    const overrides = Object.entries(codexOverrides(profile.access.kind, profile.model)).flatMap(([k, v]) => ["-c", `${k}=${v}`]);
+    this.signature = hostSignature(profile);
     this.#proc = spawnGroup({
-      command, args: ["app-server", "--listen", "stdio://"], cwd: profile.home, env,
+      command, args: ["app-server", ...overrides, "--listen", "stdio://"], cwd: profile.home, env,
       runtime: "codex", label: `codex app-server ${profile.id}`, registry,
       onLine: (line) => this.#onLine(line),
     });
@@ -98,6 +103,10 @@ class Host {
   }
 }
 
+function hostSignature(profile: Profile): string {
+  return JSON.stringify([profile.home, profile.env, codexOverrides(profile.access.kind, profile.model)]);
+}
+
 export class CodexDriver implements AgentDriver {
   readonly runtime = "codex" as const;
   readonly #registry: ProcessRegistry;
@@ -111,6 +120,17 @@ export class CodexDriver implements AgentDriver {
 
   async #host(profile: Profile): Promise<Host> {
     let host = this.#hosts.get(profile.id);
+    if (host?.alive && host.signature !== hostSignature(profile)) {
+      // The profile changed. Replace the process once no session uses it; until then keep serving.
+      if (host.threads.size === 0) {
+        log.info("profile changed; restarting its codex app-server", { profile: profile.id });
+        this.#hosts.delete(profile.id);
+        await host.kill();
+        host = undefined;
+      } else {
+        log.info("profile changed; its codex app-server restarts once idle", { profile: profile.id, sessions: host.threads.size });
+      }
+    }
     if (!host || !host.alive) {
       const created = new Host(profile, this.#command, this.#registry, () => {
         if (this.#hosts.get(profile.id) === created) this.#hosts.delete(profile.id);

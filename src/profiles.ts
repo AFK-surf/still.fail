@@ -1,12 +1,10 @@
 // How a runtime account reaches its models. A profile picks one access kind;
-// ember derives the environment (and, for Codex, the provider section of
-// config.toml) from it, so nobody has to know which variables each runtime
-// reads. "env" keeps the raw form for anything else.
+// ember derives the environment (and, for Codex, provider config overrides)
+// from it, so nobody has to know which variables each runtime reads. "env"
+// keeps the raw form for anything else.
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { promisify } from "node:util";
-import type { Profile, RuntimeKind } from "./config.ts";
+import type { RuntimeKind } from "./config.ts";
 
 export type AccessKind = "subscription" | "opencode-go" | "anthropic-api" | "env";
 
@@ -39,42 +37,22 @@ export function accessEnv(runtime: RuntimeKind, kind: AccessKind, key: string, m
   return {};
 }
 
-const MANAGED = "# Managed by ember for this profile's access; edits are replaced. Delete this line to take over the file.";
-
-/** Codex reads its provider from config.toml; write it for access kinds that need one. */
-export function codexConfig(kind: AccessKind, model: string | undefined): string | null {
-  if (kind !== "opencode-go") return null;
-  return [
-    MANAGED,
-    `model = "${model ?? "deepseek-flash"}"`,
-    `model_provider = "opencode-go"`,
-    ``,
-    `[model_providers.opencode-go]`,
-    `name = "OpenCode Go"`,
-    `base_url = "${OPENCODE}/v1"`,
-    `env_key = "OPENCODE_GO_KEY"`,
-    `wire_api = "responses"`,
-    `env_http_headers = { "x-opencode-session" = "OPENCODE_SESSION" }`,
-    ``,
-  ].join("\n");
-}
-
 /**
- * Writes the managed config.toml of a codex profile. A file someone wrote by
- * hand (no managed marker) is left alone; returns whether it was written.
+ * Codex reads its model provider from config; ember passes it as `-c`
+ * overrides when it starts the app-server, so config.toml stays the user's.
+ * Values are TOML.
  */
-export function prepareCodexHome(home: string, kind: AccessKind, model: string | undefined): boolean {
-  const content = codexConfig(kind, model);
-  if (!content) return false;
-  const path = join(home, "config.toml");
-  if (existsSync(path)) {
-    const current = readFileSync(path, "utf8");
-    if (current === content) return false;
-    if (!current.startsWith(MANAGED)) return false;
-  }
-  mkdirSync(home, { recursive: true });
-  writeFileSync(path, content);
-  return true;
+export function codexOverrides(kind: AccessKind, model: string | undefined): Record<string, string> {
+  if (kind !== "opencode-go") return {};
+  return {
+    model_provider: `"opencode-go"`,
+    ...(model ? { model: JSON.stringify(model) } : {}),
+    "model_providers.opencode-go.name": `"OpenCode Go"`,
+    "model_providers.opencode-go.base_url": `"${OPENCODE}/v1"`,
+    "model_providers.opencode-go.env_key": `"OPENCODE_GO_KEY"`,
+    "model_providers.opencode-go.wire_api": `"responses"`,
+    "model_providers.opencode-go.env_http_headers": `{"x-opencode-session"="OPENCODE_SESSION"}`,
+  };
 }
 
 export interface ProfileCheck {
@@ -87,11 +65,6 @@ export interface ProfileCheck {
 }
 
 const run = promisify(execFile);
-
-/** Writes what each profile's access kind needs into its home (codex provider config). */
-export function prepareProfileHomes(profiles: readonly Profile[]): void {
-  for (const p of profiles) if (p.runtime === "codex") prepareCodexHome(p.home, p.access.kind, p.model);
-}
 
 /** Asks the provider or runtime whether this profile works, and what models it offers. */
 export async function checkProfile(options: {

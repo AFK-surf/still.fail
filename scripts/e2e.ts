@@ -2,7 +2,7 @@
 // instead of Slack: first question, follow-up, then a follow-up after the
 // session went cold. Usage: node scripts/e2e.ts [claude|codex ...]
 // Needs ~/.config/ember-spike/opencode-go.env (OPENCODE_GO_KEY=…).
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,15 +20,6 @@ if (!key) throw new Error("OPENCODE_GO_KEY missing");
 const runtimes = (process.argv.slice(2).length ? process.argv.slice(2) : ["claude", "codex"]) as RuntimeKind[];
 
 const dataDir = mkdtempSync(join(tmpdir(), "ember-e2e-"));
-const codexHome = join(dataDir, "homes", "codex");
-mkdirSync(codexHome, { recursive: true });
-writeFileSync(join(codexHome, "config.toml"), [
-  `model = "${MODEL}"`, `model_provider = "opencode-go"`, ``,
-  `[model_providers.opencode-go]`, `name = "OpenCode Go"`, `base_url = "https://opencode.ai/zen/go/v1"`,
-  `env_key = "OPENCODE_GO_KEY"`, `wire_api = "responses"`,
-  `env_http_headers = { "x-opencode-session" = "OPENCODE_SESSION" }`, ``,
-].join("\n"));
-
 const config = parseConfig({
   http: { port: 0 },
   bots: [
@@ -38,13 +29,8 @@ const config = parseConfig({
   maxWarmClaude: 0,
   warmMinutes: 0,
   profiles: [
-    { id: "claude-ocg", runtime: "claude", home: "homes/claude", env: {
-      ANTHROPIC_BASE_URL: "https://opencode.ai/zen/go", ANTHROPIC_API_KEY: key,
-      ANTHROPIC_CUSTOM_HEADERS: "x-opencode-session: {route}",
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: MODEL, ANTHROPIC_SMALL_FAST_MODEL: MODEL,
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", DISABLE_AUTOUPDATER: "1",
-    } },
-    { id: "codex-ocg", runtime: "codex", home: "homes/codex", env: { OPENCODE_GO_KEY: key, OPENCODE_SESSION: "ember-{route}" } },
+    { id: "claude-ocg", runtime: "claude", home: "homes/claude", model: MODEL, access: { kind: "opencode-go", key } },
+    { id: "codex-ocg", runtime: "codex", home: "homes/codex", model: MODEL, access: { kind: "opencode-go", key } },
   ],
 }, dataDir);
 

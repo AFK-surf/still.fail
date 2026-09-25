@@ -10,7 +10,6 @@ import { SlackSurface } from "./chat/slack.ts";
 import { Hub } from "./hub.ts";
 import { log } from "./log.ts";
 import { McpEndpoint } from "./mcp.ts";
-import { prepareProfileHomes } from "./profiles.ts";
 import { ClaudeDriver } from "./runtime/claude.ts";
 import { CodexDriver } from "./runtime/codex.ts";
 import { reapStaleGroups } from "./runtime/process.ts";
@@ -20,7 +19,6 @@ import { Store } from "./store.ts";
 const settings = Settings.load();
 const store = new Store(join(settings.dataDir, "ember.db"));
 linkAgentHome(settings.config.agentHome, settings.config.profiles);
-prepareProfileHomes(settings.config.profiles);
 
 const reaped = await reapStaleGroups(store);
 if (reaped > 0) log.warn("reaped runtime processes left by a previous run", { count: reaped });
@@ -42,7 +40,6 @@ const admin = new AdminApi({ settings, store, hub, bots });
 
 settings.onChange((config) => {
   linkAgentHome(config.agentHome, config.profiles);
-  prepareProfileHomes(config.profiles);
   void bots.reconcile(config);
 });
 

@@ -50,10 +50,9 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
     { "id": "gpt", "name": "ember-gpt", "runtime": "codex", "profiles": ["codex-main"], "enabled": false }
   ],
   "profiles": [
-    { "id": "claude-ocg", "runtime": "claude", "home": "homes/claude-ocg",
-      "env": { "ANTHROPIC_BASE_URL": "https://opencode.ai/zen/go", "ANTHROPIC_API_KEY": "…",
-               "ANTHROPIC_CUSTOM_HEADERS": "x-opencode-session: {route}" } },
-    { "id": "codex-main", "runtime": "codex", "home": "homes/codex-main" }
+    { "id": "claude-ocg", "name": "OpenCode Go（Claude Code）", "runtime": "claude", "home": "homes/claude-ocg",
+      "access": { "kind": "opencode-go", "key": "…" } },
+    { "id": "codex-main", "runtime": "codex", "home": "homes/codex-main", "access": { "kind": "subscription" } }
   ],
   "maxNudges": 2,
   "warmMinutes": 30,
@@ -64,20 +63,7 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
 - bot 的 `id` 是会话记录的一部分，创建后不要改。
 - 账号的 `home` 相对数据目录。用订阅登录时，对这个目录登录一次：`CLAUDE_CONFIG_DIR=<home> claude`，或 `CODEX_HOME=<home> codex login`。
 - `env` 里的 `{route}` 会替换成每个会话的路由 ID（Codex 的 app-server 按账号共享，替换成账号 ID），用于 OpenCode Go 这类需要会话亲和头的服务。
-- Codex 的模型服务商写在 `<home>/config.toml`，例如 OpenCode Go：
-
-  ```toml
-  model = "deepseek-flash"
-  model_provider = "opencode-go"
-
-  [model_providers.opencode-go]
-  name = "OpenCode Go"
-  base_url = "https://opencode.ai/zen/go/v1"
-  env_key = "OPENCODE_GO_KEY"
-  wire_api = "responses"
-  env_http_headers = { "x-opencode-session" = "OPENCODE_SESSION" }
-  ```
-
+- 账号的 `access` 决定运行时怎么接模型：`subscription`（订阅登录）、`opencode-go`、`anthropic-api`（后两种要 `key`），或 `env`（只用 `env` 里手写的变量）。ember 据此生成环境变量；Codex 的服务商配置在启动 app-server 时用 `-c` 传入，不改 `config.toml`。
 - 共享的记忆和 skills 在 `<数据目录>/agent/`（`MEMORY.md` 和 `skills/`），启动时链接进每个账号的配置目录。
 
 ## 在 Slack 里使用
