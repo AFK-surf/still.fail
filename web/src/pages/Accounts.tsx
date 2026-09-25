@@ -8,7 +8,7 @@ import { useApi, keys, useOverview, type AccessKind, type Overview, type Profile
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
-import { Button, Choices, ConnectKindIcon, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
+import { Button, Choices, Loading, ConnectKindIcon, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
 function OpenCodeMark({ size = 16 }: { size?: number; strokeWidth?: number }) {
@@ -136,7 +136,7 @@ export function AccountPage() {
   const { id } = useParams();
   const overview = useOverview();
   const profile = overview.data?.profiles.find((p) => p.id === id);
-  if (!overview.data) return null;
+  if (!overview.data) return <Loading label="正在读取 Profile…" />;
   if (!profile) return <Empty><p>没有 ID 为 {id} 的 Profile。</p></Empty>;
   return <AccountView key={profile.id} profile={profile} overview={overview.data} />;
 }

@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router";
 import { relativeTime, timeUntil } from "../format.ts";
 import { ToastProvider, useToast } from "../toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
+import { Button, Confirm, Loading, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
 import { completeSignIn, signIn, type Account } from "./accounts.ts";
 import { Avatar, online, SignInPage, useAccounts } from "./gate.tsx";
 import { useInvitations, useWorkspaces, WorkspaceShell } from "./workspace.tsx";
@@ -99,14 +99,15 @@ function Landing() {
       </div>
     );
   }
-  return <div className="gate"><h1>{create.isError ? "没能建好 workspace" : "正在进入…"}</h1>{create.error && <p>{create.error.message}</p>}</div>;
+  if (create.isError) return <div className="gate"><h1>没能建好 workspace</h1><p>{create.error.message}</p><Button onClick={() => create.mutate()}>重试</Button></div>;
+  return <div className="gate"><Loading label={workspaces.isPending || invitations.isPending ? "正在读取你的 workspace…" : "正在为你建一个 workspace…"} /></div>;
 }
 
 /** A workspace by id, through whichever signed-in account belongs to it. */
 function WorkspaceRoute() {
   const { ws = "" } = useParams();
   const workspaces = useWorkspaces();
-  if (workspaces.isPending) return null;
+  if (workspaces.isPending) return <div className="gate"><Loading label="正在打开 workspace…" /></div>;
   const entry = workspaces.data?.find((w) => w.id === ws);
   if (!entry) return <div className="gate"><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className="btn btn-secondary" href="/">回到 ember</a></div>;
   return (

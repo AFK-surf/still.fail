@@ -14,13 +14,13 @@ import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
 import {
-  Button, Choices, ConnectKindIcon, Confirm, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select, StatusDot, SwitchRow, SlackLogo } from "../ui.tsx";
+  Button, Choices, ConnectKindIcon, Loading, Confirm, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select, StatusDot, SwitchRow, SlackLogo } from "../ui.tsx";
 
 export function ConnectPage() {
   const { id } = useParams();
   const overview = useOverview();
   const connect = overview.data?.connects.find((c) => c.id === id);
-  if (!overview.data) return null;
+  if (!overview.data) return <Loading label="正在读取连接…" />;
   if (!connect) return <Empty><p>没有 ID 为 {id} 的连接。</p></Empty>;
   return <ConnectDetail key={connect.id} connect={connect} overview={overview.data} />;
 }

@@ -17,7 +17,7 @@ import { MineFilter, useOnlyMine } from "../components.tsx";
 import { AccountSettings, ConnectsSettings, GeneralSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
 import { MeContext, PeopleContext, StationContext, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
-import { Button, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Select, StatusDot } from "../ui.tsx";
+import { Button, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Loading, Select, SkeletonRows, StatusDot } from "../ui.tsx";
 import { signIn, signOut, type Account } from "./accounts.ts";
 import { cloud, type PendingInvitation, type WorkspaceView } from "./api.ts";
 export type { PendingInvitation };
@@ -90,7 +90,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
         {stations.filter((s) => s.online).map((s) => <Live key={s.id} station={s} />)}
         {settings
           ? <nav className="sidebar" aria-label="设置"><div className="account-slot"><WorkspaceSwitcher current={entry} /></div><SettingsNav entry={entry} /></nav>
-          : <WorkspaceSidebar entry={entry} stations={stations} />}
+          : <WorkspaceSidebar entry={entry} stations={stations} loading={view.isPending} />}
         <main className="main">
           <Routes>
             <Route index element={<WorkspaceHome view={view.data} stations={stations} />} />
@@ -139,7 +139,7 @@ function StationPages({ stations }: { stations: Station[] }) {
 }
 
 function WorkspaceHome({ view, stations }: { view: WorkspaceView | undefined; stations: Station[] }) {
-  if (!view) return null;
+  if (!view) return <Loading label="正在读取 workspace…" />;
   const up = stations.filter((s) => s.online).length;
   return (
     <Empty>
@@ -154,7 +154,7 @@ function WorkspaceHome({ view, stations }: { view: WorkspaceView | undefined; st
 
 // ── sidebar ─────────────────────────────────────────────────────────────
 
-function WorkspaceSidebar({ entry, stations }: { entry: WorkspaceEntry; stations: Station[] }) {
+function WorkspaceSidebar({ entry, stations, loading }: { entry: WorkspaceEntry; stations: Station[]; loading: boolean }) {
   const live = stations.filter((s) => s.online);
   const sessions = useQueries({ queries: live.map((s) => ({ queryKey: keys.sessions(s.id), queryFn: () => makeApi(s.transport).sessions() })) });
   const overviews = useQueries({ queries: live.map((s) => ({ queryKey: keys.overview(s.id), queryFn: () => makeApi(s.transport).overview(), refetchInterval: 10_000 })) });
@@ -163,6 +163,7 @@ function WorkspaceSidebar({ entry, stations }: { entry: WorkspaceEntry; stations
     (sessions[i]?.data ?? []).map((session) => ({ session, station, overview: overviews[i]?.data as Overview | undefined }))), [live, sessions, overviews]);
   const groups = useSessionGroups(rows);
   const failed = live.filter((_, i) => sessions[i]?.isError);
+  const connecting = live.filter((_, i) => sessions[i]?.isPending);
   const offline = stations.filter((s) => !s.online);
 
   return (
@@ -170,9 +171,11 @@ function WorkspaceSidebar({ entry, stations }: { entry: WorkspaceEntry; stations
       <div className="account-slot"><WorkspaceSwitcher current={entry} /></div>
       <MineFilter label="会话" />
       <div className="nav-scroll">
+        {connecting.map((s) => <p key={s.id} className="nav-connecting"><span className="spinner" aria-hidden="true" />正在连接 {s.name}…</p>)}
         {failed.map((s) => <p key={s.id} className="nav-empty nav-error">连不上「{s.name}」，正在重试…</p>)}
+        {groups.length === 0 && (connecting.length > 0 || loading) && <SkeletonRows />}
         {offline.length > 0 && <p className="nav-empty">{offline.map((s) => s.name).join("、")} 离线，它们的会话暂时看不到。</p>}
-        {groups.length === 0 && !failed.length && <p className="nav-empty">{onlyMine ? "没有你发起的会话。" : stations.length ? "还没有会话。在 Slack 里 @ 它们，或者打开会话新建对话。" : "还没有 station，到「设置 → Station」添加。"}</p>}
+        {groups.length === 0 && !failed.length && !connecting.length && !loading && <p className="nav-empty">{onlyMine ? "没有你发起的会话。" : stations.length ? "还没有会话。在 Slack 里 @ 它们，或者打开会话新建对话。" : "还没有 station，到「设置 → Station」添加。"}</p>}
         {groups.map((group) => (
           <section key={group.label} aria-label={group.label}>
             <div className="nav-heading">{group.label}</div>

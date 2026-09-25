@@ -12,7 +12,7 @@ import { ACCESS, checkTone, relativeTime, RUNTIME_LABEL, timeUntil } from "../fo
 import { QuotaBars } from "../components.tsx";
 import type { Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
+import { Button, Confirm, Loading, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
 import { accessToken, signOut, type Account } from "./accounts.ts";
 import { cloud, type Role, type StationView, type WorkspaceView } from "./api.ts";
 import { Avatar, online } from "./gate.tsx";
@@ -99,7 +99,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
         <Button icon={LogOut} onClick={() => setLeaving(true)}>退出这个账号</Button>
       </header>
       <Section title="登录的地方" description="这个账号在哪些浏览器或设备上登录了 ember。认不出来的可以让它退出。">
-        {sessions.isPending ? <p className="muted">正在读取…</p> : sessions.isError ? <p className="field-error">{sessions.error.message}</p> : (
+        {sessions.isPending ? <Loading label="正在读取…" fill={false} /> : sessions.isError ? <p className="field-error">{sessions.error.message}</p> : (
           <ul className="list">
             {sessions.data.map((s) => (
               <li key={s.id} className="list-row">
@@ -140,7 +140,7 @@ export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
   const rename = useMutation({ mutationFn: () => cloud.renameWorkspace(account.sub, entry.id, name), onSuccess: () => { refresh(); toast("已改名"); } });
   const leave = useMutation({ mutationFn: () => cloud.removeMember(account.sub, entry.id, account.sub), onSuccess: () => { refresh(); toast("已退出 workspace"); navigate("/"); } });
   const remove = useMutation({ mutationFn: () => cloud.deleteWorkspace(account.sub, entry.id), onSuccess: () => { refresh(); toast("已删除 workspace"); navigate("/"); } });
-  if (!view) return <div className="page" />;
+  if (!view) return <Loading label="正在读取 workspace…" />;
   return (
     <Page title="通用" back={`/w/${entry.id}/settings`}>
       <Section title="名字">
@@ -177,7 +177,7 @@ export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
 
 export function MembersSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
-  if (!view) return <div className="page" />;
+  if (!view) return <Loading label="正在读取 workspace…" />;
   return (
     <Page title="成员" lead="谁能使用这个 workspace 里的 station。" back={`/w/${entry.id}/settings`}>
       <Members view={view} account={entry.account} manager={manager} />
@@ -187,7 +187,7 @@ export function MembersSettings({ entry }: { entry: WorkspaceEntry }) {
 
 export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
-  if (!view) return <div className="page" />;
+  if (!view) return <Loading label="正在读取 workspace…" />;
   return (
     <Page title="Station" lead="每台 station 是一台运行 ember 的机器：它的连接、会话和Profile都在那台机器上。" back={`/w/${entry.id}/settings`}>
       <Stations view={view} account={entry.account} manager={manager} />
@@ -215,7 +215,7 @@ export function RuntimeSettings({ entry, stations }: { entry: WorkspaceEntry; st
             title={<span className="station-heading"><StatusDot state={station.online ? "online" : "offline"} label={station.online ? "在线" : "离线"} />{station.name}</span>}
             actions={station.online && <Link className="btn btn-secondary" to={`${station.base}/settings/accounts`}>管理</Link>}>
             {!station.online ? <div className="card"><p className="muted card-foot">离线，暂时看不到它的 Profile。</p></div>
-              : !overview ? <div className="card"><p className="muted card-foot">正在读取…</p></div>
+              : !overview ? <div className="card"><Loading label={`正在连接 ${station.name}…`} fill={false} /></div>
               : overview.profiles.length === 0 ? <div className="card"><p className="muted card-foot">还没有 Profile。</p></div>
               : (
                 <ul className="list">

@@ -304,3 +304,21 @@ export function SlackLogo({ size = 16 }: { size?: number; strokeWidth?: number }
     </svg>
   );
 }
+
+/**
+ * Waiting on something, said in words. Appears after a short delay, so fast
+ * answers do not flash it; `fill` centres it in the page.
+ */
+export function Loading({ label = "正在加载…", fill = true }: { label?: string; fill?: boolean }) {
+  return (
+    <div className={fill ? "loading loading-fill" : "loading"} role="status" aria-live="polite">
+      <span className="spinner" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/** Placeholder rows for a list that is still arriving. */
+export function SkeletonRows({ count = 4 }: { count?: number }) {
+  return <>{Array.from({ length: count }, (_, i) => <div key={i} className="skeleton-row" aria-hidden="true"><span /><span /></div>)}</>;
+}

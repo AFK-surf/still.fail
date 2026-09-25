@@ -5,7 +5,7 @@ import { MineFilter, PeopleStack, useOnlyMine } from "./components.tsx";
 import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
 import { dayLabel, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
-import { ConnectKindIcon, ICON, Tip } from "./ui.tsx";
+import { ConnectKindIcon, ICON, SkeletonRows, Tip } from "./ui.tsx";
 
 export function Sidebar() {
   const path = useLocation().pathname;
@@ -66,6 +66,7 @@ function MainNav() {
     <>
       <MineFilter label="会话" />
       <div className="nav-scroll">
+        {sessions.isPending && <SkeletonRows />}
         {groups.length === 0 && !sessions.isPending && (
           <p className="nav-empty">{onlyMine ? "没有你发起的会话。" : connects.length ? "在 Slack 里 @ 它，会话就会出现在这里。" : "先到「设置 → 连接」添加一个连接。"}</p>
         )}

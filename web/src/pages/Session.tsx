@@ -16,7 +16,7 @@ import {
   PROCESS_LABEL, STATUS_LABEL, absoluteTime, agentLabel, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusTone, threadNamer, turnResult,
 } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Empty, ICON, IconButton, Menu, MobileBack, Pill, Tip, SlackLogo } from "../ui.tsx";
+import { Button, Empty, ICON, IconButton, Loading, Menu, MobileBack, Pill, Tip, SlackLogo } from "../ui.tsx";
 
 export function SessionPage() {
   const { key } = useParams();
@@ -50,7 +50,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const detail = useSession(sessionKey);
   const overview = useOverview();
   const client = useQueryClient();
-  if (detail.isPending) return <div className="page" />;
+  if (detail.isPending) return <Loading label={station.name ? `正在从 ${station.name} 读取会话…` : "正在读取会话…"} />;
   if (detail.isError) return <Empty><p>读不到这个会话：{detail.error.message}</p></Empty>;
   const { session, threads, chats } = detail.data;
   const connect = overview.data?.connects.find((c) => c.id === session.connect);

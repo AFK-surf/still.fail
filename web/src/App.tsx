@@ -7,6 +7,7 @@ import { ConnectsPage } from "./pages/Connects.tsx";
 import { SessionPage } from "./pages/Session.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
+import { Loading } from "./ui.tsx";
 
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
 function useDetailOpen(): boolean {
@@ -19,7 +20,7 @@ export function App() {
   const detail = useDetailOpen();
   useLiveUpdates(overview.isSuccess);
 
-  if (overview.isPending) return null;
+  if (overview.isPending) return <div className="gate"><Loading label="正在连接 ember…" /></div>;
   if (overview.isError) {
     const denied = overview.error instanceof ApiError && overview.error.status === 403;
     return (

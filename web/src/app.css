@@ -547,3 +547,19 @@
 .session-kind { display: inline-grid; flex: none; }
 .session-kind .kind-icon { width: 14px; height: 14px; }
 .nav-session-meta .nav-time { margin-left: 0; }
+
+/* ── waiting ─────────────────────────────────────────────────────────── */
+.loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-sm); animation: appear 0s linear 200ms both; }
+.loading-fill { flex: 1; min-height: 100%; justify-content: center; }
+.gate .loading { justify-content: center; }
+@keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+.spinner { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.skeleton-row { display: grid; gap: 6px; padding: 9px 10px; }
+.skeleton-row span { display: block; height: 10px; border-radius: 6px; background: var(--hover); animation: pulse 1.4s ease-in-out infinite; }
+.skeleton-row span:first-child { width: 80%; }
+.skeleton-row span:last-child { width: 45%; height: 8px; }
+@keyframes pulse { 50% { opacity: .45; } }
+.nav-connecting { display: flex; align-items: center; gap: 8px; margin: 8px 10px; font-size: var(--text-xs); color: var(--muted); }
+.nav-connecting .spinner { width: 12px; height: 12px; border-width: 1.5px; }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } .skeleton-row span { animation: none; } }
