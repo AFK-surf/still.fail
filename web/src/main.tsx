@@ -16,10 +16,6 @@ if (import.meta.env.MODE === "cloud") {
   const { CloudApp } = await import("./cloud/CloudApp.tsx");
   root.render(<StrictMode><CloudApp /></StrictMode>);
 } else {
-    const { CloudApp } = await import("./cloud/CloudApp.tsx");
-    root.render(<StrictMode><CloudApp /></StrictMode>);
-  }
-} else {
   const client = new QueryClient({
     defaultOptions: {
       queries: {
