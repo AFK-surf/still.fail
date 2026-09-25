@@ -10,6 +10,7 @@ import { extname, join, normalize } from "node:path";
 import { AdminApi } from "../src/admin/api.ts";
 import type { Connections } from "../src/connections.ts";
 import type { Hub } from "../src/hub.ts";
+import { LoginManager } from "../src/login.ts";
 import { Settings } from "../src/settings.ts";
 import { Store } from "../src/store.ts";
 
@@ -85,7 +86,7 @@ const connections = {
     channelName: async (channel: string) => ({ C0OPS: "ops", C0DEMO0: "cue-dev", C0DEMO1: "bridge" } as Record<string, string>)[channel] ?? null,
   }])),
 } as unknown as Connections;
-const api = new AdminApi({ settings, store, hub, connections });
+const api = new AdminApi({ settings, store, hub, connections, logins: new LoginManager(dataDir) });
 const ui = join(import.meta.dirname, "..", "dist", "admin");
 
 createServer((req, res) => {

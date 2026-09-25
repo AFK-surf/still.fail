@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Connections } from "../connections.ts";
 import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from "../config.ts";
 import type { Hub } from "../hub.ts";
+import type { LoginManager } from "../login.ts";
 import { log } from "../log.ts";
 import type { Settings } from "../settings.ts";
 import type { Store } from "../store.ts";
@@ -23,6 +24,7 @@ export interface AdminDeps {
   store: Store;
   hub: Hub;
   connections: Connections;
+  logins: LoginManager;
   /** Decides who may use the API; defaults to Cloudflare Access per the config. */
   gate?: AccessGate;
 }
@@ -83,6 +85,10 @@ export class AdminApi {
   constructor(deps: AdminDeps) {
     this.#deps = deps;
     this.#gate = deps.gate ?? new AccessGate(() => deps.settings.config.adminAccess);
+    // A finished sign-in changes what the profile can do; check it again right away.
+    deps.logins.changes.on("change", (id: string) => {
+      if (deps.logins.get(id)?.state === "done") void this.#check(id).catch((error) => log.warn("check after login failed", { profile: id, error }));
+    });
   }
 
   /** Handles /admin/api/*; returns false for other paths. */
@@ -149,6 +155,28 @@ export class AdminApi {
       return send(res, 200, overview);
     }
     if (resource === "profiles" && id && action === "check" && method === "POST") return send(res, 200, await this.#check(id));
+    if (resource === "profiles" && id && action === "login") {
+      const profile = this.#deps.settings.config.profiles.find((p) => p.id === id);
+      if (!profile) throw new HttpError(404, `unknown profile ${id}`);
+      if (method === "GET") return send(res, 200, { job: this.#deps.logins.get(id) });
+      if (method === "DELETE") {
+        this.#deps.logins.cancel(id);
+        return send(res, 200, { job: this.#deps.logins.get(id) });
+      }
+      if (method === "POST") {
+        if (profile.access.kind !== "subscription") throw new HttpError(400, "只有订阅账号需要登录");
+        log.info("login started from the admin page", { profile: id, by: viewer.via === "access" ? viewer.email : "local" });
+        return send(res, 200, { job: this.#deps.logins.start(profile) });
+      }
+    }
+    if (resource === "profiles" && id && action === "login-code" && method === "POST") {
+      const input = await body(req);
+      try {
+        return send(res, 200, { job: this.#deps.logins.submitCode(id, String(input.code ?? "")) });
+      } catch (error) {
+        throw new HttpError(400, error instanceof Error ? error.message : String(error));
+      }
+    }
     if (resource === "profiles" && id && !action && method === "DELETE") return send(res, 200, this.#deleteProfile(id, viewer));
     if (method === "POST" && path === "/slack/verify") {
       // Blank tokens fall back to the stored ones of `connect`, so replacing one token can be checked alone.
@@ -190,6 +218,7 @@ export class AdminApi {
         usedBy: config.connects.filter((c) => c.bind.profiles.includes(p.id)).map((c) => c.id),
         loginCommand: loginCommand(p.runtime, p.home),
         check: this.#checks.get(p.id) ?? null,
+        login: this.#deps.logins.get(p.id),
       })),
       processes: processes.map((p) => ({ ...p, rssMb: memory.has(p.pgid) ? Math.round(memory.get(p.pgid)! / 1024) : null })),
       counts: {
@@ -247,12 +276,15 @@ export class AdminApi {
     res.write("retry: 3000\n\n");
     const onSession = (key: string) => res.write(`event: session\ndata: ${JSON.stringify({ key })}\n\n`);
     const onConfig = () => res.write("event: config\ndata: {}\n\n");
+    const onLogin = (profile: string) => res.write(`event: login\ndata: ${JSON.stringify({ profile })}\n\n`);
+    this.#deps.logins.changes.on("change", onLogin);
     this.#deps.store.changes.on("session", onSession);
     const unsubscribe = this.#deps.settings.onChange(onConfig);
     const ping = setInterval(() => res.write(": ping\n\n"), 25_000); // keep proxies from closing an idle stream
     req.on("close", () => {
       clearInterval(ping);
       this.#deps.store.changes.off("session", onSession);
+      this.#deps.logins.changes.off("change", onLogin);
       unsubscribe();
     });
   }

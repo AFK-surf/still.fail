@@ -9,6 +9,7 @@ import { AccessGate } from "../src/admin/access.ts";
 import { AdminApi } from "../src/admin/api.ts";
 import { Connections, type Connection } from "../src/connections.ts";
 import { Hub } from "../src/hub.ts";
+import { LoginManager } from "../src/login.ts";
 import { Settings } from "../src/settings.ts";
 import { Store } from "../src/store.ts";
 import { FakeChat, FakeDriver, message, settle } from "./fakes.ts";
@@ -25,6 +26,25 @@ class FakeConnection extends FakeChat implements Connection {
     this.stopped++;
   }
 }
+
+/** Stands in for `claude auth login` and `codex login --device-auth`. */
+const fakeLogin = (() => {
+  const path = join(mkdtempSync(join(tmpdir(), "ember-fake-login-")), "fake-login");
+  writeFileSync(path, `#!/bin/sh
+if [ "$1" = "auth" ]; then
+  echo "Opening browser to sign in…"
+  echo "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&client_id=x&state=y"
+  printf "Paste code here if prompted > "
+  read code
+  [ "$code" = "good-code" ] && { echo "Login successful"; exit 0; }
+  echo "OAuth error: invalid code"; exit 1
+fi
+printf "1. Open this link\\n   \\033[94mhttps://auth.openai.com/codex/device\\033[0m\\n2. Enter this one-time code\\n   \\033[94mABCD-12345\\033[0m\\n"
+sleep 0.3
+echo "Successfully logged in"
+`, { mode: 0o755 });
+  return path;
+})();
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const jwks = async () => ({ keys: [{ ...publicKey.export({ format: "jwk" }), kid: "k1" }] });
@@ -58,7 +78,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
   const hub: Hub = new Hub({ config: () => settings.config, store, chats: conns.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x" });
   settings.onChange((config) => void conns.reconcile(config));
   await conns.reconcile(settings.config);
-  const api = new AdminApi({ settings, store, hub, connections: conns, gate: new AccessGate(() => settings.config.adminAccess, jwks) });
+  const api = new AdminApi({ settings, store, hub, connections: conns, logins: new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin }), gate: new AccessGate(() => settings.config.adminAccess, jwks) });
   const server = createServer((req, res) => void api.handle(req, res));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/admin/api`;
@@ -277,4 +297,40 @@ test("a legacy bots config is rewritten as connects on load", async () => {
   const saved = JSON.parse(readFileSync(path, "utf8"));
   assert.equal(saved.bots, undefined);
   assert.deepEqual(saved.connects[0].bind, { runtime: "claude", profiles: ["cc"], model: "m" });
+});
+
+test("a subscription sign-in runs on the ember host and relays the link, the code and the result", async () => {
+  const t = await setup();
+  try {
+    await t.call("PUT", "/profiles/sub", { runtime: "claude", access: { kind: "subscription" } });
+    const wait = async (profile: string, state: string) => {
+      for (let i = 0; i < 100; i++) {
+        const { body } = await t.call("GET", `/profiles/${profile}/login`);
+        if (body.job?.state === state) return body.job;
+        await new Promise((r) => setTimeout(r, 30));
+      }
+      throw new Error(`login of ${profile} never reached ${state}`);
+    };
+    assert.equal((await t.call("POST", "/profiles/cc/login")).status, 400, "keyed profiles do not sign in");
+    await t.call("POST", "/profiles/sub/login");
+    const job = await wait("sub", "needs_code");
+    assert.match(job.url, /^https:\/\/claude\.com\/cai\/oauth\/authorize\?/);
+    await t.call("POST", "/profiles/sub/login-code", { code: "wrong" });
+    assert.match((await wait("sub", "failed")).error, /invalid code/);
+    await t.call("POST", "/profiles/sub/login");
+    await wait("sub", "needs_code");
+    await t.call("POST", "/profiles/sub/login-code", { code: " good-code " });
+    await wait("sub", "done");
+
+    await t.call("PUT", "/profiles/cxs", { runtime: "codex", access: { kind: "subscription" } });
+    await t.call("POST", "/profiles/cxs/login");
+    const device = await wait("cxs", "needs_approval");
+    assert.equal(device.url, "https://auth.openai.com/codex/device");
+    assert.equal(device.userCode, "ABCD-12345");
+    await wait("cxs", "done");
+    const { body } = await t.call("GET", "/overview");
+    assert.equal(body.profiles.find((p: any) => p.id === "cxs").login.state, "done");
+  } finally {
+    t.close();
+  }
 });

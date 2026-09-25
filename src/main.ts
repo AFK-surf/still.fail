@@ -9,6 +9,7 @@ import { Connections } from "./connections.ts";
 import { SlackSurface } from "./chat/slack.ts";
 import { Hub } from "./hub.ts";
 import { log } from "./log.ts";
+import { LoginManager } from "./login.ts";
 import { McpEndpoint } from "./mcp.ts";
 import { ClaudeDriver } from "./runtime/claude.ts";
 import { CodexDriver } from "./runtime/codex.ts";
@@ -37,7 +38,8 @@ const hub: Hub = new Hub({
   drivers: { claude: new ClaudeDriver(store), codex: new CodexDriver(store) },
 });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
-const admin = new AdminApi({ settings, store, hub, connections });
+const logins = new LoginManager(settings.config.dataDir);
+const admin = new AdminApi({ settings, store, hub, connections, logins });
 
 settings.onChange((config) => {
   linkAgentHome(config.agentHome, config.profiles);
@@ -114,6 +116,7 @@ async function shutdown(signal: string): Promise<void> {
   stopping = true;
   log.info("shutting down", { signal });
   clearInterval(evictTimer);
+  logins.stopAll();
   await connections.stopAll();
   await hub.shutdown();
   server.close();
