@@ -1,6 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
+import Markdown from "react-markdown";
 import { Link, useParams } from "react-router";
+import remarkGfm from "remark-gfm";
 import { api, useOverview, useSession, useSessions, type SessionSummary, type TimelineEntry } from "../api.ts";
 import {
   absoluteTime, cleanText, duration, parsePrompt, PROCESS_LABEL, relativeTime, RUNTIME_LABEL, sessionStatus, STATUS_LABEL, turnResult,
@@ -265,7 +267,7 @@ function ToolItem({ call, result }: { call: TimelineEntry; result: TimelineEntry
           发到 Slack{kind && STATE_TEXT[kind] ? <span className="post-state" data-kind={kind}>{STATE_TEXT[kind]}</span> : null}
           {failed && "，发送失败"}
         </div>
-        <div className="entry-text">{args.text}</div>
+        <div className="markdown"><Markdown remarkPlugins={[remarkGfm]}>{args.text}</Markdown></div>
         {failed && result && <pre className="code">{result.text}</pre>}
       </div>
     );
