@@ -134,7 +134,7 @@ function uptime(sec: number): string {
   return days ? `${days} 天 ${hours} 小时` : `${hours} 小时`;
 }
 
-function Meter({ label, percent, value, note }: { label: string; percent: number; value: string; note?: string }) {
+function Meter({ label, percent, value, note }: { label: string; percent: number; value: string; note?: string | undefined }) {
   const p = Math.max(0, Math.min(100, Math.round(percent)));
   return (
     <div className="quota-row device-row">
@@ -147,7 +147,7 @@ function Meter({ label, percent, value, note }: { label: string; percent: number
 }
 
 /** The machine a station runs on: what it is, and how loaded. `processes` are the agents ember started. */
-export function DeviceCard({ host, processes }: { host: HostInfo | undefined; processes?: ProcessView[] }) {
+export function DeviceCard({ host, processes }: { host: HostInfo | undefined; processes?: ProcessView[] | undefined }) {
   if (!host) return <div className="device muted">正在读取设备信息…</div>;
   const mem = host.memory;
   const agentMb = (processes ?? []).reduce((sum, p) => sum + (p.rssMb ?? 0), 0);

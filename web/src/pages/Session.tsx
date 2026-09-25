@@ -86,39 +86,51 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
       {/* Without a chat the history is the page, with the composer under it; once someone writes, the chat takes the middle and the history moves to the right. */}
       <div className="session-body" data-chat={Boolean(chat)}>
         {chat && <ChatPanel detail={detail.data} chat={chat} />}
-        <History detail={detail.data} connect={connect} footer={<Operations detail={detail.data} />} />
+        <History detail={detail.data} connect={connect} state={<SessionState detail={detail.data} />} actions={<SessionActions detail={detail.data} />} />
       </div>
       {!chat && <Composer sessionKey={session.key} className="composer-bare" />}
     </div>
   );
 }
 
-/** What can be done to the session right now, at the foot of its history. */
-function Operations({ detail }: { detail: SessionDetail }) {
-  const api = useApi();
-  const toast = useToast();
+/** Where the session stands, for the history's header line. */
+function SessionState({ detail }: { detail: SessionDetail }) {
   const { session } = detail;
-  const stop = useMutation({ mutationFn: () => api.stop(session.key), onSuccess: () => toast("已请求停止") });
-  const evict = useMutation({ mutationFn: () => api.evict(session.key), onSuccess: () => toast("已释放进程") });
   const status = sessionStatus(session);
   const running = status === "running" || status === "queued";
   const since = detail.turns.at(-1)?.startedAt ?? session.lastActiveAt;
   const calls = (detail.transcript?.timeline ?? []).filter((e) => e.kind === "tool_call" && e.at && Date.parse(e.at) >= since).length;
   const result = turnResult(session.lastTurn);
   const text = running
-    ? (status === "queued" ? "排队中，马上开始" : `正在执行${calls ? `，已执行 ${calls} 项操作` : ""}`)
-    : result === "block" ? "在等人回复。"
-    : result === "failed" ? "上一轮失败了；新消息会重试。"
-    : result === "unexpected" ? "上一轮没有给出明确结果就停了。"
-    : result === "final" ? "上一轮已完成。"
-    : "空闲。";
+    ? (status === "queued" ? "排队中" : `正在执行${calls ? ` · 已执行 ${calls} 项` : ""}`)
+    : result === "block" ? "等人回复"
+    : result === "failed" ? "上一轮失败"
+    : result === "unexpected" ? "上一轮没给出结果"
+    : result === "final" ? "上一轮已完成"
+    : "空闲";
   return (
-    <div className="operations" data-state={running ? "running" : result}>
-      {running && <span className="activity-pulse" aria-hidden="true" />}
-      <span className="operations-text">{text}<span className="muted"> · 进程{PROCESS_LABEL[session.process]}</span></span>
-      {running && <Button icon={Square} onClick={() => stop.mutate()} busy={stop.isPending}>停止</Button>}
-      {session.process === "warm" && <Button variant="ghost" icon={Unplug} onClick={() => evict.mutate()} busy={evict.isPending}>释放进程</Button>}
-    </div>
+    <span className="session-state" data-state={running ? "running" : result}>
+      {running && <span className="activity-pulse inline" aria-hidden="true" />}
+      {text}
+      <span className="history-sep">·</span>
+      进程{PROCESS_LABEL[session.process]}
+    </span>
+  );
+}
+
+/** What can be done to it right now: stop a turn, release an idle process. */
+function SessionActions({ detail }: { detail: SessionDetail }) {
+  const api = useApi();
+  const toast = useToast();
+  const { session } = detail;
+  const stop = useMutation({ mutationFn: () => api.stop(session.key), onSuccess: () => toast("已请求停止") });
+  const evict = useMutation({ mutationFn: () => api.evict(session.key), onSuccess: () => toast("已释放进程") });
+  const status = sessionStatus(session);
+  return (
+    <>
+      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Square} onClick={() => stop.mutate()} disabled={stop.isPending} />}
+      {session.process === "warm" && <IconButton label="释放进程" icon={Unplug} onClick={() => evict.mutate()} disabled={evict.isPending} />}
+    </>
   );
 }
 

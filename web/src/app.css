@@ -572,3 +572,9 @@
 .station-item + .station-item { border-top: 1px solid var(--line); }
 .list .station-item { display: block; }
 .station-device { padding: 4px 16px 16px 36px; }
+
+.session-state { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.session-state[data-state="running"] { color: var(--accent-text); }
+.session-state[data-state="block"] { color: var(--blue); }
+.session-state[data-state="failed"], .session-state[data-state="unexpected"] { color: var(--red); }
+.session-state .history-sep { margin: 0 2px; }

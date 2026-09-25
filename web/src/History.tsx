@@ -117,10 +117,11 @@ function toItems(entries: TimelineEntry[]): Item[] {
 }
 
 /**
- * The session as it ran: the main view of a session. `footer` holds what can
+ * The session as it ran: the main view of a session. `state` says where it
+ * stands (in the header line) and `actions` what can
  * be done to it right now (stop a turn, release the process).
  */
-export function History({ detail, connect, footer }: { detail: SessionDetail; connect: ConnectView | undefined; footer?: ReactNode }) {
+export function History({ detail, connect, state, actions }: { detail: SessionDetail; connect: ConnectView | undefined; state?: ReactNode; actions?: ReactNode }) {
   const botUserId = botUserIdOf(connect);
   const member = usePerson();
   const threadName = threadNamer(detail);
@@ -159,8 +160,10 @@ export function History({ detail, connect, footer }: { detail: SessionDetail; co
           <span className="history-sep">·</span>
           <span>{RUNTIME_LABEL[session.runtime]}</span>
           {usage && <><span className="history-sep">·</span><span>{compactNumber(usage.inputTokens + usage.outputTokens)} tokens</span></>}
+          {state && <><span className="history-sep">·</span>{state}</>}
         </div>
         <div className="history-tools">
+          {actions}
           {usage && (
             <button type="button" className="text-toggle" aria-expanded={usageOpen} onClick={() => setUsageOpen(!usageOpen)}>
               用量 <ChevronDown {...ICON} size={14} />
@@ -190,7 +193,6 @@ export function History({ detail, connect, footer }: { detail: SessionDetail; co
           </>
         )}
       </div>
-    {footer}
     </section>
   );
 }
