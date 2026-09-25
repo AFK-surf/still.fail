@@ -19,7 +19,7 @@ for (const profile of config.profiles) {
     if (profile.runtime === "claude") {
       delete env.ANTHROPIC_AUTH_TOKEN;
       env.CLAUDE_CONFIG_DIR = profile.home;
-      const out = await run("claude", ["-p", QUESTION, "--model", profile.model ?? config.defaults.model ?? "deepseek-flash"],
+      const out = await run("claude", ["-p", QUESTION, "--model", profile.model ?? "deepseek-flash"],
         { cwd, env, timeout: 240_000 });
       answer = out.stdout.trim();
     } else {

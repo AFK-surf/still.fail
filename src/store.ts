@@ -7,6 +7,7 @@ import type { RuntimeKind } from "./config.ts";
 
 export interface SessionRow {
   key: string;
+  bot: string;
   channel: string;
   threadTs: string;
   runtime: RuntimeKind;
@@ -22,6 +23,7 @@ export interface SessionRow {
 }
 
 export interface InboundRow {
+  bot: string;
   channel: string;
   ts: string;
   sessionKey: string;
@@ -33,9 +35,13 @@ export interface InboundRow {
 
 export type TurnKind = "input" | "nudge" | "resume";
 
+/** Bump when the schema changes incompatibly; an older database is refused, not silently migrated. */
+const SCHEMA_VERSION = 2;
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sessions (
   key TEXT PRIMARY KEY,
+  bot TEXT NOT NULL,
   channel TEXT NOT NULL,
   thread_ts TEXT NOT NULL,
   runtime TEXT NOT NULL,
@@ -49,6 +55,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_active_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS inbound (
+  bot TEXT NOT NULL,
   channel TEXT NOT NULL,
   ts TEXT NOT NULL,
   session_key TEXT NOT NULL,
@@ -56,7 +63,7 @@ CREATE TABLE IF NOT EXISTS inbound (
   text TEXT NOT NULL,
   status TEXT NOT NULL,
   received_at INTEGER NOT NULL,
-  PRIMARY KEY (channel, ts)
+  PRIMARY KEY (bot, channel, ts)
 );
 CREATE INDEX IF NOT EXISTS inbound_pending ON inbound (session_key, status, ts);
 CREATE TABLE IF NOT EXISTS turns (
@@ -82,6 +89,7 @@ type Row = Record<string, unknown>;
 function toSession(row: Row): SessionRow {
   return {
     key: row.key as string,
+    bot: row.bot as string,
     channel: row.channel as string,
     threadTs: row.thread_ts as string,
     runtime: row.runtime as RuntimeKind,
@@ -98,6 +106,7 @@ function toSession(row: Row): SessionRow {
 
 function toInbound(row: Row): InboundRow {
   return {
+    bot: row.bot as string,
     channel: row.channel as string,
     ts: row.ts as string,
     sessionKey: row.session_key as string,
@@ -115,7 +124,13 @@ export class Store {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
     this.#db = new DatabaseSync(path);
     this.#db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
+    const version = (this.#db.prepare("PRAGMA user_version").get() as Row).user_version as number;
+    const hasTables = this.#db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() !== undefined;
+    if (hasTables && version !== SCHEMA_VERSION) {
+      throw new Error(`${path} has schema version ${version}, ember needs ${SCHEMA_VERSION}; move the old database aside`);
+    }
     this.#db.exec(SCHEMA);
+    this.#db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   }
 
   close(): void {
@@ -139,9 +154,9 @@ export class Store {
   }
 
   insertSession(s: Omit<SessionRow, "running" | "runtimeSessionId">): void {
-    this.#db.prepare(`INSERT INTO sessions (key, channel, thread_ts, runtime, profile, model, workspace, token, created_at, last_active_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(s.key, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.workspace, s.token, s.createdAt, s.lastActiveAt);
+    this.#db.prepare(`INSERT INTO sessions (key, bot, channel, thread_ts, runtime, profile, model, workspace, token, created_at, last_active_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(s.key, s.bot, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.workspace, s.token, s.createdAt, s.lastActiveAt);
   }
 
   setRuntimeSessionId(key: string, id: string): void {
@@ -154,10 +169,10 @@ export class Store {
 
   // ── inbound messages ───────────────────────────────────────────────────
 
-  /** Records a message; false if it was already recorded (Slack delivers mentions twice). */
+  /** Records a message for one bot; false if it was already recorded (Slack delivers mentions twice). */
   insertInbound(m: Omit<InboundRow, "status">): boolean {
-    const result = this.#db.prepare(`INSERT OR IGNORE INTO inbound (channel, ts, session_key, user, text, status, received_at)
-      VALUES (?, ?, ?, ?, ?, 'pending', ?)`).run(m.channel, m.ts, m.sessionKey, m.user, m.text, m.receivedAt);
+    const result = this.#db.prepare(`INSERT OR IGNORE INTO inbound (bot, channel, ts, session_key, user, text, status, received_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`).run(m.bot, m.channel, m.ts, m.sessionKey, m.user, m.text, m.receivedAt);
     return result.changes > 0;
   }
 
@@ -167,8 +182,8 @@ export class Store {
   }
 
   markDelivered(rows: readonly InboundRow[]): void {
-    const stmt = this.#db.prepare("UPDATE inbound SET status = 'delivered' WHERE channel = ? AND ts = ?");
-    for (const r of rows) stmt.run(r.channel, r.ts);
+    const stmt = this.#db.prepare("UPDATE inbound SET status = 'delivered' WHERE bot = ? AND channel = ? AND ts = ?");
+    for (const r of rows) stmt.run(r.bot, r.channel, r.ts);
   }
 
   sessionsWithPendingInbound(): string[] {

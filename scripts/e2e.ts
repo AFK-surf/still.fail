@@ -31,7 +31,10 @@ writeFileSync(join(codexHome, "config.toml"), [
 
 const config = parseConfig({
   http: { port: 0 },
-  defaults: { runtime: "claude", model: MODEL },
+  bots: [
+    { id: "claude", runtime: "claude", profile: "claude-ocg", model: MODEL },
+    { id: "codex", runtime: "codex", profile: "codex-ocg", model: MODEL },
+  ],
   maxWarmClaude: 0,
   warmMinutes: 0,
   profiles: [
@@ -65,12 +68,12 @@ const drivers = { claude: new ClaudeDriver(store), codex: new CodexDriver(store)
 const server = createServer((req, res) => void mcp.handle(req, res));
 await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 const mcpUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`;
-const hub = new Hub({ config, store, chat, drivers, mcpUrl });
+const hub = new Hub({ config, store, chats: new Map([["claude", chat], ["codex", chat]]), drivers, mcpUrl });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
 
 /** Waits until the session has been idle (no running turn, nothing pending) for a few seconds. */
-async function quiet(threadTs: string, timeoutMs = 300_000): Promise<void> {
-  const k = sessionKey("C1", threadTs);
+async function quiet(bot: string, threadTs: string, timeoutMs = 300_000): Promise<void> {
+  const k = sessionKey(bot, "C1", threadTs);
   const deadline = Date.now() + timeoutMs;
   let calm = 0;
   while (Date.now() < deadline) {
@@ -85,30 +88,30 @@ async function quiet(threadTs: string, timeoutMs = 300_000): Promise<void> {
 let counter = 1;
 /** Slack-style message timestamps, increasing. */
 const nextTs = () => `${Math.floor(Date.now() / 1000)}.${String(counter++).padStart(6, "0")}`;
-const say = (threadTs: string, text: string, addressed: boolean) =>
-  hub.accept({ channel: "C1", threadTs, ts: nextTs(), user: "U1", text, addressed });
+const say = (bot: string, threadTs: string, text: string, addressed: boolean) =>
+  hub.accept(bot, { channel: "C1", threadTs, ts: nextTs(), user: "U1", text, addressed });
 
 const results: Record<string, unknown>[] = [];
 for (const runtime of runtimes) {
   console.log(`\n=== ${runtime}`);
   const threadTs = nextTs();
-  await hub.accept({ channel: "C1", threadTs, ts: threadTs, user: "U1", addressed: true,
-    text: `<@UBOT> [${runtime}] What is 17 * 23? Compute it with a shell command and answer in the thread.` });
-  await quiet(threadTs);
+  await hub.accept(runtime, { channel: "C1", threadTs, ts: threadTs, user: "U1", addressed: true,
+    text: "<@UBOT> What is 17 * 23? Compute it with a shell command and answer in the thread." });
+  await quiet(runtime, threadTs);
   const afterFirst = chat.posts.filter((p) => p.thread === threadTs).length;
 
-  await say(threadTs, "What number did you just post? Reply with only the number.", false);
-  await quiet(threadTs);
+  await say(runtime, threadTs, "What number did you just post? Reply with only the number.", false);
+  await quiet(runtime, threadTs);
 
   // Make the session cold: claude's process is evicted; codex's shared app-server is restarted.
   if (runtime === "claude") hub.evictIdle(Date.now() + 3_600_000);
   else await drivers.codex.shutdown();
   await new Promise((r) => setTimeout(r, 3000));
-  await say(threadTs, "Say that number once more, only the number.", false);
-  await quiet(threadTs);
+  await say(runtime, threadTs, "Say that number once more, only the number.", false);
+  await quiet(runtime, threadTs);
 
   const posts = chat.posts.filter((p) => p.thread === threadTs).map((p) => p.text);
-  const turns = store.listTurns(sessionKey("C1", threadTs));
+  const turns = store.listTurns(sessionKey(runtime, "C1", threadTs));
   results.push({
     runtime,
     firstAnswered: afterFirst > 0 && /391/.test(posts.slice(0, afterFirst).join(" ")),

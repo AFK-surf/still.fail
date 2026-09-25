@@ -1,6 +1,9 @@
 // Configuration comes from one JSON file: $EMBER_CONFIG, else <dataDir>/config.json
-// with dataDir from $EMBER_DATA (default ~/.ember). Slack tokens may come from
-// SLACK_APP_TOKEN / SLACK_BOT_TOKEN instead of the file.
+// with dataDir from $EMBER_DATA (default ~/.ember).
+//
+// A bot is one Slack app bound to one runtime and model: "@claude" runs Claude
+// Code on a Claude subscription, "@ds" runs deepseek through OpenCode Go, and
+// so on. Profiles are the runtime accounts bots draw from; bots may share them.
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
@@ -22,15 +25,24 @@ export interface Profile {
   model?: string;
 }
 
+export interface Bot {
+  /** Stable id; part of session keys, so do not rename a bot that has sessions. */
+  id: string;
+  /** How the bot refers to itself in its instructions. */
+  name: string;
+  slack: { appToken: string; botToken: string };
+  runtime: RuntimeKind;
+  /** Accounts this bot may run on, in order of preference; all of `runtime`. */
+  profiles: string[];
+  model?: string;
+}
+
 export interface Config {
   dataDir: string;
   /** Shared MEMORY.md and skills/ linked into every profile home. */
   agentHome: string;
   http: { host: string; port: number };
-  slack: { appToken: string; botToken: string };
-  defaults: { runtime: RuntimeKind; model?: string };
-  /** Per-channel overrides of the default runtime and model. */
-  channels: Record<string, { runtime?: RuntimeKind; model?: string }>;
+  bots: Bot[];
   profiles: Profile[];
   /** How many times a turn that ended without final/block is nudged before giving up. */
   maxNudges: number;
@@ -43,9 +55,7 @@ export interface Config {
 interface RawConfig {
   agentHome?: string;
   http?: { host?: string; port?: number };
-  slack?: { appToken?: string; botToken?: string };
-  defaults?: { runtime?: RuntimeKind; model?: string };
-  channels?: Record<string, { runtime?: RuntimeKind; model?: string }>;
+  bots?: { id: string; name?: string; slack?: { appToken?: string; botToken?: string }; runtime: RuntimeKind; profiles?: string[]; profile?: string; model?: string }[];
   profiles?: { id: string; runtime: RuntimeKind; home: string; env?: Record<string, string>; model?: string }[];
   maxNudges?: number;
   warmMinutes?: number;
@@ -56,31 +66,44 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const dataDir = resolve(env.EMBER_DATA ?? join(homedir(), ".ember"));
   const path = env.EMBER_CONFIG ?? join(dataDir, "config.json");
   const raw: RawConfig = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) as RawConfig : {};
-  return parseConfig(raw, dataDir, env);
+  return parseConfig(raw, dataDir);
 }
 
-export function parseConfig(raw: RawConfig, dataDir: string, env: NodeJS.ProcessEnv = {}): Config {
-  const appToken = raw.slack?.appToken ?? env.SLACK_APP_TOKEN ?? "";
-  const botToken = raw.slack?.botToken ?? env.SLACK_BOT_TOKEN ?? "";
+export function parseConfig(raw: RawConfig, dataDir: string): Config {
   const profiles = (raw.profiles ?? []).map((p): Profile => {
     if (!RUNTIMES.includes(p.runtime)) throw new Error(`profile ${p.id}: unknown runtime ${String(p.runtime)}`);
     const home = isAbsolute(p.home) ? p.home : join(dataDir, p.home);
     return { id: p.id, runtime: p.runtime, home, env: p.env ?? {}, ...(p.model ? { model: p.model } : {}) };
   });
-  const ids = new Set<string>();
-  for (const p of profiles) {
-    if (ids.has(p.id)) throw new Error(`duplicate profile id ${p.id}`);
-    ids.add(p.id);
-  }
-  const runtime = raw.defaults?.runtime ?? profiles[0]?.runtime ?? "claude";
+  unique("profile", profiles.map((p) => p.id));
+
+  const bots = (raw.bots ?? []).map((b): Bot => {
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(b.id)) throw new Error(`bot id ${JSON.stringify(b.id)}: use lowercase letters, digits and dashes`);
+    if (!RUNTIMES.includes(b.runtime)) throw new Error(`bot ${b.id}: unknown runtime ${String(b.runtime)}`);
+    const ids = b.profiles ?? (b.profile ? [b.profile] : []);
+    if (ids.length === 0) throw new Error(`bot ${b.id}: no profiles`);
+    for (const id of ids) {
+      const profile = profiles.find((p) => p.id === id);
+      if (!profile) throw new Error(`bot ${b.id}: unknown profile ${id}`);
+      if (profile.runtime !== b.runtime) throw new Error(`bot ${b.id}: profile ${id} is ${profile.runtime}, the bot runs ${b.runtime}`);
+    }
+    return {
+      id: b.id,
+      name: b.name ?? b.id,
+      slack: { appToken: b.slack?.appToken ?? "", botToken: b.slack?.botToken ?? "" },
+      runtime: b.runtime,
+      profiles: ids,
+      ...(b.model ? { model: b.model } : {}),
+    };
+  });
+  unique("bot", bots.map((b) => b.id));
+
   const agentHome = raw.agentHome ?? "agent";
   return {
     dataDir,
     agentHome: isAbsolute(agentHome) ? agentHome : join(dataDir, agentHome),
     http: { host: raw.http?.host ?? "127.0.0.1", port: raw.http?.port ?? 4750 },
-    slack: { appToken, botToken },
-    defaults: { runtime, ...(raw.defaults?.model ? { model: raw.defaults.model } : {}) },
-    channels: raw.channels ?? {},
+    bots,
     profiles,
     maxNudges: raw.maxNudges ?? 2,
     warmMs: (raw.warmMinutes ?? 30) * 60_000,
@@ -88,9 +111,19 @@ export function parseConfig(raw: RawConfig, dataDir: string, env: NodeJS.Process
   };
 }
 
-/** The profile for a new session of `runtime`. Account pooling comes later; for now the first match. */
-export function profileFor(config: Config, runtime: RuntimeKind): Profile | undefined {
-  return config.profiles.find((p) => p.runtime === runtime);
+function unique(kind: string, ids: string[]): void {
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) throw new Error(`duplicate ${kind} id ${id}`);
+    seen.add(id);
+  }
+}
+
+/** The profile a new session of `bot` runs on. Account pooling comes later; for now the first. */
+export function profileFor(config: Config, bot: Bot): Profile {
+  const profile = config.profiles.find((p) => p.id === bot.profiles[0]);
+  if (!profile) throw new Error(`bot ${bot.id}: profile ${bot.profiles[0]} is not configured`);
+  return profile;
 }
 
 export function expandRoute(env: Record<string, string>, route: string): Record<string, string> {

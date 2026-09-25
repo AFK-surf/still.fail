@@ -14,6 +14,7 @@ export type DeclaredState = "final" | "block";
 export interface SessionDeps {
   store: Store;
   chat: Pick<ChatSurface, "post" | "botUserId">;
+  botName: string;
   drivers: Record<RuntimeKind, AgentDriver>;
   profile(id: string): Profile | undefined;
   mcpUrl: string;
@@ -188,7 +189,7 @@ export class SessionActor {
       cwd: row.workspace,
       ...(row.model ? { model: row.model } : {}),
       instructions: sessionInstructions({
-        botUserId: this.#deps.chat.botUserId, channel: row.channel, threadTs: row.threadTs,
+        botName: this.#deps.botName, botUserId: this.#deps.chat.botUserId, channel: row.channel, threadTs: row.threadTs,
         workspace: row.workspace, reposDir: this.#deps.reposDir, memoryPath: this.#deps.memoryPath,
       }),
       mcpToken: row.token,

@@ -20,10 +20,18 @@ linkAgentHome(config.agentHome, config.profiles);
 const reaped = await reapStaleGroups(store);
 if (reaped > 0) log.warn("reaped runtime processes left by a previous run", { count: reaped });
 
-const chat = new SlackSurface(config.slack);
+const chats = new Map<string, SlackSurface>();
+for (const bot of config.bots) {
+  if (!bot.slack.appToken || !bot.slack.botToken) {
+    log.warn("bot has no Slack tokens yet; skipping it", { bot: bot.id });
+    continue;
+  }
+  chats.set(bot.id, new SlackSurface(bot.slack));
+}
+if (chats.size === 0) throw new Error("no bot has Slack tokens; see docs/operations.md");
 const mcpUrl = `http://${config.http.host}:${config.http.port}/mcp`;
 const hub = new Hub({
-  config, store, chat, mcpUrl,
+  config, store, chats, mcpUrl,
   drivers: { claude: new ClaudeDriver(store), codex: new CodexDriver(store) },
 });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
@@ -43,7 +51,7 @@ const server = createServer((req, res) => {
 await new Promise<void>((resolve) => server.listen(config.http.port, config.http.host, resolve));
 log.info("ember listening", { mcpUrl });
 
-await chat.start((message) => hub.accept(message));
+for (const [botId, chat] of chats) await chat.start((message) => hub.accept(botId, message));
 await hub.recover();
 const evictTimer = setInterval(() => hub.evictIdle(), 60_000);
 
@@ -53,7 +61,7 @@ async function shutdown(signal: string): Promise<void> {
   stopping = true;
   log.info("shutting down", { signal });
   clearInterval(evictTimer);
-  await chat.stop();
+  await Promise.all([...chats.values()].map((chat) => chat.stop()));
   await hub.shutdown();
   server.close();
   store.close();

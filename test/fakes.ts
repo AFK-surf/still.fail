@@ -4,8 +4,11 @@ import type { RuntimeKind } from "../src/config.ts";
 import type { AgentDriver, AgentSession, OpenOptions, SessionEvents, TurnOutcome } from "../src/runtime/types.ts";
 
 export class FakeChat implements ChatSurface {
-  readonly botUserId = "UBOT";
+  readonly botUserId: string;
   readonly posts: { thread: ThreadRef; text: string }[] = [];
+  constructor(botUserId = "UBOT") {
+    this.botUserId = botUserId;
+  }
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
   async post(thread: ThreadRef, text: string): Promise<void> {
