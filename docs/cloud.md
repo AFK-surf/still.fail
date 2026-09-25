@@ -59,3 +59,9 @@ station 端由 `ember-mesh`（Rust，iroh 1.0.3）负责：ember 启动并看护
 ## relay 与发现
 
 relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Worker 转发 WebSocket 帧并做总量限制。station 和客户端都用这个 relay 作为 home relay，所以客户端只凭 station 公钥和 relay 地址就能连上，不依赖额外的发现服务；签名发现（pkarr）保留给以后能直连的原生客户端。
+
+## 部署
+
+`cloud/deploy.py`（在 studio 上运行，需要 `wrangler login` 和 OrbStack 的 docker）：构建网页版（含 wasm）、部署 Worker 和 relay 容器、写入密钥、检查 `/healthz`。线上地址 `https://ember.3720.org`，和 zork 同一个 Cloudflare 账号，Google 登录沿用 zork 的 OAuth 客户端（回调地址 `https://ember.3720.org/v1/auth/google/callback` 需要在 Google Cloud Console 里登记）。密钥在 studio 的 `~/ember-deploy/keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。
+
+本地联调（不需要 Cloudflare）：`cloud/test/dev.ts` 起一个本地控制面（Google 用模拟），配合 `iroh-relay --dev`；`/tmp/mesh-e2e.sh`（studio）把 relay、控制面、`ember-mesh`、管理 API 和无头浏览器串起来跑一遍。
