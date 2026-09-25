@@ -3,3 +3,6 @@ dist/
 data/
 *.log
 .env
+
+# built by mesh/build-web.sh
+web/src/mesh/pkg/
