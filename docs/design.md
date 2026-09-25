@@ -65,8 +65,13 @@ interface AgentSession {
 - 会话驱动先用 `@botiverse/oar` 实现，锁定版本；需要改动时先在本地 patch，同时给上游提 PR。
 - **账号相关全部自己实现**。oar 的 `accountUsage` / `listModels` 不接受按账号指定的 env。
 - 限流、认证失败的信号由驱动层归一，这是账号切换的触发条件。
-- **Codex：每个账号共享一个 app-server**，多个会话按 thread 复用同一个进程。这部分自己实现，不用 oar 的"每个会话一个 app-server"。
+  - Claude 的 turn 成败看 `result.is_error`，不看 `subtype`（认证失败时是 `subtype: "success"` + `is_error: true`）。
+  - Claude 遇到 401 会静默重试约 3 分钟，只发 `system/api_retry` 帧；驱动在第一个 401 的 `api_retry` 就判定认证失败并中止 turn。
+- **Codex：每个账号共享一个 app-server**，多个会话按 thread 复用同一个进程。这部分自己实现，不用 oar 的"每个会话一个 app-server"。实测每个 thread 的内存增量 <1MB（spike 2）。
+  - 与会话相关的配置（MCP token 等）通过 `thread/start` / `thread/resume` 的 `config` 按 thread 传入，不放进进程环境变量。
+  - thread 以 `approvalPolicy: "never"` + `sandbox: "danger-full-access"` 启动；否则 MCP 调用会被拒绝。
 - **Claude：每个会话一个 `claude -p` 进程**，因为会话在进程启动时就绑定了，无法复用。
+- 子进程的 stdin 必须由驱动持有或显式关闭：两个 CLI 都会读 stdin。
 
 ## 6. 给 agent 的工具（MCP）
 
@@ -80,8 +85,9 @@ ember 直接提供 HTTP MCP，不为每个会话额外起进程：
 | `chat_history(before?, limit?)` | 读更早的 thread 历史 |
 | `job_register` / `job_list` / `job_cancel` | 后台任务管理 |
 
-- 会话启动时通过环境变量注入会话 token，MCP 配置引用这个变量作为鉴权。agent 无法冒充其他会话。
-- MCP 配置写在各账号的配置目录中（`CLAUDE_CONFIG_DIR` / `CODEX_HOME`）。
+- 每个会话有自己的 token，MCP 服务按 token 识别会话。agent 无法冒充其他会话。
+- Claude：MCP 服务写在账号配置目录的 user 级配置里，header 为 `Authorization: Bearer ${EMBER_SESSION_TOKEN}`；token 作为该会话进程的环境变量注入。
+- Codex：MCP 服务不写进账号配置，而是在 `thread/start` / `thread/resume` 的 `config` 里按 thread 传 `mcp_servers.ember.url` 和 `mcp_servers.ember.http_headers`，因为同一个 app-server 进程承载多个会话。
 
 ## 7. 结束状态约定
 
@@ -112,7 +118,7 @@ ember 直接提供 HTTP MCP，不为每个会话额外起进程：
 - 超过 warm 时长的进程**只在超出内存预算时**才按 LRU 回收；机器空闲时可以一直保留。
 - 预算是**软上限**：超出只触发回收空闲进程，新 turn 照常启动。
 - **硬上限**（swap 或内存压力超过阈值）才让新 turn 排队，并在 thread 里说明原因；一有余量马上启动。
-- 每个进程的占用按 runtime 给初始估值，之后每 30 秒采样整个进程树的真实占用来修正。
+- 每个进程的占用按 runtime 给初始估值，之后每 30 秒采样整个进程树的真实占用来修正。实测起点（spike 1、2）：一个 `claude -p` 会话 ≈75–130MB footprint，且随上下文增长；一个共享 codex app-server ≈40–55MB，每个 thread <1MB。
 - **防泄漏**：
   - 每个 runtime 进程放进独立进程组，dispose 时整组结束
   - 进程组 ID 和启动时间记进 SQLite，启动时先清理上一轮遗留
@@ -132,7 +138,10 @@ active ──(空闲 >1 天)──► slim ──(空闲 >3 天)──► archiv
 
 - **slim**：删除 workspace 里可重新生成的目录（`node_modules`、`dist`、`build`、`target`、`.next`、缓存）；已推送且无改动的 worktree 直接移除。
 - **archived**：未提交的改动存成 patch，未跟踪文件打包；与运行时会话记录、会话元数据一起压成 `archive/<月份>/<key>.tar.zst`，然后删除原文件。
-- **唤醒**：把会话记录解压回原账号目录的原路径（Claude 的会话记录位置与 cwd 绑定，workspace 路径必须保持不变），resume 后告诉 agent 归档情况和 patch 位置。
+- **唤醒**：把会话记录解压回原账号目录的原路径，resume 后告诉 agent 归档情况和 patch 位置。spike 4 确认会话记录文件是 resume 的全部依赖：
+  - Claude：`$CLAUDE_CONFIG_DIR/projects/<cwd 编码>/<id>.jsonl`。路径里编码了 cwd，所以 workspace 路径必须保持不变。
+  - Codex：`$CODEX_HOME/sessions/YYYY/MM/DD/rollout-…-<id>.jsonl`。
+  - zstd 压缩后是原大小的 23–31%。
 - **purged**：删除归档。之后该 thread 再有消息就开新会话，从聊天历史回填上下文。
 
 **按预算驱动**：数据目录有总预算和最低空闲空间。超出时按以下顺序回收：
