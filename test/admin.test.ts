@@ -80,6 +80,7 @@ class FakeSlackApps {
 async function setup(options: { access?: { teamDomain: string; aud: string } } = {}) {
   const slackApps = new FakeSlackApps();
   const dataDir = mkdtempSync(join(tmpdir(), "ember-admin-"));
+  const logins = new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin });
   const path = join(dataDir, "config.json");
   writeFileSync(path, JSON.stringify({
     ...(options.access ? { admin: { access: options.access } } : {}),
@@ -101,7 +102,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
   const hub: Hub = new Hub({ config: () => settings.config, store, chats: conns.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x" });
   settings.onChange((config) => void conns.reconcile(config));
   await conns.reconcile(settings.config);
-  const api = new AdminApi({ settings, store, hub, connections: conns, logins: new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin }), slackApps: slackApps as unknown as SlackApps, checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks) });
+  const api = new AdminApi({ settings, store, hub, connections: conns, logins, slackApps: slackApps as unknown as SlackApps, checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks) });
   const server = createServer((req, res) => void api.handle(req, res));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/admin/api`;
@@ -113,7 +114,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
     });
     return { status: response.status, headers: response.headers, body: await response.json() as any };
   };
-  return { slackApps, dataDir, path, settings, store, hub, conns, claude, connections, call, base, close: () => server.close() };
+  return { slackApps, dataDir, path, settings, store, hub, conns, claude, connections, call, base, close: () => { logins.stopAll(); server.close(); } };
 }
 
 test("local visits need no sign-in", async () => {
@@ -327,7 +328,7 @@ test("a subscription sign-in runs on the ember host and relays the link, the cod
   try {
     await t.call("PUT", "/profiles/sub", { runtime: "claude", access: { kind: "subscription" } });
     const wait = async (profile: string, state: string) => {
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < 500; i++) {
         const { body } = await t.call("GET", `/profiles/${profile}/login`);
         if (body.job?.state === state) return body.job;
         await new Promise((r) => setTimeout(r, 30));

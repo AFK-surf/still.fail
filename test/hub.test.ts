@@ -339,6 +339,7 @@ test("a chat opened on the admin page reaches the session like Slack, and the ag
   await accept(m);
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
+  await call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
   claude.last.end();
   await settle();
   const thread = hub.openChat(key, "local", "排查");
@@ -349,7 +350,7 @@ test("a chat opened on the admin page reaches the session like Slack, and the ag
   assert.match(prompt, /现在进展如何/);
   assert.equal(await call(key, "chat_post", { to: `EMBER/${thread}`, text: "快好了", kind: "final" }), `Posted to EMBER/${thread}, and recorded state final.`);
   assert.deepEqual(store.chatMessages(thread).map((x) => [x.role, x.text]), [["person", "现在进展如何？"], ["agent", "快好了"]]);
-  assert.equal(chat.posts.length, 0, "nothing went to Slack");
+  assert.equal(chat.posts.length, 1, "only the Slack thread's own answer went to Slack");
   const history = await call(key, "chat_history", { to: `EMBER/${thread}` });
   assert.match(history, /现在进展如何/);
   assert.throws(() => hub.openChat("nope", "local"), /unknown session/);
