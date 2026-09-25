@@ -110,10 +110,10 @@ export function applySettings(manifest: Manifest, edit: Partial<SlackAppSettings
   if (edit.backgroundColor !== undefined) setOrDelete(next.display_information, "background_color", edit.backgroundColor.trim());
   if (edit.groups) {
     const on = SLACK_GROUP_IDS.filter((g) => g === "base" || (edit.groups![g] ?? settingsOf(manifest).groups[g]));
-    const keepScopes = new Set(on.flatMap((g) => SLACK_GROUPS[g].scopes));
-    const keepEvents = new Set(on.flatMap((g) => SLACK_GROUPS[g].events));
-    const known = new Set(SLACK_GROUP_IDS.flatMap((g) => SLACK_GROUPS[g].scopes));
-    const knownEvents = new Set(SLACK_GROUP_IDS.flatMap((g) => SLACK_GROUPS[g].events));
+    const keepScopes = new Set<string>(on.flatMap((g) => SLACK_GROUPS[g].scopes));
+    const keepEvents = new Set<string>(on.flatMap((g) => SLACK_GROUPS[g].events));
+    const known = new Set<string>(SLACK_GROUP_IDS.flatMap((g) => SLACK_GROUPS[g].scopes));
+    const knownEvents = new Set<string>(SLACK_GROUP_IDS.flatMap((g) => SLACK_GROUPS[g].events));
     const scopes: string[] = next.oauth_config?.scopes?.bot ?? [];
     const events: string[] = next.settings?.event_subscriptions?.bot_events ?? [];
     next.oauth_config ??= {};
@@ -227,7 +227,7 @@ export class SlackApps {
   async setIcon(appId: string, png: Buffer): Promise<void> {
     const form = new FormData();
     form.set("app_id", appId);
-    form.set("file", new Blob([png], { type: "image/png" }), "icon.png");
+    form.set("file", new Blob([new Uint8Array(png)], { type: "image/png" }), "icon.png");
     await this.#call("apps.icon.set", form);
   }
 
