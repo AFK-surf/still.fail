@@ -47,13 +47,39 @@ export interface InboundRow {
   receivedAt: number;
 }
 
+/** A chat on ember's admin page, bound to one session. Its thread_ts is its address. */
+export interface ChatRow {
+  threadTs: string;
+  sessionKey: string;
+  title: string | null;
+  createdBy: string;
+  createdAt: number;
+}
+
+export interface ChatMessageRow {
+  threadTs: string;
+  ts: string;
+  /** person: typed on the admin page; agent: posted by the agent (or an ember notice). */
+  role: "person" | "agent";
+  user: string;
+  text: string;
+  createdAt: number;
+}
+
+function toChat(row: Row): ChatRow {
+  return {
+    threadTs: row.thread_ts as string, sessionKey: row.session_key as string, title: (row.title as string | null) ?? null,
+    createdBy: row.created_by as string, createdAt: row.created_at as number,
+  };
+}
+
 export type TurnKind = "input" | "nudge" | "resume";
 
 /**
  * Bump on schema changes and add a step to MIGRATIONS that brings the
  * previous version up. Versions without a migration path are refused.
  */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 const MIGRATIONS: Record<number, string> = {
   // v2 → v3: bots became connects; sessions may span all threads; messages remember their thread.
@@ -70,6 +96,8 @@ const MIGRATIONS: Record<number, string> = {
     CREATE TABLE bindings (connect TEXT PRIMARY KEY, session_key TEXT NOT NULL);
     INSERT INTO bindings (connect, session_key) SELECT connect, key FROM sessions WHERE scope = 'all';
   `,
+  // v4 → v5: ember's own chat, opened on a session from the admin page. Tables only, created below.
+  4: "",
 };
 
 const SCHEMA = `
@@ -89,6 +117,22 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_active_at INTEGER NOT NULL,
   scope TEXT NOT NULL DEFAULT 'thread',
   title TEXT
+);
+CREATE TABLE IF NOT EXISTS chats (
+  thread_ts TEXT PRIMARY KEY,
+  session_key TEXT NOT NULL,
+  title TEXT,
+  created_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS chat_messages (
+  thread_ts TEXT NOT NULL,
+  ts TEXT NOT NULL,
+  role TEXT NOT NULL,
+  user TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (thread_ts, ts)
 );
 CREATE TABLE IF NOT EXISTS bindings (
   connect TEXT PRIMARY KEY,
@@ -175,7 +219,7 @@ export class Store {
     if (hasTables) {
       while (version < SCHEMA_VERSION) {
         const step = MIGRATIONS[version];
-        if (!step) throw new Error(`${path} has schema version ${version}, which ember ${SCHEMA_VERSION} cannot migrate; move it aside`);
+        if (step === undefined) throw new Error(`${path} has schema version ${version}, which ember ${SCHEMA_VERSION} cannot migrate; move it aside`);
         this.#db.exec(`BEGIN; ${step} PRAGMA user_version = ${version + 1}; COMMIT;`);
         version++;
       }
@@ -364,6 +408,41 @@ export class Store {
 
   listInbound(sessionKey: string): InboundRow[] {
     return (this.#db.prepare("SELECT * FROM inbound WHERE session_key = ? ORDER BY ts").all(sessionKey) as Row[]).map(toInbound);
+  }
+
+  // ── ember's own chats ──────────────────────────────────────────────────
+
+  insertChat(chat: ChatRow): void {
+    this.#db.prepare("INSERT INTO chats (thread_ts, session_key, title, created_by, created_at) VALUES (?, ?, ?, ?, ?)")
+      .run(chat.threadTs, chat.sessionKey, chat.title, chat.createdBy, chat.createdAt);
+    this.notify(chat.sessionKey);
+  }
+
+  getChat(threadTs: string): ChatRow | undefined {
+    const row = this.#db.prepare("SELECT * FROM chats WHERE thread_ts = ?").get(threadTs) as Row | undefined;
+    return row ? toChat(row) : undefined;
+  }
+
+  listChats(sessionKey: string): ChatRow[] {
+    return (this.#db.prepare("SELECT * FROM chats WHERE session_key = ? ORDER BY created_at").all(sessionKey) as Row[]).map(toChat);
+  }
+
+  insertChatMessage(m: ChatMessageRow): void {
+    this.#db.prepare("INSERT INTO chat_messages (thread_ts, ts, role, user, text, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(m.threadTs, m.ts, m.role, m.user, m.text, m.createdAt);
+    const chat = this.getChat(m.threadTs);
+    if (chat) this.notify(chat.sessionKey);
+  }
+
+  /** A chat's messages oldest first; with `before`, only older ones, the latest `limit` of them. */
+  chatMessages(threadTs: string, before?: string, limit = 1000): ChatMessageRow[] {
+    const rows = (before
+      ? this.#db.prepare("SELECT * FROM chat_messages WHERE thread_ts = ? AND CAST(ts AS REAL) < CAST(? AS REAL) ORDER BY CAST(ts AS REAL) DESC LIMIT ?").all(threadTs, before, limit)
+      : this.#db.prepare("SELECT * FROM chat_messages WHERE thread_ts = ? ORDER BY CAST(ts AS REAL) DESC LIMIT ?").all(threadTs, limit)) as Row[];
+    return rows.reverse().map((r) => ({
+      threadTs: r.thread_ts as string, ts: r.ts as string, role: r.role as ChatMessageRow["role"],
+      user: r.user as string, text: r.text as string, createdAt: r.created_at as number,
+    }));
   }
 
   // ── runtime process groups ─────────────────────────────────────────────

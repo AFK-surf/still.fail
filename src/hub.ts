@@ -13,6 +13,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
 import { profileFor, RUNTIMES, type Config, type Connect, type RuntimeKind } from "./config.ts";
+import { INTERNAL_CONNECT, type InternalChat } from "./chat/internal.ts";
 import type { ChatSurface, InboundMessage, ThreadRef } from "./chat/types.ts";
 import { parseThreadAddress, threadAddress } from "./instructions.ts";
 import { log } from "./log.ts";
@@ -39,6 +40,7 @@ export class Hub {
   readonly #getConfig: () => Config;
   readonly #store: Store;
   readonly #chats: ReadonlyMap<string, ChatSurface>;
+  readonly #internal: InternalChat | undefined;
   readonly #drivers: Record<RuntimeKind, AgentDriver>;
   readonly #mcpUrl: string;
   readonly #actors = new Map<string, SessionActor>();
@@ -54,7 +56,10 @@ export class Hub {
     chats: ReadonlyMap<string, ChatSurface>;
     drivers: Record<RuntimeKind, AgentDriver>;
     mcpUrl: string;
+    /** ember's own chat on the admin page; sessions can be talked to there too. */
+    internal?: InternalChat;
   }) {
+    this.#internal = options.internal;
     this.#getConfig = options.config;
     this.#store = options.store;
     this.#chats = options.chats;
@@ -157,6 +162,35 @@ export class Hub {
     this.#store.setBinding(connect.id, target);
     log.info("single-session connect rebound", { connect: connect.id, session: target });
     return target;
+  }
+
+  /** Opens a chat on the admin page bound to a session. Returns the chat's thread ts. */
+  openChat(sessionKey: string, createdBy: string, title: string | null = null): string {
+    if (!this.#internal) throw new Error("ember chat is not available");
+    if (!this.#store.getSession(sessionKey)) throw new Error(`unknown session ${sessionKey}`);
+    return this.#internal.open(sessionKey, createdBy, title).threadTs;
+  }
+
+  /** A person's message in an admin-page chat: recorded there and delivered to the chat's session like any chat message. */
+  async sayInChat(threadTs: string, user: string, text: string): Promise<void> {
+    if (!this.#internal) throw new Error("ember chat is not available");
+    const chat = this.#store.getChat(threadTs);
+    if (!chat) throw new Error(`unknown chat ${threadTs}`);
+    const row = this.#store.getSession(chat.sessionKey);
+    if (!row) throw new Error(`unknown session ${chat.sessionKey}`);
+    const message = this.#internal.say(threadTs, user, text);
+    this.#store.insertInbound({
+      connect: INTERNAL_CONNECT, channel: message.channel, threadTs, ts: message.ts, sessionKey: row.key,
+      user, text, receivedAt: Date.now(),
+    });
+    this.#store.touch(row.key);
+    const actor = this.#actor(row);
+    if (isStopCommand(text)) {
+      this.#store.markDelivered(this.#store.pendingInbound(row.key).filter((m) => m.ts === message.ts));
+      void actor.stop();
+      return;
+    }
+    void actor.kick();
   }
 
   /** Live process state of a session, for the admin page. */
@@ -274,14 +308,18 @@ export class Hub {
   }
 
   #chat(connectId: string): ChatSurface {
-    const chat = this.#chats.get(connectId);
+    const chat = this.#chatOf(connectId);
     if (!chat) throw new Error(`connect ${connectId} is not connected`);
     return chat;
   }
 
+  #chatOf(connectId: string): ChatSurface | undefined {
+    return connectId === INTERNAL_CONNECT ? this.#internal : this.#chats.get(connectId);
+  }
+
   #online(row: SessionRow): boolean {
     const via = this.#store.latestInbound(row.key)?.connect ?? row.connect;
-    if (this.#chats.has(via)) return true;
+    if (this.#chatOf(via)) return true;
     log.warn("session's latest thread came through a connect that is not connected; leaving it", { session: row.key, connect: via });
     return false;
   }
@@ -306,8 +344,9 @@ export class Hub {
     if (!actor) {
       actor = new SessionActor(row.key, {
         store: this.#store,
-        chat: (id) => this.#chats.get(id),
-        name: (id) => this.#config.connects.find((c) => c.id === id)?.name ?? id,
+        chat: (id) => this.#chatOf(id),
+        // In ember's own chat the agent keeps the name of the connect that started it.
+        name: (id) => this.#config.connects.find((c) => c.id === (id === INTERNAL_CONNECT ? row.connect : id))?.name ?? id,
         drivers: this.#drivers,
         profile: (id) => this.#config.profiles.find((p) => p.id === id),
         mcpUrl: this.#mcpUrl,

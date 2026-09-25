@@ -3,10 +3,11 @@ import type { RuntimeKind } from "../config.ts";
 import type { ConnectKind, ConnectMode } from "../config.ts";
 import type { ConnectState } from "../connections.ts";
 import type { LoginJob, LoginState } from "../login.ts";
+import type { ChatMessageRow, ChatRow } from "../store.ts";
 import type { AccessKind, ProfileCheck } from "../profiles.ts";
 import type { TimelineEntry, TranscriptUsage } from "../transcript.ts";
 
-export type { LoginJob, LoginState };
+export type { ChatMessageRow, ChatRow, LoginJob, LoginState };
 export type { AccessKind, ConnectKind, ConnectMode, ConnectState, ProfileCheck, RuntimeKind, TimelineEntry, TranscriptUsage };
 
 export type ProcessState = "running" | "warm" | "cold";
@@ -126,6 +127,8 @@ export interface SessionDetail {
   people: Record<string, string>;
   /** Channel names by id, where known; direct messages have none. */
   channels: Record<string, string>;
+  /** Chats opened on this session from the admin page, with their messages. */
+  chats: (ChatRow & { messages: ChatMessageRow[] })[];
   /** The threads the session has messages from, most recent first. */
   threads: { channel: string; threadTs: string; messages: number; lastTs: string }[];
   turns: TurnRecord[];

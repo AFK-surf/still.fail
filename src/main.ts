@@ -10,6 +10,7 @@ import { SlackSurface } from "./chat/slack.ts";
 import { Hub } from "./hub.ts";
 import { log } from "./log.ts";
 import { LoginManager } from "./login.ts";
+import { InternalChat } from "./chat/internal.ts";
 import { McpEndpoint } from "./mcp.ts";
 import { ClaudeDriver } from "./runtime/claude.ts";
 import { CodexDriver } from "./runtime/codex.ts";
@@ -34,6 +35,7 @@ const hub: Hub = new Hub({
   config: () => settings.config,
   store,
   chats: connections.chats,
+  internal: new InternalChat(store),
   mcpUrl,
   drivers: { claude: new ClaudeDriver(store), codex: new CodexDriver(store) },
 });

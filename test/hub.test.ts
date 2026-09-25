@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { parseConfig } from "../src/config.ts";
 import { Hub, isStopCommand, sessionKey } from "../src/hub.ts";
 import { Store } from "../src/store.ts";
+import { InternalChat } from "../src/chat/internal.ts";
 import { FakeChat, FakeDriver, message, settle } from "./fakes.ts";
 
 function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; team?: { requireMention?: boolean } } = {}) {
@@ -29,7 +30,7 @@ function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinu
   const teamChat = new FakeChat("UTEAM");
   const claude = new FakeDriver("claude");
   const codex = new FakeDriver("codex");
-  const hub = new Hub({ config: () => config, store, chats: new Map([["cl", chat], ["gpt", gptChat], ["team", teamChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp" });
+  const hub = new Hub({ config: () => config, store, chats: new Map([["cl", chat], ["gpt", gptChat], ["team", teamChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp", internal: new InternalChat(store) });
   const tools = Object.fromEntries(hub.tools().map((t) => [t.name, t]));
   const call = (key: string, name: string, args: Record<string, unknown>) => tools[name]!.run(key, args);
   const accept = (m: ReturnType<typeof message>, connect = "cl") => hub.accept(connect, m);
@@ -330,6 +331,28 @@ test("a single-session connect can be pointed at a new or an existing session", 
   assert.deepEqual(chat.posts.map((p) => p.text), ["to cl thread"]);
   assert.throws(() => hub.bindSingle("team", sessionKey("gpt", "C1", "1.1")), /unknown session/);
   assert.throws(() => hub.bindSingle("cl", null), /not single-session/);
+});
+
+test("a chat opened on the admin page reaches the session like Slack, and the agent answers there", async () => {
+  const { claude, hub, store, call, accept, chat } = setup();
+  const m = message();
+  await accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  claude.last.end();
+  await settle();
+  const thread = hub.openChat(key, "local", "排查");
+  await hub.sayInChat(thread, "local", "现在进展如何？");
+  await settle();
+  const prompt = claude.last.prompts.at(-1)!;
+  assert.match(prompt, new RegExp(`<message via="web" connect="ember" thread="EMBER/${thread.replace(".", "\\.")}" from="管理员 \\(local\\)"`));
+  assert.match(prompt, /现在进展如何/);
+  assert.equal(await call(key, "chat_post", { to: `EMBER/${thread}`, text: "快好了", kind: "final" }), `Posted to EMBER/${thread}, and recorded state final.`);
+  assert.deepEqual(store.chatMessages(thread).map((x) => [x.role, x.text]), [["person", "现在进展如何？"], ["agent", "快好了"]]);
+  assert.equal(chat.posts.length, 0, "nothing went to Slack");
+  const history = await call(key, "chat_history", { to: `EMBER/${thread}` });
+  assert.match(history, /现在进展如何/);
+  assert.throws(() => hub.openChat("nope", "local"), /unknown session/);
 });
 
 test("command parsing", () => {

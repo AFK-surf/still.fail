@@ -2,6 +2,7 @@
 // system prompt. Kept short: the runtime already knows how to code. Nothing
 // here pins the session to one conversation: every message says where it came
 // from, because a session may be bound to other conversations later.
+import { INTERNAL_CONNECT } from "./chat/internal.ts";
 import type { InboundRow } from "./store.ts";
 
 export function sessionInstructions(options: {
@@ -16,6 +17,7 @@ export function sessionInstructions(options: {
 
 Messages and where they come from:
 - Each message reaches you as <message via="slack" connect="…" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message>. The thread attribute says which conversation it belongs to. Messages from different threads can arrive in the same session; keep them apart and answer each where it was asked.
+- via="web" messages come from a chat on ember's own admin page (thread EMBER/…), usually an operator looking at this session. Treat them like any other conversation and answer there with chat_post.
 - Not every message is addressed to you; read it in context before acting.${options.mention ? ` You are mentioned as ${options.mention}.` : ""} Other bots may be in a conversation too, each with its own session.
 
 How you answer:
@@ -55,7 +57,8 @@ export function formatInbound(messages: readonly InboundRow[], options: { newThr
     if (options.newThreads?.has(address) && m.ts !== m.threadTs) {
       lines.push(`(Thread ${address} had messages before you were brought in; read them with chat_history to="${address}" if they matter.)`);
     }
-    lines.push(`<message via="slack" connect="${escapeAttr(m.connect)}" thread="${address}" from="${escapeAttr(from ? `${from} (${m.user})` : m.user)}" ts="${m.ts}">\n${m.text}\n</message>`);
+    const via = m.connect === INTERNAL_CONNECT ? "web" : "slack";
+    lines.push(`<message via="${via}" connect="${escapeAttr(m.connect)}" thread="${address}" from="${escapeAttr(from ? `${from} (${m.user})` : m.user)}" ts="${m.ts}">\n${m.text}\n</message>`);
   }
   return lines.join("\n");
 }

@@ -7,6 +7,7 @@ import type { Connections } from "../connections.ts";
 import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from "../config.ts";
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
+import { INTERNAL_CONNECT } from "../chat/internal.ts";
 import { appIdOf, applySettings, rotateConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
 import { log } from "../log.ts";
 import type { Settings } from "../settings.ts";
@@ -152,6 +153,20 @@ export class AdminApi {
       const key = this.#deps.hub.bindSingle(id, target, typeof input.title === "string" ? input.title : undefined);
       log.info("single-session binding changed from the admin page", { connect: id, session: key, by: viewer.via === "access" ? viewer.email : "local" });
       return send(res, 200, { session: key });
+    }
+    if (resource === "sessions" && id && action === "chats" && method === "POST") {
+      const input = await body(req);
+      if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
+      const title = typeof input.title === "string" && input.title.trim() ? input.title.trim().slice(0, 80) : null;
+      return send(res, 200, { threadTs: this.#deps.hub.openChat(id, viewerId(viewer), title) });
+    }
+    if (resource === "chats" && id && action === "messages" && method === "POST") {
+      const input = await body(req);
+      const text = String(input.text ?? "").trim();
+      if (!text) throw new HttpError(400, "消息是空的");
+      if (!this.#deps.store.getChat(id)) throw new HttpError(404, `unknown chat ${id}`);
+      await this.#deps.hub.sayInChat(id, viewerId(viewer), text);
+      return send(res, 200, { ok: true });
     }
     if (resource === "sessions" && id && action === "title" && method === "POST") {
       const input = await body(req);
@@ -384,7 +399,7 @@ export class AdminApi {
     const summary = this.#summary(key);
     const inbound = this.#deps.store.listInbound(key);
     // Names come from the connect each message arrived through.
-    const chatOf = (connect: string) => this.#deps.connections.chats.get(connect) ?? this.#deps.connections.chats.get(summary.connect);
+    const chatOf = (connect: string) => connect === INTERNAL_CONNECT ? internalNames : this.#deps.connections.chats.get(connect) ?? this.#deps.connections.chats.get(summary.connect);
     const people: Record<string, string> = {};
     const channels: Record<string, string> = {};
     const users = [...new Map(inbound.map((m) => [m.user, m.connect])).entries()];
@@ -400,6 +415,7 @@ export class AdminApi {
       people,
       channels,
       threads: this.#deps.store.listThreads(key),
+      chats: this.#deps.store.listChats(key).map((c) => ({ ...c, messages: this.#deps.store.chatMessages(c.threadTs) })),
       turns: this.#deps.store.listTurns(key),
       inbound,
       transcript: path ? { path, timeline: readTimeline(summary.runtime, path), usage: readUsage(summary.runtime, path) } : null,
@@ -541,3 +557,13 @@ function slackError(error: unknown): string {
   const details = Array.isArray(error.details) ? (error.details as { message?: string; pointer?: string }[]).map((d) => `${d.pointer ?? ""} ${d.message ?? ""}`.trim()).join("；") : "";
   return [known[error.code] ?? error.code, details].filter(Boolean).join("：");
 }
+
+function viewerId(viewer: Viewer): string {
+  return viewer.via === "access" ? viewer.email : "local";
+}
+
+/** Names of admin-page chat users, in the shape of a chat surface's lookups. */
+const internalNames = {
+  userName: async (user: string) => (user === "local" ? "管理员" : user),
+  channelName: async () => null,
+};
