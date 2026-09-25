@@ -309,10 +309,11 @@ function ChatPanel({ detail, chat, onOpenHistory }: { detail: SessionDetail; cha
           </div>
         )}
         {messages.map((m) => m.role === "person" ? (
-          <div key={m.ts} className="msg msg-human">
+          <div key={m.ts} className="msg msg-human" data-mine={isMine({ id: m.user, email: m.user }) || undefined}>
             {m.text && <div className="msg-bubble">{m.text}</div>}
             {m.attachments?.length ? <div className="msg-files">{m.attachments.map((a) => <FileChip key={a.path} file={a} />)}</div> : null}
-            <div className="msg-meta">{person(m.user)} · <span title={absoluteTime(m.createdAt)}>{relativeTime(m.createdAt)}</span></div>
+            {/* Only your own messages sit on the right; they need no name. */}
+            <div className="msg-meta">{!isMine({ id: m.user, email: m.user }) && <>{person(m.user)} · </>}<span title={absoluteTime(m.createdAt)}>{relativeTime(m.createdAt)}</span></div>
           </div>
         ) : (
           <div key={m.ts} className="msg msg-bot">

@@ -730,3 +730,6 @@ body[data-resizing] { cursor: col-resize; user-select: none; }
 }
 a.h-place, button.h-place { cursor: pointer; }
 a.h-place:hover, button.h-place:hover { background: var(--hover); text-decoration: underline; }
+/* Other people's messages stay on the left, with their name; yours alone sit right. */
+.msg-human:not([data-mine]) { justify-items: start; }
+.msg-human:not([data-mine]) .msg-files { justify-content: flex-start; }
