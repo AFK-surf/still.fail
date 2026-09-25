@@ -72,9 +72,10 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const single = slackThreads.length === 1 ? slackThreads[0] : undefined;
   const singleUrl = single ? slackThreadUrl(base, single.channel, single.threadTs) : null;
   const status = sessionStatus(session);
-  const chat = openChat === "0" ? undefined : chats.find((c) => c.threadTs === openChat) ?? latestChat;
+  // Your latest chat opens by default, else the latest anyone started.
   const mine = chats.filter((c) => isMine(c.creator));
   const latestChat = mine.at(-1) ?? chats.at(-1);
+  const chat = openChat === "0" ? undefined : chats.find((c) => c.threadTs === openChat) ?? latestChat;
 
   return (
     <div className="session-page">
