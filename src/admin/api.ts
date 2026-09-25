@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { createWriteStream, existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
-import { join, resolve, sep } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Connections } from "../connections.ts";
 import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from "../config.ts";
@@ -682,7 +682,7 @@ const MAX_UPLOAD = 50 * 1024 * 1024;
 
 /** Streams one uploaded file into <workspace>/uploads under a name that cannot escape it. */
 async function saveUpload(req: IncomingMessage, workspace: string, name: string): Promise<Attachment> {
-  const safe = name.replace(/[\\/\u0000-\u001f]/g, "_").replace(/^\.+/, "").slice(0, 120) || "file";
+  const safe = basename(name.replace(/\\/g, "/")).replace(/[\\/\u0000-\u001f]/g, "_").replace(/^\.+/, "").slice(0, 120) || "file";
   const dir = join(workspace, "uploads");
   await mkdir(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
