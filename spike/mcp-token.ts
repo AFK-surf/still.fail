@@ -1,15 +1,12 @@
 // Spike 3: can an HTTP MCP server identify the calling session from a token the
 // runtime reads out of its environment? Claude: header with ${VAR} expansion in
 // user-scope config. Codex: bearer_token_env_var. Usage: node spike/mcp-token.ts [cwd]
-import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
-import { promisify } from "node:util";
-import { claudeEnv, codexEnv, MODEL, report, SPIKE_ROOT } from "./lib.ts";
+import { claudeEnv, codexEnv, MODEL, report, run, SPIKE_ROOT } from "./lib.ts";
 
-const run = promisify(execFile);
 const cwd = process.argv[2] ?? process.cwd();
 const TOKEN_VAR = "EMBER_SESSION_TOKEN";
 const sessions = new Map([
@@ -70,9 +67,15 @@ try {
   results.push({ runtime: "claude", expected: "claude-session-A", answer: `FAILED: ${String(error.stderr || error.message).slice(0, 300)}` });
 }
 try {
-  const x = await run("codex", ["exec", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", ask],
+  const x = await run("codex", ["exec", "--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", ask],
     { cwd, env: { ...codex, [TOKEN_VAR]: tokenB }, timeout: 180_000 });
-  results.push({ runtime: "codex", expected: "codex-session-B", answer: x.stdout.trim().split("\n").slice(-3).join(" ").slice(0, 200) });
+  const events = x.stdout.trim().split("\n").flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } });
+  const items = events.filter((e) => e.type === "item.completed").map((e) => e.item);
+  results.push({ runtime: "codex", expected: "codex-session-B",
+    answer: String(items.filter((i: any) => i.type === "agent_message").at(-1)?.text ?? "").slice(0, 200) });
+  console.log("codex items:", JSON.stringify(items.map((i: any) => ({ type: i.type, ...(i.type === "error" ? { message: i.message } : {}),
+    ...(i.type === "mcp_tool_call" ? { server: i.server, tool: i.tool, status: i.status } : {}) }))));
+  console.log("codex stderr tail:", x.stderr.slice(-1500));
 } catch (error: any) {
   results.push({ runtime: "codex", expected: "codex-session-B", answer: `FAILED: ${String(error.stderr || error.message).slice(-300)}` });
 }
