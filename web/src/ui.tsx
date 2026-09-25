@@ -1,7 +1,7 @@
 // Shared controls on Radix primitives (focus, keyboard, layering and
 // dismissal come from Radix), styled with ember's tokens. Pages compose these
 // instead of styling their own buttons, fields or menus.
-import { Check, ChevronDown, ChevronLeft, Copy, MessageCircle, MoreHorizontal, Slack, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, Copy, MessageCircle, MoreHorizontal, X } from "lucide-react";
 import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
@@ -284,11 +284,23 @@ export function Section({ title, actions, children, description }: { title: Reac
   );
 }
 
-const KIND_ICON = { slack: Slack, wechat: MessageCircle } as const;
+const KIND_ICON = { slack: SlackLogo, wechat: MessageCircle } as const;
 
 /** What a connect connects to, as an icon: its kind, not its identity. */
 export function ConnectKindIcon({ kind, size = 16, tile }: { kind: string; size?: number; tile?: boolean }) {
   const Icon = KIND_ICON[kind as keyof typeof KIND_ICON] ?? MessageCircle;
   const icon = <Icon size={size} strokeWidth={1.7} aria-hidden="true" />;
   return tile ? <span className="mark kind-mark" style={{ width: size * 2.4, height: size * 2.4 }}>{icon}</span> : <span className="kind-icon">{icon}</span>;
+}
+
+/** Slack's mark in its own colours, sized like the line icons around it. */
+export function SlackLogo({ size = 16 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 54 54" aria-hidden="true" className="slack-logo">
+      <path fill="#36C5F0" d="M19.712.133a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386h5.376V5.52A5.381 5.381 0 0 0 19.712.133m0 14.365H5.376A5.381 5.381 0 0 0 0 19.884a5.381 5.381 0 0 0 5.376 5.387h14.336a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386" />
+      <path fill="#2EB67D" d="M53.76 19.884a5.381 5.381 0 0 0-5.376-5.386 5.381 5.381 0 0 0-5.376 5.386v5.387h5.376a5.381 5.381 0 0 0 5.376-5.387m-14.336 0V5.52A5.381 5.381 0 0 0 34.048.133a5.381 5.381 0 0 0-5.376 5.387v14.364a5.381 5.381 0 0 0 5.376 5.387 5.381 5.381 0 0 0 5.376-5.387" />
+      <path fill="#ECB22E" d="M34.048 54a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386h-5.376v5.386A5.381 5.381 0 0 0 34.048 54m0-14.365h14.336a5.381 5.381 0 0 0 5.376-5.386 5.381 5.381 0 0 0-5.376-5.387H34.048a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386" />
+      <path fill="#E01E5A" d="M0 34.249a5.381 5.381 0 0 0 5.376 5.386 5.381 5.381 0 0 0 5.376-5.386v-5.387H5.376A5.381 5.381 0 0 0 0 34.249m14.336 0v14.364A5.381 5.381 0 0 0 19.712 54a5.381 5.381 0 0 0 5.376-5.387V34.249a5.381 5.381 0 0 0-5.376-5.387 5.381 5.381 0 0 0-5.376 5.387" />
+    </svg>
+  );
 }

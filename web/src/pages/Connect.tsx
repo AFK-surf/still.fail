@@ -2,7 +2,7 @@
 // bound to, and how its conversations become sessions.
 import { useStation, useLink } from "../station.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageCircle, Pencil, Power, RefreshCw, Slack, Trash2, UserRound } from "lucide-react";
+import { MessageCircle, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useApi, keys, useOverview, useSessions, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
@@ -14,8 +14,7 @@ import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
 import {
-  Button, Choices, ConnectKindIcon, Confirm, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select, StatusDot, SwitchRow,
-} from "../ui.tsx";
+  Button, Choices, ConnectKindIcon, Confirm, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select, StatusDot, SwitchRow, SlackLogo } from "../ui.tsx";
 
 export function ConnectPage() {
   const { id } = useParams();
@@ -400,7 +399,7 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
 }
 
 const KINDS = [
-  { value: "slack", title: "Slack", description: "一个 Slack app，用 Socket Mode 连接，不需要公网地址。", icon: <span className="mark"><Slack {...ICON} size={16} /></span> },
+  { value: "slack", title: "Slack", description: "一个 Slack app，用 Socket Mode 连接，不需要公网地址。", icon: <span className="mark"><SlackLogo size={16} /></span> },
   { value: "wechat", title: "微信", description: "即将支持。", disabled: true, icon: <span className="mark"><MessageCircle {...ICON} size={16} /></span> },
 ];
 

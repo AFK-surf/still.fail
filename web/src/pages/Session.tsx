@@ -4,7 +4,7 @@
 import { useIsMine, useLink, usePerson, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack } from "../components.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Slack, Square, Unplug } from "lucide-react";
+import { Square, Unplug } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
@@ -16,7 +16,7 @@ import {
   PROCESS_LABEL, STATUS_LABEL, absoluteTime, agentLabel, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusTone, threadNamer, turnResult,
 } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Empty, ICON, IconButton, Menu, MobileBack, Pill, Tip } from "../ui.tsx";
+import { Button, Empty, ICON, IconButton, Menu, MobileBack, Pill, Tip, SlackLogo } from "../ui.tsx";
 
 export function SessionPage() {
   const { key } = useParams();
@@ -78,7 +78,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
             ? <ThreadMenu detail={detail.data} base={base} />
             : singleUrl && (
               <Tip label="在 Slack 中打开">
-                <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><Slack {...ICON} /></a>
+                <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
               </Tip>
             )}
         </div>
@@ -128,7 +128,7 @@ function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | nu
     <DropdownMenu.Root modal={false}>
       <Tip label="这个会话的 Slack thread">
         <DropdownMenu.Trigger asChild>
-          <button type="button" className="icon-btn" aria-label="这个会话的 Slack thread"><Slack {...ICON} /></button>
+          <button type="button" className="icon-btn" aria-label="这个会话的 Slack thread"><SlackLogo /></button>
         </DropdownMenu.Trigger>
       </Tip>
       <DropdownMenu.Portal>
