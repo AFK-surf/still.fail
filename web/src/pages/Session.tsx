@@ -1,17 +1,20 @@
-import { useMutation } from "@tanstack/react-query";
-import { ExternalLink, History as HistoryIcon, Square, Unplug } from "lucide-react";
+// A session: its execution history is the page; what can be done to it sits
+// with the history. A chat can be opened beside it: ember's own chat, which
+// reaches the agent the way a Slack thread does.
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, MessageSquarePlus, MessagesSquare, Square, Unplug, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import { useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { useParams, useSearchParams } from "react-router";
 import remarkGfm from "remark-gfm";
-import { api, useOverview, useSession, useSessions, type ConnectView, type SessionDetail } from "../api.ts";
-import { History, parseArgs, toolName } from "../History.tsx";
+import { api, keys, useOverview, useSession, useSessions, type ConnectView, type SessionDetail } from "../api.ts";
+import { History } from "../History.tsx";
 import {
-  absoluteTime, botUserIdOf, parsePrompt, sessionTitle, relativeTime, sessionStatus, slackThreadUrl, splitThread, turnResult, threadNamer,
+  absoluteTime, PROCESS_LABEL, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, STATUS_LABEL, statusTone, threadNamer, turnResult,
 } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Avatar, Button, Empty, ICON, IconButton, Menu, MobileBack, Pill, Tip } from "../ui.tsx";
+import { Button, Empty, ICON, IconButton, Menu, MobileBack, Pill, Tip } from "../ui.tsx";
 
 export function SessionPage() {
   const { key } = useParams();
@@ -29,7 +32,7 @@ export function SessionPage() {
       </Empty>
     );
   }
-  return <Conversation key={key} sessionKey={key} />;
+  return <SessionView key={key} sessionKey={key} />;
 }
 
 function workspaceUrl(connect: ConnectView | undefined): string | null {
@@ -37,55 +40,90 @@ function workspaceUrl(connect: ConnectView | undefined): string | null {
   return c && (c.state === "connected" || c.state === "reconnecting") ? c.workspace?.url ?? null : null;
 }
 
-function Conversation({ sessionKey }: { sessionKey: string }) {
+function SessionView({ sessionKey }: { sessionKey: string }) {
   const detail = useSession(sessionKey);
   const overview = useOverview();
+  const client = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const toast = useToast();
-  // Open beside the conversation on wide screens; on narrow ones it would cover it, so start closed.
-  const historyOpen = params.has("history") ? params.get("history") === "1" : window.matchMedia("(min-width: 1101px)").matches;
-  const stop = useMutation({ mutationFn: () => api.stop(sessionKey), onSuccess: () => toast("已请求停止") });
-  const evict = useMutation({ mutationFn: () => api.evict(sessionKey), onSuccess: () => toast("已释放进程") });
+  const openChat = params.get("chat");
+  const setChat = (threadTs: string | null) => setParams(threadTs ? { chat: threadTs } : {}, { replace: true });
+  const create = useMutation({
+    mutationFn: () => api.openChat(sessionKey),
+    onSuccess: async ({ threadTs }) => {
+      await client.invalidateQueries({ queryKey: keys.session(sessionKey) });
+      setChat(threadTs);
+    },
+  });
 
   if (detail.isPending) return <div className="page" />;
   if (detail.isError) return <Empty><p>读不到这个会话：{detail.error.message}</p></Empty>;
-  const { session, threads } = detail.data;
+  const { session, threads, chats } = detail.data;
   const connect = overview.data?.connects.find((c) => c.id === session.connect);
   const name = connect?.name ?? session.connect;
   const base = workspaceUrl(connect);
-  const toggleHistory = () => setParams({ history: historyOpen ? "0" : "1" }, { replace: true });
-  const title = sessionTitle(session, name);
-  const single = threads.length <= 1 ? threads[0] : undefined;
+  const slackThreads = threads.filter((t) => t.channel !== "EMBER");
+  const single = slackThreads.length === 1 ? slackThreads[0] : undefined;
   const singleUrl = single ? slackThreadUrl(base, single.channel, single.threadTs) : null;
+  const status = sessionStatus(session);
+  const chat = chats.find((c) => c.threadTs === openChat);
+  const latestChat = chats.at(-1);
 
   return (
-    <div className="conversation-layout" data-history={historyOpen}>
-      <section className="conversation" aria-label="会话">
+    <div className="session-layout" data-chat={Boolean(chat)}>
+      <section className="session-main" aria-label="会话">
         <header className="page-bar">
           <MobileBack to="/sessions" label="会话" />
           <div className="page-bar-title">
-            <h1>{title}</h1>
-            {session.scope === "all" && <Pill>{threads.length} 个 thread</Pill>}
+            <h1>{sessionTitle(session, name)}</h1>
+            <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
           </div>
           <div className="page-bar-actions">
-            {session.scope === "all" && threads.length > 1
+            {slackThreads.length > 1
               ? <ThreadMenu detail={detail.data} base={base} />
               : singleUrl && (
                 <Tip label="在 Slack 中打开">
                   <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><ExternalLink {...ICON} /></a>
                 </Tip>
               )}
-            <IconButton label={historyOpen ? "收起执行历史" : "执行历史"} icon={HistoryIcon} aria-pressed={historyOpen} onClick={toggleHistory} />
-            <Menu items={[
-              { label: "停止当前任务", icon: Square, disabled: session.process !== "running", onSelect: () => stop.mutate() },
-              { label: "释放进程", icon: Unplug, disabled: session.process !== "warm", onSelect: () => evict.mutate() },
-            ]} />
+            {!chat && (latestChat
+              ? <Button icon={MessagesSquare} onClick={() => setChat(latestChat.threadTs)}>对话</Button>
+              : <Button icon={MessageSquarePlus} busy={create.isPending} onClick={() => create.mutate()}>新建对话</Button>)}
           </div>
         </header>
-        <Messages detail={detail.data} name={name} botUserId={botUserIdOf(connect)} base={base} />
-        <ActivityBar detail={detail.data} url={singleUrl} onStop={() => stop.mutate()} stopping={stop.isPending} />
+        <History detail={detail.data} connect={connect} footer={<Operations detail={detail.data} />} />
       </section>
-      {historyOpen && <History detail={detail.data} connect={connect} onClose={toggleHistory} />}
+      {chat && (
+        <ChatPanel detail={detail.data} threadTs={chat.threadTs} name={name} onClose={() => setChat(null)}
+          onSwitch={setChat} onNew={() => create.mutate()} creating={create.isPending} />
+      )}
+    </div>
+  );
+}
+
+/** What can be done to the session right now, at the foot of its history. */
+function Operations({ detail }: { detail: SessionDetail }) {
+  const toast = useToast();
+  const { session } = detail;
+  const stop = useMutation({ mutationFn: () => api.stop(session.key), onSuccess: () => toast("已请求停止") });
+  const evict = useMutation({ mutationFn: () => api.evict(session.key), onSuccess: () => toast("已释放进程") });
+  const status = sessionStatus(session);
+  const running = status === "running" || status === "queued";
+  const since = detail.turns.at(-1)?.startedAt ?? session.lastActiveAt;
+  const calls = (detail.transcript?.timeline ?? []).filter((e) => e.kind === "tool_call" && e.at && Date.parse(e.at) >= since).length;
+  const result = turnResult(session.lastTurn);
+  const text = running
+    ? (status === "queued" ? "排队中，马上开始" : `正在执行${calls ? `，已执行 ${calls} 项操作` : ""}`)
+    : result === "block" ? "在等人回复。"
+    : result === "failed" ? "上一轮失败了；新消息会重试。"
+    : result === "unexpected" ? "上一轮没有给出明确结果就停了。"
+    : result === "final" ? "上一轮已完成。"
+    : "空闲。";
+  return (
+    <div className="operations" data-state={running ? "running" : result}>
+      {running && <span className="activity-pulse" aria-hidden="true" />}
+      <span className="operations-text">{text}<span className="muted"> · 进程{PROCESS_LABEL[session.process]}</span></span>
+      {running && <Button icon={Square} onClick={() => stop.mutate()} busy={stop.isPending}>停止</Button>}
+      {session.process === "warm" && <Button variant="ghost" icon={Unplug} onClick={() => evict.mutate()} busy={evict.isPending}>释放进程</Button>}
     </div>
   );
 }
@@ -94,15 +132,15 @@ function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | nu
   const name = threadNamer(detail);
   return (
     <DropdownMenu.Root modal={false}>
-      <Tip label="这个会话的 thread">
+      <Tip label="这个会话的 Slack thread">
         <DropdownMenu.Trigger asChild>
-          <button type="button" className="icon-btn" aria-label="这个会话的 thread"><ExternalLink {...ICON} /></button>
+          <button type="button" className="icon-btn" aria-label="这个会话的 Slack thread"><ExternalLink {...ICON} /></button>
         </DropdownMenu.Trigger>
       </Tip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="popover menu-list thread-menu" align="end" sideOffset={4} collisionPadding={8}>
           <DropdownMenu.Label className="menu-label">在 Slack 中打开</DropdownMenu.Label>
-          {detail.threads.map((t) => {
+          {detail.threads.filter((t) => t.channel !== "EMBER").map((t) => {
             const url = slackThreadUrl(base, t.channel, t.threadTs);
             const { where, when } = name(t.channel, t.threadTs);
             return (
@@ -121,123 +159,69 @@ function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | nu
   );
 }
 
-type Line = { at: number; thread: string | null } & (
-  | { kind: "human"; user: string; text: string }
-  | { kind: "bot"; text: string; state: string | null; failed: boolean }
-  | { kind: "notice"; text: string }
-);
+/** ember's own chat with the session: what people type reaches the agent like a Slack message; it answers with chat_post. */
+function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating }: {
+  detail: SessionDetail; threadTs: string; name: string; onClose(): void; onSwitch(threadTs: string): void; onNew(): void; creating: boolean;
+}) {
+  const client = useQueryClient();
+  const chat = detail.chats.find((c) => c.threadTs === threadTs)!;
+  const [text, setText] = useState("");
+  const list = useRef<HTMLDivElement>(null);
+  const send = useMutation({
+    mutationFn: (value: string) => api.sayInChat(threadTs, value),
+    onSuccess: () => { setText(""); void client.invalidateQueries({ queryKey: keys.session(detail.session.key) }); },
+  });
+  useEffect(() => {
+    if (list.current) list.current.scrollTop = list.current.scrollHeight;
+  }, [chat.messages.length]);
+  const status = sessionStatus(detail.session);
+  const busy = status === "running" || status === "queued";
+  const person = (id: string) => detail.people[id] ?? (id === "local" ? "管理员" : id);
+  const submit = () => {
+    const value = text.trim();
+    if (value && !send.isPending) send.mutate(value);
+  };
+  const chatName = (c: SessionDetail["chats"][number], i: number) => c.title ?? `对话 ${i + 1}`;
 
-/** The conversations as people saw them: their messages, the agent's posts, and turns that failed. */
-function useLines(detail: SessionDetail): Line[] {
-  return useMemo(() => {
-    const lines: Line[] = detail.inbound.map((m) => ({
-      kind: "human", at: Number(m.ts) * 1000, thread: `${m.channel}/${m.threadTs}`, user: m.user, text: m.text,
-    }));
-    const timeline = detail.transcript?.timeline ?? [];
-    const results = new Map(timeline.filter((e) => e.kind === "tool_result" && e.callId).map((e) => [e.callId!, e]));
-    for (const e of timeline) {
-      if (e.kind !== "tool_call" || e.subagent || toolName(e.tool) !== "chat_post") continue;
-      const args = parseArgs(e.text);
-      if (typeof args?.text !== "string") continue;
-      lines.push({
-        kind: "bot", at: e.at ? Date.parse(e.at) : 0, text: args.text,
-        // Older sessions posted without naming a thread; they only had one.
-        thread: typeof args.to === "string" ? args.to : null,
-        state: typeof args.kind === "string" ? args.kind : null,
-        failed: e.callId ? results.get(e.callId)?.ok === false : false,
-      });
-    }
-    for (const t of detail.turns) {
-      if (t.outcome === "failed" && t.endedAt) lines.push({ kind: "notice", at: t.endedAt, thread: null, text: `这一轮失败了：${t.detail ?? "原因未知"}` });
-    }
-    return lines.sort((a, b) => a.at - b.at);
-  }, [detail]);
-}
-
-function Messages({ detail, name, botUserId, base }: { detail: SessionDetail; name: string; botUserId: string | null; base: string | null }) {
-  const lines = useLines(detail);
-  const threadName = threadNamer(detail);
-  const person = (id: string) => detail.people[id] ?? id;
-  const mention = (text: string) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : person(id)}`);
-  const many = detail.threads.length > 1;
-  if (lines.length === 0) return <div className="messages"><p className="muted">还没有消息。</p></div>;
-  let current: string | null = null;
   return (
-    <div className="messages">
-      {lines.map((line, i) => {
-        // With several threads, mark where the conversation moves to another one.
-        let divider = null;
-        if (many && line.thread && line.thread !== current) {
-          current = line.thread;
-          const t = splitThread(line.thread);
-          if (t) {
-            const { where, when } = threadName(t.channel, t.threadTs);
-            const url = slackThreadUrl(base, t.channel, t.threadTs);
-            divider = (
-              <div className="thread-divider" key={`d${i}`}>
-                {url ? <a href={url} target="_blank" rel="noopener">{where}</a> : <span>{where}</span>}
-                <span className="muted">{when} 的 thread</span>
-              </div>
-            );
-          }
-        }
-        let body;
-        if (line.kind === "human") {
-          const { messages } = parsePrompt(line.text);
-          const text = messages.length ? messages.map((m) => m.text).join("\n") : line.text;
-          body = (
-            <div key={i} className="msg msg-human">
-              <div className="msg-bubble">{mention(text)}</div>
-              <div className="msg-meta">{person(line.user)} · <span title={absoluteTime(line.at)}>{relativeTime(line.at)}</span></div>
+    <aside className="chat" aria-label="对话">
+      <header className="chat-head">
+        {detail.chats.length > 1
+          ? <Menu label="切换对话" items={detail.chats.map((c, i) => ({ label: `${chatName(c, i)} · ${relativeTime(c.createdAt)}`, onSelect: () => onSwitch(c.threadTs) }))} />
+          : <span className="kind-icon"><MessagesSquare {...ICON} /></span>}
+        <strong className="chat-title">{chatName(chat, detail.chats.indexOf(chat))}</strong>
+        <IconButton label="新建对话" icon={MessageSquarePlus} onClick={onNew} disabled={creating} />
+        <IconButton label="关闭对话" icon={X} onClick={onClose} />
+      </header>
+      <div className="chat-list" ref={list}>
+        {chat.messages.length === 0 && (
+          <p className="chat-empty">在这里说的话会像 Slack 消息一样送到这个会话，{name} 会在这里回复。</p>
+        )}
+        {chat.messages.map((m) => m.role === "person" ? (
+          <div key={m.ts} className="msg msg-human">
+            <div className="msg-bubble">{m.text}</div>
+            <div className="msg-meta">{person(m.user)} · <span title={absoluteTime(m.createdAt)}>{relativeTime(m.createdAt)}</span></div>
+          </div>
+        ) : (
+          <div key={m.ts} className="msg msg-bot">
+            <div className="msg-head">
+              <span className="msg-name">{name}</span>
+              <span className="msg-time" title={absoluteTime(m.createdAt)}>{relativeTime(m.createdAt)}</span>
             </div>
-          );
-        } else if (line.kind === "notice") {
-          body = <div key={i} className="msg-notice" role="note">{line.text}</div>;
-        } else {
-          body = (
-            <div key={i} className="msg msg-bot">
-              <div className="msg-head">
-                <Avatar id={detail.session.connect} name={name} size={22} />
-                <span className="msg-name">{name}</span>
-                <span className="msg-time" title={line.at ? absoluteTime(line.at) : undefined}>{line.at ? relativeTime(line.at) : ""}</span>
-                {line.state === "final" && <Pill tone="green">已完成</Pill>}
-                {line.state === "block" && <Pill tone="blue">等你回复</Pill>}
-                {line.failed && <Pill tone="red">发送失败</Pill>}
-              </div>
-              <div className="markdown"><Markdown remarkPlugins={[remarkGfm]}>{line.text}</Markdown></div>
-            </div>
-          );
-        }
-        return divider ? [divider, body] : body;
-      })}
-    </div>
-  );
-}
-
-function ActivityBar({ detail, url, onStop, stopping }: { detail: SessionDetail; url: string | null; onStop(): void; stopping: boolean }) {
-  const { session } = detail;
-  const status = sessionStatus(session);
-  if (status === "running" || status === "queued") {
-    const lastTurn = detail.turns.at(-1);
-    const since = lastTurn?.startedAt ?? session.lastActiveAt;
-    const calls = (detail.transcript?.timeline ?? []).filter((e) => e.kind === "tool_call" && e.at && Date.parse(e.at) >= since).length;
-    return (
-      <div className="activity" data-state="running">
-        <span className="activity-pulse" aria-hidden="true" />
-        <span>{status === "queued" ? "排队中，马上开始" : `正在执行${calls ? `，已执行 ${calls} 项操作` : ""}`}</span>
-        <Button icon={Square} onClick={onStop} busy={stopping}>停止</Button>
+            <div className="markdown"><Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown></div>
+          </div>
+        ))}
+        {busy && chat.messages.at(-1)?.role === "person" && (
+          <div className="chat-typing"><span className="activity-pulse inline" aria-hidden="true" />{name} 在处理…</div>
+        )}
       </div>
-    );
-  }
-  const result = turnResult(session.lastTurn);
-  const text = result === "block" ? "在等人回复：去 Slack thread 里回复它。"
-    : result === "failed" ? "上一轮失败了。在 Slack 里回复会重试。"
-    : result === "unexpected" ? "上一轮没有给出明确结果就停了。"
-    : "对话在 Slack 里继续。";
-  return (
-    <div className="activity" data-state={result}>
-      <span>{text}</span>
-      {url && <a className="btn btn-secondary" href={url} target="_blank" rel="noopener">在 Slack 中打开</a>}
-    </div>
+      <form className="composer" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <textarea className="input composer-input" rows={2} value={text} placeholder={`发消息给 ${name}（Enter 发送，Shift+Enter 换行）`}
+          onChange={(e) => setText(e.target.value)} aria-label="消息"
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
+        <Button variant="primary" type="submit" disabled={!text.trim()} busy={send.isPending}>发送</Button>
+      </form>
+      {send.error && <p className="field-error chat-error" role="alert">{send.error.message}</p>}
+    </aside>
   );
 }

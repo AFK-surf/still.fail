@@ -416,3 +416,36 @@
 @media (max-width: 700px) {
   .slack-app-top { flex-direction: column; }
 }
+
+/* ── session: history first, chat beside ───────────────────────────── */
+
+.session-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.session-layout[data-chat="true"] { grid-template-columns: minmax(0, 1fr) minmax(360px, 38%); }
+.session-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.session-main .page-bar-title { gap: 10px; }
+.session-main .history { flex: 1; border-left: 0; }
+.session-main .history-head, .session-main .usage { padding-left: max(16px, calc((100% - 860px) / 2)); padding-right: max(8px, calc((100% - 860px) / 2)); }
+.session-main .history-body { padding-left: max(16px, calc((100% - 860px) / 2)); padding-right: max(16px, calc((100% - 860px) / 2)); }
+.operations {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px max(16px, calc((100% - 860px) / 2));
+  border-top: 1px solid var(--line); font-size: var(--text-sm); background: var(--canvas);
+}
+.operations-text { flex: 1; min-width: 0; }
+.operations[data-state="running"] { background: var(--accent-bg); }
+.operations[data-state="block"] .operations-text { color: var(--blue); }
+.operations[data-state="failed"] .operations-text, .operations[data-state="unexpected"] .operations-text { color: var(--red); }
+
+.chat { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--list); }
+.chat-head { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--line); }
+.chat-title { flex: 1; min-width: 0; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-list { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.chat-empty { margin: auto 12px; text-align: center; color: var(--muted); font-size: var(--text-sm); }
+.chat-typing { font-size: var(--text-xs); color: var(--muted); }
+.chat .msg-bubble { background: var(--canvas); border: 1px solid var(--line); }
+.composer { display: flex; align-items: flex-end; gap: 8px; padding: 12px; border-top: 1px solid var(--line); background: var(--canvas); }
+.composer-input { resize: none; max-height: 200px; line-height: 1.5; }
+.chat-error { padding: 0 12px 10px; }
+@media (max-width: 1100px) {
+  .session-layout[data-chat="true"] { grid-template-columns: minmax(0, 1fr); }
+  .session-layout[data-chat="true"] .chat { position: fixed; inset: 0 0 0 auto; width: min(440px, 100vw); z-index: 30; box-shadow: -12px 0 32px var(--shadow); }
+}

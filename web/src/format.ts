@@ -197,6 +197,10 @@ export function threadNamer(detail: SessionDetail) {
   return (channel: string, threadTs: string) => {
     const started = new Date(Number(threadTs) * 1000);
     const when = `${started.getMonth() + 1}月${started.getDate()}日 ${started.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+    if (channel === "EMBER") {
+      const chat = detail.chats.find((c) => c.threadTs === threadTs);
+      return { where: chat?.title ? `对话「${chat.title}」` : "管理页对话", when };
+    }
     const where = channel.startsWith("D") ? "私信" : `#${detail.channels[channel] ?? channel}`;
     return { where, when };
   };

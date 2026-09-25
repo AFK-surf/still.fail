@@ -1,13 +1,13 @@
 // Execution history, after Zork's: a readable account of what actually ran.
 // Messages in and out, state marks and the agent's own words are boundaries;
 // the tool calls and thinking between two boundaries fold into one group.
-import { ArrowDownToLine, ChevronDown, ChevronRight, Send, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ConnectView, SessionDetail, TimelineEntry } from "./api.ts";
 import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, splitThread, threadNamer } from "./format.ts";
-import { Avatar, ICON, IconButton, Pill } from "./ui.tsx";
+import { Avatar, ICON, Pill } from "./ui.tsx";
 
 export function parseArgs(text: string): Record<string, unknown> | null {
   try {
@@ -115,15 +115,33 @@ function toItems(entries: TimelineEntry[]): Item[] {
   return items;
 }
 
-export function History({ detail, connect, onClose }: { detail: SessionDetail; connect: ConnectView | undefined; onClose(): void }) {
+/**
+ * The session as it ran: the main view of a session. `footer` holds what can
+ * be done to it right now (stop a turn, release the process).
+ */
+export function History({ detail, connect, footer }: { detail: SessionDetail; connect: ConnectView | undefined; footer?: ReactNode }) {
   const botUserId = botUserIdOf(connect);
   const threadName = threadNamer(detail);
   // Only worth saying which thread when there is more than one.
   const where = (address: string | null | undefined) => {
-    const t = address && detail.threads.length > 1 ? splitThread(address) : null;
+    const t = address && (detail.threads.length > 1 || address.startsWith("EMBER/")) ? splitThread(address) : null;
     return t ? threadName(t.channel, t.threadTs).where : null;
   };
   const [usageOpen, setUsageOpen] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  const count = detail.transcript?.timeline.length ?? 0;
+  // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
+  const pinned = useRef(true);
+  useEffect(() => {
+    const el = body.current;
+    if (!el) return;
+    const onScroll = () => { pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+  useEffect(() => {
+    if (pinned.current && body.current) body.current.scrollTop = body.current.scrollHeight;
+  }, [count]);
   const { session, transcript } = detail;
   const items = useMemo(() => toItems(transcript?.timeline ?? []), [transcript]);
   const usage = transcript?.usage;
@@ -132,7 +150,7 @@ export function History({ detail, connect, onClose }: { detail: SessionDetail; c
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
 
   return (
-    <aside className="history" aria-label="执行历史">
+    <section className="history" aria-label="执行历史">
       <header className="history-head">
         <div className="history-identity">
           <Avatar id={session.connect} name={name} size={18} />
@@ -148,7 +166,6 @@ export function History({ detail, connect, onClose }: { detail: SessionDetail; c
               用量 <ChevronDown {...ICON} size={14} />
             </button>
           )}
-          <IconButton label="关闭执行历史" icon={X} onClick={onClose} />
         </div>
       </header>
       {usageOpen && usage && (
@@ -160,7 +177,7 @@ export function History({ detail, connect, onClose }: { detail: SessionDetail; c
           <div><dt>缓存命中率</dt><dd>{hitRate === null ? "未报告" : `${hitRate}%`}</dd></div>
         </dl>
       )}
-      <div className="history-body">
+      <div className="history-body" ref={body}>
         {!transcript ? (
           <p className="history-edge">{session.runtimeSessionId ? "找不到运行时记录，可能已归档。" : "运行时还没开始这个会话。"}</p>
         ) : (
@@ -173,7 +190,8 @@ export function History({ detail, connect, onClose }: { detail: SessionDetail; c
           </>
         )}
       </div>
-    </aside>
+    {footer}
+    </section>
   );
 }
 

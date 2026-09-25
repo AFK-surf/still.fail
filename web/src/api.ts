@@ -47,6 +47,8 @@ export const api = {
     request<{ identity: SlackIdentity | null; errors: string[] }>("POST", "/slack/verify", input),
   bindSession: (connect: string, session: string | null, title?: string) =>
     request<{ session: string }>("POST", `/connects/${encodeURIComponent(connect)}/session`, { session, ...(title ? { title } : {}) }),
+  openChat: (key: string, title?: string) => request<{ threadTs: string }>("POST", `/sessions/${encodeURIComponent(key)}/chats`, title ? { title } : {}),
+  sayInChat: (threadTs: string, text: string) => request<{ ok: true }>("POST", `/chats/${encodeURIComponent(threadTs)}/messages`, { text }),
   setTitle: (key: string, title: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/title`, { title }),
   startLogin: (profile: string) => request<{ job: LoginJob }>("POST", `/profiles/${encodeURIComponent(profile)}/login`),
   cancelLogin: (profile: string) => request<{ job: LoginJob | null }>("DELETE", `/profiles/${encodeURIComponent(profile)}/login`),
