@@ -72,6 +72,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
             <h1 className="identity-name">{connect.name}<IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
           )}
           <p className="identity-sub">
+            {station.name && <span className="station-tag">{station.name}</span>}
             <span className="kind-tag">Slack</span>
             <span>{modeText(connect.mode, connect.requireMention)}</span>
             <span>{connectSubtitle(connect, overview.profiles)}</span>

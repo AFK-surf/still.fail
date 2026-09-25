@@ -78,6 +78,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
       <header className="page-bar">
         <MobileBack to={link("/sessions")} label="会话" />
         <div className="page-bar-title">
+          {station.name && <span className="station-tag">{station.name}</span>}
           <h1>{sessionTitle(session, name)}</h1>
           <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
         </div>
