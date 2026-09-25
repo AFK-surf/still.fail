@@ -151,7 +151,7 @@ export function parsePrompt(text: string): { messages: SourcedMessage[]; note: s
     .replace(/<message ([^>]*)>\n?([\s\S]*?)\n?<\/message>/g, (_, attrs: string, body: string) => {
       const attr = (name: string) => new RegExp(`${name}="([^"]*)"`).exec(attrs)?.[1];
       const from = unescape(attr("from") ?? "");
-      messages.push({ user: /\(([A-Z0-9]+)\)$/.exec(from)?.[1] ?? from, ts: attr("ts") ?? "", text: body, thread: attr("thread") ?? null });
+      messages.push({ user: /\(([^()\s]+)\)$/.exec(from)?.[1] ?? from, ts: attr("ts") ?? "", text: body, thread: attr("thread") ?? null });
       return "";
     })
     .replace(/<slack user="([^"]*)"(?: bot)? ts="([^"]*)">\n?([\s\S]*?)\n?<\/slack>/g, (_, user: string, ts: string, body: string) => {
