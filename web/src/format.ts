@@ -1,5 +1,6 @@
 // Turning ember's records into words people read.
-import type { BotState, ProcessState, RuntimeKind, SessionSummary, TurnSummary } from "./api.ts";
+import type { AccessKind, BotState, ProcessState, ProfileCheck, RuntimeKind, SessionSummary, TurnSummary } from "./api.ts";
+import type { Presence, Tone } from "./ui.tsx";
 
 export type Status = "running" | "queued" | "final" | "block" | "failed" | "aborted" | "unexpected" | "idle";
 
@@ -17,6 +18,51 @@ export const STATUS_LABEL: Record<Status, string> = {
 export const PROCESS_LABEL: Record<ProcessState, string> = { running: "运行中", warm: "保温中", cold: "已释放" };
 
 export const RUNTIME_LABEL: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex" };
+
+export const ACCESS: Record<AccessKind, { label: string; description: string }> = {
+  "subscription": { label: "订阅账号", description: "在服务器上登录 Claude 或 ChatGPT 订阅，用订阅额度运行。" },
+  "opencode-go": { label: "OpenCode Go", description: "用 OpenCode Go 套餐的 key，模型由 OpenCode Go 提供。" },
+  "anthropic-api": { label: "Anthropic API", description: "用 Anthropic API key，按量计费。" },
+  "env": { label: "自定义环境变量", description: "手动填写运行时需要的环境变量。" },
+};
+
+export const ACCESS_KINDS: Record<RuntimeKind, AccessKind[]> = {
+  claude: ["subscription", "opencode-go", "anthropic-api", "env"],
+  codex: ["subscription", "opencode-go", "env"],
+};
+
+export const KEYED = new Set<AccessKind>(["opencode-go", "anthropic-api"]);
+
+export function checkTone(check: ProfileCheck | null): { tone: Tone; label: string } {
+  if (!check) return { tone: "neutral", label: "未检查" };
+  return { ok: { tone: "green", label: "可用" }, login: { tone: "amber", label: "需要登录" }, failed: { tone: "red", label: "不可用" }, unknown: { tone: "neutral", label: "无法检查" } }[check.state] as { tone: Tone; label: string };
+}
+
+export function presence(state: BotState): Presence {
+  switch (state.state) {
+    case "connected": return "online";
+    case "reconnecting": case "starting": return "busy";
+    case "error": return "error";
+    default: return "offline";
+  }
+}
+
+export function compactNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+  return String(n);
+}
+
+/** Groups by calendar day, like Zork's chat list: 今天, 昨天, 星期三, 9月20日. */
+export function dayLabel(ms: number, now = Date.now()): string {
+  const day = (t: number) => Math.floor((t - new Date(t).getTimezoneOffset() * 60_000) / 86_400_000);
+  const diff = day(now) - day(ms);
+  if (diff === 0) return "今天";
+  if (diff === 1) return "昨天";
+  const date = new Date(ms);
+  if (diff < 7) return ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"][date.getDay()]!;
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
 
 export function turnResult(turn: TurnSummary | null): Status {
   if (!turn) return "idle";
@@ -58,6 +104,7 @@ export function absoluteTime(ms: number): string {
 }
 
 export function duration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
   const s = Math.round(ms / 1000);
   if (s < 60) return `${s} 秒`;
   const m = Math.floor(s / 60);
@@ -66,11 +113,11 @@ export function duration(ms: number): string {
 
 export function connectionText(state: BotState): string {
   switch (state.state) {
-    case "connected": return "已连接";
+    case "connected": return "在线";
     case "reconnecting": return "重连中";
     case "starting": return "连接中";
-    case "error": return `连接失败：${state.error}`;
-    case "no_tokens": return "还没填 Slack token";
+    case "error": return "连接失败";
+    case "no_tokens": return "未连接 Slack";
     case "disabled": return "已停用";
   }
 }

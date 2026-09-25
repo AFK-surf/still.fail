@@ -24,6 +24,6 @@ test("a hand-written file in a profile home is left alone", () => {
   const root = mkdtempSync(join(tmpdir(), "ember-agent-"));
   mkdirSync(join(root, "cc"));
   writeFileSync(join(root, "cc", "CLAUDE.md"), "mine");
-  linkAgentHome(join(root, "agent"), [{ id: "cc", runtime: "claude", home: join(root, "cc"), env: {} }]);
+  linkAgentHome(join(root, "agent"), [{ runtime: "claude", home: join(root, "cc") }]);
   assert.equal(readFileSync(join(root, "cc", "CLAUDE.md"), "utf8"), "mine");
 });

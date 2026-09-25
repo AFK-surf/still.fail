@@ -1,9 +1,10 @@
-import { NavLink, Navigate, Route, Routes } from "react-router";
-import { ApiError, useLiveUpdates, useOverview, type Overview } from "./api.ts";
+import { Navigate, Route, Routes } from "react-router";
+import { ApiError, useLiveUpdates, useOverview } from "./api.ts";
+import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
+import { BotPage } from "./pages/Bot.tsx";
+import { SessionPage } from "./pages/Session.tsx";
+import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
-import { BotsPage } from "./pages/Bots.tsx";
-import { ProfilesPage } from "./pages/Profiles.tsx";
-import { SessionsPage } from "./pages/Sessions.tsx";
 
 export function App() {
   const overview = useOverview();
@@ -13,45 +14,30 @@ export function App() {
   if (overview.isError) {
     const denied = overview.error instanceof ApiError && overview.error.status === 403;
     return (
-      <div className="signin">
-        <div className="signin-box">
-          <img src="/admin/ember.svg" alt="" />
-          <h1>{denied ? "没有访问权限" : "连不上 ember"}</h1>
-          <p>{overview.error.message}</p>
-        </div>
+      <div className="gate">
+        <img src="/admin/ember.svg" alt="" width={40} height={40} />
+        <h1>{denied ? "没有访问权限" : "连不上 ember"}</h1>
+        <p>{overview.error.message}</p>
       </div>
     );
   }
 
   return (
     <ToastProvider>
-      <div className="frame">
-        <Rail viewer={overview.data.viewer} />
-        <main className="page">
+      <div className="shell">
+        <Sidebar />
+        <main className="main">
           <Routes>
             <Route path="/" element={<Navigate to="/sessions" replace />} />
-            <Route path="/sessions/:key?" element={<SessionsPage />} />
-            <Route path="/bots/:id?" element={<BotsPage />} />
-            <Route path="/profiles/:id?" element={<ProfilesPage />} />
+            <Route path="/sessions/:key?" element={<SessionPage />} />
+            <Route path="/bots/:id" element={<BotPage />} />
+            <Route path="/settings" element={<Navigate to="/settings/accounts" replace />} />
+            <Route path="/settings/accounts" element={<AccountsPage />} />
+            <Route path="/settings/accounts/:id" element={<AccountPage />} />
             <Route path="*" element={<Navigate to="/sessions" replace />} />
           </Routes>
         </main>
       </div>
     </ToastProvider>
-  );
-}
-
-function Rail({ viewer }: { viewer: Overview["viewer"] }) {
-  return (
-    <nav className="rail" aria-label="主导航">
-      <img className="rail-mark" src="/admin/ember.svg" alt="ember" />
-      <NavLink className="rail-link" to="/sessions">会话</NavLink>
-      <NavLink className="rail-link" to="/bots">Bot</NavLink>
-      <NavLink className="rail-link" to="/profiles">账号</NavLink>
-      <span className="rail-spacer" />
-      <span className="rail-viewer" title={viewer.via === "access" ? `通过 Cloudflare Access 登录：${viewer.email}` : "在运行 ember 的机器上本地访问"}>
-        {viewer.via === "access" ? viewer.email.split("@")[0] : "本机"}
-      </span>
-    </nav>
   );
 }

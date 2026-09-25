@@ -1,9 +1,11 @@
 // Talking to ember's admin API. Types come straight from the server code.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import type { BotInput, Overview, ProfileInput, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type { SlackIdentity } from "../../src/chat/slack.ts";
+import type { BotInput, Overview, ProfileCheck, ProfileInput, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
 
 export type * from "../../src/admin/types.ts";
+export type { SlackIdentity };
 
 export class ApiError extends Error {
   readonly status: number;
@@ -32,6 +34,9 @@ export const api = {
   deleteBot: (id: string) => request<Overview>("DELETE", `/bots/${encodeURIComponent(id)}`),
   reconnect: (id: string) => request<{ ok: true }>("POST", `/bots/${encodeURIComponent(id)}/reconnect`),
   putProfile: (id: string, input: ProfileInput) => request<Overview>("PUT", `/profiles/${encodeURIComponent(id)}`, input),
+  checkProfile: (id: string) => request<ProfileCheck>("POST", `/profiles/${encodeURIComponent(id)}/check`),
+  verifySlack: (input: { bot?: string; appToken?: string; botToken?: string }) =>
+    request<{ identity: SlackIdentity | null; errors: string[] }>("POST", "/slack/verify", input),
   deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${encodeURIComponent(id)}`),
   createAppUrl: (name: string) => request<{ url: string }>("GET", `/slack/create-app-url?name=${encodeURIComponent(name)}`),
 };
