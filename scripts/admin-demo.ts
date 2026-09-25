@@ -27,9 +27,9 @@ const codexIds = transcripts(join(codexHome, "sessions"), (n) => n.startsWith("r
 const dataDir = mkdtempSync(join(tmpdir(), "ember-admin-demo-"));
 writeFileSync(join(dataDir, "config.json"), JSON.stringify({
   profiles: [
-    { id: "claude-ocg", runtime: "claude", home: claudeHome, env: { ANTHROPIC_API_KEY: "sk-demo-not-a-real-key-1234", ANTHROPIC_BASE_URL: "https://opencode.ai/zen/go", ANTHROPIC_CUSTOM_HEADERS: "x-opencode-session: {route}" } },
-    { id: "codex-ocg", runtime: "codex", home: codexHome, env: { OPENCODE_GO_KEY: "demo-key-abcdefgh", OPENCODE_SESSION: "ember-{route}" } },
-    { id: "claude-team", runtime: "claude", home: "homes/claude-team", env: {} },
+    { id: "claude-ocg", name: "OpenCode Go（Claude Code）", runtime: "claude", home: claudeHome, access: { kind: "opencode-go", key: "sk-demo-not-a-real-key-1234" } },
+    { id: "codex-ocg", name: "OpenCode Go（Codex）", runtime: "codex", home: codexHome, access: { kind: "opencode-go", key: "demo-key-abcdefgh" } },
+    { id: "claude-team", name: "团队 Claude 订阅", runtime: "claude", home: "homes/claude-team", access: { kind: "subscription" } },
   ],
   bots: [
     { id: "ds", name: "ember", runtime: "claude", profiles: ["claude-ocg"], model: "deepseek-flash", slack: { appToken: "xapp-1-demo-aaaaaaaa", botToken: "xoxb-demo-bbbbbbbb" } },
