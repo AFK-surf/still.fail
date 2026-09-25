@@ -2,13 +2,15 @@
 // bound to, and how its conversations become sessions.
 import { useStation, useLink } from "../station.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageCircle, Pencil, Power, RefreshCw, Slack, Trash2 } from "lucide-react";
+import { MessageCircle, Pencil, Power, RefreshCw, Slack, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useApi, keys, useOverview, useSessions, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
 import { connectionText, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, slug, STATUS_LABEL, statusTone } from "../format.ts";
 import { SlackAppSection } from "./SlackApp.tsx";
-import { CreatorText } from "../components.tsx";
+import { OwnerLabel } from "../components.tsx";
+import { PeopleContext } from "../station.tsx";
+import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
 import {
@@ -50,6 +52,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(connect.name);
   const [deleting, setDeleting] = useState(false);
+  const [owning, setOwning] = useState(false);
   const remove = useMutation({
     mutationFn: () => api.deleteConnect(connect.id),
     onSuccess: (data) => { client.setQueryData(keys.overview(station.id), data); toast("已删除连接"); navigate(`${station.settings}/connects`); },
@@ -77,13 +80,15 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
             <span className="kind-tag">Slack</span>
             <span>{modeText(connect.mode, connect.requireMention)}</span>
             <span>{connectSubtitle(connect, overview.profiles)}</span>
-            {connect.createdBy && <CreatorText creator={{ id: connect.createdBy.id, name: connect.createdBy.name, email: connect.createdBy.id.includes("@") ? connect.createdBy.id : null, via: connect.createdBy.id === "local" ? "local" : "cloud" }} verb="添加" />}
+            <span className="owner-line">所属 <OwnerLabel owner={connect.createdBy} /></span>
           </p>
         </div>
         <Menu items={[
           connect.enabled
             ? { label: "停用", icon: Power, onSelect: () => save.mutate({ enabled: false }, { onSuccess: () => toast("已停用，Slack 连接已断开") }) }
             : { label: "启用", icon: Power, onSelect: () => save.mutate({ enabled: true }, { onSuccess: () => toast("已启用") }) },
+          "separator",
+          { label: "更改所属用户", icon: UserRound, onSelect: () => setOwning(true) },
           "separator",
           { label: "删除连接", icon: Trash2, danger: true, onSelect: () => setDeleting(true) },
         ]} />
@@ -97,6 +102,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
       <SlackAppSection connect={connect} />
       <ConnectSessions connect={connect} />
 
+      {owning && <OwnerDialog connect={connect} onClose={() => setOwning(false)} />}
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.isPending} onConfirm={() => remove.mutate()}
         title={`删除「${connect.name}」？`} action="删除连接"
         description={`Slack 连接会断开${connect.sessions ? `；它的 ${connect.sessions} 个会话的记录会保留，但不再接收消息` : ""}。Slack 里的 app 需要你自己去删除。`} />
@@ -500,6 +506,34 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
           {create.error && <p className="field-error" role="alert">{create.error.message}</p>}
         </>
       )}
+    </Dialog>
+  );
+}
+
+/** Hands a connect to another person: a workspace member in ember cloud, any email on the station's own page. */
+function OwnerDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
+  const toast = useToast();
+  const save = useSaveConnect(connect.id);
+  const people = [...useContext(PeopleContext).values()];
+  const [owner, setOwner] = useState(connect.createdBy?.id ?? people[0]?.email ?? "");
+  const chosen = people.find((p) => p.email.toLowerCase() === owner.toLowerCase());
+  return (
+    <Dialog open onClose={onClose} title="更改所属用户" description="连接属于谁，决定它出现在谁的「我创建的」里。只有 owner、管理员和当前所属用户能改。"
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>取消</Button>
+        <Button variant="primary" disabled={!owner.trim() || owner === connect.createdBy?.id} busy={save.isPending}
+          onClick={() => save.mutate({ owner: { id: owner.trim(), name: chosen?.name ?? owner.trim() } }, { onSuccess: () => { toast("已更改所属用户"); onClose(); } })}>保存</Button>
+      </>}>
+      {people.length > 0 ? (
+        <Field label="所属用户">
+          <Select value={owner} onChange={setOwner} label="所属用户" options={people.map((p) => ({ value: p.email, label: p.name ? `${p.name}（${p.email}）` : p.email }))} />
+        </Field>
+      ) : (
+        <Field label="所属用户的邮箱" htmlFor="owner-email">
+          <input id="owner-email" className="input" type="email" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="name@example.com" />
+        </Field>
+      )}
+      {save.error && <p className="field-error" role="alert">{save.error.message}</p>}
     </Dialog>
   );
 }

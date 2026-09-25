@@ -198,7 +198,7 @@ export function ConnectsSettings({ entry, stations }: { entry: WorkspaceEntry; s
   const live = stations.filter((s) => s.online);
   const overviews = useQueries({ queries: live.map((s) => ({ queryKey: keys.overview(s.id), queryFn: () => makeApi(s.transport).overview(), refetchInterval: 10_000 })) });
   const items = useMemo(() => live.flatMap((station, i) => (overviews[i]?.data?.connects ?? []).map((connect) => ({ connect, station }))), [live, overviews]);
-  return <ConnectList items={items} stations={stations} showStation={stations.length > 1} loading={overviews.some((o) => o.isPending)} back={`/w/${entry.id}/settings`} />;
+  return <ConnectList items={items} stations={stations} showStation loading={overviews.some((o) => o.isPending)} back={`/w/${entry.id}/settings`} />;
 }
 
 export function RuntimeSettings({ entry, stations }: { entry: WorkspaceEntry; stations: Station[] }) {

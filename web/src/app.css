@@ -503,3 +503,7 @@
 .mine-filter .segmented { padding: 2px; }
 .mine-filter .segmented-option { height: 26px; font-size: var(--text-xs); }
 .page .mine-filter { padding: 0 0 12px; max-width: 220px; margin: 0; }
+.connect-facts { display: flex; align-items: center; gap: 10px; flex: none; }
+.owner { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text); white-space: nowrap; }
+.owner-none { color: var(--subtle); }
+.owner-line { display: inline-flex; align-items: center; gap: 6px; }

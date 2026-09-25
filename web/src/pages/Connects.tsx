@@ -6,7 +6,7 @@ import { DropdownMenu } from "radix-ui";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useOverview, type ConnectView } from "../api.ts";
-import { CreatorText, MineFilter, useOnlyMine } from "../components.tsx";
+import { MineFilter, OwnerLabel, useOnlyMine } from "../components.tsx";
 import { connectionText, modeText, presence, RUNTIME_LABEL } from "../format.ts";
 import { StationContext, useIsMine, useStation, type Station } from "../station.tsx";
 import { Button, ConnectKindIcon, MobileBack, StatusDot } from "../ui.tsx";
@@ -52,11 +52,12 @@ export function ConnectList({ items, stations, showStation, loading, back }: { i
               <Link className="list-row" to={`${station.base}/connects/${c.id}`}>
                 <ConnectKindIcon kind={c.kind} />
                 <span className="list-row-text">
-                  <span className="list-row-title">{c.name}{showStation && <span className="station-tag inline">{station.name}</span>}</span>
-                  <span className="muted">
-                    {modeText(c.mode, c.requireMention)} · {RUNTIME_LABEL[c.bind.runtime]}{c.bind.model ? ` · ${c.bind.model}` : ""}
-                    {c.createdBy && <> · <CreatorText creator={{ id: c.createdBy.id, name: c.createdBy.name, email: c.createdBy.id.includes("@") ? c.createdBy.id : null, via: c.createdBy.id === "local" ? "local" : "cloud" }} verb="添加" /></>}
-                  </span>
+                  <span className="list-row-title">{c.name}</span>
+                  <span className="muted">{modeText(c.mode, c.requireMention)} · {RUNTIME_LABEL[c.bind.runtime]}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>
+                </span>
+                <span className="connect-facts">
+                  {showStation && <span className="station-tag">{station.name}</span>}
+                  <OwnerLabel owner={c.createdBy} />
                 </span>
                 <span className="nav-note">{connectionText(c.connection)}</span>
                 <StatusDot state={presence(c.connection)} label={connectionText(c.connection)} />

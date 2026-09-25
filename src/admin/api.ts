@@ -491,7 +491,7 @@ export class AdminApi {
       const model = bind.model === undefined ? existing?.bind.model : bind.model;
       const next: RawConnect = {
         id,
-        ...(existing ? (existing.createdBy ? { createdBy: existing.createdBy } : {}) : { createdBy: { id: viewerId(viewer), name: viewerName(viewer) } }),
+        ...ownerOf(existing?.createdBy, input.owner, viewer),
         name: typeof input.name === "string" && input.name.trim() ? input.name.trim() : existing?.name ?? id,
         enabled: typeof input.enabled === "boolean" ? input.enabled : existing?.enabled ?? true,
         kind: input.kind ?? existing?.kind ?? "slack",
@@ -585,3 +585,19 @@ function slackError(error: unknown): string {
 }
 
 
+
+/**
+ * Who a connect belongs to: whoever added it, unless `requested` hands it to
+ * someone else. Only the station itself, a workspace owner or admin, or the
+ * current owner may do that.
+ */
+function ownerOf(current: { id: string; name: string } | undefined, requested: unknown, viewer: Viewer): { createdBy?: { id: string; name: string } } {
+  const base = current ?? (requested === undefined ? { id: viewerId(viewer), name: viewerName(viewer) } : undefined);
+  if (requested === undefined) return base ? { createdBy: base } : {};
+  const r = requested as { id?: unknown; name?: unknown } | null;
+  const id = typeof r?.id === "string" ? r.id.trim().toLowerCase() : "";
+  if (id !== "local" && !/^[^\s@]+@[^\s@]+$/.test(id)) throw new Error("所属用户要写成邮箱");
+  const allowed = viewer.via === "local" || (viewer.via === "mesh" && (viewer.role === "owner" || viewer.role === "admin")) || (current !== undefined && current.id === viewerId(viewer));
+  if (!allowed) throw new Error("只有 workspace 的 owner、管理员或者当前所属用户能改所属用户");
+  return { createdBy: { id, name: typeof r?.name === "string" ? r.name.slice(0, 120) : id } };
+}

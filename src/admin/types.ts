@@ -154,6 +154,8 @@ export interface ConnectInput {
   requireMention?: boolean;
   bind?: { runtime?: RuntimeKind; profiles?: string[]; model?: string };
   slack?: { appToken?: string; botToken?: string };
+  /** Hands the connect to someone else (an email). Owners, admins, the station itself, or the current owner. */
+  owner?: { id: string; name?: string };
 }
 
 /** PUT /profiles/:id. env: a string sets, null removes, an omitted key is kept. A blank access key keeps the stored one. */

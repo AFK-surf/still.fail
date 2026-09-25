@@ -391,6 +391,9 @@ test("connects, sessions and chats remember who created them", async () => {
     assert.equal(t.settings.config.connects.find((c) => c.id === "fresh")!.createdBy?.id, "local", "editing keeps the creator");
     const { body } = await t.call("GET", "/overview");
     assert.equal(body.connects.find((c: any) => c.id === "ds").createdBy, null, "older connects have none");
+    await t.call("PUT", "/connects/ds", { owner: { id: "Bob@Example.test", name: "Bob" } });
+    assert.deepEqual(t.settings.config.connects.find((c) => c.id === "ds")!.createdBy, { id: "bob@example.test", name: "Bob" });
+    assert.equal((await t.call("PUT", "/connects/ds", { owner: { id: "not an email" } })).status, 400);
 
     await t.hub.accept("ds", message({ text: "<@UBOT> hi", user: "U42" }));
     await settle();
