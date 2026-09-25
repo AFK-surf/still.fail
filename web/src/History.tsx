@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ConnectView, SessionDetail, TimelineEntry } from "./api.ts";
-import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, splitThread, threadNamer } from "./format.ts";
+import { agentLabel, botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, splitThread, threadNamer } from "./format.ts";
 import { Avatar, ICON, Pill } from "./ui.tsx";
 import { usePerson } from "./station.tsx";
 
@@ -155,11 +155,9 @@ export function History({ detail, connect, footer }: { detail: SessionDetail; co
     <section className="history" aria-label="执行历史">
       <header className="history-head">
         <div className="history-identity">
-          <Avatar id={session.connect} name={name} size={18} />
-          <span className="history-name">{name}</span>
+          <span className="history-name">{agentLabel(model, session.effort)}</span>
           <span className="history-sep">·</span>
           <span>{RUNTIME_LABEL[session.runtime]}</span>
-          {model && <><span className="history-sep">·</span><span>{model}</span></>}
           {usage && <><span className="history-sep">·</span><span>{compactNumber(usage.inputTokens + usage.outputTokens)} tokens</span></>}
         </div>
         <div className="history-tools">

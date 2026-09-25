@@ -2,7 +2,7 @@
 // with the history. A chat can be opened beside it: ember's own chat, which
 // reaches the agent the way a Slack thread does.
 import { useIsMine, useLink, usePerson, useStation } from "../station.tsx";
-import { CreatorText, Participants } from "../components.tsx";
+import { CreatorText, PeopleStack } from "../components.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, MessageSquarePlus, MessagesSquare, Square, Unplug, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
@@ -13,7 +13,7 @@ import remarkGfm from "remark-gfm";
 import { useApi, keys, useOverview, useSession, useSessions, type ConnectView, type SessionDetail } from "../api.ts";
 import { History } from "../History.tsx";
 import {
-  absoluteTime, PROCESS_LABEL, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, STATUS_LABEL, statusTone, threadNamer, turnResult,
+  PROCESS_LABEL, STATUS_LABEL, absoluteTime, agentLabel, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusTone, threadNamer, turnResult,
 } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Empty, ICON, IconButton, Menu, MobileBack, Pill, Tip } from "../ui.tsx";
@@ -86,7 +86,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
           <h1>{sessionTitle(session, name)}</h1>
           <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
           <CreatorText creator={session.creator} verb="发起" />
-          <Participants people={session.participants} />
+          <PeopleStack people={session.participants} max={6} />
         </div>
         <div className="page-bar-actions">
           {slackThreads.length > 1
@@ -199,6 +199,7 @@ function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating 
     if (value && !send.isPending) send.mutate(value);
   };
   const isMine = useIsMine();
+  const agent = agentLabel(detail.transcript?.usage?.model ?? detail.session.model, detail.session.effort);
   const chatName = (c: SessionDetail["chats"][number], i: number) => c.title ?? `对话 ${i + 1}`;
   const owner = (c: SessionDetail["chats"][number]) => (isMine(c.creator) ? "你" : c.creator?.name ?? "");
 
@@ -214,7 +215,7 @@ function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating 
       </header>
       <div className="chat-list" ref={list}>
         {chat.messages.length === 0 && (
-          <p className="chat-empty">在这里说的话会像 Slack 消息一样送到这个会话，{name} 会在这里回复。</p>
+          <p className="chat-empty">在这里说的话会像 Slack 消息一样送到这个会话，agent 会在这里回复。</p>
         )}
         {chat.messages.map((m) => m.role === "person" ? (
           <div key={m.ts} className="msg msg-human">
@@ -224,18 +225,18 @@ function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating 
         ) : (
           <div key={m.ts} className="msg msg-bot">
             <div className="msg-head">
-              <span className="msg-name">{name}</span>
+              <span className="msg-name">{agent}</span>
               <span className="msg-time" title={absoluteTime(m.createdAt)}>{relativeTime(m.createdAt)}</span>
             </div>
             <div className="markdown"><Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown></div>
           </div>
         ))}
         {busy && chat.messages.at(-1)?.role === "person" && (
-          <div className="chat-typing"><span className="activity-pulse inline" aria-hidden="true" />{name} 在处理…</div>
+          <div className="chat-typing"><span className="activity-pulse inline" aria-hidden="true" />正在处理…</div>
         )}
       </div>
       <form className="composer" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        <textarea className="input composer-input" rows={2} value={text} placeholder={`发消息给 ${name}（Enter 发送，Shift+Enter 换行）`}
+        <textarea className="input composer-input" rows={2} value={text} placeholder="发消息（Enter 发送，Shift+Enter 换行）"
           onChange={(e) => setText(e.target.value)} aria-label="消息"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
         <Button variant="primary" type="submit" disabled={!text.trim()} busy={send.isPending}>发送</Button>

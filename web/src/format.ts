@@ -224,3 +224,16 @@ export function timeUntil(ms: number, now = Date.now()): string {
   if (hours < 48) return `${hours} 小时后`;
   return `${Math.round(hours / 24)} 天后`;
 }
+
+export const EFFORTS: Record<RuntimeKind, string[]> = {
+  claude: ["low", "medium", "high", "xhigh", "max"],
+  codex: ["minimal", "low", "medium", "high", "xhigh"],
+};
+export const EFFORT_LABEL: Record<string, string> = { minimal: "最低", low: "低", medium: "中", high: "高", xhigh: "很高", max: "最高" };
+
+/** How the agent is named: it has no name, only its model and how hard it thinks. */
+export function agentLabel(model: string | null | undefined, effort: string | null | undefined): string {
+  const parts = [model || "默认模型"];
+  if (effort) parts.push(`思考${EFFORT_LABEL[effort] ?? effort}`);
+  return parts.join(" · ");
+}
