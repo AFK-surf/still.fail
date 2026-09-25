@@ -1,256 +1,133 @@
 #!/usr/bin/env python3
-"""Prepare an immutable local deployment candidate, check private inputs, or deploy it."""
+"""Deploys ember cloud: the Worker, its relay container and the web app.
+
+    python3 deploy.py            # build the web app, deploy, set secrets, check /healthz
+    python3 deploy.py --check    # only report what is missing
+
+Inputs (none of them in the repository):
+  --google  Google "Web application" OAuth client JSON (default: zork's, ~/zork-deploy/google-oauth.json;
+            its redirect URIs must include <origin>/v1/auth/google/callback)
+  keys      ~/ember-deploy/keys.json, created on first run: session signing key, admin token and
+            the Ed25519 key that signs station grants. Keep it; losing it logs everyone out and makes
+            stations distrust new grants until they re-enroll.
+Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
+"""
 import argparse
-from contextlib import contextmanager
-import hashlib
 import json
 import os
-from pathlib import Path
+import re
 import secrets
-import shutil
 import subprocess
+import sys
 import tempfile
-import time
-from urllib.parse import urlparse
+import urllib.request
+from contextlib import contextmanager
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-PRIVATE = Path.home() / "zork-deploy"
+REPO = ROOT.parent
+DEPLOY = Path.home() / "ember-deploy"
+KEYS = DEPLOY / "keys.json"
 
-def read_config(path):
-    script = """import fs from 'node:fs'; import {parse} from 'jsonc-parser';
-const errors=[]; const value=parse(fs.readFileSync(process.argv[1], 'utf8'),errors,{allowTrailingComma:true});
-if(errors.length) process.exit(1); process.stdout.write(JSON.stringify(value));"""
-    result = subprocess.run(["node", "--input-type=module", "-e", script, str(path.resolve())],
-                            cwd=ROOT, capture_output=True, text=True)
-    if result.returncode:
-        raise ValueError("Invalid JSONC configuration: " + str(path))
-    return json.loads(result.stdout)
 
-def private_json(path):
-    if path.is_symlink() or (path.stat().st_mode & 0o077):
-        raise ValueError(f"Private input must be a regular file with mode 600: {path}")
-    return json.loads(path.read_text())
+def write_private(path: Path, value) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(value, f, indent=2)
+    os.replace(tmp, path)
 
-def write_private(path, data):
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    with os.fdopen(descriptor, "w") as output:
-        json.dump(data, output)
-        output.flush()
-        os.fsync(output.fileno())
 
-def wrangler_authenticated():
-    try:
-        result = subprocess.run(["pnpm", "exec", "wrangler", "whoami", "--json"],
-                                cwd=ROOT, capture_output=True, timeout=30)
-        return result.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        return False
+def read_template() -> dict:
+    text = (ROOT / "wrangler.jsonc").read_text()
+    text = re.sub(r"^\s*//.*$", "", text, flags=re.M)
+    text = re.sub(r",(\s*[}\]])", r"\1", text)
+    return json.loads(text)
 
-def configuration(args):
-    config = read_config(ROOT / "wrangler.jsonc")
-    if args.config and args.config.exists():
-        local = read_config(args.config)
-        for key in ("name", "account_id", "routes", "workers_dev"):
-            if key in local:
-                config[key] = local[key]
-        for key in ("PUBLIC_ORIGIN", "GOOGLE_CLIENT_ID"):
-            if key in local.get("vars", {}):
-                config["vars"][key] = local["vars"][key]
-    origin = config["vars"]["PUBLIC_ORIGIN"]
-    parsed = urlparse(origin)
-    if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment:
-        raise ValueError("PUBLIC_ORIGIN must be one canonical HTTPS origin")
-    missing = []
-    if not config.get("account_id"):
-        missing.append("Cloudflare account_id in the private deployment config")
-    routes = config.get("routes", [])
-    if not any(r.get("custom_domain") is True and r.get("pattern") == parsed.hostname for r in routes):
-        missing.append("Cloudflare custom-domain route matching PUBLIC_ORIGIN")
-    values = {}
-    callback = origin + "/v1/auth/google/callback"
-    if args.google_client.exists():
-        web = private_json(args.google_client).get("web", {})
-        if not web.get("client_id") or not web.get("client_secret"):
-            missing.append("Google Web OAuth client_id and client_secret")
-        else:
-            config["vars"]["GOOGLE_CLIENT_ID"] = web["client_id"]
-            values["GOOGLE_CLIENT_SECRET"] = web["client_secret"]
-        if callback not in web.get("redirect_uris", []):
-            missing.append("Google authorized redirect URI: " + callback)
-    elif config["vars"].get("GOOGLE_CLIENT_ID"):
-        missing.append("Google Web OAuth JSON at " + str(args.google_client))
-    if not (args.token_file.exists() or os.environ.get("CLOUDFLARE_API_TOKEN") or wrangler_authenticated()):
-        missing.append("Cloudflare API token file/environment, or an interactive Wrangler login")
-    return config, values, missing
+
+def wrangler(*args, env=None, capture=False):
+    command = ["pnpm", "exec", "wrangler", *args]
+    if capture:
+        return subprocess.run(command, cwd=ROOT, env=env, check=True, text=True, capture_output=True).stdout
+    subprocess.run(command, cwd=ROOT, env=env, check=True)
+
+
+def account_id() -> str:
+    out = wrangler("whoami", "--json", capture=True)
+    accounts = json.loads(out).get("accounts") or []
+    if len(accounts) != 1:
+        sys.exit(f"expected one Cloudflare account, got {len(accounts)}")
+    return accounts[0]["id"]
+
+
+def grant_jwk() -> dict:
+    # Node's crypto makes the Ed25519 JWK; Python's stdlib cannot.
+    out = subprocess.check_output(["node", "-e", """
+      const { generateKeyPairSync } = require("node:crypto");
+      const { privateKey } = generateKeyPairSync("ed25519");
+      console.log(JSON.stringify({ ...privateKey.export({ format: "jwk" }), kid: "grant-" + Date.now().toString(36) }));
+    """], text=True)
+    return json.loads(out)
+
+
+def keys() -> dict:
+    if KEYS.exists():
+        return json.loads(KEYS.read_text())
+    value = {"AUTH_SIGNING_KEY": secrets.token_urlsafe(32), "ADMIN_TOKEN": secrets.token_urlsafe(32), "GRANT_SIGNING_JWK": json.dumps(grant_jwk())}
+    write_private(KEYS, value)
+    print(f"created {KEYS}")
+    return value
+
 
 @contextmanager
-def docker_environment(token_file=None):
-    env = os.environ.copy()
-    if token_file and token_file.exists():
-        if token_file.is_symlink() or token_file.stat().st_mode & 0o077:
-            raise ValueError("Cloudflare token file must have mode 600")
-        env["CLOUDFLARE_API_TOKEN"] = token_file.read_text().strip()
-    host = env.get("DOCKER_HOST") or subprocess.check_output(
-        ["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"], text=True).strip()
-    original_dir = Path(env.get("DOCKER_CONFIG", str(Path.home() / ".docker")))
-    original_file = original_dir / "config.json"
-    original = json.loads(original_file.read_text()) if original_file.exists() else {}
-    with tempfile.TemporaryDirectory(prefix="zork-network-docker-") as directory:
-        # Suppress macOS keychain discovery without modifying global Docker state.
-        write_private(Path(directory) / "config.json", {
-            "auths": {"https://index.docker.io/v1/": {}}, "credsStore": "",
-            "cliPluginsExtraDirs": [str(original_dir / "cli-plugins"), *original.get("cliPluginsExtraDirs", [])],
-        })
-        env.update(DOCKER_CONFIG=directory, DOCKER_HOST=host)
-        env.pop("DOCKER_CONTEXT", None)
+def docker_env():
+    """A throwaway Docker config: an SSH session cannot unlock the macOS keychain Docker's default helper uses."""
+    env = dict(os.environ)
+    env["PATH"] = "/opt/homebrew/bin:" + env.get("PATH", "")
+    host = subprocess.check_output(["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"], env=env, text=True).strip()
+    with tempfile.TemporaryDirectory(prefix="ember-docker-") as directory:
+        Path(directory, "config.json").write_text(json.dumps({"auths": {}, "credsStore": ""}))
+        env["DOCKER_CONFIG"] = directory
+        env["DOCKER_HOST"] = host
         yield env
 
-def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
-def prepare(args, config, missing):
-    output = args.output.resolve()
-    if output.exists():
-        raise ValueError("Choose a new output directory; an existing candidate is immutable")
-    output.mkdir(parents=True)
-    for name in ("Dockerfile", "relay-entrypoint.sh", "README.md"):
-        shutil.copy2(ROOT / name, output / name)
-    build_config = dict(config)
-    build_config["main"] = str(ROOT / "src/index.ts")
-    build_config["containers"] = [{**c, "image": str(ROOT / "Dockerfile")} for c in config["containers"]]
-    # Public inputs only. Neither Google secret nor signing/admin/CF credentials
-    # are part of the candidate, its config, or the build command's arguments.
-    private_build_config = ROOT / ".wrangler/relay-candidate.json"
-    private_build_config.parent.mkdir(exist_ok=True)
-    private_build_config.write_text(json.dumps(build_config))
-    try:
-        with docker_environment() as env:
-            with (output / "build.log").open("w") as log:
-                subprocess.run(["pnpm", "exec", "wrangler", "deploy", "--dry-run", "--config", str(private_build_config),
-                                "--outdir", str(output / "worker")], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
-                subprocess.run(["docker", "build", "--platform", "linux/amd64", "-t", args.image, "."],
-                               cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
-            image_id = subprocess.check_output(["docker", "image", "inspect", "--format", "{{.Id}}", args.image], env=env, text=True).strip()
-            image_tag = "zork-network-relay:" + image_id.split(":", 1)[1]
-            subprocess.run(["docker", "tag", args.image, image_tag], env=env, check=True)
-            subprocess.run(["docker", "save", "--output", str(output / "relay-image.tar"), image_tag], env=env, check=True)
-        worker = output / "worker/index.js"
-        if not worker.exists() or "/__test/" in worker.read_text():
-            raise ValueError("Production bundle is missing or contains fixture routes")
-        deployed = dict(config)
-        deployed.pop("$schema", None)
-        deployed["main"] = "worker/index.js"
-        deployed["no_bundle"] = True
-        registry_image = "registry.cloudflare.com/" + config.get("account_id", "ACCOUNT_ID_REQUIRED") + "/" + image_tag
-        deployed["containers"] = [{**c, "image": registry_image} for c in config["containers"]]
-        (output / "wrangler.json").write_text(json.dumps(deployed, indent=2) + "\n")
-        repository = ROOT.parents[1]
-        tracked = subprocess.check_output(["git", "diff", "--name-only", "-z", "HEAD"], cwd=repository).decode().split("\0")
-        untracked = subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=repository).decode().split("\0")
-        changes = {name: digest(repository / name) if (repository / name).is_file() else None
-                   for name in sorted(set(tracked + untracked)) if name}
-        manifest = {"source_base": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-                    "source_changes": changes,
-                    "image": image_tag, "image_id": image_id, "deployed": False,
-                    "configuration_gaps": missing,
-                    "files": {str(p.relative_to(output)): digest(p) for p in sorted(output.rglob("*")) if p.is_file() and p.name != "build.log"}}
-        (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-        print("Prepared candidate:", output)
-        print("Container image:", image_id)
-    finally:
-        private_build_config.unlink(missing_ok=True)
-
-def deploy(args, values, missing):
-    candidate = args.output.resolve()
-    manifest = json.loads((candidate / "manifest.json").read_text())
-    for name, expected in manifest["files"].items():
-        if digest(candidate / name) != expected:
-            raise ValueError("Candidate file changed: " + name)
-    config = json.loads((candidate / "wrangler.json").read_text())
-    current, values, missing = configuration(args)
-    for key in ("name", "account_id", "routes", "vars"):
-        if config.get(key) != current.get(key):
-            raise ValueError("Private/public configuration changed; prepare and validate a new candidate")
-    required = [item for item in missing if not item.startswith("Cloudflare API token")]
-    if required:
-        raise ValueError("Configuration is incomplete; run check")
-    keys_path = args.session_keys
-    if not keys_path.exists():
-        write_private(keys_path, {"AUTH_SIGNING_KEY": secrets.token_urlsafe(32), "ADMIN_TOKEN": secrets.token_urlsafe(32)})
-    keys = private_json(keys_path)
-    for name in ("AUTH_SIGNING_KEY", "ADMIN_TOKEN"):
-        if not isinstance(keys.get(name), str) or len(keys[name]) < 43:
-            raise ValueError("Invalid private session key material")
-        values[name] = keys[name]
-    with docker_environment(args.token_file) as env:
-        subprocess.run(["docker", "load", "--input", str(candidate / "relay-image.tar")], env=env, check=True, stdout=subprocess.DEVNULL)
-        actual = subprocess.check_output(["docker", "image", "inspect", "--format", "{{.Id}}", manifest["image"]], env=env, text=True).strip()
-        if actual != manifest["image_id"]:
-            raise ValueError("Loaded container does not match candidate")
-        command = ["pnpm", "exec", "wrangler"]
-        subprocess.run(command + ["containers", "push", manifest["image"], "--config", str(candidate / "wrangler.json")],
-                       cwd=ROOT, env=env, check=True)
-        # Snapshot metadata for an operator-directed rollback. Do not log secrets.
-        previous = subprocess.run(command + ["deployments", "list", "--config", str(candidate / "wrangler.json"), "--json"],
-                                  cwd=ROOT, env=env, capture_output=True, text=True)
-        (candidate / "previous-deployments.json").write_text(previous.stdout)
-        with tempfile.TemporaryDirectory(prefix="zork-worker-secrets-") as directory:
-            secret_file = Path(directory) / "secrets.json"
-            write_private(secret_file, values)
-            subprocess.run(command + ["secret", "bulk", str(secret_file), "--config", str(candidate / "wrangler.json")],
-                           cwd=ROOT, env=env, check=True)
-        subprocess.run(command + ["deploy", "--config", str(candidate / "wrangler.json"), "--containers-rollout", "immediate"],
-                       cwd=ROOT, env=env, check=True)
-    if args.restart_relay:
-        # Credentials enter curl over stdin, never in its command line or logs.
-        # The just-activated Worker can take a short time to reach this edge.
-        confirmed = False
-        for attempt in range(6):
-            result = subprocess.run(["curl", "--silent", "--show-error", "--fail", "--max-time", "10",
-                                     "--request", "POST", "--config", "-",
-                                     config["vars"]["PUBLIC_ORIGIN"] + "/v1/admin/relay/restart"],
-                                    input='header = "Authorization: Bearer ' + values["ADMIN_TOKEN"] + '"\n',
-                                    capture_output=True, text=True)
-            if result.returncode == 0:
-                try:
-                    confirmed = json.loads(result.stdout).get("restarted") is True
-                except (ValueError, AttributeError):
-                    pass
-            if confirmed:
-                break
-            if attempt < 5:
-                time.sleep(2)
-        if not confirmed:
-            raise ValueError("Worker deployed, but relay cutover is not confirmed; retry the admin restart before acceptance")
-        print("Old relay process retired. New connections will start the deployed image.")
-    print("Worker deployed. Native relay acceptance is required; verify Google login separately if configured.")
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("check", "prepare", "deploy"))
-    parser.add_argument("--config", type=Path, default=ROOT / "wrangler.local.json")
-    parser.add_argument("--google-client", type=Path, default=PRIVATE / "google-oauth.json")
-    parser.add_argument("--token-file", type=Path, default=PRIVATE / "cloudflare-api-token")
-    parser.add_argument("--session-keys", type=Path, default=PRIVATE / "session-keys.json")
-    parser.add_argument("--output", type=Path, default=ROOT.parents[1] / "artifacts/cloudflare-candidate")
-    parser.add_argument("--image", default="zork-relay-account-lifecycle:candidate")
-    parser.add_argument("--restart-relay", action="store_true", help="Retire the old relay process and its sockets after deployment (required for stateless-admission cutover)")
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--google", type=Path, default=Path.home() / "zork-deploy" / "google-oauth.json")
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--skip-build", action="store_true", help="deploy the web app already in dist/cloud-app")
     args = parser.parse_args()
-    try:
-        config, values, missing = configuration(args)
-        if args.command == "check":
-            print(json.dumps({"ready": not missing, "missing": missing, "callback": config["vars"]["PUBLIC_ORIGIN"] + "/v1/auth/google/callback"}, indent=2))
-            return int(bool(missing))
-        if args.command == "prepare":
-            prepare(args, config, missing)
-        else:
-            deploy(args, values, missing)
-        return 0
-    except (ValueError, OSError, subprocess.CalledProcessError) as error:
-        # CalledProcessError contains only our credential-free command arguments.
-        print(str(error))
-        return 1
+
+    template = read_template()
+    origin = template["vars"]["PUBLIC_ORIGIN"]
+    web = json.loads(args.google.read_text())["web"]
+    callback = f"{origin}/v1/auth/google/callback"
+    if callback not in web.get("redirect_uris", []):
+        print(f"note: {args.google} does not list {callback}; make sure it is registered in Google Cloud Console")
+    if args.check:
+        print("account", account_id())
+        print("keys", "present" if KEYS.exists() else "will be created")
+        return
+
+    config = {**template, "account_id": account_id(), "vars": {**template["vars"], "GOOGLE_CLIENT_ID": web["client_id"]}}
+    local = ROOT / "wrangler.local.json"
+    local.write_text(json.dumps(config, indent=2) + "\n")
+
+    if not args.skip_build:
+        subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, check=True)
+    values = {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"]}
+    with docker_env() as env:
+        wrangler("deploy", "--config", str(local), "--containers-rollout", "immediate", env=env)
+        with tempfile.TemporaryDirectory(prefix="ember-secrets-") as directory:
+            path = Path(directory) / "secrets.json"
+            write_private(path, values)
+            wrangler("secret", "bulk", str(path), "--config", str(local), env=env)
+
+    with urllib.request.urlopen(f"{origin}/healthz", timeout=30) as response:
+        print("healthz", response.status, response.read().decode())
+
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
