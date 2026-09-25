@@ -52,7 +52,7 @@ station 端由 `ember-mesh`（Rust，iroh 1.0.3）负责：ember 启动并看护
 同一套 React 客户端，两种模式：
 
 - **本机模式**：在 station 上打开 `http://127.0.0.1:4760/admin`，不登录，直接访问本机 API。
-- **cloud 模式**：从 ember cloud 打开，先登录；左上角切换账号和 workspace，选择 station 后，所有管理 API 请求经浏览器里的 iroh（wasm，只能走 relay）送到 station。
+- **cloud 模式**：从 ember cloud 打开，先登录。左上角切换的是 workspace（标明属于哪个账号，账号的添加和退出也在这里）。一个 workspace 的页面同时连着它所有在线的 station：侧栏把各台 station 的会话按时间合在一起、每条标出 station，连接按 station 分组；打开的会话、对话、连接和运行时账号都直接和它所在的 station 通信。所有请求都经浏览器里的 iroh（wasm，只能走 relay）送到各自的 station。
 
 浏览器的设备密钥存在 IndexedDB；清掉站点数据等于换了一个新客户端，重新申请授权即可，不需要任何人重新审批。
 
