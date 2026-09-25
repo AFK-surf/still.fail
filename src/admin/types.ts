@@ -1,23 +1,25 @@
 // Shapes of the admin API responses, shared with the web client (type-only imports).
 import type { RuntimeKind } from "../config.ts";
-import type { BotState } from "../bots.ts";
+import type { ConnectKind, ConnectMode } from "../config.ts";
+import type { ConnectState } from "../connections.ts";
 import type { AccessKind, ProfileCheck } from "../profiles.ts";
 import type { TimelineEntry, TranscriptUsage } from "../transcript.ts";
 
-export type { AccessKind, BotState, ProfileCheck, RuntimeKind, TimelineEntry, TranscriptUsage };
+export type { AccessKind, ConnectKind, ConnectMode, ConnectState, ProfileCheck, RuntimeKind, TimelineEntry, TranscriptUsage };
 
 export type ProcessState = "running" | "warm" | "cold";
 
-export interface BotView {
+export interface ConnectView {
   id: string;
   name: string;
   enabled: boolean;
-  runtime: RuntimeKind;
-  profiles: string[];
-  model: string | null;
+  kind: ConnectKind;
+  mode: ConnectMode;
+  requireMention: boolean;
+  bind: { runtime: RuntimeKind; profiles: string[]; model: string | null };
   /** Masked; empty when unset. */
   slack: { appToken: string; botToken: string };
-  connection: BotState;
+  connection: ConnectState;
   sessions: number;
 }
 
@@ -56,7 +58,7 @@ export interface ProcessView {
 export interface Overview {
   /** Who is looking: a local visit, or the Cloudflare Access identity. */
   viewer: { via: "local" } | { via: "access"; email: string };
-  bots: BotView[];
+  connects: ConnectView[];
   profiles: ProfileView[];
   processes: ProcessView[];
   counts: { sessions: number; running: number; warm: number };
@@ -73,7 +75,9 @@ export interface TurnSummary {
 
 export interface SessionSummary {
   key: string;
-  bot: string;
+  connect: string;
+  /** thread: this session is one thread; all: every thread of a single-session connect. */
+  scope: "thread" | "all";
   channel: string;
   threadTs: string;
   runtime: RuntimeKind;
@@ -96,8 +100,9 @@ export interface TurnRecord extends TurnSummary {
 }
 
 export interface InboundView {
-  bot: string;
+  connect: string;
   channel: string;
+  threadTs: string;
   ts: string;
   sessionKey: string;
   user: string;
@@ -108,20 +113,23 @@ export interface InboundView {
 
 export interface SessionDetail {
   session: SessionSummary;
-  /** Display names of the people in the thread, by chat user id, where known. */
+  /** Display names of the people in its threads, by chat user id, where known. */
   people: Record<string, string>;
+  /** The threads the session has messages from, most recent first. */
+  threads: { channel: string; threadTs: string; messages: number; lastTs: string }[];
   turns: TurnRecord[];
   inbound: InboundView[];
   transcript: { path: string; timeline: TimelineEntry[]; usage: TranscriptUsage } | null;
 }
 
-/** PUT /bots/:id. Blank or missing tokens keep the stored ones. */
-export interface BotInput {
+/** PUT /connects/:id. Blank or missing tokens keep the stored ones. */
+export interface ConnectInput {
   name?: string;
   enabled?: boolean;
-  runtime?: RuntimeKind;
-  profiles?: string[];
-  model?: string;
+  kind?: ConnectKind;
+  mode?: ConnectMode;
+  requireMention?: boolean;
+  bind?: { runtime?: RuntimeKind; profiles?: string[]; model?: string };
   slack?: { appToken?: string; botToken?: string };
 }
 

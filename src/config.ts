@@ -1,9 +1,10 @@
 // Configuration comes from one JSON file: $EMBER_CONFIG, else <dataDir>/config.json
 // with dataDir from $EMBER_DATA (default ~/.ember).
 //
-// A bot is one Slack app bound to one runtime and model: "@claude" runs Claude
-// Code on a Claude subscription, "@ds" runs deepseek through OpenCode Go, and
-// so on. Profiles are the runtime accounts bots draw from; bots may share them.
+// A connect is one way in: today a Slack app, later WeChat, Telegram and so on.
+// Each connect is bound to one model (runtime + account + model) and decides
+// how conversations map to sessions. Profiles are the runtime accounts
+// connects draw from; connects may share them.
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
@@ -32,18 +33,39 @@ export interface Profile {
   model?: string;
 }
 
-export interface Bot {
-  /** Stable id; part of session keys, so do not rename a bot that has sessions. */
-  id: string;
-  /** A disabled bot keeps its config and sessions but is not connected. */
-  enabled: boolean;
-  /** How the bot refers to itself in its instructions. */
-  name: string;
-  slack: { appToken: string; botToken: string };
+export type ConnectKind = "slack";
+export const CONNECT_KINDS: readonly ConnectKind[] = ["slack"];
+
+/**
+ * multi-session: each thread is its own session, started by an @mention.
+ * single-session: one session takes every thread the connect sees; with
+ * requireMention a new thread needs an @mention, replies in threads the
+ * session is already part of do not.
+ */
+export type ConnectMode = "multi-session" | "single-session";
+export const CONNECT_MODES: readonly ConnectMode[] = ["multi-session", "single-session"];
+
+/** The model a connect runs: a runtime, the accounts it may use, and a model. */
+export interface Binding {
   runtime: RuntimeKind;
-  /** Accounts this bot may run on, in order of preference; all of `runtime`. */
+  /** Accounts in order of preference; all of `runtime`. */
   profiles: string[];
   model?: string;
+}
+
+export interface Connect {
+  /** Stable id; part of session keys, so do not rename a connect that has sessions. */
+  id: string;
+  /** How the agent refers to itself. */
+  name: string;
+  /** A disabled connect keeps its config and sessions but is not connected. */
+  enabled: boolean;
+  kind: ConnectKind;
+  mode: ConnectMode;
+  /** single-session only: whether starting on a new thread needs an @mention. */
+  requireMention: boolean;
+  slack: { appToken: string; botToken: string };
+  bind: Binding;
 }
 
 export interface Config {
@@ -55,7 +77,7 @@ export interface Config {
   /** Shared MEMORY.md and skills/ linked into every profile home. */
   agentHome: string;
   http: { host: string; port: number };
-  bots: Bot[];
+  connects: Connect[];
   profiles: Profile[];
   /** How many times a turn that ended without final/block is nudged before giving up. */
   maxNudges: number;
@@ -65,7 +87,19 @@ export interface Config {
   maxWarmClaude: number;
 }
 
-export interface RawBot {
+export interface RawConnect {
+  id: string;
+  name?: string;
+  enabled?: boolean;
+  kind?: ConnectKind;
+  mode?: ConnectMode;
+  requireMention?: boolean;
+  slack?: { appToken?: string; botToken?: string };
+  bind: { runtime: RuntimeKind; profiles?: string[]; model?: string };
+}
+
+/** The previous config shape: one Slack app per bot, always multi-session. */
+interface LegacyBot {
   id: string;
   name?: string;
   enabled?: boolean;
@@ -91,11 +125,29 @@ export interface RawConfig {
   agentHome?: string;
   admin?: { host?: string; port?: number; access?: { teamDomain?: string; aud?: string } };
   http?: { host?: string; port?: number };
-  bots?: RawBot[];
+  connects?: RawConnect[];
+  /** Legacy; read as multi-session Slack connects and rewritten by upgradeRawConfig. */
+  bots?: LegacyBot[];
   profiles?: RawProfile[];
   maxNudges?: number;
   warmMinutes?: number;
   maxWarmClaude?: number;
+}
+
+/** Rewrites older config shapes into the current one. Returns the input when already current. */
+export function upgradeRawConfig(raw: RawConfig): RawConfig {
+  if (!raw.bots) return raw;
+  const { bots, ...rest } = raw;
+  const converted = bots.map((b): RawConnect => ({
+    id: b.id,
+    ...(b.name ? { name: b.name } : {}),
+    ...(b.enabled === undefined ? {} : { enabled: b.enabled }),
+    kind: "slack",
+    mode: "multi-session",
+    ...(b.slack ? { slack: b.slack } : {}),
+    bind: { runtime: b.runtime, profiles: b.profiles ?? (b.profile ? [b.profile] : []), ...(b.model ? { model: b.model } : {}) },
+  }));
+  return { ...rest, connects: [...(raw.connects ?? []), ...converted] };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -124,27 +176,33 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
   });
   unique("profile", profiles.map((p) => p.id));
 
-  const bots = (raw.bots ?? []).map((b): Bot => {
-    if (typeof b.id !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(b.id)) throw new Error(`bot id ${JSON.stringify(b.id)}: use lowercase letters, digits and dashes`);
-    if (!RUNTIMES.includes(b.runtime)) throw new Error(`bot ${b.id}: unknown runtime ${String(b.runtime)}`);
-    const ids = b.profiles ?? (b.profile ? [b.profile] : []);
-    if (ids.length === 0) throw new Error(`bot ${b.id}: no profiles`);
+  const connects = (upgradeRawConfig(raw).connects ?? []).map((c): Connect => {
+    if (typeof c.id !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(c.id)) throw new Error(`connect id ${JSON.stringify(c.id)}: use lowercase letters, digits and dashes`);
+    const kind = c.kind ?? "slack";
+    if (!CONNECT_KINDS.includes(kind)) throw new Error(`connect ${c.id}: unknown kind ${String(kind)}`);
+    const mode = c.mode ?? "multi-session";
+    if (!CONNECT_MODES.includes(mode)) throw new Error(`connect ${c.id}: unknown mode ${String(mode)}`);
+    const runtime = c.bind?.runtime;
+    if (!RUNTIMES.includes(runtime)) throw new Error(`connect ${c.id}: unknown runtime ${String(runtime)}`);
+    const ids = c.bind.profiles ?? [];
+    if (ids.length === 0) throw new Error(`connect ${c.id}: bind at least one account`);
     for (const id of ids) {
       const profile = profiles.find((p) => p.id === id);
-      if (!profile) throw new Error(`bot ${b.id}: unknown profile ${id}`);
-      if (profile.runtime !== b.runtime) throw new Error(`bot ${b.id}: profile ${id} is ${profile.runtime}, the bot runs ${b.runtime}`);
+      if (!profile) throw new Error(`connect ${c.id}: unknown profile ${id}`);
+      if (profile.runtime !== runtime) throw new Error(`connect ${c.id}: profile ${id} is ${profile.runtime}, the connect runs ${runtime}`);
     }
     return {
-      id: b.id,
-      enabled: b.enabled ?? true,
-      name: b.name ?? b.id,
-      slack: { appToken: b.slack?.appToken ?? "", botToken: b.slack?.botToken ?? "" },
-      runtime: b.runtime,
-      profiles: ids,
-      ...(b.model ? { model: b.model } : {}),
+      id: c.id,
+      name: c.name?.trim() || c.id,
+      enabled: c.enabled ?? true,
+      kind,
+      mode,
+      requireMention: mode === "multi-session" ? true : c.requireMention ?? true,
+      slack: { appToken: c.slack?.appToken ?? "", botToken: c.slack?.botToken ?? "" },
+      bind: { runtime, profiles: ids, ...(c.bind.model ? { model: c.bind.model } : {}) },
     };
   });
-  unique("bot", bots.map((b) => b.id));
+  unique("connect", connects.map((c) => c.id));
 
   const agentHome = raw.agentHome ?? "agent";
   return {
@@ -155,7 +213,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
       : null,
     agentHome: isAbsolute(agentHome) ? agentHome : join(dataDir, agentHome),
     http: { host: raw.http?.host ?? "127.0.0.1", port: raw.http?.port ?? 4750 },
-    bots,
+    connects,
     profiles,
     maxNudges: raw.maxNudges ?? 2,
     warmMs: (raw.warmMinutes ?? 30) * 60_000,
@@ -171,10 +229,10 @@ function unique(kind: string, ids: string[]): void {
   }
 }
 
-/** The profile a new session of `bot` runs on. Account pooling comes later; for now the first. */
-export function profileFor(config: Config, bot: Bot): Profile {
-  const profile = config.profiles.find((p) => p.id === bot.profiles[0]);
-  if (!profile) throw new Error(`bot ${bot.id}: profile ${bot.profiles[0]} is not configured`);
+/** The profile a new session of `connect` runs on. Account pooling comes later; for now the first. */
+export function profileFor(config: Config, connect: Connect): Profile {
+  const profile = config.profiles.find((p) => p.id === connect.bind.profiles[0]);
+  if (!profile) throw new Error(`connect ${connect.id}: profile ${connect.bind.profiles[0]} is not configured`);
   return profile;
 }
 

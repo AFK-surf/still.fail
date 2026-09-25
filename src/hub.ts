@@ -1,21 +1,33 @@
 // Routes chat messages to session actors, creates sessions, and exposes the
-// MCP tools through which agents act on their thread. Several bots share one
-// hub; each has its own chat connection and its own sessions, so two bots in
-// the same thread never share a conversation.
+// MCP tools through which agents act on their conversations. Several connects
+// share one hub; each has its own chat connection and its own sessions.
+//
+// A connect's mode decides the sessions: multi-session gives each thread its
+// own session (started by an @mention); single-session sends every thread the
+// connect sees into one session. Either way every message carries its source
+// and the agent names the thread it answers, so a session never assumes it
+// belongs to one conversation.
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
-import { profileFor, RUNTIMES, type Bot, type Config, type RuntimeKind } from "./config.ts";
-import type { ChatSurface, InboundMessage } from "./chat/types.ts";
+import { profileFor, RUNTIMES, type Config, type Connect, type RuntimeKind } from "./config.ts";
+import type { ChatSurface, InboundMessage, ThreadRef } from "./chat/types.ts";
+import { parseThreadAddress, threadAddress } from "./instructions.ts";
 import { log } from "./log.ts";
 import type { Tool } from "./mcp.ts";
 import type { AgentDriver } from "./runtime/types.ts";
 import { SessionActor, type DeclaredState } from "./session.ts";
-import type { SessionRow, Store } from "./store.ts";
+import type { SessionRow, SessionScope, Store } from "./store.ts";
 
-export function sessionKey(bot: string, channel: string, threadTs: string): string {
-  return `${bot}:${channel}:${threadTs}`;
+/** A multi-session connect's session for one thread. */
+export function sessionKey(connect: string, channel: string, threadTs: string): string {
+  return `${connect}:${channel}:${threadTs}`;
+}
+
+/** A single-session connect's one session. */
+export function connectSessionKey(connect: string): string {
+  return `${connect}:all`;
 }
 
 export function isStopCommand(text: string): boolean {
@@ -32,8 +44,8 @@ export class Hub {
 
   /**
    * `config` is read on every use, so edits apply to the next decision.
-   * `chats` holds the connected bots by id and may change while running;
-   * configured bots without an entry are offline.
+   * `chats` holds the connected connects by id and may change while running;
+   * configured connects without an entry are offline.
    */
   constructor(options: {
     config: () => Config;
@@ -57,31 +69,35 @@ export class Hub {
     return join(this.#config.dataDir, "repos");
   }
 
-  /** Accepts one message seen by `botId`. Resolves once it is durably recorded (or deliberately ignored). */
-  async accept(botId: string, message: InboundMessage): Promise<void> {
-    const bot = this.#bot(botId);
-    const chat = this.#chat(botId);
-    const key = sessionKey(bot.id, message.channel, message.threadTs);
-    let created = false;
-    if (!this.#store.getSession(key)) {
-      if (!message.addressed) return; // chatter in a thread this bot is not part of
+  /** Accepts one message seen by a connect. Resolves once it is durably recorded (or deliberately ignored). */
+  async accept(connectId: string, message: InboundMessage): Promise<void> {
+    const connect = this.#connect(connectId);
+    const chat = this.#chat(connectId);
+    const single = connect.mode === "single-session";
+    const key = single ? connectSessionKey(connect.id) : sessionKey(connect.id, message.channel, message.threadTs);
+    const exists = Boolean(this.#store.getSession(key));
+    const wanted = single
+      ? message.addressed || !connect.requireMention || (exists && this.#store.inThread(key, message.channel, message.threadTs))
+      : exists || message.addressed;
+    if (!wanted) return; // chatter this connect is not part of
+    if (!exists) {
       try {
-        this.#createSession(key, bot, message);
+        this.#createSession(key, connect, message, single ? "all" : "thread");
       } catch (error) {
         log.error("cannot create session", { session: key, error });
         await chat.post(message, `⚠️ 无法创建会话：${error instanceof Error ? error.message : String(error)}`);
         return;
       }
-      created = true;
     }
     const fresh = this.#store.insertInbound({
-      bot: bot.id, channel: message.channel, ts: message.ts, sessionKey: key,
+      connect: connect.id, channel: message.channel, threadTs: message.threadTs, ts: message.ts, sessionKey: key,
       user: message.user, text: message.text, receivedAt: Date.now(),
     });
     if (!fresh) return;
-    const actor = this.#actor(this.#store.getSession(key)!, { earlierMessages: created && message.ts !== message.threadTs });
+    this.#store.setLatestThread(key, message.channel, message.threadTs);
+    const actor = this.#actor(this.#store.getSession(key)!);
     if (isStopCommand(message.text)) {
-      const [row] = this.#store.pendingInbound(key).filter((m) => m.ts === message.ts);
+      const [row] = this.#store.pendingInbound(key).filter((m) => m.ts === message.ts && m.channel === message.channel);
       if (row) this.#store.markDelivered([row]);
       void actor.stop();
       return;
@@ -122,7 +138,7 @@ export class Hub {
     return this.#actors.get(key)?.processState ?? "cold";
   }
 
-  /** Interrupts the session's running turn, as `-stop` in the thread would. */
+  /** Interrupts the session's running turn, as `-stop` in a thread would. */
   stop(key: string): Promise<void> {
     const row = this.#store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
@@ -140,37 +156,48 @@ export class Hub {
   }
 
   tools(): Tool[] {
-    const session = (key: string) => {
+    /** The connection and a thread of this session the agent named with to=. */
+    const target = (key: string, to: unknown): { chat: ChatSurface; thread: ThreadRef } => {
       const row = this.#store.getSession(key);
       if (!row) throw new Error("unknown session");
-      return { chat: this.#chat(row.bot), thread: { channel: row.channel, threadTs: row.threadTs } };
+      const known = () => this.#store.listThreads(key).map((t) => threadAddress(t.channel, t.threadTs)).join(", ") || "none yet";
+      if (typeof to !== "string" || !to.trim()) throw new Error(`to is required: the thread attribute of the message you are answering. This session's threads: ${known()}`);
+      const thread = parseThreadAddress(to);
+      if (!thread) throw new Error(`to must look like CHANNEL/THREAD_TS, got ${JSON.stringify(to)}`);
+      if (!this.#store.inThread(key, thread.channel, thread.threadTs)) {
+        throw new Error(`${to} is not a conversation of this session. Its threads: ${known()}`);
+      }
+      return { chat: this.#chat(row.connect), thread };
     };
     const stateArg = (value: unknown): DeclaredState | undefined => {
       if (value === undefined || value === null || value === "") return undefined;
       if (value === "final" || value === "block") return value;
       throw new Error(`kind must be "final" or "block", got ${JSON.stringify(value)}`);
     };
+    const to = { type: "string", description: "CHANNEL/THREAD_TS: the thread attribute of the message you are answering." };
     return [
       {
         name: "chat_post",
-        description: "Post a Markdown message to your chat thread. Set kind to \"final\" when this message completes the work, or \"block\" when it asks a person for something you need.",
+        description: "Post a Markdown message to one of your conversations. Set kind to \"final\" when this message completes the work, or \"block\" when it asks a person for something you need.",
         inputSchema: {
           type: "object",
           properties: {
+            to,
             text: { type: "string", description: "Markdown message." },
             kind: { type: "string", enum: ["final", "block"], description: "Omit for a progress update." },
           },
-          required: ["text"],
+          required: ["to", "text"],
           additionalProperties: false,
         },
         run: async (key, args) => {
           const text = String(args.text ?? "").trim();
           if (!text) throw new Error("text is empty");
           const kind = stateArg(args.kind);
-          const { chat, thread } = session(key);
+          const { chat, thread } = target(key, args.to);
           await chat.post(thread, text);
           if (kind) this.#actors.get(key)?.declare(kind);
-          return kind ? `Posted, and recorded state ${kind}.` : "Posted.";
+          const where = threadAddress(thread.channel, thread.threadTs);
+          return kind ? `Posted to ${where}, and recorded state ${kind}.` : `Posted to ${where}.`;
         },
       },
       {
@@ -191,72 +218,77 @@ export class Hub {
       },
       {
         name: "chat_history",
-        description: "Read earlier messages of your chat thread, oldest first.",
+        description: "Read earlier messages of one of your conversations, oldest first.",
         inputSchema: {
           type: "object",
           properties: {
+            to,
             before: { type: "string", description: "Only messages older than this message ts." },
             limit: { type: "integer", minimum: 1, maximum: 200, description: "Default 30." },
           },
+          required: ["to"],
           additionalProperties: false,
         },
         run: async (key, args) => {
           const limit = Math.min(Math.max(Number(args.limit ?? 30) || 30, 1), 200);
           const before = typeof args.before === "string" && args.before ? args.before : undefined;
-          const { chat, thread } = session(key);
+          const { chat, thread } = target(key, args.to);
           const messages = await chat.history(thread, before, limit);
           if (messages.length === 0) return "No earlier messages.";
-          return messages.map((m) => `<slack user="${m.user}"${m.fromBot ? " bot" : ""} ts="${m.ts}">\n${m.text}\n</slack>`).join("\n");
+          const address = threadAddress(thread.channel, thread.threadTs);
+          return messages.map((m) => `<message via="slack" thread="${address}" from="${m.user}"${m.fromBot ? " bot" : ""} ts="${m.ts}">\n${m.text}\n</message>`).join("\n");
         },
       },
     ];
   }
 
-  #bot(id: string): Bot {
-    const bot = this.#config.bots.find((b) => b.id === id);
-    if (!bot) throw new Error(`unknown bot ${id}`);
-    return bot;
+  #connect(id: string): Connect {
+    const connect = this.#config.connects.find((c) => c.id === id);
+    if (!connect) throw new Error(`unknown connect ${id}`);
+    return connect;
   }
 
-  #chat(botId: string): ChatSurface {
-    const chat = this.#chats.get(botId);
-    if (!chat) throw new Error(`bot ${botId} is not connected`);
+  #chat(connectId: string): ChatSurface {
+    const chat = this.#chats.get(connectId);
+    if (!chat) throw new Error(`connect ${connectId} is not connected`);
     return chat;
   }
 
   #online(row: SessionRow): boolean {
-    if (this.#chats.has(row.bot)) return true;
-    log.warn("session belongs to a bot that is not connected; leaving it", { session: row.key, bot: row.bot });
+    if (this.#chats.has(row.connect)) return true;
+    log.warn("session belongs to a connect that is not connected; leaving it", { session: row.key, connect: row.connect });
     return false;
   }
 
-  #createSession(key: string, bot: Bot, message: InboundMessage): void {
-    const profile = profileFor(this.#config, bot);
-    const workspace = join(this.#config.dataDir, "sessions", bot.id, `${message.channel}-${message.threadTs.replace(".", "-")}`, "workspace");
+  #createSession(key: string, connect: Connect, message: InboundMessage, scope: SessionScope): void {
+    const profile = profileFor(this.#config, connect);
+    const dir = scope === "all" ? "all" : `${message.channel}-${message.threadTs.replace(".", "-")}`;
+    const workspace = join(this.#config.dataDir, "sessions", connect.id, dir, "workspace");
     mkdirSync(workspace, { recursive: true });
     mkdirSync(this.reposDir, { recursive: true });
     const now = Date.now();
     this.#store.insertSession({
-      key, bot: bot.id, channel: message.channel, threadTs: message.threadTs, runtime: bot.runtime, profile: profile.id,
-      model: bot.model ?? null, workspace, token: randomBytes(24).toString("base64url"), createdAt: now, lastActiveAt: now,
+      key, connect: connect.id, scope, channel: message.channel, threadTs: message.threadTs,
+      runtime: connect.bind.runtime, profile: profile.id, model: connect.bind.model ?? null,
+      workspace, token: randomBytes(24).toString("base64url"), createdAt: now, lastActiveAt: now,
     });
-    log.info("session created", { session: key, bot: bot.id, runtime: bot.runtime, profile: profile.id });
+    log.info("session created", { session: key, connect: connect.id, scope, runtime: connect.bind.runtime, profile: profile.id });
   }
 
-  #actor(row: SessionRow, options: { earlierMessages?: boolean } = {}): SessionActor {
+  #actor(row: SessionRow): SessionActor {
     let actor = this.#actors.get(row.key);
     if (!actor) {
       actor = new SessionActor(row.key, {
         store: this.#store,
-        chat: this.#chat(row.bot),
-        botName: this.#bot(row.bot).name,
+        chat: this.#chat(row.connect),
+        name: this.#connect(row.connect).name,
         drivers: this.#drivers,
         profile: (id) => this.#config.profiles.find((p) => p.id === id),
         mcpUrl: this.#mcpUrl,
         reposDir: this.reposDir,
         memoryPath: agentHomePaths(this.#config.agentHome).memory,
         maxNudges: this.#config.maxNudges,
-      }, options);
+      });
       this.#actors.set(row.key, actor);
     }
     return actor;

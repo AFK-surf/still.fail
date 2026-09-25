@@ -4,33 +4,36 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { parseConfig } from "../src/config.ts";
-import { Hub, isStopCommand, sessionKey } from "../src/hub.ts";
+import { connectSessionKey, Hub, isStopCommand, sessionKey } from "../src/hub.ts";
 import { Store } from "../src/store.ts";
 import { FakeChat, FakeDriver, message, settle } from "./fakes.ts";
 
-function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number } = {}) {
+function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; team?: { requireMention?: boolean } } = {}) {
+  const { team, ...rest } = overrides;
   const dataDir = mkdtempSync(join(tmpdir(), "ember-test-"));
   const config = parseConfig({
     profiles: [
       { id: "cc", runtime: "claude", home: "homes/cc" },
       { id: "cx", runtime: "codex", home: "homes/cx" },
     ],
-    bots: [
-      { id: "cl", name: "Claude bot", runtime: "claude", profile: "cc", model: "opus" },
-      { id: "gpt", runtime: "codex", profile: "cx" },
+    connects: [
+      { id: "cl", name: "Claude bot", bind: { runtime: "claude", profiles: ["cc"], model: "opus" } },
+      { id: "gpt", bind: { runtime: "codex", profiles: ["cx"] } },
+      { id: "team", mode: "single-session", requireMention: team?.requireMention ?? true, bind: { runtime: "claude", profiles: ["cc"] } },
     ],
-    ...overrides,
+    ...rest,
   }, dataDir);
   const store = new Store(":memory:");
   const chat = new FakeChat("UBOT");
   const gptChat = new FakeChat("UGPT");
+  const teamChat = new FakeChat("UTEAM");
   const claude = new FakeDriver("claude");
   const codex = new FakeDriver("codex");
-  const hub = new Hub({ config: () => config, store, chats: new Map([["cl", chat], ["gpt", gptChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp" });
+  const hub = new Hub({ config: () => config, store, chats: new Map([["cl", chat], ["gpt", gptChat], ["team", teamChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp" });
   const tools = Object.fromEntries(hub.tools().map((t) => [t.name, t]));
   const call = (key: string, name: string, args: Record<string, unknown>) => tools[name]!.run(key, args);
-  const accept = (m: ReturnType<typeof message>, bot = "cl") => hub.accept(bot, m);
-  return { config, store, chat, gptChat, claude, codex, hub, call, accept };
+  const accept = (m: ReturnType<typeof message>, connect = "cl") => hub.accept(connect, m);
+  return { config, store, chat, gptChat, teamChat, claude, codex, hub, call, accept };
 }
 
 test("a mention starts a session and prompts the runtime with the message", async () => {
@@ -40,7 +43,7 @@ test("a mention starts a session and prompts the runtime with the message", asyn
   await settle();
   const session = claude.last;
   assert.equal(session.prompts.length, 1);
-  assert.match(session.prompts[0]!, /<slack user="U1" ts="[\d.]+">\n<@UBOT> fix the build\n<\/slack>/);
+  assert.match(session.prompts[0]!, /<message via="slack" connect="cl" thread="C1\/[\d.]+" from="U1" ts="[\d.]+">\n<@UBOT> fix the build\n<\/message>/);
   assert.equal(store.getSession(sessionKey("cl", "C1", m.threadTs))?.runtimeSessionId, session.id);
   assert.equal(session.options.cwd.endsWith("workspace"), true);
 });
@@ -56,7 +59,7 @@ test("a mention inside an existing thread tells the agent about earlier messages
   const { claude, accept } = setup();
   await accept(message({ threadTs: "1.000001", ts: "5.000001" }));
   await settle();
-  assert.match(claude.last.prompts[0]!, /already had messages/);
+  assert.match(claude.last.prompts[0]!, /Thread C1\/1.000001 had messages before you were brought in/);
 });
 
 test("a message during a running turn is steered into it", async () => {
@@ -99,7 +102,7 @@ test("chat_post with kind final posts and settles the turn without a nudge", asy
   await accept(m);
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
-  assert.equal(await call(key, "chat_post", { text: "**done**", kind: "final" }), "Posted, and recorded state final.");
+  assert.equal(await call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "**done**", kind: "final" }), `Posted to C1/${m.threadTs}, and recorded state final.`);
   claude.last.end();
   await settle();
   assert.equal(claude.last.prompts.length, 1);
@@ -153,7 +156,7 @@ test("messages that arrive while a turn cannot take them go in the next turn", a
   assert.match(session.prompts[1]!, /one more thing/);
 });
 
-test("a bot's runtime, profile and model decide the session", async () => {
+test("a connect's runtime, profile and model decide the session", async () => {
   const { claude, codex, store, accept } = setup();
   const m = message({ text: "<@UGPT> refactor this" });
   await accept(m, "gpt");
@@ -170,7 +173,7 @@ test("a bot's runtime, profile and model decide the session", async () => {
   assert.match(claude.last.options.instructions, /You are Claude bot/);
 });
 
-test("two bots in one thread keep separate sessions and reply through their own connection", async () => {
+test("two connects in one thread keep separate sessions and reply through their own connection", async () => {
   const { chat, gptChat, claude, codex, call, accept } = setup();
   const root = message({ text: "<@UBOT> <@UGPT> compare notes" });
   await accept(root);
@@ -182,12 +185,12 @@ test("two bots in one thread keep separate sessions and reply through their own 
   await settle();
   assert.match(claude.last.steers[0]!, /both of you/);
   assert.match(codex.last.steers[0]!, /both of you/);
-  await call(sessionKey("gpt", "C1", root.threadTs), "chat_post", { text: "from gpt" });
+  await call(sessionKey("gpt", "C1", root.threadTs), "chat_post", { to: `C1/${root.threadTs}`, text: "from gpt" });
   assert.deepEqual(gptChat.posts.map((p) => p.text), ["from gpt"]);
   assert.equal(chat.posts.length, 0);
 });
 
-test("a mention of one bot does not start a session for another bot that sees the message", async () => {
+test("a mention of one connect does not start a session for another connect that sees the message", async () => {
   const { codex, accept } = setup();
   await accept(message({ addressed: false, text: "<@UBOT> only claude" }), "gpt");
   await settle();
@@ -251,6 +254,49 @@ test("a running turn is never evicted", async () => {
   hub.evictIdle(Date.now() + 10_000_000);
   await settle();
   assert.equal(claude.last.disposed, false);
+});
+
+test("chat_post and chat_history need an explicit thread of this session", async () => {
+  const { call, accept, chat } = setup();
+  const m = message();
+  await accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await assert.rejects(call(key, "chat_post", { text: "hi" }), /to is required[\s\S]*C1\//);
+  await assert.rejects(call(key, "chat_post", { to: "C1", text: "hi" }), /CHANNEL\/THREAD_TS/);
+  await assert.rejects(call(key, "chat_post", { to: "C9/1.1", text: "hi" }), /not a conversation of this session/);
+  await assert.rejects(call(key, "chat_history", {}), /to is required/);
+  assert.equal(chat.posts.length, 0);
+});
+
+test("a single-session connect gathers every thread into one session and replies where asked", async () => {
+  const { claude, teamChat, store, call, accept } = setup();
+  const a = message({ text: "<@UTEAM> build A", channel: "C1" });
+  await accept(a, "team");
+  await settle();
+  await accept(message({ addressed: false, text: "unrelated chatter", channel: "C2" }), "team");
+  const b = message({ text: "<@UTEAM> build B", channel: "C2" });
+  await accept(b, "team");
+  await settle();
+  assert.equal(claude.sessions.length, 1);
+  assert.equal(store.listSessions().length, 1);
+  assert.equal(store.getSession(connectSessionKey("team"))?.scope, "all");
+  assert.match(claude.last.steers[0]!, /thread="C2\/[\d.]+"[\s\S]*build B/);
+  assert.doesNotMatch(claude.last.steers.join("\n") + claude.last.prompts.join("\n"), /unrelated chatter/);
+  // A reply in a thread the session already follows needs no mention.
+  await accept(message({ addressed: false, threadTs: a.threadTs, ts: "9999.8", text: "and tests too", channel: "C1" }), "team");
+  await settle();
+  assert.match(claude.last.steers.at(-1)!, /and tests too/);
+  await call(connectSessionKey("team"), "chat_post", { to: `C2/${b.threadTs}`, text: "B done" });
+  assert.deepEqual(teamChat.posts, [{ thread: { channel: "C2", threadTs: b.threadTs }, text: "B done" }]);
+});
+
+test("a single-session connect without requireMention hears every message", async () => {
+  const { claude, accept } = setup({ team: { requireMention: false } });
+  await accept(message({ addressed: false, text: "anyone around?" }), "team");
+  await settle();
+  assert.equal(claude.sessions.length, 1);
+  assert.match(claude.last.prompts[0]!, /anyone around\?/);
 });
 
 test("command parsing", () => {

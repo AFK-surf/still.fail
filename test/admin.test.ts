@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { AccessGate } from "../src/admin/access.ts";
 import { AdminApi } from "../src/admin/api.ts";
-import { BotConnections, type Connection } from "../src/bots.ts";
+import { Connections, type Connection } from "../src/connections.ts";
 import { Hub } from "../src/hub.ts";
 import { Settings } from "../src/settings.ts";
 import { Store } from "../src/store.ts";
@@ -44,21 +44,21 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
       { id: "cc", runtime: "claude", home: "homes/cc", env: { ANTHROPIC_API_KEY: "sk-very-secret-value", ANTHROPIC_BASE_URL: "https://example" } },
       { id: "cx", runtime: "codex", home: "homes/cx" },
     ],
-    bots: [{ id: "ds", name: "ember", runtime: "claude", profiles: ["cc"], slack: { appToken: "xapp-1-aaaaaaaaaaaa", botToken: "xoxb-bbbbbbbbbbbb" } }],
+    connects: [{ id: "ds", name: "ember", kind: "slack", mode: "multi-session", bind: { runtime: "claude", profiles: ["cc"] }, slack: { appToken: "xapp-1-aaaaaaaaaaaa", botToken: "xoxb-bbbbbbbbbbbb" } }],
   }));
   const settings = new Settings(path, dataDir);
   const store = new Store(":memory:");
   const connections: FakeConnection[] = [];
-  const bots = new BotConnections(() => {
+  const conns = new Connections(() => {
     const c = new FakeConnection();
     connections.push(c);
     return c;
-  }, (botId, m) => hub.accept(botId, m));
+  }, (id, m) => hub.accept(id, m));
   const claude = new FakeDriver("claude");
-  const hub: Hub = new Hub({ config: () => settings.config, store, chats: bots.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x" });
-  settings.onChange((config) => void bots.reconcile(config));
-  await bots.reconcile(settings.config);
-  const api = new AdminApi({ settings, store, hub, bots, gate: new AccessGate(() => settings.config.adminAccess, jwks) });
+  const hub: Hub = new Hub({ config: () => settings.config, store, chats: conns.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x" });
+  settings.onChange((config) => void conns.reconcile(config));
+  await conns.reconcile(settings.config);
+  const api = new AdminApi({ settings, store, hub, connections: conns, gate: new AccessGate(() => settings.config.adminAccess, jwks) });
   const server = createServer((req, res) => void api.handle(req, res));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/admin/api`;
@@ -70,7 +70,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
     });
     return { status: response.status, headers: response.headers, body: await response.json() as any };
   };
-  return { dataDir, path, settings, store, hub, bots, claude, connections, call, base, close: () => server.close() };
+  return { dataDir, path, settings, store, hub, conns, claude, connections, call, base, close: () => server.close() };
 }
 
 test("local visits need no sign-in", async () => {
@@ -126,8 +126,8 @@ test("secrets are masked in the overview", async () => {
   const t = await setup();
   try {
     const { body } = await t.call("GET", "/overview");
-    assert.equal(body.bots[0].slack.botToken, "xoxb-…bbbb");
-    assert.equal(body.bots[0].connection.state, "connected");
+    assert.equal(body.connects[0].slack.botToken, "xoxb-…bbbb");
+    assert.equal(body.connects[0].connection.state, "connected");
     const env = Object.fromEntries(body.profiles[0].env.map((e: any) => [e.key, e]));
     assert.equal(env.ANTHROPIC_API_KEY.secret, true);
     assert.equal(env.ANTHROPIC_API_KEY.value, "sk-ve…alue");
@@ -138,35 +138,37 @@ test("secrets are masked in the overview", async () => {
   }
 });
 
-test("editing a bot keeps tokens that were left blank and writes config.json privately", async () => {
+test("editing a connect keeps tokens that were left blank and writes config.json privately", async () => {
   const t = await setup();
   try {
-    const { status } = await t.call("PUT", "/bots/ds", { name: "ember-ds", model: "deepseek-flash", slack: { appToken: "", botToken: "" } });
+    const { status } = await t.call("PUT", "/connects/ds", { name: "ember-ds", bind: { model: "deepseek-flash" }, slack: { appToken: "", botToken: "" } });
     assert.equal(status, 200);
     const saved = JSON.parse(readFileSync(t.path, "utf8"));
-    assert.equal(saved.bots[0].name, "ember-ds");
-    assert.equal(saved.bots[0].slack.botToken, "xoxb-bbbbbbbbbbbb");
+    assert.equal(saved.connects[0].name, "ember-ds");
+    assert.equal(saved.connects[0].slack.botToken, "xoxb-bbbbbbbbbbbb");
+    assert.equal(saved.connects[0].bind.model, "deepseek-flash");
+    assert.equal(saved.bots, undefined);
     assert.equal(statSync(t.path).mode & 0o777, 0o600);
   } finally {
     t.close();
   }
 });
 
-test("adding, disabling and deleting bots follows through to connections", async () => {
+test("adding, disabling and deleting connects follows through to connections", async () => {
   const t = await setup();
   try {
     assert.equal(t.connections.length, 1);
-    await t.call("PUT", "/bots/gpt", { runtime: "codex", profiles: ["cx"], slack: { appToken: "xapp-2-cccccccccc", botToken: "xoxb-dddddddddd" } });
-    await t.bots.reconcile(t.settings.config);
-    assert.deepEqual([...t.bots.chats.keys()].sort(), ["ds", "gpt"]);
-    await t.call("PUT", "/bots/gpt", { enabled: false });
-    await t.bots.reconcile(t.settings.config);
-    assert.deepEqual([...t.bots.chats.keys()], ["ds"]);
+    await t.call("PUT", "/connects/gpt", { bind: { runtime: "codex", profiles: ["cx"] }, slack: { appToken: "xapp-2-cccccccccc", botToken: "xoxb-dddddddddd" } });
+    await t.conns.reconcile(t.settings.config);
+    assert.deepEqual([...t.conns.chats.keys()].sort(), ["ds", "gpt"]);
+    await t.call("PUT", "/connects/gpt", { enabled: false });
+    await t.conns.reconcile(t.settings.config);
+    assert.deepEqual([...t.conns.chats.keys()], ["ds"]);
     assert.equal(t.connections[1]!.stopped, 1);
     const { body } = await t.call("GET", "/overview");
-    assert.equal(body.bots.find((b: any) => b.id === "gpt").connection.state, "disabled");
-    await t.call("DELETE", "/bots/gpt");
-    assert.deepEqual(t.settings.config.bots.map((b) => b.id), ["ds"]);
+    assert.equal(body.connects.find((b: any) => b.id === "gpt").connection.state, "disabled");
+    await t.call("DELETE", "/connects/gpt");
+    assert.deepEqual(t.settings.config.connects.map((b) => b.id), ["ds"]);
   } finally {
     t.close();
   }
@@ -176,10 +178,10 @@ test("invalid edits are refused and leave the config unchanged", async () => {
   const t = await setup();
   try {
     const before = readFileSync(t.path, "utf8");
-    const bad = await t.call("PUT", "/bots/x", { runtime: "claude", profiles: ["nope"] });
+    const bad = await t.call("PUT", "/connects/x", { bind: { runtime: "claude", profiles: ["nope"] } });
     assert.equal(bad.status, 400);
     assert.match(bad.body.error, /unknown profile nope/);
-    const mismatch = await t.call("PUT", "/bots/x", { runtime: "codex", profiles: ["cc"] });
+    const mismatch = await t.call("PUT", "/connects/x", { bind: { runtime: "codex", profiles: ["cc"] } });
     assert.match(mismatch.body.error, /profile cc is claude/);
     const inUse = await t.call("DELETE", "/profiles/cc");
     assert.equal(inUse.status, 400);
@@ -239,6 +241,7 @@ test("session detail includes turns, messages and the runtime transcript", async
     assert.equal(list.body[0].token, undefined, "session tokens are never sent to the page");
     const detail = await t.call("GET", `/sessions/${encodeURIComponent(row!.key)}`);
     assert.equal(detail.body.inbound.length, 1);
+    assert.equal(detail.body.threads.length, 1);
     assert.equal(detail.body.turns.length, 1);
     assert.deepEqual(detail.body.transcript.timeline.map((e: any) => e.kind), ["user", "tool_call"]);
     assert.equal((await t.call("POST", `/sessions/${encodeURIComponent(row!.key)}/stop`)).status, 200);
@@ -246,4 +249,32 @@ test("session detail includes turns, messages and the runtime transcript", async
   } finally {
     t.close();
   }
+});
+
+test("a single-session connect can be set to wake without a mention", async () => {
+  const t = await setup();
+  try {
+    assert.equal((await t.call("PUT", "/connects/ds", { mode: "single-session", requireMention: false })).status, 200);
+    const { body } = await t.call("GET", "/overview");
+    assert.equal(body.connects[0].mode, "single-session");
+    assert.equal(body.connects[0].requireMention, false);
+    await t.call("PUT", "/connects/ds", { mode: "multi-session" });
+    assert.equal(t.settings.config.connects[0]!.requireMention, true, "multi-session always needs a mention");
+  } finally {
+    t.close();
+  }
+});
+
+test("a legacy bots config is rewritten as connects on load", async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "ember-legacy-"));
+  const path = join(dataDir, "config.json");
+  writeFileSync(path, JSON.stringify({
+    profiles: [{ id: "cc", runtime: "claude", home: "homes/cc" }],
+    bots: [{ id: "ds", runtime: "claude", profile: "cc", model: "m" }],
+  }));
+  const settings = new Settings(path, dataDir);
+  assert.deepEqual(settings.config.connects.map((c) => [c.id, c.mode, c.bind.model]), [["ds", "multi-session", "m"]]);
+  const saved = JSON.parse(readFileSync(path, "utf8"));
+  assert.equal(saved.bots, undefined);
+  assert.deepEqual(saved.connects[0].bind, { runtime: "claude", profiles: ["cc"], model: "m" });
 });

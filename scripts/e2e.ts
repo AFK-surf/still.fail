@@ -22,9 +22,9 @@ const runtimes = (process.argv.slice(2).length ? process.argv.slice(2) : ["claud
 const dataDir = mkdtempSync(join(tmpdir(), "ember-e2e-"));
 const config = parseConfig({
   http: { port: 0 },
-  bots: [
-    { id: "claude", runtime: "claude", profile: "claude-ocg", model: MODEL },
-    { id: "codex", runtime: "codex", profile: "codex-ocg", model: MODEL },
+  connects: [
+    { id: "claude", bind: { runtime: "claude", profiles: ["claude-ocg"], model: MODEL } },
+    { id: "codex", bind: { runtime: "codex", profiles: ["codex-ocg"], model: MODEL } },
   ],
   maxWarmClaude: 0,
   warmMinutes: 0,
@@ -58,8 +58,8 @@ const hub = new Hub({ config: () => config, store, chats: new Map([["claude", ch
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
 
 /** Waits until the session has been idle (no running turn, nothing pending) for a few seconds. */
-async function quiet(bot: string, threadTs: string, timeoutMs = 300_000): Promise<void> {
-  const k = sessionKey(bot, "C1", threadTs);
+async function quiet(connect: string, threadTs: string, timeoutMs = 300_000): Promise<void> {
+  const k = sessionKey(connect, "C1", threadTs);
   const deadline = Date.now() + timeoutMs;
   let calm = 0;
   while (Date.now() < deadline) {
@@ -74,8 +74,8 @@ async function quiet(bot: string, threadTs: string, timeoutMs = 300_000): Promis
 let counter = 1;
 /** Slack-style message timestamps, increasing. */
 const nextTs = () => `${Math.floor(Date.now() / 1000)}.${String(counter++).padStart(6, "0")}`;
-const say = (bot: string, threadTs: string, text: string, addressed: boolean) =>
-  hub.accept(bot, { channel: "C1", threadTs, ts: nextTs(), user: "U1", text, addressed });
+const say = (connect: string, threadTs: string, text: string, addressed: boolean) =>
+  hub.accept(connect, { channel: "C1", threadTs, ts: nextTs(), user: "U1", text, addressed });
 
 const results: Record<string, unknown>[] = [];
 for (const runtime of runtimes) {

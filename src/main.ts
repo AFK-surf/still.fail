@@ -5,7 +5,7 @@ import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AdminApi } from "./admin/api.ts";
 import { linkAgentHome } from "./agent-home.ts";
-import { BotConnections } from "./bots.ts";
+import { Connections } from "./connections.ts";
 import { SlackSurface } from "./chat/slack.ts";
 import { Hub } from "./hub.ts";
 import { log } from "./log.ts";
@@ -24,23 +24,24 @@ const reaped = await reapStaleGroups(store);
 if (reaped > 0) log.warn("reaped runtime processes left by a previous run", { count: reaped });
 
 const mcpUrl = `http://${settings.config.http.host}:${settings.config.http.port}/mcp`;
-const bots: BotConnections = new BotConnections(
-  (bot) => new SlackSurface(bot.slack),
-  (botId, message): Promise<void> => hub.accept(botId, message),
+// One chat connection per connect; Slack is the only kind so far.
+const connections: Connections = new Connections(
+  (connect) => new SlackSurface(connect.slack),
+  (connectId, message): Promise<void> => hub.accept(connectId, message),
 );
 const hub: Hub = new Hub({
   config: () => settings.config,
   store,
-  chats: bots.chats,
+  chats: connections.chats,
   mcpUrl,
   drivers: { claude: new ClaudeDriver(store), codex: new CodexDriver(store) },
 });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
-const admin = new AdminApi({ settings, store, hub, bots });
+const admin = new AdminApi({ settings, store, hub, connections });
 
 settings.onChange((config) => {
   linkAgentHome(config.agentHome, config.profiles);
-  void bots.reconcile(config);
+  void connections.reconcile(config);
 });
 
 // Built by `pnpm build` from web/ into dist/admin.
@@ -102,8 +103,8 @@ const { host: adminHost, port: adminPort } = settings.config.adminHttp;
 await new Promise<void>((resolve) => adminServer.listen(adminPort, adminHost, resolve));
 log.info("ember listening", { mcpUrl, admin: `http://${adminHost}:${adminPort}/admin` });
 
-await bots.reconcile(settings.config);
-if (bots.chats.size === 0) log.warn("no bot is connected; add or enable one on the admin page");
+await connections.reconcile(settings.config);
+if (connections.chats.size === 0) log.warn("no connect is connected; add or enable one on the admin page");
 await hub.recover();
 const evictTimer = setInterval(() => hub.evictIdle(), 60_000);
 
@@ -113,7 +114,7 @@ async function shutdown(signal: string): Promise<void> {
   stopping = true;
   log.info("shutting down", { signal });
   clearInterval(evictTimer);
-  await bots.stopAll();
+  await connections.stopAll();
   await hub.shutdown();
   server.close();
   adminServer.close();

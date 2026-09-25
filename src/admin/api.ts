@@ -3,8 +3,8 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { BotConnections } from "../bots.ts";
-import type { RawBot, RawConfig, RawProfile, RuntimeKind } from "../config.ts";
+import type { Connections } from "../connections.ts";
+import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from "../config.ts";
 import type { Hub } from "../hub.ts";
 import { log } from "../log.ts";
 import type { Settings } from "../settings.ts";
@@ -22,7 +22,7 @@ export interface AdminDeps {
   settings: Settings;
   store: Store;
   hub: Hub;
-  bots: BotConnections;
+  connections: Connections;
   /** Decides who may use the API; defaults to Cloudflare Access per the config. */
   gate?: AccessGate;
 }
@@ -114,7 +114,7 @@ export class AdminApi {
 
     if (method === "GET" && path === "/overview") return send(res, 200, this.#overview(viewer));
     if (method === "GET" && path === "/events") return this.#events(req, res);
-    if (method === "GET" && path === "/sessions") return send(res, 200, this.#sessions(url.searchParams.get("bot")));
+    if (method === "GET" && path === "/sessions") return send(res, 200, this.#sessions(url.searchParams.get("connect")));
     if (resource === "sessions" && id && !action && method === "GET") return send(res, 200, await this.#session(id));
     if (resource === "sessions" && id && action === "stop" && method === "POST") {
       await this.#deps.hub.stop(id);
@@ -124,10 +124,10 @@ export class AdminApi {
       await this.#deps.hub.evict(id);
       return send(res, 200, { ok: true });
     }
-    if (resource === "bots" && id && !action && method === "PUT") return send(res, 200, this.#putBot(id, await body(req), viewer));
-    if (resource === "bots" && id && !action && method === "DELETE") return send(res, 200, this.#deleteBot(id, viewer));
-    if (resource === "bots" && id && action === "reconnect" && method === "POST") {
-      await this.#deps.bots.reconcile(this.#deps.settings.config);
+    if (resource === "connects" && id && !action && method === "PUT") return send(res, 200, this.#putConnect(id, await body(req), viewer));
+    if (resource === "connects" && id && !action && method === "DELETE") return send(res, 200, this.#deleteConnect(id, viewer));
+    if (resource === "connects" && id && action === "reconnect" && method === "POST") {
+      await this.#deps.connections.reconcile(this.#deps.settings.config);
       return send(res, 200, { ok: true });
     }
     if (resource === "profiles" && id && !action && method === "PUT") {
@@ -138,9 +138,9 @@ export class AdminApi {
     if (resource === "profiles" && id && action === "check" && method === "POST") return send(res, 200, await this.#check(id));
     if (resource === "profiles" && id && !action && method === "DELETE") return send(res, 200, this.#deleteProfile(id, viewer));
     if (method === "POST" && path === "/slack/verify") {
-      // Blank tokens fall back to the stored ones of `bot`, so replacing one token can be checked alone.
+      // Blank tokens fall back to the stored ones of `connect`, so replacing one token can be checked alone.
       const input = await body(req);
-      const stored = typeof input.bot === "string" ? this.#deps.settings.config.bots.find((b) => b.id === input.bot)?.slack : undefined;
+      const stored = typeof input.connect === "string" ? this.#deps.settings.config.connects.find((c) => c.id === input.connect)?.slack : undefined;
       const pick = (field: "appToken" | "botToken") =>
         typeof input[field] === "string" && input[field].trim() ? input[field].trim() : stored?.[field] ?? "";
       return send(res, 200, await verifySlackTokens({ appToken: pick("appToken"), botToken: pick("botToken") }));
@@ -162,17 +162,18 @@ export class AdminApi {
     const memory = processMemory(processes.map((p) => p.pgid));
     return {
       viewer,
-      bots: config.bots.map((bot) => ({
-        id: bot.id, name: bot.name, enabled: bot.enabled, runtime: bot.runtime, profiles: bot.profiles, model: bot.model ?? null,
-        slack: { appToken: mask(bot.slack.appToken), botToken: mask(bot.slack.botToken) },
-        connection: this.#deps.bots.state(bot),
-        sessions: sessions.filter((s) => s.bot === bot.id).length,
+      connects: config.connects.map((c) => ({
+        id: c.id, name: c.name, enabled: c.enabled, kind: c.kind, mode: c.mode, requireMention: c.requireMention,
+        bind: { runtime: c.bind.runtime, profiles: c.bind.profiles, model: c.bind.model ?? null },
+        slack: { appToken: mask(c.slack.appToken), botToken: mask(c.slack.botToken) },
+        connection: this.#deps.connections.state(c),
+        sessions: sessions.filter((s) => s.connect === c.id).length,
       })),
       profiles: config.profiles.map((p) => ({
         id: p.id, name: p.name, runtime: p.runtime, access: { kind: p.access.kind, key: mask(p.access.key) },
         home: p.home, homeExists: existsSync(p.home), model: p.model ?? null,
         env: Object.entries(p.customEnv).map(([key, value]) => ({ key, secret: SECRET_KEY.test(key), value: SECRET_KEY.test(key) ? mask(value) : value })),
-        usedBy: config.bots.filter((b) => b.profiles.includes(p.id)).map((b) => b.id),
+        usedBy: config.connects.filter((c) => c.bind.profiles.includes(p.id)).map((c) => c.id),
         loginCommand: loginCommand(p.runtime, p.home),
         check: this.#checks.get(p.id) ?? null,
       })),
@@ -192,15 +193,15 @@ export class AdminApi {
     return { ...visible, process: this.#deps.hub.processState(key), ...(stats.get(key) ?? { turns: 0, pending: 0, firstText: null, lastTurn: null }) };
   }
 
-  #sessions(bot: string | null): SessionSummary[] {
+  #sessions(connect: string | null): SessionSummary[] {
     const stats = this.#deps.store.sessionStats();
-    return this.#deps.store.listSessions().filter((s) => !bot || s.bot === bot).map((s) => this.#summary(s.key, stats));
+    return this.#deps.store.listSessions().filter((s) => !connect || s.connect === connect).map((s) => this.#summary(s.key, stats));
   }
 
   async #session(key: string): Promise<SessionDetail> {
     const summary = this.#summary(key);
     const inbound = this.#deps.store.listInbound(key);
-    const chat = this.#deps.bots.chats.get(summary.bot);
+    const chat = this.#deps.connections.chats.get(summary.connect);
     const people: Record<string, string> = {};
     if (chat?.userName) {
       const ids = [...new Set(inbound.map((m) => m.user))];
@@ -212,6 +213,7 @@ export class AdminApi {
     return {
       session: summary,
       people,
+      threads: this.#deps.store.listThreads(key),
       turns: this.#deps.store.listTurns(key),
       inbound,
       transcript: path ? { path, timeline: readTimeline(summary.runtime, path), usage: readUsage(summary.runtime, path) } : null,
@@ -245,34 +247,40 @@ export class AdminApi {
     return this.#overview(viewer);
   }
 
-  #putBot(id: string, input: Record<string, any>, viewer: Viewer) {
-    return this.#save(viewer, `bot ${id}`, (raw) => {
-      const bots = raw.bots ?? [];
-      const existing = bots.find((b) => b.id === id);
+  #putConnect(id: string, input: Record<string, any>, viewer: Viewer) {
+    return this.#save(viewer, `connect ${id}`, (raw) => {
+      const connects = raw.connects ?? [];
+      const existing = connects.find((c) => c.id === id);
       const token = (field: "appToken" | "botToken"): string | undefined => {
         const given = input.slack?.[field];
         return typeof given === "string" && given.trim() ? given.trim() : existing?.slack?.[field];
       };
       const appToken = token("appToken");
       const botToken = token("botToken");
-      const next: RawBot = {
+      const bind = input.bind ?? {};
+      const model = bind.model === undefined ? existing?.bind.model : bind.model;
+      const next: RawConnect = {
         id,
         name: typeof input.name === "string" && input.name.trim() ? input.name.trim() : existing?.name ?? id,
         enabled: typeof input.enabled === "boolean" ? input.enabled : existing?.enabled ?? true,
-        runtime: (input.runtime ?? existing?.runtime) as RuntimeKind,
-        profiles: Array.isArray(input.profiles) ? input.profiles.map(String) : existing?.profiles ?? (existing?.profile ? [existing.profile] : []),
+        kind: input.kind ?? existing?.kind ?? "slack",
+        mode: (input.mode ?? existing?.mode ?? "multi-session") as ConnectMode,
+        requireMention: typeof input.requireMention === "boolean" ? input.requireMention : existing?.requireMention ?? true,
         ...(appToken || botToken ? { slack: { ...(appToken ? { appToken } : {}), ...(botToken ? { botToken } : {}) } } : {}),
+        bind: {
+          runtime: (bind.runtime ?? existing?.bind.runtime) as RuntimeKind,
+          profiles: Array.isArray(bind.profiles) ? bind.profiles.map(String) : existing?.bind.profiles ?? [],
+          ...(typeof model === "string" && model.trim() ? { model: model.trim() } : {}),
+        },
       };
-      const model = input.model === undefined ? existing?.model : input.model;
-      if (typeof model === "string" && model.trim()) next.model = model.trim();
-      return { ...raw, bots: existing ? bots.map((b) => (b.id === id ? next : b)) : [...bots, next] };
+      return { ...raw, connects: existing ? connects.map((c) => (c.id === id ? next : c)) : [...connects, next] };
     });
   }
 
-  #deleteBot(id: string, viewer: Viewer) {
-    return this.#save(viewer, `delete bot ${id}`, (raw) => {
-      if (!raw.bots?.some((b) => b.id === id)) throw new Error(`unknown bot ${id}`);
-      return { ...raw, bots: raw.bots.filter((b) => b.id !== id) };
+  #deleteConnect(id: string, viewer: Viewer) {
+    return this.#save(viewer, `delete connect ${id}`, (raw) => {
+      if (!raw.connects?.some((c) => c.id === id)) throw new Error(`unknown connect ${id}`);
+      return { ...raw, connects: raw.connects.filter((c) => c.id !== id) };
     });
   }
 
@@ -302,8 +310,8 @@ export class AdminApi {
       };
       const model = input.model === undefined ? existing?.model : input.model;
       if (typeof model === "string" && model.trim()) next.model = model.trim();
-      if (existing && existing.runtime !== next.runtime && raw.bots?.some((b) => (b.profiles ?? [b.profile]).includes(id))) {
-        throw new Error(`profile ${id} is used by a bot; its runtime cannot change`);
+      if (existing && existing.runtime !== next.runtime && raw.connects?.some((c) => (c.bind.profiles ?? []).includes(id))) {
+        throw new Error(`profile ${id} is used by a connect; its runtime cannot change`);
       }
       return { ...raw, profiles: existing ? profiles.map((p) => (p.id === id ? next : p)) : [...profiles, next] };
     });
@@ -320,7 +328,7 @@ export class AdminApi {
 
   #deleteProfile(id: string, viewer: Viewer) {
     return this.#save(viewer, `delete profile ${id}`, (raw) => {
-      const users = (raw.bots ?? []).filter((b) => (b.profiles ?? [b.profile]).includes(id)).map((b) => b.id);
+      const users = (raw.connects ?? []).filter((c) => (c.bind.profiles ?? []).includes(id)).map((c) => c.id);
       if (users.length > 0) throw new Error(`profile ${id} is used by ${users.join(", ")}`);
       if (!raw.profiles?.some((p) => p.id === id)) throw new Error(`unknown profile ${id}`);
       return { ...raw, profiles: raw.profiles.filter((p) => p.id !== id) };

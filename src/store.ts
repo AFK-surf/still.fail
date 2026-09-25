@@ -6,9 +6,17 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { RuntimeKind } from "./config.ts";
 
+/** thread: one thread per session (multi-session connects); all: every thread of the connect (single-session). */
+export type SessionScope = "thread" | "all";
+
 export interface SessionRow {
   key: string;
-  bot: string;
+  connect: string;
+  scope: SessionScope;
+  /**
+   * The thread of the session's latest message. Only ember's own notices
+   * (a failed turn, a stop) go here; the agent always names its target.
+   */
   channel: string;
   threadTs: string;
   runtime: RuntimeKind;
@@ -24,8 +32,10 @@ export interface SessionRow {
 }
 
 export interface InboundRow {
-  bot: string;
+  connect: string;
   channel: string;
+  /** The thread the message belongs to (its own ts for a thread root). */
+  threadTs: string;
   ts: string;
   sessionKey: string;
   user: string;
@@ -36,13 +46,27 @@ export interface InboundRow {
 
 export type TurnKind = "input" | "nudge" | "resume";
 
-/** Bump when the schema changes incompatibly; an older database is refused, not silently migrated. */
-const SCHEMA_VERSION = 2;
+/**
+ * Bump on schema changes and add a step to MIGRATIONS that brings the
+ * previous version up. Versions without a migration path are refused.
+ */
+const SCHEMA_VERSION = 3;
+
+const MIGRATIONS: Record<number, string> = {
+  // v2 → v3: bots became connects; sessions may span all threads; messages remember their thread.
+  2: `
+    ALTER TABLE sessions RENAME COLUMN bot TO connect;
+    ALTER TABLE sessions ADD COLUMN scope TEXT NOT NULL DEFAULT 'thread';
+    ALTER TABLE inbound RENAME COLUMN bot TO connect;
+    ALTER TABLE inbound ADD COLUMN thread_ts TEXT NOT NULL DEFAULT '';
+    UPDATE inbound SET thread_ts = COALESCE((SELECT s.thread_ts FROM sessions s WHERE s.key = inbound.session_key), ts);
+  `,
+};
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sessions (
   key TEXT PRIMARY KEY,
-  bot TEXT NOT NULL,
+  connect TEXT NOT NULL,
   channel TEXT NOT NULL,
   thread_ts TEXT NOT NULL,
   runtime TEXT NOT NULL,
@@ -53,10 +77,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   token TEXT NOT NULL UNIQUE,
   running INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
-  last_active_at INTEGER NOT NULL
+  last_active_at INTEGER NOT NULL,
+  scope TEXT NOT NULL DEFAULT 'thread'
 );
 CREATE TABLE IF NOT EXISTS inbound (
-  bot TEXT NOT NULL,
+  connect TEXT NOT NULL,
   channel TEXT NOT NULL,
   ts TEXT NOT NULL,
   session_key TEXT NOT NULL,
@@ -64,7 +89,8 @@ CREATE TABLE IF NOT EXISTS inbound (
   text TEXT NOT NULL,
   status TEXT NOT NULL,
   received_at INTEGER NOT NULL,
-  PRIMARY KEY (bot, channel, ts)
+  thread_ts TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (connect, channel, ts)
 );
 CREATE INDEX IF NOT EXISTS inbound_pending ON inbound (session_key, status, ts);
 CREATE TABLE IF NOT EXISTS turns (
@@ -90,7 +116,8 @@ type Row = Record<string, unknown>;
 function toSession(row: Row): SessionRow {
   return {
     key: row.key as string,
-    bot: row.bot as string,
+    connect: row.connect as string,
+    scope: (row.scope as SessionScope | undefined) ?? "thread",
     channel: row.channel as string,
     threadTs: row.thread_ts as string,
     runtime: row.runtime as RuntimeKind,
@@ -107,8 +134,9 @@ function toSession(row: Row): SessionRow {
 
 function toInbound(row: Row): InboundRow {
   return {
-    bot: row.bot as string,
+    connect: row.connect as string,
     channel: row.channel as string,
+    threadTs: row.thread_ts as string,
     ts: row.ts as string,
     sessionKey: row.session_key as string,
     user: row.user as string,
@@ -127,10 +155,16 @@ export class Store {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
     this.#db = new DatabaseSync(path);
     this.#db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
-    const version = (this.#db.prepare("PRAGMA user_version").get() as Row).user_version as number;
+    let version = (this.#db.prepare("PRAGMA user_version").get() as Row).user_version as number;
     const hasTables = this.#db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() !== undefined;
-    if (hasTables && version !== SCHEMA_VERSION) {
-      throw new Error(`${path} has schema version ${version}, ember needs ${SCHEMA_VERSION}; move the old database aside`);
+    if (hasTables) {
+      while (version < SCHEMA_VERSION) {
+        const step = MIGRATIONS[version];
+        if (!step) throw new Error(`${path} has schema version ${version}, which ember ${SCHEMA_VERSION} cannot migrate; move it aside`);
+        this.#db.exec(`BEGIN; ${step} PRAGMA user_version = ${version + 1}; COMMIT;`);
+        version++;
+      }
+      if (version > SCHEMA_VERSION) throw new Error(`${path} was written by a newer ember (schema ${version})`);
     }
     this.#db.exec(SCHEMA);
     this.#db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
@@ -162,10 +196,15 @@ export class Store {
   }
 
   insertSession(s: Omit<SessionRow, "running" | "runtimeSessionId">): void {
-    this.#db.prepare(`INSERT INTO sessions (key, bot, channel, thread_ts, runtime, profile, model, workspace, token, created_at, last_active_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(s.key, s.bot, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.workspace, s.token, s.createdAt, s.lastActiveAt);
+    this.#db.prepare(`INSERT INTO sessions (key, connect, scope, channel, thread_ts, runtime, profile, model, workspace, token, created_at, last_active_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(s.key, s.connect, s.scope, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.workspace, s.token, s.createdAt, s.lastActiveAt);
     this.notify(s.key);
+  }
+
+  /** Records the thread of the latest message, where ember's own notices go. */
+  setLatestThread(key: string, channel: string, threadTs: string): void {
+    this.#db.prepare("UPDATE sessions SET channel = ?, thread_ts = ? WHERE key = ?").run(channel, threadTs, key);
   }
 
   setRuntimeSessionId(key: string, id: string): void {
@@ -180,10 +219,10 @@ export class Store {
 
   // ── inbound messages ───────────────────────────────────────────────────
 
-  /** Records a message for one bot; false if it was already recorded (Slack delivers mentions twice). */
+  /** Records a message for one connect; false if it was already recorded (Slack delivers mentions twice). */
   insertInbound(m: Omit<InboundRow, "status">): boolean {
-    const result = this.#db.prepare(`INSERT OR IGNORE INTO inbound (bot, channel, ts, session_key, user, text, status, received_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`).run(m.bot, m.channel, m.ts, m.sessionKey, m.user, m.text, m.receivedAt);
+    const result = this.#db.prepare(`INSERT OR IGNORE INTO inbound (connect, channel, thread_ts, ts, session_key, user, text, status, received_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`).run(m.connect, m.channel, m.threadTs, m.ts, m.sessionKey, m.user, m.text, m.receivedAt);
     if (result.changes > 0) this.notify(m.sessionKey);
     return result.changes > 0;
   }
@@ -194,9 +233,22 @@ export class Store {
   }
 
   markDelivered(rows: readonly InboundRow[]): void {
-    const stmt = this.#db.prepare("UPDATE inbound SET status = 'delivered' WHERE bot = ? AND channel = ? AND ts = ?");
-    for (const r of rows) stmt.run(r.bot, r.channel, r.ts);
+    const stmt = this.#db.prepare("UPDATE inbound SET status = 'delivered' WHERE connect = ? AND channel = ? AND ts = ?");
+    for (const r of rows) stmt.run(r.connect, r.channel, r.ts);
     for (const key of new Set(rows.map((r) => r.sessionKey))) this.notify(key);
+  }
+
+  /** Whether the session already has messages from this thread, i.e. is part of that conversation. */
+  inThread(sessionKey: string, channel: string, threadTs: string): boolean {
+    return this.#db.prepare("SELECT 1 FROM inbound WHERE session_key = ? AND channel = ? AND thread_ts = ? LIMIT 1")
+      .get(sessionKey, channel, threadTs) !== undefined;
+  }
+
+  /** The threads a session has messages from, most recent first. */
+  listThreads(sessionKey: string): { channel: string; threadTs: string; messages: number; lastTs: string }[] {
+    return (this.#db.prepare(`SELECT channel, thread_ts, COUNT(*) AS n, MAX(ts) AS last FROM inbound
+      WHERE session_key = ? GROUP BY channel, thread_ts ORDER BY MAX(CAST(ts AS REAL)) DESC`).all(sessionKey) as Row[])
+      .map((r) => ({ channel: r.channel as string, threadTs: r.thread_ts as string, messages: r.n as number, lastTs: r.last as string }));
   }
 
   sessionsWithPendingInbound(): string[] {

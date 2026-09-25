@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { parseConfig, type Config, type RawConfig } from "./config.ts";
+import { parseConfig, upgradeRawConfig, type Config, type RawConfig } from "./config.ts";
 
 export class Settings {
   readonly path: string;
@@ -16,8 +16,10 @@ export class Settings {
   constructor(path: string, dataDir: string) {
     this.path = path;
     this.dataDir = dataDir;
-    this.#raw = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) as RawConfig : {};
+    const stored = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) as RawConfig : {};
+    this.#raw = upgradeRawConfig(stored);
     this.#config = parseConfig(this.#raw, dataDir);
+    if (this.#raw !== stored) this.#write(); // keep one shape on disk
   }
 
   static load(env: NodeJS.ProcessEnv = process.env): Settings {

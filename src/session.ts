@@ -4,17 +4,18 @@
 import { randomUUID } from "node:crypto";
 import type { Profile, RuntimeKind } from "./config.ts";
 import type { ChatSurface } from "./chat/types.ts";
-import { formatInbound, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, sessionInstructions } from "./instructions.ts";
+import { formatInbound, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, sessionInstructions, threadAddress } from "./instructions.ts";
 import { log } from "./log.ts";
 import type { AgentDriver, AgentSession, TurnOutcome } from "./runtime/types.ts";
-import type { SessionRow, Store, TurnKind } from "./store.ts";
+import type { InboundRow, SessionRow, Store, TurnKind } from "./store.ts";
 
 export type DeclaredState = "final" | "block";
 
 export interface SessionDeps {
   store: Store;
-  chat: Pick<ChatSurface, "post" | "botUserId">;
-  botName: string;
+  chat: Pick<ChatSurface, "post" | "botUserId" | "userName">;
+  /** The connect's name, which the agent goes by. */
+  name: string;
   drivers: Record<RuntimeKind, AgentDriver>;
   profile(id: string): Profile | undefined;
   mcpUrl: string;
@@ -37,16 +38,13 @@ export class SessionActor {
   #turn: Turn | undefined;
   #nudges = 0;
   #stopRequested = false;
-  /** Prefix for the next prompt: the thread had messages before the first mention. */
-  #earlierMessages = false;
   #resumeLost = false;
   #closing = false;
   #idleSince = Date.now();
 
-  constructor(key: string, deps: SessionDeps, options: { earlierMessages?: boolean } = {}) {
+  constructor(key: string, deps: SessionDeps) {
     this.key = key;
     this.#deps = deps;
-    this.#earlierMessages = options.earlierMessages ?? false;
   }
 
   get #row(): SessionRow {
@@ -95,7 +93,7 @@ export class SessionActor {
     return this.#enqueue(async () => {
       this.#deps.store.setRunning(this.key, false);
       const pending = this.#deps.store.pendingInbound(this.key);
-      const text = pending.length > 0 ? `${RESUME_AFTER_RESTART}\n\n${formatInbound(pending, null)}` : RESUME_AFTER_RESTART;
+      const text = pending.length > 0 ? `${RESUME_AFTER_RESTART}\n\n${await this.#format(pending)}` : RESUME_AFTER_RESTART;
       await this.#startTurn("resume", text);
       this.#deps.store.markDelivered(pending);
     });
@@ -135,15 +133,34 @@ export class SessionActor {
   async #pump(): Promise<void> {
     const pending = this.#deps.store.pendingInbound(this.key);
     if (pending.length === 0) return;
-    const text = formatInbound(pending, { earlierMessages: this.#earlierMessages });
+    const text = await this.#format(pending);
     if (this.#agent?.busy) {
       if (await this.#agent.steer(text)) this.#deps.store.markDelivered(pending);
       return; // otherwise delivered when the turn ends
     }
-    this.#earlierMessages = false;
     this.#nudges = 0;
     await this.#startTurn("input", text);
     this.#deps.store.markDelivered(pending);
+  }
+
+  /**
+   * The messages as the agent reads them: each with its source and sender's
+   * name, plus a hint when a thread appears in this session for the first
+   * time mid-conversation (its earlier messages are only a chat_history away).
+   */
+  async #format(pending: readonly InboundRow[]): Promise<string> {
+    const known = new Set(this.#deps.store.listInbound(this.key)
+      .filter((m) => m.status === "delivered")
+      .map((m) => threadAddress(m.channel, m.threadTs)));
+    const newThreads = new Set(pending.map((m) => threadAddress(m.channel, m.threadTs)).filter((a) => !known.has(a)));
+    const names = new Map<string, string>();
+    if (this.#deps.chat.userName) {
+      for (const user of new Set(pending.map((m) => m.user))) {
+        const name = await this.#deps.chat.userName(user);
+        if (name) names.set(user, name);
+      }
+    }
+    return formatInbound(pending, { newThreads, names });
   }
 
   /**
@@ -196,7 +213,8 @@ export class SessionActor {
       cwd: row.workspace,
       ...(row.model ? { model: row.model } : {}),
       instructions: sessionInstructions({
-        botName: this.#deps.botName, botUserId: this.#deps.chat.botUserId, channel: row.channel, threadTs: row.threadTs,
+        name: this.#deps.name,
+        mention: this.#deps.chat.botUserId ? `<@${this.#deps.chat.botUserId}>` : null,
         workspace: row.workspace, reposDir: this.#deps.reposDir, memoryPath: this.#deps.memoryPath,
       }),
       mcpToken: row.token,
