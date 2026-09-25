@@ -200,6 +200,15 @@ export class AdminApi {
         typeof input[field] === "string" && input[field].trim() ? input[field].trim() : stored?.[field] ?? "";
       return send(res, 200, await verifySlackTokens({ appToken: pick("appToken"), botToken: pick("botToken") }));
     }
+    // Development only (EMBER_DEV=1, local visits): hand ember a chat message as if the connect had received it.
+    if (method === "POST" && path === "/dev/inject" && process.env.EMBER_DEV === "1" && viewer.via === "local") {
+      const input = await body(req);
+      const ts = String(input.ts);
+      await this.#deps.hub.accept(String(input.connect), {
+        channel: String(input.channel), threadTs: String(input.threadTs ?? ts), ts, user: String(input.user), text: String(input.text), addressed: input.addressed !== false,
+      });
+      return send(res, 200, { ok: true });
+    }
     if (path === "/slack/config-token") {
       if (method === "GET") return send(res, 200, this.#configTokenView());
       if (method === "PUT") {
