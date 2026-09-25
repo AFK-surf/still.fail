@@ -87,6 +87,27 @@ test("accounts own workspaces, invite each other, enroll stations and get grants
   }
 });
 
+test("an invitation waits for its email: signing in with it shows the invitation, which joins without a link", async () => {
+  const h = await harness();
+  try {
+    const alice = h.as(await h.login("alice"));
+    const bob = h.as(await h.login("bob"));
+    const home = await (await alice("POST", "/v1/workspaces", { name: "Home" })).json() as any;
+    assert.equal((await alice("POST", `/v1/workspaces/${home.id}/invitations`, { role: "member" })).status, 400, "an email is required");
+    assert.equal((await alice("POST", `/v1/workspaces/${home.id}/invitations`, { role: "member", email: "alice@example.test" })).status, 409, "already a member");
+    await alice("POST", `/v1/workspaces/${home.id}/invitations`, { role: "member", email: "Bob@Example.test" });
+    const me = await (await bob("GET", "/v1/me")).json() as any;
+    assert.deepEqual(me.invitations.map((i: any) => [i.name, i.role, i.inviter]), [["Home", "member", "Name of alice"]]);
+    const carol = h.as(await h.login("carol"));
+    assert.equal((await carol("POST", `/v1/invitations/${me.invitations[0].id}/accept`)).status, 403);
+    assert.equal((await bob("POST", `/v1/invitations/${me.invitations[0].id}/accept`)).status, 200);
+    const after = await (await bob("GET", "/v1/me")).json() as any;
+    assert.deepEqual([after.invitations.length, after.workspaces.map((w: any) => w.name)], [0, ["Home"]]);
+  } finally {
+    await h.close();
+  }
+});
+
 test("the web app may use this origin's /auth/callback; other redirects are refused", async () => {
   const h = await harness();
   try {

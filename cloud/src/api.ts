@@ -10,7 +10,7 @@ import { grantKeys, signGrant, validKeyHex, verifyKeySignature } from "./grants"
 const STATUS: Record<string, number> = {
   workspace_not_found: 404, member_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
   forbidden: 403, invitation_for_other_email: 403,
-  invalid_name: 400, invalid_role: 400, invalid_email: 400,
+  already_member: 409, invalid_name: 400, invalid_role: 400, invalid_email: 400,
   last_owner: 409,
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
 };
@@ -83,7 +83,13 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   const text = (key: string) => (typeof input[key] === "string" ? (input[key] as string) : "");
   const role = (): Role => (ROLES.includes(input.role as Role) ? (input.role as Role) : "member");
 
-  if (path === "/v1/me" && method === "GET") return directory(async () => ({ ...(await dir.me(sub)), relay_url: env.RELAY_URL || env.PUBLIC_ORIGIN }));
+  if (path === "/v1/me" && method === "GET") {
+    return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), relay_url: env.RELAY_URL || env.PUBLIC_ORIGIN }));
+  }
+  const byId = /^\/v1\/invitations\/([0-9A-HJKMNP-TV-Z]{26})\/(accept|decline)$/.exec(path);
+  if (byId && method === "POST") {
+    return directory(() => (byId[2] === "accept" ? dir.acceptById(sub, claims.email, byId[1]!) : dir.declineById(claims.email, byId[1]!)));
+  }
   if (path === "/v1/workspaces" && method === "POST") return directory(() => dir.createWorkspace(sub, text("name")));
   if (path === "/v1/invitations/preview" && method === "POST") return directory(() => dir.previewInvitation(text("token")));
   if (path === "/v1/invitations/accept" && method === "POST") return directory(() => dir.acceptInvitation(sub, claims.email, text("token")));
@@ -97,7 +103,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     if (method === "DELETE") return directory(() => dir.deleteWorkspace(sub, ws));
   }
   if (kind === "invitations" && !target && method === "POST") {
-    const email = text("email").trim() || null;
+    const email = text("email").trim().toLowerCase() || null;
     return directory(async () => {
       const made = await dir.invite(sub, ws, role(), email);
       return { ...made, url: `${env.PUBLIC_ORIGIN}/invite#${made.token}` };

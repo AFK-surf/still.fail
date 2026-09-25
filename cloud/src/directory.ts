@@ -6,7 +6,7 @@ import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
 import type { Env } from "./env";
-import type { InvitationView, MemberView, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { InvitationView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -128,14 +128,17 @@ export class Directory extends DurableObject<Env> {
     const mine = this.#role(sub, workspace, MANAGERS);
     if (!ROLES.includes(role)) fail(400, "invalid_role");
     if (role === "owner" && mine !== "owner") fail(403, "forbidden");
-    if (email !== null && !/^[^\s@]{1,64}@[^\s@]{1,190}$/.test(email)) fail(400, "invalid_email");
+    if (email === null || !/^[^\s@]{1,64}@[^\s@]{1,190}$/.test(email)) fail(400, "invalid_email");
+    if (this.#one("SELECT 1 AS x FROM members m JOIN users u ON u.sub = m.sub WHERE m.workspace = ? AND lower(u.email) = lower(?)", workspace, email!)) fail(409, "already_member");
     const open = this.#one("SELECT COUNT(*) AS n FROM invitations WHERE workspace = ? AND expires_at > ?", workspace, nowSeconds())!.n as number;
     if (open >= LIMITS.openInvitations) fail(429, "too_many_invitations");
     const token = randomSecret();
     const id = ulid();
     const expires = nowSeconds() + INVITATION_TTL_SEC;
+    // A newer invitation for the same email replaces the older one.
+    this.#run("DELETE FROM invitations WHERE workspace = ? AND email = ?", workspace, email!.toLowerCase());
     this.#run("INSERT INTO invitations (id, workspace, token_hash, role, email, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      id, workspace, await digest(token), role, email?.toLowerCase() ?? null, sub, expires);
+      id, workspace, await digest(token), role, email!.toLowerCase(), sub, expires);
     return { token, id, expires_at: expires };
   }
 
@@ -163,6 +166,33 @@ export class Directory extends DurableObject<Env> {
       else if (ROLES.indexOf(row!.role as Role) < ROLES.indexOf(existing.role as Role)) this.#run("UPDATE members SET role = ? WHERE workspace = ? AND sub = ?", row!.role, workspace, sub);
     });
     return this.workspace(sub, workspace);
+  }
+
+  /** Invitations waiting for this email: what someone sees right after signing in. */
+  invitationsFor(email: string): PendingInvitation[] {
+    return this.#rows(`SELECT i.id, i.workspace, w.name, i.role, COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter, i.expires_at FROM invitations i
+      JOIN workspaces w ON w.id = i.workspace LEFT JOIN users u ON u.sub = i.created_by
+      WHERE i.email = ? AND i.expires_at > ? ORDER BY i.expires_at`, email.toLowerCase(), nowSeconds()) as unknown as PendingInvitation[];
+  }
+
+  /** Accepts an invitation addressed to this account's email, by id (no link needed). */
+  acceptById(sub: string, email: string, id: string): WorkspaceView {
+    const row = this.#one("SELECT id, workspace, role, email FROM invitations WHERE id = ? AND expires_at > ?", id, nowSeconds());
+    if (!row) fail(404, "invitation_not_found");
+    if ((row!.email as string | null) !== email.toLowerCase()) fail(403, "invitation_for_other_email");
+    const workspace = row!.workspace as string;
+    const existing = this.#one("SELECT role FROM members WHERE workspace = ? AND sub = ?", workspace, sub);
+    const count = this.#one("SELECT COUNT(*) AS n FROM members WHERE workspace = ?", workspace)!.n as number;
+    if (!existing && count >= LIMITS.membersPerWorkspace) fail(429, "too_many_members");
+    this.ctx.storage.transactionSync(() => {
+      this.#run("DELETE FROM invitations WHERE id = ?", id);
+      if (!existing) this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, ?, ?)", workspace, sub, row!.role, nowSeconds());
+    });
+    return this.workspace(sub, workspace);
+  }
+
+  declineById(email: string, id: string): void {
+    this.#run("DELETE FROM invitations WHERE id = ? AND email = ?", id, email.toLowerCase());
   }
 
   revokeInvitation(sub: string, workspace: string, id: string): void {

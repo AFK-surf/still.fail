@@ -532,7 +532,7 @@
 .composer-bare { border-top: 1px solid var(--line); background: var(--canvas); }
 .chat .composer { border-top: 1px solid var(--line); }
 /* Adjacent sidebar items never touch, so a selected or hovered row stays distinct. */
-.nav-row + .nav-row, .nav-row + .nav-heading { margin-top: 2px; }
+.nav-row + .nav-row { margin-top: 2px; }
 
 /* Section titles and their actions share a centre line. */
 .section-head { align-items: center; }
