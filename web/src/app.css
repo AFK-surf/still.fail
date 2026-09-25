@@ -546,3 +546,4 @@
 .invite-card { width: min(460px, 90vw); text-align: left; }
 .session-kind { display: inline-grid; flex: none; }
 .session-kind .kind-icon { width: 14px; height: 14px; }
+.nav-session-meta .nav-time { margin-left: 0; }
