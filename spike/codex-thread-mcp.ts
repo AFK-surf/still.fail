@@ -19,7 +19,7 @@ const perThreadConfig = (token: string) => ({
 const rows: Record<string, unknown>[] = [];
 try {
   const threads = await Promise.all(tokens.map(async (token) =>
-    (await app.request("thread/start", { cwd, model: MODEL, approvalPolicy: "never", config: perThreadConfig(token) })).thread.id as string));
+    (await app.request("thread/start", { cwd, model: MODEL, approvalPolicy: "never", sandbox: "danger-full-access", config: perThreadConfig(token) })).thread.id as string));
   // Run the three turns concurrently: the tokens must not bleed across threads.
   await Promise.all(threads.map(async (threadId, i) => {
     const items = await app.runTurn(threadId,
