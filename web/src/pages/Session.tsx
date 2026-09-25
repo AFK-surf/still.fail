@@ -99,7 +99,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
               <IconButton label="收起侧栏" icon={X} onClick={() => togglePanel(false)} />
             </div>
             <Tabs.Content className="side-content" value="history">
-              <History detail={detail.data} connect={connect} state={<SessionState detail={detail.data} />} actions={<SessionActions detail={detail.data} />} />
+              <History detail={detail.data} connect={connect} actions={<SessionActions detail={detail.data} />} />
             </Tabs.Content>
             <Tabs.Content className="side-content" value="details">
               <SessionDetails detail={detail.data} connect={connect} base={base} />
@@ -126,7 +126,7 @@ function SessionDetails({ detail, connect, base }: { detail: SessionDetail; conn
         {row("连接", connect ? <Link to={link(`/connects/${connect.id}`)} className="detail-link"><ConnectKindIcon kind={connect.kind} size={13} />{connect.name}</Link> : session.connect)}
         {row("运行时", <span className="detail-inline"><RuntimeLogo runtime={session.runtime} size={13} />{RUNTIME_LABEL[session.runtime]}</span>)}
         {row("模型", agentLabel(detail.transcript?.usage?.model ?? session.model, session.effort))}
-        {row("发起", <CreatorText creator={session.creator} verb="发起" />)}
+        {row("发起", session.creator ? <CreatorText creator={session.creator} verb="发起" /> : <span className="muted">未记录</span>)}
         {row("参与", <span className="detail-inline"><PeopleStack people={session.participants} max={8} />{session.participants?.length ?? 0} 人</span>)}
         {row("状态", <SessionState detail={detail} />)}
         {row("创建", absoluteTime(session.createdAt))}
