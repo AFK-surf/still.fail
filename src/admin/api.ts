@@ -491,7 +491,7 @@ export class AdminApi {
       const model = bind.model === undefined ? existing?.bind.model : bind.model;
       const next: RawConnect = {
         id,
-        createdBy: existing ? existing.createdBy : { id: viewerId(viewer), name: viewerName(viewer) },
+        ...(existing ? (existing.createdBy ? { createdBy: existing.createdBy } : {}) : { createdBy: { id: viewerId(viewer), name: viewerName(viewer) } }),
         name: typeof input.name === "string" && input.name.trim() ? input.name.trim() : existing?.name ?? id,
         enabled: typeof input.enabled === "boolean" ? input.enabled : existing?.enabled ?? true,
         kind: input.kind ?? existing?.kind ?? "slack",

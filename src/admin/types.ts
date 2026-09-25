@@ -92,6 +92,7 @@ export interface SessionSummary {
   /** thread: started by one thread; all: a single-session connect's session. */
   scope: "thread" | "all";
   title: string | null;
+  createdBy: string | null;
   /** Single-session connects currently delivering into it. */
   boundTo: string[];
   /** Who started it, resolved for people; filled in lists and details. */
