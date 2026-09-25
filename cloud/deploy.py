@@ -89,7 +89,7 @@ def docker_env():
     with tempfile.TemporaryDirectory(prefix="ember-docker-") as directory:
         # Keep the plugins (buildx) the normal config would find.
         plugins = [str(p) for p in [Path.home() / ".docker" / "cli-plugins", Path("/opt/homebrew/lib/docker/cli-plugins"), Path("/Applications/OrbStack.app/Contents/MacOS/xbin")] if p.exists()]
-        Path(directory, "config.json").write_text(json.dumps({"auths": {}, "credsStore": "", "cliPluginsExtraDirs": plugins}))
+        Path(directory, "config.json").write_text(json.dumps({"auths": {"https://index.docker.io/v1/": {}}, "credsStore": "", "cliPluginsExtraDirs": plugins}))
         env["DOCKER_CONFIG"] = directory
         env["DOCKER_HOST"] = host
         yield env
