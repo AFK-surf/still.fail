@@ -457,3 +457,31 @@
   .chat-list { padding: 16px; }
   .composer { padding: 10px 12px 12px; }
 }
+
+/* ── ember cloud: accounts, workspaces, station frame ──────────────── */
+
+.account-slot { padding: 10px 8px 4px; }
+.account-trigger {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: var(--r-nav);
+  background: none; color: var(--text); text-align: left; cursor: pointer;
+}
+.account-trigger:hover, .account-trigger[data-state="open"] { background: var(--hover); }
+.account-trigger > svg { color: var(--muted); flex: none; margin-left: auto; }
+.account-text { display: grid; min-width: 0; line-height: 1.3; }
+.account-name { font-size: var(--text-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-email { font-size: var(--text-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu { min-width: 260px; }
+.frame-slot { padding-top: 12px; }
+.person { flex: none; border-radius: 50%; object-fit: cover; }
+.person-letter { display: inline-grid; place-items: center; background: var(--paper); color: var(--text); font-weight: 600; }
+.ws-mark { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 7px; background: var(--primary); color: var(--on-primary); font-size: 12px; font-weight: 650; }
+.ws-mark-lg { width: 52px; height: 52px; border-radius: 16px; font-size: 22px; }
+.nav-session .ws-mark { margin-top: 1px; }
+.station-row .btn { flex: none; }
+.role-select { width: 120px; flex: none; }
+.callout[data-tone="green"] { background: var(--green-bg); color: var(--green); }
+.dialog-note { margin: 0; font-size: var(--text-sm); }
+.sign-in-page p, .invite-page p { max-width: 30em; }
+.sign-in-page .btn, .invite-page .btn { margin-top: 8px; }
+.invite-account { width: 280px; margin-top: 8px; }
+.invite-actions { display: flex; gap: 8px; }

@@ -24,7 +24,7 @@ export function SessionPage() {
     const hasConnects = (overview.data?.connects.length ?? 0) > 0;
     return (
       <Empty>
-        <img src="/admin/ember.svg" alt="" width={36} height={36} />
+        <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={36} height={36} />
         <h2>{sessions.data?.length ? "选一个会话" : hasConnects ? "还没有会话" : "添加第一个连接"}</h2>
         <p>{sessions.data?.length ? "左边是所有连接的会话，最近活动的在最上面。"
           : hasConnects ? "在 Slack 里 @ 它，收到的第一条消息会在这里出现。"

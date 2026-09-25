@@ -1,6 +1,7 @@
 // Talking to ember's admin API. Types come straight from the server code.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { transport } from "./transport.ts";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
 import type { ConnectInput, LoginJob, Overview, ProfileCheck, ProfileInput, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
@@ -24,14 +25,8 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`/admin/api${path}`, {
-    method,
-    credentials: "same-origin",
-    headers: body === undefined ? {} : { "content-type": "application/json" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  const data = await response.json().catch(() => ({})) as { error?: string };
-  if (!response.ok) throw new ApiError(response.status, data.error ?? `请求失败（${response.status}）`);
+  const { status, data } = await transport().request(method, path, body);
+  if (status < 200 || status >= 300) throw new ApiError(status, (data as { error?: string })?.error ?? `请求失败（${status}）`);
   return data as T;
 }
 
@@ -95,7 +90,6 @@ export function useLiveUpdates(enabled: boolean): void {
   const client = useQueryClient();
   useEffect(() => {
     if (!enabled) return;
-    const source = new EventSource("/admin/api/events");
     const dirty = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const flush = () => {
@@ -105,16 +99,16 @@ export function useLiveUpdates(enabled: boolean): void {
       for (const key of dirty) void client.invalidateQueries({ queryKey: keys.session(key) });
       dirty.clear();
     };
-    source.addEventListener("session", (event) => {
-      dirty.add((JSON.parse((event as MessageEvent<string>).data) as { key: string }).key);
-      timer ??= setTimeout(flush, 400);
-    });
-    source.addEventListener("config", () => void client.invalidateQueries({ queryKey: keys.overview }));
-    source.addEventListener("login", () => void client.invalidateQueries({ queryKey: keys.overview }));
-    // After a reconnect, anything may have changed while we were away.
-    source.addEventListener("open", () => void client.invalidateQueries());
+    const stop = transport().events((name, data) => {
+      if (name === "session") {
+        dirty.add((JSON.parse(data) as { key: string }).key);
+        timer ??= setTimeout(flush, 400);
+      } else {
+        void client.invalidateQueries({ queryKey: keys.overview });
+      }
+    }, () => void client.invalidateQueries()); // after a reconnect, anything may have changed
     return () => {
-      source.close();
+      stop();
       if (timer) clearTimeout(timer);
     };
   }, [enabled, client]);

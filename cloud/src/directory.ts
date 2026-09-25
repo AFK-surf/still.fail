@@ -6,8 +6,9 @@ import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
 import type { Env } from "./env";
+import type { InvitationView, MemberView, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+export type { Role };
 
-export type Role = "owner" | "admin" | "member";
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
 const MANAGERS: readonly Role[] = ["owner", "admin"];
 
@@ -27,13 +28,6 @@ export class DirectoryError extends Error {
 const fail = (status: number, code: string): never => {
   throw new DirectoryError(status, code);
 };
-
-export interface UserView { sub: string; email: string; name: string; picture: string }
-export interface WorkspaceSummary { id: string; name: string; role: Role; created_at: number; stations: number; members: number }
-export interface StationView { id: string; name: string; enrolled_at: number; enrolled_by: string; last_seen: number | null; version: string | null }
-export interface MemberView extends UserView { role: Role; added_at: number }
-export interface InvitationView { id: string; role: Role; email: string | null; created_by: string; expires_at: number }
-export interface WorkspaceView { id: string; name: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[] }
 
 type Row = Record<string, SqlStorageValue>;
 

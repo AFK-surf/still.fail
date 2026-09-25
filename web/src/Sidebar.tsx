@@ -4,16 +4,20 @@ import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
 import { connectionText, dayLabel, modeShort, presence, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
 import { NewConnectDialog } from "./pages/Connect.tsx";
+import { FrameSwitcher, useFrame } from "./cloud/switcher.tsx";
 import { ConnectKindIcon, ICON, IconButton, StatusDot, Tip } from "./ui.tsx";
 
 export function Sidebar() {
+  const frame = useFrame();
   const settings = useLocation().pathname.startsWith("/settings");
   return (
     <nav className="sidebar" aria-label="导航">
-      <div className="brand">
-        <img src="/admin/ember.svg" alt="" width={22} height={22} />
-        <span className="brand-word">ember</span>
-      </div>
+      {frame ? <div className="account-slot frame-slot"><FrameSwitcher /></div> : (
+        <div className="brand">
+          <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={22} height={22} />
+          <span className="brand-word">ember</span>
+        </div>
+      )}
       {settings ? <SettingsNav /> : <MainNav />}
     </nav>
   );

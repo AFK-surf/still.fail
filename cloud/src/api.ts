@@ -83,7 +83,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   const text = (key: string) => (typeof input[key] === "string" ? (input[key] as string) : "");
   const role = (): Role => (ROLES.includes(input.role as Role) ? (input.role as Role) : "member");
 
-  if (path === "/v1/me" && method === "GET") return directory(() => dir.me(sub));
+  if (path === "/v1/me" && method === "GET") return directory(async () => ({ ...(await dir.me(sub)), relay_url: env.RELAY_URL || env.PUBLIC_ORIGIN }));
   if (path === "/v1/workspaces" && method === "POST") return directory(() => dir.createWorkspace(sub, text("name")));
   if (path === "/v1/invitations/preview" && method === "POST") return directory(() => dir.previewInvitation(text("token")));
   if (path === "/v1/invitations/accept" && method === "POST") return directory(() => dir.acceptInvitation(sub, claims.email, text("token")));

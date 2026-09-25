@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node src/main.ts",
     "build": "vite build --config web/vite.config.ts",
+    "build:cloud": "sh mesh/build-web.sh && vite build --config web/vite.config.ts --mode cloud",
     "dev:web": "vite --config web/vite.config.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
     "test": "node --test \"test/**/*.test.ts\""

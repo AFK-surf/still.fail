@@ -23,7 +23,7 @@ export function App() {
     const denied = overview.error instanceof ApiError && overview.error.status === 403;
     return (
       <div className="gate">
-        <img src="/admin/ember.svg" alt="" width={40} height={40} />
+        <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={40} height={40} />
         <h1>{denied ? "没有访问权限" : "连不上 ember"}</h1>
         <p>{overview.error.message}</p>
       </div>
