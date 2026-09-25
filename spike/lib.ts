@@ -22,12 +22,13 @@ export function claudeEnv(routingId: string): NodeJS.ProcessEnv {
   const home = join(SPIKE_ROOT, "claude-home");
   mkdirSync(home, { recursive: true });
   const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const name of ["ANTHROPIC_API_KEY", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]) delete env[name];
+  for (const name of ["ANTHROPIC_AUTH_TOKEN", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]) delete env[name];
   return {
     ...env,
     CLAUDE_CONFIG_DIR: home,
     ANTHROPIC_BASE_URL: OPENCODE_BASE,
-    ANTHROPIC_AUTH_TOKEN: opencodeKey(),
+    // OpenCode Go's /messages wants x-api-key; ANTHROPIC_AUTH_TOKEN (Bearer) gets 401.
+    ANTHROPIC_API_KEY: opencodeKey(),
     ANTHROPIC_CUSTOM_HEADERS: `x-opencode-session: ${routingId}`,
     ANTHROPIC_MODEL: MODEL,
     ANTHROPIC_DEFAULT_OPUS_MODEL: MODEL,
