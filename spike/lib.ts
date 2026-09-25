@@ -218,8 +218,16 @@ export async function startAppServer(cwd: string, env: NodeJS.ProcessEnv): Promi
       const items: any[] = [];
       const done = new Promise<void>((resolve) => turns.set(threadId, { items, done: resolve }));
       await request("turn/start", { threadId, input: [{ type: "text", text }] });
-      await Promise.race([done, sleep(timeoutMs).then(() => { throw new Error(`turn on ${threadId} timed out`); })]);
-      turns.delete(threadId);
+      let timer: NodeJS.Timeout | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`turn on ${threadId} timed out`)), timeoutMs);
+      });
+      try {
+        await Promise.race([done, timeout]);
+      } finally {
+        clearTimeout(timer);
+        turns.delete(threadId);
+      }
       return items;
     },
     killTree: proc.killTree,
