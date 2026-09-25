@@ -8,5 +8,5 @@ export default defineConfig({
   base: "/admin/",
   plugins: [react()],
   build: { outDir: fileURLToPath(new URL("../dist/admin", import.meta.url)), emptyOutDir: true },
-  server: { proxy: { "/admin/api": { target: "http://127.0.0.1:4750", changeOrigin: false } } },
+  server: { proxy: { "/admin/api": { target: "http://127.0.0.1:4760", changeOrigin: false } } },
 });

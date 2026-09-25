@@ -74,6 +74,7 @@ async function serveUi(pathname: string, res: ServerResponse): Promise<void> {
   res.writeHead(503, { "content-type": "text/plain; charset=utf-8" }).end("admin client not built: run `pnpm build`");
 }
 
+// Agents' MCP endpoint: loopback only.
 const server = createServer((req, res) => {
   const pathname = new URL(req.url ?? "/", "http://ember").pathname;
   if (pathname === "/mcp") {
@@ -83,18 +84,23 @@ const server = createServer((req, res) => {
     });
   } else if (pathname === "/health") {
     res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ok: true }));
-  } else if (pathname.startsWith("/admin/api/")) {
-    void admin.handle(req, res);
-  } else if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    void serveUi(pathname, res);
-  } else if (pathname === "/") {
-    res.writeHead(302, { location: "/admin" }).end();
   } else {
     res.writeHead(404).end();
   }
 });
 await new Promise<void>((resolve) => server.listen(settings.config.http.port, settings.config.http.host, resolve));
-log.info("ember listening", { mcpUrl, admin: `http://${settings.config.http.host}:${settings.config.http.port}/admin` });
+
+// The admin page on its own port, the only one a tunnel should point at.
+const adminServer = createServer((req, res) => {
+  const pathname = new URL(req.url ?? "/", "http://ember").pathname;
+  if (pathname.startsWith("/admin/api/")) void admin.handle(req, res);
+  else if (pathname === "/admin" || pathname.startsWith("/admin/")) void serveUi(pathname, res);
+  else if (pathname === "/") res.writeHead(302, { location: "/admin" }).end();
+  else res.writeHead(404).end();
+});
+const { host: adminHost, port: adminPort } = settings.config.adminHttp;
+await new Promise<void>((resolve) => adminServer.listen(adminPort, adminHost, resolve));
+log.info("ember listening", { mcpUrl, admin: `http://${adminHost}:${adminPort}/admin` });
 
 await bots.reconcile(settings.config);
 if (bots.chats.size === 0) log.warn("no bot is connected; add or enable one on the admin page");
@@ -110,6 +116,7 @@ async function shutdown(signal: string): Promise<void> {
   await bots.stopAll();
   await hub.shutdown();
   server.close();
+  adminServer.close();
   store.close();
   process.exit(0);
 }

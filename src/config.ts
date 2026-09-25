@@ -43,6 +43,8 @@ export interface Config {
   dataDir: string;
   /** Bearer token for the admin page and API. */
   adminToken: string;
+  /** Where the admin page listens: its own port, so a public tunnel never reaches the agents' MCP endpoint. */
+  adminHttp: { host: string; port: number };
   /** Shared MEMORY.md and skills/ linked into every profile home. */
   agentHome: string;
   http: { host: string; port: number };
@@ -78,7 +80,7 @@ export interface RawProfile {
 /** config.json as written; parseConfig turns it into a validated Config. */
 export interface RawConfig {
   agentHome?: string;
-  admin?: { token?: string };
+  admin?: { token?: string; host?: string; port?: number };
   http?: { host?: string; port?: number };
   bots?: RawBot[];
   profiles?: RawProfile[];
@@ -130,6 +132,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
   return {
     dataDir,
     adminToken: raw.admin?.token ?? "",
+    adminHttp: { host: raw.admin?.host ?? "127.0.0.1", port: raw.admin?.port ?? 4760 },
     agentHome: isAbsolute(agentHome) ? agentHome : join(dataDir, agentHome),
     http: { host: raw.http?.host ?? "127.0.0.1", port: raw.http?.port ?? 4750 },
     bots,
