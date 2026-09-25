@@ -54,10 +54,12 @@ class Host {
       this.threads.clear();
       onExit();
     });
-    this.ready = (async () => {
-      await this.request("initialize", { clientInfo: { name: "ember", version: "0" }, capabilities: { experimentalApi: true } });
-      this.#proc.write(JSON.stringify({ method: "initialized", params: {} }));
-    })();
+    this.ready = this.#initialize();
+  }
+
+  async #initialize(): Promise<void> {
+    await this.request("initialize", { clientInfo: { name: "ember", version: "0" }, capabilities: { experimentalApi: true } });
+    this.#proc.write(JSON.stringify({ method: "initialized", params: {} }));
   }
 
   request(method: string, params: unknown): Promise<any> {
