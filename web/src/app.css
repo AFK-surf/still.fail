@@ -485,3 +485,6 @@
 .sign-in-page .btn, .invite-page .btn { margin-top: 8px; }
 .invite-account { width: 280px; margin-top: 8px; }
 .invite-actions { display: flex; gap: 8px; }
+.steps li { min-width: 0; }
+.steps .command { width: 100%; min-width: 0; }
+.dialog .command code { min-width: 0; }

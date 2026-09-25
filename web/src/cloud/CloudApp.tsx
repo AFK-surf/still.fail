@@ -7,7 +7,7 @@ import { Check, ChevronsUpDown, Copy, LogOut, Plus, Trash2, UserPlus } from "luc
 import { DropdownMenu, Tooltip } from "radix-ui";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate, useParams } from "react-router";
-import { relativeTime } from "../format.ts";
+import { relativeTime, timeUntil } from "../format.ts";
 import { ToastProvider, useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
 import { completeSignIn, signIn, signOut, type Account } from "./accounts.ts";
@@ -378,7 +378,7 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
               <li key={i.id} className="list-row">
                 <span className="list-row-text">
                   <span className="list-row-title">{i.email ?? "任何拿到链接的人"}</span>
-                  <span className="muted">{ROLE_LABEL[i.role]} · {relativeTime(i.expires_at * 1000).replace("前", "后")}过期</span>
+                  <span className="muted">{ROLE_LABEL[i.role]} · {timeUntil(i.expires_at * 1000)}过期</span>
                 </span>
                 <Button variant="ghost" busy={revoke.isPending && revoke.variables === i.id} onClick={() => revoke.mutate(i.id)}>撤回</Button>
               </li>

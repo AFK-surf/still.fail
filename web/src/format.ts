@@ -215,3 +215,12 @@ export function modeShort(mode: ConnectMode): string {
 export function sessionTitle(s: { title: string | null; firstText: string | null; scope: string }, connectName: string): string {
   return s.title || cleanText(s.firstText) || (s.scope === "all" ? `${connectName} 的会话` : "（没有消息）");
 }
+
+/** How long until a future moment, in words: "3 天后", "5 小时后". */
+export function timeUntil(ms: number, now = Date.now()): string {
+  const minutes = Math.max(0, Math.round((ms - now) / 60_000));
+  if (minutes < 60) return minutes <= 1 ? "1 分钟内" : `${minutes} 分钟后`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} 小时后`;
+  return `${Math.round(hours / 24)} 天后`;
+}

@@ -23,8 +23,9 @@ export function useAccounts(): Account[] {
 
 export function Avatar({ account, size = 24 }: { account: { name: string; email: string; picture: string }; size?: number }) {
   const letter = ([...(account.name || account.email)][0] ?? "?").toUpperCase();
-  return account.picture
-    ? <img className="person" src={account.picture} alt="" width={size} height={size} referrerPolicy="no-referrer" />
+  const [broken, setBroken] = useState(false);
+  return account.picture && !broken
+    ? <img className="person" src={account.picture} alt="" width={size} height={size} referrerPolicy="no-referrer" onError={() => setBroken(true)} />
     : <span className="person person-letter" style={{ width: size, height: size, fontSize: size * .45 }} aria-hidden="true">{letter}</span>;
 }
 
