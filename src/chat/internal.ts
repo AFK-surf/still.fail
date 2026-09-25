@@ -3,7 +3,7 @@
 // with their source, and the agent answers with chat_post to their thread.
 // Every chat lives in one channel, INTERNAL_CHANNEL; its thread_ts is its
 // address and its primary key.
-import type { Store } from "../store.ts";
+import type { Attachment, Store } from "../store.ts";
 import type { ChatMessage, ChatSurface, InboundMessage, ThreadRef } from "./types.ts";
 
 /** The connect id ember's own chat goes by. Not configurable; never in config.json. */
@@ -41,10 +41,13 @@ export class InternalChat implements ChatSurface {
   }
 
   /** Records what a person typed; the caller hands the returned message to the hub. */
-  say(threadTs: string, user: string, text: string): InboundMessage {
+  say(threadTs: string, user: string, text: string, attachments: Attachment[] = []): InboundMessage {
     const ts = nextTs();
-    this.#store.insertChatMessage({ threadTs, ts, role: "person", user, text, createdAt: Date.now() });
-    return { channel: INTERNAL_CHANNEL, threadTs, ts, user, text, addressed: true };
+    this.#store.insertChatMessage({ threadTs, ts, role: "person", user, text, createdAt: Date.now(), attachments });
+    // The agent gets the files as paths on this machine, after the words.
+    const files = attachments.map((a) => `- ${a.path} (${a.name}, ${a.size} bytes)`).join("\n");
+    const forAgent = files ? `${text}${text ? "\n\n" : ""}Attached files:\n${files}` : text;
+    return { channel: INTERNAL_CHANNEL, threadTs, ts, user, text: forAgent, addressed: true };
   }
 
   async post(thread: ThreadRef, markdown: string): Promise<void> {

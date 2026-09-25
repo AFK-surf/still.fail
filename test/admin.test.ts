@@ -443,3 +443,26 @@ test("the station reports the machine it runs on", async () => {
     t.close();
   }
 });
+
+test("files sent to a session land in its workspace and reach the agent as paths", async () => {
+  const t = await setup();
+  try {
+    await t.hub.accept("ds", message({ text: "<@UBOT> hi" }));
+    await settle();
+    const [summary] = (await t.call("GET", "/sessions")).body;
+    const key = encodeURIComponent(summary.key);
+    const upload = await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent("../../report.txt")}`, { method: "POST", body: "hello file" });
+    const file = await upload.json() as any;
+    assert.equal(upload.status, 200);
+    assert.match(file.path, /\/uploads\/[^/]+-report\.txt$/, "a name cannot climb out of the upload directory");
+    assert.equal(readFileSync(file.path, "utf8"), "hello file");
+    assert.equal((await t.call("POST", `/sessions/${key}/messages`, { text: "看看", attachments: [{ ...file, path: "/etc/hosts" }] })).status, 400);
+    assert.equal((await t.call("POST", `/sessions/${key}/messages`, { text: "看看这个", attachments: [file] })).status, 200);
+    await settle();
+    assert.match(t.claude.last.steers.at(-1) ?? t.claude.last.prompts.at(-1)!, new RegExp(`Attached files:\\n- ${file.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    const detail = await t.call("GET", `/sessions/${key}`);
+    assert.deepEqual(detail.body.chats[0].messages[0].attachments.map((a: any) => a.name), [file.name]);
+  } finally {
+    t.close();
+  }
+});

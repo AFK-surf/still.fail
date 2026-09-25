@@ -71,7 +71,12 @@ export interface ChatMessageRow {
   user: string;
   text: string;
   createdAt: number;
+  /** Files sent with the message, stored in the session's workspace. */
+  attachments?: Attachment[];
 }
+
+/** A file someone sent to a session; `path` is where the agent finds it on the station. */
+export interface Attachment { name: string; path: string; size: number }
 
 function toChat(row: Row): ChatRow {
   return {
@@ -86,7 +91,7 @@ export type TurnKind = "input" | "nudge" | "resume";
  * Bump on schema changes and add a step to MIGRATIONS that brings the
  * previous version up. Versions without a migration path are refused.
  */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 const MIGRATIONS: Record<number, string> = {
   // v2 → v3: bots became connects; sessions may span all threads; messages remember their thread.
@@ -109,6 +114,8 @@ const MIGRATIONS: Record<number, string> = {
   5: "ALTER TABLE sessions ADD COLUMN created_by TEXT;",
   // v6 → v7: the reasoning effort a session runs with.
   6: "ALTER TABLE sessions ADD COLUMN effort TEXT;",
+  // v7 → v8: files sent with a chat message.
+  7: "ALTER TABLE chat_messages ADD COLUMN attachments TEXT;",
 };
 
 const SCHEMA = `
@@ -145,6 +152,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   user TEXT NOT NULL,
   text TEXT NOT NULL,
   created_at INTEGER NOT NULL,
+  attachments TEXT,
   PRIMARY KEY (thread_ts, ts)
 );
 CREATE TABLE IF NOT EXISTS bindings (
@@ -455,8 +463,8 @@ export class Store {
   }
 
   insertChatMessage(m: ChatMessageRow): void {
-    this.#db.prepare("INSERT INTO chat_messages (thread_ts, ts, role, user, text, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(m.threadTs, m.ts, m.role, m.user, m.text, m.createdAt);
+    this.#db.prepare("INSERT INTO chat_messages (thread_ts, ts, role, user, text, created_at, attachments) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(m.threadTs, m.ts, m.role, m.user, m.text, m.createdAt, m.attachments?.length ? JSON.stringify(m.attachments) : null);
     const chat = this.getChat(m.threadTs);
     if (chat) this.notify(chat.sessionKey);
   }
@@ -469,6 +477,7 @@ export class Store {
     return rows.reverse().map((r) => ({
       threadTs: r.thread_ts as string, ts: r.ts as string, role: r.role as ChatMessageRow["role"],
       user: r.user as string, text: r.text as string, createdAt: r.created_at as number,
+      ...(r.attachments ? { attachments: JSON.parse(r.attachments as string) as Attachment[] } : {}),
     }));
   }
 

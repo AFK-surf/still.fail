@@ -1,13 +1,16 @@
 // The admin API behind /admin. Local visits are trusted; visits through the
 // Cloudflare tunnel must carry a valid Access identity (see access.ts).
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { createWriteStream, existsSync } from "node:fs";
+import { mkdir, rm } from "node:fs/promises";
+import { join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Connections } from "../connections.ts";
 import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from "../config.ts";
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
 import type { MeshStatus } from "../mesh.ts";
+import type { Attachment } from "../store.ts";
 import { hostInfo } from "../host.ts";
 import type { ProfileQuota } from "../quota.ts";
 import type { Profile } from "../config.ts";
@@ -174,12 +177,25 @@ export class AdminApi {
       const title = typeof input.title === "string" && input.title.trim() ? input.title.trim().slice(0, 80) : null;
       return send(res, 200, { threadTs: this.#deps.hub.openChat(id, viewerId(viewer), title) });
     }
+    if (resource === "sessions" && id && action === "files" && method === "POST") {
+      const session = this.#deps.store.getSession(id);
+      if (!session) throw new HttpError(404, `unknown session ${id}`);
+      return send(res, 200, await saveUpload(req, session.workspace, url.searchParams.get("name") ?? "file"));
+    }
     if (resource === "sessions" && id && action === "messages" && method === "POST") {
       const input = await body(req);
       const text = String(input.text ?? "").trim();
-      if (!text) throw new HttpError(400, "消息是空的");
-      if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
-      return send(res, 200, { threadTs: await this.#deps.hub.sayToSession(id, viewerId(viewer), text) });
+      const session = this.#deps.store.getSession(id);
+      if (!session) throw new HttpError(404, `unknown session ${id}`);
+      // Only files uploaded into this session's own upload directory may be named.
+      const uploads = resolve(session.workspace, "uploads") + sep;
+      const attachments: Attachment[] = (Array.isArray(input.attachments) ? input.attachments : []).slice(0, 20).map((a: Record<string, unknown>) => {
+        const path = resolve(String(a.path ?? ""));
+        if (!path.startsWith(uploads) || !existsSync(path)) throw new HttpError(400, "附件不在这个会话的上传目录里");
+        return { name: String(a.name ?? path.slice(uploads.length)).slice(0, 200), path, size: Number(a.size) || 0 };
+      });
+      if (!text && attachments.length === 0) throw new HttpError(400, "消息是空的");
+      return send(res, 200, { threadTs: await this.#deps.hub.sayToSession(id, viewerId(viewer), text, attachments) });
     }
     if (resource === "chats" && id && action === "messages" && method === "POST") {
       const input = await body(req);
@@ -660,4 +676,30 @@ function ownerOf(current: { id: string; name: string } | undefined, requested: u
   const allowed = viewer.via === "local" || (viewer.via === "mesh" && (viewer.role === "owner" || viewer.role === "admin")) || (current !== undefined && current.id === viewerId(viewer));
   if (!allowed) throw new Error("只有 workspace 的 owner、管理员或者当前所属用户能改所属用户");
   return { createdBy: { id, name: typeof r?.name === "string" ? r.name.slice(0, 120) : id } };
+}
+
+const MAX_UPLOAD = 50 * 1024 * 1024;
+
+/** Streams one uploaded file into <workspace>/uploads under a name that cannot escape it. */
+async function saveUpload(req: IncomingMessage, workspace: string, name: string): Promise<Attachment> {
+  const safe = name.replace(/[\\/\u0000-\u001f]/g, "_").replace(/^\.+/, "").slice(0, 120) || "file";
+  const dir = join(workspace, "uploads");
+  await mkdir(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const path = join(dir, `${stamp}-${safe}`);
+  let size = 0;
+  const out = createWriteStream(path, { flags: "wx" });
+  try {
+    for await (const chunk of req) {
+      size += (chunk as Buffer).length;
+      if (size > MAX_UPLOAD) throw new HttpError(413, "文件太大了，最多 50 MB");
+      if (!out.write(chunk)) await new Promise((r) => out.once("drain", r));
+    }
+    await new Promise<void>((resolveDone, reject) => out.end((error?: Error | null) => (error ? reject(error) : resolveDone())));
+  } catch (error) {
+    out.destroy();
+    await rm(path, { force: true });
+    throw error;
+  }
+  return { name: safe, path, size };
 }
