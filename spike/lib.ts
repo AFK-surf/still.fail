@@ -2,6 +2,7 @@
 // process-tree memory sampling. Never touches the user's ~/.claude or ~/.codex.
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -131,6 +132,97 @@ export function spawnLines(command: string, args: string[], options: { cwd: stri
     lines,
     send(obj) { child.stdin!.write(JSON.stringify(obj) + "\n"); },
     killTree() { try { process.kill(-child.pid!, "SIGTERM"); } catch { /* already gone */ } },
+  };
+}
+
+/**
+ * A minimal streamable-HTTP MCP server with one `whoami` tool. It maps the
+ * caller's bearer token to a session name, so a spike can tell who called.
+ */
+export async function startWhoamiServer(sessions: ReadonlyMap<string, string>):
+  Promise<{ url: string; seen: Record<string, unknown>[]; close(): void }> {
+  const seen: Record<string, unknown>[] = [];
+  const server = createServer((req, res) => {
+    if (req.method !== "POST") { res.writeHead(405).end(); return; }
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      const auth = req.headers.authorization ?? "";
+      const who = sessions.get(auth.replace(/^Bearer\s+/i, "")) ?? null;
+      const msg = JSON.parse(body) as { id?: number | string; method: string; params?: any };
+      seen.push({ method: msg.method, authorized: who ?? `NO (${auth ? auth.slice(0, 24) + "…" : "missing"})` });
+      if (!who) { res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: "unauthorized" })); return; }
+      if (msg.id === undefined) { res.writeHead(202).end(); return; }
+      const reply = (result: unknown) =>
+        res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }));
+      switch (msg.method) {
+        case "initialize":
+          return reply({ protocolVersion: msg.params?.protocolVersion ?? "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "ember", version: "0" } });
+        case "tools/list":
+          return reply({ tools: [{ name: "whoami", description: "Return which ember session the caller is.", inputSchema: { type: "object", properties: {}, additionalProperties: false } }] });
+        case "tools/call":
+          return reply({ content: [{ type: "text", text: `You are ${who}.` }] });
+        default:
+          return res.writeHead(200, { "content-type": "application/json" })
+            .end(JSON.stringify({ jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "not found" } }));
+      }
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`;
+  return { url, seen, close: () => server.close() };
+}
+
+export interface AppServer {
+  pid: number;
+  request(method: string, params: unknown): Promise<any>;
+  /** Starts a turn and resolves with the items it completed, once `turn/completed` arrives. */
+  runTurn(threadId: string, text: string, timeoutMs?: number): Promise<any[]>;
+  killTree(): void;
+}
+
+/** One `codex app-server` over stdio, initialized. Server->client requests are refused. */
+export async function startAppServer(cwd: string, env: NodeJS.ProcessEnv): Promise<AppServer> {
+  const proc = spawnLines("codex", ["app-server", "--listen", "stdio://"], { cwd, env });
+  let nextId = 1;
+  const pending = new Map<number, { resolve(v: any): void; reject(e: Error): void }>();
+  const turns = new Map<string, { items: any[]; done(): void }>();
+  (async () => {
+    for await (const line of proc.lines) {
+      const msg = JSON.parse(line) as Record<string, any>;
+      if (typeof msg.id === "number" && ("result" in msg || "error" in msg) && pending.has(msg.id)) {
+        const waiter = pending.get(msg.id)!;
+        pending.delete(msg.id);
+        if (msg.error) waiter.reject(new Error(JSON.stringify(msg.error)));
+        else waiter.resolve(msg.result);
+      } else if (msg.id !== undefined && msg.method) {
+        proc.send({ id: msg.id, error: { code: -32601, message: "not supported in spike" } });
+      } else if (msg.method === "item/completed") {
+        turns.get(msg.params?.threadId)?.items.push(msg.params?.item);
+      } else if (msg.method === "turn/completed") {
+        turns.get(msg.params?.threadId)?.done();
+      }
+    }
+  })();
+  const request = (method: string, params: unknown): Promise<any> => {
+    const id = nextId++;
+    proc.send({ id, method, params });
+    return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+  };
+  await request("initialize", { clientInfo: { name: "ember-spike", version: "0" }, capabilities: { experimentalApi: true } });
+  proc.send({ method: "initialized", params: {} });
+  return {
+    pid: proc.child.pid!,
+    request,
+    async runTurn(threadId, text, timeoutMs = 180_000) {
+      const items: any[] = [];
+      const done = new Promise<void>((resolve) => turns.set(threadId, { items, done: resolve }));
+      await request("turn/start", { threadId, input: [{ type: "text", text }] });
+      await Promise.race([done, sleep(timeoutMs).then(() => { throw new Error(`turn on ${threadId} timed out`); })]);
+      turns.delete(threadId);
+      return items;
+    },
+    killTree: proc.killTree,
   };
 }
 
