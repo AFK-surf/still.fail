@@ -73,8 +73,10 @@ export class StationTransport implements Transport {
 
   async #send(method: string, path: string, body?: unknown) {
     const link = await this.#open();
-    const head = JSON.stringify({ method, path: `/admin/api${path}`, headers: body === undefined ? {} : { "content-type": "application/json" } });
-    const reply = await link.request(head, body === undefined ? new Uint8Array() : new TextEncoder().encode(JSON.stringify(body)));
+    const raw = body instanceof Uint8Array;
+    const head = JSON.stringify({ method, path: `/admin/api${path}`, headers: body === undefined ? {} : { "content-type": raw ? "application/octet-stream" : "application/json" } });
+    const bytes = body === undefined ? new Uint8Array() : raw ? body : new TextEncoder().encode(JSON.stringify(body));
+    const reply = await link.request(head, bytes);
     return { reply, head: JSON.parse(reply.head()) as { status: number; headers: Record<string, string> } };
   }
 

@@ -3,7 +3,7 @@ import type { RuntimeKind } from "../config.ts";
 import type { ConnectKind, ConnectMode } from "../config.ts";
 import type { ConnectState } from "../connections.ts";
 import type { LoginJob, LoginState } from "../login.ts";
-import type { ChatMessageRow, ChatRow } from "../store.ts";
+import type { Attachment, ChatMessageRow, ChatRow } from "../store.ts";
 import type { MeshStatus } from "../mesh.ts";
 import type { HostInfo } from "../host.ts";
 import type { ProfileQuota, QuotaWindow } from "../quota.ts";
@@ -11,7 +11,7 @@ import type { Viewer } from "./access.ts";
 import type { AccessKind, ProfileCheck } from "../profiles.ts";
 import type { TimelineEntry, TranscriptUsage } from "../transcript.ts";
 
-export type { ChatMessageRow, ChatRow, HostInfo, LoginJob, LoginState, MeshStatus, ProfileQuota, QuotaWindow };
+export type { Attachment, ChatMessageRow, ChatRow, HostInfo, LoginJob, LoginState, MeshStatus, ProfileQuota, QuotaWindow };
 export type { AccessKind, ConnectKind, ConnectMode, ConnectState, ProfileCheck, RuntimeKind, TimelineEntry, TranscriptUsage };
 
 export type ProcessState = "running" | "warm" | "cold";

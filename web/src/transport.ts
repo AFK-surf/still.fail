@@ -3,7 +3,7 @@
 // Both give the same shape: a JSON request, and a stream of server events.
 
 export interface Transport {
-  /** One request; resolves to status and parsed JSON body. */
+  /** One request; resolves to status and parsed JSON body. Bytes go as they are, anything else as JSON. */
   request(method: string, path: string, body?: unknown): Promise<{ status: number; data: unknown }>;
   /** Follows /admin/api/events; `onEvent(name, data)` per event, `onOpen` on each (re)connect. Returns a stop function. */
   events(onEvent: (name: string, data: string) => void, onOpen: () => void): () => void;
@@ -15,8 +15,8 @@ export const localTransport: Transport = {
     const response = await fetch(`/admin/api${path}`, {
       method,
       credentials: "same-origin",
-      headers: body === undefined ? {} : { "content-type": "application/json" },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      headers: body === undefined ? {} : { "content-type": body instanceof Uint8Array ? "application/octet-stream" : "application/json" },
+      ...(body === undefined ? {} : { body: body instanceof Uint8Array ? body : JSON.stringify(body) }),
     });
     return { status: response.status, data: await response.json().catch(() => ({})) };
   },

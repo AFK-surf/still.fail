@@ -43,11 +43,13 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
       <div className="nav-heading">账号</div>
       <NavLink className="nav-row" to={`${base}/account`}><Avatar account={entry.account} size={18} /><span className="nav-text">{entry.account.email}</span></NavLink>
       <div className="nav-heading">Workspace · {entry.name}</div>
-      <NavLink className="nav-row" to={`${base}/general`}><Settings2 {...ICON} />通用</NavLink>
-      <NavLink className="nav-row" to={`${base}/members`}><Users {...ICON} />成员</NavLink>
       <NavLink className="nav-row" to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
       <NavLink className="nav-row" to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>
       <NavLink className="nav-row" to={`${base}/profiles`}><KeyRound {...ICON} />Profile</NavLink>
+      <NavLink className="nav-row" to={`${base}/members`}><Users {...ICON} />成员</NavLink>
+      <NavLink className="nav-row" to={`${base}/general`}><Settings2 {...ICON} />通用</NavLink>
+      <div className="nav-heading">离开</div>
+      <NavLink className="nav-row" to={`${base}/leave`}><LogOut {...ICON} />退出与删除</NavLink>
     </div>
   );
 }
@@ -96,7 +98,6 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           <h1 className="identity-name">{account.name || account.email}</h1>
           <p className="identity-sub"><span>{account.email}</span><span>Google 账号</span></p>
         </div>
-        <Button icon={LogOut} onClick={() => setLeaving(true)}>退出这个账号</Button>
       </header>
       <Section title="登录的地方" description="这个账号在哪些浏览器或设备上登录了 ember。认不出来的可以让它退出。">
         {sessions.isPending ? <Loading label="正在读取…" fill={false} /> : sessions.isError ? <p className="field-error">{sessions.error.message}</p> : (
@@ -113,8 +114,6 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           </ul>
         )}
       </Section>
-      <Confirm open={leaving} onClose={() => setLeaving(false)} onConfirm={() => void signOut(account.sub).then(() => { toast(`已退出 ${account.email}`); navigate("/"); })}
-        title={`退出 ${account.email}？`} action="退出账号" description="这个浏览器上不再使用这个账号；它所在的 workspace 也会从这里消失。其他已登录的账号不受影响。" />
     </div>
   );
 }
@@ -135,11 +134,7 @@ export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
   const [name, setName] = useState("");
   useEffect(() => { if (view) setName(view.name); }, [view?.name]);
   const refresh = () => void queries.invalidateQueries({ queryKey: ["cloud"] });
-  const [leaving, setLeaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const rename = useMutation({ mutationFn: () => cloud.renameWorkspace(account.sub, entry.id, name), onSuccess: () => { refresh(); toast("已改名"); } });
-  const leave = useMutation({ mutationFn: () => cloud.removeMember(account.sub, entry.id, account.sub), onSuccess: () => { refresh(); toast("已退出 workspace"); navigate("/"); } });
-  const remove = useMutation({ mutationFn: () => cloud.deleteWorkspace(account.sub, entry.id), onSuccess: () => { refresh(); toast("已删除 workspace"); navigate("/"); } });
   if (!view) return <Loading label="正在读取 workspace…" />;
   return (
     <Page title="通用" back={`/w/${entry.id}/settings`}>
@@ -154,7 +149,33 @@ export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
           <p className="muted card-foot">你在这里是{ROLE_LABEL[view.role]}，通过 {account.email} 访问。</p>
         </div>
       </Section>
-      <Section title="离开或删除">
+    </Page>
+  );
+}
+
+/** The last settings page: everything that ends access, away from everyday settings. */
+export function LeaveSettings({ entry }: { entry: WorkspaceEntry }) {
+  const { view } = useWorkspace(entry);
+  const account = entry.account;
+  const queries = useQueryClient();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const refresh = () => void queries.invalidateQueries({ queryKey: ["cloud"] });
+  const [signingOut, setSigningOut] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const leave = useMutation({ mutationFn: () => cloud.removeMember(account.sub, entry.id, account.sub), onSuccess: () => { refresh(); toast("已退出 workspace"); navigate("/"); } });
+  const remove = useMutation({ mutationFn: () => cloud.deleteWorkspace(account.sub, entry.id), onSuccess: () => { refresh(); toast("已删除 workspace"); navigate("/"); } });
+  if (!view) return <Loading label="正在读取 workspace…" />;
+  return (
+    <Page title="退出与删除" back={`/w/${entry.id}/settings`}>
+      <Section title="账号">
+        <div className="card card-row">
+          <div className="card-row-text"><strong>在这个浏览器上退出 {account.email}</strong><span className="muted">它所在的 workspace 会从这里消失；其他已登录的账号不受影响。</span></div>
+          <Button icon={LogOut} onClick={() => setSigningOut(true)}>退出账号</Button>
+        </div>
+      </Section>
+      <Section title={`Workspace · ${view.name}`}>
         <div className="card card-row">
           <div className="card-row-text"><strong>退出这个 workspace</strong><span className="muted">退出后不能再访问里面的 station，需要重新被邀请。</span></div>
           <Button onClick={() => setLeaving(true)}>退出</Button>
@@ -171,6 +192,8 @@ export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.isPending} onConfirm={() => remove.mutate()}
         title={`删除「${view.name}」？`} action="删除 workspace"
         description={remove.error?.message ?? `所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 ember cloud 的连接（station 本机上的数据不受影响）。`} />
+      <Confirm open={signingOut} onClose={() => setSigningOut(false)} onConfirm={() => void signOut(account.sub).then(() => { toast(`已退出 ${account.email}`); navigate("/"); })}
+        title={`退出 ${account.email}？`} action="退出账号" description="这个浏览器上不再使用这个账号；它所在的 workspace 也会从这里消失。其他已登录的账号不受影响。" />
     </Page>
   );
 }

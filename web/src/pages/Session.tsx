@@ -2,15 +2,15 @@
 // with the history. A chat can be opened beside it: ember's own chat, which
 // reaches the agent the way a Slack thread does.
 import { useIsMine, useLink, usePerson, useStation } from "../station.tsx";
-import { CreatorText, PeopleStack } from "../components.tsx";
+import { CreatorText, PeopleStack, Ring } from "../components.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
+import { ArrowUp, FileText, Paperclip, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
 import { DropdownMenu, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import { Link, useParams } from "react-router";
 import remarkGfm from "remark-gfm";
-import { useApi, keys, useOverview, useSession, useSessions, type ConnectView, type SessionDetail } from "../api.ts";
+import { useApi, keys, useHost, useOverview, useSession, useSessions, type Attachment, type ConnectView, type SessionDetail } from "../api.ts";
 import { History } from "../History.tsx";
 import {
   PROCESS_LABEL, RUNTIME_LABEL, STATUS_LABEL, absoluteTime, agentLabel, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusTone, threadNamer, turnResult,
@@ -153,6 +153,7 @@ function SessionDetails({ detail, connect, base }: { detail: SessionDetail; conn
         {row("创建", absoluteTime(session.createdAt))}
         {row("最近活动", `${relativeTime(session.lastActiveAt)}`)}
       </dl>
+      <Resources profileId={session.profile} />
       {threads.length > 0 && (
         <section className="details-section">
           <h3>Slack thread</h3>
@@ -169,6 +170,42 @@ function SessionDetails({ detail, connect, base }: { detail: SessionDetail; conn
             })}
           </ul>
         </section>
+      )}
+    </div>
+  );
+}
+
+/** What the session runs on, at a glance: its profile's allowance and its station's machine, as rings. */
+function Resources({ profileId }: { profileId: string }) {
+  const overview = useOverview();
+  const host = useHost().data;
+  const link = useLink();
+  const profile = overview.data?.profiles.find((p) => p.id === profileId);
+  const quota = profile?.quota;
+  const gb = (bytes: number) => `${Math.round(bytes / 1024 ** 3)} GB`;
+  return (
+    <div className="resources">
+      <div className="resource-group">
+        <Link className="resource-head detail-link" to={link(`/settings/accounts/${profileId}`)}>
+          {profile && <RuntimeLogo runtime={profile.runtime} size={12} />}{profile?.name ?? profileId}
+        </Link>
+        <div className="resource-rings">
+          {quota?.state === "ok" && quota.windows.length > 0
+            ? quota.windows.map((w) => <Ring key={w.label} percent={w.usedPercent} label={w.label} title={`${w.label}已用 ${w.usedPercent}%${w.resetsAt ? `，${absoluteTime(w.resetsAt)} 重置` : ""}`} />)
+            : <span className="muted resource-note">{quota?.detail ?? (quota ? "查不到额度" : "还没查过额度")}</span>}
+        </div>
+      </div>
+      {host && (
+        <div className="resource-group">
+          <span className="resource-head">{host.hostname}</span>
+          <div className="resource-rings">
+            <Ring percent={host.load * 100} label="CPU" title={`负载 ${host.load}（${host.cpus} 核）`} />
+            <Ring percent={(host.memory.usedBytes / host.memory.totalBytes) * 100} label="内存" title={`内存 ${gb(host.memory.usedBytes)} / ${gb(host.memory.totalBytes)}`} />
+            {host.disk.totalBytes > 0 && (
+              <Ring percent={(1 - host.disk.freeBytes / host.disk.totalBytes) * 100} label="磁盘" title={`磁盘剩 ${gb(host.disk.freeBytes)} / ${gb(host.disk.totalBytes)}`} />
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -271,7 +308,8 @@ function ChatPanel({ detail, chat, onOpenHistory }: { detail: SessionDetail; cha
         )}
         {messages.map((m) => m.role === "person" ? (
           <div key={m.ts} className="msg msg-human">
-            <div className="msg-bubble">{m.text}</div>
+            {m.text && <div className="msg-bubble">{m.text}</div>}
+            {m.attachments?.length ? <div className="msg-files">{m.attachments.map((a) => <FileChip key={a.path} file={a} />)}</div> : null}
             <div className="msg-meta">{person(m.user)} · <span title={absoluteTime(m.createdAt)}>{relativeTime(m.createdAt)}</span></div>
           </div>
         ) : (
@@ -292,17 +330,61 @@ function ChatPanel({ detail, chat, onOpenHistory }: { detail: SessionDetail; cha
   );
 }
 
-/** Where people write to the session; the first message makes its chat. Zork's composer: a soft frame that grows with the text, and a round send button. */
+function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** A file sent with a message; its full path on the station shows on hover. */
+function FileChip({ file, onRemove, pending }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean }) {
+  return (
+    <span className="file-chip" title={file.path ?? file.name}>
+      {pending ? <span className="spinner" aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}
+      <span className="file-chip-name">{file.name}</span>
+      <span className="file-chip-size">{fileSize(file.size)}</span>
+      {onRemove && <button type="button" className="file-chip-remove" aria-label={`移除 ${file.name}`} onClick={(e) => { e.stopPropagation(); onRemove(); }}><X size={12} /></button>}
+    </span>
+  );
+}
+
+const MAX_FILE = 50 * 1024 * 1024;
+
+/** A file on its way to the station: uploading, uploaded, or failed. */
+interface Pending { id: number; name: string; size: number; done: Attachment | null; error: string | null }
+
+/**
+ * Where people write to the session; the first message makes its chat. Zork's
+ * composer: a soft frame that grows with the text, and a round send button.
+ * Files (picked, pasted or dropped) go to the session's workspace on the
+ * station as soon as they are added; the message carries their paths.
+ */
 function Composer({ sessionKey, className }: { sessionKey: string; className?: string }) {
   const api = useApi();
   const station = useStation();
   const client = useQueryClient();
   const [text, setText] = useState("");
+  const [files, setFiles] = useState<Pending[]>([]);
+  const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const nextId = useRef(1);
   const send = useMutation({
-    mutationFn: (value: string) => api.sayToSession(sessionKey, value),
-    onSuccess: () => { setText(""); void client.invalidateQueries({ queryKey: keys.session(station.id, sessionKey) }); },
+    mutationFn: (value: string) => api.sayToSession(sessionKey, value, files.flatMap((f) => (f.done ? [f.done] : []))),
+    onSuccess: () => { setText(""); setFiles([]); void client.invalidateQueries({ queryKey: keys.session(station.id, sessionKey) }); },
   });
+  const add = (list: FileList | File[]) => {
+    for (const file of Array.from(list)) {
+      const id = nextId.current++;
+      const tooBig = file.size > MAX_FILE;
+      setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null }]);
+      if (tooBig) continue;
+      api.uploadFile(sessionKey, file).then(
+        (done) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, done } : f))),
+        (error: unknown) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, error: error instanceof Error ? error.message : "上传失败" } : f))),
+      );
+    }
+  };
   // Grow with the text up to the frame's limit; the frame is never resized by hand.
   useEffect(() => {
     const el = input.current;
@@ -310,25 +392,45 @@ function Composer({ sessionKey, className }: { sessionKey: string; className?: s
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [text]);
-  const ready = Boolean(text.trim()) && !send.isPending;
+  const uploading = files.some((f) => !f.done && !f.error);
+  const ready = (Boolean(text.trim()) || files.some((f) => f.done)) && !uploading && !send.isPending;
   const submit = () => {
     if (ready) send.mutate(text.trim());
   };
+  const failed = files.find((f) => f.error);
   return (
     <div className={`composer-wrap${className ? ` ${className}` : ""}`}>
-      <form className="composer-box" data-multiline={text.includes("\n") || text.length > 60 || undefined}
-        onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}>
+      <form className="composer-box" data-multiline={text.includes("\n") || text.length > 60 || files.length > 0 || undefined} data-dragging={dragging || undefined}
+        onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
+        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); add(e.dataTransfer.files); } }}>
+        {files.length > 0 && (
+          <div className="composer-files">
+            {files.map((f) => (
+              <FileChip key={f.id} file={f.done ?? f} pending={!f.done && !f.error} onRemove={() => setFiles((all) => all.filter((x) => x.id !== f.id))} />
+            ))}
+          </div>
+        )}
         <textarea ref={input} className="composer-text" rows={1} value={text} placeholder="给这个会话发消息" aria-label="消息"
           onChange={(e) => setText(e.target.value)}
+          onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); add(e.clipboardData.files); } }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
         <div className="composer-toolbar">
-          <Tip label="发送">
+          <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
+          <Tip label="发送文件">
+            <button type="button" className="attach-btn" aria-label="发送文件" onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
+              <Paperclip size={16} />
+            </button>
+          </Tip>
+          <Tip label={uploading ? "文件还在上传" : "发送"}>
             <button type="submit" className="send-btn" disabled={!ready} aria-label="发送" aria-busy={send.isPending || undefined}>
               {send.isPending ? <span className="spinner" aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
             </button>
           </Tip>
         </div>
       </form>
+      {failed && <p className="field-error chat-error" role="alert">{failed.name}：{failed.error}</p>}
       {send.error && <p className="field-error chat-error" role="alert">{send.error.message}</p>}
     </div>
   );

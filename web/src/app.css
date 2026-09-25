@@ -599,7 +599,7 @@
 }
 .composer-box[data-multiline] .composer-text { padding: 8px 8px 0; }
 .composer-text::placeholder { color: var(--subtle); }
-.composer-toolbar { display: flex; justify-content: flex-end; flex: none; }
+.composer-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex: none; }
 .send-btn {
   display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
   background: var(--primary); color: var(--on-primary); cursor: pointer; transition: background var(--dur) var(--ease-out);
@@ -665,3 +665,45 @@
 .side-tab-close:hover { background: var(--line); color: var(--text); }
 .msg-agent { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--text); cursor: pointer; }
 .msg-agent:hover { text-decoration: underline; }
+
+/* Composer: one line sits on the frame's centre line; files ride above the text. */
+.composer-box:not([data-multiline]) { align-items: center; }
+.composer-box:not([data-multiline]) .composer-text { padding: 5px 8px; }
+.composer-box[data-multiline] .composer-toolbar { justify-content: space-between; }
+.composer-box[data-dragging] { border-color: var(--field-focus); background: color-mix(in oklch, var(--field-focus) 6%, var(--canvas)); }
+.attach-btn {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--muted); cursor: pointer;
+}
+.attach-btn:hover { background: var(--hover); color: var(--text); }
+.composer-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 4px 0; }
+.file-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 260px; padding: 4px 6px 4px 8px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--neutral-bg); font-size: var(--text-sm); color: var(--text);
+}
+.file-chip .spinner { width: 12px; height: 12px; }
+.file-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-chip-size { color: var(--subtle); flex: none; }
+.file-chip-remove { display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; }
+.file-chip-remove:hover { background: var(--hover); color: var(--text); }
+.msg-files { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+
+/* Session details: profile allowance and station machine as rings, side by side. */
+.resources { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 8px 0 2px; border-top: 1px solid var(--line); }
+.resource-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.resource-head { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--muted); }
+.resource-rings { display: flex; align-items: center; gap: 10px; }
+.resource-note { font-size: var(--text-xs); }
+.ring { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--muted); }
+.ring svg { flex: none; }
+.ring-track, .ring-fill { fill: none; stroke-width: 3; }
+.ring-track { stroke: var(--line); }
+.ring-fill { stroke: var(--green); stroke-linecap: round; }
+.ring-fill[data-level="amber"] { stroke: var(--amber); }
+.ring-fill[data-level="red"] { stroke: var(--red); }
+.ring text { font-size: 9px; font-weight: 600; fill: var(--text); font-variant-numeric: tabular-nums; }
+/* Details pack tight: two columns of short facts, small type. */
+.history-details .session-details { gap: 10px; padding: 10px 14px; }
+.history-details .details { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 16px; }
+.history-details .detail-row { grid-template-columns: 4.5em minmax(0, 1fr); gap: 8px; font-size: var(--text-xs); min-height: 22px; }
+.history-details .detail-row dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

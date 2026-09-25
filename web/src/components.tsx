@@ -173,3 +173,21 @@ export function DeviceCard({ host, processes }: { host: HostInfo | undefined; pr
     </div>
   );
 }
+
+/** A percentage as a small ring, filled clockwise from the top; colour follows the same levels as the bars. */
+export function Ring({ percent, size = 28, label, title }: { percent: number; size?: number; label: string; title?: string }) {
+  const p = Math.max(0, Math.min(100, Math.round(percent)));
+  const r = (size - 4) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <span className="ring" title={title ?? `${label} ${p}%`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle className="ring-track" cx={size / 2} cy={size / 2} r={r} />
+        <circle className="ring-fill" data-level={level(p)} cx={size / 2} cy={size / 2} r={r}
+          strokeDasharray={`${(c * p) / 100} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+        <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle">{p}</text>
+      </svg>
+      <span className="ring-label">{label}</span>
+    </span>
+  );
+}

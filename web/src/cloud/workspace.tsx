@@ -14,7 +14,7 @@ import { ConnectPage, NewConnectDialog } from "../pages/Connect.tsx";
 import { SessionPage } from "../pages/Session.tsx";
 import { SessionRow, useSessionGroups } from "../Sidebar.tsx";
 import { MineFilter, useOnlyMine } from "../components.tsx";
-import { AccountSettings, ConnectsSettings, GeneralSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
+import { AccountSettings, ConnectsSettings, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
 import { MeContext, PeopleContext, StationContext, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Loading, Select, SkeletonRows, StatusDot } from "../ui.tsx";
@@ -101,6 +101,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/stations" element={<StationsSettings entry={entry} stations={stations} />} />
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} stations={stations} />} />
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} stations={stations} />} />
+            <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
             <Route path="s/:station/*" element={<StationPages stations={stations} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>

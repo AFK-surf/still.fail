@@ -31,7 +31,8 @@ use tracing::{info, warn};
 
 const ALPN: &[u8] = b"ember/admin/1";
 const MAX_HEAD: usize = 16 * 1024;
-const MAX_BODY: usize = 4 * 1024 * 1024;
+// Files sent to a session go through here; the station caps them at 50 MB.
+const MAX_BODY: usize = 64 * 1024 * 1024;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Serialize, Deserialize, Clone)]
