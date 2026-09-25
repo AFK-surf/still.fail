@@ -56,12 +56,12 @@ export function TokenFields({ value, onChange, connect, masked }: {
   return (
     <div className="token-fields">
       <Field label="App-Level Token" htmlFor="app-token">
-        <input id="app-token" className="input mono" type="password" autoComplete="off" value={value.appToken}
+        <input id="app-token" className="input mono" spellCheck={false} type="password" autoComplete="off" value={value.appToken}
           onChange={(e) => edit({ appToken: e.target.value.trim() })}
           placeholder={masked?.appToken ? `已保存 ${masked.appToken}，留空保持不变` : "xapp-…"} />
       </Field>
       <Field label="Bot Token" htmlFor="bot-token">
-        <input id="bot-token" className="input mono" type="password" autoComplete="off" value={value.botToken}
+        <input id="bot-token" className="input mono" spellCheck={false} type="password" autoComplete="off" value={value.botToken}
           onChange={(e) => edit({ botToken: e.target.value.trim() })}
           placeholder={masked?.botToken ? `已保存 ${masked.botToken}，留空保持不变` : "xoxb-…"} />
       </Field>

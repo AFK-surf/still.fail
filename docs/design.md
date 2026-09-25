@@ -43,7 +43,7 @@ JobRunner   ProfilePool   ResourceGovernor(内存)   StorageLifecycle(磁盘)
 
 ## 5. 运行时驱动
 
-ember 定义自己的接口，bot 的其余部分只依赖这层接口：
+ember 定义自己的接口，其余部分只依赖这层接口：
 
 ```ts
 interface AgentDriver {

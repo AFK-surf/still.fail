@@ -32,10 +32,10 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
 在管理页里可以：
 
 - 实时看所有会话的状态和对话过程，停止正在运行的任务，释放空闲的运行时进程；
-- 增删改 **bot**：一个 bot 对应一个 Slack app，绑定一种运行时（Claude Code / Codex）、一组账号和一个模型。页面上的「在 Slack 创建 app」会打开预填好 manifest 的 Slack 新建页；
+- 增删改 **连接**（connect）：人找到 ember 的地方。目前只有 Slack 连接（一个 Slack app），以后会有微信、Telegram。每个连接绑定一个模型（运行时 Claude Code / Codex、一组账号和一个模型），并选一种会话方式（见下文）。页面上的「在 Slack 创建 app」会打开预填好 manifest 的 Slack 新建页；
 - 增删改 **账号**：运行时的配置目录（`CLAUDE_CONFIG_DIR` / `CODEX_HOME`）和启动时注入的环境变量。
 
-改动立即写回 `config.json`（权限 600）并生效：新增或换了 token 的 bot 会重新连接，停用或删除的 bot 会断开。token 和密钥类环境变量在页面上只显示打码后的值，留空即保持不变。
+改动立即写回 `config.json`（权限 600）并生效：新增或换了 token 的连接会重新连接，停用或删除的连接会断开。token 和密钥类环境变量在页面上只显示打码后的值，留空即保持不变。
 
 ## config.json
 
@@ -44,10 +44,12 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
 ```json
 {
   "admin": { "port": 4760, "access": { "teamDomain": "…", "aud": "…" } },
-  "bots": [
-    { "id": "ds", "name": "ember", "runtime": "claude", "profiles": ["claude-ocg"], "model": "deepseek-flash",
+  "connects": [
+    { "id": "ds", "name": "ember", "kind": "slack", "mode": "multi-session",
+      "bind": { "runtime": "claude", "profiles": ["claude-ocg"], "model": "deepseek-flash" },
       "slack": { "appToken": "xapp-…", "botToken": "xoxb-…" } },
-    { "id": "gpt", "name": "ember-gpt", "runtime": "codex", "profiles": ["codex-main"], "enabled": false }
+    { "id": "ops", "name": "ember-ops", "kind": "slack", "mode": "single-session", "requireMention": false,
+      "bind": { "runtime": "codex", "profiles": ["codex-main"] }, "enabled": false }
   ],
   "profiles": [
     { "id": "claude-ocg", "name": "OpenCode Go（Claude Code）", "runtime": "claude", "home": "homes/claude-ocg",
@@ -60,16 +62,23 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
 }
 ```
 
-- bot 的 `id` 是会话记录的一部分，创建后不要改。
+- 连接的 `id` 是会话记录的一部分，创建后不要改。旧版的 `bots` 配置在启动时会自动改写成 `connects`（多会话）。
 - 账号的 `home` 相对数据目录。用订阅登录时，对这个目录登录一次：`CLAUDE_CONFIG_DIR=<home> claude`，或 `CODEX_HOME=<home> codex login`。
 - `env` 里的 `{route}` 会替换成每个会话的路由 ID（Codex 的 app-server 按账号共享，替换成账号 ID），用于 OpenCode Go 这类需要会话亲和头的服务。
 - 账号的 `access` 决定运行时怎么接模型：`subscription`（订阅登录）、`opencode-go`、`anthropic-api`（后两种要 `key`），或 `env`（只用 `env` 里手写的变量）。ember 据此生成环境变量；Codex 的服务商配置在启动 app-server 时用 `-c` 传入，不改 `config.toml`。
 - 共享的记忆和 skills 在 `<数据目录>/agent/`（`MEMORY.md` 和 `skills/`），启动时链接进每个账号的配置目录。
 
+## 会话方式
+
+- **多会话**（`multi-session`）：每个 thread 一个会话。在 thread 里 @ 它开始，之后这个 thread 的回复都进这个会话；私聊直接开会话。
+- **单会话**（`single-session`）：这个连接看到的所有 thread 进同一个会话。`requireMention: true`（默认）时，被 @ 的 thread 才会进来，进来之后的回复不用再 @；`false` 时它能看到的每条消息都进来。
+
+两种方式下，agent 收到的每条消息都带着来源（`thread="频道/thread_ts"`），回复时必须用 `to=` 指明发到哪个 thread，没有默认位置。这样一个会话以后换绑到别的连接，行为也不变。
+
 ## 在 Slack 里使用
 
-- `@bot名 <任务>`：在频道里开一个会话，之后这个 thread 里的回复都会转给它。私聊 bot 直接开会话。
-- 同一个 thread 里可以 @ 多个 bot，它们各自有独立的会话。
+- `@名字 <任务>`：开始一个会话（单会话连接则把这个 thread 带进它的会话）。
+- 同一个 thread 里可以 @ 多个连接，它们各自有独立的会话。
 - `-stop`：中断当前 turn。
 
 ## 开发

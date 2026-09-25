@@ -182,7 +182,7 @@ export function ModelPicker({ id, account, value, onChange }: { id: string; acco
   const models = account?.check?.models ?? [];
   const fallback = account?.model ? `账号默认（${account.model}）` : "运行时默认";
   if (models.length === 0) {
-    return <input id={id} className="input mono" value={value} onChange={(e) => onChange(e.target.value)} placeholder={fallback} />;
+    return <input id={id} className="input mono" spellCheck={false} value={value} onChange={(e) => onChange(e.target.value)} placeholder={fallback} />;
   }
   const options = [{ value: "", label: fallback }, ...[...new Set([...(value ? [value] : []), ...models])].map((m) => ({ value: m, label: m }))];
   return <Select id={id} value={value} onChange={onChange} options={options} label="模型" />;
@@ -329,7 +329,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
               <input id="new-connect-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="例如 ember-claude" />
             </Field>
             <Field label="ID" htmlFor="new-connect-id" error={taken ? "这个 ID 已经被别的连接用了" : undefined} hint="会话记录用它区分连接，创建后不能改。">
-              <input id="new-connect-id" className="input mono" value={connectId} onChange={(e) => { setIdTouched(true); setId(e.target.value); }} />
+              <input id="new-connect-id" className="input mono" spellCheck={false} value={connectId} onChange={(e) => { setIdTouched(true); setId(e.target.value); }} />
             </Field>
           </div>
         </>

@@ -113,7 +113,7 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
       </Field>
       {KEYED.has(kind) && (
         <Field label={kind === "opencode-go" ? "OpenCode Go key" : "API key"} htmlFor="account-key">
-          <input id="account-key" className="input mono" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())} />
+          <input id="account-key" className="input mono" spellCheck={false} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())} />
         </Field>
       )}
       <Field label="名称" htmlFor="account-name" error={taken ? "已经有同名的账号了" : undefined}
@@ -235,7 +235,7 @@ function AccessSection({ profile, onSave, busy }: { profile: ProfileView; onSave
         </Field>
         {KEYED.has(kind) && (
           <Field label={kind === "opencode-go" ? "OpenCode Go key" : "API key"} htmlFor="access-key">
-            <input id="access-key" className="input mono" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())}
+            <input id="access-key" className="input mono" spellCheck={false} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())}
               placeholder={!changedKind && profile.access.key ? `已保存 ${profile.access.key}，留空保持不变` : "粘贴 key"} />
           </Field>
         )}
@@ -277,10 +277,10 @@ function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(inpu
       <Collapsible.Content>
       <div className="card">
         <Field label="配置目录" htmlFor="adv-home" hint={`${profile.runtime === "claude" ? "作为 CLAUDE_CONFIG_DIR" : "作为 CODEX_HOME"}。相对路径以 ember 数据目录为基准。${profile.homeExists ? "" : "目录还不存在。"}`}>
-          <input id="adv-home" className="input mono" value={home} onChange={(e) => setHome(e.target.value)} />
+          <input id="adv-home" className="input mono" spellCheck={false} value={home} onChange={(e) => setHome(e.target.value)} />
         </Field>
         <Field label="默认模型" htmlFor="adv-model" hint="连接没指定模型时使用。">
-          <input id="adv-model" className="input mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="运行时默认" />
+          <input id="adv-model" className="input mono" spellCheck={false} value={model} onChange={(e) => setModel(e.target.value)} placeholder="运行时默认" />
         </Field>
         <Field label="自定义环境变量" hint="在接入方式生成的变量之外追加；同名时以这里为准。值里的 {route} 会换成会话的路由 ID。">
           <div className="env-table">
@@ -288,8 +288,8 @@ function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(inpu
               const secret = r.masked !== null || /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(r.key);
               return (
                 <div key={r.row} className="env-row">
-                  <input className="input mono" aria-label="变量名" value={r.key} onChange={(e) => update(r.row, { key: e.target.value })} placeholder="NAME" />
-                  <input className="input mono" aria-label={`${r.key || "变量"} 的值`} type={secret ? "password" : "text"} autoComplete="off" value={r.value}
+                  <input className="input mono" spellCheck={false} aria-label="变量名" value={r.key} onChange={(e) => update(r.row, { key: e.target.value })} placeholder="NAME" />
+                  <input className="input mono" spellCheck={false} aria-label={`${r.key || "变量"} 的值`} type={secret ? "password" : "text"} autoComplete="off" value={r.value}
                     onChange={(e) => update(r.row, { value: e.target.value })} placeholder={r.masked !== null ? `已保存 ${r.masked}，留空保持不变` : "值"} />
                   <Button variant="ghost" onClick={() => setRows(rows.filter((x) => x.row !== r.row))}>删除</Button>
                 </div>
