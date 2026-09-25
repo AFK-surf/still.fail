@@ -9,6 +9,7 @@ import { AccessGate } from "../src/admin/access.ts";
 import { AdminApi } from "../src/admin/api.ts";
 import { Connections, type Connection } from "../src/connections.ts";
 import { Hub } from "../src/hub.ts";
+import { InternalChat } from "../src/chat/internal.ts";
 import { slackManifest } from "../src/admin/slack-manifest.ts";
 import { SlackApiError, type SlackApps } from "../src/chat/slack-apps.ts";
 import { LoginManager } from "../src/login.ts";
@@ -99,7 +100,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
     return c;
   }, (id, m) => hub.accept(id, m));
   const claude = new FakeDriver("claude");
-  const hub: Hub = new Hub({ config: () => settings.config, store, chats: conns.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x" });
+  const hub: Hub = new Hub({ config: () => settings.config, store, chats: conns.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x", internal: new InternalChat(store) });
   settings.onChange((config) => void conns.reconcile(config));
   await conns.reconcile(settings.config);
   const api = new AdminApi({ settings, store, hub, connections: conns, logins, names: new Map(), slackApps: slackApps as unknown as SlackApps, checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks) });
