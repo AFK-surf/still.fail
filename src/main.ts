@@ -43,24 +43,35 @@ settings.onChange((config) => {
   void bots.reconcile(config);
 });
 
-const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "admin", "ui");
+// Built by `pnpm build` from web/ into dist/admin.
+const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "admin");
 const TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2",
 };
 
-/** /admin and client-side routes get the app shell; /admin/assets/* are files. */
+/** Files under dist/admin by path; anything else gets index.html, where the client router takes over. */
 async function serveUi(pathname: string, res: ServerResponse): Promise<void> {
-  const file = pathname.startsWith("/admin/assets/") ? normalize(pathname.slice("/admin/assets/".length)) : "index.html";
-  if (file.startsWith("..")) {
+  const relative = normalize(pathname.slice("/admin".length)).replace(/^\/+/, "");
+  if (relative.startsWith("..")) {
     res.writeHead(400).end();
     return;
   }
-  try {
-    const content = await readFile(join(UI_DIR, file));
-    res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream", "cache-control": "no-cache" }).end(content);
-  } catch {
-    res.writeHead(404).end();
+  const hashed = relative.startsWith("assets/");
+  for (const file of relative && extname(relative) ? [relative, "index.html"] : ["index.html"]) {
+    try {
+      const content = await readFile(join(UI_DIR, file));
+      res.writeHead(200, {
+        "content-type": TYPES[extname(file)] ?? "application/octet-stream",
+        // Vite fingerprints assets; the shell must always be revalidated.
+        "cache-control": hashed && file === relative ? "public, max-age=31536000, immutable" : "no-cache",
+      }).end(content);
+      return;
+    } catch {
+      // try the next candidate
+    }
   }
+  res.writeHead(503, { "content-type": "text/plain; charset=utf-8" }).end("admin client not built: run `pnpm build`");
 }
 
 const server = createServer((req, res) => {

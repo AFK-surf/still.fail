@@ -227,11 +227,12 @@ export class Store {
   }
 
   /** Per session: turn count, the latest turn, and undelivered messages. For listings. */
-  sessionStats(): Map<string, { turns: number; pending: number; lastTurn: { kind: string; outcome: string | null; declared: string | null; detail: string | null; startedAt: number; endedAt: number | null } | null }> {
+  sessionStats(): Map<string, { turns: number; pending: number; firstText: string | null; lastTurn: { kind: string; outcome: string | null; declared: string | null; detail: string | null; startedAt: number; endedAt: number | null } | null }> {
     const rows = this.#db.prepare(`
       SELECT s.key,
         (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
         (SELECT COUNT(*) FROM inbound i WHERE i.session_key = s.key AND i.status = 'pending') AS pending,
+        (SELECT substr(text, 1, 300) FROM inbound i WHERE i.session_key = s.key ORDER BY ts LIMIT 1) AS first_text,
         l.kind, l.outcome, l.declared, l.detail, l.started_at, l.ended_at
       FROM sessions s
       LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
@@ -239,6 +240,7 @@ export class Store {
     return new Map(rows.map((r) => [r.key as string, {
       turns: r.turns as number,
       pending: r.pending as number,
+      firstText: (r.first_text as string | null) ?? null,
       lastTurn: r.started_at == null ? null : {
         kind: r.kind as string, outcome: (r.outcome as string | null) ?? null, declared: (r.declared as string | null) ?? null,
         detail: (r.detail as string | null) ?? null, startedAt: r.started_at as number, endedAt: (r.ended_at as number | null) ?? null,

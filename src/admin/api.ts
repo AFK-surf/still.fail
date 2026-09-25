@@ -12,6 +12,7 @@ import type { Settings } from "../settings.ts";
 import type { Store } from "../store.ts";
 import { readTimeline, transcriptPath } from "../transcript.ts";
 import { createAppUrl } from "./slack-manifest.ts";
+import type { Overview, SessionDetail, SessionSummary } from "./types.ts";
 
 const COOKIE = "ember_admin";
 const SECRET_KEY = /KEY|TOKEN|SECRET|PASSWORD|AUTH/i;
@@ -161,7 +162,7 @@ export class AdminApi {
 
   // ── reads ───────────────────────────────────────────────────────────────
 
-  #overview() {
+  #overview(): Overview {
     const { config } = this.#deps.settings;
     const sessions = this.#deps.store.listSessions();
     const processes = this.#deps.store.listProcesses();
@@ -187,19 +188,19 @@ export class AdminApi {
     };
   }
 
-  #summary(key: string, stats = this.#deps.store.sessionStats()) {
+  #summary(key: string, stats = this.#deps.store.sessionStats()): SessionSummary {
     const row = this.#deps.store.getSession(key);
     if (!row) throw new HttpError(404, `unknown session ${key}`);
     const { token: _token, ...visible } = row;
-    return { ...visible, process: this.#deps.hub.processState(key), ...(stats.get(key) ?? { turns: 0, pending: 0, lastTurn: null }) };
+    return { ...visible, process: this.#deps.hub.processState(key), ...(stats.get(key) ?? { turns: 0, pending: 0, firstText: null, lastTurn: null }) };
   }
 
-  #sessions(bot: string | null) {
+  #sessions(bot: string | null): SessionSummary[] {
     const stats = this.#deps.store.sessionStats();
     return this.#deps.store.listSessions().filter((s) => !bot || s.bot === bot).map((s) => this.#summary(s.key, stats));
   }
 
-  #session(key: string) {
+  #session(key: string): SessionDetail {
     const summary = this.#summary(key);
     const profile = this.#deps.settings.config.profiles.find((p) => p.id === summary.profile);
     const path = profile && summary.runtimeSessionId ? transcriptPath(summary.runtime, profile.home, summary.runtimeSessionId) : undefined;
@@ -228,7 +229,7 @@ export class AdminApi {
 
   // ── writes ──────────────────────────────────────────────────────────────
 
-  #save(edit: (raw: RawConfig) => RawConfig) {
+  #save(edit: (raw: RawConfig) => RawConfig): Overview {
     try {
       this.#deps.settings.update(edit);
     } catch (error) {
