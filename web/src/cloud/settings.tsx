@@ -189,7 +189,7 @@ export function StationsSettings({ entry, stations }: { entry: WorkspaceEntry; s
   const { view, manager } = useWorkspace(entry);
   if (!view) return <Loading label="正在读取 workspace…" />;
   return (
-    <Page title="Station" lead="每台 station 是一台运行 ember 的机器：它的连接、会话和Profile都在那台机器上。" back={`/w/${entry.id}/settings`}>
+    <Page title="Station" lead="每台 station 是一台运行 ember 的机器：它的连接、会话和 Profile 都在那台机器上。" back={`/w/${entry.id}/settings`}>
       <Stations view={view} account={entry.account} manager={manager} live={stations} />
     </Page>
   );
