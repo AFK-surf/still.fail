@@ -62,8 +62,8 @@ interface AgentSession {
 }
 ```
 
-- 会话驱动先用 `@botiverse/oar` 实现，锁定版本；需要改动时先在本地 patch，同时给上游提 PR。
-- **账号相关全部自己实现**。oar 的 `accountUsage` / `listModels` 不接受按账号指定的 env。
+- 两个驱动都自己实现，共用一套进程管理（进程组、stdin、内存采样）。不依赖 `@botiverse/oar`：它只结束直接子进程、不解析 `api_retry` / `rate_limit_event`，也没有按账号的 env。它的 Claude / Codex 文档和实验脚本作为需求清单和参考，升级 CLI 版本时对照其上游。
+- **账号相关全部自己实现**。
 - 限流、认证失败的信号由驱动层归一，这是账号切换的触发条件。
   - Claude 的 turn 成败看 `result.is_error`，不看 `subtype`（认证失败时是 `subtype: "success"` + `is_error: true`）。
   - Claude 遇到 401 会静默重试约 3 分钟，只发 `system/api_retry` 帧；驱动在第一个 401 的 `api_retry` 就判定认证失败并中止 turn。
