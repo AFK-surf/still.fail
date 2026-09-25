@@ -11,6 +11,8 @@ import { AdminApi } from "../src/admin/api.ts";
 import type { Connections } from "../src/connections.ts";
 import type { Hub } from "../src/hub.ts";
 import { LoginManager } from "../src/login.ts";
+import { slackManifest } from "../src/admin/slack-manifest.ts";
+import type { SlackApps } from "../src/chat/slack-apps.ts";
 import { Settings } from "../src/settings.ts";
 import { Store } from "../src/store.ts";
 
@@ -33,7 +35,7 @@ writeFileSync(join(dataDir, "config.json"), JSON.stringify({
     { id: "claude-team", name: "团队 Claude 订阅", runtime: "claude", home: "homes/claude-team", access: { kind: "subscription" } },
   ],
   connects: [
-    { id: "ds", name: "ember", kind: "slack", mode: "multi-session", bind: { runtime: "claude", profiles: ["claude-ocg"], model: "deepseek-flash" }, slack: { appToken: "xapp-1-demo-aaaaaaaa", botToken: "xoxb-demo-bbbbbbbb" } },
+    { id: "ds", name: "ember", kind: "slack", mode: "multi-session", bind: { runtime: "claude", profiles: ["claude-ocg"], model: "deepseek-flash" }, slack: { appToken: "xapp-1-demo-aaaaaaaa", botToken: "xoxb-demo-bbbbbbbb", appId: "A0DEMO" } },
     { id: "gpt", name: "ember-gpt", kind: "slack", mode: "single-session", requireMention: false, bind: { runtime: "codex", profiles: ["codex-ocg"] }, slack: { appToken: "xapp-1-demo-cccccccc", botToken: "xoxb-demo-dddddddd" } },
     { id: "claude", name: "ember-claude", kind: "slack", mode: "multi-session", bind: { runtime: "claude", profiles: ["claude-team"], model: "opus" }, enabled: false },
   ],
@@ -86,7 +88,28 @@ const connections = {
     channelName: async (channel: string) => ({ C0OPS: "ops", C0DEMO0: "cue-dev", C0DEMO1: "bridge" } as Record<string, string>)[channel] ?? null,
   }])),
 } as unknown as Connections;
-const api = new AdminApi({ settings, store, hub, connections, logins: new LoginManager(dataDir) });
+// A stand-in login command that behaves like `claude auth login` / `codex login --device-auth` without signing anything in.
+const fakeLogin = join(dataDir, "fake-login");
+writeFileSync(fakeLogin, `#!/bin/sh
+if [ "$1" = "auth" ]; then echo "visit: https://claude.com/cai/oauth/authorize?code=true&client_id=demo"; printf "Paste code here if prompted > "; read c; exit 1; fi
+printf "Open https://auth.openai.com/codex/device\\nEnter code DEMO-12345\\n"; sleep 600
+`, { mode: 0o755 });
+// Slack's app API, answered locally.
+let manifest: any = slackManifest("ember");
+const slackApps = {
+  configured: true,
+  exportManifest: async () => structuredClone(manifest),
+  updateManifest: async (_: string, next: any) => { manifest = next; return { permissionsUpdated: true }; },
+  createApp: async () => ({ appId: "A0DEMO2", oauthAuthorizeUrl: "" }),
+  setIcon: async () => {},
+} as unknown as SlackApps;
+const api = new AdminApi({
+  settings, store, hub, connections, slackApps,
+  logins: new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin }),
+  checkProfile: async (p) => (p.kind === "subscription"
+    ? { state: "login", detail: "还没有登录", models: null, checkedAt: Date.now() }
+    : { state: "ok", detail: "OpenCode Go 可用", models: ["deepseek-flash", "glm-5", "kimi-k2", "qwen3-coder"], checkedAt: Date.now() }),
+});
 const ui = join(import.meta.dirname, "..", "dist", "admin");
 
 createServer((req, res) => {
