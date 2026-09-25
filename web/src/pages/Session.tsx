@@ -1,7 +1,7 @@
 // A session: its execution history is the page; what can be done to it sits
 // with the history. A chat can be opened beside it: ember's own chat, which
 // reaches the agent the way a Slack thread does.
-import { useIsMine, useLink, useStation } from "../station.tsx";
+import { useIsMine, useLink, usePerson, useStation } from "../station.tsx";
 import { CreatorText } from "../components.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, MessageSquarePlus, MessagesSquare, Square, Unplug, X } from "lucide-react";
@@ -191,7 +191,8 @@ function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating 
   }, [chat.messages.length]);
   const status = sessionStatus(detail.session);
   const busy = status === "running" || status === "queued";
-  const person = (id: string) => detail.people[id] ?? (id === "local" ? "管理员" : id);
+  const member = usePerson();
+  const person = (id: string) => member(id)?.name || detail.people[id] || (id === "local" ? "管理员" : id);
   const submit = () => {
     const value = text.trim();
     if (value && !send.isPending) send.mutate(value);

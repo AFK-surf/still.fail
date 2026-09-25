@@ -15,7 +15,7 @@ import { SessionPage } from "../pages/Session.tsx";
 import { SessionRow, useSessionGroups } from "../Sidebar.tsx";
 import { MineFilter, useOnlyMine } from "../components.tsx";
 import { AccountSettings, ConnectsSettings, GeneralSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
-import { MeContext, StationContext, type Station } from "../station.tsx";
+import { MeContext, PeopleContext, StationContext, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Select, StatusDot } from "../ui.tsx";
 import { signIn, signOut, type Account } from "./accounts.ts";
@@ -63,9 +63,11 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
   const me = useMemo(() => ({ id: entry.account.email, email: entry.account.email }), [entry.account.email]);
+  const people = useMemo(() => new Map((view.data?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view.data]);
 
   return (
     <MeContext.Provider value={me}>
+    <PeopleContext.Provider value={people}>
       <div className="shell" data-detail={detail}>
         {stations.filter((s) => s.online).map((s) => <Live key={s.id} station={s} />)}
         {settings
@@ -86,6 +88,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
           </Routes>
         </main>
       </div>
+    </PeopleContext.Provider>
     </MeContext.Provider>
   );
 }

@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import type { ConnectView, SessionDetail, TimelineEntry } from "./api.ts";
 import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, splitThread, threadNamer } from "./format.ts";
 import { Avatar, ICON, Pill } from "./ui.tsx";
+import { usePerson } from "./station.tsx";
 
 export function parseArgs(text: string): Record<string, unknown> | null {
   try {
@@ -121,6 +122,7 @@ function toItems(entries: TimelineEntry[]): Item[] {
  */
 export function History({ detail, connect, footer }: { detail: SessionDetail; connect: ConnectView | undefined; footer?: ReactNode }) {
   const botUserId = botUserIdOf(connect);
+  const member = usePerson();
   const threadName = threadNamer(detail);
   // Only worth saying which thread when there is more than one.
   const where = (address: string | null | undefined) => {
@@ -184,7 +186,7 @@ export function History({ detail, connect, footer }: { detail: SessionDetail; co
           <>
             <p className="history-edge">已到 Session 开始处</p>
             {items.map((item, i) => (
-              <HistoryItem key={i} item={item} where={where} person={(id) => detail.people[id] ?? id}
+              <HistoryItem key={i} item={item} where={where} person={(id) => member(id)?.name || detail.people[id] || id}
                 mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : detail.people[id] ?? id}`)} />
             ))}
           </>

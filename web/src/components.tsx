@@ -1,7 +1,7 @@
 // Small pieces the station client and ember cloud share.
 import { useEffect, useState } from "react";
 import type { Creator } from "./api.ts";
-import { readOnlyMine, useIsMine, writeOnlyMine } from "./station.tsx";
+import { readOnlyMine, useIsMine, usePerson, writeOnlyMine } from "./station.tsx";
 import { Segmented } from "./ui.tsx";
 
 export function useOnlyMine(): [boolean, (value: boolean) => void] {
@@ -28,8 +28,10 @@ export function MineFilter({ label = "筛选" }: { label?: string }) {
 /** "由 X 创建", with "你" for the viewer. */
 export function CreatorText({ creator, verb = "创建" }: { creator: Pick<Creator, "id" | "name" | "email" | "via"> | null | undefined; verb?: string }) {
   const isMine = useIsMine();
+  const person = usePerson();
   if (!creator) return null;
-  const who = isMine(creator) ? "你" : creator.name || creator.email || creator.id;
+  // Names come from ember cloud's member list where the person is a member; the station only keeps emails.
+  const who = isMine(creator) ? "你" : person(creator.email)?.name || creator.name || creator.email || creator.id;
   const where = creator.via === "slack" ? "（Slack）" : "";
   return <span className="creator">由 {who}{where} {verb}</span>;
 }

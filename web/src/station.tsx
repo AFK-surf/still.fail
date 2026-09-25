@@ -56,3 +56,12 @@ export function writeOnlyMine(value: boolean): void {
   localStorage.setItem(FILTER, value ? "1" : "0");
   window.dispatchEvent(new Event("ember-filter"));
 }
+
+/** People by email, from ember cloud's member list; empty on a station's own page. */
+export interface Person { name: string; email: string; picture: string }
+export const PeopleContext = createContext<ReadonlyMap<string, Person>>(new Map());
+
+export function usePerson(): (email: string | null | undefined) => Person | undefined {
+  const people = useContext(PeopleContext);
+  return (email) => (email ? people.get(email.toLowerCase()) : undefined);
+}
