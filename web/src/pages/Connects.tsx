@@ -41,6 +41,7 @@ export function ConnectList({ items, stations, showStation, loading, back }: { i
           </DropdownMenu.Root>
         )}
       </header>
+      <div>
       <MineFilter label="连接" />
       {shown.length === 0 ? (
         <p className="muted">{loading ? "正在读取…" : onlyMine ? "没有你添加的连接。" : "还没有连接。"}</p>
@@ -64,6 +65,7 @@ export function ConnectList({ items, stations, showStation, loading, back }: { i
           ))}
         </ul>
       )}
+      </div>
       {adding && (
         <StationContext.Provider value={adding}>
           <NewConnectDialog open onClose={() => setAdding(null)} />
