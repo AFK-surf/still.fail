@@ -51,6 +51,7 @@ export function makeApi(t: Transport) {
   bindSession: (connect: string, session: string | null, title?: string) =>
     request<{ session: string }>("POST", `/connects/${encodeURIComponent(connect)}/session`, { session, ...(title ? { title } : {}) }),
   openChat: (key: string, title?: string) => request<{ threadTs: string }>("POST", `/sessions/${encodeURIComponent(key)}/chats`, title ? { title } : {}),
+  sayToSession: (key: string, text: string) => request<{ threadTs: string }>("POST", `/sessions/${encodeURIComponent(key)}/messages`, { text }),
   sayInChat: (threadTs: string, text: string) => request<{ ok: true }>("POST", `/chats/${encodeURIComponent(threadTs)}/messages`, { text }),
   setTitle: (key: string, title: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/title`, { title }),
   startLogin: (profile: string) => request<{ job: LoginJob }>("POST", `/profiles/${encodeURIComponent(profile)}/login`),

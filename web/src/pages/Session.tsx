@@ -4,11 +4,11 @@
 import { useIsMine, useLink, usePerson, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack } from "../components.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, MessageSquarePlus, MessagesSquare, Square, Unplug, X } from "lucide-react";
+import { Slack, Square, Unplug } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
-import { useParams, useSearchParams } from "react-router";
+import { useParams } from "react-router";
 import remarkGfm from "remark-gfm";
 import { useApi, keys, useOverview, useSession, useSessions, type ConnectView, type SessionDetail } from "../api.ts";
 import { History } from "../History.tsx";
@@ -50,18 +50,6 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const detail = useSession(sessionKey);
   const overview = useOverview();
   const client = useQueryClient();
-  const [params, setParams] = useSearchParams();
-  const openChat = params.get("chat");
-  // "0" means the reader closed the chat; without a choice the latest chat opens.
-  const setChat = (threadTs: string | null) => setParams({ chat: threadTs ?? "0" }, { replace: true });
-  const create = useMutation({
-    mutationFn: () => api.openChat(sessionKey),
-    onSuccess: async ({ threadTs }) => {
-      await client.invalidateQueries({ queryKey: keys.session(station.id, sessionKey) });
-      setChat(threadTs);
-    },
-  });
-
   if (detail.isPending) return <div className="page" />;
   if (detail.isError) return <Empty><p>读不到这个会话：{detail.error.message}</p></Empty>;
   const { session, threads, chats } = detail.data;
@@ -72,11 +60,8 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const single = slackThreads.length === 1 ? slackThreads[0] : undefined;
   const singleUrl = single ? slackThreadUrl(base, single.channel, single.threadTs) : null;
   const status = sessionStatus(session);
-  // Your latest chat opens by default, else the latest anyone started.
-  const mine = chats.filter((c) => isMine(c.creator));
-  const latestChat = mine.at(-1) ?? chats.at(-1);
-  const chat = openChat === "0" ? undefined : chats.find((c) => c.threadTs === openChat) ?? latestChat;
-
+  // One chat per session; older sessions may have several, of which the first is the one.
+  const chat = chats[0];
   return (
     <div className="session-page">
       <header className="page-bar">
@@ -93,22 +78,17 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
             ? <ThreadMenu detail={detail.data} base={base} />
             : singleUrl && (
               <Tip label="在 Slack 中打开">
-                <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><ExternalLink {...ICON} /></a>
+                <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><Slack {...ICON} /></a>
               </Tip>
             )}
-          {!chat && (latestChat
-            ? <Button icon={MessagesSquare} onClick={() => setChat(latestChat.threadTs)}>对话</Button>
-            : <Button icon={MessageSquarePlus} busy={create.isPending} onClick={() => create.mutate()}>新建对话</Button>)}
         </div>
       </header>
-      {/* Without a chat the history is the page; with one, the chat takes the middle and the history moves to the right. */}
+      {/* Without a chat the history is the page, with the composer under it; once someone writes, the chat takes the middle and the history moves to the right. */}
       <div className="session-body" data-chat={Boolean(chat)}>
-        {chat && (
-          <ChatPanel detail={detail.data} threadTs={chat.threadTs} name={name} onClose={() => setChat(null)}
-            onSwitch={setChat} onNew={() => create.mutate()} creating={create.isPending} />
-        )}
+        {chat && <ChatPanel detail={detail.data} chat={chat} />}
         <History detail={detail.data} connect={connect} footer={<Operations detail={detail.data} />} />
       </div>
+      {!chat && <Composer sessionKey={session.key} className="composer-bare" />}
     </div>
   );
 }
@@ -148,7 +128,7 @@ function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | nu
     <DropdownMenu.Root modal={false}>
       <Tip label="这个会话的 Slack thread">
         <DropdownMenu.Trigger asChild>
-          <button type="button" className="icon-btn" aria-label="这个会话的 Slack thread"><ExternalLink {...ICON} /></button>
+          <button type="button" className="icon-btn" aria-label="这个会话的 Slack thread"><Slack {...ICON} /></button>
         </DropdownMenu.Trigger>
       </Tip>
       <DropdownMenu.Portal>
@@ -174,49 +154,21 @@ function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | nu
 }
 
 /** ember's own chat with the session: what people type reaches the agent like a Slack message; it answers with chat_post. */
-function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating }: {
-  detail: SessionDetail; threadTs: string; name: string; onClose(): void; onSwitch(threadTs: string): void; onNew(): void; creating: boolean;
-}) {
-  const api = useApi();
-  const station = useStation();
-  const client = useQueryClient();
-  const chat = detail.chats.find((c) => c.threadTs === threadTs)!;
-  const [text, setText] = useState("");
+function ChatPanel({ detail, chat }: { detail: SessionDetail; chat: SessionDetail["chats"][number] }) {
   const list = useRef<HTMLDivElement>(null);
-  const send = useMutation({
-    mutationFn: (value: string) => api.sayInChat(threadTs, value),
-    onSuccess: () => { setText(""); void client.invalidateQueries({ queryKey: keys.session(station.id, detail.session.key) }); },
-  });
   useEffect(() => {
     if (list.current) list.current.scrollTop = list.current.scrollHeight;
   }, [chat.messages.length]);
   const status = sessionStatus(detail.session);
   const busy = status === "running" || status === "queued";
   const member = usePerson();
-  const person = (id: string) => member(id)?.name || detail.people[id] || (id === "local" ? "管理员" : id);
-  const submit = () => {
-    const value = text.trim();
-    if (value && !send.isPending) send.mutate(value);
-  };
   const isMine = useIsMine();
+  const person = (id: string) => (isMine({ id, email: id }) ? "你" : member(id)?.name || detail.people[id] || (id === "local" ? "管理员" : id));
   const agent = agentLabel(detail.transcript?.usage?.model ?? detail.session.model, detail.session.effort);
-  const chatName = (c: SessionDetail["chats"][number], i: number) => c.title ?? `对话 ${i + 1}`;
-  const owner = (c: SessionDetail["chats"][number]) => (isMine(c.creator) ? "你" : c.creator?.name ?? "");
 
   return (
     <section className="chat" aria-label="对话">
-      <header className="chat-head">
-        {detail.chats.length > 1
-          ? <Menu label="切换对话" items={detail.chats.map((c, i) => ({ c, i })).sort((a, b) => Number(isMine(b.c.creator)) - Number(isMine(a.c.creator))).map(({ c, i }) => ({ label: `${chatName(c, i)} · ${owner(c)} · ${relativeTime(c.createdAt)}`, onSelect: () => onSwitch(c.threadTs) }))} />
-          : <span className="kind-icon"><MessagesSquare {...ICON} /></span>}
-        <strong className="chat-title">{chatName(chat, detail.chats.indexOf(chat))}<span className="chat-owner">{owner(chat) && ` · ${owner(chat)}创建`}</span></strong>
-        <IconButton label="新建对话" icon={MessageSquarePlus} onClick={onNew} disabled={creating} />
-        <IconButton label="关闭对话" icon={X} onClick={onClose} />
-      </header>
       <div className="chat-list" ref={list}>
-        {chat.messages.length === 0 && (
-          <p className="chat-empty">在这里说的话会像 Slack 消息一样送到这个会话，agent 会在这里回复。</p>
-        )}
         {chat.messages.map((m) => m.role === "person" ? (
           <div key={m.ts} className="msg msg-human">
             <div className="msg-bubble">{m.text}</div>
@@ -235,13 +187,34 @@ function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating 
           <div className="chat-typing"><span className="activity-pulse inline" aria-hidden="true" />正在处理…</div>
         )}
       </div>
+      <Composer sessionKey={detail.session.key} />
+    </section>
+  );
+}
+
+/** Where people write to the session; the first message makes its chat. */
+function Composer({ sessionKey, className }: { sessionKey: string; className?: string }) {
+  const api = useApi();
+  const station = useStation();
+  const client = useQueryClient();
+  const [text, setText] = useState("");
+  const send = useMutation({
+    mutationFn: (value: string) => api.sayToSession(sessionKey, value),
+    onSuccess: () => { setText(""); void client.invalidateQueries({ queryKey: keys.session(station.id, sessionKey) }); },
+  });
+  const submit = () => {
+    const value = text.trim();
+    if (value && !send.isPending) send.mutate(value);
+  };
+  return (
+    <div className={`composer-wrap${className ? ` ${className}` : ""}`}>
       <form className="composer" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        <textarea className="input composer-input" rows={2} value={text} placeholder="发消息（Enter 发送，Shift+Enter 换行）"
+        <textarea className="input composer-input" rows={2} value={text} placeholder="给这个会话发消息（Enter 发送，Shift+Enter 换行）"
           onChange={(e) => setText(e.target.value)} aria-label="消息"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
         <Button variant="primary" type="submit" disabled={!text.trim()} busy={send.isPending}>发送</Button>
       </form>
       {send.error && <p className="field-error chat-error" role="alert">{send.error.message}</p>}
-    </section>
+    </div>
   );
 }
