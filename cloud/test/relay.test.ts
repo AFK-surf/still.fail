@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { harness } from "./harness.ts";
+import { LIMITS } from "../src/limits.ts";
 
 const upgrade = { upgrade: "websocket", "sec-websocket-protocol": "iroh-relay" };
 
@@ -33,8 +34,8 @@ test("pending upgrades consume capacity before the backend replies", { timeout: 
   try {
     const relays: any = await h.mf.getDurableObjectNamespace("RELAY");
     await relays.get(relays.idFromName("primary")).delay(500);
-    const responses = await Promise.all(Array.from({ length: 8 + 1 }, () => h.fetch("/relay", { headers: upgrade })));
-    assert.equal(responses.filter((r) => r.status === 101).length, 8);
+    const responses = await Promise.all(Array.from({ length: LIMITS.connections + 1 }, () => h.fetch("/relay", { headers: upgrade })));
+    assert.equal(responses.filter((r) => r.status === 101).length, LIMITS.connections);
     assert.equal(responses.filter((r) => r.status === 429).length, 1);
     for (const response of responses) {
       response.webSocket?.accept();

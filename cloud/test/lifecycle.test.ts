@@ -3,6 +3,7 @@ import test from "node:test";
 import { ulid } from "ulid";
 import { randomSecret, type Tokens } from "../src/auth.ts";
 import { harness } from "./harness.ts";
+import { LIMITS } from "../src/limits.ts";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -254,7 +255,7 @@ test("relay budgets span anonymous and account sessions; account idle expiry sti
       h.fetch("/relay", {
         headers: { ...auth(token), upgrade: "websocket", "sec-websocket-protocol": "iroh-relay" },
       });
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < LIMITS.connections; i++) {
       const response = await upgrade((i % 2 ? first : second).access_token);
       assert.equal(response.status, 101);
       response.webSocket!.accept();
