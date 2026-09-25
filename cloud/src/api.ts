@@ -34,7 +34,8 @@ async function account(request: Request, env: Env): Promise<Claims | null> {
 }
 
 async function body(request: Request): Promise<Record<string, unknown>> {
-  if (request.method === "GET" || request.method === "DELETE") return {};
+  // Bodiless calls (GET, DELETE, a bare accept or decline) carry no JSON.
+  if (request.method === "GET" || request.method === "DELETE" || !request.headers.get("content-type")) return {};
   return readJson(request);
 }
 
