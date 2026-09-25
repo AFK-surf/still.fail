@@ -640,3 +640,8 @@
   .session-body[data-panel="true"] { grid-template-columns: minmax(0, 1fr); }
   .session-body[data-panel="true"] .side-panel { position: fixed; inset: 0 0 0 auto; width: min(460px, 100vw); z-index: 30; box-shadow: -12px 0 32px var(--shadow); }
 }
+
+.history-details { border-bottom: 1px solid var(--line); background: var(--list); }
+.history-details .session-details { padding: 12px 16px; max-height: 50vh; }
+.history-details + .usage { background: var(--list); }
+.text-toggle .flip { transform: rotate(180deg); }

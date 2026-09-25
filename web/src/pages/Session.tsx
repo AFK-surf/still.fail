@@ -49,7 +49,6 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const overview = useOverview();
   // The side panel stays open on wide screens unless closed; on narrow ones it opens on demand, over the chat.
   const [panel, setPanel] = useState<boolean>(() => localStorage.getItem("ember.sidePanel") !== "0" && window.matchMedia("(min-width: 1101px)").matches);
-  const [tab, setTab] = useState(() => localStorage.getItem("ember.sideTab") ?? "history");
   const togglePanel = (open: boolean) => {
     setPanel(open);
     localStorage.setItem("ember.sidePanel", open ? "1" : "0");
@@ -90,19 +89,16 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
       <div className="session-body" data-panel={panel}>
         <ChatPanel detail={detail.data} chat={chat} />
         {panel && (
-          <Tabs.Root className="side-panel" value={tab} onValueChange={(v) => { setTab(v); localStorage.setItem("ember.sideTab", v); }}>
+          <Tabs.Root className="side-panel" value="history">
             <div className="side-tabs">
               <Tabs.List className="side-tab-list" aria-label="会话侧栏">
                 <Tabs.Trigger className="side-tab" value="history">执行历史</Tabs.Trigger>
-                <Tabs.Trigger className="side-tab" value="details">详情</Tabs.Trigger>
               </Tabs.List>
               <IconButton label="收起侧栏" icon={X} onClick={() => togglePanel(false)} />
             </div>
             <Tabs.Content className="side-content" value="history">
-              <History detail={detail.data} connect={connect} actions={<SessionActions detail={detail.data} />} />
-            </Tabs.Content>
-            <Tabs.Content className="side-content" value="details">
-              <SessionDetails detail={detail.data} connect={connect} base={base} />
+              <History detail={detail.data} connect={connect} actions={<SessionActions detail={detail.data} />}
+                details={<SessionDetails detail={detail.data} connect={connect} base={base} />} />
             </Tabs.Content>
           </Tabs.Root>
         )}

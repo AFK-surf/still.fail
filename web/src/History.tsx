@@ -121,7 +121,7 @@ function toItems(entries: TimelineEntry[]): Item[] {
  * stands (in the header line) and `actions` what can
  * be done to it right now (stop a turn, release the process).
  */
-export function History({ detail, connect, state, actions }: { detail: SessionDetail; connect: ConnectView | undefined; state?: ReactNode; actions?: ReactNode }) {
+export function History({ detail, connect, state, actions, details }: { detail: SessionDetail; connect: ConnectView | undefined; state?: ReactNode; actions?: ReactNode; details?: ReactNode }) {
   const botUserId = botUserIdOf(connect);
   const member = usePerson();
   const threadName = threadNamer(detail);
@@ -164,13 +164,14 @@ export function History({ detail, connect, state, actions }: { detail: SessionDe
         </div>
         <div className="history-tools">
           {actions}
-          {usage && (
+          {(usage || details) && (
             <button type="button" className="text-toggle" aria-expanded={usageOpen} onClick={() => setUsageOpen(!usageOpen)}>
-              用量 <ChevronDown {...ICON} size={14} />
+              详情 <ChevronDown {...ICON} size={14} className={usageOpen ? "flip" : undefined} />
             </button>
           )}
         </div>
       </header>
+      {usageOpen && details && <div className="history-details">{details}</div>}
       {usageOpen && usage && (
         <dl className="usage">
           <div><dt>模型调用</dt><dd>{usage.modelCalls} 次</dd></div>
