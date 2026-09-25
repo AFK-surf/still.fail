@@ -40,7 +40,8 @@ function Conversation({ sessionKey }: { sessionKey: string }) {
   const overview = useOverview();
   const [params, setParams] = useSearchParams();
   const toast = useToast();
-  const historyOpen = params.get("history") !== "0";
+  // Open beside the conversation on wide screens; on narrow ones it would cover it, so start closed.
+  const historyOpen = params.has("history") ? params.get("history") === "1" : window.matchMedia("(min-width: 901px)").matches;
   const stop = useMutation({ mutationFn: () => api.stop(sessionKey), onSuccess: () => toast("已请求停止") });
   const evict = useMutation({ mutationFn: () => api.evict(sessionKey), onSuccess: () => toast("已释放进程") });
 
@@ -50,7 +51,7 @@ function Conversation({ sessionKey }: { sessionKey: string }) {
   const bot = overview.data?.bots.find((b) => b.id === session.bot);
   const botName = bot?.name ?? session.bot;
   const url = threadUrl(bot, session.channel, session.threadTs);
-  const toggleHistory = () => setParams(historyOpen ? { history: "0" } : {}, { replace: true });
+  const toggleHistory = () => setParams({ history: historyOpen ? "0" : "1" }, { replace: true });
 
   return (
     <div className="conversation-layout" data-history={historyOpen}>
@@ -108,7 +109,8 @@ function useLines(detail: SessionDetail): Line[] {
 
 function Messages({ detail, botName, botUserId }: { detail: SessionDetail; botName: string; botUserId: string | null }) {
   const lines = useLines(detail);
-  const mention = (text: string) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? botName : id}`);
+  const person = (id: string) => detail.people[id] ?? id;
+  const mention = (text: string) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? botName : person(id)}`);
   if (lines.length === 0) return <div className="messages"><p className="muted">还没有消息。</p></div>;
   return (
     <div className="messages">
@@ -119,7 +121,7 @@ function Messages({ detail, botName, botUserId }: { detail: SessionDetail; botNa
           return (
             <div key={i} className="msg msg-human">
               <div className="msg-bubble">{mention(text)}</div>
-              <div className="msg-meta">{line.user} · {relativeTime(line.at)}</div>
+              <div className="msg-meta">{person(line.user)} · {relativeTime(line.at)}</div>
             </div>
           );
         }

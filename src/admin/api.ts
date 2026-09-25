@@ -115,7 +115,7 @@ export class AdminApi {
     if (method === "GET" && path === "/overview") return send(res, 200, this.#overview(viewer));
     if (method === "GET" && path === "/events") return this.#events(req, res);
     if (method === "GET" && path === "/sessions") return send(res, 200, this.#sessions(url.searchParams.get("bot")));
-    if (resource === "sessions" && id && !action && method === "GET") return send(res, 200, this.#session(id));
+    if (resource === "sessions" && id && !action && method === "GET") return send(res, 200, await this.#session(id));
     if (resource === "sessions" && id && action === "stop" && method === "POST") {
       await this.#deps.hub.stop(id);
       return send(res, 200, { ok: true });
@@ -197,14 +197,23 @@ export class AdminApi {
     return this.#deps.store.listSessions().filter((s) => !bot || s.bot === bot).map((s) => this.#summary(s.key, stats));
   }
 
-  #session(key: string): SessionDetail {
+  async #session(key: string): Promise<SessionDetail> {
     const summary = this.#summary(key);
+    const inbound = this.#deps.store.listInbound(key);
+    const chat = this.#deps.bots.chats.get(summary.bot);
+    const people: Record<string, string> = {};
+    if (chat?.userName) {
+      const ids = [...new Set(inbound.map((m) => m.user))];
+      const names = await Promise.all(ids.map((id) => chat.userName!(id)));
+      ids.forEach((id, i) => { if (names[i]) people[id] = names[i]!; });
+    }
     const profile = this.#deps.settings.config.profiles.find((p) => p.id === summary.profile);
     const path = profile && summary.runtimeSessionId ? transcriptPath(summary.runtime, profile.home, summary.runtimeSessionId) : undefined;
     return {
       session: summary,
+      people,
       turns: this.#deps.store.listTurns(key),
-      inbound: this.#deps.store.listInbound(key),
+      inbound,
       transcript: path ? { path, timeline: readTimeline(summary.runtime, path), usage: readUsage(summary.runtime, path) } : null,
     };
   }

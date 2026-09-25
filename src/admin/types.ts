@@ -108,6 +108,8 @@ export interface InboundView {
 
 export interface SessionDetail {
   session: SessionSummary;
+  /** Display names of the people in the thread, by chat user id, where known. */
+  people: Record<string, string>;
   turns: TurnRecord[];
   inbound: InboundView[];
   transcript: { path: string; timeline: TimelineEntry[]; usage: TranscriptUsage } | null;

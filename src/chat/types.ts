@@ -30,6 +30,8 @@ export interface ChatSurface {
   start(handler: (message: InboundMessage) => Promise<void>): Promise<void>;
   /** Posts Markdown into the thread. */
   post(thread: ThreadRef, markdown: string): Promise<void>;
+  /** A person's display name, or null if unknown. Optional: not every platform can say. */
+  userName?(userId: string): Promise<string | null>;
   /** Messages in the thread strictly before `before` (all when absent), oldest first, at most `limit`. */
   history(thread: ThreadRef, before: string | undefined, limit: number): Promise<ChatMessage[]>;
   stop(): Promise<void>;

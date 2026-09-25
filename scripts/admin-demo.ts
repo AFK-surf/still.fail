@@ -72,6 +72,7 @@ const hub = { processState: (key: string) => states.get(key) ?? "cold", stop: as
 const bots = {
   state: (bot: { enabled: boolean; id: string }) => (!bot.enabled ? { state: "disabled" } : bot.id === "gpt" ? { state: "reconnecting", botUserId: "UGPT", lastError: "socket closed", workspace: demoWorkspace("UGPT", "ember-gpt") } : { state: "connected", botUserId: "U0C4KHKPWTC", lastError: null, workspace: demoWorkspace("U0C4KHKPWTC", "ember") }),
   reconcile: async () => {},
+  chats: new Map(["ds", "gpt"].map((id) => [id, { userName: async (user: string) => ({ U09ABCDEF: "左子健", U09KY0GE28K: "左子健" } as Record<string, string>)[user] ?? null }])),
 } as unknown as BotConnections;
 const api = new AdminApi({ settings, store, hub, bots });
 const ui = join(import.meta.dirname, "..", "dist", "admin");

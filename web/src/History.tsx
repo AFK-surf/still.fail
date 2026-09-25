@@ -160,7 +160,10 @@ export function History({ detail, bot, onClose }: { detail: SessionDetail; bot: 
         ) : (
           <>
             <p className="history-edge">已到 Session 开始处</p>
-            {items.map((item, i) => <HistoryItem key={i} item={item} mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : id}`)} />)}
+            {items.map((item, i) => (
+              <HistoryItem key={i} item={item} person={(id) => detail.people[id] ?? id}
+                mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : detail.people[id] ?? id}`)} />
+            ))}
           </>
         )}
       </div>
@@ -168,14 +171,14 @@ export function History({ detail, bot, onClose }: { detail: SessionDetail; bot: 
   );
 }
 
-function HistoryItem({ item, mention }: { item: Item; mention(text: string): string }) {
+function HistoryItem({ item, mention, person }: { item: Item; mention(text: string): string; person(id: string): string }) {
   switch (item.type) {
     case "received": {
       const { messages, note } = parsePrompt(item.entry.text);
       return (
         <>
           {note && <Received from="ember" text={note} />}
-          {messages.map((m) => <Received key={m.ts} from={m.user} text={mention(m.text)} />)}
+          {messages.map((m) => <Received key={m.ts} from={person(m.user)} text={mention(m.text)} />)}
         </>
       );
     }

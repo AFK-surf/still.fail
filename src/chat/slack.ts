@@ -69,6 +69,7 @@ export class SlackSurface implements ChatSurface {
   readonly #appToken: string;
   readonly #botToken: string;
   #identity: SlackIdentity | null = null;
+  readonly #names = new Map<string, Promise<string | null>>();
   #socket: WebSocket | undefined;
   #stopped = false;
   #connected = false;
@@ -109,6 +110,24 @@ export class SlackSurface implements ChatSurface {
     for (const text of splitForSlack(toMrkdwn(markdown))) {
       await this.#api("chat.postMessage", { channel: thread.channel, thread_ts: thread.threadTs, text, unfurl_links: "false" }, this.#botToken);
     }
+  }
+
+  /** Display name via users.info, cached for the connection's lifetime. */
+  userName(userId: string): Promise<string | null> {
+    let name = this.#names.get(userId);
+    if (!name) {
+      name = this.#api("users.info", { user: userId }, this.#botToken)
+        .then((r) => {
+          const u = r.user ?? {};
+          return String(u.profile?.display_name || u.real_name || u.name || "") || null;
+        })
+        .catch(() => {
+          this.#names.delete(userId); // retry next time rather than caching a failure
+          return null;
+        });
+      this.#names.set(userId, name);
+    }
+    return name;
   }
 
   async history(thread: ThreadRef, before: string | undefined, limit: number): Promise<ChatMessage[]> {
