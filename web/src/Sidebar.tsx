@@ -3,8 +3,8 @@ import { useMemo, useState } from "react";
 import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
 import { cleanText, connectionText, dayLabel, presence, relativeTime, sessionStatus } from "./format.ts";
-import { NewBotDialog } from "./pages/NewBot.tsx";
-import { Avatar, ICON, IconButton, StatusDot } from "./ui.tsx";
+import { NewConnectDialog } from "./pages/Connect.tsx";
+import { Avatar, ICON, IconButton, StatusDot, Tip } from "./ui.tsx";
 
 export function Sidebar() {
   const settings = useLocation().pathname.startsWith("/settings");
@@ -33,8 +33,8 @@ function MainNav() {
   const overview = useOverview();
   const sessions = useSessions();
   const [adding, setAdding] = useState(false);
-  const bots = overview.data?.bots ?? [];
-  const byId = useMemo(() => new Map(bots.map((b) => [b.id, b])), [bots]);
+  const connects = overview.data?.connects ?? [];
+  const byId = useMemo(() => new Map(connects.map((c) => [c.id, c])), [connects]);
   const groups = useMemo(() => {
     const list = [...(sessions.data ?? [])].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
     const out: { label: string; items: SessionSummary[] }[] = [];
@@ -50,36 +50,37 @@ function MainNav() {
     <>
       <div className="nav-scroll">
         {groups.length === 0 && !sessions.isPending && (
-          <p className="nav-empty">{bots.length ? "在 Slack 里 @ 一个 bot，会话就会出现在这里。" : "先添加一个 bot。"}</p>
+          <p className="nav-empty">{connects.length ? "在 Slack 里 @ 它，会话就会出现在这里。" : "先添加一个连接。"}</p>
         )}
         {groups.map((group) => (
           <section key={group.label} aria-label={group.label}>
             <div className="nav-heading">{group.label}</div>
-            {group.items.map((s) => <SessionRow key={s.key} session={s} bot={byId.get(s.bot)} />)}
+            {group.items.map((s) => <SessionRow key={s.key} session={s} connect={byId.get(s.connect)} />)}
           </section>
         ))}
         <div className="nav-heading nav-heading-action">
-          Bot
-          <IconButton label="添加 Bot" icon={Plus} onClick={() => setAdding(true)} />
+          连接
+          <IconButton label="添加连接" icon={Plus} onClick={() => setAdding(true)} />
         </div>
-        {bots.map((b) => (
-          <NavLink key={b.id} className="nav-row" to={`/bots/${b.id}`}>
-            <Avatar id={b.id} name={b.name} />
-            <span className="nav-text">{b.name}</span>
-            <StatusDot state={presence(b.connection)} label={connectionText(b.connection)} />
-            {b.connection.state !== "connected" && <span className="nav-note">{connectionText(b.connection)}</span>}
+        {connects.map((c) => (
+          <NavLink key={c.id} className="nav-row" to={`/connects/${c.id}`}>
+            <Avatar id={c.id} name={c.name} />
+            <span className="nav-text">{c.name}</span>
+            {c.connection.state !== "connected" && <span className="nav-note">{connectionText(c.connection)}</span>}
+            <StatusDot state={presence(c.connection)} label={connectionText(c.connection)} />
           </NavLink>
         ))}
       </div>
       <div className="nav-foot">
         <NavLink className="nav-row" to="/settings"><Settings {...ICON} />设置</NavLink>
       </div>
-      <NewBotDialog open={adding} onClose={() => setAdding(false)} />
+      <NewConnectDialog open={adding} onClose={() => setAdding(false)} />
     </>
   );
 }
 
-function SessionRow({ session: s, bot }: { session: SessionSummary; bot: { id: string; name: string } | undefined }) {
+function SessionRow({ session: s, connect }: { session: SessionSummary; connect: { id: string; name: string } | undefined }) {
+  const name = connect?.name ?? s.connect;
   const { key } = useParams();
   const status = sessionStatus(s);
   const marker = status === "running" || status === "queued" ? "running"
@@ -87,13 +88,18 @@ function SessionRow({ session: s, bot }: { session: SessionSummary; bot: { id: s
   return (
     <NavLink className="nav-row nav-session" to={`/sessions/${encodeURIComponent(s.key)}`} aria-current={key === s.key ? "page" : undefined}>
       <span className="nav-session-text">
-        <span className="nav-session-title">{cleanText(s.firstText) || "（没有消息）"}</span>
+        <span className="nav-session-title">{s.scope === "all" ? `${name} 的会话` : cleanText(s.firstText) || "（没有消息）"}</span>
         <span className="nav-session-meta">
-          <Avatar id={s.bot} name={bot?.name ?? s.bot} size={14} />
-          {bot?.name ?? s.bot} · {relativeTime(s.lastActiveAt)}
+          <Avatar id={s.connect} name={name} size={14} />
+          <span className="nav-text">{s.scope === "all" ? "所有 thread" : name}</span>
+          <span className="nav-time">{relativeTime(s.lastActiveAt)}</span>
         </span>
       </span>
-      {marker && <span className="nav-marker" data-kind={marker} aria-label={marker === "running" ? "进行中" : marker === "attention" ? "等你回复" : "需要处理"} />}
+      {marker && (
+        <Tip label={marker === "running" ? "进行中" : marker === "attention" ? "等人回复" : "需要处理"} side="right">
+          <span className="nav-marker" data-kind={marker} role="img" aria-label={marker === "running" ? "进行中" : marker === "attention" ? "等人回复" : "需要处理"} />
+        </Tip>
+      )}
     </NavLink>
   );
 }

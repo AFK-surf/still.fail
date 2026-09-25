@@ -115,6 +115,8 @@ export interface SessionDetail {
   session: SessionSummary;
   /** Display names of the people in its threads, by chat user id, where known. */
   people: Record<string, string>;
+  /** Channel names by id, where known; direct messages have none. */
+  channels: Record<string, string>;
   /** The threads the session has messages from, most recent first. */
   threads: { channel: string; threadTs: string; messages: number; lastTs: string }[];
   turns: TurnRecord[];

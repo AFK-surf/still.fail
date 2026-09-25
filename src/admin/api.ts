@@ -208,11 +208,18 @@ export class AdminApi {
       const names = await Promise.all(ids.map((id) => chat.userName!(id)));
       ids.forEach((id, i) => { if (names[i]) people[id] = names[i]!; });
     }
+    const channels: Record<string, string> = {};
+    if (chat?.channelName) {
+      const ids = [...new Set(inbound.map((m) => m.channel))];
+      const names = await Promise.all(ids.map((id) => chat.channelName!(id)));
+      ids.forEach((id, i) => { if (names[i]) channels[id] = names[i]!; });
+    }
     const profile = this.#deps.settings.config.profiles.find((p) => p.id === summary.profile);
     const path = profile && summary.runtimeSessionId ? transcriptPath(summary.runtime, profile.home, summary.runtimeSessionId) : undefined;
     return {
       session: summary,
       people,
+      channels,
       threads: this.#deps.store.listThreads(key),
       turns: this.#deps.store.listTurns(key),
       inbound,

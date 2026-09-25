@@ -1,20 +1,23 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { Toast } from "radix-ui";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
 const ToastContext = createContext<(message: string) => void>(() => {});
 
 /** A short confirmation at the bottom of the screen, named after the action that happened. */
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [message, setMessage] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const show = useCallback((text: string) => {
-    setMessage(text);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setMessage(null), 2600);
-  }, []);
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
+  const show = useCallback((message: string) => setToast({ id: Date.now(), message }), []);
   return (
     <ToastContext.Provider value={show}>
-      {children}
-      {message && <div className="toast" role="status">{message}</div>}
+      <Toast.Provider duration={2600} swipeDirection="down">
+        {children}
+        {toast && (
+          <Toast.Root key={toast.id} className="toast" onOpenChange={(open) => { if (!open) setToast(null); }}>
+            <Toast.Title>{toast.message}</Toast.Title>
+          </Toast.Root>
+        )}
+        <Toast.Viewport className="toast-viewport" />
+      </Toast.Provider>
     </ToastContext.Provider>
   );
 }

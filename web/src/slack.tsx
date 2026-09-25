@@ -1,4 +1,4 @@
-// Connecting a bot to Slack: create the app from ember's manifest, paste the two
+// Connecting a Slack connect: create the app from ember's manifest, paste the two
 // tokens, and see who they belong to before anything is saved.
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, ExternalLink } from "lucide-react";
@@ -34,15 +34,15 @@ export interface TokenState {
 export const emptyTokens: TokenState = { appToken: "", botToken: "", verified: null };
 
 /**
- * Token inputs with a verify step. For an existing bot (`bot`), a blank field
+ * Token inputs with a verify step. For an existing connect (`connect`), a blank field
  * means "keep the stored token", and verification uses the stored one.
  */
-export function TokenFields({ value, onChange, bot, masked }: {
-  value: TokenState; onChange(value: TokenState): void; bot?: string; masked?: { appToken: string; botToken: string };
+export function TokenFields({ value, onChange, connect, masked }: {
+  value: TokenState; onChange(value: TokenState): void; connect?: string; masked?: { appToken: string; botToken: string };
 }) {
   const [errors, setErrors] = useState<string[]>([]);
   const verify = useMutation({
-    mutationFn: () => api.verifySlack({ ...(bot ? { bot } : {}), appToken: value.appToken, botToken: value.botToken }),
+    mutationFn: () => api.verifySlack({ ...(connect ? { connect } : {}), appToken: value.appToken, botToken: value.botToken }),
     onSuccess: (result) => {
       setErrors(result.errors);
       onChange({ ...value, verified: result.errors.length === 0 ? result.identity : null });
@@ -52,7 +52,7 @@ export function TokenFields({ value, onChange, bot, masked }: {
     setErrors([]);
     onChange({ ...value, ...patch, verified: null });
   };
-  const hasInput = Boolean(value.appToken || value.botToken || bot);
+  const hasInput = Boolean(value.appToken || value.botToken || connect);
   return (
     <div className="token-fields">
       <Field label="App-Level Token" htmlFor="app-token">

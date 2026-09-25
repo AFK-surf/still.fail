@@ -5,8 +5,8 @@ import { ArrowDownToLine, ChevronDown, ChevronRight, Send, X } from "lucide-reac
 import { useMemo, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { BotView, SessionDetail, TimelineEntry } from "./api.ts";
-import { compactNumber, duration, parsePrompt, RUNTIME_LABEL } from "./format.ts";
+import type { ConnectView, SessionDetail, TimelineEntry } from "./api.ts";
+import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, splitThread, threadNamer } from "./format.ts";
 import { Avatar, ICON, IconButton, Pill } from "./ui.tsx";
 
 export function parseArgs(text: string): Record<string, unknown> | null {
@@ -115,21 +115,27 @@ function toItems(entries: TimelineEntry[]): Item[] {
   return items;
 }
 
-export function History({ detail, bot, onClose }: { detail: SessionDetail; bot: BotView | undefined; onClose(): void }) {
-  const botUserId = bot && (bot.connection.state === "connected" || bot.connection.state === "reconnecting") ? bot.connection.botUserId : null;
+export function History({ detail, connect, onClose }: { detail: SessionDetail; connect: ConnectView | undefined; onClose(): void }) {
+  const botUserId = botUserIdOf(connect);
+  const threadName = threadNamer(detail);
+  // Only worth saying which thread when there is more than one.
+  const where = (address: string | null | undefined) => {
+    const t = address && detail.threads.length > 1 ? splitThread(address) : null;
+    return t ? threadName(t.channel, t.threadTs).where : null;
+  };
   const [usageOpen, setUsageOpen] = useState(false);
   const { session, transcript } = detail;
   const items = useMemo(() => toItems(transcript?.timeline ?? []), [transcript]);
   const usage = transcript?.usage;
-  const model = usage?.model ?? session.model ?? bot?.model ?? null;
-  const name = bot?.name ?? session.bot;
+  const model = usage?.model ?? session.model ?? connect?.bind.model ?? null;
+  const name = connect?.name ?? session.connect;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
 
   return (
     <aside className="history" aria-label="执行历史">
       <header className="history-head">
         <div className="history-identity">
-          <Avatar id={session.bot} name={name} size={18} />
+          <Avatar id={session.connect} name={name} size={18} />
           <span className="history-name">{name}</span>
           <span className="history-sep">·</span>
           <span>{RUNTIME_LABEL[session.runtime]}</span>
@@ -161,7 +167,7 @@ export function History({ detail, bot, onClose }: { detail: SessionDetail; bot: 
           <>
             <p className="history-edge">已到 Session 开始处</p>
             {items.map((item, i) => (
-              <HistoryItem key={i} item={item} person={(id) => detail.people[id] ?? id}
+              <HistoryItem key={i} item={item} where={where} person={(id) => detail.people[id] ?? id}
                 mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : detail.people[id] ?? id}`)} />
             ))}
           </>
@@ -171,14 +177,14 @@ export function History({ detail, bot, onClose }: { detail: SessionDetail; bot: 
   );
 }
 
-function HistoryItem({ item, mention, person }: { item: Item; mention(text: string): string; person(id: string): string }) {
+function HistoryItem({ item, mention, person, where }: { item: Item; mention(text: string): string; person(id: string): string; where(address: string | null | undefined): string | null }) {
   switch (item.type) {
     case "received": {
       const { messages, note } = parsePrompt(item.entry.text);
       return (
         <>
           {note && <Received from="ember" text={note} />}
-          {messages.map((m) => <Received key={m.ts} from={person(m.user)} text={mention(m.text)} />)}
+          {messages.map((m) => <Received key={m.ts} from={person(m.user)} text={mention(m.text)} place={where(m.thread)} />)}
         </>
       );
     }
@@ -192,7 +198,7 @@ function HistoryItem({ item, mention, person }: { item: Item; mention(text: stri
         <div className="h-post" data-failed={failed}>
           <div className="h-post-head">
             <Send {...ICON} size={14} />
-            发送到 Slack
+            发送到 {where(typeof args.to === "string" ? args.to : null) ?? "Slack"}
             {kind === "final" && <Pill tone="green">已完成</Pill>}
             {kind === "block" && <Pill tone="blue">等你回复</Pill>}
             {failed && <Pill tone="red">发送失败</Pill>}
@@ -208,12 +214,12 @@ function HistoryItem({ item, mention, person }: { item: Item; mention(text: stri
   }
 }
 
-function Received({ from, text }: { from: string; text: string }) {
+function Received({ from, text, place }: { from: string; text: string; place?: string | null }) {
   const [open, setOpen] = useState(false);
   const long = text.length > 280 || text.split("\n").length > 5;
   return (
     <div className="h-received">
-      <div className="h-label"><ArrowDownToLine {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "ember" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}</div>
+      <div className="h-label"><ArrowDownToLine {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "ember" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <span className="h-place">{place}</span>}</div>
       <blockquote className="h-quote" data-clamped={long && !open}>{text}</blockquote>
       {long && <button type="button" className="text-toggle" onClick={() => setOpen(!open)}>{open ? "收起" : "展开更多"}</button>}
     </div>

@@ -1,7 +1,8 @@
-import { Navigate, Route, Routes, useLocation } from "react-router";
+import { Tooltip } from "radix-ui";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router";
 import { ApiError, useLiveUpdates, useOverview } from "./api.ts";
 import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
-import { BotPage } from "./pages/Bot.tsx";
+import { ConnectPage } from "./pages/Connect.tsx";
 import { SessionPage } from "./pages/Session.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
@@ -9,7 +10,7 @@ import { ToastProvider } from "./toast.tsx";
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
 function useDetailOpen(): boolean {
   const path = useLocation().pathname;
-  return /^\/(sessions\/.+|bots\/.+|settings(\/.*)?$)/.test(path);
+  return /^\/(sessions\/.+|connects\/.+|settings(\/.*)?$)/.test(path);
 }
 
 export function App() {
@@ -31,13 +32,15 @@ export function App() {
 
   return (
     <ToastProvider>
+      <Tooltip.Provider delayDuration={400} skipDelayDuration={200}>
       <div className="shell" data-detail={detail}>
         <Sidebar />
         <main className="main">
           <Routes>
             <Route path="/" element={<Navigate to="/sessions" replace />} />
             <Route path="/sessions/:key?" element={<SessionPage />} />
-            <Route path="/bots/:id" element={<BotPage />} />
+            <Route path="/connects/:id" element={<ConnectPage />} />
+            <Route path="/bots/:id" element={<LegacyBot />} />
             <Route path="/settings" element={<Navigate to="/settings/accounts" replace />} />
             <Route path="/settings/accounts" element={<AccountsPage />} />
             <Route path="/settings/accounts/:id" element={<AccountPage />} />
@@ -45,6 +48,12 @@ export function App() {
           </Routes>
         </main>
       </div>
+      </Tooltip.Provider>
     </ToastProvider>
   );
+}
+
+/** Links from before bots became connects. */
+function LegacyBot() {
+  return <Navigate to={`/connects/${useParams().id}`} replace />;
 }

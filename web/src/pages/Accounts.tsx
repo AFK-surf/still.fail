@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, KeyRound, Pencil, Plus, RefreshCw, SlidersHorizontal, UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, KeyRound, Pencil, Plus, RefreshCw, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
+import { Collapsible } from "radix-ui";
 import { useState, type ComponentType } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, keys, useOverview, type AccessKind, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
-import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL } from "../format.ts";
+import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Avatar, Button, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Segmented } from "../ui.tsx";
-import { slug } from "./NewBot.tsx";
+import { Avatar, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
 function OpenCodeMark({ size = 16 }: { size?: number; strokeWidth?: number }) {
@@ -45,11 +45,11 @@ export function AccountsPage() {
       <header className="page-head">
         <div>
           <h1>运行时账号</h1>
-          <p className="page-sub">bot 通过这些账号运行 Claude Code 或 Codex：用哪份订阅，或者接到哪个模型服务。</p>
+          <p className="page-sub">连接通过这些账号运行 Claude Code 或 Codex：用哪份订阅，或者接到哪个模型服务。</p>
         </div>
         <Button icon={Plus} onClick={() => setAdding(true)}>添加账号</Button>
       </header>
-      {profiles.length === 0 && <Empty><p>还没有账号。bot 至少需要一个账号才能运行。</p></Empty>}
+      {profiles.length === 0 && <Empty><p>还没有账号。连接至少需要一个账号才能运行。</p></Empty>}
       {groups.filter((g) => g.items.length).map((g) => (
         <section key={g.runtime} className="section" aria-label={RUNTIME_LABEL[g.runtime]}>
           <div className="group-head"><strong>{RUNTIME_LABEL[g.runtime]}</strong><span className="muted">{g.items.length} 个账号</span></div>
@@ -62,7 +62,7 @@ export function AccountsPage() {
                     <AccessMark kind={p.access.kind} />
                     <span className="list-row-text">
                       <span className="list-row-title">{p.name}</span>
-                      <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.data!.bots.find((b) => b.id === id)?.name ?? id).join("、")} 使用` : " · 没有 bot 使用"}</span>
+                      <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.data!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
                     </span>
                     <Pill tone={tone.tone}>{tone.label}</Pill>
                     <ChevronRight {...ICON} className="list-row-chevron" />
@@ -105,14 +105,11 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
           options={[{ value: "claude", label: "Claude Code" }, { value: "codex", label: "Codex" }]} />
       </Field>
       <Field label="接入方式">
-        <div className="choices" role="radiogroup" aria-label="接入方式">
-          {ACCESS_KINDS[runtime].map((k) => (
-            <button key={k} type="button" role="radio" aria-checked={k === kind} className="choice" onClick={() => setKind(k)}>
-              <AccessMark kind={k} size={28} />
-              <span className="choice-text"><strong>{k === "subscription" ? (runtime === "claude" ? "Claude 订阅" : "ChatGPT 订阅") : ACCESS[k].label}</strong><span className="muted">{ACCESS[k].description}</span></span>
-            </button>
-          ))}
-        </div>
+        <Choices label="接入方式" value={kind} onChange={setKind}
+          options={ACCESS_KINDS[runtime].map((k) => ({
+            value: k, icon: <AccessMark kind={k} size={28} />, description: ACCESS[k].description,
+            title: k === "subscription" ? (runtime === "claude" ? "Claude 订阅" : "ChatGPT 订阅") : ACCESS[k].label,
+          }))} />
       </Field>
       {KEYED.has(kind) && (
         <Field label={kind === "opencode-go" ? "OpenCode Go key" : "API key"} htmlFor="account-key">
@@ -155,7 +152,8 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
   };
   const latest = check.data ?? profile.check;
   const tone = checkTone(latest);
-  const users = profile.usedBy.map((id) => overview.bots.find((b) => b.id === id)).filter((b) => b !== undefined);
+  const users = profile.usedBy.map((id) => overview.connects.find((c) => c.id === id)).filter((c) => c !== undefined);
+  const [deleting, setDeleting] = useState(false);
 
   return (
     <div className="page page-narrow">
@@ -171,10 +169,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
           )}
           <p className="identity-sub">{RUNTIME_LABEL[profile.runtime]} · {ACCESS[profile.access.kind].label} · <span className="mono">{profile.id}</span></p>
         </div>
-        <Menu items={[{
-          label: "删除账号", danger: true, disabled: profile.usedBy.length > 0,
-          onSelect: () => { if (window.confirm(`删除「${profile.name}」？配置目录不会删除。`)) remove.mutate(); },
-        }]} />
+        <Menu items={[{ label: profile.usedBy.length ? "删除账号（还有连接在用）" : "删除账号", icon: Trash2, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>
       {(save.error || remove.error) && <p className="field-error" role="alert">{(save.error ?? remove.error)!.message}</p>}
 
@@ -207,18 +202,19 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
         </section>
       )}
 
-      <section className="section" aria-labelledby="users-heading">
-        <div className="section-head"><h2 id="users-heading">使用它的 bot</h2></div>
-        {users.length === 0 ? <p className="muted">还没有 bot 使用这个账号。</p> : (
+      <Section title="使用它的连接">
+        {users.length === 0 ? <p className="muted">还没有连接使用这个账号。</p> : (
           <ul className="list">
-            {users.map((b) => (
-              <li key={b.id}><Link className="list-row" to={`/bots/${b.id}`}><Avatar id={b.id} name={b.name} /><span className="list-row-title">{b.name}</span><span className="muted">{b.model ?? "默认模型"}</span></Link></li>
+            {users.map((c) => (
+              <li key={c.id}><Link className="list-row" to={`/connects/${c.id}`}><Avatar id={c.id} name={c.name} /><span className="list-row-title">{c.name}</span><span className="muted">{c.bind.model ?? profile.model ?? "默认模型"}</span></Link></li>
             ))}
           </ul>
         )}
-      </section>
+      </Section>
 
       <Advanced profile={profile} onSave={(input) => save.mutate(input, { onSuccess: () => toast("已保存") })} busy={save.isPending} />
+      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.isPending} onConfirm={() => remove.mutate()}
+        title={`删除「${profile.name}」？`} action="删除账号" description="只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。" />
     </div>
   );
 }
@@ -234,9 +230,8 @@ function AccessSection({ profile, onSave, busy }: { profile: ProfileView; onSave
       <div className="section-head"><h2 id="access-heading">接入</h2></div>
       <div className="card">
         <Field label="接入方式" htmlFor="access-kind" hint={ACCESS[kind].description}>
-          <select id="access-kind" className="select" value={kind} onChange={(e) => { setKind(e.target.value as AccessKind); setKey(""); }}>
-            {ACCESS_KINDS[profile.runtime].map((k) => <option key={k} value={k}>{ACCESS[k].label}</option>)}
-          </select>
+          <Select id="access-kind" value={kind} onChange={(v) => { setKind(v as AccessKind); setKey(""); }}
+            options={ACCESS_KINDS[profile.runtime].map((k) => ({ value: k, label: ACCESS[k].label }))} />
         </Field>
         {KEYED.has(kind) && (
           <Field label={kind === "opencode-go" ? "OpenCode Go key" : "API key"} htmlFor="access-key">
@@ -277,13 +272,14 @@ function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(inpu
   };
   const update = (row: number, p: Partial<EnvRow>) => setRows(rows.map((r) => (r.row === row ? { ...r, ...p } : r)));
   return (
-    <details className="section advanced">
-      <summary><h2>高级</h2></summary>
+    <Collapsible.Root className="section advanced">
+      <Collapsible.Trigger className="advanced-trigger"><h2>高级</h2><span className="muted">配置目录、默认模型、环境变量</span><ChevronDown {...ICON} size={14} className="advanced-chevron" /></Collapsible.Trigger>
+      <Collapsible.Content>
       <div className="card">
         <Field label="配置目录" htmlFor="adv-home" hint={`${profile.runtime === "claude" ? "作为 CLAUDE_CONFIG_DIR" : "作为 CODEX_HOME"}。相对路径以 ember 数据目录为基准。${profile.homeExists ? "" : "目录还不存在。"}`}>
           <input id="adv-home" className="input mono" value={home} onChange={(e) => setHome(e.target.value)} />
         </Field>
-        <Field label="默认模型" htmlFor="adv-model" hint="bot 没指定模型时使用。">
+        <Field label="默认模型" htmlFor="adv-model" hint="连接没指定模型时使用。">
           <input id="adv-model" className="input mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="运行时默认" />
         </Field>
         <Field label="自定义环境变量" hint="在接入方式生成的变量之外追加；同名时以这里为准。值里的 {route} 会换成会话的路由 ID。">
@@ -306,6 +302,7 @@ function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(inpu
           <Button variant="primary" busy={busy} onClick={() => onSave({ home: home.trim(), model: model.trim(), env: patch() })}>保存高级设置</Button>
         </div>
       </div>
-    </details>
+      </Collapsible.Content>
+    </Collapsible.Root>
   );
 }

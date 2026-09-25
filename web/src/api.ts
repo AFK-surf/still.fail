@@ -2,7 +2,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
-import type { BotInput, Overview, ProfileCheck, ProfileInput, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type { ConnectInput, Overview, ProfileCheck, ProfileInput, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
 
 export type * from "../../src/admin/types.ts";
 export type { SlackIdentity };
@@ -30,12 +30,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   stop: (key: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/stop`),
   evict: (key: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/evict`),
-  putBot: (id: string, input: BotInput) => request<Overview>("PUT", `/bots/${encodeURIComponent(id)}`, input),
-  deleteBot: (id: string) => request<Overview>("DELETE", `/bots/${encodeURIComponent(id)}`),
-  reconnect: (id: string) => request<{ ok: true }>("POST", `/bots/${encodeURIComponent(id)}/reconnect`),
+  putConnect: (id: string, input: ConnectInput) => request<Overview>("PUT", `/connects/${encodeURIComponent(id)}`, input),
+  deleteConnect: (id: string) => request<Overview>("DELETE", `/connects/${encodeURIComponent(id)}`),
+  reconnect: (id: string) => request<{ ok: true }>("POST", `/connects/${encodeURIComponent(id)}/reconnect`),
   putProfile: (id: string, input: ProfileInput) => request<Overview>("PUT", `/profiles/${encodeURIComponent(id)}`, input),
   checkProfile: (id: string) => request<ProfileCheck>("POST", `/profiles/${encodeURIComponent(id)}/check`),
-  verifySlack: (input: { bot?: string; appToken?: string; botToken?: string }) =>
+  verifySlack: (input: { connect?: string; appToken?: string; botToken?: string }) =>
     request<{ identity: SlackIdentity | null; errors: string[] }>("POST", "/slack/verify", input),
   deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${encodeURIComponent(id)}`),
   createAppUrl: (name: string) => request<{ url: string }>("GET", `/slack/create-app-url?name=${encodeURIComponent(name)}`),

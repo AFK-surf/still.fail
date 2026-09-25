@@ -80,7 +80,10 @@ const hub = { processState: (key: string) => states.get(key) ?? "cold", stop: as
 const connections = {
   state: (c: { enabled: boolean; id: string }) => (!c.enabled ? { state: "disabled" } : c.id === "gpt" ? { state: "reconnecting", botUserId: "UGPT", lastError: "socket closed", workspace: demoWorkspace("UGPT", "ember-gpt") } : { state: "connected", botUserId: "U0C4KHKPWTC", lastError: null, workspace: demoWorkspace("U0C4KHKPWTC", "ember") }),
   reconcile: async () => {},
-  chats: new Map(["ds", "gpt"].map((id) => [id, { userName: async (user: string) => ({ U09ABCDEF: "左子健", U09KY0GE28K: "左子健" } as Record<string, string>)[user] ?? null }])),
+  chats: new Map(["ds", "gpt"].map((id) => [id, {
+    userName: async (user: string) => ({ U09ABCDEF: "左子健", U09KY0GE28K: "左子健" } as Record<string, string>)[user] ?? null,
+    channelName: async (channel: string) => ({ C0OPS: "ops", C0DEMO0: "cue-dev", C0DEMO1: "bridge" } as Record<string, string>)[channel] ?? null,
+  }])),
 } as unknown as Connections;
 const api = new AdminApi({ settings, store, hub, connections });
 const ui = join(import.meta.dirname, "..", "dist", "admin");

@@ -1,5 +1,5 @@
 // Turning ember's records into words people read.
-import type { AccessKind, BotState, ProcessState, ProfileCheck, RuntimeKind, SessionSummary, TurnSummary } from "./api.ts";
+import type { AccessKind, ConnectMode, ConnectState, ConnectView, SessionDetail, ProcessState, ProfileCheck, RuntimeKind, SessionSummary, TurnSummary } from "./api.ts";
 import type { Presence, Tone } from "./ui.tsx";
 
 export type Status = "running" | "queued" | "final" | "block" | "failed" | "aborted" | "unexpected" | "idle";
@@ -16,6 +16,15 @@ export const STATUS_LABEL: Record<Status, string> = {
 };
 
 export const PROCESS_LABEL: Record<ProcessState, string> = { running: "运行中", warm: "保温中", cold: "已释放" };
+
+export const MODE: Record<ConnectMode, { label: string; description: string }> = {
+  "multi-session": { label: "每个 thread 一个会话", description: "在 thread 里 @ 它就开一个新会话，thread 里的后续消息都进这个会话。" },
+  "single-session": { label: "所有 thread 共用一个会话", description: "它看到的所有 thread 进同一个会话，适合一个长期值守的助手。" },
+};
+
+export function modeText(mode: ConnectMode, requireMention: boolean): string {
+  return mode === "multi-session" ? "多会话" : requireMention ? "单会话 · @ 唤醒" : "单会话 · 全部消息";
+}
 
 export const RUNTIME_LABEL: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex" };
 
@@ -38,7 +47,7 @@ export function checkTone(check: ProfileCheck | null): { tone: Tone; label: stri
   return { ok: { tone: "green", label: "可用" }, login: { tone: "amber", label: "需要登录" }, failed: { tone: "red", label: "不可用" }, unknown: { tone: "neutral", label: "无法检查" } }[check.state] as { tone: Tone; label: string };
 }
 
-export function presence(state: BotState): Presence {
+export function presence(state: ConnectState): Presence {
   switch (state.state) {
     case "connected": return "online";
     case "reconnecting": case "starting": return "busy";
@@ -111,7 +120,7 @@ export function duration(ms: number): string {
   return m < 60 ? `${m} 分 ${s % 60} 秒` : `${Math.floor(m / 60)} 小时 ${m % 60} 分`;
 }
 
-export function connectionText(state: BotState): string {
+export function connectionText(state: ConnectState): string {
   switch (state.state) {
     case "connected": return "在线";
     case "reconnecting": return "重连中";
@@ -122,18 +131,74 @@ export function connectionText(state: BotState): string {
   }
 }
 
-export interface SlackMessage {
+export interface SourcedMessage {
   user: string;
   ts: string;
   text: string;
+  /** CHANNEL/THREAD_TS, when the prompt said. */
+  thread: string | null;
 }
 
-/** Splits a prompt ember built into the Slack messages it carried and ember's own words around them. */
-export function parsePrompt(text: string): { messages: SlackMessage[]; note: string } {
-  const messages: SlackMessage[] = [];
-  const note = text.replace(/<slack user="([^"]*)"(?: bot)? ts="([^"]*)">\n?([\s\S]*?)\n?<\/slack>/g, (_, user: string, ts: string, body: string) => {
-    messages.push({ user, ts, text: body });
-    return "";
-  }).trim();
+const unescape = (v: string) => v.replaceAll("&quot;", "\"").replaceAll("&amp;", "&");
+
+/**
+ * Splits a prompt ember built into the chat messages it carried and ember's own
+ * words around them. Reads the current <message …> form and the older <slack …> one.
+ */
+export function parsePrompt(text: string): { messages: SourcedMessage[]; note: string } {
+  const messages: SourcedMessage[] = [];
+  const note = text
+    .replace(/<message ([^>]*)>\n?([\s\S]*?)\n?<\/message>/g, (_, attrs: string, body: string) => {
+      const attr = (name: string) => new RegExp(`${name}="([^"]*)"`).exec(attrs)?.[1];
+      const from = unescape(attr("from") ?? "");
+      messages.push({ user: /\(([A-Z0-9]+)\)$/.exec(from)?.[1] ?? from, ts: attr("ts") ?? "", text: body, thread: attr("thread") ?? null });
+      return "";
+    })
+    .replace(/<slack user="([^"]*)"(?: bot)? ts="([^"]*)">\n?([\s\S]*?)\n?<\/slack>/g, (_, user: string, ts: string, body: string) => {
+      messages.push({ user, ts, text: body, thread: null });
+      return "";
+    })
+    .replace(/^\(Thread \S+ had messages before you were brought in;.*\)$/gm, "")
+    .trim();
   return { messages, note };
 }
+
+/** "C0OPS/1727.0001" → its channel and thread. */
+export function splitThread(address: string): { channel: string; threadTs: string } | null {
+  const m = /^([A-Z0-9]+)\/(\d+\.\d+)$/.exec(address);
+  return m ? { channel: m[1]!, threadTs: m[2]! } : null;
+}
+
+/** Slack deep link to a thread, when the workspace URL is known. */
+export function slackThreadUrl(workspaceUrl: string | null | undefined, channel: string, threadTs: string): string | null {
+  return workspaceUrl ? `${workspaceUrl}archives/${channel}/p${threadTs.replace(".", "")}` : null;
+}
+
+/** A readable id from a name: "Ember DS" → "ember-ds". */
+export function slug(name: string): string {
+  return name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
+}
+
+export function statusTone(status: Status): Tone {
+  if (status === "running" || status === "queued") return "accent";
+  if (status === "final") return "green";
+  if (status === "block") return "blue";
+  if (status === "failed" || status === "unexpected") return "red";
+  return "neutral";
+}
+
+export function botUserIdOf(connect: ConnectView | undefined): string | null {
+  const c = connect?.connection;
+  return c && (c.state === "connected" || c.state === "reconnecting") ? c.botUserId : null;
+}
+
+/** Names a thread for people: its channel (by name when known) and when it began. */
+export function threadNamer(detail: SessionDetail) {
+  return (channel: string, threadTs: string) => {
+    const started = new Date(Number(threadTs) * 1000);
+    const when = `${started.getMonth() + 1}月${started.getDate()}日 ${started.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+    const where = channel.startsWith("D") ? "私信" : `#${detail.channels[channel] ?? channel}`;
+    return { where, when };
+  };
+}
+

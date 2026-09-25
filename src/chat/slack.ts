@@ -70,6 +70,7 @@ export class SlackSurface implements ChatSurface {
   readonly #botToken: string;
   #identity: SlackIdentity | null = null;
   readonly #names = new Map<string, Promise<string | null>>();
+  readonly #channels = new Map<string, Promise<string | null>>();
   #socket: WebSocket | undefined;
   #stopped = false;
   #connected = false;
@@ -126,6 +127,21 @@ export class SlackSurface implements ChatSurface {
           return null;
         });
       this.#names.set(userId, name);
+    }
+    return name;
+  }
+
+  /** Channel name via conversations.info (null for DMs), cached for the connection's lifetime. */
+  channelName(channelId: string): Promise<string | null> {
+    let name = this.#channels.get(channelId);
+    if (!name) {
+      name = this.#api("conversations.info", { channel: channelId }, this.#botToken)
+        .then((r) => (r.channel?.is_im ? null : String(r.channel?.name ?? "") || null))
+        .catch(() => {
+          this.#channels.delete(channelId);
+          return null;
+        });
+      this.#channels.set(channelId, name);
     }
     return name;
   }
