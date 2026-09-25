@@ -35,7 +35,7 @@ try {
 
   let sampler = peakSampler(proc.child.pid!);
   let run = await turn("Reply with exactly: hi");
-  record("turn 1 (no tools) peak", sampler.stop(), { outcome: run.result.subtype, tools: run.tools });
+  record("turn 1 (no tools) peak", sampler.stop(), { outcome: run.result.is_error ? `ERROR: ${String(run.result.result).slice(0, 60)}` : "ok", tools: run.tools });
   await sleep(10_000);
   record("idle 10s after turn 1");
 
@@ -44,7 +44,7 @@ try {
     "Read package.json and docs/design.md, run `ls -la` and `git log --oneline -5`, " +
     "then reply with a three-line summary of this repository. Do not modify anything.",
   );
-  record("turn 2 (tools) peak", sampler.stop(), { outcome: run.result.subtype, tools: run.tools });
+  record("turn 2 (tools) peak", sampler.stop(), { outcome: run.result.is_error ? `ERROR: ${String(run.result.result).slice(0, 60)}` : "ok", tools: run.tools });
   await sleep(30_000);
   record("idle 30s after turn 2");
   await sleep(90_000);
