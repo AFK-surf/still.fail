@@ -177,7 +177,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
           ) : (
             <h1 className="identity-name">{profile.name}<IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
           )}
-          <p className="identity-sub">{RUNTIME_LABEL[profile.runtime]} · {ACCESS[profile.access.kind].label} · <span className="mono">{profile.id}</span></p>
+          <p className="identity-sub"><span>{RUNTIME_LABEL[profile.runtime]}</span><span>{ACCESS[profile.access.kind].label}</span><span className="mono">{profile.id}</span></p>
         </div>
         <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash2, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>
