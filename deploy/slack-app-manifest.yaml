@@ -1,0 +1,82 @@
+# Create the app at https://api.slack.com/apps → Create New App → From an app manifest.
+# Afterwards: Basic Information → App-Level Tokens → generate one with
+# connections:write (the xapp- token), and Install to Workspace (the xoxb- token).
+#
+# Scopes are deliberately broader than the MVP uses, so later features
+# (file upload, reactions as status, channel lookup, co-author mapping) do not
+# need a reinstall.
+display_information:
+  name: ember
+  description: Coding agents (Claude Code / Codex) in your threads
+  background_color: "#7a2e0e"
+features:
+  bot_user:
+    display_name: ember
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      # read and answer messages
+      - app_mentions:read
+      - channels:history
+      - groups:history
+      - im:history
+      - mpim:history
+      - chat:write
+      - chat:write.public
+      - chat:write.customize
+      # conversations: look up, join, open DMs
+      - channels:read
+      - groups:read
+      - im:read
+      - mpim:read
+      - im:write
+      - mpim:write
+      - channels:join
+      - channels:manage
+      - groups:write
+      # files: read attachments, upload artifacts
+      - files:read
+      - files:write
+      - remote_files:read
+      - remote_files:write
+      - remote_files:share
+      # reactions (status markers), pins and bookmarks
+      - reactions:read
+      - reactions:write
+      - pins:read
+      - pins:write
+      - bookmarks:read
+      - bookmarks:write
+      # people and workspace
+      - users:read
+      - users:read.email
+      - users.profile:read
+      - usergroups:read
+      - team:read
+      - emoji:read
+      # links and reminders
+      - links:read
+      - links:write
+      - reminders:read
+      - reminders:write
+      - dnd:read
+      - calls:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+      - message.mpim
+      - reaction_added
+      - reaction_removed
+      - file_shared
+      - member_joined_channel
+      - channel_created
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
