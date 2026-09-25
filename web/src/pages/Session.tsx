@@ -4,19 +4,19 @@
 import { useIsMine, useLink, usePerson, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack } from "../components.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, Square, Unplug } from "lucide-react";
-import { DropdownMenu } from "radix-ui";
-import { useEffect, useRef, useState } from "react";
+import { ArrowUp, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
+import { DropdownMenu, Tabs } from "radix-ui";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import remarkGfm from "remark-gfm";
 import { useApi, keys, useOverview, useSession, useSessions, type ConnectView, type SessionDetail } from "../api.ts";
 import { History } from "../History.tsx";
 import {
-  PROCESS_LABEL, STATUS_LABEL, absoluteTime, agentLabel, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusTone, threadNamer, turnResult,
+  PROCESS_LABEL, RUNTIME_LABEL, STATUS_LABEL, absoluteTime, agentLabel, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusTone, threadNamer, turnResult,
 } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Empty, ICON, IconButton, Loading, Menu, MobileBack, Pill, Tip, SlackLogo } from "../ui.tsx";
+import { Button, ConnectKindIcon, Empty, ICON, IconButton, Loading, Menu, MobileBack, Pill, RuntimeLogo, SlackLogo, Tip } from "../ui.tsx";
 
 export function SessionPage() {
   const { key } = useParams();
@@ -43,13 +43,17 @@ function workspaceUrl(connect: ConnectView | undefined): string | null {
 }
 
 function SessionView({ sessionKey }: { sessionKey: string }) {
-  const isMine = useIsMine();
-  const api = useApi();
   const station = useStation();
   const link = useLink();
   const detail = useSession(sessionKey);
   const overview = useOverview();
-  const client = useQueryClient();
+  // The side panel stays open on wide screens unless closed; on narrow ones it opens on demand, over the chat.
+  const [panel, setPanel] = useState<boolean>(() => localStorage.getItem("ember.sidePanel") !== "0" && window.matchMedia("(min-width: 1101px)").matches);
+  const [tab, setTab] = useState(() => localStorage.getItem("ember.sideTab") ?? "history");
+  const togglePanel = (open: boolean) => {
+    setPanel(open);
+    localStorage.setItem("ember.sidePanel", open ? "1" : "0");
+  };
   if (detail.isPending) return <Loading label={station.name ? `正在从 ${station.name} 读取会话…` : "正在读取会话…"} />;
   if (detail.isError) return <Empty><p>读不到这个会话：{detail.error.message}</p></Empty>;
   const { session, threads, chats } = detail.data;
@@ -70,8 +74,6 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
           {station.name && <span className="station-tag">{station.name}</span>}
           <h1>{sessionTitle(session, name)}</h1>
           <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
-          <CreatorText creator={session.creator} verb="发起" />
-          <PeopleStack people={session.participants} max={6} />
         </div>
         <div className="page-bar-actions">
           {slackThreads.length > 1
@@ -81,14 +83,72 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
                 <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
               </Tip>
             )}
+          <IconButton label={panel ? "收起侧栏" : "执行历史与详情"} icon={panel ? PanelRightClose : PanelRightOpen} aria-pressed={panel} onClick={() => togglePanel(!panel)} />
         </div>
       </header>
-      {/* Without a chat the history is the page, with the composer under it; once someone writes, the chat takes the middle and the history moves to the right. */}
-      <div className="session-body" data-chat={Boolean(chat)}>
-        {chat && <ChatPanel detail={detail.data} chat={chat} />}
-        <History detail={detail.data} connect={connect} state={<SessionState detail={detail.data} />} actions={<SessionActions detail={detail.data} />} />
+      {/* The chat is the page; the session's history and details sit in a tab set on the right. */}
+      <div className="session-body" data-panel={panel}>
+        <ChatPanel detail={detail.data} chat={chat} />
+        {panel && (
+          <Tabs.Root className="side-panel" value={tab} onValueChange={(v) => { setTab(v); localStorage.setItem("ember.sideTab", v); }}>
+            <div className="side-tabs">
+              <Tabs.List className="side-tab-list" aria-label="会话侧栏">
+                <Tabs.Trigger className="side-tab" value="history">执行历史</Tabs.Trigger>
+                <Tabs.Trigger className="side-tab" value="details">详情</Tabs.Trigger>
+              </Tabs.List>
+              <IconButton label="收起侧栏" icon={X} onClick={() => togglePanel(false)} />
+            </div>
+            <Tabs.Content className="side-content" value="history">
+              <History detail={detail.data} connect={connect} state={<SessionState detail={detail.data} />} actions={<SessionActions detail={detail.data} />} />
+            </Tabs.Content>
+            <Tabs.Content className="side-content" value="details">
+              <SessionDetails detail={detail.data} connect={connect} base={base} />
+            </Tabs.Content>
+          </Tabs.Root>
+        )}
       </div>
-      {!chat && <Composer sessionKey={session.key} className="composer-bare" />}
+    </div>
+  );
+}
+
+/** What a session is: where it runs, what runs it, who is in it, where it is talked about. */
+function SessionDetails({ detail, connect, base }: { detail: SessionDetail; connect: ConnectView | undefined; base: string | null }) {
+  const { session } = detail;
+  const station = useStation();
+  const link = useLink();
+  const name = threadNamer(detail);
+  const threads = detail.threads.filter((t) => t.channel !== "EMBER");
+  const row = (label: string, value: ReactNode) => <div className="detail-row"><dt>{label}</dt><dd>{value}</dd></div>;
+  return (
+    <div className="session-details">
+      <dl className="details">
+        {station.name && row("Station", station.name)}
+        {row("连接", connect ? <Link to={link(`/connects/${connect.id}`)} className="detail-link"><ConnectKindIcon kind={connect.kind} size={13} />{connect.name}</Link> : session.connect)}
+        {row("运行时", <span className="detail-inline"><RuntimeLogo runtime={session.runtime} size={13} />{RUNTIME_LABEL[session.runtime]}</span>)}
+        {row("模型", agentLabel(detail.transcript?.usage?.model ?? session.model, session.effort))}
+        {row("发起", <CreatorText creator={session.creator} verb="发起" />)}
+        {row("参与", <span className="detail-inline"><PeopleStack people={session.participants} max={8} />{session.participants?.length ?? 0} 人</span>)}
+        {row("状态", <SessionState detail={detail} />)}
+        {row("创建", absoluteTime(session.createdAt))}
+        {row("最近活动", `${relativeTime(session.lastActiveAt)}`)}
+      </dl>
+      {threads.length > 0 && (
+        <section className="details-section">
+          <h3>Slack thread</h3>
+          <ul className="details-list">
+            {threads.map((t) => {
+              const url = slackThreadUrl(base, t.channel, t.threadTs);
+              const { where, when } = name(t.channel, t.threadTs);
+              return (
+                <li key={`${t.channel}/${t.threadTs}`}>
+                  {url ? <a href={url} target="_blank" rel="noopener" className="detail-link"><SlackLogo size={13} />{where}</a> : <span className="detail-inline"><SlackLogo size={13} />{where}</span>}
+                  <span className="muted">{when} 开始 · {t.messages} 条消息</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
@@ -166,11 +226,12 @@ function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | nu
 }
 
 /** ember's own chat with the session: what people type reaches the agent like a Slack message; it answers with chat_post. */
-function ChatPanel({ detail, chat }: { detail: SessionDetail; chat: SessionDetail["chats"][number] }) {
+function ChatPanel({ detail, chat }: { detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined }) {
   const list = useRef<HTMLDivElement>(null);
+  const messages = chat?.messages ?? [];
   useEffect(() => {
     if (list.current) list.current.scrollTop = list.current.scrollHeight;
-  }, [chat.messages.length]);
+  }, [messages.length]);
   const status = sessionStatus(detail.session);
   const busy = status === "running" || status === "queued";
   const member = usePerson();
@@ -181,7 +242,13 @@ function ChatPanel({ detail, chat }: { detail: SessionDetail; chat: SessionDetai
   return (
     <section className="chat" aria-label="对话">
       <div className="chat-list" ref={list}>
-        {chat.messages.map((m) => m.role === "person" ? (
+        {messages.length === 0 && (
+          <div className="chat-empty">
+            <p>在这里给这个会话发消息，agent 会在这里回复。</p>
+            <p className="muted">{detail.threads.some((t) => t.channel !== "EMBER") ? "它在 Slack 里的来往，在右边的执行历史里能看到。" : ""}</p>
+          </div>
+        )}
+        {messages.map((m) => m.role === "person" ? (
           <div key={m.ts} className="msg msg-human">
             <div className="msg-bubble">{m.text}</div>
             <div className="msg-meta">{person(m.user)} · <span title={absoluteTime(m.createdAt)}>{relativeTime(m.createdAt)}</span></div>
@@ -195,7 +262,7 @@ function ChatPanel({ detail, chat }: { detail: SessionDetail; chat: SessionDetai
             <div className="markdown"><Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown></div>
           </div>
         ))}
-        {busy && chat.messages.at(-1)?.role === "person" && (
+        {busy && messages.at(-1)?.role === "person" && (
           <div className="chat-typing"><span className="activity-pulse inline" aria-hidden="true" />正在处理…</div>
         )}
       </div>
