@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, ExternalLink, KeyRound, LogIn, Pencil, Plus,
 import { Collapsible } from "radix-ui";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useApi, keys, useOverview, type AccessKind, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
+import { useApi, keys, useOverview, type AccessKind, type Overview, type ProfileInput, type ProfileView, type RuntimeKind } from "../api.ts";
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Choices, ConnectKindIcon, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
@@ -147,7 +147,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
   const toast = useToast();
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(profile.name);
-  const save = useMutation({ mutationFn: (input: Parameters<typeof api.putProfile>[1]) => api.putProfile(profile.id, input), onSuccess: apply });
+  const save = useMutation({ mutationFn: (input: ProfileInput) => api.putProfile(profile.id, input), onSuccess: apply });
   const remove = useMutation({
     mutationFn: () => api.deleteProfile(profile.id),
     onSuccess: (data) => { apply(data); toast("已删除账号"); navigate(link("/settings/accounts")); },
@@ -222,7 +222,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
   );
 }
 
-function AccessSection({ profile, onSave, busy }: { profile: ProfileView; onSave(input: Parameters<typeof api.putProfile>[1], done: () => void): void; busy: boolean }) {
+function AccessSection({ profile, onSave, busy }: { profile: ProfileView; onSave(input: ProfileInput, done: () => void): void; busy: boolean }) {
   const [kind, setKind] = useState<AccessKind>(profile.access.kind);
   const [key, setKey] = useState("");
   const changedKind = kind !== profile.access.kind;
@@ -256,7 +256,7 @@ function AccessSection({ profile, onSave, busy }: { profile: ProfileView; onSave
 interface EnvRow { row: number; key: string; value: string; masked: string | null; original: string | null }
 let nextRow = 1;
 
-function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(input: Parameters<typeof api.putProfile>[1]): void; busy: boolean }) {
+function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(input: ProfileInput): void; busy: boolean }) {
   const [home, setHome] = useState(profile.home);
   const [model, setModel] = useState(profile.model ?? "");
   const [rows, setRows] = useState<EnvRow[]>(() => profile.env.map((e) => ({ row: nextRow++, key: e.key, value: e.secret ? "" : e.value, masked: e.secret ? e.value : null, original: e.key })));
