@@ -1,10 +1,27 @@
 // Do claude and codex actually call tools with the spike model? Memory numbers
 // from turns that never ran a tool would be meaningless. Usage: node spike/tool-check.ts [cwd]
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
 import { claudeEnv, codexEnv, MODEL, report } from "./lib.ts";
 
-const run = promisify(execFile);
+/** Runs a command with stdin closed (both CLIs otherwise wait on it). Rejects on non-zero exit. */
+function run(command: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv; timeout: number }):
+  Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const child = spawn(command, args, { cwd: options.cwd, env: options.env, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    const timer = setTimeout(() => child.kill("SIGTERM"), options.timeout);
+    child.on("close", (code, signal) => {
+      clearTimeout(timer);
+      const elapsed = `${Math.round((Date.now() - started) / 1000)}s`;
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(Object.assign(new Error(`exit ${code ?? signal} after ${elapsed}`), { stderr: `exit ${code ?? signal} after ${elapsed}: ${stderr}` }));
+    });
+  });
+}
 const cwd = process.argv[2] ?? process.cwd();
 const ask = "Use your shell tool to run `ls -la`, then reply with only the number of entries it printed.";
 const rows: Record<string, unknown>[] = [];
