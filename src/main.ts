@@ -24,8 +24,11 @@ const reaped = await reapStaleGroups(store);
 if (reaped > 0) log.warn("reaped runtime processes left by a previous run", { count: reaped });
 
 const mcpUrl = `http://${settings.config.http.host}:${settings.config.http.port}/mcp`;
-const bots = new BotConnections((bot) => new SlackSurface(bot.slack), (botId, message) => hub.accept(botId, message));
-const hub = new Hub({
+const bots: BotConnections = new BotConnections(
+  (bot) => new SlackSurface(bot.slack),
+  (botId, message): Promise<void> => hub.accept(botId, message),
+);
+const hub: Hub = new Hub({
   config: () => settings.config,
   store,
   chats: bots.chats,
