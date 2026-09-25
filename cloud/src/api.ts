@@ -88,7 +88,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   }
   const byId = /^\/v1\/invitations\/([0-9A-HJKMNP-TV-Z]{26})\/(accept|decline)$/.exec(path);
   if (byId && method === "POST") {
-    return directory(() => (byId[2] === "accept" ? dir.acceptById(sub, claims.email, byId[1]!) : dir.declineById(claims.email, byId[1]!)));
+    if (byId[2] === "accept") return directory(() => dir.acceptById(sub, claims.email, byId[1]!));
+    return directory(() => dir.declineById(claims.email, byId[1]!));
   }
   if (path === "/v1/workspaces" && method === "POST") return directory(() => dir.createWorkspace(sub, text("name")));
   if (path === "/v1/invitations/preview" && method === "POST") return directory(() => dir.previewInvitation(text("token")));
