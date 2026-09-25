@@ -98,7 +98,7 @@ export function SessionRow({ session: s, connect, station }: { session: SessionS
         <span className="nav-session-meta">
           <PeopleStack people={s.participants} />
           {station && <span className="station-tag small">{station}</span>}
-          <span className="nav-text">{s.scope === "all" ? `${name} · 单会话` : name}</span>
+          <span className="nav-text" />
           <span className="nav-time">{relativeTime(s.lastActiveAt)}</span>
         </span>
       </span>

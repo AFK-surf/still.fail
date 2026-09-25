@@ -213,7 +213,7 @@ export function modeShort(mode: ConnectMode): string {
 
 /** What a session is called in lists: its given title, else its first message. */
 export function sessionTitle(s: { title: string | null; firstText: string | null; scope: string }, connectName: string): string {
-  return s.title || cleanText(s.firstText) || (s.scope === "all" ? `${connectName} 的会话` : "（没有消息）");
+  return s.title || cleanText(s.firstText) || "（还没有消息）";
 }
 
 /** How long until a future moment, in words: "3 天后", "5 小时后". */
