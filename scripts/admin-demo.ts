@@ -79,8 +79,11 @@ const ui = join(import.meta.dirname, "..", "dist", "admin");
 createServer((req, res) => {
   const pathname = new URL(req.url ?? "/", "http://demo").pathname;
   if (pathname.startsWith("/admin/api/")) return void api.handle(req, res);
+  // Files by path; anything else (client routes, session keys with dots) gets the app shell.
   const rel = normalize(pathname.replace(/^\/admin\/?/, "")) || "index.html";
-  void readFile(join(ui, extname(rel) ? rel : "index.html"))
-    .then((body) => res.writeHead(200, { "content-type": { ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" }[extname(rel)] ?? "text/html" }).end(body))
+  const types: Record<string, string> = { ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
+  void readFile(join(ui, rel))
+    .then((body) => res.writeHead(200, { "content-type": types[extname(rel)] ?? "text/html" }).end(body))
+    .catch(() => readFile(join(ui, "index.html")).then((body) => res.writeHead(200, { "content-type": "text/html" }).end(body)))
     .catch(() => res.writeHead(404).end());
 }).listen(port, "127.0.0.1", () => console.log(`admin demo on http://127.0.0.1:${port}/admin, data ${dataDir}; claude transcripts ${claudeIds.length}, codex ${codexIds.length}`));
