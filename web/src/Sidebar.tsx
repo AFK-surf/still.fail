@@ -1,14 +1,15 @@
-import { ArrowLeft, KeyRound, Plus, Settings } from "lucide-react";
-import { useLink } from "./station.tsx";
-import { useMemo, useState } from "react";
+import { ArrowLeft, KeyRound, Plug, Settings } from "lucide-react";
+import { useIsMine, useLink } from "./station.tsx";
+import { useMemo } from "react";
+import { MineFilter, useOnlyMine } from "./components.tsx";
 import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
-import { connectionText, dayLabel, modeShort, presence, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
-import { NewConnectDialog } from "./pages/Connect.tsx";
-import { ConnectKindIcon, ICON, IconButton, StatusDot, Tip } from "./ui.tsx";
+import { dayLabel, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
+import { ICON, Tip } from "./ui.tsx";
 
 export function Sidebar() {
-  const settings = useLocation().pathname.startsWith("/settings");
+  const path = useLocation().pathname;
+  const settings = path.startsWith("/settings") || path.startsWith("/connects");
   return (
     <nav className="sidebar" aria-label="导航">
       <div className="brand">
@@ -22,65 +23,62 @@ export function Sidebar() {
 
 function SettingsNav() {
   const link = useLink();
+  const connectOpen = useLocation().pathname.startsWith("/connects");
   return (
     <div className="nav-scroll">
       <NavLink className="nav-row" to={link("/sessions")}><ArrowLeft {...ICON} />返回会话</NavLink>
       <div className="nav-heading">设置</div>
+      <NavLink className="nav-row" to={link("/settings/connects")} aria-current={connectOpen ? "page" : undefined}><Plug {...ICON} />连接</NavLink>
       <NavLink className="nav-row" to={link("/settings/accounts")}><KeyRound {...ICON} />运行时账号</NavLink>
     </div>
   );
+}
+
+/** Sessions, newest first, grouped by day; optionally only the ones the viewer started. */
+export function useSessionGroups<T extends { session: SessionSummary }>(rows: T[]): { label: string; items: T[] }[] {
+  const [onlyMine] = useOnlyMine();
+  const isMine = useIsMine();
+  return useMemo(() => {
+    const list = rows.filter((r) => !onlyMine || isMine(r.session.creator)).sort((a, b) => b.session.lastActiveAt - a.session.lastActiveAt);
+    const out: { label: string; items: T[] }[] = [];
+    for (const r of list) {
+      const label = dayLabel(r.session.lastActiveAt);
+      if (out.at(-1)?.label !== label) out.push({ label, items: [] });
+      out.at(-1)!.items.push(r);
+    }
+    return out;
+    // isMine is stable for a given viewer
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, onlyMine]);
 }
 
 function MainNav() {
   const link = useLink();
   const overview = useOverview();
   const sessions = useSessions();
-  const [adding, setAdding] = useState(false);
+  const [onlyMine] = useOnlyMine();
   const connects = overview.data?.connects ?? [];
   const byId = useMemo(() => new Map(connects.map((c) => [c.id, c])), [connects]);
-  const groups = useMemo(() => {
-    const list = [...(sessions.data ?? [])].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
-    const out: { label: string; items: SessionSummary[] }[] = [];
-    for (const s of list) {
-      const label = dayLabel(s.lastActiveAt);
-      if (out.at(-1)?.label !== label) out.push({ label, items: [] });
-      out.at(-1)!.items.push(s);
-    }
-    return out;
-  }, [sessions.data]);
+  const rows = useMemo(() => (sessions.data ?? []).map((session) => ({ session })), [sessions.data]);
+  const groups = useSessionGroups(rows);
 
   return (
     <>
+      <MineFilter label="会话" />
       <div className="nav-scroll">
         {groups.length === 0 && !sessions.isPending && (
-          <p className="nav-empty">{connects.length ? "在 Slack 里 @ 它，会话就会出现在这里。" : "先在下面添加一个连接。"}</p>
+          <p className="nav-empty">{onlyMine ? "没有你发起的会话。" : connects.length ? "在 Slack 里 @ 它，会话就会出现在这里。" : "先到「设置 → 连接」添加一个连接。"}</p>
         )}
         {groups.map((group) => (
           <section key={group.label} aria-label={group.label}>
             <div className="nav-heading">{group.label}</div>
-            {group.items.map((s) => <SessionRow key={s.key} session={s} connect={byId.get(s.connect)} />)}
+            {group.items.map(({ session: s }) => <SessionRow key={s.key} session={s} connect={byId.get(s.connect)} />)}
           </section>
         ))}
       </div>
-      <section className="nav-connects" aria-label="连接">
-        <div className="nav-heading nav-heading-action">
-          <span>连接</span>
-          <IconButton label="添加连接" icon={Plus} onClick={() => setAdding(true)} />
-        </div>
-        {connects.length === 0 && <p className="nav-empty">还没有连接。</p>}
-        {connects.map((c) => (
-          <NavLink key={c.id} className="nav-row" to={link(`/connects/${c.id}`)}>
-            <ConnectKindIcon kind={c.kind} />
-            <span className="nav-text">{c.name}</span>
-            <span className="nav-note">{c.connection.state === "connected" ? modeShort(c.mode) : connectionText(c.connection)}</span>
-            <StatusDot state={presence(c.connection)} label={connectionText(c.connection)} />
-          </NavLink>
-        ))}
-      </section>
       <div className="nav-foot">
         <NavLink className="nav-row" to={link("/settings")}><Settings {...ICON} />设置</NavLink>
       </div>
-      <NewConnectDialog open={adding} onClose={() => setAdding(false)} />
     </>
   );
 }

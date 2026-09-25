@@ -12,8 +12,10 @@ import { connectionText, dayLabel, modeShort, presence } from "../format.ts";
 import { AccountPage, AccountsPage } from "../pages/Accounts.tsx";
 import { ConnectPage, NewConnectDialog } from "../pages/Connect.tsx";
 import { SessionPage } from "../pages/Session.tsx";
-import { SessionRow } from "../Sidebar.tsx";
-import { StationContext, type Station } from "../station.tsx";
+import { SessionRow, useSessionGroups } from "../Sidebar.tsx";
+import { MineFilter, useOnlyMine } from "../components.tsx";
+import { AccountSettings, ConnectsSettings, GeneralSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
+import { MeContext, StationContext, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Select, StatusDot } from "../ui.tsx";
 import { signIn, signOut, type Account } from "./accounts.ts";
@@ -45,7 +47,7 @@ function transportFor(sub: string, ws: string, station: string, relay: string): 
   return t;
 }
 
-export function WorkspaceShell({ entry, children }: { entry: WorkspaceEntry; children?: ReactNode }) {
+export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const view = useQuery({
     queryKey: ["cloud", "workspace", entry.id, entry.account.sub],
     queryFn: () => cloud.workspace(entry.account.sub, entry.id),
@@ -53,25 +55,38 @@ export function WorkspaceShell({ entry, children }: { entry: WorkspaceEntry; chi
   });
   const stations = useMemo<Station[]>(() => (view.data?.stations ?? []).map((s) => ({
     id: s.id, name: s.name, online: online(s),
-    base: `/w/${entry.id}/s/${s.id}`,
+    base: `/w/${entry.id}/s/${s.id}`, settings: `/w/${entry.id}/settings`,
     transport: transportFor(entry.account.sub, entry.id, s.id, entry.relay),
   })), [view.data, entry]);
-  const detail = /\/(s\/[^/]+\/.+|settings)/.test(useLocation().pathname);
+  const path = useLocation().pathname;
+  const detail = /\/(s\/[^/]+\/.+|settings)/.test(path);
+  // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
+  const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
+  const me = useMemo(() => ({ id: entry.account.email, email: entry.account.email }), [entry.account.email]);
 
   return (
-    <div className="shell" data-detail={detail}>
-      {stations.filter((s) => s.online).map((s) => <Live key={s.id} station={s} />)}
-      <WorkspaceSidebar entry={entry} view={view.data} stations={stations} />
-      <main className="main">
-        {children ?? (
+    <MeContext.Provider value={me}>
+      <div className="shell" data-detail={detail}>
+        {stations.filter((s) => s.online).map((s) => <Live key={s.id} station={s} />)}
+        {settings
+          ? <nav className="sidebar" aria-label="设置"><div className="account-slot"><WorkspaceSwitcher current={entry} /></div><SettingsNav entry={entry} /></nav>
+          : <WorkspaceSidebar entry={entry} stations={stations} />}
+        <main className="main">
           <Routes>
             <Route index element={<WorkspaceHome view={view.data} stations={stations} />} />
+            <Route path="settings" element={<Navigate to="general" replace />} />
+            <Route path="settings/account" element={<AccountSettings entry={entry} />} />
+            <Route path="settings/general" element={<GeneralSettings entry={entry} />} />
+            <Route path="settings/members" element={<MembersSettings entry={entry} />} />
+            <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
+            <Route path="settings/connects" element={<ConnectsSettings entry={entry} stations={stations} />} />
+            <Route path="settings/runtime" element={<RuntimeSettings entry={entry} stations={stations} />} />
             <Route path="s/:station/*" element={<StationPages stations={stations} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
-        )}
-      </main>
-    </div>
+        </main>
+      </div>
+    </MeContext.Provider>
   );
 }
 
@@ -118,35 +133,26 @@ function WorkspaceHome({ view, stations }: { view: WorkspaceView | undefined; st
 
 // ── sidebar ─────────────────────────────────────────────────────────────
 
-function WorkspaceSidebar({ entry, view, stations }: { entry: WorkspaceEntry; view: WorkspaceView | undefined; stations: Station[] }) {
+function WorkspaceSidebar({ entry, stations }: { entry: WorkspaceEntry; stations: Station[] }) {
   const live = stations.filter((s) => s.online);
   const sessions = useQueries({ queries: live.map((s) => ({ queryKey: keys.sessions(s.id), queryFn: () => makeApi(s.transport).sessions() })) });
   const overviews = useQueries({ queries: live.map((s) => ({ queryKey: keys.overview(s.id), queryFn: () => makeApi(s.transport).overview(), refetchInterval: 10_000 })) });
-  const [adding, setAdding] = useState<Station | null>(null);
+  const [onlyMine] = useOnlyMine();
   const many = stations.length > 1;
-
-  const groups = useMemo(() => {
-    const rows: { session: SessionSummary; station: Station; overview: Overview | undefined }[] = [];
-    live.forEach((station, i) => {
-      for (const session of sessions[i]?.data ?? []) rows.push({ session, station, overview: overviews[i]?.data });
-    });
-    rows.sort((a, b) => b.session.lastActiveAt - a.session.lastActiveAt);
-    const out: { label: string; items: typeof rows }[] = [];
-    for (const row of rows) {
-      const label = dayLabel(row.session.lastActiveAt);
-      if (out.at(-1)?.label !== label) out.push({ label, items: [] });
-      out.at(-1)!.items.push(row);
-    }
-    return out;
-  }, [live, sessions, overviews]);
+  const rows = useMemo(() => live.flatMap((station, i) =>
+    (sessions[i]?.data ?? []).map((session) => ({ session, station, overview: overviews[i]?.data as Overview | undefined }))), [live, sessions, overviews]);
+  const groups = useSessionGroups(rows);
   const failed = live.filter((_, i) => sessions[i]?.isError);
+  const offline = stations.filter((s) => !s.online);
 
   return (
     <nav className="sidebar" aria-label="导航">
       <div className="account-slot"><WorkspaceSwitcher current={entry} /></div>
+      <MineFilter label="会话" />
       <div className="nav-scroll">
         {failed.map((s) => <p key={s.id} className="nav-empty nav-error">连不上「{s.name}」，正在重试…</p>)}
-        {groups.length === 0 && !failed.length && <p className="nav-empty">{stations.length ? "还没有会话。在 Slack 里 @ 它们，或者打开会话新建对话。" : "还没有 station。"}</p>}
+        {offline.length > 0 && <p className="nav-empty">{offline.map((s) => s.name).join("、")} 离线，它们的会话暂时看不到。</p>}
+        {groups.length === 0 && !failed.length && <p className="nav-empty">{onlyMine ? "没有你发起的会话。" : stations.length ? "还没有会话。在 Slack 里 @ 它们，或者打开会话新建对话。" : "还没有 station，到「设置 → Station」添加。"}</p>}
         {groups.map((group) => (
           <section key={group.label} aria-label={group.label}>
             <div className="nav-heading">{group.label}</div>
@@ -158,37 +164,9 @@ function WorkspaceSidebar({ entry, view, stations }: { entry: WorkspaceEntry; vi
           </section>
         ))}
       </div>
-      <section className="nav-connects" aria-label="连接">
-        {stations.map((station) => {
-          const overview = station.online ? overviews[live.indexOf(station)]?.data : undefined;
-          return (
-            <div key={station.id} className="station-group">
-              <div className="nav-heading nav-heading-action">
-                <span className="station-heading"><StatusDot state={station.online ? "online" : "offline"} label={station.online ? "在线" : "离线"} />{station.name}</span>
-                {station.online && <IconButton label={`在「${station.name}」添加连接`} icon={Plus} onClick={() => setAdding(station)} />}
-              </div>
-              {!station.online && <p className="nav-empty">离线</p>}
-              {overview?.connects.map((c) => (
-                <NavLink key={c.id} className="nav-row" to={`${station.base}/connects/${c.id}`}>
-                  <ConnectKindIcon kind={c.kind} />
-                  <span className="nav-text">{c.name}</span>
-                  <span className="nav-note">{c.connection.state === "connected" ? modeShort(c.mode) : connectionText(c.connection)}</span>
-                  <StatusDot state={presence(c.connection)} label={connectionText(c.connection)} />
-                </NavLink>
-              ))}
-              {overview && overview.connects.length === 0 && <p className="nav-empty">还没有连接。</p>}
-            </div>
-          );
-        })}
-      </section>
       <div className="nav-foot">
         <NavLink className="nav-row" to={`/w/${entry.id}/settings`}><Settings {...ICON} />设置</NavLink>
       </div>
-      {adding && (
-        <StationContext.Provider value={adding}>
-          <NewConnectDialog open onClose={() => setAdding(null)} />
-        </StationContext.Provider>
-      )}
     </nav>
   );
 }

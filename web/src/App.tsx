@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useParams } from "react-router";
 import { ApiError, useLiveUpdates, useOverview } from "./api.ts";
 import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
+import { ConnectsPage } from "./pages/Connects.tsx";
 import { SessionPage } from "./pages/Session.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
@@ -41,7 +42,8 @@ export function App() {
             <Route path="/sessions/:key?" element={<SessionPage />} />
             <Route path="/connects/:id" element={<ConnectPage />} />
             <Route path="/bots/:id" element={<LegacyBot />} />
-            <Route path="/settings" element={<Navigate to="/settings/accounts" replace />} />
+            <Route path="/settings" element={<Navigate to="/settings/connects" replace />} />
+            <Route path="/settings/connects" element={<ConnectsPage />} />
             <Route path="/settings/accounts" element={<AccountsPage />} />
             <Route path="/settings/accounts/:id" element={<AccountPage />} />
             <Route path="*" element={<Navigate to="/sessions" replace />} />

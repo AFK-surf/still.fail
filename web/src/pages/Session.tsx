@@ -1,7 +1,8 @@
 // A session: its execution history is the page; what can be done to it sits
 // with the history. A chat can be opened beside it: ember's own chat, which
 // reaches the agent the way a Slack thread does.
-import { useStation, useLink } from "../station.tsx";
+import { useIsMine, useLink, useStation } from "../station.tsx";
+import { CreatorText } from "../components.tsx";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, MessageSquarePlus, MessagesSquare, Square, Unplug, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
@@ -42,6 +43,7 @@ function workspaceUrl(connect: ConnectView | undefined): string | null {
 }
 
 function SessionView({ sessionKey }: { sessionKey: string }) {
+  const isMine = useIsMine();
   const api = useApi();
   const station = useStation();
   const link = useLink();
@@ -70,8 +72,9 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const single = slackThreads.length === 1 ? slackThreads[0] : undefined;
   const singleUrl = single ? slackThreadUrl(base, single.channel, single.threadTs) : null;
   const status = sessionStatus(session);
-  const chat = openChat === "0" ? undefined : chats.find((c) => c.threadTs === openChat) ?? chats.at(-1);
-  const latestChat = chats.at(-1);
+  const chat = openChat === "0" ? undefined : chats.find((c) => c.threadTs === openChat) ?? latestChat;
+  const mine = chats.filter((c) => isMine(c.creator));
+  const latestChat = mine.at(-1) ?? chats.at(-1);
 
   return (
     <div className="session-page">
@@ -81,6 +84,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
           {station.name && <span className="station-tag">{station.name}</span>}
           <h1>{sessionTitle(session, name)}</h1>
           <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
+          <CreatorText creator={session.creator} verb="发起" />
         </div>
         <div className="page-bar-actions">
           {slackThreads.length > 1
@@ -191,15 +195,17 @@ function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating 
     const value = text.trim();
     if (value && !send.isPending) send.mutate(value);
   };
+  const isMine = useIsMine();
   const chatName = (c: SessionDetail["chats"][number], i: number) => c.title ?? `对话 ${i + 1}`;
+  const owner = (c: SessionDetail["chats"][number]) => (isMine(c.creator) ? "你" : c.creator?.name ?? "");
 
   return (
     <section className="chat" aria-label="对话">
       <header className="chat-head">
         {detail.chats.length > 1
-          ? <Menu label="切换对话" items={detail.chats.map((c, i) => ({ label: `${chatName(c, i)} · ${relativeTime(c.createdAt)}`, onSelect: () => onSwitch(c.threadTs) }))} />
+          ? <Menu label="切换对话" items={detail.chats.map((c, i) => ({ c, i })).sort((a, b) => Number(isMine(b.c.creator)) - Number(isMine(a.c.creator))).map(({ c, i }) => ({ label: `${chatName(c, i)} · ${owner(c)} · ${relativeTime(c.createdAt)}`, onSelect: () => onSwitch(c.threadTs) }))} />
           : <span className="kind-icon"><MessagesSquare {...ICON} /></span>}
-        <strong className="chat-title">{chatName(chat, detail.chats.indexOf(chat))}</strong>
+        <strong className="chat-title">{chatName(chat, detail.chats.indexOf(chat))}<span className="chat-owner">{owner(chat) && ` · ${owner(chat)}创建`}</span></strong>
         <IconButton label="新建对话" icon={MessageSquarePlus} onClick={onNew} disabled={creating} />
         <IconButton label="关闭对话" icon={X} onClick={onClose} />
       </header>

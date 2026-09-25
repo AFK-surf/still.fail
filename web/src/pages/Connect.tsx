@@ -8,6 +8,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { useApi, keys, useOverview, useSessions, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
 import { connectionText, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, slug, STATUS_LABEL, statusTone } from "../format.ts";
 import { SlackAppSection } from "./SlackApp.tsx";
+import { CreatorText } from "../components.tsx";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
 import {
@@ -51,7 +52,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
   const [deleting, setDeleting] = useState(false);
   const remove = useMutation({
     mutationFn: () => api.deleteConnect(connect.id),
-    onSuccess: (data) => { client.setQueryData(keys.overview(station.id), data); toast("已删除连接"); navigate(link("/sessions")); },
+    onSuccess: (data) => { client.setQueryData(keys.overview(station.id), data); toast("已删除连接"); navigate(`${station.settings}/connects`); },
   });
   const rename = () => {
     setEditingName(false);
@@ -60,7 +61,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
 
   return (
     <div className="page page-narrow">
-      <MobileBack to={link("/sessions")} label="返回" />
+      <MobileBack to={`${station.settings}/connects`} label="连接" />
       <header className="identity">
         <ConnectKindIcon kind={connect.kind} size={22} tile />
         <div className="identity-text">
@@ -76,6 +77,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
             <span className="kind-tag">Slack</span>
             <span>{modeText(connect.mode, connect.requireMention)}</span>
             <span>{connectSubtitle(connect, overview.profiles)}</span>
+            {connect.createdBy && <CreatorText creator={{ id: connect.createdBy.id, name: connect.createdBy.name, email: connect.createdBy.id.includes("@") ? connect.createdBy.id : null, via: connect.createdBy.id === "local" ? "local" : "cloud" }} verb="添加" />}
           </p>
         </div>
         <Menu items={[
