@@ -187,6 +187,13 @@ export class Store {
       .run(Date.now(), outcome, detail, declared, id);
   }
 
+  listTurns(sessionKey: string): { id: string; kind: TurnKind; outcome: string | null; detail: string | null; declared: string | null }[] {
+    return (this.#db.prepare("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at").all(sessionKey) as Row[]).map((r) => ({
+      id: r.id as string, kind: r.kind as TurnKind, outcome: (r.outcome as string | null) ?? null,
+      detail: (r.detail as string | null) ?? null, declared: (r.declared as string | null) ?? null,
+    }));
+  }
+
   // ── runtime process groups ─────────────────────────────────────────────
 
   recordProcess(pgid: number, startedAt: number, runtime: RuntimeKind, label: string): void {
