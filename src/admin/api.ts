@@ -126,6 +126,19 @@ export class AdminApi {
     }
     if (resource === "connects" && id && !action && method === "PUT") return send(res, 200, this.#putConnect(id, await body(req), viewer));
     if (resource === "connects" && id && !action && method === "DELETE") return send(res, 200, this.#deleteConnect(id, viewer));
+    if (resource === "connects" && id && action === "session" && method === "POST") {
+      const input = await body(req);
+      const target = typeof input.session === "string" && input.session ? input.session : null;
+      const key = this.#deps.hub.bindSingle(id, target, typeof input.title === "string" ? input.title : undefined);
+      log.info("single-session binding changed from the admin page", { connect: id, session: key, by: viewer.via === "access" ? viewer.email : "local" });
+      return send(res, 200, { session: key });
+    }
+    if (resource === "sessions" && id && action === "title" && method === "POST") {
+      const input = await body(req);
+      if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
+      this.#deps.store.setTitle(id, typeof input.title === "string" && input.title.trim() ? input.title.trim().slice(0, 80) : null);
+      return send(res, 200, { ok: true });
+    }
     if (resource === "connects" && id && action === "reconnect" && method === "POST") {
       await this.#deps.connections.reconcile(this.#deps.settings.config);
       return send(res, 200, { ok: true });
@@ -168,6 +181,7 @@ export class AdminApi {
         slack: { appToken: mask(c.slack.appToken), botToken: mask(c.slack.botToken) },
         connection: this.#deps.connections.state(c),
         sessions: sessions.filter((s) => s.connect === c.id).length,
+        session: c.mode === "single-session" ? this.#deps.store.binding(c.id) ?? null : null,
       })),
       profiles: config.profiles.map((p) => ({
         id: p.id, name: p.name, runtime: p.runtime, access: { kind: p.access.kind, key: mask(p.access.key) },
@@ -186,34 +200,35 @@ export class AdminApi {
     };
   }
 
-  #summary(key: string, stats = this.#deps.store.sessionStats()): SessionSummary {
+  #summary(key: string, stats = this.#deps.store.sessionStats(), bindings = this.#deps.store.listBindings()): SessionSummary {
     const row = this.#deps.store.getSession(key);
     if (!row) throw new HttpError(404, `unknown session ${key}`);
     const { token: _token, ...visible } = row;
-    return { ...visible, process: this.#deps.hub.processState(key), ...(stats.get(key) ?? { turns: 0, pending: 0, firstText: null, lastTurn: null }) };
+    return {
+      ...visible, boundTo: bindings.get(key) ?? [], process: this.#deps.hub.processState(key),
+      ...(stats.get(key) ?? { turns: 0, pending: 0, firstText: null, lastTurn: null }),
+    };
   }
 
   #sessions(connect: string | null): SessionSummary[] {
     const stats = this.#deps.store.sessionStats();
-    return this.#deps.store.listSessions().filter((s) => !connect || s.connect === connect).map((s) => this.#summary(s.key, stats));
+    const bindings = this.#deps.store.listBindings();
+    return this.#deps.store.listSessions().filter((s) => !connect || s.connect === connect).map((s) => this.#summary(s.key, stats, bindings));
   }
 
   async #session(key: string): Promise<SessionDetail> {
     const summary = this.#summary(key);
     const inbound = this.#deps.store.listInbound(key);
-    const chat = this.#deps.connections.chats.get(summary.connect);
+    // Names come from the connect each message arrived through.
+    const chatOf = (connect: string) => this.#deps.connections.chats.get(connect) ?? this.#deps.connections.chats.get(summary.connect);
     const people: Record<string, string> = {};
-    if (chat?.userName) {
-      const ids = [...new Set(inbound.map((m) => m.user))];
-      const names = await Promise.all(ids.map((id) => chat.userName!(id)));
-      ids.forEach((id, i) => { if (names[i]) people[id] = names[i]!; });
-    }
     const channels: Record<string, string> = {};
-    if (chat?.channelName) {
-      const ids = [...new Set(inbound.map((m) => m.channel))];
-      const names = await Promise.all(ids.map((id) => chat.channelName!(id)));
-      ids.forEach((id, i) => { if (names[i]) channels[id] = names[i]!; });
-    }
+    const users = [...new Map(inbound.map((m) => [m.user, m.connect])).entries()];
+    const chans = [...new Map(inbound.map((m) => [m.channel, m.connect])).entries()];
+    await Promise.all([
+      ...users.map(async ([id, via]) => { const n = await chatOf(via)?.userName?.(id); if (n) people[id] = n; }),
+      ...chans.map(async ([id, via]) => { const n = await chatOf(via)?.channelName?.(id); if (n) channels[id] = n; }),
+    ]);
     const profile = this.#deps.settings.config.profiles.find((p) => p.id === summary.profile);
     const path = profile && summary.runtimeSessionId ? transcriptPath(summary.runtime, profile.home, summary.runtimeSessionId) : undefined;
     return {

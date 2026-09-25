@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { parseConfig } from "../src/config.ts";
-import { connectSessionKey, Hub, isStopCommand, sessionKey } from "../src/hub.ts";
+import { Hub, isStopCommand, sessionKey } from "../src/hub.ts";
 import { Store } from "../src/store.ts";
 import { FakeChat, FakeDriver, message, settle } from "./fakes.ts";
 
@@ -280,14 +280,15 @@ test("a single-session connect gathers every thread into one session and replies
   await settle();
   assert.equal(claude.sessions.length, 1);
   assert.equal(store.listSessions().length, 1);
-  assert.equal(store.getSession(connectSessionKey("team"))?.scope, "all");
+  const bound = store.binding("team")!;
+  assert.equal(store.getSession(bound)?.scope, "all");
   assert.match(claude.last.steers[0]!, /thread="C2\/[\d.]+"[\s\S]*build B/);
   assert.doesNotMatch(claude.last.steers.join("\n") + claude.last.prompts.join("\n"), /unrelated chatter/);
   // A reply in a thread the session already follows needs no mention.
   await accept(message({ addressed: false, threadTs: a.threadTs, ts: "9999.8", text: "and tests too", channel: "C1" }), "team");
   await settle();
   assert.match(claude.last.steers.at(-1)!, /and tests too/);
-  await call(connectSessionKey("team"), "chat_post", { to: `C2/${b.threadTs}`, text: "B done" });
+  await call(bound, "chat_post", { to: `C2/${b.threadTs}`, text: "B done" });
   assert.deepEqual(teamChat.posts, [{ thread: { channel: "C2", threadTs: b.threadTs }, text: "B done" }]);
 });
 
@@ -297,6 +298,38 @@ test("a single-session connect without requireMention hears every message", asyn
   await settle();
   assert.equal(claude.sessions.length, 1);
   assert.match(claude.last.prompts[0]!, /anyone around\?/);
+});
+
+test("a single-session connect can be pointed at a new or an existing session", async () => {
+  const { claude, hub, store, accept, teamChat, chat, call } = setup();
+  const first = message({ text: "<@UTEAM> one" });
+  await accept(first, "team");
+  await settle();
+  const old = store.binding("team")!;
+  const fresh = hub.bindSingle("team", null, "值班");
+  assert.notEqual(fresh, old);
+  assert.equal(store.getSession(fresh)?.title, "值班");
+  await accept(message({ text: "<@UTEAM> two" }), "team");
+  await settle();
+  assert.equal(claude.sessions.length, 2, "the new binding got its own runtime session");
+  assert.match(claude.last.prompts[0]!, /two/);
+
+  // Binding a session that another connect started: replies still go out where each thread came in.
+  const m = message({ text: "<@UBOT> from cl" });
+  await accept(m);
+  await settle();
+  const clKey = sessionKey("cl", "C1", m.threadTs);
+  hub.bindSingle("team", clKey);
+  const t = message({ text: "<@UTEAM> via team", channel: "C7" });
+  await accept(t, "team");
+  await settle();
+  assert.equal(store.listInbound(clKey).length, 2);
+  await call(clKey, "chat_post", { to: `C7/${t.threadTs}`, text: "to team thread" });
+  await call(clKey, "chat_post", { to: `C1/${m.threadTs}`, text: "to cl thread" });
+  assert.deepEqual(teamChat.posts.map((p) => p.text), ["to team thread"]);
+  assert.deepEqual(chat.posts.map((p) => p.text), ["to cl thread"]);
+  assert.throws(() => hub.bindSingle("team", sessionKey("gpt", "C1", "1.1")), /unknown session/);
+  assert.throws(() => hub.bindSingle("cl", null), /not single-session/);
 });
 
 test("command parsing", () => {

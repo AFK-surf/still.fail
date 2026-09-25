@@ -21,6 +21,8 @@ export interface ConnectView {
   slack: { appToken: string; botToken: string };
   connection: ConnectState;
   sessions: number;
+  /** The session a single-session connect delivers into; null until its first message or after "new session". */
+  session: string | null;
 }
 
 export interface EnvView {
@@ -76,8 +78,11 @@ export interface TurnSummary {
 export interface SessionSummary {
   key: string;
   connect: string;
-  /** thread: this session is one thread; all: every thread of a single-session connect. */
+  /** thread: started by one thread; all: a single-session connect's session. */
   scope: "thread" | "all";
+  title: string | null;
+  /** Single-session connects currently delivering into it. */
+  boundTo: string[];
   channel: string;
   threadTs: string;
   runtime: RuntimeKind;

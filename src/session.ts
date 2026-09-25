@@ -1,4 +1,4 @@
-// One actor per chat thread. Every change to a session's state runs through
+// One actor per session. Every change to a session's state runs through
 // its serial queue, so runtime events, inbound messages and tool calls never
 // interleave halfway.
 import { randomUUID } from "node:crypto";
@@ -13,9 +13,10 @@ export type DeclaredState = "final" | "block";
 
 export interface SessionDeps {
   store: Store;
-  chat: Pick<ChatSurface, "post" | "botUserId" | "userName">;
-  /** The connect's name, which the agent goes by. */
-  name: string;
+  /** A connect's chat connection, when it is connected. A session hears from and answers through several. */
+  chat(connect: string): Pick<ChatSurface, "post" | "botUserId" | "userName"> | undefined;
+  /** A connect's name, which the agent goes by. */
+  name(connect: string): string;
   drivers: Record<RuntimeKind, AgentDriver>;
   profile(id: string): Profile | undefined;
   mcpUrl: string;
@@ -154,11 +155,10 @@ export class SessionActor {
       .map((m) => threadAddress(m.channel, m.threadTs)));
     const newThreads = new Set(pending.map((m) => threadAddress(m.channel, m.threadTs)).filter((a) => !known.has(a)));
     const names = new Map<string, string>();
-    if (this.#deps.chat.userName) {
-      for (const user of new Set(pending.map((m) => m.user))) {
-        const name = await this.#deps.chat.userName(user);
-        if (name) names.set(user, name);
-      }
+    for (const m of pending) {
+      if (names.has(m.user)) continue;
+      const name = await this.#deps.chat(m.connect)?.userName?.(m.user);
+      if (name) names.set(m.user, name);
     }
     return formatInbound(pending, { newThreads, names });
   }
@@ -190,8 +190,7 @@ export class SessionActor {
       if (this.#turn) this.#deps.store.endTurn(this.#turn.id, "failed", `other: ${message}`, null);
       this.#turn = undefined;
       this.#deps.store.setRunning(this.key, false);
-      const row = this.#row;
-      await this.#deps.chat.post({ channel: row.channel, threadTs: row.threadTs }, `⚠️ 无法启动 agent：${message}`);
+      await this.#notice(`⚠️ 无法启动 agent：${message}`);
       throw error;
     }
   }
@@ -206,6 +205,9 @@ export class SessionActor {
     if (this.#agent) return this.#agent;
     const row = this.#row;
     const driver = this.#deps.drivers[row.runtime];
+    // The agent goes by the name of the connect it currently hears through.
+    const connect = this.#deps.store.latestInbound(this.key)?.connect ?? row.connect;
+    const botUserId = this.#deps.chat(connect)?.botUserId;
     const profile = this.#deps.profile(row.profile);
     if (!profile) throw new Error(`session ${this.key}: profile ${row.profile} is not configured`);
     const base = {
@@ -213,8 +215,8 @@ export class SessionActor {
       cwd: row.workspace,
       ...(row.model ? { model: row.model } : {}),
       instructions: sessionInstructions({
-        name: this.#deps.name,
-        mention: this.#deps.chat.botUserId ? `<@${this.#deps.chat.botUserId}>` : null,
+        name: this.#deps.name(connect),
+        mention: botUserId ? `<@${botUserId}>` : null,
         workspace: row.workspace, reposDir: this.#deps.reposDir, memoryPath: this.#deps.memoryPath,
       }),
       mcpToken: row.token,
@@ -261,14 +263,12 @@ export class SessionActor {
       const detail = outcome.kind === "failed" ? `${outcome.reason}: ${outcome.message}` : null;
       this.#deps.store.endTurn(turn.id, outcome.kind, detail, turn.declared);
     }
-    const thread = { channel: this.#row.channel, threadTs: this.#row.threadTs };
-
     if (outcome.kind === "failed") {
       this.#nudges = 0;
-      await this.#deps.chat.post(thread, failureNotice(outcome));
+      await this.#notice(failureNotice(outcome));
     } else if (outcome.kind === "aborted") {
       this.#nudges = 0;
-      if (this.#stopRequested) await this.#deps.chat.post(thread, "已停止当前任务。");
+      if (this.#stopRequested) await this.#notice("已停止当前任务。");
     }
     this.#stopRequested = false;
 
@@ -287,7 +287,18 @@ export class SessionActor {
       return;
     }
     this.#nudges = 0;
-    await this.#deps.chat.post(thread, "⚠️ 我停下来了，但没有给出明确结果。如果还需要继续，请直接回复我。");
+    await this.#notice("⚠️ 我停下来了，但没有给出明确结果。如果还需要继续，请直接回复我。");
+  }
+
+  /** ember's own words (not the agent's) go to the thread people spoke in last. */
+  async #notice(text: string): Promise<void> {
+    const latest = this.#deps.store.latestInbound(this.key);
+    const chat = latest && this.#deps.chat(latest.connect);
+    if (!latest || !chat) {
+      log.warn("no thread to post a notice to", { session: this.key, text });
+      return;
+    }
+    await chat.post({ channel: latest.channel, threadTs: latest.threadTs }, text).catch((error) => log.warn("notice failed", { session: this.key, error }));
   }
 }
 

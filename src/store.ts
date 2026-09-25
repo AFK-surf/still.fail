@@ -6,16 +6,19 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { RuntimeKind } from "./config.ts";
 
-/** thread: one thread per session (multi-session connects); all: every thread of the connect (single-session). */
+/** thread: started by one thread (multi-session connects); all: takes every thread of the connects bound to it (single-session). */
 export type SessionScope = "thread" | "all";
 
 export interface SessionRow {
   key: string;
+  /** The connect that started it. Replies go through the connect each thread came from. */
   connect: string;
   scope: SessionScope;
+  /** A name people gave it, for choosing among single-session sessions. */
+  title: string | null;
   /**
-   * The thread of the session's latest message. Only ember's own notices
-   * (a failed turn, a stop) go here; the agent always names its target.
+   * The thread of the session's first message; empty for a session created
+   * before any message. ember's own notices go to the latest thread instead.
    */
   channel: string;
   threadTs: string;
@@ -50,7 +53,7 @@ export type TurnKind = "input" | "nudge" | "resume";
  * Bump on schema changes and add a step to MIGRATIONS that brings the
  * previous version up. Versions without a migration path are refused.
  */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const MIGRATIONS: Record<number, string> = {
   // v2 → v3: bots became connects; sessions may span all threads; messages remember their thread.
@@ -60,6 +63,12 @@ const MIGRATIONS: Record<number, string> = {
     ALTER TABLE inbound RENAME COLUMN bot TO connect;
     ALTER TABLE inbound ADD COLUMN thread_ts TEXT NOT NULL DEFAULT '';
     UPDATE inbound SET thread_ts = COALESCE((SELECT s.thread_ts FROM sessions s WHERE s.key = inbound.session_key), ts);
+  `,
+  // v3 → v4: a single-session connect delivers into the session bound to it, which people may choose.
+  3: `
+    ALTER TABLE sessions ADD COLUMN title TEXT;
+    CREATE TABLE bindings (connect TEXT PRIMARY KEY, session_key TEXT NOT NULL);
+    INSERT INTO bindings (connect, session_key) SELECT connect, key FROM sessions WHERE scope = 'all';
   `,
 };
 
@@ -78,7 +87,12 @@ CREATE TABLE IF NOT EXISTS sessions (
   running INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   last_active_at INTEGER NOT NULL,
-  scope TEXT NOT NULL DEFAULT 'thread'
+  scope TEXT NOT NULL DEFAULT 'thread',
+  title TEXT
+);
+CREATE TABLE IF NOT EXISTS bindings (
+  connect TEXT PRIMARY KEY,
+  session_key TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS inbound (
   connect TEXT NOT NULL,
@@ -118,6 +132,7 @@ function toSession(row: Row): SessionRow {
     key: row.key as string,
     connect: row.connect as string,
     scope: (row.scope as SessionScope | undefined) ?? "thread",
+    title: (row.title as string | null | undefined) ?? null,
     channel: row.channel as string,
     threadTs: row.thread_ts as string,
     runtime: row.runtime as RuntimeKind,
@@ -195,16 +210,50 @@ export class Store {
     return (this.#db.prepare("SELECT * FROM sessions ORDER BY last_active_at DESC").all() as Row[]).map(toSession);
   }
 
-  insertSession(s: Omit<SessionRow, "running" | "runtimeSessionId">): void {
-    this.#db.prepare(`INSERT INTO sessions (key, connect, scope, channel, thread_ts, runtime, profile, model, workspace, token, created_at, last_active_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(s.key, s.connect, s.scope, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.workspace, s.token, s.createdAt, s.lastActiveAt);
+  insertSession(s: Omit<SessionRow, "running" | "runtimeSessionId" | "title"> & { title?: string | null }): void {
+    this.#db.prepare(`INSERT INTO sessions (key, connect, scope, title, channel, thread_ts, runtime, profile, model, workspace, token, created_at, last_active_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(s.key, s.connect, s.scope, s.title ?? null, s.channel, s.threadTs, s.runtime, s.profile, s.model, s.workspace, s.token, s.createdAt, s.lastActiveAt);
     this.notify(s.key);
   }
 
-  /** Records the thread of the latest message, where ember's own notices go. */
-  setLatestThread(key: string, channel: string, threadTs: string): void {
-    this.#db.prepare("UPDATE sessions SET channel = ?, thread_ts = ? WHERE key = ?").run(channel, threadTs, key);
+  /** Remembers the thread of a session created before any message. */
+  setFirstThread(key: string, channel: string, threadTs: string): void {
+    this.#db.prepare("UPDATE sessions SET channel = ?, thread_ts = ? WHERE key = ? AND channel = ''").run(channel, threadTs, key);
+  }
+
+  setTitle(key: string, title: string | null): void {
+    this.#db.prepare("UPDATE sessions SET title = ? WHERE key = ?").run(title, key);
+    this.notify(key);
+  }
+
+  touch(key: string): void {
+    this.#db.prepare("UPDATE sessions SET last_active_at = ? WHERE key = ?").run(Date.now(), key);
+  }
+
+  // ── single-session bindings ────────────────────────────────────────────
+
+  /** The session a single-session connect delivers into, if one is bound. */
+  binding(connect: string): string | undefined {
+    const row = this.#db.prepare("SELECT session_key FROM bindings WHERE connect = ?").get(connect) as Row | undefined;
+    return row ? row.session_key as string : undefined;
+  }
+
+  /** Binds a connect to a session, or unbinds it (null) so its next message starts a new one. */
+  setBinding(connect: string, sessionKey: string | null): void {
+    if (sessionKey) this.#db.prepare("INSERT OR REPLACE INTO bindings (connect, session_key) VALUES (?, ?)").run(connect, sessionKey);
+    else this.#db.prepare("DELETE FROM bindings WHERE connect = ?").run(connect);
+    if (sessionKey) this.notify(sessionKey);
+  }
+
+  /** Connects bound to each session. */
+  listBindings(): Map<string, string[]> {
+    const out = new Map<string, string[]>();
+    for (const r of this.#db.prepare("SELECT connect, session_key FROM bindings").all() as Row[]) {
+      const key = r.session_key as string;
+      out.set(key, [...(out.get(key) ?? []), r.connect as string]);
+    }
+    return out;
   }
 
   setRuntimeSessionId(key: string, id: string): void {
@@ -236,6 +285,19 @@ export class Store {
     const stmt = this.#db.prepare("UPDATE inbound SET status = 'delivered' WHERE connect = ? AND channel = ? AND ts = ?");
     for (const r of rows) stmt.run(r.connect, r.channel, r.ts);
     for (const key of new Set(rows.map((r) => r.sessionKey))) this.notify(key);
+  }
+
+  /** The session's most recent message: where ember's own notices go. */
+  latestInbound(sessionKey: string): InboundRow | undefined {
+    const row = this.#db.prepare("SELECT * FROM inbound WHERE session_key = ? ORDER BY CAST(ts AS REAL) DESC LIMIT 1").get(sessionKey) as Row | undefined;
+    return row ? toInbound(row) : undefined;
+  }
+
+  /** Which connect a thread of this session came through, if it is one of its threads. */
+  threadConnect(sessionKey: string, channel: string, threadTs: string): string | undefined {
+    const row = this.#db.prepare("SELECT connect FROM inbound WHERE session_key = ? AND channel = ? AND thread_ts = ? ORDER BY ts DESC LIMIT 1")
+      .get(sessionKey, channel, threadTs) as Row | undefined;
+    return row ? row.connect as string : undefined;
   }
 
   /** Whether the session already has messages from this thread, i.e. is part of that conversation. */

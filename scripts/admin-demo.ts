@@ -58,13 +58,13 @@ seeds.forEach((seed, i) => {
   store.insertSession({ key, connect: seed.connect, scope: single ? "all" : "thread", channel: `C0DEMO${i}`, threadTs: ts, runtime: seed.runtime, profile: seed.profile, model: null,
     workspace: join(dataDir, "sessions", String(i)), token: `demo-${i}`, createdAt: now - seed.ago - 600_000, lastActiveAt: now - seed.ago });
   if (seed.id) store.setRuntimeSessionId(key, seed.id);
+  if (single) { store.setBinding(seed.connect, key); store.setTitle(key, "bridge 值班"); }
   store.insertInbound({ connect: seed.connect, channel: `C0DEMO${i}`, threadTs: ts, ts, sessionKey: key, user: "U09ABCDEF", text: seed.text, receivedAt: now - seed.ago });
   seed.extra?.forEach((m, j) => {
     const at = now - seed.ago + (j + 1) * 60_000;
     const mts = `${Math.floor(at / 1000)}.${String(j + 1).padStart(6, "0")}`;
     const threadTs = m.channel === `C0DEMO${i}` ? ts : mts;
     store.insertInbound({ connect: seed.connect, channel: m.channel, threadTs, ts: mts, sessionKey: key, user: "U09ABCDEF", text: m.text, receivedAt: at });
-    store.setLatestThread(key, m.channel, threadTs);
   });
   if (!seed.pending) store.markDelivered(store.pendingInbound(key));
   seed.turns.forEach(([kind, outcome, declared], j) => {

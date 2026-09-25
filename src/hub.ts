@@ -4,9 +4,10 @@
 //
 // A connect's mode decides the sessions: multi-session gives each thread its
 // own session (started by an @mention); single-session sends every thread the
-// connect sees into one session. Either way every message carries its source
-// and the agent names the thread it answers, so a session never assumes it
-// belongs to one conversation.
+// connect sees into the one session bound to it, which people can switch or
+// replace. Either way every message carries its source and the agent names the
+// thread it answers, so a session never assumes it belongs to one conversation;
+// replies go out through whichever connect the thread came in on.
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -25,9 +26,9 @@ export function sessionKey(connect: string, channel: string, threadTs: string): 
   return `${connect}:${channel}:${threadTs}`;
 }
 
-/** A single-session connect's one session. */
-export function connectSessionKey(connect: string): string {
-  return `${connect}:all`;
+/** A new session for a single-session connect. */
+export function newSingleSessionKey(connect: string): string {
+  return `${connect}:s-${randomBytes(4).toString("hex")}`;
 }
 
 export function isStopCommand(text: string): boolean {
@@ -74,7 +75,8 @@ export class Hub {
     const connect = this.#connect(connectId);
     const chat = this.#chat(connectId);
     const single = connect.mode === "single-session";
-    const key = single ? connectSessionKey(connect.id) : sessionKey(connect.id, message.channel, message.threadTs);
+    const bound = single ? this.#store.binding(connect.id) : undefined;
+    const key = single ? bound ?? newSingleSessionKey(connect.id) : sessionKey(connect.id, message.channel, message.threadTs);
     const exists = Boolean(this.#store.getSession(key));
     const wanted = single
       ? message.addressed || !connect.requireMention || (exists && this.#store.inThread(key, message.channel, message.threadTs))
@@ -82,7 +84,8 @@ export class Hub {
     if (!wanted) return; // chatter this connect is not part of
     if (!exists) {
       try {
-        this.#createSession(key, connect, message, single ? "all" : "thread");
+        this.#createSession(key, connect, single ? "all" : "thread", message);
+        if (single) this.#store.setBinding(connect.id, key);
       } catch (error) {
         log.error("cannot create session", { session: key, error });
         await chat.post(message, `⚠️ 无法创建会话：${error instanceof Error ? error.message : String(error)}`);
@@ -94,7 +97,8 @@ export class Hub {
       user: message.user, text: message.text, receivedAt: Date.now(),
     });
     if (!fresh) return;
-    this.#store.setLatestThread(key, message.channel, message.threadTs);
+    this.#store.setFirstThread(key, message.channel, message.threadTs);
+    this.#store.touch(key);
     const actor = this.#actor(this.#store.getSession(key)!);
     if (isStopCommand(message.text)) {
       const [row] = this.#store.pendingInbound(key).filter((m) => m.ts === message.ts && m.channel === message.channel);
@@ -133,6 +137,28 @@ export class Hub {
     }
   }
 
+  /**
+   * Points a single-session connect at a session: an existing one (any
+   * session on the same runtime, whichever connect started it) or, with
+   * `null`, a new empty one. Returns the bound session's key.
+   */
+  bindSingle(connectId: string, target: string | null, title?: string): string {
+    const connect = this.#connect(connectId);
+    if (connect.mode !== "single-session") throw new Error(`connect ${connectId} is not single-session`);
+    if (target === null) {
+      const key = newSingleSessionKey(connect.id);
+      this.#createSession(key, connect, "all", null, title?.trim() || null);
+      this.#store.setBinding(connect.id, key);
+      return key;
+    }
+    const row = this.#store.getSession(target);
+    if (!row) throw new Error(`unknown session ${target}`);
+    if (row.runtime !== connect.bind.runtime) throw new Error(`session ${target} runs ${row.runtime}, the connect runs ${connect.bind.runtime}`);
+    this.#store.setBinding(connect.id, target);
+    log.info("single-session connect rebound", { connect: connect.id, session: target });
+    return target;
+  }
+
   /** Live process state of a session, for the admin page. */
   processState(key: string): "running" | "warm" | "cold" {
     return this.#actors.get(key)?.processState ?? "cold";
@@ -164,10 +190,9 @@ export class Hub {
       if (typeof to !== "string" || !to.trim()) throw new Error(`to is required: the thread attribute of the message you are answering. This session's threads: ${known()}`);
       const thread = parseThreadAddress(to);
       if (!thread) throw new Error(`to must look like CHANNEL/THREAD_TS, got ${JSON.stringify(to)}`);
-      if (!this.#store.inThread(key, thread.channel, thread.threadTs)) {
-        throw new Error(`${to} is not a conversation of this session. Its threads: ${known()}`);
-      }
-      return { chat: this.#chat(row.connect), thread };
+      const via = this.#store.threadConnect(key, thread.channel, thread.threadTs);
+      if (!via) throw new Error(`${to} is not a conversation of this session. Its threads: ${known()}`);
+      return { chat: this.#chat(via), thread };
     };
     const stateArg = (value: unknown): DeclaredState | undefined => {
       if (value === undefined || value === null || value === "") return undefined;
@@ -255,20 +280,21 @@ export class Hub {
   }
 
   #online(row: SessionRow): boolean {
-    if (this.#chats.has(row.connect)) return true;
-    log.warn("session belongs to a connect that is not connected; leaving it", { session: row.key, connect: row.connect });
+    const via = this.#store.latestInbound(row.key)?.connect ?? row.connect;
+    if (this.#chats.has(via)) return true;
+    log.warn("session's latest thread came through a connect that is not connected; leaving it", { session: row.key, connect: via });
     return false;
   }
 
-  #createSession(key: string, connect: Connect, message: InboundMessage, scope: SessionScope): void {
+  #createSession(key: string, connect: Connect, scope: SessionScope, message: InboundMessage | null, title: string | null = null): void {
     const profile = profileFor(this.#config, connect);
-    const dir = scope === "all" ? "all" : `${message.channel}-${message.threadTs.replace(".", "-")}`;
+    const dir = scope === "all" ? key.slice(connect.id.length + 1) : `${message!.channel}-${message!.threadTs.replace(".", "-")}`;
     const workspace = join(this.#config.dataDir, "sessions", connect.id, dir, "workspace");
     mkdirSync(workspace, { recursive: true });
     mkdirSync(this.reposDir, { recursive: true });
     const now = Date.now();
     this.#store.insertSession({
-      key, connect: connect.id, scope, channel: message.channel, threadTs: message.threadTs,
+      key, connect: connect.id, scope, title, channel: message?.channel ?? "", threadTs: message?.threadTs ?? "",
       runtime: connect.bind.runtime, profile: profile.id, model: connect.bind.model ?? null,
       workspace, token: randomBytes(24).toString("base64url"), createdAt: now, lastActiveAt: now,
     });
@@ -280,8 +306,8 @@ export class Hub {
     if (!actor) {
       actor = new SessionActor(row.key, {
         store: this.#store,
-        chat: this.#chat(row.connect),
-        name: this.#connect(row.connect).name,
+        chat: (id) => this.#chats.get(id),
+        name: (id) => this.#config.connects.find((c) => c.id === id)?.name ?? id,
         drivers: this.#drivers,
         profile: (id) => this.#config.profiles.find((p) => p.id === id),
         mcpUrl: this.#mcpUrl,
