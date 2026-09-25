@@ -704,7 +704,7 @@
 .ring text { font-size: 9px; font-weight: 600; fill: var(--text); font-variant-numeric: tabular-nums; }
 /* Details pack tight: two columns of short facts, small type. */
 .history-details .session-details { gap: 10px; padding: 10px 14px; }
-.history-details .details { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 16px; }
+.history-details .details { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px 16px; }
 .history-details .detail-row { grid-template-columns: 4.5em minmax(0, 1fr); gap: 8px; font-size: var(--text-xs); min-height: 22px; }
 .history-details .detail-row dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

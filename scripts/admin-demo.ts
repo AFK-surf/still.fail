@@ -10,6 +10,8 @@ import { extname, join, normalize } from "node:path";
 import { AdminApi } from "../src/admin/api.ts";
 import type { Connections } from "../src/connections.ts";
 import type { Hub } from "../src/hub.ts";
+import { InternalChat } from "../src/chat/internal.ts";
+import type { Attachment } from "../src/store.ts";
 import { LoginManager } from "../src/login.ts";
 import { slackManifest } from "../src/admin/slack-manifest.ts";
 import type { SlackApps } from "../src/chat/slack-apps.ts";
@@ -79,7 +81,18 @@ seeds.forEach((seed, i) => {
 });
 
 const demoWorkspace = (botUserId: string, botName: string) => ({ team: "Cue", teamId: "T0DEMO", url: "https://cue.slack.com/", botUserId, botName });
-const hub = { processState: (key: string) => states.get(key) ?? "cold", stop: async () => {}, evict: async () => {} } as unknown as Hub;
+// ember's own chat works in the demo: messages are recorded; no agent answers.
+const demoChat = new InternalChat(store);
+const hub = {
+  processState: (key: string) => states.get(key) ?? "cold", stop: async () => {}, evict: async () => {},
+  openChat: (key: string, user: string) => demoChat.open(key, user, null).threadTs,
+  sayInChat: async (threadTs: string, user: string, text: string, attachments: Attachment[] = []) => { demoChat.say(threadTs, user, text, attachments); },
+  sayToSession: async (key: string, user: string, text: string, attachments: Attachment[] = []) => {
+    const threadTs = store.listChats(key)[0]?.threadTs ?? demoChat.open(key, user, null).threadTs;
+    demoChat.say(threadTs, user, text, attachments);
+    return threadTs;
+  },
+} as unknown as Hub;
 const connections = {
   state: (c: { enabled: boolean; id: string }) => (!c.enabled ? { state: "disabled" } : c.id === "gpt" ? { state: "reconnecting", botUserId: "UGPT", lastError: "socket closed", workspace: demoWorkspace("UGPT", "ember-gpt") } : { state: "connected", botUserId: "U0C4KHKPWTC", lastError: null, workspace: demoWorkspace("U0C4KHKPWTC", "ember") }),
   reconcile: async () => {},
