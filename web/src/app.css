@@ -417,17 +417,21 @@
   .slack-app-top { flex-direction: column; }
 }
 
-/* ── session: history first, chat beside ───────────────────────────── */
+/* ── session: history alone, or chat in the middle with history on the right ── */
 
-.session-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
-.session-layout[data-chat="true"] { grid-template-columns: minmax(0, 1fr) minmax(360px, 38%); }
-.session-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.session-main .page-bar-title { gap: 10px; }
-.session-main .history { flex: 1; border-left: 0; }
-.session-main .history-head, .session-main .usage { padding-left: max(16px, calc((100% - 860px) / 2)); padding-right: max(8px, calc((100% - 860px) / 2)); }
-.session-main .history-body { padding-left: max(16px, calc((100% - 860px) / 2)); padding-right: max(16px, calc((100% - 860px) / 2)); }
+.session-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.session-page .page-bar-title { gap: 10px; }
+.session-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.session-body[data-chat="true"] { grid-template-columns: minmax(0, 1fr) minmax(380px, 40%); }
+.session-body .history { min-height: 0; }
+.session-body[data-chat="false"] .history { border-left: 0; }
+/* Alone, the history reads as a centred column. */
+.session-body[data-chat="false"] .history-head, .session-body[data-chat="false"] .usage,
+.session-body[data-chat="false"] .history-body, .session-body[data-chat="false"] .operations {
+  padding-left: max(16px, calc((100% - 860px) / 2)); padding-right: max(16px, calc((100% - 860px) / 2));
+}
 .operations {
-  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px max(16px, calc((100% - 860px) / 2));
+  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 16px;
   border-top: 1px solid var(--line); font-size: var(--text-sm); background: var(--canvas);
 }
 .operations-text { flex: 1; min-width: 0; }
@@ -435,17 +439,21 @@
 .operations[data-state="block"] .operations-text { color: var(--blue); }
 .operations[data-state="failed"] .operations-text, .operations[data-state="unexpected"] .operations-text { color: var(--red); }
 
-.chat { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--list); }
-.chat-head { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--line); }
+.chat { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--canvas); }
+.chat-head { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px 0 16px; border-bottom: 1px solid var(--line); }
 .chat-title { flex: 1; min-width: 0; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-list { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
-.chat-empty { margin: auto 12px; text-align: center; color: var(--muted); font-size: var(--text-sm); }
+.chat-list { flex: 1; min-height: 0; overflow-y: auto; padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; }
+.chat-list > * { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; }
+.chat-empty { margin: auto; text-align: center; color: var(--muted); font-size: var(--text-sm); }
 .chat-typing { font-size: var(--text-xs); color: var(--muted); }
-.chat .msg-bubble { background: var(--canvas); border: 1px solid var(--line); }
-.composer { display: flex; align-items: flex-end; gap: 8px; padding: 12px; border-top: 1px solid var(--line); background: var(--canvas); }
-.composer-input { resize: none; max-height: 200px; line-height: 1.5; }
-.chat-error { padding: 0 12px 10px; }
+.composer { display: flex; align-items: flex-end; gap: 8px; width: 100%; max-width: 824px; margin: 0 auto; padding: 12px 32px 16px; }
+.composer-input { resize: none; max-height: 200px; line-height: 1.5; border-radius: 16px; }
+.chat-error { padding: 0 32px 10px; }
 @media (max-width: 1100px) {
-  .session-layout[data-chat="true"] { grid-template-columns: minmax(0, 1fr); }
-  .session-layout[data-chat="true"] .chat { position: fixed; inset: 0 0 0 auto; width: min(440px, 100vw); z-index: 30; box-shadow: -12px 0 32px var(--shadow); }
+  .session-body[data-chat="true"] { grid-template-columns: minmax(0, 1fr); }
+  .session-body[data-chat="true"] .history { display: none; }
+}
+@media (max-width: 700px) {
+  .chat-list { padding: 16px; }
+  .composer { padding: 10px 12px 12px; }
 }

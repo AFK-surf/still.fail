@@ -69,33 +69,34 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const latestChat = chats.at(-1);
 
   return (
-    <div className="session-layout" data-chat={Boolean(chat)}>
-      <section className="session-main" aria-label="会话">
-        <header className="page-bar">
-          <MobileBack to="/sessions" label="会话" />
-          <div className="page-bar-title">
-            <h1>{sessionTitle(session, name)}</h1>
-            <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
-          </div>
-          <div className="page-bar-actions">
-            {slackThreads.length > 1
-              ? <ThreadMenu detail={detail.data} base={base} />
-              : singleUrl && (
-                <Tip label="在 Slack 中打开">
-                  <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><ExternalLink {...ICON} /></a>
-                </Tip>
-              )}
-            {!chat && (latestChat
-              ? <Button icon={MessagesSquare} onClick={() => setChat(latestChat.threadTs)}>对话</Button>
-              : <Button icon={MessageSquarePlus} busy={create.isPending} onClick={() => create.mutate()}>新建对话</Button>)}
-          </div>
-        </header>
+    <div className="session-page">
+      <header className="page-bar">
+        <MobileBack to="/sessions" label="会话" />
+        <div className="page-bar-title">
+          <h1>{sessionTitle(session, name)}</h1>
+          <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
+        </div>
+        <div className="page-bar-actions">
+          {slackThreads.length > 1
+            ? <ThreadMenu detail={detail.data} base={base} />
+            : singleUrl && (
+              <Tip label="在 Slack 中打开">
+                <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><ExternalLink {...ICON} /></a>
+              </Tip>
+            )}
+          {!chat && (latestChat
+            ? <Button icon={MessagesSquare} onClick={() => setChat(latestChat.threadTs)}>对话</Button>
+            : <Button icon={MessageSquarePlus} busy={create.isPending} onClick={() => create.mutate()}>新建对话</Button>)}
+        </div>
+      </header>
+      {/* Without a chat the history is the page; with one, the chat takes the middle and the history moves to the right. */}
+      <div className="session-body" data-chat={Boolean(chat)}>
+        {chat && (
+          <ChatPanel detail={detail.data} threadTs={chat.threadTs} name={name} onClose={() => setChat(null)}
+            onSwitch={setChat} onNew={() => create.mutate()} creating={create.isPending} />
+        )}
         <History detail={detail.data} connect={connect} footer={<Operations detail={detail.data} />} />
-      </section>
-      {chat && (
-        <ChatPanel detail={detail.data} threadTs={chat.threadTs} name={name} onClose={() => setChat(null)}
-          onSwitch={setChat} onNew={() => create.mutate()} creating={create.isPending} />
-      )}
+      </div>
     </div>
   );
 }
@@ -184,7 +185,7 @@ function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating 
   const chatName = (c: SessionDetail["chats"][number], i: number) => c.title ?? `对话 ${i + 1}`;
 
   return (
-    <aside className="chat" aria-label="对话">
+    <section className="chat" aria-label="对话">
       <header className="chat-head">
         {detail.chats.length > 1
           ? <Menu label="切换对话" items={detail.chats.map((c, i) => ({ label: `${chatName(c, i)} · ${relativeTime(c.createdAt)}`, onSelect: () => onSwitch(c.threadTs) }))} />
@@ -222,6 +223,6 @@ function ChatPanel({ detail, threadTs, name, onClose, onSwitch, onNew, creating 
         <Button variant="primary" type="submit" disabled={!text.trim()} busy={send.isPending}>发送</Button>
       </form>
       {send.error && <p className="field-error chat-error" role="alert">{send.error.message}</p>}
-    </aside>
+    </section>
   );
 }
