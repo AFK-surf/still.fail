@@ -1,0 +1,42 @@
+<!doctype html><meta charset="utf-8"><pre id="out">loading</pre>
+<script type="module">
+// End-to-end check of the browser client against a local station (see cloud/test/dev.ts).
+import init, { Mesh } from "./pkg/ember_mesh_web.js";
+const out = [];
+const say = (line) => { out.push(line); document.getElementById("out").textContent = out.join("\n"); };
+try {
+  await init();
+  const relay = new URLSearchParams(location.search).get("relay");
+  const mesh = await Mesh.create(new Uint8Array(), relay);
+  say(`device ${mesh.id().slice(0, 12)}`);
+  const g = await (await fetch(`http://127.0.0.1:8788/grant?device=${mesh.id()}`)).json();
+  const t0 = performance.now();
+  const link = await mesh.connect(g.station, g.relay_url, g.grant);
+  say(`connected ${link.accepted()} in ${Math.round(performance.now() - t0)}ms`);
+  const read = async (reply, max = Infinity) => {
+    const parts = [];
+    let size = 0;
+    for (;;) {
+      const chunk = await reply.next();
+      if (!chunk) break;
+      parts.push(new TextDecoder().decode(chunk));
+      size += chunk.length;
+      if (size >= max) { reply.cancel(); break; }
+    }
+    return parts.join("");
+  };
+  const t1 = performance.now();
+  const overview = await link.request(JSON.stringify({ method: "GET", path: "/admin/api/overview", headers: {} }), new Uint8Array());
+  const body = JSON.parse(await read(overview));
+  say(`overview ${overview.head()} viewer=${JSON.stringify(body.viewer)} connects=${body.connects.length} in ${Math.round(performance.now() - t1)}ms`);
+  const events = await link.request(JSON.stringify({ method: "GET", path: "/admin/api/events", headers: {} }), new Uint8Array());
+  say(`events ${events.head()} first=${JSON.stringify((await read(events, 1)).slice(0, 20))}`);
+  const outside = await link.request(JSON.stringify({ method: "GET", path: "/admin/index.html", headers: {} }), new Uint8Array());
+  say(`outside ${outside.head()}`);
+  const renewed = await (await fetch(`http://127.0.0.1:8788/grant?device=${mesh.id()}`)).json();
+  say(`renew ${await link.renew(renewed.grant)}`);
+  say("DONE");
+} catch (e) {
+  say(`FAIL ${e?.message ?? e}`);
+}
+</script>

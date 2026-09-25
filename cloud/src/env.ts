@@ -15,6 +15,8 @@ export interface Env {
   LOGINS: DurableObjectNamespace<LoginAttempt>;
   LOGIN_LIMITS: DurableObjectNamespace<LoginLimiter>;
   PUBLIC_ORIGIN: string;
+  /** Where stations and clients find the relay; defaults to PUBLIC_ORIGIN (whose /relay is the relay). */
+  RELAY_URL?: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SIGNING_KEY: string;

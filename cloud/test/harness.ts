@@ -12,6 +12,7 @@ export async function harness(
     port?: number;
     signingKey?: string;
     noGoogle?: boolean;
+    relayUrl?: string;
   } = {},
 ) {
   const origin = options.origin ?? "https://relay.example";
@@ -57,6 +58,7 @@ export async function harness(
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
+        ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
       },
       serviceBindings: options.relay ? { TEST_RELAY: { external: { address: new URL(options.relay).host, http: {} } } } : {},
       durableObjects: Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Relay", "DiscoveryRecord", "RelayBudget", "Directory"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "RELAY", "RECORDS", "RELAY_BUDGET", "DIRECTORY"][i], { className, useSQLite: true }])),
