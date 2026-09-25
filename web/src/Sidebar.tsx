@@ -5,7 +5,7 @@ import { MineFilter, PeopleStack, useOnlyMine } from "./components.tsx";
 import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
 import { dayLabel, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
-import { ICON, Tip } from "./ui.tsx";
+import { ConnectKindIcon, ICON, Tip } from "./ui.tsx";
 
 export function Sidebar() {
   const path = useLocation().pathname;
@@ -84,7 +84,7 @@ function MainNav() {
 }
 
 /** A session in a list. `station` names the station it runs on, where several share one list. */
-export function SessionRow({ session: s, connect, station }: { session: SessionSummary; connect: { id: string; name: string } | undefined; station?: string }) {
+export function SessionRow({ session: s, connect, station }: { session: SessionSummary; connect: { id: string; name: string; kind?: string } | undefined; station?: string }) {
   const link = useLink();
   const name = connect?.name ?? s.connect;
   const { key } = useParams();
@@ -96,6 +96,7 @@ export function SessionRow({ session: s, connect, station }: { session: SessionS
       <span className="nav-session-text">
         <span className="nav-session-title">{sessionTitle(s, name)}</span>
         <span className="nav-session-meta">
+          <Tip label={connect ? `来自 ${connect.name}` : "来自连接"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>
           <PeopleStack people={s.participants} />
           {station && <span className="station-tag small">{station}</span>}
           <span className="nav-text" />

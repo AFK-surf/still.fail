@@ -544,3 +544,5 @@
 .menu-invite-btn { height: 28px; padding: 0 12px; outline: none; }
 .menu-invite-btn[data-highlighted] { filter: brightness(0.95); }
 .invite-card { width: min(460px, 90vw); text-align: left; }
+.session-kind { display: inline-grid; flex: none; }
+.session-kind .kind-icon { width: 14px; height: 14px; }
