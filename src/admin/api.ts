@@ -8,6 +8,7 @@ import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
 import type { MeshStatus } from "../mesh.ts";
+import { hostInfo } from "../host.ts";
 import type { ProfileQuota } from "../quota.ts";
 import type { Profile } from "../config.ts";
 import { INTERNAL_CONNECT } from "../chat/internal.ts";
@@ -145,6 +146,7 @@ export class AdminApi {
     const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
     const [resource, id, action] = parts;
 
+    if (method === "GET" && path === "/host") return send(res, 200, await hostInfo(this.#deps.settings.config.dataDir));
     if (method === "GET" && path === "/overview") return send(res, 200, this.#overview(viewer));
     if (method === "GET" && path === "/events") return this.#events(req, res);
     if (method === "GET" && path === "/sessions") return send(res, 200, await this.#sessions(url.searchParams.get("connect")));

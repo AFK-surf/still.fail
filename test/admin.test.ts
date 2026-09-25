@@ -430,3 +430,16 @@ test("a session has one chat, made by its first message from the page", async ()
     t.close();
   }
 });
+
+test("the station reports the machine it runs on", async () => {
+  const t = await setup();
+  try {
+    const { status, body } = await t.call("GET", "/host");
+    assert.equal(status, 200);
+    assert.ok(body.hostname && body.cpus > 0);
+    assert.ok(body.memory.totalBytes > 0 && body.memory.usedBytes > 0 && body.memory.usedBytes <= body.memory.totalBytes);
+    assert.ok(body.disk.totalBytes > 0 && body.disk.freeBytes <= body.disk.totalBytes);
+  } finally {
+    t.close();
+  }
+});
