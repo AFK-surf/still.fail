@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { api, keys, useOverview, type RuntimeKind } from "../api.ts";
-import { ACCESS, RUNTIME_LABEL } from "../format.ts";
+import { RUNTIME_LABEL } from "../format.ts";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Field, Segmented } from "../ui.tsx";
@@ -80,7 +80,7 @@ export function NewBotDialog({ open, onClose }: { open: boolean; onClose(): void
           <Field label="运行时账号" htmlFor="new-bot-account"
             error={accounts.length === 0 ? `还没有 ${RUNTIME_LABEL[runtime]} 账号，先到「设置 → 运行时账号」添加。` : undefined}>
             <select id="new-bot-account" className="select" value={chosen?.id ?? ""} onChange={(e) => setAccount(e.target.value)} disabled={accounts.length === 0}>
-              {accounts.map((p) => <option key={p.id} value={p.id}>{p.name}（{ACCESS[p.access.kind].label}）</option>)}
+              {accounts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </Field>
           <Field label="模型" htmlFor="new-bot-model" hint={models.length ? `这个账号有 ${models.length} 个可用模型。` : "留空用运行时或账号的默认模型。"}>

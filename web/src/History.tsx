@@ -116,6 +116,7 @@ function toItems(entries: TimelineEntry[]): Item[] {
 }
 
 export function History({ detail, bot, onClose }: { detail: SessionDetail; bot: BotView | undefined; onClose(): void }) {
+  const botUserId = bot && (bot.connection.state === "connected" || bot.connection.state === "reconnecting") ? bot.connection.botUserId : null;
   const [usageOpen, setUsageOpen] = useState(false);
   const { session, transcript } = detail;
   const items = useMemo(() => toItems(transcript?.timeline ?? []), [transcript]);
@@ -159,7 +160,7 @@ export function History({ detail, bot, onClose }: { detail: SessionDetail; bot: 
         ) : (
           <>
             <p className="history-edge">已到 Session 开始处</p>
-            {items.map((item, i) => <HistoryItem key={i} item={item} />)}
+            {items.map((item, i) => <HistoryItem key={i} item={item} mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : id}`)} />)}
           </>
         )}
       </div>
@@ -167,14 +168,14 @@ export function History({ detail, bot, onClose }: { detail: SessionDetail; bot: 
   );
 }
 
-function HistoryItem({ item }: { item: Item }) {
+function HistoryItem({ item, mention }: { item: Item; mention(text: string): string }) {
   switch (item.type) {
     case "received": {
       const { messages, note } = parsePrompt(item.entry.text);
       return (
         <>
           {note && <Received from="ember" text={note} />}
-          {messages.map((m) => <Received key={m.ts} from={m.user} text={m.text} />)}
+          {messages.map((m) => <Received key={m.ts} from={m.user} text={mention(m.text)} />)}
         </>
       );
     }
@@ -233,7 +234,8 @@ function Group({ steps, thinking }: { steps: Step[]; thinking: TimelineEntry[] }
   const parts = [...counts].map(([c, v]) => `${CATEGORY[c].verb} ${typeof v === "number" ? v : v.size} ${CATEGORY[c].unit}`);
   const failed = steps.filter((s) => s.result?.ok === false).length;
   const pending = steps.filter((s) => !s.result).length;
-  const summary = steps.length ? `执行了 ${steps.length} 项操作：${parts.join("、")}` : "思考";
+  const firstThought = thinking[0]?.text.split("\n").find((l) => l.trim()) ?? "";
+  const summary = steps.length ? `执行了 ${steps.length} 项操作：${parts.join("、")}` : `思考：${firstThought.slice(0, 80)}`;
   return (
     <div className="h-group" data-failed={failed > 0}>
       <button type="button" className="h-group-head" aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -244,12 +246,12 @@ function Group({ steps, thinking }: { steps: Step[]; thinking: TimelineEntry[] }
       </button>
       {open && (
         <div className="h-steps">
-          {thinking.map((t, i) => (
+          {thinking.map((t, i) => steps.length ? (
             <details key={`t${i}`} className="h-step">
-              <summary><span className="h-step-name">思考</span></summary>
+              <summary><span className="h-step-name">思考</span><span className="h-step-hint">{t.text.split("\n").find((l) => l.trim())}</span></summary>
               <div className="h-step-body muted">{t.text}</div>
             </details>
-          ))}
+          ) : <div key={`t${i}`} className="h-thinking">{t.text}</div>)}
           {steps.map((s, i) => <StepRow key={i} step={s} />)}
         </div>
       )}

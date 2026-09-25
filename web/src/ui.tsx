@@ -76,7 +76,9 @@ const AVATAR_TONES = ["#c9954c", "#6f8fbf", "#7d9a6f", "#b07a9c", "#8c83c7", "#c
 export function Avatar({ id, name, size = 20 }: { id: string; name: string; size?: number }) {
   let hash = 0;
   for (const c of id) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
-  const letter = (name.trim()[0] ?? "?").toUpperCase();
+  // "ember-gpt" → G: the distinguishing last word, since bots often share a prefix.
+  const word = name.trim().split(/[\s\-_./]+/).filter(Boolean).at(-1) ?? name;
+  const letter = ([...word][0] ?? "?").toUpperCase();
   return (
     <span className="avatar" aria-hidden="true"
       style={{ width: size, height: size, fontSize: Math.round(size * .52), background: AVATAR_TONES[hash % AVATAR_TONES.length], borderRadius: Math.min(size * .375, 12) }}>

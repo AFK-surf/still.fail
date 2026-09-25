@@ -3,7 +3,7 @@ import { Pencil, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, keys, useOverview, useSessions, type BotView, type Overview } from "../api.ts";
-import { ACCESS, cleanText, connectionText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, STATUS_LABEL } from "../format.ts";
+import { cleanText, connectionText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, STATUS_LABEL } from "../format.ts";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
 import { Avatar, Button, Dialog, Empty, Field, IconButton, Menu, Pill, StatusDot } from "../ui.tsx";
@@ -165,7 +165,7 @@ function RunSection({ bot, overview }: { bot: BotView; overview: Overview }) {
         </Field>
         <Field label="运行时账号" htmlFor="bot-account">
           <select id="bot-account" className="select" value={account} onChange={(e) => setAccount(e.target.value)}>
-            {accounts.map((p) => <option key={p.id} value={p.id}>{p.name}（{ACCESS[p.access.kind].label}）</option>)}
+            {accounts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </Field>
         <Field label="模型" htmlFor="bot-model" hint={models.length ? `这个账号有 ${models.length} 个可用模型。` : "留空用账号的默认模型。"}>
