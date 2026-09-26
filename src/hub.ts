@@ -297,12 +297,12 @@ export class Hub {
   }
 
   /** Chooses the profile a new session runs on; see pool.ts. */
-  #pick(candidates: Profile[], model: string | null): Profile {
+  #pick(candidates: Profile[], model: string | null, strict = true): Profile {
     const profile = pickProfile(candidates, model, {
       health: (id) => this.#health(id),
       load: (id) => [...this.#actors.entries()].filter(([key, a]) => a.processState !== "cold" && this.#store.getSession(key)?.profile === id).length,
       lastPicked: (id) => this.#picked.get(id) ?? 0,
-    });
+    }, strict);
     this.#picked.set(profile.id, Date.now());
     return profile;
   }
@@ -433,7 +433,7 @@ export class Hub {
 
   #createSession(key: string, connect: Connect, scope: SessionScope, message: InboundMessage | null, title: string | null = null, createdBy: string | null = null): void {
     const bound = connect.bind.profiles.map((id) => this.#config.profiles.find((p) => p.id === id)).filter((p): p is Profile => Boolean(p));
-    const profile = bound.length ? this.#pick(bound, connect.bind.model ?? null) : profileFor(this.#config, connect);
+    const profile = bound.length ? this.#pick(bound, connect.bind.model ?? null, false) : profileFor(this.#config, connect);
     const dir = scope === "all" ? key.slice(connect.id.length + 1) : `${message!.channel}-${message!.threadTs.replace(".", "-")}`;
     const workspace = join(this.#config.dataDir, "sessions", connect.id, dir, "workspace");
     mkdirSync(workspace, { recursive: true });

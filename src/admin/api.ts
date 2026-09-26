@@ -462,7 +462,7 @@ export class AdminApi {
       })),
       profiles: config.profiles.map((p) => ({
         id: p.id, name: p.name, runtime: p.runtime, access: { kind: p.access.kind, key: mask(p.access.key) },
-        home: p.home, homeExists: existsSync(p.home), model: p.model ?? null,
+        home: p.home, homeExists: existsSync(p.home), model: p.model ?? null, models: p.models,
         env: Object.entries(p.customEnv).map(([key, value]) => ({ key, secret: SECRET_KEY.test(key), value: SECRET_KEY.test(key) ? mask(value) : value })),
         usedBy: config.connects.filter((c) => c.bind.profiles.includes(p.id)).map((c) => c.id),
         loginCommand: loginCommand(p.runtime, p.home),
@@ -671,6 +671,8 @@ export class AdminApi {
       };
       const model = input.model === undefined ? existing?.model : input.model;
       if (typeof model === "string" && model.trim()) next.model = model.trim();
+      const models = input.models === undefined ? existing?.models : input.models;
+      if (Array.isArray(models) && models.length) next.models = [...new Set(models.map(String).map((m) => m.trim()).filter(Boolean))].slice(0, 200);
       if (existing && existing.runtime !== next.runtime && raw.connects?.some((c) => (c.bind.profiles ?? []).includes(id))) {
         throw new Error(`profile ${id} is used by a connect; its runtime cannot change`);
       }

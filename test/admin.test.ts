@@ -493,6 +493,10 @@ test("a new chat makes a session of its own with the chosen runtime, model and e
   try {
     assert.equal((await t.call("POST", "/sessions", { runtime: "gpt" })).status, 400);
     assert.equal((await t.call("POST", "/sessions", { runtime: "claude", effort: "turbo" })).status, 400);
+    assert.equal((await t.call("POST", "/sessions", { runtime: "claude", model: "deepseek-flash" })).status, 400, "no profile has the model enabled");
+    await t.call("PUT", "/profiles/cc", { models: ["deepseek-flash", "deepseek-flash", " glm-5 "] });
+    const { body: ov } = await t.call("GET", "/overview");
+    assert.deepEqual(ov.profiles.find((p: any) => p.id === "cc").models, ["deepseek-flash", "glm-5"]);
     const made = await t.call("POST", "/sessions", { runtime: "claude", model: "deepseek-flash", effort: "high" });
     assert.equal(made.status, 200);
     const key = encodeURIComponent(made.body.key);

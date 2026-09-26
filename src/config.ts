@@ -32,6 +32,8 @@ export interface Profile {
   /** Variables set by hand; they win over derived ones. */
   customEnv: Record<string, string>;
   model?: string;
+  /** Models this profile may be used for, chosen by hand from what its check found. None until someone picks. */
+  models: string[];
 }
 
 export type ConnectKind = "slack";
@@ -133,6 +135,7 @@ export interface RawProfile {
   home: string;
   env?: Record<string, string>;
   model?: string;
+  models?: string[];
 }
 
 /** config.json as written; parseConfig turns it into a validated Config. */
@@ -188,6 +191,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
       id: p.id, name: p.name?.trim() || p.id, runtime: p.runtime, access: { kind, key }, home,
       env: { ...accessEnv(p.runtime, kind, key, p.model), ...customEnv }, customEnv,
       ...(p.model ? { model: p.model } : {}),
+      models: [...new Set((p.models ?? []).filter((m) => typeof m === "string" && m.trim()).map((m) => m.trim()))],
     };
   });
   unique("profile", profiles.map((p) => p.id));

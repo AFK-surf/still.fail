@@ -52,6 +52,8 @@ export interface ProfileView {
   home: string;
   homeExists: boolean;
   model: string | null;
+  /** Models enabled for use; only these can be chosen for chats and connects. */
+  models: string[];
   /** Hand-set variables only; the ones an access kind derives are not listed. */
   env: EnvView[];
   usedBy: string[];
@@ -175,6 +177,8 @@ export interface ProfileInput {
   access?: { kind: AccessKind; key?: string };
   home?: string;
   model?: string;
+  /** Replaces the enabled models. */
+  models?: string[];
   env?: Record<string, string | null>;
 }
 
