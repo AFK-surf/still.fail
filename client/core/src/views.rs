@@ -230,6 +230,7 @@ impl Views {
                 topics.insert(Topic::Threads { station: station.clone() });
                 topics.insert(Topic::Sessions { station: station.clone() });
                 topics.insert(Topic::Thread { station: station.clone(), thread: *thread });
+                topics.insert(Topic::ChatRows { station: station.clone() });
                 topics.insert(Topic::Overview { station: station.clone() });
                 topics.insert(Topic::Link { station: station.clone() });
                 return topics;
@@ -448,7 +449,10 @@ impl Views {
         let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
         Some(Ok(json!({
             "me": self.me(scope),
-            "title": chat_title(&thread),
+            // The same title the sidebar shows: the station's for its item, while it has one.
+            "title": self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok)
+                .and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(id))?.get("title").cloned())
+                .unwrap_or_else(|| json!(chat_title(&thread))),
             "people": thread.get("people").cloned().unwrap_or_else(|| json!([])),
             "agents": agents,
             "messages": messages,

@@ -1,6 +1,7 @@
 // Execution history, after Zork's: a readable account of what actually ran.
 // Messages in and out, state marks and the agent's own words are boundaries;
 // the tool calls and thinking between two boundaries fold into one group.
+import { useToast } from "./toast.tsx";
 import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -257,13 +258,14 @@ function HistoryItem({ item, mention, person, where }: {
  */
 function SlackName({ user, name }: { user: string; name: string }) {
   const api = useApi();
+  const toast = useToast();
   const bound = useOverview(useStation().address).value?.slackUsers.includes(user) ?? false;
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger className="h-person">{bound ? "你" : name}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="popover menu-list" align="start" sideOffset={4} collisionPadding={8}>
-          <DropdownMenu.Item className="menu-item" onSelect={() => void api.slackIdentity(user, !bound).catch(() => undefined)}>{bound ? "不是我" : "这是我"}</DropdownMenu.Item>
+          <DropdownMenu.Item className="menu-item" onSelect={() => void api.slackIdentity(user, !bound).catch((error: unknown) => toast(`${bound ? "解除" : "绑定"}没有成功：${error instanceof Error ? error.message : String(error)}`))}>{bound ? "不是我" : "这是我"}</DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

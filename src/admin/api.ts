@@ -737,11 +737,12 @@ export class AdminApi {
     const chats = threads.filter((t) => t.surface === EMBER_SURFACE && t.sessions.some((m) => shown.has(m.session))).map(async (t): Promise<ChatRow> => {
       const from = t.sessions.map((m) => origins.get(m.session)).find((o) => o !== undefined);
       const agents = t.sessions.filter((m) => shown.has(m.session)).map((m) => agent(m.session));
-      const [origin, creator, people, last] = await Promise.all([
+      const [origin, creator, people, last, starters] = await Promise.all([
         from ? this.#origin(from) : null,
         this.#creator(t.createdBy),
         this.#people(t.people),
         t.last ? this.#messageViews(t.id, [t.last]).then(([m]) => m!) : null,
+        Promise.all(agents.map((a) => this.#creator(shown.get(a.key)?.createdBy ?? null))),
       ]);
       return {
         id: String(t.id), session: agents[0]!.key, thread: t.id,
@@ -752,7 +753,8 @@ export class AdminApi {
           text: [...last.text].slice(0, LAST_CHARS).join(""), createdAt: last.createdAt, deletedAt: last.deletedAt,
         },
         unread: t.unread > 0,
-        mine: isMine(creator) || people.some(isMine),
+        // Mine: the viewer takes part in the chat, or started one of its sessions (through a connect or on ember).
+        mine: isMine(creator) || people.some(isMine) || starters.some(isMine),
         lastActiveAt: Math.max(t.createdAt, t.last?.createdAt ?? 0),
         connect: from ? slackConnectOf(from) : null,
         origin,
@@ -760,14 +762,15 @@ export class AdminApi {
     });
     const agents = [...shown.values()].filter((s) => !chatted.has(s.key)).map(async (s): Promise<ChatRow> => {
       const from = origins.get(s.key);
-      const [origin, creator, people] = await Promise.all([from ? this.#origin(from) : null, this.#creator(s.createdBy), this.#people(from?.people ?? [])]);
+      const [origin, creator] = await Promise.all([from ? this.#origin(from) : null, this.#creator(s.createdBy)]);
       return {
         id: s.key, session: s.key, thread: null,
         title: s.title?.trim() || (from ? chatTitle({ ...from, channelName: origin!.channelName }) : NO_WORDS),
         agents: [agent(s.key)],
         last: null,
         unread: false,
-        mine: isMine(creator) || people.some(isMine),
+        // No chat yet: mine only if the viewer started the session; others in its Slack thread do not count.
+        mine: isMine(creator),
         lastActiveAt: s.lastActiveAt,
         connect: s.connect === INTERNAL_CONNECT ? null : s.connect,
         origin,
