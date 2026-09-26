@@ -55,6 +55,9 @@ function SidebarBuddy() {
   useEffect(() => () => clearTimeout(timer.current), []);
   const toggle = () => {
     const next = !closed;
+    // It moves (and the sidebar with it) only now: resizing the sidebar follows the pointer at once.
+    document.documentElement.dataset.sidebarMoving = "";
+    setTimeout(() => { delete document.documentElement.dataset.sidebarMoving; }, 420);
     setClosed(next);
     closeSidebar(next);
     // It hops on the way, and lands in the pose of where it goes.
