@@ -398,9 +398,9 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
         {usage && <> · 调用 {usage.modelCalls} 次 · 输入 {compactNumber(usage.inputTokens)}{hitRate === null ? "" : `（缓存 ${hitRate}%）`} · 输出 {compactNumber(usage.outputTokens)}</>}
         {" · "}<Link className="detail-link" to={link(`/settings/accounts/${session.profile}`)}>Profile 详情</Link>
       </p>
-      {/* The station: folded. */}
-      <details className="run-station">
-        <summary className="muted">{station.name || host?.hostname || "本机"}{host ? ` · ${host.cpus} 核 · ${gb(host.memory.totalBytes)}` : ""}</summary>
+      {/* The station it runs on, and how loaded it is. */}
+      <div className="run-station">
+        <p className="muted">{station.name || host?.hostname || "本机"}{host ? ` · ${host.cpus} 核 · ${gb(host.memory.totalBytes)}` : ""}</p>
         {host && (
           <div className="resource-rings">
             <Ring percent={host.load * 100} label="CPU" title={`负载 ${host.load}（${host.cpus} 核）`} />
@@ -408,7 +408,7 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
             {host.disk.totalBytes > 0 && <Ring percent={(1 - host.disk.freeBytes / host.disk.totalBytes) * 100} label="磁盘" title={`磁盘剩 ${gb(host.disk.freeBytes)} / ${gb(host.disk.totalBytes)}`} />}
           </div>
         )}
-      </details>
+      </div>
     </div>
   );
 }

@@ -679,7 +679,7 @@
 .run-chip .quota-rings { margin-left: 4px; }
 .run-chip .quota-ring-letter { display: none; }
 .run-usage { margin: 0; font-size: var(--text-xs); }
-.run-station summary { cursor: pointer; font-size: var(--text-xs); }
+.run-station p { margin: 0; font-size: var(--text-xs); }
 .run-station .resource-rings { margin-top: 8px; }
 .menu-separator { height: 1px; margin: 4px 0; background: var(--line); }
 /* How a session runs, changed in its details. */
