@@ -9,11 +9,11 @@ import { Composer } from "./Chat.tsx";
 import { timeUntil } from "./format.ts";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Chooser, ChooserItem as Item } from "./ui.tsx";
-import { ModelTriple } from "./ModelTriple.tsx";
+import { ModelTriple, profilesFrom } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
 
-interface Choice { runtime: RuntimeKind | ""; model: string; effort: string }
+interface Choice { runtime: RuntimeKind | ""; model: string; effort: string; profile?: string }
 const LAST = "ember.newChat";
 
 function lastChoice(station: string): Partial<Choice> {
@@ -97,6 +97,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       const { key, thread } = await api.newChat({
         runtime, model,
         ...(choice.effort ? { effort: choice.effort } : {}),
+        // Kept to a profile only while it still runs the model there.
+        ...(choice.profile && profilesFrom(profiles)(model, runtime).some((a) => a.id === choice.profile) ? { profile: choice.profile } : {}),
       });
       track("chat_created", { runtime, model, ...(choice.effort ? { effort: choice.effort } : {}), ms: Math.round(performance.now() - at) });
       return { key, thread: thread.id };
@@ -114,9 +116,9 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         // Nothing to choose from: the chooser leads to where models are enabled.
         <Link className="chooser" to={profilesPage(station)} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
       ) : (
-        <ModelTriple side="top" title="用哪个模型、运行时和思考深度" options={view.models}
-          value={{ model, runtime, effort: choice.effort || null }}
-          onPick={(p) => pick({ model: p.model, runtime: p.runtime, effort: p.effort ?? "" })} />
+        <ModelTriple side="top" title="用哪个模型、运行时、思考深度和账号" options={view.models} profilesFor={profilesFrom(profiles)}
+          value={{ model, runtime, effort: choice.effort || null, profile: choice.profile || null }}
+          onPick={(p) => pick({ model: p.model, runtime: p.runtime, effort: p.effort ?? "", profile: p.profile ?? "" })} />
       )}
     </>
   ), [stations, station, view, runtime, choice, model]);

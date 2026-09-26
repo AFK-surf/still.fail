@@ -355,14 +355,15 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
   return (
     <div className="session-details">
       {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota). */}
-      <ModelTriple title="换模型、思考深度和账号"
-        options={agent.choices.map((c) => ({ model: c.model, runtimes: [session.runtime], profiles: c.profiles }))}
-        value={{ model: session.model ?? "", runtime: session.runtime, effort: session.effort }}
-        account={{ pinned: session.profilePinned, profile: session.profile, current: (() => {
-          const current = agent.profiles.find((p) => p.current);
-          return { name: current?.name ?? agent.profile?.name ?? session.profile, kind: current?.kind ?? agent.profile?.access.kind ?? null, quota: current?.quota ?? agent.profile?.quota ?? null };
-        })() }}
-        onPick={({ model, effort, profile }) => void change.run({ model, effort, profile: profile ?? null })} />
+      <ModelTriple title="换模型、思考深度和账号" runtimeFixed
+        options={agent.choices.map((c) => ({ model: c.model, runtimes: [session.runtime] }))}
+        profilesFor={(m) => agent.choices.find((c) => c.model === m)?.profiles ?? []}
+        current={(() => {
+          const on = agent.profiles.find((p) => p.current);
+          return { id: session.profile, name: on?.name ?? agent.profile?.name ?? session.profile, kind: on?.kind ?? agent.profile?.access.kind ?? null, quota: on?.quota ?? agent.profile?.quota ?? null };
+        })()}
+        value={{ model: session.model ?? "", runtime: session.runtime, effort: session.effort, profile: session.profilePinned ? session.profile : null }}
+        onPick={({ model, effort, profile }) => void change.run({ model, effort, profile })} />
       {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
       {/* What it used: a line, quiet. */}
       <p className="run-usage muted">
