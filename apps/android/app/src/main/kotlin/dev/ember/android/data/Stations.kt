@@ -70,6 +70,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable data class RuntimeModels(val runtime: String, val models: List<String> = emptyList())
 
+/** A model the station can run, with the runtimes it runs on (the core's): the model is chosen first, the runtime only when there are several. */
+@Serializable data class ModelRuntimes(val model: String, val runtimes: List<String> = emptyList())
+
 @Serializable data class StationView(
     val station: String,
     val id: String,
@@ -82,4 +85,5 @@ import kotlinx.serialization.Serializable
     val overview: Overview? = null,
     val host: HostInfo? = null,
     val runtimes: List<RuntimeModels> = emptyList(),
+    val models: List<ModelRuntimes> = emptyList(),
 )

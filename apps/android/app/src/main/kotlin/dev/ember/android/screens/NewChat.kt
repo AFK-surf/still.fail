@@ -52,6 +52,7 @@ import dev.ember.android.data.ChatOf
 import dev.ember.android.data.EFFORTS
 import dev.ember.android.data.EFFORT_LABEL
 import dev.ember.android.data.RUNTIME_LABEL
+import dev.ember.android.data.ModelRuntimes
 import dev.ember.android.data.StationView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.rememberTopic
@@ -113,10 +114,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
     val scope = rememberCoroutineScope()
     val draft = remember(view.station) { Draft() }
     var choice by remember(view.station) { mutableStateOf(app.lastChoice(view.station)) }
-    // Runtimes this station has enabled models for; a remembered model no longer enabled gives way to the first that is.
-    val runtime = view.runtimes.firstOrNull { it.runtime == choice?.runtime } ?: view.runtimes.firstOrNull()
-    val model = runtime?.models?.firstOrNull { it == choice?.model } ?: runtime?.models?.firstOrNull()
-    val effort = choice?.effort?.takeIf { it != "-" && runtime != null && it in EFFORTS[runtime.runtime].orEmpty() } ?: ""
+    // The model first, from what the station's profiles have enabled; the runtime only when it runs on more than one. A
+    // remembered model or runtime no longer there gives way to the first that is.
+    val entry = view.models.firstOrNull { it.model == choice?.model } ?: view.models.firstOrNull()
+    val model = entry?.model
+    val runtime = entry?.runtimes?.firstOrNull { it == choice?.runtime } ?: entry?.runtimes?.firstOrNull()
+    val effort = choice?.effort?.takeIf { it != "-" && runtime != null && it in EFFORTS[runtime].orEmpty() } ?: ""
     val pick = { next: Choice -> choice = next; app.keepChoice(view.station, next) }
     // The model list is what a profile's check found; profiles not checked since the station started are checked now, once.
     val profiles = view.overview?.profiles.orEmpty()
@@ -153,7 +156,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
             val problem = when {
                 view.overview == null -> "正在读取 ${view.name} 的 Profile…"
                 profiles.isEmpty() -> "这台 station 还没有 Profile，先在电脑上到 设置 → Profile 里加一个。"
-                view.runtimes.isEmpty() -> "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。"
+                view.models.isEmpty() -> "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。"
                 else -> null
             }
             if (problem != null) Text(problem, fontSize = 13.sp, color = if (view.overview == null) C.muted else C.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
@@ -169,11 +172,15 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
                 // Nothing to choose from: the chooser leads to where models are enabled.
                 Chooser(haze, null, "没有可用模型 · 去勾选") { app.push(Screen.Station(view.station)) }
             } else {
-                Chooser(haze, { MakerIcon(model, runtime.runtime, 14.dp) }, model) {
-                    pickModel(app, view, runtime.runtime, model) { rt, m -> pick(Choice(rt, m, if (rt != runtime.runtime) "" else effort)) }
+                Chooser(haze, { MakerIcon(model, runtime, 14.dp) }, model) {
+                    pickModel(app, view, model) { m -> val rt = m.runtimes.firstOrNull { it == runtime } ?: m.runtimes.first(); pick(Choice(rt, m.model, if (rt != runtime) "" else effort)) }
+                }
+                // The runtime only when the model runs on more than one.
+                if ((entry?.runtimes?.size ?: 0) > 1) Chooser(haze, { MakerIcon(null, runtime, 13.dp) }, RUNTIME_LABEL[runtime] ?: runtime) {
+                    pickRuntime(app, entry!!.runtimes, runtime) { rt -> pick(Choice(rt, model, "")) }
                 }
                 Chooser(haze, null, "思考 " + (EFFORT_LABEL[effort] ?: "默认")) {
-                    pickEffort(app, runtime.runtime, effort) { e -> pick(Choice(runtime.runtime, model, e)) }
+                    pickEffort(app, runtime, effort) { e -> pick(Choice(runtime, model, e)) }
                 }
             }
         }
@@ -228,16 +235,24 @@ private fun pickStation(app: AppState, stations: List<StationView>, current: Str
     }
 }
 
-private fun pickModel(app: AppState, view: StationView, currentRuntime: String, current: String, onPick: (String, String) -> Unit) {
+private fun pickModel(app: AppState, view: StationView, current: String, onPick: (ModelRuntimes) -> Unit) {
     app.sheet = SheetSpec(0.5f) {
         SheetGrab()
         SheetHead("用哪个模型")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            view.runtimes.forEach { rt ->
-                rt.models.forEach { m ->
-                    PickRow(m, RUNTIME_LABEL[rt.runtime] ?: rt.runtime, checked = rt.runtime == currentRuntime && m == current, leading = { ModelMark(m, rt.runtime, 36.dp) }) { onPick(rt.runtime, m); app.sheet = null }
-                }
+            view.models.forEach { m ->
+                PickRow(m.model, m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, checked = m.model == current, leading = { ModelMark(m.model, m.runtimes.first(), 36.dp) }) { onPick(m); app.sheet = null }
             }
+        }
+    }
+}
+
+private fun pickRuntime(app: AppState, runtimes: List<String>, current: String, onPick: (String) -> Unit) {
+    app.sheet = SheetSpec(0.36f) {
+        SheetGrab()
+        SheetHead("用哪个运行时")
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            runtimes.forEach { rt -> PickRow(RUNTIME_LABEL[rt] ?: rt, checked = rt == current) { onPick(rt); app.sheet = null } }
         }
     }
 }
