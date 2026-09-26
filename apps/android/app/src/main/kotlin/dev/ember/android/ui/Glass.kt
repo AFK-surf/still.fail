@@ -8,6 +8,7 @@ package dev.ember.android.ui
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,6 +66,11 @@ private fun fadePadding(edge: Edge, fade: Dp) = when (edge) {
     Edge.Top -> PaddingValues(bottom = fade)
     Edge.Bottom -> PaddingValues(top = fade)
 }
+
+/** The composer's capsule: its corner and the room inside it; what sits in it takes the corner that is concentric with it. */
+val ComposerCorner = 26.dp
+val ComposerInset = 8.dp
+val InComposer = RoundedCornerShape(ComposerCorner - ComposerInset)
 
 /** A capsule floating over the list that `state` is the source of: raised, frosted, with a hairline round it. */
 @Composable

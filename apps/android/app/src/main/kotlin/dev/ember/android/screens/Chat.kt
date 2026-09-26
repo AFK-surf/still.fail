@@ -5,6 +5,10 @@
 // the time over their words. Long-press quotes or copies a message; ＋ adds files.
 package dev.ember.android.screens
 
+import androidx.compose.ui.graphics.Shape
+import dev.ember.android.ui.InComposer
+import dev.ember.android.ui.ComposerInset
+import dev.ember.android.ui.ComposerCorner
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
@@ -828,9 +832,9 @@ private suspend fun download(context: Context, name: String, bytes: ByteArray): 
 }
 
 @Composable
-private fun FileCard(name: String, size: Long, note: String? = null, busy: Boolean = false, onRemove: (() -> Unit)? = null) {
+private fun FileCard(name: String, size: Long, note: String? = null, busy: Boolean = false, onRemove: (() -> Unit)? = null, shape: Shape = RoundedCornerShape(12.dp)) {
     Row(
-        Modifier.widthIn(max = 260.dp).clip(RoundedCornerShape(12.dp)).background(C.chip).padding(horizontal = 10.dp, vertical = 8.dp),
+        Modifier.widthIn(max = 260.dp).clip(shape).background(C.chip).padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (busy) Spinner(16.dp) else IconIn(Icons.File, 18.dp, C.muted)
@@ -959,8 +963,9 @@ fun openAttach(app: AppState, launchers: Triple<() -> Unit, () -> Unit, () -> Un
 /** What waits to go with the message: the quotes (each with a line for a comment), then the files. */
 @Composable
 fun DraftExtras(draft: Draft) {
+    // In the composer's capsule: corners concentric with it.
     draft.quotes.forEach { q ->
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.chip)) {
+        Column(Modifier.fillMaxWidth().clip(InComposer).background(C.chip)) {
             Row(
                 Modifier.fillMaxWidth().background(C.accentBg.copy(alpha = 0.6f)).padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -984,7 +989,7 @@ fun DraftExtras(draft: Draft) {
     if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         draft.files.forEach { f ->
             val remove = { draft.files.remove(f); Unit }
-            if (f.preview != null) Box(Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(C.chip)) {
+            if (f.preview != null) Box(Modifier.size(56.dp).clip(InComposer).background(C.chip)) {
                 Image(f.preview, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
                     if (f.error != null) Text("失败", color = Color.White, fontSize = 11.sp) else CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 1.5.dp)
@@ -992,7 +997,7 @@ fun DraftExtras(draft: Draft) {
                 Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(18.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
                     IconIn(Icons.Close, 10.dp, Color.White)
                 }
-            } else FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) "正在上传…" else null, busy = f.done == null && f.error == null, onRemove = remove)
+            } else FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) "正在上传…" else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
         }
     }
 }
@@ -1054,9 +1059,9 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<C
     // A capsule floating over the list, which runs on around it.
     Column(
         modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)
-            .floating(haze, RoundedCornerShape(26.dp))
+            .floating(haze, RoundedCornerShape(ComposerCorner))
             // A tap on the capsule's own room is a tap on the field.
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { draft.focus++ }.padding(8.dp),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { draft.focus++ }.padding(ComposerInset),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         DraftExtras(draft)
