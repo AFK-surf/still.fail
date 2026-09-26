@@ -12,7 +12,7 @@
 //! recomputed at the viewer's next local midnight (`daysAgo` changes then).
 
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::{Rc, Weak};
 
 use futures::FutureExt;
@@ -436,6 +436,7 @@ impl Views {
                 "online": s.online, "lastSeen": s.last_seen, "version": s.version,
                 "link": self.link(&s.address, s.online),
                 "runtimes": runtimes(overview.as_ref()),
+                "models": models(overview.as_ref()),
                 "overview": overview, "host": host,
             })
         });
@@ -686,6 +687,25 @@ fn runtimes(overview: Option<&Value>) -> Value {
         (!models.is_empty()).then(|| json!({ "runtime": runtime, "models": models }))
     });
     Value::Array(list.collect())
+}
+
+/// The models the station can run, each with the runtimes it runs on (those of the profiles that have it enabled):
+/// a model is chosen first, and a runtime only when it has more than one.
+fn models(overview: Option<&Value>) -> Value {
+    let mut on: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for p in overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten() {
+        let runtimes: Vec<&str> = p.get("runtimes").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+        for model in p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+            on.entry(model).or_default().extend(runtimes.iter().copied());
+        }
+    }
+    // Claude Code first where both run it: it is the one most chats use.
+    let order = |r: &&str| RUNTIMES.iter().position(|x| x == r).unwrap_or(usize::MAX);
+    Value::Array(on.into_iter().map(|(model, runtimes)| {
+        let mut runtimes: Vec<&str> = runtimes.into_iter().collect();
+        runtimes.sort_by_key(order);
+        json!({ "model": model, "runtimes": runtimes })
+    }).collect())
 }
 
 #[cfg(test)]
@@ -1098,6 +1118,7 @@ mod tests {
                 {"id": "p2", "runtimes": ["claude"], "models": []},
                 {"id": "p3", "runtimes": ["claude"], "models": ["sonnet"]},
                 {"id": "p4", "runtimes": ["claude"], "models": ["opus", "sonnet"]},
+                {"id": "p5", "runtimes": ["claude", "codex"], "models": ["deepseek-flash"]},
             ]});
             t.set(overview("ws/a"), overview_a.clone());
             t.set(host_of("ws/a"), json!({"hostname": "studio"}));
@@ -1111,7 +1132,9 @@ mod tests {
             assert_eq!(v[0]["link"], json!({"state": "error", "message": "没有权限"}));
             assert_eq!(v[0]["overview"], overview_a);
             assert_eq!(v[0]["host"], json!({"hostname": "studio"}));
-            assert_eq!(v[0]["runtimes"], json!([{"runtime": "claude", "models": ["opus", "sonnet"]}, {"runtime": "codex", "models": ["gpt-5", "o3"]}]));
+            assert_eq!(v[0]["runtimes"], json!([{"runtime": "claude", "models": ["deepseek-flash", "opus", "sonnet"]}, {"runtime": "codex", "models": ["deepseek-flash", "gpt-5", "o3"]}]));
+            // An account run on both offers its model on both: a runtime is chosen for it.
+            assert_eq!(v[0]["models"], json!([{"model": "deepseek-flash", "runtimes": ["claude", "codex"]}, {"model": "gpt-5", "runtimes": ["codex"]}, {"model": "o3", "runtimes": ["codex"]}, {"model": "opus", "runtimes": ["claude"]}, {"model": "sonnet", "runtimes": ["claude"]}]));
             assert_eq!(
                 v[1],
                 json!({"station": "ws/b", "id": "b", "name": "beta", "online": false, "lastSeen": v[1]["lastSeen"], "version": null,
