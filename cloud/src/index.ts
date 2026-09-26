@@ -182,11 +182,13 @@ async function handle(request: Request, env: Env): Promise<Response> {
   const restartRelay = path === "/v1/admin/relay/restart";
   const whereRelay = path === "/v1/admin/relay/where";
   const deleteWorkspace = /^\/v1\/admin\/workspaces\/([A-Za-z0-9_-]{1,64})\/delete$/.exec(path);
-  if ((admin || restartRelay || whereRelay || deleteWorkspace) && request.method === "POST") {
+  const listWorkspaces = path === "/v1/admin/workspaces/list";
+  if ((admin || restartRelay || whereRelay || deleteWorkspace || listWorkspaces) && request.method === "POST") {
     const supplied = bearerToken(request);
     if (!env.ADMIN_TOKEN || env.ADMIN_TOKEN.length < 43 || !supplied || (await digest(supplied)) !== (await digest(env.ADMIN_TOKEN))) return denied();
     try {
       if (whereRelay) return reply(await env.RELAY_BUDGET.getByName("primary").where());
+      if (listWorkspaces) return reply({ workspaces: await env.DIRECTORY.getByName("primary").adminWorkspaces() });
       if (deleteWorkspace) {
         await env.DIRECTORY.getByName("primary").adminDeleteWorkspace(deleteWorkspace[1]!);
         return reply({ deleted: true });
