@@ -1,33 +1,16 @@
 import { useStation, useLink } from "../station.tsx";
-import { ChevronDown, ChevronRight, ExternalLink, KeyRound, LogIn, Pencil, Plus, RefreshCw, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, LogIn, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Collapsible } from "radix-ui";
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type ProfileView, type RuntimeKind } from "../api.ts";
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, Pill, RuntimeLogo, Section, Segmented, Select, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeLogo, Section, Segmented, Select, Time } from "../ui.tsx";
 
-/** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
-function OpenCodeMark({ size = 16 }: { size?: number; strokeWidth?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} aria-hidden="true">
-      <rect x="6" y="4" width="12" height="16" />
-    </svg>
-  );
-}
-
-const ACCESS_ICON: Record<AccessKind, ComponentType<{ size?: number; strokeWidth?: number }>> = {
-  "subscription": UserRound,
-  "opencode-go": OpenCodeMark,
-  "anthropic-api": KeyRound,
-  "env": SlidersHorizontal,
-};
-
-function AccessMark({ kind, size = 32 }: { kind: AccessKind; size?: number }) {
-  const Icon = ACCESS_ICON[kind];
-  return <span className="mark" style={{ width: size, height: size }}><Icon {...ICON} size={Math.round(size * .55)} /></span>;
+function AccessMark({ kind, runtime, size = 32 }: { kind: AccessKind; runtime: RuntimeKind; size?: number }) {
+  return <span className="mark" style={{ width: size, height: size }}><ProviderLogo runtime={runtime} kind={kind} size={Math.round(size * .55)} /></span>;
 }
 
 export function AccountsPage() {
@@ -56,10 +39,10 @@ export function AccountsPage() {
               return (
                 <li key={p.id}>
                   <Link className="list-row account-row" to={link(`/settings/accounts/${p.id}`)}>
-                    <span className="mark runtime-mark"><RuntimeLogo runtime={p.runtime} size={18} /></span>
+                    <span className="mark runtime-mark"><ProviderLogo runtime={p.runtime} kind={p.access.kind} size={18} /></span>
                     <span className="list-row-text">
                       <span className="list-row-title">{p.name}</span>
-                      <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.value!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
+                      <span className="muted runtime-line"><RuntimeLogo runtime={p.runtime} size={12} />{RUNTIME_LABEL[p.runtime]} · {ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.value!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
                     </span>
                     <QuotaBars quota={p.quota} compact />
                     <Pill tone={tone.tone}>{tone.label}</Pill>
@@ -127,7 +110,7 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
           <Field label="接入方式">
             <Choices label="接入方式" value={kind} onChange={(v) => setKind(v as AccessKind)}
               options={ACCESS_KINDS[runtime].map((k) => ({
-                value: k, icon: <AccessMark kind={k} size={28} />, description: ACCESS[k].description,
+                value: k, icon: <AccessMark kind={k} runtime={runtime} size={28} />, description: ACCESS[k].description,
                 title: k === "subscription" ? (runtime === "claude" ? "Claude 订阅" : "ChatGPT 订阅") : ACCESS[k].label,
               }))} />
           </Field>
@@ -178,7 +161,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
     <div className="page page-narrow">
       <MobileBack to={link("/settings/accounts")} label="Profile" />
       <header className="identity">
-        <span className="mark runtime-mark" style={{ width: 48, height: 48 }}><RuntimeLogo runtime={profile.runtime} size={26} /></span>
+        <span className="mark runtime-mark" style={{ width: 48, height: 48 }}><ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={26} /></span>
         <div className="identity-text">
           {editingName ? (
             <input className="input identity-name-input" value={name} autoFocus aria-label="名称" onChange={(e) => setName(e.target.value)} onBlur={rename}
@@ -186,7 +169,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
           ) : (
             <h1 className="identity-name">{profile.name}<IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
           )}
-          <p className="identity-sub"><span>{RUNTIME_LABEL[profile.runtime]}</span><span>{ACCESS[profile.access.kind].label}</span><span className="mono">{profile.id}</span></p>
+          <p className="identity-sub"><span className="runtime-line"><RuntimeLogo runtime={profile.runtime} size={12} />{RUNTIME_LABEL[profile.runtime]}</span><span>{ACCESS[profile.access.kind].label}</span><span className="mono">{profile.id}</span></p>
         </div>
         <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash2, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>

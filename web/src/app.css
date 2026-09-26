@@ -628,6 +628,8 @@
 .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-sm); animation: appear 0s linear 400ms both; }
 .loading-fill { flex: 1; min-height: 100%; justify-content: center; }
 .gate .loading { justify-content: center; }
+/* A profile's runtime, small, under its provider's mark. */
+.runtime-line { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 /* The app starting: the buddy floats; what it waits for comes up only if it takes a while. */
 .splash { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 16px; padding: 24px; background: var(--canvas); text-align: center; }
 .splash-mark { display: block; animation: splash-float 1.8s ease-in-out infinite; }

@@ -12,7 +12,7 @@ import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
 import { stationBase, type Station } from "../station.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Loading, Menu, MobileBack, Pill, RuntimeLogo, Section, Select, StatusDot, Time } from "../ui.tsx";
+import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeLogo, Section, Select, StatusDot, Time } from "../ui.tsx";
 import { signOut, type Account } from "./accounts.ts";
 import { lastChat } from "../lastChat.ts";
 import { cloud, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
@@ -219,10 +219,10 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
                     return (
                       <li key={p.id}>
                         <Link className="list-row" to={`${base}/settings/accounts/${p.id}`}>
-                          <span className="mark runtime-mark"><RuntimeLogo runtime={p.runtime} size={18} /></span>
+                          <span className="mark runtime-mark"><ProviderLogo runtime={p.runtime} kind={p.access.kind} size={18} /></span>
                           <span className="list-row-text">
                             <span className="list-row-title">{p.name}</span>
-                            <span className="muted">{RUNTIME_LABEL[p.runtime]} · {ACCESS[p.access.kind].label}{p.usedBy.length ? ` · ${p.usedBy.length} 个连接在用` : ""}</span>
+                            <span className="muted runtime-line"><RuntimeLogo runtime={p.runtime} size={12} />{RUNTIME_LABEL[p.runtime]} · {ACCESS[p.access.kind].label}{p.usedBy.length ? ` · ${p.usedBy.length} 个连接在用` : ""}</span>
                           </span>
                           <QuotaBars quota={p.quota} compact />
                           <Pill tone={tone.tone}>{tone.label}</Pill>

@@ -2,7 +2,7 @@
 // dismissal come from Radix), styled with ember's tokens. Pages compose these
 // instead of styling their own buttons, fields or menus.
 import { Mark } from "./brand.tsx";
-import { Check, ChevronDown, ChevronLeft, Copy, MessageCircle, MoreHorizontal, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, Copy, MessageCircle, MoreHorizontal, SlidersHorizontal, X } from "lucide-react";
 import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
@@ -416,6 +416,22 @@ export function ModelLogo({ model, runtime, size = 14 }: { model: string | null 
   if (!maker) return <RuntimeLogo runtime={runtime} size={size} />;
   const [, file, name, mono] = maker;
   return <img className="model-logo" src={`${import.meta.env.BASE_URL}models/${file}.svg`} alt={name} title={name} width={size} height={size} data-mono={mono || undefined} />;
+}
+
+/** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
+function OpenCodeMark({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} aria-hidden="true">
+      <rect x="6" y="4" width="12" height="16" />
+    </svg>
+  );
+}
+
+/** Whose service a profile runs on: Anthropic or OpenAI for a subscription or an API key, OpenCode for OpenCode Go. */
+export function ProviderLogo({ runtime, kind, size = 16 }: { runtime: "claude" | "codex"; kind: string; size?: number }) {
+  if (kind === "opencode-go") return <OpenCodeMark size={size} />;
+  if (kind === "env") return <SlidersHorizontal size={size} strokeWidth={1.7} aria-hidden="true" />;
+  return <ModelLogo model={runtime === "claude" || kind === "anthropic-api" ? "claude" : "openai"} runtime={runtime} size={size} />;
 }
 
 /** An agent as the phone shows it: its model's maker on a tile, and where it stands as a badge. */
