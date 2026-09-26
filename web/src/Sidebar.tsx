@@ -106,7 +106,7 @@ function ChatRow({ item }: { item: ChatItem }) {
         <span className="nav-session-head">
           <span className="nav-session-title">{item.title}</span>
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
-          {connect && <Tip label={`来自 ${connect.name}`} side="right"><span className="session-kind"><ConnectKindIcon kind={connect.kind} size={12} /></span></Tip>}
+          {connect && <Tip label={`来自 ${connect.kind === "slack" ? "Slack" : connect.kind} · 连接「${connect.name}」`} side="right"><span className="session-kind"><ConnectKindIcon kind={connect.kind} size={12} /></span></Tip>}
         </span>
         {/* People are in the chat itself; here only the last thing said and when. */}
         <span className="nav-session-meta">
