@@ -4,16 +4,15 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { useApi, useChatSend, useIsMine, useStationCall, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
+import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
-import { agentLabel, botUserIdOf, sessionStatus } from "./format.ts";
+import { agentLabel, botUserIdOf, sessionStatus, slackThreadUrl, slackWorkspaceUrl } from "./format.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
-import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
+import { Avatar, ModelLogo, SlackLogo, Time, Tip } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
 import { useStickToBottom } from "./scroll.ts";
-import { useNavigate } from "react-router";
 
 /** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
 interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null; session: SessionSummary; live: LiveView | undefined; turns: ChatView["agents"][number]["turns"] }
@@ -223,41 +222,16 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
   );
 }
 
-/**
- * Where a Slack thread's composer would be. The Slack thread is Slack's; one
- * talks to its agent on ember in the agent's own internal chat, bound to its
- * session (made on first use), whose messages reach the agent like Slack's.
- */
+/** Where a Slack thread's composer would be: people answer it in Slack. */
 function SlackReply({ chat }: { chat: ChatView }) {
-  const station = useStation();
-  const call = useStationCall(station.address);
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const open = async (agent: ChatView["agents"][number]) => {
-    setError(null);
-    const existing = agent.threads.find((t) => t.surface === "ember");
-    if (existing) return navigate(`${station.base}/chats/${existing.id}`);
-    setBusy(agent.session.key);
-    try {
-      const made = await call.request<{ id: number }>("POST", "/threads", { session: agent.session.key });
-      navigate(`${station.base}/chats/${made.id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
-  };
+  const connect = chat.agents.find((a) => a.connect?.kind === "slack")?.connect ?? null;
+  const url = slackThreadUrl(slackWorkspaceUrl(connect), chat.thread.channel, chat.thread.threadTs);
   return (
     <div className="composer-wrap">
       <p className="chat-slack-reply">
-        {chat.agents.map((agent) => (
-          <button key={agent.session.key} type="button" className="btn btn-secondary" disabled={busy !== null} onClick={() => void open(agent)}>
-            <ModelLogo model={agent.session.model} runtime={agent.session.runtime} size={14} />
-            {chat.agents.length > 1 ? `和 ${agentLabel(agent.session.model, agent.session.effort)} 对话` : "和它对话"}
-          </button>
-        ))}
-        {error && <span className="field-error">{error}</span>}
+        {url
+          ? <a className="inline-link" href={url} target="_blank" rel="noopener"><SlackLogo size={13} />在 Slack 里回复</a>
+          : <span className="muted"><SlackLogo size={13} />在 Slack 里回复</span>}
       </p>
     </div>
   );

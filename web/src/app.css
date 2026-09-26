@@ -675,7 +675,7 @@
 .chat-unread-line { display: flex; align-items: center; gap: 10px; color: var(--accent); font-size: var(--text-xs); font-weight: 500; }
 .chat-unread-line::before, .chat-unread-line::after { content: ""; flex: 1; height: 1px; background: currentColor; opacity: .5; }
 /* A Slack chat is answered in Slack: this line takes the composer's place. */
-.chat-slack-reply { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; margin: 0; padding: 14px 0 18px; font-size: var(--text-sm); }
+.chat-slack-reply { display: flex; justify-content: center; margin: 0; padding: 14px 0 18px; font-size: var(--text-sm); }
 .chat-slack-reply a, .chat-slack-reply span { display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 1100px) {
   .session-body[data-panel="true"] { grid-template-columns: minmax(0, 1fr); }
