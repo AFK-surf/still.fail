@@ -3,11 +3,14 @@
 // one control that shows them together. Picks there are a draft until 确定; a panel closed otherwise changes nothing.
 import { ChevronDown } from "lucide-react";
 import { Popover } from "radix-ui";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ProfileView, RunnableProfile, RuntimeKind } from "./api.ts";
 import { QuotaBars } from "./components.tsx";
 import { EFFORTS, RUNTIME_LABEL, timeUntil } from "./format.ts";
 import { ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
+
+/** What the control leaves out, in turn, as its room narrows: the account's name, its quota and a default effort, the runtime, the effort. */
+const DROPS = ["", "name", "name rings", "name rings runtime", "name rings runtime effort"];
 
 /** A model that can be chosen: the runtimes it runs on, and whether its accounts' quota is used up. */
 export interface ModelOption { model: string; runtimes: RuntimeKind[]; spent?: { until: number | null } | null }
@@ -53,12 +56,33 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
   const shown = kept ?? current;
   const valueOption = options.find((o) => o.model === value.model);
   const set = (patch: Partial<Pick>) => setDraft((d) => ({ ...d, ...patch }));
+  // Shown within the room it has: the most it can say that fits, dropping what matters least first.
+  const fit = useRef<HTMLSpanElement>(null);
+  const [drop, setDrop] = useState(0);
+  const label = `${value.model}|${value.runtime}|${value.effort}|${value.profile}|${shown?.name ?? ""}`;
+  useLayoutEffect(() => {
+    const room = fit.current;
+    const trigger = room?.firstElementChild as HTMLElement | null;
+    if (!room || !trigger) return;
+    const measure = () => {
+      let level = 0;
+      for (; level < DROPS.length - 1; level++) {
+        trigger.dataset.drop = DROPS[level]!;
+        if (trigger.scrollWidth <= room.clientWidth) break;
+      }
+      trigger.dataset.drop = DROPS[level]!;
+      setDrop(level);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(room);
+    return () => observer.disconnect();
+  }, [label]);
 
   return (
     <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) setDraft(value); }}>
-      {/* Shown within the room it has: what matters least goes first as it narrows (app.css, .model-triple-fit). */}
-      <span className="model-triple-fit">
-        <Popover.Trigger className="model-triple" title={title} disabled={options.length === 0}>
+      <span className="model-triple-fit" ref={fit}>
+        <Popover.Trigger className="model-triple" title={title} disabled={options.length === 0} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className="triple-model">没有可用模型</span> : (
             <>
               <span className="triple-model"><ModelLogo model={value.model} runtime={value.runtime} size={13} /><span className="triple-model-name">{value.model || "选模型"}</span></span>
