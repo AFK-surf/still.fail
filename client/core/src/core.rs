@@ -5,9 +5,14 @@
 //! workspaces, workspace), stations (everything with a station) or the views.
 //!
 //! The account topics live here: `accounts` is the list itself, `workspaces`
-//! every account's `/v1/me`, `workspace` one `GET /v1/workspaces/:id`. They are
-//! refetched when the accounts change, after a write through `cloud.request`,
-//! and every [`REFRESH_MS`] while subscribed.
+//! every account's `/v1/me`, `workspace` one `GET /v1/workspaces/:id`. While
+//! `workspaces` or a `workspace` is live, each signed-in account holds ember
+//! cloud's `/v1/events` socket, and the topics change when it says so:
+//! `workspaces` reads that account's `/v1/me` again, `workspace` that
+//! workspace, and `station` sets the station's `online` in place. Every time a
+//! socket opens, the live account topics are read once (nothing is replayed).
+//! They are also read when the accounts change and after a write through
+//! `cloud.request`; never on a timer.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -15,8 +20,8 @@ use std::rc::{Rc, Weak};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use futures::FutureExt;
-use futures::future::{LocalBoxFuture, Shared};
+use futures::future::{AbortHandle, Abortable, LocalBoxFuture, Shared, join_all};
+use futures::{FutureExt, StreamExt};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -31,8 +36,12 @@ use crate::station::{self, MeshSource, StationAddr, StationGrants, Stations, Top
 use crate::store::{Source, Store};
 use crate::views::{EmailOf, Views};
 
-/// How often `workspaces` and `workspace` are refetched while subscribed.
-pub const REFRESH_MS: u64 = 30_000;
+/// The first wait before an events socket is opened again; it doubles up to [`SOCKET_RETRY_MAX_MS`], and starts
+/// over once a socket held for a minute.
+pub const SOCKET_RETRY_MS: u64 = 1_000;
+pub const SOCKET_RETRY_MAX_MS: u64 = 60_000;
+/// The subprotocol ember cloud's `/v1/events` answers with; the token travels as a second one.
+pub const EVENTS_PROTOCOL: &str = "ember-events";
 
 pub struct Core {
     inner: Rc<Inner>,
@@ -52,15 +61,34 @@ struct Inner {
     relay_url: RefCell<Option<String>>,
     /// Which account reaches each workspace, from the latest `/v1/me` answers.
     owners: RefCell<HashMap<String, String>>,
-    /// The subscribed `workspaces` / `workspace` topics. `run` ends a refresh loop when the topic stops or restarts;
-    /// `fetch` lets only the newest fetch of a topic set its value.
-    live: RefCell<HashMap<Topic, Live>>,
-    runs: Cell<u64>,
+    /// Each account's latest `/v1/me`: its answer, or why it failed.
+    mes: RefCell<HashMap<String, Result<Value>>>,
+    /// Each account's latest successful `/v1/me`: whom it reaches.
+    reach: RefCell<HashMap<String, Value>>,
+    /// The accounts as last shown, so a change that UIs cannot see (a refreshed token) is not one.
+    shown_accounts: RefCell<Vec<AccountView>>,
+    /// Every account's `/v1/me` under way.
+    me_loading: RefCell<Option<Shared<LocalBoxFuture<'static, ()>>>>,
+    /// Numbers the `/v1/me` requests per account, so only the newest answer is kept.
+    me_fetches: RefCell<HashMap<String, u64>>,
+    /// The live `workspaces` / `workspace` topics, each with the number of its newest fetch.
+    live: RefCell<HashMap<Topic, u64>>,
+    /// Per account, its ember cloud events socket while an account topic is live.
+    sockets: RefCell<HashMap<String, Socket>>,
 }
 
-struct Live {
-    run: u64,
-    fetch: u64,
+struct Socket {
+    task: AbortHandle,
+    state: SocketState,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum SocketState {
+    /// Its first try: the topics are read once it opens (or fails).
+    Connecting,
+    Open,
+    /// Down, trying again.
+    Retrying,
 }
 
 impl Core {
@@ -84,8 +112,13 @@ impl Core {
                 mesh: RefCell::default(),
                 relay_url: RefCell::default(),
                 owners: RefCell::default(),
+                mes: RefCell::default(),
+                reach: RefCell::default(),
+                me_loading: RefCell::default(),
+                shown_accounts: RefCell::new(accounts.list()),
+                me_fetches: RefCell::default(),
                 live: RefCell::default(),
-                runs: Cell::new(0),
+                sockets: RefCell::default(),
             }
         });
         let me = Rc::downgrade(&inner);
@@ -156,6 +189,7 @@ impl Source for Router {
             self.stations.stop(topic);
         } else if let Some(core) = self.core.upgrade() {
             core.live.borrow_mut().remove(topic);
+            core.sync_sockets();
         }
     }
 
@@ -221,7 +255,7 @@ impl Inner {
                 let result = self.cloud.request(&account, &method, &path, body).await?;
                 // A write may rename, join or leave a workspace: what the account topics show changed too.
                 if !method.eq_ignore_ascii_case("GET") {
-                    self.refresh_all();
+                    self.refresh_all().await;
                 }
                 Ok(result)
             }
@@ -243,6 +277,20 @@ impl Inner {
                 self.views.outbox_remove(&station, &key, &id);
                 Ok(Value::Null)
             }
+            Call::ChatOlder { station, key } => {
+                let addr = StationAddr::parse(&station)?;
+                let Some(thread) = self.stations.ember_thread(&addr, &key).await?.and_then(|t| t.get("id")?.as_u64()) else {
+                    return Ok(json!({ "more": false }));
+                };
+                Ok(json!({ "more": self.stations.older(&addr, thread).await? }))
+            }
+            Call::ChatRead { station, key, seq } => {
+                let addr = StationAddr::parse(&station)?;
+                if let Some(thread) = self.stations.ember_thread(&addr, &key).await?.and_then(|t| t.get("id")?.as_u64()) {
+                    self.stations.read(&addr, thread, seq).await?;
+                }
+                Ok(Value::Null)
+            }
             Call::StationUpload { station, key, name, bytes } => {
                 self.stations.upload(&StationAddr::parse(&station)?, &key, &name, bytes).await
             }
@@ -262,19 +310,29 @@ impl Inner {
         }
     }
 
-    /// The device endpoint, bringing it up the first time.
-    /// Posts an outgoing message. Once the station has it and the session shows it, it leaves the outbox
-    /// (in the same emission as the session's new value); a failure leaves it there as `failed`.
+    /// Posts an outgoing message into the session's chat on ember's page (opening one if it has none). The
+    /// entry leaves the outbox in the emission that brings the message into the chat's messages; a failure
+    /// leaves it there as `failed`.
     async fn deliver(&self, station: &str, key: &str, id: &str, message: Value) -> Result<Value> {
-        let path = format!("/sessions/{}/messages", encode(key));
-        let result = async { self.stations.request(&StationAddr::parse(station)?, "POST", &path, Some(message)).await }.await;
-        match &result {
-            Ok(_) => self.views.outbox_remove(station, key, id),
-            Err(error) => self.views.outbox_state(station, key, id, Some(&error.message)),
+        let result = async {
+            let addr = StationAddr::parse(station)?;
+            let thread = self.stations.chat_thread(&addr, key).await?;
+            self.stations.post(&addr, thread, message).await
         }
-        result
+        .await;
+        match result {
+            Ok(seq) => {
+                self.views.outbox_sent(station, key, id, seq);
+                Ok(json!({ "seq": seq }))
+            }
+            Err(error) => {
+                self.views.outbox_state(station, key, id, Some(&error.message));
+                Err(error)
+            }
+        }
     }
 
+    /// The device endpoint, bringing it up the first time.
     async fn mesh(&self) -> Result<Rc<Mesh>> {
         let pending = self.mesh.borrow().clone();
         let pending = match pending {
@@ -335,44 +393,96 @@ impl Inner {
     }
 
     /// Every account's `/v1/me`, noting who reaches which workspace and the relay url on the way.
+    /// One at a time: whoever asks while it is under way waits for that one.
     async fn load_me(&self) -> Vec<(AccountView, Result<Value>)> {
+        let pending = self.me_loading.borrow().clone();
+        let pending = match pending {
+            Some(pending) => pending,
+            None => {
+                let core = self.me.clone();
+                let pending = async move {
+                    let Some(core) = core.upgrade() else { return };
+                    let accounts = core.accounts.list();
+                    core.load_me_of(&accounts).await;
+                    core.me_loading.borrow_mut().take();
+                }
+                .boxed_local()
+                .shared();
+                *self.me_loading.borrow_mut() = Some(pending.clone());
+                pending
+            }
+        };
+        pending.await;
         let accounts = self.accounts.list();
-        let answers = futures::future::join_all(accounts.iter().map(|a| self.cloud.me(&a.sub))).await;
-        let results: Vec<_> = accounts.into_iter().zip(answers).collect();
+        let mes = self.mes.borrow();
+        accounts.into_iter().map(|a| {
+            let me = mes.get(&a.sub).cloned().unwrap_or_else(|| Err(CoreError::signed_out("这个账号已退出")));
+            (a, me)
+        }).collect()
+    }
+
+    /// These accounts' `/v1/me`, kept per account; an answer overtaken by a newer request is dropped.
+    async fn load_me_of(&self, accounts: &[AccountView]) {
+        let asked: Vec<u64> = accounts.iter().map(|a| {
+            let mut fetches = self.me_fetches.borrow_mut();
+            let n = fetches.entry(a.sub.clone()).or_default();
+            *n += 1;
+            *n
+        }).collect();
+        let answers = join_all(accounts.iter().map(|a| self.cloud.me(&a.sub))).await;
+        for ((account, n), me) in accounts.iter().zip(asked).zip(answers) {
+            if self.me_fetches.borrow().get(&account.sub) != Some(&n) {
+                continue;
+            }
+            if let Ok(me) = &me {
+                if let Some(url) = me.get("relay_url").and_then(Value::as_str) {
+                    self.relay_url.borrow_mut().get_or_insert_with(|| url.to_string());
+                }
+                self.reach.borrow_mut().insert(account.sub.clone(), me.clone());
+            }
+            self.mes.borrow_mut().insert(account.sub.clone(), me);
+        }
+        self.recompute_owners();
+    }
+
+    /// Which account reaches each workspace: the first (in sign-in order) whose last `/v1/me` answer lists it.
+    /// An account whose latest request failed keeps what it was known to reach; signed-out ones are forgotten.
+    fn recompute_owners(&self) {
+        let accounts = self.accounts.list();
+        self.mes.borrow_mut().retain(|sub, _| accounts.iter().any(|a| &a.sub == sub));
+        self.reach.borrow_mut().retain(|sub, _| accounts.iter().any(|a| &a.sub == sub));
+        let reach = self.reach.borrow();
         let mut owners = self.owners.borrow_mut();
-        // Accounts whose /v1/me failed keep what was known of them; signed-out ones are forgotten.
-        let failed: Vec<&str> = results.iter().filter(|(_, me)| me.is_err()).map(|(a, _)| a.sub.as_str()).collect();
-        owners.retain(|_, sub| failed.contains(&sub.as_str()));
-        for (account, me) in &results {
-            let Ok(me) = me else { continue };
+        owners.clear();
+        for account in &accounts {
+            let Some(me) = reach.get(&account.sub) else { continue };
             for workspace in me.get("workspaces").and_then(Value::as_array).into_iter().flatten() {
                 if let Some(id) = workspace.get("id").and_then(Value::as_str) {
                     owners.entry(id.to_string()).or_insert_with(|| account.sub.clone());
                 }
             }
-            if let Some(url) = me.get("relay_url").and_then(Value::as_str) {
-                self.relay_url.borrow_mut().get_or_insert_with(|| url.to_string());
-            }
         }
-        results
     }
 
     fn accounts_value(&self) -> Result<Value> {
         Ok(serde_json::to_value(self.accounts.list()).expect("accounts serialize"))
     }
 
-    async fn workspaces_value(&self) -> Result<Value> {
-        let entries = self.load_me().await.into_iter().map(|(account, me)| match me {
-            Ok(me) => json!({
+    /// Every account with what its latest `/v1/me` said.
+    fn workspaces_value(&self) -> Value {
+        let mes = self.mes.borrow();
+        let entries = self.accounts.list().into_iter().map(|account| match mes.get(&account.sub) {
+            Some(Ok(me)) => json!({
                 "account": account,
                 "workspaces": me.get("workspaces").cloned().unwrap_or_else(|| json!([])),
                 "invitations": me.get("invitations").cloned().unwrap_or_else(|| json!([])),
                 "relay_url": me.get("relay_url").cloned().unwrap_or(Value::Null),
             }),
             // One account failing (offline, signed out elsewhere) still shows the others.
-            Err(error) => json!({ "account": account, "workspaces": [], "invitations": [], "relay_url": null, "error": error }),
+            Some(Err(error)) => json!({ "account": account, "workspaces": [], "invitations": [], "relay_url": null, "error": error }),
+            None => json!({ "account": account, "workspaces": [], "invitations": [], "relay_url": null }),
         });
-        Ok(Value::Array(entries.collect()))
+        Value::Array(entries.collect())
     }
 
     async fn workspace_value(&self, workspace: &str) -> Result<Value> {
@@ -385,65 +495,209 @@ impl Inner {
             self.store.set(topic, self.accounts_value());
             return;
         }
-        let run = self.runs.get() + 1;
-        self.runs.set(run);
-        self.live.borrow_mut().insert(topic.clone(), Live { run, fetch: 0 });
+        self.live.borrow_mut().insert(topic.clone(), 0);
+        self.sync_sockets();
+        // A socket on its first try reads the topics when it opens; otherwise they are read now.
+        if !self.sockets.borrow().values().any(|s| s.state == SocketState::Connecting) {
+            self.spawn_refresh(topic.clone());
+        }
+    }
+
+    fn spawn_refresh(&self, topic: Topic) {
         let core = self.me.clone();
-        let topic = topic.clone();
         self.host.spawn(
             async move {
-                loop {
-                    let Some(this) = core.upgrade() else { return };
-                    if this.live.borrow().get(&topic).map(|l| l.run) != Some(run) {
-                        return;
-                    }
-                    this.refresh(&topic).await;
-                    let sleep = this.host.sleep(REFRESH_MS);
-                    drop(this);
-                    sleep.await;
+                if let Some(core) = core.upgrade() {
+                    core.refresh(&topic).await;
                 }
             }
             .boxed_local(),
         );
     }
 
-    /// Refetches one account topic; an answer overtaken by a newer fetch is dropped.
+    /// Reads one account topic again; an answer overtaken by a newer fetch is dropped.
     async fn refresh(&self, topic: &Topic) {
+        self.refresh_with(topic, false).await
+    }
+
+    /// `me_read`: every account's `/v1/me` was just read, so `workspaces` needs no request of its own.
+    async fn refresh_with(&self, topic: &Topic, me_read: bool) {
         let fetch = {
             let mut live = self.live.borrow_mut();
-            let Some(live) = live.get_mut(topic) else { return };
-            live.fetch += 1;
-            live.fetch
+            let Some(fetch) = live.get_mut(topic) else { return };
+            *fetch += 1;
+            *fetch
         };
         let value = match topic {
-            Topic::Workspaces => self.workspaces_value().await,
+            Topic::Workspaces => {
+                if !me_read {
+                    self.load_me().await;
+                }
+                Ok(self.workspaces_value())
+            }
             Topic::Workspace { workspace } => self.workspace_value(workspace).await,
             _ => return,
         };
-        if self.live.borrow().get(topic).is_some_and(|l| l.fetch == fetch) {
+        if self.live.borrow().get(topic) == Some(&fetch) {
             self.store.set(topic, value);
         }
     }
 
+    /// The accounts as UIs see them changed (a token refresh alone changes nothing here).
     fn accounts_changed(&self) {
+        let list = self.accounts.list();
+        if *self.shown_accounts.borrow() == list {
+            return;
+        }
+        *self.shown_accounts.borrow_mut() = list;
         self.store.set(&Topic::Accounts, self.accounts_value());
-        self.refresh_all();
+        self.sync_sockets();
+        let core = self.me.clone();
+        self.host.spawn(
+            async move {
+                if let Some(core) = core.upgrade() {
+                    core.refresh_all().await;
+                }
+            }
+            .boxed_local(),
+        );
     }
 
-    /// Refetches every subscribed `workspaces` / `workspace` topic now.
-    fn refresh_all(&self) {
+    /// Reads every live `workspaces` / `workspace` topic again: `/v1/me` once, then each workspace.
+    async fn refresh_all(&self) {
         let topics: Vec<Topic> = self.live.borrow().keys().cloned().collect();
-        for topic in topics {
-            let core = self.me.clone();
-            self.host.spawn(
-                async move {
-                    if let Some(core) = core.upgrade() {
-                        core.refresh(&topic).await;
-                    }
-                }
-                .boxed_local(),
-            );
+        if topics.is_empty() {
+            return;
         }
+        self.load_me().await;
+        join_all(topics.iter().map(|topic| self.refresh_with(topic, true))).await;
+    }
+
+    // ── ember cloud's events ──
+
+    /// One socket per signed-in account while any account topic is live; none otherwise.
+    fn sync_sockets(&self) {
+        let wanted: Vec<String> = if self.live.borrow().is_empty() { Vec::new() } else { self.accounts.list().into_iter().map(|a| a.sub).collect() };
+        let mut sockets = self.sockets.borrow_mut();
+        sockets.retain(|sub, socket| {
+            let keep = wanted.contains(sub);
+            if !keep {
+                socket.task.abort();
+            }
+            keep
+        });
+        for sub in wanted {
+            if sockets.contains_key(&sub) {
+                continue;
+            }
+            let (task, registration) = AbortHandle::new_pair();
+            sockets.insert(sub.clone(), Socket { task, state: SocketState::Connecting });
+            let follow = Abortable::new(follow_socket(self.me.clone(), sub), registration).map(|_| ());
+            self.host.spawn(follow.boxed_local());
+        }
+    }
+
+    /// Notes a socket's state; answers the one before.
+    fn socket_state(&self, sub: &str, state: SocketState) -> Option<SocketState> {
+        self.sockets.borrow_mut().get_mut(sub).map(|s| std::mem::replace(&mut s.state, state))
+    }
+
+    /// Opens an account's events socket with a token good now (refreshed when it is about to expire).
+    async fn open_socket(&self, sub: &str) -> Result<crate::host::SocketFrames> {
+        let token = self.accounts.access_token(sub).await?;
+        let origin = self.host.cloud_origin();
+        let url = match origin.strip_prefix("https://") {
+            Some(rest) => format!("wss://{rest}/v1/events"),
+            None => format!("ws://{}/v1/events", origin.strip_prefix("http://").unwrap_or(&origin)),
+        };
+        Ok(self.host.websocket(url, vec![EVENTS_PROTOCOL.into(), format!("ember-token.{token}")]).await?)
+    }
+
+    fn on_cloud_event(&self, sub: &str, text: &str) {
+        let Ok(event) = serde_json::from_str::<Value>(text) else { return };
+        match event.get("type").and_then(Value::as_str) {
+            Some("workspaces") => {
+                let (core, sub) = (self.me.clone(), sub.to_string());
+                self.host.spawn(
+                    async move {
+                        let Some(core) = core.upgrade() else { return };
+                        let Some(account) = core.accounts.list().into_iter().find(|a| a.sub == sub) else { return };
+                        core.load_me_of(&[account]).await;
+                        if core.live.borrow().contains_key(&Topic::Workspaces) {
+                            core.store.set(&Topic::Workspaces, Ok(core.workspaces_value()));
+                        }
+                    }
+                    .boxed_local(),
+                );
+            }
+            Some("workspace") => {
+                let Some(id) = event.get("id").and_then(Value::as_str) else { return };
+                let topic = Topic::Workspace { workspace: id.to_string() };
+                if self.live.borrow().contains_key(&topic) {
+                    self.spawn_refresh(topic);
+                }
+            }
+            Some("station") => {
+                let (Some(workspace), Some(id), Some(online)) =
+                    (event.get("workspace").and_then(Value::as_str), event.get("id").and_then(Value::as_str), event.get("online").and_then(Value::as_bool))
+                else {
+                    return;
+                };
+                // Complete in itself: the station's presence changes in place, and it was last seen now.
+                let now = (self.host.now_ms() / 1000.0).floor();
+                self.store.update(&Topic::Workspace { workspace: workspace.to_string() }, &mut |view| {
+                    for station in view.get_mut("stations").and_then(Value::as_array_mut).into_iter().flatten() {
+                        if station.get("id").and_then(Value::as_str) == Some(id) {
+                            station["online"] = json!(online);
+                            station["last_seen"] = json!(now);
+                        }
+                    }
+                });
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Holds an account's `/v1/events` socket open, reconnecting with backoff, until it is no longer wanted (the
+/// task is aborted) or the account is signed out.
+async fn follow_socket(core: Weak<Inner>, sub: String) {
+    let mut wait = SOCKET_RETRY_MS;
+    loop {
+        let Some(this) = core.upgrade() else { return };
+        match this.open_socket(&sub).await {
+            Ok(mut frames) => {
+                let opened = this.host.now_ms();
+                this.socket_state(&sub, SocketState::Open);
+                // Nothing is replayed: what changed while it was closed is read now.
+                this.refresh_all().await;
+                drop(this);
+                while let Some(frame) = frames.next().await {
+                    let (Some(this), Ok(text)) = (core.upgrade(), frame) else { break };
+                    this.on_cloud_event(&sub, &text);
+                }
+                let Some(this) = core.upgrade() else { return };
+                if this.host.now_ms() - opened >= 60_000.0 {
+                    wait = SOCKET_RETRY_MS;
+                }
+                this.socket_state(&sub, SocketState::Retrying);
+            }
+            Err(error) if error.code == "signed_out" => {
+                this.sockets.borrow_mut().remove(&sub);
+                return;
+            }
+            Err(_) => {
+                // Its first try failed: the topics are read anyway, so they show what can be shown.
+                if this.socket_state(&sub, SocketState::Retrying) == Some(SocketState::Connecting) {
+                    this.refresh_all().await;
+                }
+            }
+        }
+        let Some(this) = core.upgrade() else { return };
+        let sleep = this.host.sleep(wait);
+        drop(this);
+        sleep.await;
+        wait = (wait * 2).min(SOCKET_RETRY_MAX_MS);
     }
 }
 
@@ -477,6 +731,8 @@ enum Call {
     ChatSend { station: String, key: String, text: String, attachments: Value, quotes: Value },
     ChatRetry { station: String, key: String, id: String },
     ChatDiscard { station: String, key: String, id: String },
+    ChatOlder { station: String, key: String },
+    ChatRead { station: String, key: String, seq: u64 },
     StationUpload { station: String, key: String, name: String, bytes: Vec<u8> },
     StationFile { station: String, key: String, name: String },
     Migrate { accounts: Option<Value>, device: Option<Vec<u8>> },
@@ -532,6 +788,17 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         id: String,
     }
     #[derive(Deserialize)]
+    struct Chat {
+        station: String,
+        key: String,
+    }
+    #[derive(Deserialize)]
+    struct Read {
+        station: String,
+        key: String,
+        seq: u64,
+    }
+    #[derive(Deserialize)]
     struct Upload {
         station: String,
         key: String,
@@ -583,6 +850,14 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         "chat.discard" => {
             let p: Outgoing = read(params)?;
             Call::ChatDiscard { station: p.station, key: p.key, id: p.id }
+        }
+        "chat.older" => {
+            let p: Chat = read(params)?;
+            Call::ChatOlder { station: p.station, key: p.key }
+        }
+        "chat.read" => {
+            let p: Read = read(params)?;
+            Call::ChatRead { station: p.station, key: p.key, seq: p.seq }
         }
         "station.upload" => {
             let p: Upload = read(params)?;
@@ -699,6 +974,8 @@ mod tests {
             parse_call("chat.discard", json!({"station": "w/s", "key": "k", "id": "out-1"})).unwrap(),
             Call::ChatDiscard { station: "w/s".into(), key: "k".into(), id: "out-1".into() }
         );
+        assert_eq!(parse_call("chat.older", json!({"station": "w/s", "key": "k"})).unwrap(), Call::ChatOlder { station: "w/s".into(), key: "k".into() });
+        assert_eq!(parse_call("chat.read", json!({"station": "w/s", "key": "k", "seq": 12})).unwrap(), Call::ChatRead { station: "w/s".into(), key: "k".into(), seq: 12 });
     }
 
     #[test]
@@ -721,6 +998,149 @@ mod tests {
         assert_eq!(parse_call("migrate", json!({"accounts": null})).unwrap(), Call::Migrate { accounts: None, device: None });
         assert_eq!(parse_call("migrate", Value::Null).unwrap(), Call::Migrate { accounts: None, device: None });
         assert_eq!(code(parse_call("migrate", json!({"device": BASE64.encode([1u8; 16])}))), "invalid_params");
+    }
+
+    // ── ember cloud's events ──
+
+    use crate::accounts::{STORAGE_KEY, StoredAccount};
+    use crate::testing::{FakeHost, json_response, run};
+
+    /// Timers this many times faster: eviction in 0.6 s, a socket's first retry in 10 ms.
+    const SPEEDUP: u64 = 100;
+
+    fn now_s() -> f64 {
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64()
+    }
+
+    /// A core with one signed-in account whose token expires in 30 s (so every socket opens with a fresh one),
+    /// ember cloud answering `/v1/me`, the workspace and token refreshes.
+    async fn cloud_core() -> (Rc<FakeHost>, Core) {
+        let host = FakeHost::new();
+        host.speed_up(SPEEDUP);
+        let account = StoredAccount { sub: "s1".into(), email: "a@x.com".into(), name: "阿一".into(), picture: String::new(), access: "stale".into(), refresh: "r0".into(), access_expires: now_s() + 30.0 };
+        host.store(STORAGE_KEY, serde_json::to_vec(&vec![account]).unwrap());
+        let refreshes = Cell::new(0);
+        host.on_fetch(move |req| {
+            let path = req.url.trim_start_matches("https://ember.test");
+            match path {
+                "/v1/me" => json_response(200, json!({"workspaces": [{"id": "ws", "name": "W"}], "invitations": [], "relay_url": "https://relay.test"})),
+                "/v1/workspaces/ws" => json_response(200, json!({"id": "ws", "stations": [{"id": "st", "name": "studio", "online": false, "last_seen": 1}]})),
+                "/v1/auth/refresh" => {
+                    refreshes.set(refreshes.get() + 1);
+                    json_response(200, json!({"access_token": format!("fresh-{}", refreshes.get()), "refresh_token": "r", "subject": "s1", "email": "a@x.com", "expires_at": now_s() + 30.0}))
+                }
+                _ => json_response(404, json!({"error": "not_found"})),
+            }
+        });
+        let core = Core::new(host.clone()).await;
+        (host, core)
+    }
+
+    fn count(host: &FakeHost, path: &str) -> usize {
+        host.requests.borrow().iter().filter(|r| r.url.ends_with(path) && r.method == "GET").count()
+    }
+
+    /// The value subscription `id` has now, deltas applied.
+    fn apply(host: &FakeHost, values: &mut HashMap<RequestId, Value>) {
+        for (_, message) in host.take_emitted() {
+            match message {
+                CoreMessage::Value { id, value } => {
+                    values.insert(id, value);
+                }
+                CoreMessage::Delta { id, delta } => crate::delta::apply(values.get_mut(&id).expect("a delta needs a value"), &delta),
+                _ => {}
+            }
+        }
+    }
+
+    async fn pass(ms: u64) {
+        tokio::time::sleep(std::time::Duration::from_micros(ms * 1000 / SPEEDUP)).await;
+        for _ in 0..10 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    #[test]
+    fn account_topics_follow_the_cloud_socket() {
+        run(async {
+            let (host, core) = cloud_core().await;
+            let ui = core.connect();
+            let mut values = HashMap::new();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Workspace { workspace: "ws".into() } });
+            host.settle().await;
+            // One socket, the token as a subprotocol (refreshed first: it was about to expire).
+            let sockets: Vec<(String, Vec<String>)> = host.sockets.borrow().iter().map(|(u, p, _)| (u.clone(), p.clone())).collect();
+            assert_eq!(sockets, vec![("wss://ember.test/v1/events".to_string(), vec!["ember-events".to_string(), "ember-token.fresh-1".to_string()])]);
+            // Read once, when the socket opened.
+            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (1, 1));
+            apply(&host, &mut values);
+            assert_eq!(values[&1][0]["workspaces"][0]["id"], "ws");
+            assert_eq!(values[&2]["stations"][0]["online"], false);
+
+            // A station event is complete in itself.
+            host.socket_send("/v1/events", r#"{"type":"station","workspace":"ws","id":"st","online":true}"#);
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&2]["stations"][0]["online"], true);
+            assert!(values[&2]["stations"][0]["last_seen"].as_f64().unwrap() > 1.0);
+            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (1, 1));
+            // `workspaces` reads /v1/me again, `workspace` that workspace; others are not ours.
+            host.socket_send("/v1/events", r#"{"type":"workspaces"}"#);
+            host.socket_send("/v1/events", r#"{"type":"workspace","id":"ws"}"#);
+            host.socket_send("/v1/events", r#"{"type":"workspace","id":"other"}"#);
+            host.socket_send("/v1/events", "pong");
+            host.settle().await;
+            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (2, 2));
+            apply(&host, &mut values);
+            assert_eq!(values[&2]["stations"][0]["online"], false, "as the cloud says now");
+
+            // Idle: no request and no timer.
+            host.sleeps.borrow_mut().clear();
+            let requests = host.requests.borrow().len();
+            pass(super::SOCKET_RETRY_MAX_MS * 2).await;
+            assert_eq!(host.requests.borrow().len(), requests);
+            assert!(host.sleeps.borrow().is_empty(), "{:?}", host.sleeps.borrow());
+
+            // The socket drops: it opens again after a second with a fresh token, and the topics are read once.
+            host.socket_close("/v1/events");
+            pass(SOCKET_RETRY_MS + 200).await;
+            host.settle().await;
+            assert_eq!((host.sockets.borrow().len(), host.open_sockets("/v1/events")), (2, 1));
+            let token = host.sockets.borrow()[1].1[1].clone();
+            assert!(token.starts_with("ember-token.fresh-") && token != "ember-token.fresh-1", "{token}");
+            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (3, 3));
+
+            // Nobody looks any more: the socket closes (after the topics' grace) and stays closed.
+            core.receive(ui, ClientMessage::Unsubscribe { id: 1, unsubscribe: true });
+            core.receive(ui, ClientMessage::Unsubscribe { id: 2, unsubscribe: true });
+            pass(crate::store::EVICT_AFTER_MS * 5 / 4).await;
+            assert_eq!(host.open_sockets("/v1/events"), 0);
+            pass(SOCKET_RETRY_MAX_MS).await;
+            assert_eq!(host.sockets.borrow().len(), 2);
+        });
+    }
+
+    #[test]
+    fn a_refused_socket_still_reads_the_topics_and_retries_with_backoff() {
+        run(async {
+            let (host, core) = cloud_core().await;
+            host.refuse_sockets.set(true);
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
+            host.settle().await;
+            assert_eq!(count(&host, "/v1/me"), 1, "read although the socket did not open");
+            pass(SOCKET_RETRY_MS * 7).await;
+            // 1 s, 2 s, 4 s: waits double.
+            let waits: Vec<u64> = host.sleeps.borrow().iter().copied().filter(|ms| *ms >= SOCKET_RETRY_MS && *ms <= SOCKET_RETRY_MAX_MS).collect();
+            assert_eq!(&waits[..3], &[1_000, 2_000, 4_000]);
+            assert_eq!(count(&host, "/v1/me"), 1, "failed retries read nothing");
+            host.refuse_sockets.set(false);
+            pass(SOCKET_RETRY_MS * 10).await;
+            host.settle().await;
+            assert_eq!(host.open_sockets("/v1/events"), 1);
+            assert_eq!(count(&host, "/v1/me"), 2, "read again once it opened");
+        });
     }
 
     #[test]
