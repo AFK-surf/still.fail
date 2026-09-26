@@ -3,13 +3,13 @@ import { useIsMine, type Creator, type HostInfo, type ProcessView, type ProfileQ
 import { useOnlyMine, usePerson } from "./station.tsx";
 import { Segmented } from "./ui.tsx";
 
-/** 全部 / 我创建的 */
-export function MineFilter({ label = "筛选" }: { label?: string }) {
+/** 全部 / 我参与的 (chats) or 我创建的 (connects) */
+export function MineFilter({ label = "筛选", mine = "我创建的" }: { label?: string; mine?: string }) {
   const [onlyMine, setOnlyMine] = useOnlyMine();
   return (
     <div className="mine-filter">
       <Segmented label={label} value={onlyMine ? "mine" : "all"} onChange={(v) => setOnlyMine(v === "mine")}
-        options={[{ value: "all", label: "全部" }, { value: "mine", label: "我创建的" }]} />
+        options={[{ value: "all", label: "全部" }, { value: "mine", label: mine }]} />
     </div>
   );
 }

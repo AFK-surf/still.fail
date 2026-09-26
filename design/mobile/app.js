@@ -186,7 +186,7 @@ function refreshHome() { const h = stack.find((x) => x.name === "home"); if (h) 
 render.chat = (el, id) => {
   const s = byId(id);
   el.innerHTML = `<div class="navbar compact"><button class="nav-back">会话</button>
-      <div class="nav-title"><b>${esc(s.title)}</b><small>${sourceIcon(s)}${s.station}${peopleStack(s.people, 14)}<span class="mini-models">${s.models.map((m) => `<img src="assets/${maker(m)}.svg" alt="">`).join("")}</span></small></div>
+      <div class="nav-title"><b>${esc(s.title)}</b><small>${sourceIcon(s)}${peopleStack(s.people, 14)}<span class="mini-models">${s.models.map((m) => `<img src="assets/${maker(m)}.svg" alt="">`).join("")}</span></small></div>
       <button class="nav-btn" data-more><i class="i i-more"></i></button></div>
     <div class="scroll"><div class="chat-list"></div></div>
     <div class="composer">

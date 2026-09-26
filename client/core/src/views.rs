@@ -247,7 +247,10 @@ impl Views {
                     Some(Ok(sessions)) => {
                         let connects = self.ok(Topic::Overview { station: s.address.clone() }).and_then(|o| o.get("connects").cloned());
                         for session in sessions.as_array().into_iter().flatten() {
-                            if mine && !is_mine(&me, session.get("creator")) {
+                            // "Mine" for chats is where the viewer takes part: started it, or is among its participants.
+                            let takes_part = is_mine(&me, session.get("creator"))
+                                || session.get("participants").and_then(Value::as_array).is_some_and(|people| people.iter().any(|p| is_mine(&me, Some(p))));
+                            if mine && !takes_part {
                                 continue;
                             }
                             let connect = find(connects.as_ref(), session.get("connect"));

@@ -137,10 +137,8 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
       <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger asChild>
           <button type="button" className="account-trigger">
-            <span className="ws-mark" aria-hidden="true">{([...current.name][0] ?? "?").toUpperCase()}</span>
             <span className="account-text">
               <span className="account-name">{current.name}</span>
-              <span className="account-email">{current.account.email}</span>
             </span>
             {pending.length > 0 && <span className="invite-dot" role="img" aria-label={`${pending.length} 个邀请`} />}
             <ChevronsUpDown {...ICON} size={14} />
@@ -173,7 +171,6 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
                 {items.length === 0 && <div className="menu-empty">没有 workspace</div>}
                 {items.map((w) => (
                   <DropdownMenu.Item key={w.id} className="menu-item" onSelect={() => navigate(`/w/${w.id}`)}>
-                    <span className="ws-mark" aria-hidden="true">{([...w.name][0] ?? "?").toUpperCase()}</span>
                     <span className="thread-item"><span>{w.name}</span><span className="muted">{w.stations} 台 station · {w.members} 人</span></span>
                     {w.id === current.id && account.sub === current.account.sub && <Check {...ICON} size={14} className="menu-check" />}
                   </DropdownMenu.Item>
