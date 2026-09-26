@@ -88,14 +88,12 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const agents = chatView.value?.agents ?? [];
   const lives = useLives(station.address, agents.map((a) => a.session.key));
   // One history tab per agent, by session key; each can be closed, and with none open the panel goes away.
-  // Each chat keeps its own tabs. A chat not opened before shows its first agent's history, except on narrow
-  // screens, where the panel would cover the chat.
+  // Each chat keeps its own tabs; a chat that never had one open has none.
   const chatKey = `${station.address}:${"thread" in of ? of.thread : of.session}`;
   const [kept] = useState(() => keptTabs(chatKey));
-  const [tabs, setTabs] = useState<string[] | null>(() => kept?.tabs ?? (window.matchMedia("(min-width: 1101px)").matches ? null : []));
+  const [tabs, setTabs] = useState<string[]>(() => kept?.tabs ?? []);
   const [active, setActiveState] = useState<string | null>(kept?.active ?? null);
-  // Until chosen, the panel holds the first agent's history.
-  const open = (tabs ?? agents.slice(0, 1).map((a) => a.session.key)).filter((key) => agents.some((a) => a.session.key === key));
+  const open = tabs.filter((key) => agents.some((a) => a.session.key === key));
   const shown = active && open.includes(active) ? active : open[0] ?? null;
   // Tabs and the one in front change together, and are kept for this chat in one write.
   const commit = (next: string[], front: string | null) => {
