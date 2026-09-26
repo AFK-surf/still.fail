@@ -259,12 +259,12 @@ private fun LastMessage(item: ChatItem) {
 
 @Composable
 private fun Toolbar(app: AppState, haze: HazeState, modifier: Modifier) {
-    // One capsule floating over the list: the switch fills it, the capsule being its track, and the new-chat button
+    // One capsule floating over the list, round at both ends like what is in it: the switch fills it, the capsule being its track, and the new-chat button
     // closes it at the right, a disc in the accent (no line between them: shape and colour tell them apart).
     Row(
         modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp)
-            .floating(haze, RoundedCornerShape(28.dp)).padding(6.dp),
+            .floating(haze, RoundedCornerShape(percent = 50)).padding(6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Seg(

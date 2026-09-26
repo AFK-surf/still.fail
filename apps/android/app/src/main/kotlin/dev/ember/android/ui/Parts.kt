@@ -222,12 +222,15 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
         w.animateTo(tw, ease)
     }
     val density = LocalDensity.current
-    val thumb = if (C.dark) Color(0xFF3A3B40) else Color.White
+    val thumbShape = RoundedCornerShape((radius - inset).coerceAtLeast(0.dp))
     Box(modifier.height(height).clip(RoundedCornerShape(radius)).let { if (track) it.background(C.ink.copy(alpha = 0.06f)) else it }.padding(inset)) {
         if (w.value > 0f) Box(
-            Modifier.offset { IntOffset(x.value.roundToInt(), 0) }.width(with(density) { w.value.toDp() }).fillMaxHeight()
-                // A hairline all round, not an elevation shadow (which falls below and makes the thumb look low).
-                .background(thumb, RoundedCornerShape((radius - inset).coerceAtLeast(0.dp))).border(0.5.dp, C.line, RoundedCornerShape((radius - inset).coerceAtLeast(0.dp))),
+            Modifier.offset { IntOffset(x.value.roundToInt(), 0) }.width(with(density) { w.value.toDp() }).fillMaxHeight().let {
+                // In a capsule, a soft tint of the text colour: the capsule's glass shows through it. On a track, a light
+                // thumb with a hairline all round, not an elevation shadow (which falls below and makes it look low).
+                if (!track) it.background(C.ink.copy(alpha = if (C.dark) 0.13f else 0.08f), thumbShape)
+                else it.background(if (C.dark) Color(0xFF3A3B40) else Color.White, thumbShape).border(0.5.dp, C.line, thumbShape)
+            },
         )
         Row(Modifier.fillMaxHeight().let { if (fill) it.fillMaxWidth() else it }) {
             options.forEachIndexed { i, label ->
@@ -237,7 +240,7 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) }
                         .padding(horizontal = if (fill) 12.dp else 10.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text(label, fontSize = if (fill) 14.sp else 13.sp, color = if (i == selected) C.ink else C.muted, maxLines = 1) }
+                ) { Text(label, fontSize = if (fill) 14.sp else 13.sp, fontWeight = if (i == selected && !track) FontWeight.SemiBold else null, color = if (i == selected) C.ink else C.muted, maxLines = 1) }
             }
         }
     }
