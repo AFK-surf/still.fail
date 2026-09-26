@@ -131,7 +131,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, trail = [], o
             );
           }
           if (!busy) return null;
-          return <Activities trail={trail} phase={phase} agent={agent} onOpenHistory={onOpenHistory} />;
+          return <Activities agents={[{ key: detail.session.key, who: agent, trail, phase }]} onOpenHistory={onOpenHistory} />;
         })()}
       </div>
       {picked && (
@@ -367,25 +367,24 @@ function stepText(s: ShownStep): string {
   return s.step === "thinking" ? "思考" : s.step === "text" ? "写回复" : activityText(s.tool, s.input);
 }
 
-/** One activity per agent at work: the agent, then each sub-agent it started. */
-function Activities({ trail, phase, agent, onOpenHistory }: { trail: ShownStep[]; phase: ShownPhase | null; agent: string; onOpenHistory(): void }) {
+/** An agent in this chat that is at work: who it is, and its running turn's steps so far. */
+interface AgentAtWork { key: string; who: string; trail: ShownStep[]; phase: ShownPhase | null }
+
+/**
+ * One activity per agent in the chat that is at work. A runtime's own
+ * sub-agents are not agents of the chat: their steps count as the agent's.
+ */
+function Activities({ agents, onOpenHistory }: { agents: AgentAtWork[]; onOpenHistory(): void }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(ACTIVITY_COLLAPSED) === "1");
   const toggle = () => {
     localStorage.setItem(ACTIVITY_COLLAPSED, collapsed ? "0" : "1");
     setCollapsed(!collapsed);
   };
-  const main = trail.filter((s) => !s.parent);
-  // A sub-agent is at work while the call that started it has not ended.
-  const parents = [...new Set(trail.filter((s) => s.parent).map((s) => s.parent!))]
-    .filter((id) => !trail.find((s) => s.id === id)?.ended);
-  const waiting = phase?.phase === "starting" ? "正在启动" : phase?.phase === "requesting" ? "等待模型响应" : null;
   return (
     <div className="activities">
-      <Activity who={agent} steps={main} waiting={waiting} collapsed={collapsed} onToggle={toggle} onOpen={onOpenHistory} />
-      {parents.map((id) => {
-        const call = trail.find((s) => s.id === id);
-        return <Activity key={id} who={(call && partialString(call.input, "description")) || "子 agent"} steps={trail.filter((s) => s.parent === id)} waiting={null}
-          collapsed={collapsed} onToggle={toggle} onOpen={onOpenHistory} />;
+      {agents.map((a) => {
+        const waiting = a.phase?.phase === "starting" ? "正在启动" : a.phase?.phase === "requesting" ? "等待模型响应" : null;
+        return <Activity key={a.key} who={a.who} steps={a.trail} waiting={waiting} collapsed={collapsed} onToggle={toggle} onOpen={onOpenHistory} />;
       })}
     </div>
   );
