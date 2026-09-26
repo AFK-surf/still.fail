@@ -216,7 +216,7 @@ function SessionState({ detail }: { detail: SessionDetail }) {
   const result = turnResult(session.lastTurn);
   const text = running
     ? (status === "queued" ? "排队中" : `正在执行${calls ? ` · 已执行 ${calls} 项` : ""}`)
-    : result === "block" ? "等人回复"
+    : result === "block" ? "Block：agent 停下来等人处理"
     : result === "failed" ? "上一轮失败"
     : result === "unexpected" ? "上一轮没给出结果"
     : result === "final" ? "上一轮已完成"

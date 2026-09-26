@@ -110,8 +110,8 @@ export function SessionRow({ session: s, connect, station }: { session: SessionS
         </span>
       </span>
       {marker && (
-        <Tip label={marker === "running" ? "进行中" : marker === "attention" ? "等人回复" : "需要处理"} side="right">
-          <span className="nav-marker" data-kind={marker} role="img" aria-label={marker === "running" ? "进行中" : marker === "attention" ? "等人回复" : "需要处理"} />
+        <Tip label={marker === "running" ? "进行中" : marker === "attention" ? "Block：agent 停下来等人处理" : "需要处理"} side="right">
+          <span className="nav-marker" data-kind={marker} role="img" aria-label={marker === "running" ? "进行中" : marker === "attention" ? "Block：agent 停下来等人处理" : "需要处理"} />
         </Tip>
       )}
     </NavLink>
