@@ -185,9 +185,6 @@ pub fn transport() -> QuicTransportConfig {
     QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build()
 }
 
-/// How long a connection waits for this device's relay link before trying anyway.
-const ONLINE_WAIT_MS: u64 = 3_000;
-
 /// Connects, presents the first grant, and starts renewing it.
 ///
 /// Nothing waits on anything it does not need: the grant is asked of ember
@@ -201,14 +198,10 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station
     let id = PublicKey::from_bytes(&id).map_err(|_| CoreError::invalid(format!("station id 不对：{station_id}")))?;
     let device = hex::encode(endpoint.id().as_bytes());
     let connecting = async {
-        // Our own relay link first (a fresh endpoint may not have it yet): packets sent before it is up are dropped,
-        // and QUIC only resends after ~1 s and then ~2 s more. At most ONLINE_WAIT_MS, then try regardless.
+        // No waiting for our own relay link: the endpoint came up as soon as the relay was known (Core warms it),
+        // and in the browser `online()` does not report it, so a wait would only ever run out.
         let mut addr = EndpointAddr::new(id);
         if !relay_url.is_empty() {
-            let online = endpoint.online().fuse();
-            let waited = host.sleep(ONLINE_WAIT_MS).fuse();
-            pin_mut!(online, waited);
-            futures::select! { _ = online => {}, _ = waited => {} }
             let relay: RelayUrl = relay_url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))?;
             addr = addr.with_relay_url(relay);
         }
