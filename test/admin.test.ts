@@ -100,19 +100,19 @@ function jwt(claims: Record<string, unknown>, kid = "k1"): string {
 
 /** Records what ember asks of Slack's app API. */
 class FakeSlackApps {
-  configured = true;
   manifest: any = slackManifest("ember");
   updates: any[] = [];
   icons = 0;
   async exportManifest() { return structuredClone(this.manifest); }
-  async updateManifest(_appId: string, manifest: any) {
+  async updateManifest(_by: string, _appId: string, manifest: any) {
     const before = [...this.manifest.oauth_config.scopes.bot].sort().join();
     this.updates.push(manifest);
     this.manifest = manifest;
     return { permissionsUpdated: before !== [...manifest.oauth_config.scopes.bot].sort().join() };
   }
   made: any[] = [];
-  async createApp(team: string, manifest: any) { this.made.push({ team, manifest }); return { appId: "A0NEW", clientId: "C1", clientSecret: "S1" }; }
+  configured() { return true; }
+  async createApp(by: string, team: string, manifest: any) { this.made.push({ by, team, manifest }); return { appId: "A0NEW", clientId: "C1", clientSecret: "S1" }; }
   async setIcon() {
     this.icons++;
     throw new SlackApiError("apps.icon.set", "app_not_owned_by_manager_app");
@@ -176,8 +176,9 @@ test("a Slack app made on a station in ember cloud is installed through Slack's 
   });
   try {
     const owner = (team: string) => ({ team, teamDomain: null, teamIcon: null, user: "Ada", email: "ada@example.com", image: null });
-    const token = (teamId: string, team: string) => ({ accessToken: `xoxe.xoxp-${teamId}`, refreshToken: "xoxe-1", expiresAt: Date.now() + 3600_000, teamId, owner: owner(team) });
-    s.settings.update((raw) => ({ ...raw, slackConfigTokens: [token("T1", "Acme"), token("T2", "Other")] }));
+    const token = (teamId: string, team: string, by = "local") => ({ accessToken: `xoxe.xoxp-${teamId}`, refreshToken: "xoxe-1", expiresAt: Date.now() + 3600_000, teamId, by, owner: owner(team) });
+    // Someone else's token on this station: not the viewer's to see or use.
+    s.settings.update((raw) => ({ ...raw, slackConfigTokens: [token("T1", "Acme"), token("T2", "Other"), token("T3", "Theirs", "bob@example.com")] }));
     // Several workspaces: the station lists them (never their tokens), and the app goes into the one chosen.
     const overview0 = (await s.call("GET", "/overview")).body;
     assert.deepEqual(overview0.slackTeams, [{ teamId: "T1", name: "Acme", owner: owner("Acme") }, { teamId: "T2", name: "Other", owner: owner("Other") }]);
@@ -185,7 +186,8 @@ test("a Slack app made on a station in ember cloud is installed through Slack's 
     assert.equal((await s.call("POST", "/slack/apps", { settings: { name: "ember" } })).status, 400, "which workspace, when there are several");
     const made = (await s.call("POST", "/slack/apps", { team: "T2", settings: { name: "Helper", description: "Hi", groups: { dm: false } } })).body;
     const sent = s.slackApps.made[0];
-    assert.equal(sent.team, "T2");
+    assert.deepEqual([sent.by, sent.team], ["local", "T2"]);
+    assert.equal((await s.call("POST", "/slack/apps", { team: "T3", settings: { name: "x" } })).status, 400, "not with another's token");
     assert.equal(sent.manifest.display_information.name, "Helper");
     assert.equal(sent.manifest.display_information.description, "Hi");
     // Slack sends the person back to ember cloud's page, which hands the code to the station the state names.

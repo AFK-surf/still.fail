@@ -51,7 +51,7 @@ export function SlackAppSection({ connect }: { connect: ConnectView }) {
 function ConfigTokenCard({ onSaved }: { onSaved(): void }) {
   return (
     <div className="card">
-      <p className="card-lead">修改 app 需要这个 Slack 工作区的 App 配置 token。每个工作区设置一次，那里的连接共用。</p>
+      <p className="card-lead">修改 app 需要你在这个 Slack 工作区的 App 配置 token。token 只归你用，这台 station 上的其他人看不到。</p>
       <ConfigTokenForm onSaved={onSaved} />
     </div>
   );

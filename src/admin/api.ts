@@ -393,7 +393,7 @@ export class AdminApi {
     // A new Slack connect from its tokens: named as its bot is in Slack, with an id made from that name.
     if (method === "POST" && path === "/connects") return send(res, 200, await this.#newSlackConnect(await body(req), viewer));
     // A Slack app made with the configuration token before there is a connect for it (the connect comes with its tokens).
-    if (method === "POST" && path === "/slack/apps") return send(res, 200, await this.#makeSlackApp(await body(req)));
+    if (method === "POST" && path === "/slack/apps") return send(res, 200, await this.#makeSlackApp(await body(req), viewer));
     // Slack sent someone back from installing such an app: its code, for the bot token.
     if (method === "POST" && path === "/slack/installs") return send(res, 200, await this.#installed(await body(req)));
     if (resource === "connects" && id && !action && method === "PUT") return send(res, 200, this.#putConnect(id, await body(req), viewer));
@@ -531,16 +531,16 @@ export class AdminApi {
       if (!refresh.startsWith("xoxe-")) throw new HttpError(400, "Refresh token 应该以 xoxe- 开头（不是 xoxe.xoxp- 开头的那个）");
       const token = await rotateConfigToken(refresh).catch((error) => { throw new HttpError(400, `Slack 没接受这个 token：${error instanceof Error ? error.message : String(error)}`); });
       const owner = await ownerOfConfigToken(token.accessToken);
-      this.#deps.settings.update((raw) => ({ ...raw, slackConfigTokens: upsertToken(raw.slackConfigTokens ?? [], { ...token, ...(owner ? { owner } : {}) }) }));
+      this.#deps.settings.update((raw) => ({ ...raw, slackConfigTokens: upsertToken(raw.slackConfigTokens ?? [], { ...token, by: viewerId(viewer), ...(owner ? { owner } : {}) }) }));
       log.info("slack configuration token added", { team: token.teamId, by: viewerId(viewer) });
       return send(res, 200, { teamId: token.teamId, overview: this.#overview(viewer) });
     }
     if (resource === "slack" && id === "config-tokens" && action && method === "DELETE") {
-      this.#deps.settings.update((raw) => ({ ...raw, slackConfigTokens: (raw.slackConfigTokens ?? []).filter((t) => t.teamId !== action) }));
+      this.#deps.settings.update((raw) => ({ ...raw, slackConfigTokens: (raw.slackConfigTokens ?? []).filter((t) => t.by !== viewerId(viewer) || t.teamId !== action) }));
       return send(res, 200, this.#overview(viewer));
     }
     if (resource === "connects" && id && action === "slack-app") {
-      if (method === "GET") return send(res, 200, await this.#slackApp(id));
+      if (method === "GET") return send(res, 200, await this.#slackApp(id, viewer));
       if (method === "PUT") return send(res, 200, await this.#putSlackApp(id, await body(req), viewer));
       if (method === "POST") return send(res, 200, await this.#createSlackApp(id, await body(req), viewer));
     }
@@ -554,15 +554,15 @@ export class AdminApi {
 
   // ── Slack apps ──────────────────────────────────────────────────────────
 
-  /** The Slack workspaces ember makes apps in (a configuration token each), with whose token it is; never the tokens. */
-  #slackTeams() {
-    return this.#deps.settings.config.slackConfigTokens.map((t) => ({ teamId: t.teamId, name: t.owner?.team || t.teamId, owner: t.owner ?? null }));
+  /** The viewer's own Slack workspaces (a configuration token each), with whose token it is; never the tokens. */
+  #slackTeams(viewer: Viewer) {
+    return this.#deps.settings.config.slackConfigTokens.filter((t) => t.by === viewerId(viewer)).map((t) => ({ teamId: t.teamId, name: t.owner?.team || t.teamId, owner: t.owner ?? null }));
   }
 
-  /** The workspace an app is made in: the one asked for, or the only one there is. */
-  #teamFor(input: Record<string, any>): string {
-    const teams = this.#deps.settings.config.slackConfigTokens;
-    if (teams.length === 0) throw new HttpError(400, "还没有设置 Slack 的 App 配置 token");
+  /** The workspace an app is made in: the one asked for, or the only one the viewer has. */
+  #teamFor(input: Record<string, any>, viewer: Viewer): string {
+    const teams = this.#deps.settings.config.slackConfigTokens.filter((t) => t.by === viewerId(viewer));
+    if (teams.length === 0) throw new HttpError(400, "你还没有加 Slack 的 App 配置 token");
     const team = typeof input.team === "string" ? input.team : teams.length === 1 ? teams[0]!.teamId : null;
     if (!team || !teams.some((t) => t.teamId === team)) throw new HttpError(400, "选一个 Slack 工作区");
     return team;
@@ -580,7 +580,7 @@ export class AdminApi {
     return appId;
   }
 
-  async #slackApp(connectId: string) {
+  async #slackApp(connectId: string, viewer: Viewer) {
     let appId: string | null;
     try {
       appId = await this.#appId(connectId);
@@ -591,9 +591,9 @@ export class AdminApi {
     }
     if (!appId) return { state: "no_app" as const, appId: null, links: null, settings: null, groups: SLACK_GROUP_IDS };
     const links = slackAppLinks(appId);
-    if (!this.#apps.configured) return { state: "no_config_token" as const, appId, links, settings: null, groups: SLACK_GROUP_IDS };
+    if (!this.#apps.configured(viewerId(viewer))) return { state: "no_config_token" as const, appId, links, settings: null, groups: SLACK_GROUP_IDS };
     try {
-      return { state: "ok" as const, appId, links, settings: settingsOf(await this.#apps.exportManifest(appId)), groups: SLACK_GROUP_IDS };
+      return { state: "ok" as const, appId, links, settings: settingsOf(await this.#apps.exportManifest(viewerId(viewer), appId)), groups: SLACK_GROUP_IDS };
     } catch (error) {
       return { state: "error" as const, appId, links, settings: null, groups: SLACK_GROUP_IDS, error: slackError(error) };
     }
@@ -611,12 +611,12 @@ export class AdminApi {
     if (edit.backgroundColor && !/^#[0-9a-fA-F]{6}$/.test(edit.backgroundColor.trim())) throw new HttpError(400, "背景色要写成 #RRGGBB");
     let permissionsUpdated = false;
     try {
-      const current = await this.#apps.exportManifest(appId);
-      ({ permissionsUpdated } = await this.#apps.updateManifest(appId, applySettings(current, edit)));
+      const current = await this.#apps.exportManifest(viewerId(viewer), appId);
+      ({ permissionsUpdated } = await this.#apps.updateManifest(viewerId(viewer), appId, applySettings(current, edit)));
     } catch (error) {
       throw new HttpError(400, `Slack 没接受这次修改：${slackError(error)}`);
     }
-    const iconError = typeof input.icon === "string" && input.icon ? await this.#setIcon(appId, input.icon) : null;
+    const iconError = typeof input.icon === "string" && input.icon ? await this.#setIcon(viewerId(viewer), appId, input.icon) : null;
     log.info("slack app updated from the admin page", { connect: connectId, appId, permissionsUpdated, by: viewerId(viewer) });
     return { permissionsUpdated, iconError, links: slackAppLinks(appId) };
   }
@@ -722,8 +722,9 @@ export class AdminApi {
    * OAuth: `install` is the link, and Slack sends the person back to ember cloud's page, which hands the code to this
    * station (`POST /slack/installs`), which takes the bot token for it. Elsewhere (or with no cloud) the token is copied.
    */
-  async #makeSlackApp(input: Record<string, any>) {
-    const team = this.#teamFor(input);
+  async #makeSlackApp(input: Record<string, any>, viewer: Viewer) {
+    const by = viewerId(viewer);
+    const team = this.#teamFor(input, viewer);
     const settings = (input.settings && typeof input.settings === "object" ? input.settings : {}) as Partial<SlackAppSettings>;
     const name = typeof settings.name === "string" && settings.name.trim() ? settings.name.trim() : "ember";
     if (settings.backgroundColor && !/^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor.trim())) throw new HttpError(400, "背景色要写成 #RRGGBB");
@@ -732,11 +733,11 @@ export class AdminApi {
     const manifest = applySettings(slackManifest(name, undefined, redirectUri ?? undefined), { ...settings, name });
     let app: { appId: string; clientId: string; clientSecret: string };
     try {
-      app = await this.#apps.createApp(team, manifest);
+      app = await this.#apps.createApp(by, team, manifest);
     } catch (error) {
       throw new HttpError(400, `Slack 没能创建 app：${slackError(error)}`);
     }
-    const iconError = typeof input.icon === "string" && input.icon ? await this.#setIcon(app.appId, input.icon) : null;
+    const iconError = typeof input.icon === "string" && input.icon ? await this.#setIcon(by, app.appId, input.icon) : null;
     const links = slackAppLinks(app.appId);
     if (!redirectUri || !app.clientId || !app.clientSecret) return { appId: app.appId, links, install: null, state: null, iconError };
     // Which station it is for goes with it, so ember cloud's page knows where to hand the code.
@@ -747,9 +748,9 @@ export class AdminApi {
   }
 
   /** Sets an app's icon (a PNG data URL); what went wrong, in words, or null. */
-  async #setIcon(appId: string, icon: string): Promise<string | null> {
+  async #setIcon(by: string, appId: string, icon: string): Promise<string | null> {
     try {
-      await this.#apps.setIcon(appId, Buffer.from(icon.replace(/^data:image\/png;base64,/, ""), "base64"));
+      await this.#apps.setIcon(by, appId, Buffer.from(icon.replace(/^data:image\/png;base64,/, ""), "base64"));
       return null;
     } catch (error) {
       return error instanceof SlackApiError && error.code === "app_not_owned_by_manager_app"
@@ -806,7 +807,7 @@ export class AdminApi {
     const name = typeof input.name === "string" && input.name.trim() ? input.name.trim() : connect.name;
     let appId: string;
     try {
-      ({ appId } = await this.#apps.createApp(this.#teamFor(input), slackManifest(name)));
+      ({ appId } = await this.#apps.createApp(viewerId(viewer), this.#teamFor(input, viewer), slackManifest(name)));
     } catch (error) {
       throw new HttpError(400, `Slack 没能创建 app：${slackError(error)}`);
     }
@@ -855,7 +856,7 @@ export class AdminApi {
       },
       slackUsers: this.#deps.store.slackIdentities(viewerId(viewer)),
       // The Slack workspaces ember can make and edit apps in itself (an app configuration token each).
-      slackTeams: this.#slackTeams(),
+      slackTeams: this.#slackTeams(viewer),
       // The data disk's room, read as the overview is: what clients warn of when it runs low.
       disk: diskRoom(config.dataDir),
       // Sign-ins that will make a profile when they succeed (POST /logins), with the profile they made once they did.
@@ -1613,7 +1614,8 @@ async function saveUpload(req: IncomingMessage, dir: string, name: string): Prom
   return { name: safe, path, size };
 }
 
-/** The tokens with this one in, in place of its workspace's old one. */
+/** The tokens with this one in, in place of its person's old one for the workspace. */
 function upsertToken(tokens: ConfigToken[], token: ConfigToken): ConfigToken[] {
-  return tokens.some((t) => t.teamId === token.teamId) ? tokens.map((t) => (t.teamId === token.teamId ? { ...t, ...token } : t)) : [...tokens, token];
+  const same = (t: ConfigToken) => t.by === token.by && t.teamId === token.teamId;
+  return tokens.some(same) ? tokens.map((t) => (same(t) ? { ...t, ...token } : t)) : [...tokens, token];
 }
