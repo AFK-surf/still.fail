@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDark } from "./theme.ts";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
@@ -61,10 +62,13 @@ function SidebarBuddy() {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setPose(next ? "rest" : "push"), 380);
   };
-  return (
+  // On the page itself, not in the sidebar: a closed sidebar clips what is in it, and the desktop app's window would
+  // then take a click on the buddy for a drag of the window.
+  return createPortal(
     <button type="button" className="sidebar-buddy" data-pose={pose} onClick={toggle} aria-label={closed ? "展开侧边栏" : "收起侧边栏"} title={closed ? "展开侧边栏" : "收起侧边栏"}>
       <Themed name={`buddy/${pose}`} width={28} height={28} />
-    </button>
+    </button>,
+    document.body,
   );
 }
 
