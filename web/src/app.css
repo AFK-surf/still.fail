@@ -1450,3 +1450,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 }
 @media (prefers-reduced-motion: reduce) { .sidebar-buddy, .shell { transition: none; } .sidebar-buddy[data-pose="hop"] img { animation: none; } }
 .model-triple .quota-ring-number { display: none; }
+/* In a row of a list, a ring's mark sits beside it, so the ring is on the row's line. */
+:is(.run-picker-option, .chooser-item) .quota-ring-cell { display: flex; align-items: center; gap: 3px; }
+/* Where it heads text, the control's text lines up with the text under it (its border and padding stand out). */
+:is(.session-details, .card) > .model-triple-fit { margin-left: -11px; }
