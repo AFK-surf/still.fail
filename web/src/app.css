@@ -597,8 +597,15 @@
 .quota-ring[data-level="amber"] { color: var(--amber); }
 .quota-ring[data-level="red"] { color: var(--red); }
 .quota-ring svg { position: absolute; inset: 0; }
-.quota-ring-track { fill: none; stroke: var(--neutral-bg); stroke-width: 3; }
-.quota-ring-fill { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
+.quota-ring-track { fill: none; stroke: var(--neutral-bg); }
+.quota-ring-fill { fill: none; stroke: currentColor; stroke-linecap: round; }
+.quota-ring[data-size="large"] .quota-ring-number { font-size: 17px; letter-spacing: -0.03em; }
+/* A profile's own page: a ring per window, larger, with its name and when it refills. */
+.quota-dials { display: flex; flex-wrap: wrap; gap: 28px; }
+.quota-dial { display: grid; justify-items: center; gap: 4px; min-width: 88px; }
+.quota-dial .quota-ring { margin-bottom: 4px; }
+.quota-dial-label { font-size: var(--text-sm); font-weight: 500; }
+.quota-dial-reset { font-size: var(--text-xs); color: var(--muted); }
 .quota-ring-number { position: relative; font-size: 9.5px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .quota-note { margin: 0; font-size: var(--text-sm); }
 .station-tag.small { padding: 0 5px; font-size: 10.5px; border-radius: calc(5px * var(--corner-scale)); flex: none; corner-shape: var(--corner-shape); }
@@ -640,6 +647,11 @@
 .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-sm); animation: appear 0s linear 400ms both; }
 .loading-fill { flex: 1; min-height: 100%; justify-content: center; }
 .gate .loading { justify-content: center; }
+/* A profile's enabled models, as chips. */
+.model-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.model-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--hover); font-size: var(--text-sm); }
+/* A profile's state under its name: the check, when, and checking again. */
+.profile-state { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 /* The runtimes a profile runs, after its name. */
 .runtime-tags { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: 1px; }
 .runtime-tag { display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; height: 17px; border-radius: 5px; background: var(--hover); color: var(--muted); font-size: 11px; font-weight: 500; }

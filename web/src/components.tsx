@@ -43,16 +43,6 @@ export function OwnerLabel({ owner }: { owner: { id: string; name: string } | nu
   );
 }
 
-/** When a quota window resets, in words: "3 小时后", "周日 08:00". */
-function resetText(ms: number | null): string {
-  if (ms === null) return "";
-  const hours = (ms - Date.now()) / 3_600_000;
-  if (hours <= 0) return "即将重置";
-  if (hours < 24) return `${Math.max(1, Math.round(hours))} 小时后重置`;
-  const d = new Date(ms);
-  const day = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][d.getDay()];
-  return `${hours < 24 * 7 ? day : `${d.getMonth() + 1}月${d.getDate()}日`} ${d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} 重置`;
-}
 
 /** How long until a quota window refills, in words: "40 分钟后刷新", "3 小时 20 分钟后刷新", "2 天 5 小时后刷新". */
 function refillsIn(ms: number | null): string {
@@ -72,16 +62,8 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
   if (!quota) return compact ? null : <p className="muted quota-note">还没查过额度。</p>;
   if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className="muted quota-note">{quota.detail ?? "查不到额度。"}</p>;
   if (compact) {
-    // Every window, shortest first, each a ring marked by its length: 5H (five hours), W (a week), M (a month), 3D.
-    const mark = (label: string) => {
-      if (label.startsWith("每月")) return { text: "M", order: 3 };
-      if (label.startsWith("每周")) return { text: "W", order: 2 };
-      const hours = /^(\d+) 小时/.exec(label);
-      if (hours) return { text: `${hours[1]}H`, order: 0 };
-      const days = /^(\d+) 天/.exec(label);
-      return { text: days ? `${days[1]}D` : label, order: 1 };
-    };
-    const windows = [...quota.windows].sort((a, b) => mark(a.label).order - mark(b.label).order);
+    // Every window, shortest first, each a ring marked by its length.
+    const windows = byLength(quota.windows);
     return (
       <span className="quota-rings">
         {windows.map((w) => (
@@ -95,32 +77,48 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
       </span>
     );
   }
+  // The profile's own page: each window a larger ring, what is left of it and when it refills under it.
   return (
-    <div className="quota">
-      {quota.windows.map((w) => (
-        <div key={w.label} className="quota-row">
-          <span className="quota-label">{w.label}</span>
-          <span className="quota-track"><span className="quota-fill" data-level={level(w.usedPercent)} style={{ width: `${w.usedPercent}%` }} /></span>
-          <span className="quota-value">{w.usedPercent}%</span>
-          <span className="quota-reset">{resetText(w.resetsAt)}</span>
+    <div className="quota-dials">
+      {byLength(quota.windows).map((w) => (
+        <div key={w.label} className="quota-dial">
+          <QuotaRing percent={w.usedPercent} size={64} />
+          <span className="quota-dial-label">{w.label}</span>
+          <span className="quota-dial-reset">{w.resetsAt !== null ? refillsIn(w.resetsAt) : "\u00a0"}</span>
         </div>
       ))}
     </div>
   );
 }
 
+/** A window marked by its length (5H five hours, W a week, M a month, 3D) and where it goes among the others. */
+function mark(label: string): { text: string; order: number } {
+  if (label.startsWith("每月")) return { text: "M", order: 3 };
+  if (label.startsWith("每周")) return { text: "W", order: 2 };
+  const hours = /^(\d+) 小时/.exec(label);
+  if (hours) return { text: `${hours[1]}H`, order: 0 };
+  const days = /^(\d+) 天/.exec(label);
+  return { text: days ? `${days[1]}D` : label, order: 1 };
+}
+
+function byLength<T extends { label: string }>(windows: T[]): T[] {
+  return [...windows].sort((a, b) => mark(a.label).order - mark(b.label).order);
+}
+
 /** What is left of the most used window, as a ring: full and green when untouched, shorter and redder as it goes; the
  * number left inside (up to 99; a full ring says 100 by itself). Use eats it clockwise from the top. */
-function QuotaRing({ percent }: { percent: number }) {
+function QuotaRing({ percent, size = 26 }: { percent: number; size?: number }) {
   const used = Math.max(0, Math.min(100, Math.round(percent)));
   const left = 100 - used;
-  const r = 10;
+  const stroke = size > 40 ? 5 : 3;
+  const c = size / 2;
+  const r = c - stroke / 2 - 0.5;
   const around = 2 * Math.PI * r;
   return (
-    <span className="quota-ring" data-level={level(used)} role="img" aria-label={`剩余 ${left}%`}>
-      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
-        <circle className="quota-ring-track" cx="13" cy="13" r={r} />
-        {left > 0 && <circle className="quota-ring-fill" cx="13" cy="13" r={r} strokeDasharray={`${(around * left) / 100} ${around}`} transform={`rotate(${-90 + used * 3.6} 13 13)`} />}
+    <span className="quota-ring" data-level={level(used)} data-size={size > 40 ? "large" : undefined} style={{ width: size, height: size }} role="img" aria-label={`剩余 ${left}%`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ strokeWidth: stroke }}>
+        <circle className="quota-ring-track" cx={c} cy={c} r={r} />
+        {left > 0 && <circle className="quota-ring-fill" cx={c} cy={c} r={r} strokeDasharray={`${(around * left) / 100} ${around}`} transform={`rotate(${-90 + used * 3.6} ${c} ${c})`} />}
       </svg>
       {left < 100 && <span className="quota-ring-number">{left}</span>}
     </span>

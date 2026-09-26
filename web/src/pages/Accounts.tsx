@@ -160,9 +160,12 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
   const users = profile.usedBy.map((id) => overview.connects.find((c) => c.id === id)).filter((c) => c !== undefined);
   const [deleting, setDeleting] = useState(false);
 
+  const signIn = profile.access.kind === "subscription";
+  const signingIn = profile.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(profile.login.state);
   return (
     <div className="page page-narrow">
       <MobileBack to={link("/settings/accounts")} label="Profile" />
+      {/* Who the account is and whether it works now: its provider, name, runtimes, and its last check. */}
       <header className="identity">
         <span className="mark runtime-mark" style={{ width: 48, height: 48 }}><ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={26} /></span>
         <div className="identity-text">
@@ -170,32 +173,22 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
             <input className="input identity-name-input" value={name} autoFocus aria-label="名称" onChange={(e) => setName(e.target.value)} onBlur={rename}
               onKeyDown={(e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
-            <h1 className="identity-name">{profile.name}<IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
+            <h1 className="identity-name">{profile.name}<RuntimeTags runtimes={profile.runtimes} /><IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
           )}
-          <p className="identity-sub"><RuntimeTags runtimes={profile.runtimes} /><span>{ACCESS[profile.access.kind].label}</span><span className="mono">{profile.id}</span></p>
+          <p className="identity-sub profile-state">
+            <Pill tone={tone.tone}>{tone.label}</Pill>
+            <span>{latest?.detail ?? "还没检查过"}</span>
+            {latest && <span className="muted"><Time at={latest.checkedAt} />检查</span>}
+            <IconButton label="重新检查" icon={RefreshCw} busy={check.busy} onClick={() => void check.run()} />
+          </p>
         </div>
         <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash2, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>
       {(save.error || remove.error) && <p className="field-error" role="alert">{(save.error ?? remove.error)!.message}</p>}
-
-      <section className="section" aria-labelledby="state-heading">
-        <div className="section-head">
-          <h2 id="state-heading">状态</h2>
-          <Button icon={RefreshCw} busy={check.busy} onClick={() => void check.run()}>重新检查</Button>
-        </div>
-        <div className="card card-row">
-          <Pill tone={tone.tone}>{tone.label}</Pill>
-          <div className="card-row-text">
-            <span>{latest?.detail ?? "还没检查过。"}</span>
-            {latest && <span className="muted"><Time at={latest.checkedAt} />检查</span>}
-          </div>
-        </div>
-        {profile.access.kind === "subscription" && <SignIn profile={profile} needed={latest?.state === "login"} />}
-      </section>
+      {/* A subscription that needs signing in, or is signing in: that comes first. */}
+      {signIn && (latest?.state === "login" || signingIn) && <section className="section"><SignIn profile={profile} needed /></section>}
 
       <QuotaSection profile={profile} />
-
-      <AccessSection profile={profile} onSave={(input, done) => saveThen(input, () => { toast("已保存，正在检查"); done(); })} busy={save.busy} />
 
       <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => void save.run({ models })} />
 
@@ -209,6 +202,9 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
         )}
       </Section>
 
+      <AccountSection profile={profile} signedIn={latest?.state !== "login" && !signingIn}
+        onSave={(input, done) => saveThen(input, () => { toast("已保存，正在检查"); done(); })} busy={save.busy} />
+
       <Advanced profile={profile} onSave={(input) => saveThen(input, () => toast("已保存"))} busy={save.busy} />
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
         title={`删除「${profile.name}」？`} action="删除 Profile" description="只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。" />
@@ -216,34 +212,39 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
   );
 }
 
-function AccessSection({ profile, onSave, busy }: { profile: ProfileView; onSave(input: ProfileInput, done: () => void): void; busy: boolean }) {
-  const [kind, setKind] = useState<AccessKind>(profile.access.kind);
+/**
+ * The account itself: its key (shown masked, replaced here — its provider stays, since a profile is that account), or
+ * for a subscription, signing in again (as another account, or after it expired).
+ */
+function AccountSection({ profile, signedIn, onSave, busy }: { profile: ProfileView; signedIn: boolean; onSave(input: ProfileInput, done: () => void): void; busy: boolean }) {
+  const [replacing, setReplacing] = useState(false);
   const [key, setKey] = useState("");
-  const changedKind = kind !== profile.access.kind;
-  const needsKey = KEYED.has(kind) && (changedKind || !profile.access.key);
-  const dirty = changedKind || key.length > 0;
+  const keyed = KEYED.has(profile.access.kind);
+  if (!keyed && profile.access.kind !== "subscription") return null;
   return (
-    <section className="section" aria-labelledby="access-heading">
-      <div className="section-head"><h2 id="access-heading">接入</h2></div>
-      <div className="card">
-        <Field label="接入方式" htmlFor="access-kind" hint={ACCESS[kind].description}>
-          <Select id="access-kind" value={kind} onChange={(v) => { setKind(v as AccessKind); setKey(""); }}
-            options={ACCESS_KINDS[profile.runtime].map((k) => ({ value: k, label: ACCESS[k].label }))} />
-        </Field>
-        {KEYED.has(kind) && (
-          <Field label={kind === "opencode-go" ? "OpenCode Go key" : "API key"} htmlFor="access-key">
-            <input id="access-key" className="input mono" spellCheck={false} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())}
-              placeholder={!changedKind && profile.access.key ? `已保存 ${profile.access.key}，留空保持不变` : "粘贴 key"} />
-          </Field>
-        )}
-        {dirty && (
-          <div className="card-actions">
-            <Button variant="ghost" onClick={() => { setKind(profile.access.kind); setKey(""); }}>还原</Button>
-            <Button variant="primary" busy={busy} disabled={needsKey && !key} onClick={() => onSave({ access: { kind, key } }, () => setKey(""))}>保存</Button>
-          </div>
-        )}
-      </div>
-    </section>
+    <Section title="账号">
+      {keyed ? (
+        <div className="card">
+          {!replacing ? (
+            <div className="card-row">
+              <div className="card-row-text">
+                <strong>{profile.access.kind === "opencode-go" ? "OpenCode Go key" : "API key"}</strong>
+                <span className="muted mono">{profile.access.key || "没有保存"}</span>
+              </div>
+              <Button onClick={() => setReplacing(true)}>更换</Button>
+            </div>
+          ) : (
+            <Field label={profile.access.kind === "opencode-go" ? "新的 OpenCode Go key" : "新的 API key"} htmlFor="access-key" hint="保存后会重新检查。">
+              <div className="input-row">
+                <input id="access-key" className="input mono" spellCheck={false} type="password" autoComplete="off" autoFocus value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="粘贴 key" />
+                <Button variant="ghost" onClick={() => { setReplacing(false); setKey(""); }}>取消</Button>
+                <Button variant="primary" disabled={!key} busy={busy} onClick={() => onSave({ access: { kind: profile.access.kind, key } }, () => { setKey(""); setReplacing(false); })}>保存</Button>
+              </div>
+            </Field>
+          )}
+        </div>
+      ) : signedIn && <SignIn profile={profile} needed={false} />}
+    </Section>
   );
 }
 
@@ -407,8 +408,8 @@ function QuotaSection({ profile }: { profile: ProfileView }) {
   const refresh = useAction(() => api.refreshQuota(profile.id));
   const quota = refresh.data ?? profile.quota;
   return (
-    <Section title="额度" description={quota?.checkedAt ? <><Time at={quota.checkedAt} />查询；每几分钟自动更新。</> : undefined}
-      actions={<Button icon={RefreshCw} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
+    <Section title="额度" description={quota?.checkedAt ? <><Time at={quota.checkedAt} />查询，每几分钟自动更新</> : undefined}
+      actions={<Button variant="ghost" icon={RefreshCw} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
       <div className="card"><QuotaBars quota={quota} /></div>
     </Section>
   );
@@ -434,14 +435,25 @@ function ModelPool({ profile, found, onSave }: { profile: ProfileView; found: st
     if (next.has(m)) next.delete(m); else next.add(m);
     commit(next);
   };
+  const [choosing, setChoosing] = useState(false);
+  const on = [...enabled].sort();
   return (
     <Section title="模型" description={all.length
-      ? `勾选这个 Profile 可以用的模型；只有勾选的模型能在新对话和连接里选。已启用 ${enabled.size} / ${all.length}。`
-      : "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。"}>
-      {all.length > 0 && (
+      ? "只有启用的模型能在新对话和连接里选。"
+      : "检查过 Profile 后，这里会列出它能用的模型，启用后才能使用。"}
+      actions={all.length > 0 && <Button variant="ghost" onClick={() => setChoosing(!choosing)}>{choosing ? "收起" : `选择模型（${enabled.size} / ${all.length}）`}</Button>}>
+      {/* What it can be used for now, first; the whole list only when choosing. */}
+      {all.length > 0 && !choosing && (
+        on.length === 0 ? <p className="muted">还没有启用模型。</p> : (
+          <ul className="model-chips">
+            {on.map((m) => <li key={m} className="model-chip"><ModelLogo model={m} runtime={profile.runtime} size={13} /><span className="mono">{m}</span></li>)}
+          </ul>
+        )
+      )}
+      {all.length > 0 && choosing && (
         <div className="model-pool">
           <div className="model-pool-tools">
-            {all.length > 10 && <input className="input model-pool-filter" placeholder="筛选模型" value={filter} onChange={(e) => setFilter(e.target.value)} />}
+            {all.length > 10 && <input className="input model-pool-filter" placeholder="筛选模型" autoFocus value={filter} onChange={(e) => setFilter(e.target.value)} />}
             <button type="button" className="text-toggle" onClick={() => commit(new Set([...enabled, ...shown]))}>全选{filter ? "筛选结果" : ""}</button>
             <button type="button" className="text-toggle" onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>全不选{filter ? "筛选结果" : ""}</button>
           </div>
