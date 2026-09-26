@@ -221,6 +221,9 @@ impl Views {
                 topics.insert(Topic::Threads { station: station.clone() });
                 topics.insert(Topic::Sessions { station: station.clone() });
                 topics.insert(Topic::Thread { station: station.clone(), thread: *thread });
+                if let Some(companion) = self.companion(station, *thread) {
+                    topics.insert(Topic::Thread { station: station.clone(), thread: companion });
+                }
                 topics.insert(Topic::Overview { station: station.clone() });
                 topics.insert(Topic::Link { station: station.clone() });
                 return topics;
@@ -274,6 +277,40 @@ impl Views {
     }
 
     /// A thread as the station's `threads` topic has it.
+    /**
+     * A Slack chat's internal chat on ember: the ember thread of one of its
+     * agents (the oldest). What is written on ember's page in the Slack chat
+     * goes there — it reaches the agent like a Slack message, and the agent
+     * answers there, not in Slack — and the page shows both together.
+     */
+    fn companion(&self, station: &str, id: u64) -> Option<u64> {
+        let threads = self.ok(Topic::Threads { station: station.to_string() })?;
+        let list = threads.as_array()?;
+        let thread = list.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id))?;
+        if thread.get("surface").and_then(Value::as_str) == Some("ember") {
+            return None;
+        }
+        let keys = members(thread);
+        list.iter()
+            .filter(|t| t.get("surface").and_then(Value::as_str) == Some("ember"))
+            .filter(|t| members(t).iter().any(|k| keys.contains(k)))
+            .filter_map(|t| t.get("id").and_then(Value::as_u64))
+            .min()
+    }
+
+    /// Where a message written in this chat goes: the chat itself, a Slack chat's internal chat, or — a Slack chat
+    /// whose agent has none yet — a new one to make for that agent's session first.
+    pub fn send_target(&self, station: &str, id: u64) -> SendTarget {
+        let Some(thread) = self.thread_of(station, id) else { return SendTarget::Thread(id) };
+        if thread.get("surface").and_then(Value::as_str) == Some("ember") {
+            return SendTarget::Thread(id);
+        }
+        match self.companion(station, id) {
+            Some(companion) => SendTarget::Thread(companion),
+            None => members(&thread).into_iter().next().map_or(SendTarget::Thread(id), SendTarget::NewChatFor),
+        }
+    }
+
     fn thread_of(&self, station: &str, id: u64) -> Option<Value> {
         self.ok(Topic::Threads { station: station.to_string() })?.as_array()?.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned()
     }
@@ -442,9 +479,18 @@ impl Views {
                 "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
             }));
         }
-        let messages = page.get("messages").cloned().unwrap_or_else(|| json!([]));
-        // A sent message leaves the outbox as its own copy (or anything later) arrives.
-        let newest = messages.as_array().and_then(|m| m.last()).and_then(|m| m.get("seq")?.as_u64());
+        let mut messages = page.get("messages").cloned().unwrap_or_else(|| json!([]));
+        // A Slack chat also shows its internal chat: what was said to its agent on ember, and the answers.
+        let companion = self.companion(station, id);
+        if let Some(Ok(extra)) = companion.and_then(|c| self.store.value(&Topic::Thread { station: station.to_string(), thread: c })) {
+            if let (Some(list), Some(more)) = (messages.as_array_mut(), extra.get("messages").and_then(Value::as_array)) {
+                list.extend(more.iter().cloned());
+                let key = |m: &Value| (m.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0), m.get("seq").and_then(Value::as_u64).unwrap_or(0));
+                list.sort_by(|a, b| key(a).partial_cmp(&key(b)).unwrap_or(std::cmp::Ordering::Equal));
+            }
+        }
+        // A sent message leaves the outbox as its own copy (or anything later) arrives; seqs grow across threads.
+        let newest = messages.as_array().and_then(|m| m.iter().filter_map(|m| m.get("seq")?.as_u64()).max());
         let at = (station.to_string(), id);
         let outbox = {
             let mut all = self.outbox.borrow_mut();
@@ -466,10 +512,17 @@ impl Views {
             "messages": messages,
             "more": page.get("more").cloned().unwrap_or(json!(false)),
             "outbox": outbox,
+            "sendTo": companion,
             "link": self.link(station, true),
             "thread": thread,
         })))
     }
+}
+
+/// See [`Views::send_target`].
+pub enum SendTarget {
+    Thread(u64),
+    NewChatFor(String),
 }
 
 /// The session keys taking part in a thread.

@@ -6,10 +6,10 @@ import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as Quo
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
-import { agentLabel, botUserIdOf, sessionStatus, slackThreadUrl, slackWorkspaceUrl } from "./format.ts";
+import { agentLabel, botUserIdOf, sessionStatus } from "./format.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
-import { Avatar, ModelLogo, SlackLogo, Time, Tip } from "./ui.tsx";
+import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
 import { useStickToBottom } from "./scroll.ts";
@@ -108,7 +108,7 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
         {chat.more && <div className="chat-older" aria-hidden="true"><span className="spinner" /></div>}
         {messages.length === 0 && (
           <div className="chat-empty">
-            <p>{thread.surface === "ember" ? "在这里发消息，这个对话里的 agent 会在这里回复。" : "这个 thread 里还没有消息。"}</p>
+            <p>在这里发消息，这个对话里的 agent 会在这里回复。</p>
           </div>
         )}
         {messages.map((m) => {
@@ -215,25 +215,8 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
-      {thread.surface === "ember"
-        ? <Composer thread={thread.id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
-        : <SlackReply chat={chat} />}
+      <Composer thread={thread.id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
     </section>
-  );
-}
-
-/** Where a Slack thread's composer would be: people answer it in Slack. */
-function SlackReply({ chat }: { chat: ChatView }) {
-  const connect = chat.agents.find((a) => a.connect?.kind === "slack")?.connect ?? null;
-  const url = slackThreadUrl(slackWorkspaceUrl(connect), chat.thread.channel, chat.thread.threadTs);
-  return (
-    <div className="composer-wrap">
-      <p className="chat-slack-reply">
-        {url
-          ? <a className="inline-link" href={url} target="_blank" rel="noopener"><SlackLogo size={13} />在 Slack 里回复</a>
-          : <span className="muted"><SlackLogo size={13} />在 Slack 里回复</span>}
-      </p>
-    </div>
   );
 }
 
