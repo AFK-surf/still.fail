@@ -25,6 +25,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   chat: ChatView; lives: ReadonlyMap<string, LiveView>; onOpenHistory(key: string, entry?: number): void;
   ensureChat?: () => Promise<{ key: string; thread: number }>; onSent?: (thread: number) => void;
 }) {
+  const station = useStation();
   const list = useRef<HTMLDivElement>(null);
   const floor = useRef<HTMLDivElement>(null);
   const sending = useChatSend();
@@ -218,8 +219,9 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
+      {chat.offline && <p className="offline-notice" role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
       <Composer thread={id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)}
-        {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
+        locked={chat.offline} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
 }

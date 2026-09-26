@@ -159,6 +159,10 @@ impl Core {
         // Whom each account reaches, as the data center has it from the last run: views put together before the
         // first `/v1/me` answers know whose workspace is whose.
         inner.recompute_owners();
+        // Which stations were offline when last heard of: served from what was kept until their workspace says more.
+        for (workspace, view) in inner.data.records("workspace") {
+            inner.presence(&workspace, &view);
+        }
         let me = Rc::downgrade(&inner);
         tracer.set_export(Rc::new(move |body: Vec<u8>| {
             let me = me.clone();
@@ -581,6 +585,16 @@ impl Inner {
     }
 
     /// A workspace's stations as it lists them now: what is kept of the others in it goes.
+    /// Tells the stations module which of a workspace's stations are online: an offline one is served from what was
+    /// kept, and asked for nothing until it is back.
+    fn presence(&self, workspace: &str, view: &Value) {
+        for station in view.get("stations").and_then(Value::as_array).into_iter().flatten() {
+            if let Some(id) = station.get("id").and_then(Value::as_str) {
+                self.stations.set_presence(&format!("{workspace}/{id}"), station.get("online").and_then(Value::as_bool).unwrap_or(false));
+            }
+        }
+    }
+
     fn forget_gone_stations(&self, workspace: &str, view: &Value) {
         let ids: HashSet<String> = view.get("stations").and_then(Value::as_array).into_iter().flatten().filter_map(|s| Some(s.get("id")?.as_str()?.to_string())).collect();
         let workspace = workspace.to_string();
@@ -687,6 +701,7 @@ impl Inner {
         };
         if let (Topic::Workspace { workspace }, Ok(view)) = (topic, &value) {
             self.forget_gone_stations(workspace, view);
+            self.presence(workspace, view);
         }
         if self.live.borrow().get(topic) == Some(&fetch) {
             // A workspace goes to the data center; the list of them is put together from the accounts' records.
@@ -807,6 +822,7 @@ impl Inner {
                         }
                     }
                 });
+                self.stations.set_presence(&format!("{workspace}/{id}"), online);
             }
             _ => {}
         }

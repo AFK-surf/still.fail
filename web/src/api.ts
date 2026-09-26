@@ -90,6 +90,8 @@ export interface ChatView {
   /** Each says whose it is (`mine`: the viewer's), as the core decides. */
   /** `system`: said by ember itself (a limit hit, a failure), shown as a notice. */
   messages: (MessageView & { mine: boolean; system: boolean })[];
+  /** Its station is offline: what was kept shows, nothing can be sent. */
+  offline: boolean;
   more: boolean;
   outbox: OutboxMessage[];
   link: LinkView;

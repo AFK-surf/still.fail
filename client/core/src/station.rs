@@ -460,6 +460,9 @@ pub struct Stations {
     kept: Rc<Kept>,
     me: Weak<Stations>,
     stations: RefCell<HashMap<String, StationState>>,
+    /// Stations their workspace says are offline: their topics are served from what was kept (the data center, the
+    /// device's logs), and nothing is asked of them until they are back.
+    offline: RefCell<HashSet<String>>,
 }
 
 /// A failed request's span.
@@ -481,7 +484,7 @@ fn answered(span: &mut Span, reply: &WireReply) {
 
 impl Stations {
     pub fn new(host: Rc<dyn Host>, sink: Rc<dyn TopicSink>, wire: Rc<dyn StationWire>, tracer: Rc<Tracer>, kept: Rc<Kept>) -> Rc<Stations> {
-        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, me: me.clone(), stations: RefCell::default() })
+        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, me: me.clone(), stations: RefCell::default(), offline: RefCell::default() })
     }
 
     /// One JSON call to the admin API (path without the `/admin/api` prefix); a write answers once the live topics
@@ -706,7 +709,7 @@ impl Stations {
     }
 
     async fn reload(&self, topic: &Topic) {
-        if !self.is_live(topic) {
+        if !self.is_live(topic) || topic.station().is_some_and(|s| !self.reachable(s)) {
             return;
         }
         let Some(addr) = topic.station().and_then(|s| self.addr(s)) else { return };
@@ -761,6 +764,9 @@ impl Stations {
     /// summary and title, so a chat opens from what is kept rather than waiting for the station. Chats open meanwhile
     /// read themselves; it stops when the station is no longer in use.
     async fn warm(&self, station: &str) {
+        if !self.reachable(station) {
+            return;
+        }
         let Some(addr) = self.addr(station) else { return };
         let rows = self.sink.get(&Topic::ChatRows { station: station.into() }).unwrap_or(Value::Null);
         let mut chats: Vec<(f64, u64, Value)> = rows.as_array().into_iter().flatten()
@@ -812,6 +818,41 @@ impl Stations {
         });
     }
 
+    /// A station went offline or came back, as its workspace says. Offline: its streams and requests end and its link
+    /// says so; its topics keep what they have. Back: what its topics want is read again and its stream opens.
+    pub fn set_presence(&self, station: &str, online: bool) {
+        let changed = if online { self.offline.borrow_mut().remove(station) } else { self.offline.borrow_mut().insert(station.to_string()) };
+        if !changed {
+            return;
+        }
+        if !online {
+            if let Some(s) = self.stations.borrow_mut().get_mut(station) {
+                for task in s.events.take().map(|(t, _)| t).into_iter().chain(s.replaced.take()) {
+                    task.abort();
+                }
+                for (_, task) in s.tasks.drain() {
+                    task.abort();
+                }
+                s.stale = true;
+            }
+            self.set_link(station, json!({ "state": "offline", "message": null }));
+            return;
+        }
+        let topics: Vec<Topic> = self.stations.borrow().get(station).map(|s| s.topics.iter().cloned().collect()).unwrap_or_default();
+        for topic in &topics {
+            match topic {
+                Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } | Topic::Thread { .. } => self.refetch(topic),
+                _ => {}
+            }
+        }
+        self.open_events(station, true);
+    }
+
+    /// Whether the station can be asked for anything now (not offline).
+    fn reachable(&self, station: &str) -> bool {
+        !self.offline.borrow().contains(station)
+    }
+
     fn set_link(&self, station: &str, value: Value) {
         let live = {
             let mut stations = self.stations.borrow_mut();
@@ -835,6 +876,9 @@ impl Stations {
     /// Opens the station's `/events` for what its topics want now (unless its stream already is, or `anew`): the
     /// new stream opens first, and the old one goes once it has, so nothing falls between.
     fn open_events(&self, station: &str, anew: bool) {
+        if !self.reachable(station) {
+            return;
+        }
         // A session is followed once its live topic has what was kept of it: the stream asks from there.
         let mut live: Vec<String> = self
             .live_topics(station, |t| matches!(t, Topic::Live { .. }))
@@ -1527,6 +1571,10 @@ impl Source for Stations {
             return;
         }
         match topic {
+            Topic::Link { .. } if !self.reachable(&station) => {
+                let (this, station) = (self.rc(), station.clone());
+                self.spawn(async move { this.set_link(&station, json!({ "state": "offline", "message": null })) });
+            }
             Topic::Link { .. } => {
                 // The state as it is when this runs: the events stream may have moved on.
                 let (this, station) = (self.rc(), station.clone());

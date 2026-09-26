@@ -89,7 +89,7 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
   if (!stations) return null;
   const station = stations.find((s) => s.id === id);
   if (!station) return <Empty><p>这个 workspace 里没有这台 station。</p></Empty>;
-  if (!station.online) return <Empty><Illustration name="station-offline" /><h2>「{station.name}」离线</h2><p>它最近没有和 ember cloud 联系。确认那台机器上的 ember 在运行。</p></Empty>;
+  // Offline, its pages still show what the core kept of it; the core says where nothing can be done.
   return (
     <StationContext.Provider value={station}>
       <Routes>
