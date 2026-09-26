@@ -176,16 +176,32 @@ function MessageAvatar({ message, name, runtime, model }: { message: ChatMessage
     : <span className="msg-avatar"><Avatar id={message.user} name={name} size={18} /></span>;
 }
 
-/** Quoted passages as sent: who said it, the passage, then the comment. */
+/**
+ * Quoted passages as sent, like a reply in a messaging app: a card naming
+ * whose message it quotes with the passage (two lines), the comment under it.
+ * The card leads back to the quoted message.
+ */
 function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
   if (!quotes?.length) return null;
+  const jump = (ts: string | undefined) => {
+    const target = ts ? document.querySelector<HTMLElement>(`.chat-list [data-ts="${ts}"]`) : null;
+    if (!target) return;
+    // A reader's move: the pane lets it take the position.
+    target.closest(".chat-list")?.dispatchEvent(new WheelEvent("wheel"));
+    target.scrollIntoView({ block: "center" });
+    target.classList.remove("msg-flash");
+    void target.offsetWidth;
+    target.classList.add("msg-flash");
+  };
   return (
     <div className="msg-quotes">
       {quotes.map((q, i) => (
         <div key={i} className="msg-quote">
-          <span className="msg-quote-author">{q.author}</span>
-          <blockquote>{q.text}</blockquote>
-          {q.comment && <div className="msg-plain">{q.comment}</div>}
+          <button type="button" className="msg-quote-card" onClick={() => jump(q.ts)} disabled={!q.ts} title={q.ts ? "跳到原消息" : undefined}>
+            <span className="msg-quote-head"><QuoteIcon size={11} strokeWidth={2.2} />引用 {q.author}</span>
+            <span className="msg-quote-text">{q.text}</span>
+          </button>
+          {q.comment && <div className="msg-plain msg-quote-comment">{q.comment}</div>}
         </div>
       ))}
     </div>

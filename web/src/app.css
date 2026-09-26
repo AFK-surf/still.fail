@@ -1029,3 +1029,21 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 *, *::before, *::after { corner-shape: squircle; }
 /* These panes keep their distance from the bottom themselves; the browser's top anchoring would fight it. */
 .chat-list, .history-body { overflow-anchor: none; }
+
+/* Quotes in a sent message: a reply card (whose, the passage) with the comment under it. */
+.msg-quotes { display: grid; gap: 8px; margin-bottom: 6px; }
+.msg-quote { display: grid; gap: 4px; padding: 0; border: 0; }
+.msg-quote-card {
+  display: grid; gap: 1px; width: 100%; padding: 6px 10px; border: 0; border-radius: 10px;
+  background: color-mix(in oklch, var(--canvas) 70%, transparent); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.msg-row .msg-quote-card { background: var(--neutral-bg); }
+.msg-quote-card:disabled { cursor: default; }
+.msg-quote-card:not(:disabled):hover { background: var(--canvas); }
+.msg-quote-head { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--accent-text); }
+.msg-quote-text { font-size: var(--text-xs); color: var(--muted); white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.msg-quote-comment { font-size: var(--text-sm); }
+@keyframes msg-flash { 0%, 60% { background: var(--accent-bg); } 100% { background: transparent; } }
+.msg-flash { animation: msg-flash 1400ms var(--ease-out); border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) { .msg-flash { animation: none; outline: 2px solid var(--accent); } }
