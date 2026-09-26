@@ -43,10 +43,11 @@ export const APP_REDIRECT = "ember://auth/callback";
 
 /**
  * Where a login may return: the web app's own callback on this origin, the
- * native app's callback, or a loopback listener of a command-line client.
+ * admin console's on its origin, the native app's callback, or a loopback
+ * listener of a command-line client.
  */
 export function validRedirect(env: Env, value: string): boolean {
-  if (value === `${env.PUBLIC_ORIGIN}/auth/callback` || value === APP_REDIRECT) return true;
+  if (value === `${env.PUBLIC_ORIGIN}/auth/callback` || value === `${env.ADMIN_ORIGIN}/auth/callback` || value === APP_REDIRECT) return true;
   try {
     const url = new URL(value);
     return url.protocol === "http:" && url.hostname === "127.0.0.1" && Number(url.port) > 0 && url.pathname === "/oauth/callback" && !url.username && !url.password && !url.search && !url.hash;

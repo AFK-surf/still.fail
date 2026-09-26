@@ -6,19 +6,27 @@
   "compatibility_date": "2026-09-08",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
-  "routes": [{ "pattern": "ember.3720.org", "custom_domain": true }],
+  // Custom domains: wrangler creates each one's DNS record and certificate on deploy.
+  "routes": [
+    { "pattern": "ember.3720.org", "custom_domain": true },
+    { "pattern": "admin.ember.3720.org", "custom_domain": true },
+  ],
   "preview_urls": false,
   "observability": { "enabled": false },
   "vars": {
     "PUBLIC_ORIGIN": "https://ember.3720.org",
+    "ADMIN_ORIGIN": "https://admin.ember.3720.org",
     "GOOGLE_CLIENT_ID": "",
   },
-  // The web app; API, relay and discovery paths reach the Worker first.
+  // The web app at the root, the admin's console under admin-app/. Every
+  // request reaches the Worker first: which app a path belongs to depends on
+  // the host, and each app's client-side routes fall back to its own
+  // index.html (see index.ts), so no not-found handling here.
   "assets": {
     "directory": "../dist/cloud-app",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/v1/*", "/relay", "/pkarr/*", "/healthz", "/ping", "/.well-known/*"],
+    "not_found_handling": "none",
+    "run_worker_first": true,
   },
   "containers": [{ "class_name": "Relay", "image": "./Dockerfile", "max_instances": 1, "instance_type": "lite" }],
   "durable_objects": {

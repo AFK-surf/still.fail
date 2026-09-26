@@ -1,7 +1,8 @@
 // The account-facing API: workspaces, members, invitations, stations and
 // grants, and each device's event socket; plus the two things stations do
-// with their own key (enroll, and hold their presence socket); and the admin's
-// console. Returns null for paths it does not own.
+// with their own key (enroll, and hold their presence socket). `api` returns
+// null for paths it does not own. The admin's console has its own, `adminApi`,
+// which only the console's host routes to (index.ts).
 import { isAdmin } from "./admin";
 import { bearerToken, denied, readJson, reply, verifyToken, type Claims } from "./auth";
 import { EVENTS_PROTOCOL, ROLES, type Role } from "./directory";
@@ -100,8 +101,6 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-ember-sub": claims.sub } }));
   }
 
-  if (path.startsWith("/v1/admin/")) return admin(request, env, path, method);
-
   // ── accounts ────────────────────────────────────────────────────────────
   const isAccountRoute = path === "/v1/me" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
@@ -172,7 +171,10 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
 /** What any path nobody serves answers; the console's paths answer it to everyone but the admin. */
 const notFound = () => new Response("Not found", { status: 404 });
 
-async function admin(request: Request, env: Env, path: string, method: string): Promise<Response> {
+const inviteUrl = (env: Env, code: string) => `${env.PUBLIC_ORIGIN}/?invite=${code}`;
+
+export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
+  const method = request.method;
   const claims = await account(bearerToken(request), env);
   if (!claims || !isAdmin(env, claims.email)) return notFound();
   let input: Record<string, unknown>;
@@ -185,11 +187,12 @@ async function admin(request: Request, env: Env, path: string, method: string): 
   if (path === "/v1/admin/me" && method === "GET") return reply({ email: claims.email });
   if (path === "/v1/admin/users" && method === "GET") return directory(async () => ({ users: await dir.adminUsers() }));
   if (path === "/v1/admin/workspaces" && method === "GET") return directory(async () => ({ workspaces: await dir.adminWorkspaces() }));
-  if (path === "/v1/admin/invite-codes" && method === "GET") return directory(async () => ({ codes: await dir.inviteCodes() }));
+  // Each with its sign-up link: that is the web app's, on the other origin.
+  if (path === "/v1/admin/invite-codes" && method === "GET") return directory(async () => ({ codes: (await dir.inviteCodes()).map((c) => ({ ...c, url: inviteUrl(env, c.code) })) }));
   if (path === "/v1/admin/invite-codes" && method === "POST") {
     return directory(async () => {
       const made = await dir.createInviteCode(claims.sub, input.note, input.days);
-      return { ...made, url: `${env.PUBLIC_ORIGIN}/?invite=${made.code}` };
+      return { ...made, url: inviteUrl(env, made.code) };
     });
   }
   const revoke = /^\/v1\/admin\/invite-codes\/([A-Za-z0-9-]{1,32})\/revoke$/.exec(path);

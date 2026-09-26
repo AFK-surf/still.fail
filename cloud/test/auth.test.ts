@@ -4,12 +4,13 @@ import { ulid } from "ulid";
 import { ACCESS_TTL_SEC, bearerToken, nowSeconds, randomSecret, signToken, validRedirect, verifyToken } from "../src/auth.ts";
 import type { Env } from "../src/env.ts";
 
-const env = { AUTH_SIGNING_KEY: randomSecret(), PUBLIC_ORIGIN: "https://relay.example" } as Env;
-test("only loopback callbacks, this origin's web callback and the app's callback are accepted", () => {
+const env = { AUTH_SIGNING_KEY: randomSecret(), PUBLIC_ORIGIN: "https://relay.example", ADMIN_ORIGIN: "https://admin.relay.example" } as Env;
+test("only loopback callbacks, this origin's and the console's web callbacks and the app's callback are accepted", () => {
   assert.equal(validRedirect(env, "http://127.0.0.1:43025/oauth/callback"), true);
   assert.equal(validRedirect(env, "https://relay.example/auth/callback"), true);
+  assert.equal(validRedirect(env, "https://admin.relay.example/auth/callback"), true);
   assert.equal(validRedirect(env, "ember://auth/callback"), true);
-  for (const url of ["ember://auth/callback?x=1", "ember://auth/callback/", "ember://auth/callback#x", "ember://evil/callback", "ember://auth/other", "ember:/auth/callback", "EMBER://auth/callback", "ember://user@auth/callback", "embers://auth/callback", "http://127.0.0.1/oauth/callback", "https://127.0.0.1:43025/oauth/callback", "http://evil.example/oauth/callback", "http://127.0.0.1:43025/oauth/callback?next=https://x", "http://user@127.0.0.1:1234/oauth/callback", "https://relay.example/auth/callback?x=1", "https://evil.example/auth/callback"]) assert.equal(validRedirect(env, url), false);
+  for (const url of ["ember://auth/callback?x=1", "ember://auth/callback/", "ember://auth/callback#x", "ember://evil/callback", "ember://auth/other", "ember:/auth/callback", "EMBER://auth/callback", "ember://user@auth/callback", "embers://auth/callback", "http://127.0.0.1/oauth/callback", "https://127.0.0.1:43025/oauth/callback", "http://evil.example/oauth/callback", "http://127.0.0.1:43025/oauth/callback?next=https://x", "http://user@127.0.0.1:1234/oauth/callback", "https://relay.example/auth/callback?x=1", "https://evil.example/auth/callback", "https://admin.relay.example/auth/callback?x=1", "https://admin.relay.example/auth/callback/", "https://admin.relay.example/oauth/callback", "http://admin.relay.example/auth/callback", "https://evil.admin.relay.example/auth/callback", "https://admin.relay.example.evil/auth/callback"]) assert.equal(validRedirect(env, url), false);
 });
 test("JWTs separate access/refresh, audience, signature, expiry and malformed inputs", async () => {
   const claims = { sub: "google-sub", email: "user@example.test", sid: ulid() };

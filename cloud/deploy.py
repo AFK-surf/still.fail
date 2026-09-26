@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Deploys ember cloud: the Worker, its relay container and the web app.
+"""Deploys ember cloud: the Worker, its relay container, the web app and the admin's console
+(one Worker on two custom domains, PUBLIC_ORIGIN and ADMIN_ORIGIN).
 
     python3 deploy.py            # build the web app, deploy, set secrets, check /healthz
     python3 deploy.py --check    # only report what is missing
@@ -99,7 +100,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--google", type=Path, default=DEPLOY / "google-oauth.json")
     parser.add_argument("--check", action="store_true")
-    parser.add_argument("--skip-build", action="store_true", help="deploy the web app already in dist/cloud-app")
+    parser.add_argument("--skip-build", action="store_true", help="deploy the web apps already in dist/cloud-app")
     args = parser.parse_args()
 
     template = read_template()
@@ -127,10 +128,15 @@ def main() -> None:
             write_private(path, values)
             wrangler("secret", "bulk", str(path), "--config", str(local), env=env)
 
-    # Cloudflare turns away urllib's default User-Agent.
-    request = urllib.request.Request(f"{origin}/healthz", headers={"user-agent": "ember-deploy"})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        print("healthz", response.status, response.read().decode())
+    # Cloudflare turns away urllib's default User-Agent. A new custom domain's
+    # certificate may take a few minutes; a failure here is not a failed deploy.
+    for each in (origin, template["vars"]["ADMIN_ORIGIN"]):
+        request = urllib.request.Request(f"{each}/healthz", headers={"user-agent": "ember-deploy"})
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                print("healthz", each, response.status, response.read().decode())
+        except OSError as error:
+            print("healthz", each, "failed:", error)
 
 
 if __name__ == "__main__":
