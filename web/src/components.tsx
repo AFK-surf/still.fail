@@ -1,4 +1,5 @@
 // Small pieces the station client and ember cloud share.
+import { useAppearance } from "./theme.ts";
 import { useIsMine, type Creator, type HostInfo, type ProcessView, type ProfileQuota } from "./api.ts";
 import { useOnlyMine, usePerson } from "./station.tsx";
 import { Segmented } from "./ui.tsx";
@@ -178,5 +179,14 @@ export function Ring({ percent, size = 28, label, title }: { percent: number; si
       </svg>
       <span className="ring-label">{label}</span>
     </span>
+  );
+}
+
+/** 外观: follow the system, or always light, or always dark (kept in this browser). */
+export function AppearanceSetting() {
+  const [appearance, setAppearance] = useAppearance();
+  return (
+    <Segmented label="外观" value={appearance} onChange={setAppearance}
+      options={[{ value: "system", label: "跟随系统" }, { value: "light", label: "浅色" }, { value: "dark", label: "深色" }]} />
   );
 }

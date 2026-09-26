@@ -1,7 +1,7 @@
 // The machine this station runs on.
 import { useHost, useOverview } from "../api.ts";
-import { DeviceCard } from "../components.tsx";
-import { MobileBack } from "../ui.tsx";
+import { AppearanceSetting, DeviceCard } from "../components.tsx";
+import { MobileBack, Section } from "../ui.tsx";
 
 export function DevicePage() {
   const host = useHost("local");
@@ -11,6 +11,9 @@ export function DevicePage() {
       <MobileBack to="/settings" label="设置" />
       <header className="page-head"><div><h1>设备</h1><p className="page-sub">这台 station 所在的机器。每 15 秒更新。</p></div></header>
       <div className="card"><DeviceCard host={host.value} processes={overview.value?.processes} /></div>
+      <Section title="外观" description="浅色、深色，或跟着系统走。只对这个浏览器生效。">
+        <div className="appearance-setting"><AppearanceSetting /></div>
+      </Section>
     </div>
   );
 }

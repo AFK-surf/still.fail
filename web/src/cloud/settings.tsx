@@ -8,7 +8,7 @@ import { Link, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, checkTone, RUNTIME_LABEL, timeUntil } from "../format.ts";
-import { DeviceCard, QuotaBars } from "../components.tsx";
+import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
 import { stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Loading, Menu, MobileBack, Pill, RuntimeLogo, Section, Select, StatusDot, Time } from "../ui.tsx";
@@ -78,6 +78,9 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           <p className="identity-sub"><span>{account.email}</span><span>Google 账号</span></p>
         </div>
       </header>
+      <Section title="外观" description="浅色、深色，或跟着系统走。只对这个浏览器生效。">
+        <div className="appearance-setting"><AppearanceSetting /></div>
+      </Section>
       <Section title="登录的地方" description="这个账号在哪些浏览器或设备上登录了 ember。认不出来的可以让它退出。">
         {!sessions ? <Loading label="正在读取…" fill={false} /> : "error" in sessions ? <p className="field-error">读不到登录记录：{sessions.error.message}</p> : (
           <ul className="list">

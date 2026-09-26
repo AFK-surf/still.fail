@@ -866,7 +866,8 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .composer-box:not([data-multiline]) .composer-toolbar .attach-btn { order: -1; }
 .composer-box:not([data-multiline]) { padding-left: 6px; }
 .model-logo { flex: none; display: inline-block; vertical-align: -2px; }
-@media (prefers-color-scheme: dark) { .model-logo[data-mono] { filter: invert(1); } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .model-logo[data-mono] { filter: invert(1); } }
+:root[data-theme="dark"] .model-logo[data-mono] { filter: invert(1); }
 
 /* Session details in three groups: the conversation, the model it runs on, the station it runs at. */
 .session-details .details-group { display: grid; gap: 6px; }
@@ -1195,3 +1196,4 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .invite-code { display: grid; gap: 6px; width: min(420px, 90vw); margin-top: 8px; }
 .invite-code .btn { margin-top: 0; }
 .gate .invite-code .field-error { color: var(--red); }
+.appearance-setting { max-width: 320px; }

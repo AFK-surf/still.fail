@@ -63,8 +63,9 @@
   color-scheme: light;
 }
 
+/* Dark: chosen in 外观 (data-theme="dark" on the root), or following a dark system unless 浅色 was chosen. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --canvas: #1f2023;
     --sidebar: #19191b;
     --list: #1c1d20;
@@ -97,6 +98,39 @@
     --field-focus: #8a8d93;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --canvas: #1f2023;
+  --sidebar: #19191b;
+  --list: #1c1d20;
+  --text: #e9e9ea;
+  --muted: #a3a5a9;
+  --subtle: #8c8f94;
+  --line: #2d2e32;
+  --line-strong: #3d3f44;
+  --hover: #2a2b2f;
+  --selected: #323338;
+  --paper: #26272b;
+  --accent: oklch(72% .16 42);
+  --accent-text: oklch(78% .13 45);
+  --accent-bg: oklch(30% .05 40);
+  --blue: oklch(75% .12 260);
+  --blue-bg: oklch(30% .05 260);
+  --green: oklch(76% .12 158);
+  --green-bg: oklch(30% .04 158);
+  --amber: oklch(80% .12 80);
+  --amber-bg: oklch(32% .05 80);
+  --red: oklch(74% .14 22);
+  --red-bg: oklch(30% .05 22);
+  --neutral-bg: #2a2b2f;
+  --overlay: oklch(0% 0 0 / .5);
+  --shadow: oklch(0% 0 0 / .45);
+  --primary: #eceded;
+  --primary-hover: #d3d4d6;
+  --on-primary: #1f2023;
+  --field-hover: #5d6066;
+  --field-focus: #8a8d93;
+  color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; }

@@ -1,17 +1,14 @@
+import { useDark } from "./theme.ts";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
 // picked by the OS theme like the rest of the app; the illustrations switch themselves.
 
 const BASE = import.meta.env.BASE_URL;
 
-/** A light asset and its -dark twin. */
+/** A light asset and its -dark twin, as the page's 外观 has it. */
 function Themed({ name, width, height, alt = "", className }: { name: string; width: number; height: number; alt?: string; className?: string | undefined }) {
-  return (
-    <picture className="brand-pic">
-      <source srcSet={`${BASE}${name}-dark.svg`} media="(prefers-color-scheme: dark)" />
-      <img className={className} src={`${BASE}${name}.svg`} alt={alt} width={width} height={height} />
-    </picture>
-  );
+  const dark = useDark();
+  return <img className={className} src={`${BASE}${name}${dark ? "-dark" : ""}.svg`} alt={alt} width={width} height={height} />;
 }
 
 /** The buddy: the simplified 16-grid drawing up to 16 px, the full one from 22 px. */
