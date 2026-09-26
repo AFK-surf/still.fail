@@ -550,14 +550,40 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
         if (list == "model") return ModelList(agent.choices.map { it.model }, s.runtime, model) { model = it; list = null }
         if (list == "account") return AccountList(accounts, s.runtime, chosen) { profile = it; list = null }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-            // What it is now.
-            Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("现在", fontSize = 12.sp, color = C.muted)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MakerIcon(s.model, s.runtime, 16.dp)
-                    Text("${s.model ?: "默认模型"} · ${s.effort ?: "默认深度"}", fontSize = 15.sp, color = C.ink, fontWeight = FontWeight.SemiBold)
+            // Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why.
+            val was = listOf(s.model ?: "默认模型", s.effort ?: "默认深度", if (kept != null) currentName else "自动 · $currentName")
+            // The station's pick moves off an account without the model (the one it is on now, when it has it).
+            val movesOff = chosen == null && kept == null && model != null && current != null && accounts.none { it.id == current.id }
+            val becomes = listOf(model ?: "默认模型", effort ?: "默认深度", when {
+                chosen != null -> accountText(chosen)
+                movesOff -> "自动（换账号）"
+                current != null && accounts.any { it.id == current.id } -> "自动 · $currentName"
+                else -> "自动分配"
+            })
+            val force = when {
+                dropped -> "指定的账号「${accountText(profile)}」没有启用 $model，改成了自动分配"
+                movesOff -> "现在的账号「$currentName」没有启用 $model，会自动换一个启用了的"
+                else -> null
+            }
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("原来", fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
+                    Text(was.joinToString(" · "), fontSize = 14.sp, color = C.ink)
                 }
-                Text(if (kept != null) "固定用「$currentName」" else "自动分配，现在在「$currentName」", fontSize = 13.sp, color = C.muted)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("改成", fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
+                    if (!changed && !movesOff) Text("不变", fontSize = 14.sp, color = C.muted)
+                    else Text(
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            becomes.forEachIndexed { i, part ->
+                                if (i > 0) append(" · ")
+                                if (part != was[i]) withStyle(androidx.compose.ui.text.SpanStyle(color = C.accent, fontWeight = FontWeight.SemiBold)) { append(part) } else append(part)
+                            }
+                        },
+                        fontSize = 14.sp, color = C.ink,
+                    )
+                }
+                if (force != null) Text(force, fontSize = 12.sp, color = C.warn)
                 Text("改了以后从下一轮开始生效。", fontSize = 12.sp, color = C.subtle)
             }
             GroupLabel("模型")
@@ -566,10 +592,10 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             Text("想得越深越慢，也越费额度。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
             EffortChips(efforts, effort) { effort = it }
             GroupLabel("账号")
-            if (dropped) Text("指定的账号没有启用 $model，改成了自动分配", fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(bottom = 4.dp))
             SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp) } }) {
                 Text(accountText(chosen), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(if (chosen == null) "额度用完或登录失效时换一个" else "固定用它", fontSize = 12.sp, color = C.muted)
+                if (dropped || (chosen == null && kept == null && current != null && model != null && accounts.none { it.id == current.id })) Text("这个模型要换账号", fontSize = 12.sp, color = C.warn)
             }
             Box(Modifier.height(16.dp))
         }

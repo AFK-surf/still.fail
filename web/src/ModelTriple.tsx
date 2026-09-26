@@ -57,9 +57,9 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
   const valueOption = options.find((o) => o.model === value.model);
   const set = (patch: Partial<Pick>) => setDraft((d) => ({ ...d, ...patch }));
   const [filter, setFilter] = useState("");
-  const shown = options.filter((o) => o.model.toLowerCase().includes(filter.trim().toLowerCase()));
+  const listed = options.filter((o) => o.model.toLowerCase().includes(filter.trim().toLowerCase()));
   const byMaker = new Map<string, ModelOption[]>();
-  for (const o of shown) {
+  for (const o of listed) {
     const who = makerName(o.model) ?? "其他";
     byMaker.set(who, [...(byMaker.get(who) ?? []), o]);
   }
@@ -127,7 +127,7 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
                   ))}
                 </div>
               ))}
-              {shown.length === 0 && <p className="muted run-picker-empty">没有叫这个的模型</p>}
+              {listed.length === 0 && <p className="muted run-picker-empty">没有叫这个的模型</p>}
             </div>
             {askRuntime && (
               <div className="run-picker-column">
