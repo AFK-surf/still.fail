@@ -1,12 +1,12 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
-import { CheckCircle2, ExternalLink, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { CheckCircle2, Plus, ExternalLink, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
 import { agentLabel, connectionText, EFFORT_LABEL, EFFORTS, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, STATUS_LABEL, statusTone } from "../format.ts";
-import { ConfigTokenForm, SlackAppSection } from "./SlackApp.tsx";
+import { AppFields, ConfigTokenForm, NEW_APP, SlackAppSection } from "./SlackApp.tsx";
 import { OwnerLabel } from "../components.tsx";
 import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
@@ -400,6 +400,14 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
  * A new connect. Slack first: its app (made by ember with the workspace's configuration token, or by hand) and its
  * two tokens; the connect is named as its bot is in Slack, and its id comes from that. Then the model it runs.
  */
+type NewStep = "team" | "app" | "install" | "manual" | "bind";
+
+/**
+ * A new Slack connect, in steps: the Slack workspace to make its app in (a configuration token each, or a new one);
+ * the app's look and permissions; making it and installing it (Slack's OAuth gives the station the bot token), then
+ * the app-level token; last, the model it runs. Without a configuration token the app is made in Slack by hand and
+ * both tokens are pasted.
+ */
 export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const api = useApi();
   const station = useStation();
@@ -407,7 +415,13 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const overview = useOverview(station.address);
   const navigate = useNavigate();
   const toast = useToast();
-  const [step, setStep] = useState<1 | 2>(1);
+  const teams = overview.value?.slackTeams ?? [];
+  const [step, setStep] = useState<NewStep>("team");
+  const [team, setTeam] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [app, setApp] = useState(NEW_APP);
+  const [icon, setIcon] = useState<string | null>(null);
+  const [iconError, setIconError] = useState<string | null>(null);
   const [made, setMade] = useState<MadeSlackApp | null>(null);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
   // The model first; the runtime only when the model runs on more than one.
@@ -418,14 +432,17 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const runtime: RuntimeKind = entry && picked && entry.runtimes.includes(picked) ? picked : entry?.runtimes[0] ?? "claude";
   const [effort, setEffort] = useState("");
   const [mode, setMode] = useState<{ mode: ConnectMode; requireMention: boolean }>({ mode: "multi-session", requireMention: true });
-  const configured = overview.value?.slackConfig.configured ?? false;
+  // The workspace chosen, else the only one there is.
+  const chosen = teams.find((t) => t.teamId === team) ?? (teams.length === 1 ? teams[0] : undefined);
 
   const close = () => {
-    setStep(1); setMade(null); setTokens(emptyTokens); setModel(""); setPicked(null); setEffort("");
-    setMode({ mode: "multi-session", requireMention: true });
+    setStep("team"); setTeam(null); setAdding(false); setApp(NEW_APP); setIcon(null); setIconError(null); setMade(null);
+    setTokens(emptyTokens); setModel(""); setPicked(null); setEffort(""); setMode({ mode: "multi-session", requireMention: true });
     onClose();
   };
-  const makeApp = useAction(() => api.makeSlackApp(), (result) => setMade(result));
+  const makeApp = useAction(() => api.makeSlackApp({ team: chosen!.teamId, settings: app, ...(icon ? { icon } : {}) }), (result) => {
+    setMade(result); setIconError(result.iconError); setStep("install");
+  });
   const create = useAction(() => api.createConnect({
     kind: "slack", ...mode, bind: { runtime, model: entry?.model ?? "", effort },
     slack: made?.state ? { appToken: tokens.appToken, install: made.state }
@@ -436,44 +453,71 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
     navigate(link(`/connects/${id}`));
   });
 
-  const footer = step === 1 ? (
+  const TITLES: Record<NewStep, string> = { team: "选 Slack 工作区", app: "配置 app", install: "安装", manual: "连接 Slack", bind: "绑定模型" };
+  const order: NewStep[] = step === "manual" || (step === "bind" && !made) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
+  const footer = step === "team" ? (
     <>
       <Button variant="ghost" onClick={close}>取消</Button>
-      <Button variant="primary" disabled={!tokens.verified} onClick={() => setStep(2)}>下一步</Button>
+      <Button variant="primary" disabled={!chosen} onClick={() => setStep("app")}>下一步</Button>
+    </>
+  ) : step === "app" ? (
+    <>
+      <Button variant="ghost" onClick={() => setStep("team")}>上一步</Button>
+      <Button variant="primary" disabled={!app.name.trim()} busy={makeApp.busy} onClick={() => void makeApp.run()}>创建 app</Button>
+    </>
+  ) : step === "install" || step === "manual" ? (
+    <>
+      <Button variant="ghost" onClick={step === "manual" ? () => setStep("team") : close}>{step === "manual" ? "上一步" : "取消"}</Button>
+      <Button variant="primary" disabled={!tokens.verified} onClick={() => setStep("bind")}>下一步</Button>
     </>
   ) : (
     <>
-      <Button variant="ghost" onClick={() => setStep(1)}>上一步</Button>
+      <Button variant="ghost" onClick={() => setStep(made ? "install" : "manual")}>上一步</Button>
       <Button variant="primary" disabled={models.length === 0} busy={create.busy} onClick={() => void create.run()}>添加并连接</Button>
     </>
   );
 
   return (
-    <Dialog open={open} onClose={close} wide title={<>{step === 1 ? "连接 Slack" : "绑定模型"}<span className="dialog-step">{step} / 2</span></>} footer={footer}
-      description={step === 1 ? "连接是人找到 ember 的地方：一个 Slack app，在哪个连接说话就由它绑定的模型来做。名字就是 Slack 里 bot 的名字。" : undefined}>
-      {step === 1 && (
+    <Dialog open={open} onClose={close} wide title={<>{TITLES[step]}<span className="dialog-step">{order.indexOf(step) + 1} / {order.length}</span></>} footer={footer}
+      description={step === "team" ? "连接是人找到 ember 的地方：一个 Slack app，在哪个连接说话就由它绑定的模型来做。ember 用工作区的 App 配置 token 替你建 app。" : undefined}>
+      {step === "team" && (
         <>
-          {made ? <MadeAppSteps made={made} installed={overview.value?.slackInstalls.find((i) => i.state === made.state) ?? null} />
-            : configured ? (
-              <div className="callout" data-tone="blue">
-                <span>ember 可以直接在 Slack 建好 app：名字、权限、Socket Mode 都配好，之后也能在连接页改名字和图标。</span>
-                <Button variant="primary" busy={makeApp.busy} onClick={() => void makeApp.run()}>在 Slack 创建 app</Button>
-              </div>
-            ) : (
-              <>
-                <p className="card-lead">先设置一次 Slack 的 App 配置 token：ember 就能直接替你建 app，以后也能改它的名字、图标和权限。</p>
-                <ConfigTokenForm onSaved={() => {}} />
-                <details className="manual-app">
-                  <summary>不用配置 token，自己在 Slack 建</summary>
-                  <CreateAppSteps name="ember" />
-                </details>
-              </>
-            )}
-          {makeApp.error && <p className="field-error" role="alert">{makeApp.error.message}</p>}
-          <TokenFields value={tokens} onChange={setTokens} install={made?.state ?? undefined} />
+          {teams.length > 0 && (
+            <Choices label="Slack 工作区" value={chosen?.teamId ?? ""} onChange={setTeam}
+              options={teams.map((t) => ({ value: t.teamId, title: t.name, icon: <SlackLogo size={18} /> }))} />
+          )}
+          {teams.length === 0 || adding ? (
+            <div className="card">
+              {teams.length === 0 && <p className="card-lead">先加一个 Slack 工作区的 App 配置 token：ember 就能直接替你建 app，以后也能改它的名字、图标和权限。</p>}
+              <ConfigTokenForm onSaved={(id) => { setTeam(id); setAdding(false); }} />
+            </div>
+          ) : (
+            <Button variant="ghost" onClick={() => setAdding(true)}><Plus {...ICON} />添加工作区的配置 token</Button>
+          )}
+          <Button variant="ghost" onClick={() => setStep("manual")}>不用配置 token，自己在 Slack 建 app</Button>
         </>
       )}
-      {step === 2 && (
+      {step === "app" && (
+        <div className="slack-app">
+          <AppFields settings={app} onChange={setApp} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
+          {iconError && <p className="field-error" role="alert">{iconError}</p>}
+          {makeApp.error && <p className="field-error" role="alert">{makeApp.error.message}</p>}
+        </div>
+      )}
+      {step === "install" && made && (
+        <>
+          <MadeAppSteps made={made} installed={overview.value?.slackInstalls.find((i) => i.state === made.state) ?? null} />
+          {iconError && <p className="field-error" role="alert">图标没传上：{iconError}</p>}
+          <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} />
+        </>
+      )}
+      {step === "manual" && (
+        <>
+          <CreateAppSteps name="ember" />
+          <TokenFields value={tokens} onChange={setTokens} />
+        </>
+      )}
+      {step === "bind" && (
         <>
           <div className="field-grid">
             <Field label="模型" htmlFor="new-connect-model">

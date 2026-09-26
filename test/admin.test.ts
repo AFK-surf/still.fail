@@ -112,7 +112,7 @@ class FakeSlackApps {
     return { permissionsUpdated: before !== [...manifest.oauth_config.scopes.bot].sort().join() };
   }
   made: any[] = [];
-  async createApp(manifest: any) { this.made.push(manifest); return { appId: "A0NEW", clientId: "C1", clientSecret: "S1" }; }
+  async createApp(team: string, manifest: any) { this.made.push({ team, manifest }); return { appId: "A0NEW", clientId: "C1", clientSecret: "S1" }; }
   async setIcon() {
     this.icons++;
     throw new SlackApiError("apps.icon.set", "app_not_owned_by_manager_app");
@@ -175,11 +175,24 @@ test("a Slack app made on a station in ember cloud is installed through Slack's 
     return new Response(JSON.stringify({ ok: true, access_token: "xoxb-installed", team: { name: "Acme" } }));
   });
   try {
-    s.settings.update((raw) => ({ ...raw, slackConfigToken: { accessToken: "xoxe.xoxp-1", refreshToken: "xoxe-1", expiresAt: Date.now() + 3600_000, teamId: "T1" } }));
-    const made = (await s.call("POST", "/slack/apps", { name: "ember" })).body;
+    const token = (teamId: string, team: string) => ({ accessToken: `xoxe.xoxp-${teamId}`, refreshToken: "xoxe-1", expiresAt: Date.now() + 3600_000, teamId, team });
+    s.settings.update((raw) => ({ ...raw, slackConfigTokens: [token("T1", "Acme"), token("T2", "Other")] }));
+    // Several workspaces: the station lists them (never their tokens), and the app goes into the one chosen.
+    const overview0 = (await s.call("GET", "/overview")).body;
+    assert.deepEqual(overview0.slackTeams, [{ teamId: "T1", name: "Acme" }, { teamId: "T2", name: "Other" }]);
+    assert.equal(JSON.stringify(overview0).includes("xoxe"), false);
+    assert.equal((await s.call("POST", "/slack/apps", { settings: { name: "ember" } })).status, 400, "which workspace, when there are several");
+    const made = (await s.call("POST", "/slack/apps", { team: "T2", settings: { name: "Helper", description: "Hi", groups: { dm: false } } })).body;
+    const sent = s.slackApps.made[0];
+    assert.equal(sent.team, "T2");
+    assert.equal(sent.manifest.display_information.name, "Helper");
+    assert.equal(sent.manifest.display_information.description, "Hi");
     // Slack sends the person back to ember cloud's page, which hands the code to the station the state names.
-    assert.deepEqual(s.slackApps.made[0].oauth_config.redirect_urls, ["https://cloud.test/slack/installed"]);
+    assert.deepEqual(sent.manifest.oauth_config.redirect_urls, ["https://cloud.test/slack/installed"]);
     const install = new URL(made.install);
+    // It asks for what the app has on, no more.
+    assert.equal(install.searchParams.get("scope"), sent.manifest.oauth_config.scopes.bot.join(","));
+    assert.equal(install.searchParams.get("scope")!.split(",").includes("im:write"), false);
     assert.equal(install.searchParams.get("client_id"), "C1");
     assert.equal(install.searchParams.get("redirect_uri"), "https://cloud.test/slack/installed");
     assert.match(made.state, /^ws\/st~[0-9a-f]{32}$/);

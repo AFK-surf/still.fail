@@ -228,7 +228,7 @@ export function useStationCall(station: string): StationCall {
 }
 
 /** The admin API of one station, by what each call does. */
-export interface MadeSlackApp { appId: string; links: SlackAppLinks; install: string | null; state: string | null }
+export interface MadeSlackApp { appId: string; links: SlackAppLinks; install: string | null; state: string | null; iconError: string | null }
 
 export function stationApi(t: StationCall) {
   const { request } = t;
@@ -266,14 +266,16 @@ export function stationApi(t: StationCall) {
       request<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>("PUT", `/connects/${at(connect)}/slack-app`, input),
     /** Makes a Slack app with the workspace's configuration token (ember's manifest, Socket Mode on), for a connect to come. */
     /** `install`: Slack's install link, when the app is installed through OAuth (a station in ember cloud); `state` names it. */
-    makeSlackApp: () => request<MadeSlackApp>("POST", "/slack/apps", {}),
+    makeSlackApp: (input: { team: string; settings: SlackAppSettings; icon?: string }) => request<MadeSlackApp>("POST", "/slack/apps", input),
     /** Hands Slack's install code to the station that made the app. */
     slackInstalled: (code: string, state: string) => request<{ team: string | null }>("POST", "/slack/installs", { code, state }),
     /** A new Slack connect from its tokens: the station names it as its bot is named in Slack. */
     createConnect: (input: ConnectInput) => request<{ id: string; overview: Overview }>("POST", "/connects", input),
     /** How a session runs from its next turn on: its profile, model, effort (null: the runtime's default). */
     sessionSettings: (key: string, input: { profile?: string | null; model?: string | null; effort?: string | null }) => request<{ ok: true }>("POST", `/sessions/${at(key)}/settings`, input),
-    putConfigToken: (refreshToken: string) => request<{ configured: boolean; teamId: string | null }>("PUT", "/slack/config-token", { refreshToken }),
+    /** Adds a Slack workspace's app configuration token; answers which workspace it is. */
+    addConfigToken: (refreshToken: string) => request<{ teamId: string; overview: Overview }>("POST", "/slack/config-tokens", { refreshToken }),
+    removeConfigToken: (team: string) => request<Overview>("DELETE", `/slack/config-tokens/${at(team)}`),
     deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${at(id)}`),
     /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */
     slackIdentity: (user: string, bound: boolean) => request<Overview>(bound ? "PUT" : "DELETE", `/me/slack/${at(user)}`),

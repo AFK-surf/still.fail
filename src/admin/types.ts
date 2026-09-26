@@ -88,8 +88,8 @@ export interface Overview {
   mesh: MeshStatus | null;
   /** The Slack users the viewer said are them (PUT /me/slack/:user): the station takes them for the viewer. */
   slackUsers: string[];
-  /** The workspace's Slack app configuration token: with it, ember makes and edits connects' Slack apps. */
-  slackConfig: { configured: boolean; teamId: string | null };
+  /** The Slack workspaces ember makes and edits connects' apps in, an app configuration token each (never shown). */
+  slackTeams: { teamId: string; name: string }[];
   /** Slack apps made here, waiting for their connect: `installed` once Slack sent the install back (`team`, where to). */
   slackInstalls: { state: string; appId: string; installed: boolean; team: string | null }[];
   /** The data disk's room; null when it cannot be read. */

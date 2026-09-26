@@ -90,8 +90,8 @@ export interface Config {
   adminHttp: { host: string; port: number };
   /** Cloudflare Access application guarding the public admin page; null refuses tunneled requests. */
   adminAccess: { teamDomain: string; aud: string } | null;
-  /** The Slack app configuration token pair, for editing apps' manifests from ember. */
-  slackConfigToken: ConfigToken | null;
+  /** Slack app configuration tokens, one per Slack workspace: ember makes and edits apps there with them. */
+  slackConfigTokens: ConfigToken[];
   /** Shared MEMORY.md and skills/ linked into every profile home. */
   agentHome: string;
   http: { host: string; port: number };
@@ -137,7 +137,7 @@ export interface RawConfig {
   admin?: { host?: string; port?: number; access?: { teamDomain?: string; aud?: string } };
   http?: { host?: string; port?: number };
   connects?: RawConnect[];
-  slackConfigToken?: ConfigToken;
+  slackConfigTokens?: ConfigToken[];
   profiles?: RawProfile[];
   maxNudges?: number;
   warmMinutes?: number;
@@ -203,7 +203,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
     adminAccess: raw.admin?.access?.teamDomain && raw.admin.access.aud
       ? { teamDomain: raw.admin.access.teamDomain, aud: raw.admin.access.aud }
       : null,
-    slackConfigToken: raw.slackConfigToken?.refreshToken ? raw.slackConfigToken : null,
+    slackConfigTokens: (raw.slackConfigTokens ?? []).filter((t) => t.refreshToken && t.teamId),
     agentHome: isAbsolute(agentHome) ? agentHome : join(dataDir, agentHome),
     http: { host: raw.http?.host ?? "127.0.0.1", port: raw.http?.port ?? 4750 },
     connects,

@@ -140,7 +140,9 @@ export interface ConfigToken {
   refreshToken: string;
   /** Epoch ms when the access token stops working. */
   expiresAt: number;
+  /** The Slack workspace it makes apps in, and its name there. */
   teamId: string;
+  team?: string;
 }
 
 export class SlackApiError extends Error {
@@ -195,65 +197,95 @@ export function slackAppLinks(appId: string) {
   return { settings: base, install: `${base}/install-on-team`, appToken: `${base}/general`, oauth: `${base}/oauth` };
 }
 
+/** The Slack workspace a configuration token is for, by name (auth.test with its access token). */
+export async function teamOfConfigToken(accessToken: string): Promise<string | null> {
+  const data = await call("auth.test", accessToken, {}).catch(() => null);
+  return data?.team ? String(data.team) : null;
+}
+
 /**
- * The Slack app API with the workspace's configuration token. `load` and
- * `save` keep the token pair in ember's config, so a rotation survives restarts.
+ * The Slack app API with the configuration tokens, one per Slack workspace. `load` and `save` keep them in ember's
+ * config, so a rotation survives restarts. An app is made with the token of the workspace chosen; an app already made
+ * is read and changed with whichever token owns it (found once, by asking).
  */
 export class SlackApps {
-  readonly #load: () => ConfigToken | null;
-  readonly #save: (token: ConfigToken | null) => void;
-  #rotating: Promise<string> | null = null;
+  readonly #load: () => ConfigToken[];
+  readonly #save: (token: ConfigToken) => void;
+  readonly #rotating = new Map<string, Promise<string>>();
+  /** Which workspace's token owns an app, once known. */
+  readonly #owner = new Map<string, string>();
 
-  constructor(load: () => ConfigToken | null, save: (token: ConfigToken | null) => void) {
+  constructor(load: () => ConfigToken[], save: (token: ConfigToken) => void) {
     this.#load = load;
     this.#save = save;
   }
 
   get configured(): boolean {
-    return this.#load() !== null;
+    return this.#load().length > 0;
   }
 
   async exportManifest(appId: string): Promise<Manifest> {
-    return (await this.#call("apps.manifest.export", { app_id: appId })).manifest as Manifest;
+    return (await this.#forApp(appId, "apps.manifest.export", { app_id: appId })).manifest as Manifest;
   }
 
   /** Validates, then updates. Returns whether Slack wants the permissions approved again. */
   async updateManifest(appId: string, manifest: Manifest): Promise<{ permissionsUpdated: boolean }> {
     const text = JSON.stringify(manifest);
-    await this.#call("apps.manifest.validate", { app_id: appId, manifest: text });
-    const data = await this.#call("apps.manifest.update", { app_id: appId, manifest: text });
+    await this.#forApp(appId, "apps.manifest.validate", { app_id: appId, manifest: text });
+    const data = await this.#forApp(appId, "apps.manifest.update", { app_id: appId, manifest: text });
     return { permissionsUpdated: Boolean(data.permissions_updated) };
   }
 
-  /** Makes the app; its OAuth credentials come only now, once. */
-  async createApp(manifest: Manifest): Promise<{ appId: string; clientId: string; clientSecret: string }> {
-    const data = await this.#call("apps.manifest.create", { manifest: JSON.stringify(manifest) });
-    return { appId: String(data.app_id), clientId: String(data.credentials?.client_id ?? ""), clientSecret: String(data.credentials?.client_secret ?? "") };
+  /** Makes the app in a workspace (`team`); its OAuth credentials come only now, once. */
+  async createApp(team: string, manifest: Manifest): Promise<{ appId: string; clientId: string; clientSecret: string }> {
+    const data = await call("apps.manifest.create", await this.#token(team), { manifest: JSON.stringify(manifest) });
+    const appId = String(data.app_id);
+    this.#owner.set(appId, team);
+    return { appId, clientId: String(data.credentials?.client_id ?? ""), clientSecret: String(data.credentials?.client_secret ?? "") };
   }
 
   async setIcon(appId: string, png: Buffer): Promise<void> {
     const form = new FormData();
     form.set("app_id", appId);
     form.set("file", new Blob([new Uint8Array(png)], { type: "image/png" }), "icon.png");
-    await this.#call("apps.icon.set", form);
+    await this.#forApp(appId, "apps.icon.set", form);
   }
 
-  async #call(method: string, params: Record<string, string> | FormData): Promise<Record<string, any>> {
-    return call(method, await this.#token(), params);
+  /** A call about an app, with the token that owns it: the one known, else each in turn until one is not refused. */
+  async #forApp(appId: string, method: string, params: Record<string, string> | FormData): Promise<Record<string, any>> {
+    const known = this.#owner.get(appId);
+    if (known) return call(method, await this.#token(known), params);
+    const tokens = this.#load();
+    if (tokens.length === 0) throw new Error("还没有配置 Slack App 配置 token");
+    let last: unknown = null;
+    for (const token of tokens) {
+      try {
+        const data = await call(method, await this.#token(token.teamId), params);
+        this.#owner.set(appId, token.teamId);
+        return data;
+      } catch (error) {
+        last = error;
+      }
+    }
+    throw last;
   }
 
-  /** A working access token, rotating first when the current one is about to expire. */
-  #token(): Promise<string> {
-    const current = this.#load();
-    if (!current) return Promise.reject(new Error("还没有配置 Slack App 配置 token"));
+  /** A working access token of a workspace, rotating first when the current one is about to expire. */
+  #token(team: string): Promise<string> {
+    const current = this.#load().find((t) => t.teamId === team);
+    if (!current) return Promise.reject(new Error("这个 Slack 工作区没有配置 token"));
     if (current.expiresAt - Date.now() > 5 * 60_000) return Promise.resolve(current.accessToken);
-    this.#rotating ??= rotateConfigToken(current.refreshToken)
-      .then((next) => {
-        this.#save(next);
-        log.info("slack configuration token rotated", { team: next.teamId });
-        return next.accessToken;
-      })
-      .finally(() => { this.#rotating = null; });
-    return this.#rotating;
+    let rotating = this.#rotating.get(team);
+    if (!rotating) {
+      rotating = rotateConfigToken(current.refreshToken)
+        .then((next) => {
+          this.#save({ ...next, ...(current.team ? { team: current.team } : {}) });
+          log.info("slack configuration token rotated", { team: next.teamId });
+          return next.accessToken;
+        })
+        .finally(() => { this.#rotating.delete(team); });
+      this.#rotating.set(team, rotating);
+    }
+    return rotating;
   }
 }

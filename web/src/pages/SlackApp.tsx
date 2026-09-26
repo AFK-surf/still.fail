@@ -51,17 +51,18 @@ export function SlackAppSection({ connect }: { connect: ConnectView }) {
 function ConfigTokenCard({ onSaved }: { onSaved(): void }) {
   return (
     <div className="card">
-      <p className="card-lead">修改 app 需要一个 Slack 的 App 配置 token。每个工作区设置一次，所有连接共用。</p>
+      <p className="card-lead">修改 app 需要这个 Slack 工作区的 App 配置 token。每个工作区设置一次，那里的连接共用。</p>
       <ConfigTokenForm onSaved={onSaved} />
     </div>
   );
 }
 
-export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; onSaved(): void }) {
+/** Adds a Slack workspace's app configuration token (by its refresh token); `onSaved` gets the workspace. */
+export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; onSaved(teamId: string): void }) {
   const api = useApi();
   const toast = useToast();
   const [token, setToken] = useState("");
-  const save = useAction(() => api.putConfigToken(token), () => { setToken(""); toast("已保存配置 token"); onSaved(); });
+  const save = useAction(() => api.addConfigToken(token), ({ teamId }) => { setToken(""); toast("已保存配置 token"); onSaved(teamId); });
   return (
     <>
       <ol className="steps">
@@ -99,6 +100,62 @@ async function toIcon(file: File): Promise<string> {
   }
 }
 
+/** What a new app starts as: every permission on, ember's name and colour. */
+export const NEW_APP: SlackAppSettings = {
+  name: "ember", displayName: "ember", description: "Coding agent in your threads (ember)", longDescription: "", backgroundColor: "#7a2e0e",
+  groups: Object.fromEntries((Object.keys(GROUPS) as SlackGroup[]).map((g) => [g, true])) as Record<SlackGroup, boolean>,
+};
+
+/** An app's look and permissions: its icon (a PNG data URL, once one is chosen), names, description, colour, groups. */
+export function AppFields({ settings, onChange, icon, onIcon }: {
+  settings: SlackAppSettings; onChange(settings: SlackAppSettings): void; icon: string | null; onIcon(icon: string | null, error: string | null): void;
+}) {
+  const file = useRef<HTMLInputElement>(null);
+  const set = <K extends keyof SlackAppSettings>(key: K, value: SlackAppSettings[K]) => onChange({ ...settings, [key]: value });
+  return (
+    <>
+      <div className="slack-app-top">
+        <button type="button" className="icon-drop" onClick={() => file.current?.click()} aria-label="上传图标"
+          style={{ background: settings.backgroundColor || undefined }}>
+          {icon ? <img src={icon} alt="新图标" /> : <><ImageUp {...ICON} size={20} /><span>上传图标</span></>}
+        </button>
+        <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) void toIcon(f).then((i) => onIcon(i, null), () => onIcon(null, "读不了这张图片"));
+        }} />
+        <div className="field-grid slack-app-names">
+          <Field label="App 名字" htmlFor="app-name">
+            <input id="app-name" className="input" value={settings.name} onChange={(e) => set("name", e.target.value)} />
+          </Field>
+          <Field label="在消息里显示的名字" htmlFor="app-display">
+            <input id="app-display" className="input" value={settings.displayName} onChange={(e) => set("displayName", e.target.value)} />
+          </Field>
+        </div>
+      </div>
+      <Field label="简介" htmlFor="app-desc" hint="显示在 app 资料卡上，最多 140 字。">
+        <input id="app-desc" className="input" maxLength={140} value={settings.description} onChange={(e) => set("description", e.target.value)} />
+      </Field>
+      <div className="field-grid">
+        <Field label="背景色" htmlFor="app-color" hint="图标后面的底色。">
+          <div className="input-row">
+            <input type="color" className="color-swatch" aria-label="选择背景色" value={settings.backgroundColor || "#7a2e0e"} onChange={(e) => set("backgroundColor", e.target.value)} />
+            <input id="app-color" className="input mono" spellCheck={false} value={settings.backgroundColor} onChange={(e) => set("backgroundColor", e.target.value)} placeholder="#7a2e0e" />
+          </div>
+        </Field>
+      </div>
+      <Field label="权限" hint="关掉的权限不会加到 app 上；以后在连接页可以再打开。">
+        <div className="switch-list">
+          {(Object.keys(GROUPS) as SlackGroup[]).map((g) => (
+            <SwitchRow key={g} title={GROUPS[g].label} description={GROUPS[g].description} disabled={g === "base"}
+              checked={settings.groups[g] ?? false} onChange={(v) => set("groups", { ...settings.groups, [g]: v })} />
+          ))}
+        </div>
+      </Field>
+    </>
+  );
+}
+
 function AppForm({ connect, settings, links, onSaved }: { connect: ConnectView; settings: SlackAppSettings; links: SlackAppLinks; onSaved(): void }) {
   const api = useApi();
   const toast = useToast();
@@ -106,7 +163,6 @@ function AppForm({ connect, settings, links, onSaved }: { connect: ConnectView; 
   const [icon, setIcon] = useState<string | null>(null);
   const [iconError, setIconError] = useState<string | null>(null);
   const [approve, setApprove] = useState(false);
-  const file = useRef<HTMLInputElement>(null);
   useEffect(() => setDraft(settings), [settings]);
 
   const changed = (Object.keys(settings) as (keyof SlackAppSettings)[]).filter((k) => JSON.stringify(settings[k]) !== JSON.stringify(draft[k]));
@@ -121,7 +177,6 @@ function AppForm({ connect, settings, links, onSaved }: { connect: ConnectView; 
     toast(result.permissionsUpdated ? "已更新，还需要在 Slack 同意新权限" : "已更新 Slack app");
     onSaved();
   });
-  const set = <K extends keyof SlackAppSettings>(key: K, value: SlackAppSettings[K]) => setDraft({ ...draft, [key]: value });
 
   return (
     <div className="card slack-app">
@@ -132,45 +187,8 @@ function AppForm({ connect, settings, links, onSaved }: { connect: ConnectView; 
           <a className="btn btn-primary" href={links.install} target="_blank" rel="noopener" onClick={() => setApprove(false)}>去 Slack 同意</a>
         </div>
       )}
-      <div className="slack-app-top">
-        <button type="button" className="icon-drop" onClick={() => file.current?.click()} aria-label="上传图标"
-          style={{ background: draft.backgroundColor || undefined }}>
-          {icon ? <img src={icon} alt="新图标" /> : <><ImageUp {...ICON} size={20} /><span>上传图标</span></>}
-        </button>
-        <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          if (f) void toIcon(f).then(setIcon, () => setIconError("读不了这张图片"));
-        }} />
-        <div className="field-grid slack-app-names">
-          <Field label="App 名字" htmlFor="app-name">
-            <input id="app-name" className="input" value={draft.name} onChange={(e) => set("name", e.target.value)} />
-          </Field>
-          <Field label="在消息里显示的名字" htmlFor="app-display">
-            <input id="app-display" className="input" value={draft.displayName} onChange={(e) => set("displayName", e.target.value)} />
-          </Field>
-        </div>
-      </div>
+      <AppFields settings={draft} onChange={setDraft} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
       {iconError && <p className="field-error" role="alert">{iconError}</p>}
-      <Field label="简介" htmlFor="app-desc" hint="显示在 app 资料卡上，最多 140 字。">
-        <input id="app-desc" className="input" maxLength={140} value={draft.description} onChange={(e) => set("description", e.target.value)} />
-      </Field>
-      <div className="field-grid">
-        <Field label="背景色" htmlFor="app-color" hint="图标后面的底色。">
-          <div className="input-row">
-            <input type="color" className="color-swatch" aria-label="选择背景色" value={draft.backgroundColor || "#7a2e0e"} onChange={(e) => set("backgroundColor", e.target.value)} />
-            <input id="app-color" className="input mono" spellCheck={false} value={draft.backgroundColor} onChange={(e) => set("backgroundColor", e.target.value)} placeholder="#7a2e0e" />
-          </div>
-        </Field>
-      </div>
-      <Field label="权限" hint="关掉的权限会从 app 上移除；打开新的权限需要在 Slack 同意一次。">
-        <div className="switch-list">
-          {(Object.keys(GROUPS) as SlackGroup[]).map((g) => (
-            <SwitchRow key={g} title={GROUPS[g].label} description={GROUPS[g].description} disabled={g === "base"}
-              checked={draft.groups[g] ?? false} onChange={(v) => set("groups", { ...draft.groups, [g]: v })} />
-          ))}
-        </div>
-      </Field>
       {apply.error && <p className="field-error" role="alert">{apply.error.message}</p>}
       <div className="card-actions">
         {dirty && <Button variant="ghost" onClick={() => { setDraft(settings); setIcon(null); }}>还原</Button>}
