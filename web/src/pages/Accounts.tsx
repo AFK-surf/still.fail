@@ -177,7 +177,8 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
           )}
           <p className="identity-sub profile-state">
             <Pill tone={tone.tone}>{tone.label}</Pill>
-            <span>{latest?.detail ?? "还没检查过"}</span>
+            {/* The pill already says it works; the detail says what else it found. */}
+            <span>{latest ? latest.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}</span>
             {latest && <span className="muted"><Time at={latest.checkedAt} />检查</span>}
             <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={RefreshCw} disabled={check.busy} data-busy={check.busy || undefined} onClick={() => void check.run()} />
           </p>
