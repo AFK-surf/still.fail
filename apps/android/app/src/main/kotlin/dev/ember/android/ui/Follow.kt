@@ -3,6 +3,7 @@
 // down until its top reaches the top, so a long one is read from its start;
 // anything else growing below keeps the end in view. Scrolling by the reader
 // sets the new position: at the end it follows again, elsewhere it stays put.
+// The list growing shorter (the keyboard) keeps its bottom in place.
 package dev.ember.android.ui
 
 import androidx.compose.foundation.gestures.scrollBy
@@ -65,6 +66,15 @@ fun rememberFollow(list: LazyListState): Follow {
         launch {
             snapshotFlow { list.isScrollInProgress }.collect { scrolling ->
                 if (!scrolling && follow.touched) { follow.touched = false; follow.on = !list.canScrollForward }
+            }
+        }
+        // The list itself grew shorter or taller (the keyboard coming up, or going): what was at its bottom stays at
+        // its bottom, as the web keeps the distance from the bottom through a resize.
+        launch {
+            var last = -1
+            snapshotFlow { list.layoutInfo.viewportSize.height }.collect { h ->
+                if (last > 0 && h > 0 && h != last && follow.placed) list.scrollBy((last - h).toFloat())
+                if (h > 0) last = h
             }
         }
         // The content changed while following: hold the anchor, or the end.

@@ -21,14 +21,25 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.alpha
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -99,17 +110,17 @@ private fun Blocks(nodes: List<Node>, size: Int, gap: Int = 8) {
 @Composable
 private fun Block(node: Node, size: Int) {
     when (node) {
-        is Paragraph -> Text(inline(node), color = C.ink, fontSize = size.sp, lineHeight = (size * 1.6).sp)
+        is Paragraph -> MdText(inline(node), size.sp, (size * 1.6).sp)
         // Headings are the body's size, bolder, with room above (as the web draws h1–h4).
-        is Heading -> Text(inline(node), color = C.ink, fontSize = (size + 1).sp, lineHeight = (size * 1.5).sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+        is Heading -> MdText(inline(node), (size + 1).sp, (size * 1.5).sp, FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
         is BulletList -> ListBlock(node, size) { _, item -> taskMark(item) ?: "•" }
         is OrderedList -> ListBlock(node, size) { i, item -> taskMark(item) ?: "${(node.markerStartNumber ?: 1) + i}." }
         is BlockQuote -> Row(Modifier.height(IntrinsicSize.Min)) {
             Box(Modifier.width(2.dp).fillMaxHeight().clip(RoundedCornerShape(1.dp)).background(C.line))
             Box(Modifier.padding(start = 10.dp)) { Blocks(node.children(), size) }
         }
-        is FencedCodeBlock -> CodeBlock(node.literal.trimEnd('\n'))
-        is IndentedCodeBlock -> CodeBlock(node.literal.trimEnd('\n'))
+        is FencedCodeBlock -> CodeBlock(node.literal.trimEnd('\n'), node.info?.trim()?.substringBefore(' ')?.lowercase()?.ifEmpty { null })
+        is IndentedCodeBlock -> CodeBlock(node.literal.trimEnd('\n'), null)
         is TableBlock -> Table(node)
         is ThematicBreak -> Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(C.line))
         is HtmlBlock -> Text(node.literal.trimEnd(), color = C.muted, fontSize = size.sp, lineHeight = (size * 1.6).sp)
@@ -135,19 +146,33 @@ private fun ListBlock(list: Node, size: Int, marker: (Int, Node) -> String) {
     }
 }
 
+/**
+ * A code block as the web draws it (web/src/Prose.tsx): a quiet tinted block with no frame; its language and a
+ * copy button in the corner; highlighted when its language is named. It scrolls sideways rather than wrapping.
+ */
 @Composable
-private fun CodeBlock(code: String) {
+private fun CodeBlock(code: String, language: String?) {
     val context = LocalContext.current
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface2).border(1.dp, C.line, RoundedCornerShape(12.dp))) {
-        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 40.dp, top = 10.dp, bottom = 10.dp)) {
-            Text(code, style = Mono, color = C.ink, softWrap = false)
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) { if (copied) { delay(1500); copied = false } }
+    val colored = remember(code, language, C.dark) { highlight(code, language, C.dark) }
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.ink.copy(alpha = 0.04f))) {
+        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(colored, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, lineHeight = 20.sp, color = C.ink, softWrap = false)
         }
-        Box(
-            Modifier.align(Alignment.TopEnd).padding(4.dp).size(30.dp).clip(RoundedCornerShape(8.dp)).clickable {
-                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("code", code))
-            },
-            contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Copy, 14.dp, C.subtle) }
+        Row(Modifier.align(Alignment.TopEnd).padding(4.dp).alpha(0.75f), verticalAlignment = Alignment.CenterVertically) {
+            Text(language ?: "text", fontSize = 10.sp, color = C.subtle, modifier = Modifier.padding(horizontal = 6.dp))
+            Row(
+                Modifier.height(26.dp).clip(RoundedCornerShape(6.dp)).background(C.bg.copy(alpha = 0.8f)).clickable {
+                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("code", code))
+                    copied = true
+                }.padding(horizontal = 7.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                IconIn(if (copied) Icons.Check else Icons.Copy, 12.dp, C.muted)
+                Text(if (copied) "已复制" else "复制", fontSize = 11.sp, color = C.muted)
+            }
+        }
     }
 }
 
@@ -164,9 +189,8 @@ private fun Table(table: TableBlock) {
                 Column(Modifier.width(IntrinsicSize.Max)) {
                     cells.forEachIndexed { r, row ->
                         val cell = row.getOrNull(c)
-                        Text(
-                            cell?.let { inline(it) } ?: AnnotatedString(""), fontSize = 13.sp, color = C.ink, softWrap = false,
-                            fontWeight = if (cell?.isHeader == true) FontWeight.SemiBold else null,
+                        MdText(
+                            cell?.let { inline(it) } ?: AnnotatedString(""), 13.sp, 20.sp, if (cell?.isHeader == true) FontWeight.SemiBold else null, softWrap = false,
                             modifier = Modifier.fillMaxWidth().border(0.5.dp, C.line).padding(horizontal = 8.dp, vertical = 4.dp),
                         )
                     }
@@ -178,7 +202,7 @@ private fun Table(table: TableBlock) {
 
 @Composable
 private fun inline(node: Node): AnnotatedString {
-    val code = SpanStyle(fontFamily = FontFamily.Monospace, fontSize = 0.88.em(), background = C.chip)
+    val code = SpanStyle(fontFamily = FontFamily.Monospace, fontSize = CODE_EM.em())
     val link = TextLinkStyles(SpanStyle(color = C.blue))
     return buildAnnotatedString {
         fun walk(n: Node) {
@@ -199,6 +223,41 @@ private fun inline(node: Node): AnnotatedString {
         }
         node.children().forEach(::walk)
     }
+}
+
+private const val CODE = "code"
+private const val CODE_EM = 0.88
+
+/**
+ * Text whose inline code sits on a small rounded box, as on the web (`.markdown :not(pre) > code`): the box
+ * follows the code's own glyphs, not the line's height, and a span that wraps gets a box on each line.
+ */
+@Composable
+private fun MdText(text: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, softWrap: Boolean = true, modifier: Modifier = Modifier) {
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val codes = remember(text) { text.getStringAnnotations(CODE, 0, text.length) }
+    val fill = C.ink.copy(alpha = 0.07f)
+    Text(
+        text, color = C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, softWrap = softWrap, onTextLayout = { layout = it },
+        modifier = modifier.drawBehind {
+            val l = layout ?: return@drawBehind
+            val em = fontSize.toPx() * CODE_EM.toFloat()
+            val corner = CornerRadius(5.dp.toPx())
+            for (a in codes) {
+                var start = a.start
+                while (start < a.end) {
+                    val line = l.getLineForOffset(start)
+                    val end = minOf(a.end, l.getLineEnd(line))
+                    val left = l.getHorizontalPosition(start, true)
+                    val right = if (end < a.end) l.getLineRight(line) else l.getHorizontalPosition(end, true).let { if (it <= left) l.getLineRight(line) else it }
+                    val base = l.getLineBaseline(line)
+                    drawRoundRect(fill, Offset(left, base - em * 1.02f), Size(right - left, em * 1.36f), corner)
+                    if (end <= start) break
+                    start = end
+                }
+            }
+        },
+    )
 }
 
 private fun Double.em() = androidx.compose.ui.unit.TextUnit(this.toFloat(), androidx.compose.ui.unit.TextUnitType.Em)
