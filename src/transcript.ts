@@ -102,6 +102,17 @@ function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
     } else if (p.type === "reasoning") {
       const text = toText(p.content?.length ? p.content : p.summary ?? []);
       if (text.trim()) out.push({ at, kind: "thinking", text: clip(text) });
+    } else if (p.type === "custom_tool_call" && p.name === "exec") {
+      // Codex's code mode: the model calls tools from a script. The calls in it are the steps; the script itself is
+      // one only when it does more than call them.
+      const script = String(p.input ?? "");
+      const { calls, only } = scriptCalls(script);
+      if (!only) out.push({ at, kind: "tool_call", tool: "exec", text: clip(script), ...(p.call_id ? { callId: String(p.call_id) } : {}) });
+      calls.forEach((c, i) => out.push({
+        at, kind: "tool_call", tool: c.tool, text: clip(JSON.stringify(c.args, null, 2)),
+        // The script's output answers its first call when the script is nothing but calls.
+        ...(p.call_id ? { callId: only && i === 0 ? String(p.call_id) : `${String(p.call_id)}#${i}` } : {}),
+      }));
     } else if (p.type === "function_call" || p.type === "custom_tool_call") {
       let args: string = String(p.arguments ?? p.input ?? "");
       try {
@@ -125,6 +136,102 @@ function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
  * independent, so parsing only the new ones gives what a full read would.
  * Everything read is kept, so watchers joining later are served from memory.
  */
+/**
+ * The tool calls in a code-mode script, `tools.<name>({…})` with a literal argument (read as data, never run), and
+ * whether the script is nothing else (each call alone, or wrapped in `text(await …)`).
+ */
+export function scriptCalls(script: string): { calls: { tool: string; args: unknown }[]; only: boolean } {
+  const calls: { tool: string; args: unknown }[] = [];
+  let rest = script;
+  const call = /tools\.([A-Za-z_$][\w$]*)\s*\(/g;
+  for (let m = call.exec(script); m; m = call.exec(script)) {
+    const read = readLiteral(script, m.index + m[0].length);
+    if (!read || !/^\s*\)/.test(script.slice(read.end))) continue;
+    calls.push({ tool: m[1]!, args: read.value });
+    rest = rest.replace(script.slice(m.index, read.end + script.slice(read.end).indexOf(")") + 1), "");
+  }
+  // What is left once the calls are out: nothing but their wrapping.
+  const only = calls.length > 0 && /^[\s;]*$/.test(rest.replace(/text\(\s*await\s*\)|await|text\(\s*\)/g, ""));
+  return { calls, only };
+}
+
+/** A JavaScript literal (object, array, string, number, true/false/null) at `at`, as data; null when it is anything else. */
+function readLiteral(src: string, at: number): { value: unknown; end: number } | null {
+  let i = at;
+  const space = () => { while (i < src.length && /\s/.test(src[i]!)) i++; };
+  const value = (): unknown => {
+    space();
+    const ch = src[i];
+    if (ch === "{") {
+      i++;
+      const obj: Record<string, unknown> = {};
+      for (;;) {
+        space();
+        if (src[i] === "}") { i++; return obj; }
+        let key: string;
+        if (src[i] === '"' || src[i] === "'") key = string() as string;
+        else {
+          const m = /^[A-Za-z_$][\w$]*/.exec(src.slice(i));
+          if (!m) throw new Error("key");
+          key = m[0];
+          i += key.length;
+        }
+        space();
+        if (src[i] !== ":") throw new Error(":");
+        i++;
+        obj[key] = value();
+        space();
+        if (src[i] === ",") { i++; continue; }
+        if (src[i] === "}") { i++; return obj; }
+        throw new Error("object");
+      }
+    }
+    if (ch === "[") {
+      i++;
+      const list: unknown[] = [];
+      for (;;) {
+        space();
+        if (src[i] === "]") { i++; return list; }
+        list.push(value());
+        space();
+        if (src[i] === ",") { i++; continue; }
+        if (src[i] === "]") { i++; return list; }
+        throw new Error("array");
+      }
+    }
+    if (ch === '"' || ch === "'" || ch === "`") return string();
+    const m = /^(-?\d+(\.\d+)?([eE][+-]?\d+)?|true|false|null)/.exec(src.slice(i));
+    if (!m) throw new Error("value");
+    i += m[0].length;
+    return JSON.parse(m[0]);
+  };
+  const string = (): string => {
+    const quote = src[i++]!;
+    let out = "";
+    while (i < src.length && src[i] !== quote) {
+      if (quote === "`" && src[i] === "$" && src[i + 1] === "{") throw new Error("template");
+      if (src[i] === "\\") {
+        const next = src[i + 1]!;
+        const simple: Record<string, string> = { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f", v: "\v", "0": "\0" };
+        if (next === "u") { out += String.fromCharCode(parseInt(src.slice(i + 2, i + 6), 16)); i += 6; continue; }
+        out += simple[next] ?? next;
+        i += 2;
+        continue;
+      }
+      out += src[i++];
+    }
+    if (src[i] !== quote) throw new Error("string");
+    i++;
+    return out;
+  };
+  try {
+    const v = value();
+    return { value: v, end: i };
+  } catch {
+    return null;
+  }
+}
+
 export class TranscriptTail {
   readonly runtime: RuntimeKind;
   readonly path: string;

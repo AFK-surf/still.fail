@@ -68,3 +68,15 @@ test("transcripts are found where each runtime keeps them", () => {
   assert.equal(transcriptPath("codex", home, "xyz"), join(home, "sessions", "2026", "09", "26", "rollout-2026-09-26T00-00-00-xyz.jsonl"));
   assert.equal(transcriptPath("claude", home, "missing"), undefined);
 });
+
+test("codex code mode: the tool calls in an exec script are its steps, read as data", async () => {
+  const { scriptCalls } = await import("../src/transcript.ts");
+  const post = scriptCalls('text(await tools.mcp__ember__chat_post({to:"EMBER/1790434911.559000",text:"你好，我在。\\n有什么\\"事\\"？",kind:"final"}));\n');
+  assert.deepEqual(post, { calls: [{ tool: "mcp__ember__chat_post", args: { to: "EMBER/1790434911.559000", text: "你好，我在。\n有什么\"事\"？", kind: "final" } }], only: true });
+  // More than calls: the script stays, the calls in it too.
+  const mixed = scriptCalls('text(ALL_TOOLS.filter(x=>/chat_post/.test(x.name)));\ntext(await tools.exec_command({cmd:"cat SKILL.md",max_output_tokens:3000}));\n');
+  assert.deepEqual(mixed, { calls: [{ tool: "exec_command", args: { cmd: "cat SKILL.md", max_output_tokens: 3000 } }], only: false });
+  // An argument that is not a literal is not read (nothing is run).
+  assert.deepEqual(scriptCalls("await tools.mcp__ember__chat_post(build())"), { calls: [], only: false });
+  assert.deepEqual(scriptCalls("await tools.x({a:`${secret}`})").calls, []);
+});
