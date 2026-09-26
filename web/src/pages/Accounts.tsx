@@ -27,6 +27,7 @@ export function AccountsPage() {
       </header>
       {profiles.length === 0 && <Empty><p>还没有 Profile。连接至少需要一个 Profile 才能运行。</p></Empty>}
       {profiles.length > 0 && (
+        <section className="section" aria-label="Profile">
         <ul className="list">
           {profiles.map((p) => {
             const tone = checkTone(p.check);
@@ -46,6 +47,7 @@ export function AccountsPage() {
             );
           })}
         </ul>
+        </section>
       )}
       <AddAccountDialog open={adding} onClose={() => setAdding(false)} />
     </div>
