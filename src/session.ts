@@ -1,13 +1,13 @@
 // One actor per session. Every change to a session's state runs through
-// its serial queue, so runtime events, inbound messages and tool calls never
+// its serial queue, so runtime events, deliveries and tool calls never
 // interleave halfway.
 import { randomUUID } from "node:crypto";
 import type { Profile, RuntimeKind } from "./config.ts";
 import type { ChatSurface } from "./chat/types.ts";
-import { formatInbound, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, sessionInstructions, threadAddress } from "./instructions.ts";
+import { formatInbound, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, sessionInstructions } from "./instructions.ts";
 import { log } from "./log.ts";
 import type { AgentDriver, AgentSession, LiveEvent, TurnOutcome } from "./runtime/types.ts";
-import type { InboundRow, SessionRow, Store, TurnKind } from "./store.ts";
+import type { PendingMessage, SessionRow, Store, TurnKind } from "./store.ts";
 
 export type DeclaredState = "final" | "block";
 
@@ -25,6 +25,8 @@ export interface SessionDeps {
   maxNudges: number;
   /** Where the runtime's live steps go, for whoever watches the session. */
   live?: { event(key: string, event: LiveEvent): void; turnEnded(key: string): void };
+  /** The runtime process has gone idle (see Hub's eviction deadlines). */
+  idle?(key: string): void;
 }
 
 interface Turn {
@@ -72,7 +74,7 @@ export class SessionActor {
     return now - this.#idleSince;
   }
 
-  /** Delivers any pending inbound messages. */
+  /** Delivers any pending messages. */
   kick(): Promise<void> {
     return this.#enqueue(() => this.#pump());
   }
@@ -95,10 +97,10 @@ export class SessionActor {
   recover(): Promise<void> {
     return this.#enqueue(async () => {
       this.#deps.store.setRunning(this.key, false);
-      const pending = this.#deps.store.pendingInbound(this.key);
-      const text = pending.length > 0 ? `${RESUME_AFTER_RESTART}\n\n${await this.#format(pending)}` : RESUME_AFTER_RESTART;
-      await this.#startTurn("resume", text);
-      this.#deps.store.markDelivered(pending);
+      const pending = this.#deps.store.pendingMessages(this.key);
+      const said = await this.#format(pending);
+      await this.#startTurn("resume", said ? `${RESUME_AFTER_RESTART}\n\n${said}` : RESUME_AFTER_RESTART);
+      this.#delivered(pending);
     });
   }
 
@@ -113,6 +115,7 @@ export class SessionActor {
       await this.#ensureAgent();
       this.#idleSince = Date.now();
       this.#deps.store.notify(this.key);
+      this.#deps.idle?.(this.key);
     });
   }
 
@@ -148,35 +151,43 @@ export class SessionActor {
   }
 
   async #pump(): Promise<void> {
-    const pending = this.#deps.store.pendingInbound(this.key);
+    const pending = this.#deps.store.pendingMessages(this.key);
     if (pending.length === 0) return;
     const text = await this.#format(pending);
+    if (!text) {
+      this.#delivered(pending); // deleted before the agent saw them
+      return;
+    }
     if (this.#agent?.busy) {
-      if (await this.#agent.steer(text)) this.#deps.store.markDelivered(pending);
+      if (await this.#agent.steer(text)) this.#delivered(pending);
       return; // otherwise delivered when the turn ends
     }
     this.#nudges = 0;
     await this.#startTurn("input", text);
-    this.#deps.store.markDelivered(pending);
+    this.#delivered(pending);
+  }
+
+  #delivered(messages: readonly PendingMessage[]): void {
+    this.#deps.store.markDelivered(this.key, messages.map((m) => m.seq));
   }
 
   /**
-   * The messages as the agent reads them: each with its source and sender's
-   * name, plus a hint when a thread appears in this session for the first
-   * time mid-conversation (its earlier messages are only a chat_history away).
+   * The messages as the agent reads them, made now so edits count: each with
+   * its source and sender's name, plus a hint when a thread appears in this
+   * session for the first time mid-conversation (its earlier messages are
+   * only a chat_history away). Empty when all were deleted meanwhile.
    */
-  async #format(pending: readonly InboundRow[]): Promise<string> {
-    const known = new Set(this.#deps.store.listInbound(this.key)
-      .filter((m) => m.status === "delivered")
-      .map((m) => threadAddress(m.channel, m.threadTs)));
-    const newThreads = new Set(pending.map((m) => threadAddress(m.channel, m.threadTs)).filter((a) => !known.has(a)));
+  async #format(pending: readonly PendingMessage[]): Promise<string> {
+    const said = pending.filter((m) => m.deletedAt === null);
+    const heard = this.#deps.store.heardThreads(this.key);
+    const newThreads = new Set(said.map((m) => m.thread).filter((t) => !heard.has(t)));
     const names = new Map<string, string>();
-    for (const m of pending) {
-      if (names.has(m.user)) continue;
-      const name = await this.#deps.chat(m.connect)?.userName?.(m.user);
-      if (name) names.set(m.user, name);
+    for (const m of said) {
+      if (m.authorKind !== "person" || names.has(m.author)) continue;
+      const name = await this.#deps.chat(m.connect)?.userName?.(m.author);
+      if (name) names.set(m.author, name);
     }
-    return formatInbound(pending, { newThreads, names });
+    return formatInbound(said, { newThreads, names });
   }
 
   /**
@@ -224,7 +235,7 @@ export class SessionActor {
     const row = this.#row;
     const driver = this.#deps.drivers[row.runtime];
     // The agent goes by the name of the connect it currently hears through.
-    const connect = this.#deps.store.latestInbound(this.key)?.connect ?? row.connect;
+    const connect = this.#deps.store.latestThread(this.key)?.connect ?? row.connect;
     const botUserId = this.#deps.chat(connect)?.botUserId;
     const profile = this.#deps.profile(row.profile);
     if (!profile) throw new Error(`session ${this.key}: profile ${row.profile} is not configured`);
@@ -295,10 +306,11 @@ export class SessionActor {
     }
     this.#stopRequested = false;
 
-    if (this.#deps.store.pendingInbound(this.key).length > 0) {
+    if (this.#deps.store.pendingMessages(this.key).length > 0) {
       await this.#pump();
       return;
     }
+    this.#deps.idle?.(this.key);
     if (outcome.kind !== "completed" || turn?.declared) {
       this.#nudges = 0;
       return;
@@ -313,15 +325,20 @@ export class SessionActor {
     await this.#notice("⚠️ 我停下来了，但没有给出明确结果。如果还需要继续，请直接回复我。");
   }
 
-  /** ember's own words (not the agent's) go to the thread people spoke in last. */
+  /** ember's own words (not the agent's) go to the thread people spoke in last, and are recorded there. */
   async #notice(text: string): Promise<void> {
-    const latest = this.#deps.store.latestInbound(this.key);
+    const latest = this.#deps.store.latestThread(this.key);
     const chat = latest && this.#deps.chat(latest.connect);
     if (!latest || !chat) {
       log.warn("no thread to post a notice to", { session: this.key, text });
       return;
     }
-    await chat.post({ channel: latest.channel, threadTs: latest.threadTs }, text).catch((error) => log.warn("notice failed", { session: this.key, error }));
+    try {
+      const ts = await chat.post(latest, text);
+      this.#deps.store.insertMessage({ thread: latest.id, ts, authorKind: "ember", author: "ember", text });
+    } catch (error) {
+      log.warn("notice failed", { session: this.key, error });
+    }
   }
 }
 

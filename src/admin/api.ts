@@ -1,6 +1,10 @@
 // The admin API behind /admin. Local visits are trusted; visits through the
 // Cloudflare tunnel must carry a valid Access identity (see access.ts).
+//
+// Clients follow GET /events instead of asking again on a timer: every change
+// to what the API shows is announced there (see docs/station-storage.md).
 import { execFileSync } from "node:child_process";
+import type { EventEmitter } from "node:events";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { basename, extname, join, resolve, sep } from "node:path";
@@ -10,21 +14,21 @@ import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
 import type { MeshStatus } from "../mesh.ts";
-import type { Attachment, Quote } from "../store.ts";
-import { hostInfo } from "../host.ts";
+import type { Attachment, MessageRow, Quote, ThreadSummary } from "../store.ts";
+import { hostInfo, type HostInfo } from "../host.ts";
 import type { ProfileQuota } from "../quota.ts";
 import type { Profile } from "../config.ts";
 import { INTERNAL_CONNECT } from "../chat/internal.ts";
+import { EMBER_SURFACE } from "../store.ts";
 import { appIdOf, applySettings, rotateConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
 import { log } from "../log.ts";
 import type { Settings } from "../settings.ts";
 import type { Store } from "../store.ts";
 import { checkProfile, loginCommand, type ProfileCheck } from "../profiles.ts";
-import { readTimeline, readUsage, transcriptPath } from "../transcript.ts";
 import { AccessDenied, AccessGate, viewerId, viewerName, type Viewer } from "./access.ts";
 import { verifySlackTokens } from "../chat/slack.ts";
 import { createAppUrl, slackManifest } from "./slack-manifest.ts";
-import type { Creator, Overview, SessionDetail, SessionSummary } from "./types.ts";
+import type { Creator, MessageView, Overview, ProcessState, SessionDetail, SessionSummary, StationEvents, ThreadMessages, ThreadView } from "./types.ts";
 
 const SECRET_KEY = /KEY|TOKEN|SECRET|PASSWORD|AUTH/i;
 
@@ -36,8 +40,8 @@ export interface AdminDeps {
   logins: LoginManager;
   /** Display names of people seen through ember cloud, by email; shared with ember's own chat. */
   names: Map<string, string>;
-  /** ember-mesh's shared secret, and its state for the page. */
-  mesh?: { secret(): string | null; status(): MeshStatus };
+  /** ember-mesh's shared secret, and its state for the page; `changes` emits "change" when the state does. */
+  mesh?: { secret(): string | null; status(): MeshStatus; changes?: EventEmitter };
   /** A profile's allowance; absent where nobody can ask (tests). */
   quota?: (profile: Profile) => Promise<ProfileQuota>;
   /** How a profile is checked; tests replace it so no real CLI runs. */
@@ -48,6 +52,19 @@ export interface AdminDeps {
   gate?: AccessGate;
   /** Check every profile shortly after start (the real station; tests leave it off). */
   checkOnStart?: boolean;
+}
+
+/** How often quotas are asked again while someone follows /events, and host info sampled while someone asks for it. */
+const QUOTA_MS = 5 * 60_000;
+const HOST_MS = 10_000;
+/** Keeps proxies (the tunnel) from closing an idle event stream. */
+const PING_MS = 25_000;
+
+interface Client {
+  res: ServerResponse;
+  viewer: Viewer;
+  /** Wants host samples. */
+  host: boolean;
 }
 
 class HttpError extends Error {
@@ -106,15 +123,33 @@ export class AdminApi {
   readonly #quotaPending = new Set<string>();
   readonly #apps: SlackApps;
   readonly #appIds = new Map<string, string>();
+  /** Open /events streams, and /sessions/:key/live streams (which only need the keepalive). */
+  readonly #clients = new Set<Client>();
+  readonly #streams = new Set<ServerResponse>();
+  /** Timers that run only while someone follows: quotas, host samples, keepalives. */
+  #quotaTimer: ReturnType<typeof setInterval> | null = null;
+  #hostTimer: ReturnType<typeof setInterval> | null = null;
+  #pingTimer: ReturnType<typeof setInterval> | null = null;
+  #lastHost = "";
+  /** Changes waiting to be sent, gathered so a burst becomes one event each. */
+  readonly #dirtySessions = new Set<string>();
+  #overviewDirty = false;
+  #flushing = false;
+  /** Events go out in order, though some take a lookup (names) first. */
+  #outbox: Promise<void> = Promise.resolve();
+  /** The process state last announced per session; the overview counts them. */
+  readonly #processStates = new Map<string, ProcessState>();
 
   constructor(deps: AdminDeps) {
     this.#deps = deps;
+    // What the last run learned about profiles shows until they are checked again.
+    for (const [id, status] of deps.store.profileStatus()) {
+      if (status.check) this.#checks.set(id, status.check);
+      if (status.quota) this.#quotas.set(id, status.quota);
+    }
     // The account pool picks profiles by what their checks and allowances say.
-    deps.hub.setProfileHealth?.((id) => {
-      const profile = deps.settings.config.profiles.find((p) => p.id === id);
-      return { check: this.#checks.get(id) ?? null, quota: profile ? this.#quotaFor(profile) : null };
-    });
-    // Checks live in memory; after a start, check every profile once so the pool and the model menus know them.
+    deps.hub.setProfileHealth?.((id) => ({ check: this.#checks.get(id) ?? null, quota: this.#quotas.get(id) ?? null }));
+    // Check every profile once after a start, so the pool and the model menus know them as they are now.
     if (deps.checkOnStart) {
       setTimeout(() => {
         for (const p of deps.settings.config.profiles) void this.#check(p.id).catch((error) => log.warn("profile check failed", { profile: p.id, error }));
@@ -130,8 +165,30 @@ export class AdminApi {
     );
     // A finished sign-in changes what the profile can do; check it again right away.
     deps.logins.changes.on("change", (id: string) => {
+      this.#overviewChanged();
       if (deps.logins.get(id)?.state === "done") void this.#check(id).catch((error) => log.warn("check after login failed", { profile: id, error }));
     });
+    deps.settings.onChange(() => this.#overviewChanged());
+    deps.connections.changes.on("change", () => this.#overviewChanged());
+    deps.mesh?.changes?.on("change", () => this.#overviewChanged());
+    const { changes } = deps.store;
+    changes.on("session", (key: string) => {
+      this.#dirtySessions.add(key);
+      this.#schedule();
+    });
+    changes.on("session-removed", (key: string) => {
+      this.#dirtySessions.delete(key);
+      this.#processStates.delete(key);
+      this.#emit("session-removed", { key });
+      this.#overviewChanged();
+    });
+    changes.on("thread", (change: { id: number; rev: number; messages: MessageRow[] }) => {
+      if (this.#clients.size === 0) return;
+      const views = this.#messageViews(change.id, change.messages);
+      this.#emitLater("thread", views.then((messages) => ({ id: change.id, rev: change.rev, messages })));
+    });
+    changes.on("read", (read: StationEvents["read"]) => this.#emit("read", read, (c) => viewerId(c.viewer) === read.viewer));
+    changes.on("processes", () => this.#overviewChanged());
   }
 
   /** Handles /admin/api/*; returns false for other paths. */
@@ -164,27 +221,39 @@ export class AdminApi {
 
     if (method === "GET" && path === "/host") return send(res, 200, await hostInfo(this.#deps.settings.config.dataDir));
     if (method === "GET" && path === "/overview") return send(res, 200, this.#overview(viewer));
-    if (method === "GET" && path === "/events") return this.#events(req, res);
-    if (method === "GET" && path === "/sessions") return send(res, 200, await this.#sessions(url.searchParams.get("connect")));
+    if (method === "GET" && path === "/events") return this.#events(req, res, viewer, url.searchParams.get("host") === "1");
+    if (method === "GET" && path === "/sessions") return send(res, 200, await this.#sessions(url.searchParams.get("connect"), url.searchParams.get("archived") === "1"));
     if (method === "POST" && path === "/sessions") {
-      // A new chat: its session is made first, so files can be uploaded into it before the first message.
+      // A new chat: its session and its thread are made first, so files can be uploaded into it before the first message.
       const input = await body(req);
       const runtime = String(input.runtime ?? "");
       if (runtime !== "claude" && runtime !== "codex") throw new HttpError(400, "runtime 必须是 claude 或 codex");
+      let made;
       try {
-        const key = this.#deps.hub.newSession({
+        made = this.#deps.hub.newSession({
           runtime, createdBy: viewerId(viewer),
           ...(typeof input.profile === "string" && input.profile ? { profile: input.profile } : {}),
           ...(typeof input.model === "string" && input.model ? { model: input.model } : {}),
           ...(typeof input.effort === "string" && input.effort ? { effort: input.effort } : {}),
           ...(typeof input.title === "string" ? { title: input.title.slice(0, 120) } : {}),
         });
-        return send(res, 200, { key });
       } catch (error) {
         throw new HttpError(400, error instanceof Error ? error.message : String(error));
       }
+      return send(res, 200, { key: made.key, thread: await this.#thread(made.thread.id, viewer) });
     }
-    if (resource === "sessions" && id && !action && method === "GET") return send(res, 200, await this.#session(id));
+    if (resource === "sessions" && id && !action && method === "GET") return send(res, 200, await this.#session(id, viewer));
+    if (resource === "sessions" && id && !action && method === "DELETE") {
+      this.#sessionRow(id);
+      await this.#deps.hub.deleteSession(id);
+      log.info("session deleted from the admin page", { session: id, by: viewerId(viewer) });
+      return send(res, 200, { ok: true });
+    }
+    if (resource === "sessions" && id && action === "archive" && (method === "POST" || method === "DELETE")) {
+      this.#sessionRow(id);
+      this.#deps.hub.archive(id, method === "POST");
+      return send(res, 200, await this.#summary(id));
+    }
     if (resource === "sessions" && id && action === "stop" && method === "POST") {
       await this.#deps.hub.stop(id);
       return send(res, 200, { ok: true });
@@ -192,6 +261,51 @@ export class AdminApi {
     if (resource === "sessions" && id && action === "evict" && method === "POST") {
       await this.#deps.hub.evict(id);
       return send(res, 200, { ok: true });
+    }
+    if (method === "GET" && path === "/threads") {
+      const session = url.searchParams.get("session");
+      return send(res, 200, await this.#threads(viewer, session ?? undefined));
+    }
+    if (method === "POST" && path === "/threads") {
+      // Another chat on ember's page with a session in it.
+      const input = await body(req);
+      const session = String(input.session ?? "");
+      this.#sessionRow(session);
+      const title = typeof input.title === "string" && input.title.trim() ? input.title.trim().slice(0, 80) : null;
+      return send(res, 200, await this.#thread(this.#deps.hub.openChat(session, viewerId(viewer), title).id, viewer));
+    }
+    if (resource === "threads" && id) {
+      const threadId = Number(id);
+      const thread = Number.isInteger(threadId) ? this.#deps.store.getThread(threadId) : undefined;
+      if (!thread) throw new HttpError(404, `unknown thread ${id}`);
+      if (!action && method === "GET") return send(res, 200, await this.#thread(threadId, viewer));
+      if (action === "messages" && method === "GET") return send(res, 200, await this.#messages(threadId, url.searchParams));
+      if (action === "messages" && method === "POST") {
+        if (thread.surface !== EMBER_SURFACE) throw new HttpError(400, "只能在 ember 自己的对话里发消息");
+        const input = await body(req);
+        const text = String(input.text ?? "").trim();
+        const attachments = this.#attachments(threadId, input.attachments);
+        const quotes = quotesOf(input.quotes);
+        if (!text && attachments.length === 0 && quotes.length === 0) throw new HttpError(400, "消息是空的");
+        return send(res, 200, { seq: this.#deps.hub.say(threadId, viewerId(viewer), text, attachments, quotes) });
+      }
+      if (action === "read" && method === "PUT") {
+        const input = await body(req);
+        const seq = Number(input.seq);
+        if (!Number.isInteger(seq) || seq < 0) throw new HttpError(400, "seq 必须是整数");
+        return send(res, 200, { viewer: viewerId(viewer), thread: threadId, seq: this.#deps.store.setRead(viewerId(viewer), threadId, seq) });
+      }
+      if (action === "sessions" && method === "POST") {
+        const input = await body(req);
+        const session = String(input.session ?? "");
+        this.#sessionRow(session);
+        try {
+          this.#deps.hub.addToThread(threadId, session);
+        } catch (error) {
+          throw new HttpError(400, error instanceof Error ? error.message : String(error));
+        }
+        return send(res, 200, await this.#thread(threadId, viewer));
+      }
     }
     if (resource === "connects" && id && !action && method === "PUT") return send(res, 200, this.#putConnect(id, await body(req), viewer));
     if (resource === "connects" && id && !action && method === "DELETE") return send(res, 200, this.#deleteConnect(id, viewer));
@@ -202,19 +316,13 @@ export class AdminApi {
       log.info("single-session binding changed from the admin page", { connect: id, session: key, by: viewerId(viewer) });
       return send(res, 200, { session: key });
     }
-    if (resource === "sessions" && id && action === "chats" && method === "POST") {
-      const input = await body(req);
-      if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
-      const title = typeof input.title === "string" && input.title.trim() ? input.title.trim().slice(0, 80) : null;
-      return send(res, 200, { threadTs: this.#deps.hub.openChat(id, viewerId(viewer), title) });
-    }
     if (resource === "sessions" && id && action === "warm" && method === "POST") {
       if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
       void this.#deps.hub.warm(id).catch((error) => log.warn("warming failed", { session: id, error }));
       return send(res, 202, { ok: true });
     }
     if (resource === "sessions" && id && action === "live" && method === "GET") {
-      if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
+      this.#sessionRow(id);
       return this.#live(req, res, id, Math.max(0, Number(url.searchParams.get("from")) || 0));
     }
     if (resource === "sessions" && id && action === "files" && method === "GET") {
@@ -233,38 +341,6 @@ export class AdminApi {
       const session = this.#deps.store.getSession(id);
       if (!session) throw new HttpError(404, `unknown session ${id}`);
       return send(res, 200, await saveUpload(req, session.workspace, url.searchParams.get("name") ?? "file"));
-    }
-    if (resource === "sessions" && id && action === "messages" && method === "POST") {
-      const input = await body(req);
-      const text = String(input.text ?? "").trim();
-      const session = this.#deps.store.getSession(id);
-      if (!session) throw new HttpError(404, `unknown session ${id}`);
-      // Only files uploaded into this session's own upload directory may be named.
-      const uploads = resolve(session.workspace, "uploads") + sep;
-      const attachments: Attachment[] = (Array.isArray(input.attachments) ? input.attachments : []).slice(0, 20).map((a: Record<string, unknown>) => {
-        const path = resolve(String(a.path ?? ""));
-        if (!path.startsWith(uploads) || !existsSync(path)) throw new HttpError(400, "附件不在这个会话的上传目录里");
-        const w = Number(a.width), h = Number(a.height);
-        return {
-          name: String(a.name ?? path.slice(uploads.length)).slice(0, 200), path, size: Number(a.size) || 0,
-          ...(Number.isInteger(w) && Number.isInteger(h) && w > 0 && h > 0 && w < 100_000 && h < 100_000 ? { width: w, height: h } : {}),
-        };
-      });
-      const quotes: Quote[] = (Array.isArray(input.quotes) ? input.quotes : []).slice(0, 20).map((q: Record<string, unknown>): Quote => ({
-        author: String(q.author ?? "消息").slice(0, 100), text: String(q.text ?? "").slice(0, 4000), comment: String(q.comment ?? "").slice(0, 4000),
-        ...(typeof q.ts === "string" && /^\d+\.\d+$/.test(q.ts) ? { ts: q.ts } : {}),
-        ...(q.role === "agent" || q.role === "person" ? { role: q.role as "agent" | "person" } : {}),
-      })).filter((q: Quote) => q.text.trim());
-      if (!text && attachments.length === 0 && quotes.length === 0) throw new HttpError(400, "消息是空的");
-      return send(res, 200, { threadTs: await this.#deps.hub.sayToSession(id, viewerId(viewer), text, attachments, quotes) });
-    }
-    if (resource === "chats" && id && action === "messages" && method === "POST") {
-      const input = await body(req);
-      const text = String(input.text ?? "").trim();
-      if (!text) throw new HttpError(400, "消息是空的");
-      if (!this.#deps.store.getChat(id)) throw new HttpError(404, `unknown chat ${id}`);
-      await this.#deps.hub.sayInChat(id, viewerId(viewer), text);
-      return send(res, 200, { ok: true });
     }
     if (resource === "sessions" && id && action === "title" && method === "POST") {
       const input = await body(req);
@@ -470,7 +546,7 @@ export class AdminApi {
         loginCommand: loginCommand(p.runtime, p.home),
         check: this.#checks.get(p.id) ?? null,
         login: this.#deps.logins.get(p.id),
-        quota: this.#quotaFor(p),
+        quota: this.#quotas.get(p.id) ?? null,
       })),
       processes: processes.map((p) => ({ ...p, rssMb: memory.has(p.pgid) ? Math.round(memory.get(p.pgid)! / 1024) : null })),
       counts: {
@@ -481,26 +557,30 @@ export class AdminApi {
     };
   }
 
-  #summary(key: string, stats = this.#deps.store.sessionStats(), bindings = this.#deps.store.listBindings()): SessionSummary {
+  #sessionRow(key: string) {
     const row = this.#deps.store.getSession(key);
     if (!row) throw new HttpError(404, `unknown session ${key}`);
-    const { token: _token, ...visible } = row;
+    return row;
+  }
+
+  /** A session for lists and events: its row (without the token), process state, counts and people. */
+  async #summary(key: string, stats = this.#deps.store.sessionStats(key), bindings = this.#deps.store.listBindings(), participants = this.#deps.store.participants(key)): Promise<SessionSummary> {
+    const { token: _token, ...visible } = this.#sessionRow(key);
     return {
       ...visible, boundTo: bindings.get(key) ?? [], process: this.#deps.hub.processState(key),
       ...(stats.get(key) ?? { turns: 0, pending: 0, firstText: null, lastTurn: null }),
+      creator: await this.#creator(visible.createdBy),
+      participants: await this.#people(participants.get(key) ?? []),
     };
   }
 
-  async #sessions(connect: string | null): Promise<SessionSummary[]> {
+  /** Sessions shown in lists, or only the archived ones. */
+  async #sessions(connect: string | null, archived: boolean): Promise<SessionSummary[]> {
     const stats = this.#deps.store.sessionStats();
     const bindings = this.#deps.store.listBindings();
-    const summaries = this.#deps.store.listSessions().filter((s) => !connect || s.connect === connect).map((s) => this.#summary(s.key, stats, bindings));
     const participants = this.#deps.store.participants();
-    return Promise.all(summaries.map(async (s) => ({
-      ...s,
-      creator: await this.#creator(s.createdBy),
-      participants: await this.#people(participants.get(s.key) ?? []),
-    })));
+    const rows = this.#deps.store.listSessions().filter((s) => (!connect || s.connect === connect) && (s.archivedAt !== null) === archived);
+    return Promise.all(rows.map((s) => this.#summary(s.key, stats, bindings, participants)));
   }
 
   /** Several people, once each: one person may write through Slack and ember's chat under the same email. */
@@ -530,35 +610,90 @@ export class AdminApi {
     return { id: ref, name: this.#deps.names.get(ref) ?? ref, email: ref, via: "cloud" };
   }
 
-  async #session(key: string): Promise<SessionDetail> {
-    const summary = this.#summary(key);
-    const inbound = this.#deps.store.listInbound(key);
-    // Names come from the connect each message arrived through.
-    const internalNames = { userName: async (user: string) => this.#deps.names.get(user) ?? (user === "local" ? "管理员" : user), channelName: async () => null };
-    const chatOf = (connect: string) => connect === INTERNAL_CONNECT ? internalNames : this.#deps.connections.chats.get(connect) ?? this.#deps.connections.chats.get(summary.connect);
-    const people: Record<string, string> = {};
-    const channels: Record<string, string> = {};
-    const users = [...new Map(inbound.map((m) => [m.user, m.connect])).entries()];
-    const chans = [...new Map(inbound.map((m) => [m.channel, m.connect])).entries()];
-    await Promise.all([
-      ...users.map(async ([id, via]) => { const n = await chatOf(via)?.userName?.(id); if (n) people[id] = n; }),
-      ...chans.map(async ([id, via]) => { const n = await chatOf(via)?.channelName?.(id); if (n) channels[id] = n; }),
-    ]);
-    const profile = this.#deps.settings.config.profiles.find((p) => p.id === summary.profile);
-    const path = profile && summary.runtimeSessionId ? transcriptPath(summary.runtime, profile.home, summary.runtimeSessionId) : undefined;
+  async #session(key: string, viewer: Viewer): Promise<SessionDetail> {
     return {
-      session: { ...summary, creator: await this.#creator(summary.createdBy), participants: await this.#people(this.#deps.store.participants().get(key) ?? []) },
-      people,
-      channels,
-      threads: this.#deps.store.listThreads(key),
-      chats: await Promise.all(this.#deps.store.listChats(key).map(async (c) => ({
-        ...c, creator: await this.#creator(c.createdBy), messages: this.#deps.store.chatMessages(c.threadTs),
-      }))),
+      session: await this.#summary(key),
+      threads: await this.#threads(viewer, key),
       turns: this.#deps.store.listTurns(key),
-      inbound,
-      transcript: path ? { path, timeline: readTimeline(summary.runtime, path), usage: readUsage(summary.runtime, path) } : null,
     };
   }
+
+  // ── threads ─────────────────────────────────────────────────────────────
+
+  async #threads(viewer: Viewer, session?: string): Promise<ThreadView[]> {
+    return Promise.all(this.#deps.store.listThreads(viewerId(viewer), session === undefined ? {} : { session }).map((t) => this.#threadView(t)));
+  }
+
+  async #thread(id: number, viewer: Viewer): Promise<ThreadView> {
+    const [thread] = this.#deps.store.listThreads(viewerId(viewer), { thread: id });
+    if (!thread) throw new HttpError(404, `unknown thread ${id}`);
+    return this.#threadView(thread);
+  }
+
+  async #threadView(t: ThreadSummary): Promise<ThreadView> {
+    const chat = this.#threadChat(t.id);
+    const [channelName, creator, last] = await Promise.all([
+      t.surface === EMBER_SURFACE ? null : chat?.channelName?.(t.channel) ?? null,
+      this.#creator(t.createdBy),
+      t.last ? this.#messageViews(t.id, [t.last]).then(([m]) => m ?? null) : null,
+    ]);
+    return { ...t, channelName, creator, last };
+  }
+
+  /**
+   * GET /threads/:id/messages: `after` (a rev) gives every message changed
+   * since; `before` (a seq) pages back; neither gives the latest page.
+   */
+  async #messages(thread: number, params: URLSearchParams): Promise<ThreadMessages> {
+    const rev = this.#deps.store.threadRev(thread);
+    const limit = Math.min(Math.max(Number(params.get("limit")) || 50, 1), 500);
+    if (params.has("after")) {
+      const after = Number(params.get("after"));
+      if (!Number.isInteger(after) || after < 0) throw new HttpError(400, "after 必须是整数");
+      return { rev, messages: await this.#messageViews(thread, this.#deps.store.messagesAfter(thread, after)), more: false };
+    }
+    const before = params.has("before") ? Number(params.get("before")) : undefined;
+    if (before !== undefined && (!Number.isInteger(before) || before < 0)) throw new HttpError(400, "before 必须是整数");
+    const page = this.#deps.store.messagesBefore(thread, before, limit + 1);
+    const more = page.length > limit;
+    return { rev, messages: await this.#messageViews(thread, more ? page.slice(1) : page), more };
+  }
+
+  /** A connection that can name the thread's people and channel: that of a session taking part. */
+  #threadChat(thread: number) {
+    for (const m of this.#deps.store.threadSessions(thread)) {
+      const chat = m.connect === INTERNAL_CONNECT ? undefined : this.#deps.connections.chats.get(m.connect);
+      if (chat) return chat;
+    }
+    return undefined;
+  }
+
+  /** Messages with their authors' names. */
+  async #messageViews(thread: number, messages: MessageRow[]): Promise<MessageView[]> {
+    const t = this.#deps.store.getThread(thread);
+    const chat = this.#threadChat(thread);
+    const members = this.#deps.store.threadSessions(thread);
+    const names = new Map<string, Promise<string | null>>();
+    const nameOf = (m: MessageRow): Promise<string | null> => {
+      if (m.authorKind === "ember") return Promise.resolve("ember");
+      if (m.authorKind === "agent") {
+        // An agent goes by the name of the connect it posts through (on the page, of the connect that started it).
+        const session = this.#deps.store.getSession(m.author);
+        const via = members.find((x) => x.session === m.author)?.connect;
+        const connect = via === INTERNAL_CONNECT || !via ? session?.connect : via;
+        return Promise.resolve(this.#deps.settings.config.connects.find((c) => c.id === connect)?.name ?? session?.title ?? null);
+      }
+      if (t?.surface === EMBER_SURFACE) return Promise.resolve(m.author === "local" ? "管理员" : this.#deps.names.get(m.author) ?? m.author);
+      return chat?.userName?.(m.author) ?? Promise.resolve(null);
+    };
+    for (const m of messages) {
+      const key = `${m.authorKind}:${m.author}`;
+      if (!names.has(key)) names.set(key, nameOf(m));
+    }
+    return Promise.all(messages.map(async (m) => ({ ...m, authorName: await names.get(`${m.authorKind}:${m.author}`)! })));
+  }
+
+  // ── event streams ───────────────────────────────────────────────────────
 
   /**
    * One session as it runs: the transcript entries from `from` on, the steps
@@ -568,32 +703,154 @@ export class AdminApi {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
     res.write("retry: 2000\n\n");
     const stop = this.#deps.hub.live.subscribe(key, from, (message) => res.write(`event: ${message.type}\ndata: ${JSON.stringify(message)}\n\n`));
-    const ping = setInterval(() => res.write(": ping\n\n"), 25_000);
+    this.#streams.add(res);
+    this.#timers();
     req.on("close", () => {
-      clearInterval(ping);
       stop();
+      this.#streams.delete(res);
+      this.#timers();
     });
   }
 
-  #events(req: IncomingMessage, res: ServerResponse): void {
+  /** What changed, as it changes: see StationEvents. `host` adds host samples. */
+  #events(req: IncomingMessage, res: ServerResponse, viewer: Viewer, host: boolean): void {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
     res.write("retry: 3000\n\n");
-    const onSession = (key: string) => res.write(`event: session\ndata: ${JSON.stringify({ key })}\n\n`);
-    const onConfig = () => res.write("event: config\ndata: {}\n\n");
-    const onLogin = (profile: string) => res.write(`event: login\ndata: ${JSON.stringify({ profile })}\n\n`);
-    this.#deps.logins.changes.on("change", onLogin);
-    this.#deps.store.changes.on("session", onSession);
-    const unsubscribe = this.#deps.settings.onChange(onConfig);
-    const ping = setInterval(() => res.write(": ping\n\n"), 25_000); // keep proxies from closing an idle stream
+    const client: Client = { res, viewer, host };
+    this.#clients.add(client);
+    this.#streams.add(res);
+    if (host) void this.#sampleHost(client);
+    this.#timers();
     req.on("close", () => {
-      clearInterval(ping);
-      this.#deps.store.changes.off("session", onSession);
-      this.#deps.logins.changes.off("change", onLogin);
-      unsubscribe();
+      this.#clients.delete(client);
+      this.#streams.delete(res);
+      this.#timers();
+    });
+  }
+
+  /** Starts what runs only while someone follows, and stops it when nobody does. */
+  #timers(): void {
+    const following = this.#clients.size > 0;
+    if (following && !this.#quotaTimer && this.#deps.quota) {
+      this.#quotaTimer = setInterval(() => this.#refreshQuotas(), QUOTA_MS);
+      this.#refreshQuotas(); // whatever is older than a round
+    } else if (!following && this.#quotaTimer) {
+      clearInterval(this.#quotaTimer);
+      this.#quotaTimer = null;
+    }
+    const sampling = [...this.#clients].some((c) => c.host);
+    if (sampling && !this.#hostTimer) this.#hostTimer = setInterval(() => void this.#sampleHost(), HOST_MS);
+    else if (!sampling && this.#hostTimer) {
+      clearInterval(this.#hostTimer);
+      this.#hostTimer = null;
+      this.#lastHost = "";
+    }
+    if (this.#streams.size > 0 && !this.#pingTimer) {
+      this.#pingTimer = setInterval(() => { for (const res of this.#streams) res.write(": ping\n\n"); }, PING_MS);
+    } else if (this.#streams.size === 0 && this.#pingTimer) {
+      clearInterval(this.#pingTimer);
+      this.#pingTimer = null;
+    }
+  }
+
+  /** Sends host info to `only`, or to every client asking for it when it changed. */
+  async #sampleHost(only?: Client): Promise<void> {
+    let info: HostInfo;
+    try {
+      info = await hostInfo(this.#deps.settings.config.dataDir);
+    } catch (error) {
+      log.warn("host sample failed", { error });
+      return;
+    }
+    if (only) {
+      this.#write(only, "host", info);
+      return;
+    }
+    const { checkedAt: _at, uptimeSec: _up, ...shown } = info;
+    const key = JSON.stringify(shown);
+    if (key === this.#lastHost) return;
+    this.#lastHost = key;
+    this.#emit("host", info, (c) => c.host);
+  }
+
+  #refreshQuotas(): void {
+    for (const p of this.#deps.settings.config.profiles) {
+      const cached = this.#quotas.get(p.id);
+      if (cached && Date.now() - cached.checkedAt < QUOTA_MS - 1000) continue;
+      void this.#refreshQuota(p.id).catch((error) => log.warn("quota refresh failed", { profile: p.id, error }));
+    }
+  }
+
+  #write<E extends keyof StationEvents>(client: Client, event: E, data: StationEvents[E]): void {
+    client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+
+  #emit<E extends keyof StationEvents>(event: E, data: StationEvents[E], to: (client: Client) => boolean = () => true): void {
+    this.#emitLater(event, Promise.resolve(data), to);
+  }
+
+  /** Queues an event whose data takes a moment to make, keeping the order events were raised in. */
+  #emitLater<E extends keyof StationEvents>(event: E, data: Promise<StationEvents[E]>, to: (client: Client) => boolean = () => true): void {
+    data.catch(() => undefined); // reported where the outbox awaits it
+    this.#outbox = this.#outbox.then(async () => {
+      const value = await data;
+      for (const client of this.#clients) if (to(client)) this.#write(client, event, value);
+    }).catch((error) => log.warn("event not sent", { event, error }));
+  }
+
+  #overviewChanged(): void {
+    this.#overviewDirty = true;
+    this.#schedule();
+  }
+
+  /** Gathers the changes of this turn of the event loop into one event per session and one overview. */
+  #schedule(): void {
+    if (this.#flushing) return;
+    this.#flushing = true;
+    setImmediate(() => {
+      this.#flushing = false;
+      const keys = [...this.#dirtySessions];
+      this.#dirtySessions.clear();
+      for (const key of keys) {
+        if (!this.#deps.store.getSession(key)) continue;
+        const state = this.#deps.hub.processState(key);
+        if (this.#processStates.get(key) !== state) {
+          this.#processStates.set(key, state);
+          this.#overviewDirty = true; // the overview counts running and warm sessions
+        }
+        if (this.#clients.size > 0) this.#emitLater("session", this.#summary(key));
+      }
+      if (this.#overviewDirty) {
+        this.#overviewDirty = false;
+        if (this.#clients.size > 0) {
+          // One overview for everyone; only who is looking differs.
+          const [first] = this.#clients;
+          const overview = this.#overview(first!.viewer);
+          for (const client of this.#clients) this.#emitLater("overview", Promise.resolve({ ...overview, viewer: client.viewer }), (c) => c === client);
+        }
+      }
     });
   }
 
   // ── writes ──────────────────────────────────────────────────────────────
+
+  /** Files named in a message: only ones uploaded into a session of the thread (POST /sessions/:key/files). */
+  #attachments(thread: number, input: unknown): Attachment[] {
+    const dirs = this.#deps.store.threadSessions(thread)
+      .map((m) => this.#deps.store.getSession(m.session))
+      .filter((s) => s !== undefined)
+      .map((s) => resolve(s.workspace, "uploads") + sep);
+    return (Array.isArray(input) ? input : []).slice(0, 20).map((a: Record<string, unknown>) => {
+      const path = resolve(String(a.path ?? ""));
+      const uploads = dirs.find((d) => path.startsWith(d));
+      if (!uploads || !existsSync(path)) throw new HttpError(400, "附件不在这个对话里会话的上传目录里");
+      const w = Number(a.width), h = Number(a.height);
+      return {
+        name: String(a.name ?? path.slice(uploads.length)).slice(0, 200), path, size: Number(a.size) || 0,
+        ...(Number.isInteger(w) && Number.isInteger(h) && w > 0 && h > 0 && w < 100_000 && h < 100_000 ? { width: w, height: h } : {}),
+      };
+    });
+  }
 
   #save(viewer: Viewer, what: string, edit: (raw: RawConfig) => RawConfig): Overview {
     try {
@@ -682,13 +939,6 @@ export class AdminApi {
     });
   }
 
-  /** The cached allowance; asks again in the background once it is five minutes old. */
-  #quotaFor(profile: Profile): ProfileQuota | null {
-    const cached = this.#quotas.get(profile.id);
-    if (this.#deps.quota && (!cached || Date.now() - cached.checkedAt > 5 * 60_000)) void this.#refreshQuota(profile.id).catch(() => undefined);
-    return cached ?? null;
-  }
-
   async #refreshQuota(id: string): Promise<ProfileQuota | null> {
     const profile = this.#deps.settings.config.profiles.find((p) => p.id === id);
     if (!profile) throw new HttpError(404, `unknown profile ${id}`);
@@ -697,7 +947,8 @@ export class AdminApi {
     try {
       const quota = await this.#deps.quota(profile);
       this.#quotas.set(id, quota);
-      this.#deps.settings.touch(); // pages refresh the overview
+      this.#deps.store.setProfileQuota(id, quota);
+      this.#overviewChanged();
       return quota;
     } finally {
       this.#quotaPending.delete(id);
@@ -709,7 +960,8 @@ export class AdminApi {
     if (!profile) throw new HttpError(404, `unknown profile ${id}`);
     const check = await (this.#deps.checkProfile ?? checkProfile)({ runtime: profile.runtime, kind: profile.access.kind, key: profile.access.key, home: profile.home, env: process.env });
     this.#checks.set(id, check);
-    this.#deps.settings.touch();
+    this.#deps.store.setProfileCheck(id, check);
+    this.#overviewChanged();
     return check;
   }
 
@@ -754,6 +1006,15 @@ function ownerOf(current: { id: string; name: string } | undefined, requested: u
   const allowed = viewer.via === "local" || (viewer.via === "mesh" && (viewer.role === "owner" || viewer.role === "admin")) || (current !== undefined && current.id === viewerId(viewer));
   if (!allowed) throw new Error("只有 workspace 的 owner、管理员或者当前所属用户能改所属用户");
   return { createdBy: { id, name: typeof r?.name === "string" ? r.name.slice(0, 120) : id } };
+}
+
+/** Quotes as the page sends them, bounded. */
+function quotesOf(input: unknown): Quote[] {
+  return (Array.isArray(input) ? input : []).slice(0, 20).map((q: Record<string, unknown>): Quote => ({
+    author: String(q.author ?? "消息").slice(0, 100), text: String(q.text ?? "").slice(0, 4000), comment: String(q.comment ?? "").slice(0, 4000),
+    ...(typeof q.ts === "string" && /^\d+\.\d+$/.test(q.ts) ? { ts: q.ts } : {}),
+    ...(q.role === "agent" || q.role === "person" ? { role: q.role as "agent" | "person" } : {}),
+  })).filter((q) => q.text.trim());
 }
 
 const MAX_UPLOAD = 50 * 1024 * 1024;

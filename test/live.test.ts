@@ -7,7 +7,7 @@ import { LiveHub, type LiveMessage } from "../src/live.ts";
 import { liveFromClaude } from "../src/runtime/claude.ts";
 import { liveFromCodex } from "../src/runtime/codex.ts";
 import type { LiveEvent } from "../src/runtime/types.ts";
-import { readTimeline, TranscriptTail } from "../src/transcript.ts";
+import { TranscriptTail } from "../src/transcript.ts";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -81,7 +81,8 @@ test("a transcript read as it grows gives what a full read gives, a half-written
   const r = tail.read();
   assert.equal(r.start, 1);
   assert.deepEqual(r.entries.map((e) => e.text), ["two"]);
-  assert.deepEqual(readTimeline("claude", path).map((e) => e.text), ["one", "two"]);
+  assert.deepEqual(tail.entries.map((e) => e.text), ["one", "two"]);
+  assert.deepEqual(new TranscriptTail("claude", path).read().entries, tail.entries, "read in pieces, the same as read at once");
   assert.equal(tail.usage.modelCalls, 2);
 });
 

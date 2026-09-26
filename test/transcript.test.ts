@@ -3,7 +3,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { readTimeline, transcriptPath } from "../src/transcript.ts";
+import { TranscriptTail, transcriptPath } from "../src/transcript.ts";
+import type { RuntimeKind } from "../src/config.ts";
+
+const readTimeline = (runtime: RuntimeKind, path: string) => new TranscriptTail(runtime, path).read().entries;
 
 function file(lines: unknown[]): string {
   const dir = mkdtempSync(join(tmpdir(), "ember-transcript-"));

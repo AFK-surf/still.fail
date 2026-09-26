@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,6 +28,46 @@ class FakeConnection extends FakeChat implements Connection {
   override async stop(): Promise<void> {
     this.stopped++;
   }
+  onStatus(): void {}
+}
+
+/** Follows an event stream (/events or /sessions/:key/live), gathering what it sends. */
+async function follow(url: string, headers: Record<string, string> = {}) {
+  const controller = new AbortController();
+  const response = await fetch(url, { headers, signal: controller.signal });
+  const events: { event: string; data: any }[] = [];
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  void (async () => {
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) return;
+        buffer += decoder.decode(value, { stream: true });
+        let end: number;
+        while ((end = buffer.indexOf("\n\n")) >= 0) {
+          const chunk = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          const event = /^event: (.+)$/m.exec(chunk)?.[1];
+          const data = /^data: (.+)$/m.exec(chunk)?.[1];
+          if (event && data) events.push({ event, data: JSON.parse(data) });
+        }
+      }
+    } catch {
+      // closed
+    }
+  })();
+  /** The first event (after `from`) that `match` accepts, once it has come. */
+  const next = async (event: string, match: (data: any) => boolean = () => true, from = 0) => {
+    for (let i = 0; i < 300; i++) {
+      const found = events.slice(from).find((e) => e.event === event && match(e.data));
+      if (found) return found.data;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    throw new Error(`no ${event} event; got ${events.map((e) => e.event).join(", ")}`);
+  };
+  return { events, next, close: () => controller.abort() };
 }
 
 /** Stands in for `claude auth login` and `codex login --device-auth`. */
@@ -78,9 +118,9 @@ class FakeSlackApps {
   }
 }
 
-async function setup(options: { access?: { teamDomain: string; aud: string } } = {}) {
+async function setup(options: { access?: { teamDomain: string; aud: string }; store?: Store; dataDir?: string; quota?: () => void } = {}) {
   const slackApps = new FakeSlackApps();
-  const dataDir = mkdtempSync(join(tmpdir(), "ember-admin-"));
+  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "ember-admin-"));
   const logins = new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin });
   const path = join(dataDir, "config.json");
   writeFileSync(path, JSON.stringify({
@@ -92,18 +132,22 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
     connects: [{ id: "ds", name: "ember", kind: "slack", mode: "multi-session", bind: { runtime: "claude", profiles: ["cc"] }, slack: { appToken: "xapp-1-aaaaaaaaaaaa", botToken: "xoxb-bbbbbbbbbbbb", appId: "A0DS" } }],
   }));
   const settings = new Settings(path, dataDir);
-  const store = new Store(":memory:");
+  const store = options.store ?? new Store(":memory:");
   const connections: FakeConnection[] = [];
   const conns = new Connections(() => {
     const c = new FakeConnection();
     connections.push(c);
     return c;
-  }, (id, m) => hub.accept(id, m));
+  }, (id, event) => hub.receive(id, event));
   const claude = new FakeDriver("claude");
-  const hub: Hub = new Hub({ config: () => settings.config, store, chats: conns.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x", internal: new InternalChat(store) });
+  const hub: Hub = new Hub({ config: () => settings.config, store, chats: conns.chats, drivers: { claude, codex: new FakeDriver("codex") }, mcpUrl: "x", internal: new InternalChat() });
   settings.onChange((config) => void conns.reconcile(config));
   await conns.reconcile(settings.config);
-  const api = new AdminApi({ settings, store, hub, connections: conns, logins, names: new Map(), slackApps: slackApps as unknown as SlackApps, checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks) });
+  const api = new AdminApi({
+    settings, store, hub, connections: conns, logins, names: new Map(), slackApps: slackApps as unknown as SlackApps,
+    checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks),
+    ...(options.quota ? { quota: async () => { options.quota!(); return { state: "ok" as const, windows: [{ label: "5 小时", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: Date.now() }; } } : {}),
+  });
   const server = createServer((req, res) => void api.handle(req, res));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/admin/api`;
@@ -115,7 +159,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string } } =
     });
     return { status: response.status, headers: response.headers, body: await response.json() as any };
   };
-  return { slackApps, dataDir, path, settings, store, hub, conns, claude, connections, call, base, close: () => { logins.stopAll(); server.close(); } };
+  return { slackApps, dataDir, path, settings, store, hub, conns, claude, connections, call, base, close: () => { logins.stopAll(); server.closeAllConnections(); server.close(); } };
 }
 
 test("local visits need no sign-in", async () => {
@@ -269,7 +313,7 @@ test("editing a profile's access keeps a blank key but never carries it to anoth
   }
 });
 
-test("session detail includes turns, messages and the runtime transcript", async () => {
+test("session detail is the session, its threads and turns; its transcript comes live from any entry on", async () => {
   const t = await setup();
   try {
     await t.hub.accept("ds", message({ text: "<@UBOT> hi" }));
@@ -280,15 +324,20 @@ test("session detail includes turns, messages and the runtime transcript", async
     writeFileSync(join(projects, `${row!.runtimeSessionId}.jsonl`), [
       JSON.stringify({ type: "user", timestamp: "2026-09-26T00:00:00Z", message: { content: "hi" } }),
       JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Bash", input: { command: "ls" } }] } }),
-    ].join("\n"));
+    ].join("\n") + "\n");
     const list = await t.call("GET", "/sessions");
     assert.equal(list.body[0].process, "running");
     assert.equal(list.body[0].token, undefined, "session tokens are never sent to the page");
     const detail = await t.call("GET", `/sessions/${encodeURIComponent(row!.key)}`);
-    assert.equal(detail.body.inbound.length, 1);
+    assert.deepEqual(Object.keys(detail.body).sort(), ["session", "threads", "turns"]);
     assert.equal(detail.body.threads.length, 1);
+    assert.equal(detail.body.threads[0].last.text, "<@UBOT> hi");
+    assert.equal(detail.body.threads[0].surface, "slack:T1");
     assert.equal(detail.body.turns.length, 1);
-    assert.deepEqual(detail.body.transcript.timeline.map((e: any) => e.kind), ["user", "tool_call"]);
+    const live = await follow(`${t.base}/sessions/${encodeURIComponent(row!.key)}/live?from=1`);
+    const timeline = await live.next("timeline");
+    assert.deepEqual([timeline.start, timeline.entries.map((e: any) => e.kind)], [1, ["tool_call"]]);
+    live.close();
     assert.equal((await t.call("POST", `/sessions/${encodeURIComponent(row!.key)}/stop`)).status, 200);
     assert.equal(t.claude.last.aborts, 1);
   } finally {
@@ -400,32 +449,17 @@ test("connects, sessions and chats remember who created them", async () => {
     const [summary] = (await t.call("GET", "/sessions")).body;
     assert.deepEqual(summary.creator, { id: "slack:ds:U42", name: "U42", email: null, via: "slack" });
     assert.deepEqual(summary.participants.map((p: any) => p.id), ["slack:ds:U42"]);
-    const chat = await t.call("POST", `/sessions/${encodeURIComponent(summary.key)}/chats`, {});
-    const detail = await t.call("GET", `/sessions/${encodeURIComponent(summary.key)}`);
-    assert.equal(detail.body.chats[0].threadTs, chat.body.threadTs);
-    assert.equal(detail.body.chats[0].creator.via, "local");
-    await t.call("POST", `/chats/${chat.body.threadTs}/messages`, { text: "hello from the page" });
+    const chat = await t.call("POST", "/threads", { session: summary.key, title: "排查" });
+    assert.equal(chat.body.surface, "ember");
+    assert.equal(chat.body.creator.via, "local");
+    assert.deepEqual(chat.body.sessions.map((m: any) => [m.session, m.connect]), [[summary.key, "ember"]]);
+    assert.equal((await t.call("POST", `/threads/${chat.body.id}/messages`, { text: "  " })).status, 400);
+    await t.call("POST", `/threads/${chat.body.id}/messages`, { text: "hello from the page" });
     const after = await t.call("GET", `/sessions/${encodeURIComponent(summary.key)}`);
     assert.deepEqual(after.body.session.participants.map((p: any) => p.id), ["slack:ds:U42", "local"]);
-  } finally {
-    t.close();
-  }
-});
-
-test("a session has one chat, made by its first message from the page", async () => {
-  const t = await setup();
-  try {
-    await t.hub.accept("ds", message({ text: "<@UBOT> hi" }));
-    await settle();
-    const [summary] = (await t.call("GET", "/sessions")).body;
-    const say = (text: string) => t.call("POST", `/sessions/${encodeURIComponent(summary.key)}/messages`, { text });
-    const first = await say("first");
-    const second = await say("second");
-    assert.equal(first.body.threadTs, second.body.threadTs);
-    const detail = await t.call("GET", `/sessions/${encodeURIComponent(summary.key)}`);
-    assert.equal(detail.body.chats.length, 1);
-    assert.deepEqual(detail.body.chats[0].messages.map((m: any) => m.text), ["first", "second"]);
-    assert.equal((await say("  ")).status, 400);
+    assert.deepEqual(after.body.threads.map((x: any) => x.title), ["排查", null]);
+    const slackThread = after.body.threads[1];
+    assert.equal((await t.call("POST", `/threads/${slackThread.id}/messages`, { text: "hi" })).status, 400, "Slack threads are written in Slack");
   } finally {
     t.close();
   }
@@ -451,38 +485,40 @@ test("files sent to a session land in its workspace and reach the agent as paths
     await settle();
     const [summary] = (await t.call("GET", "/sessions")).body;
     const key = encodeURIComponent(summary.key);
+    const chat = (await t.call("POST", "/threads", { session: summary.key })).body;
+    const say = (input: unknown) => t.call("POST", `/threads/${chat.id}/messages`, input);
     const upload = await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent("../../report.txt")}`, { method: "POST", body: "hello file" });
     const file = await upload.json() as any;
     assert.equal(upload.status, 200);
     assert.match(file.path, /\/uploads\/[^/]+-report\.txt$/, "a name cannot climb out of the upload directory");
     assert.equal(readFileSync(file.path, "utf8"), "hello file");
-    assert.equal((await t.call("POST", `/sessions/${key}/messages`, { text: "看看", attachments: [{ ...file, path: "/etc/hosts" }] })).status, 400);
-    assert.equal((await t.call("POST", `/sessions/${key}/messages`, { text: "看看这个", attachments: [file] })).status, 200);
+    assert.equal((await say({ text: "看看", attachments: [{ ...file, path: "/etc/hosts" }] })).status, 400);
+    assert.equal((await say({ text: "看看这个", attachments: [file] })).status, 200);
     await settle();
-    assert.match(t.claude.last.steers.at(-1) ?? t.claude.last.prompts.at(-1)!, new RegExp(`Attached files:\\n- ${file.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
-    const detail = await t.call("GET", `/sessions/${key}`);
-    assert.deepEqual(detail.body.chats[0].messages[0].attachments.map((a: any) => a.name), [file.name]);
+    assert.match(t.claude.last.steers.at(-1) ?? t.claude.last.prompts.at(-1)!, new RegExp(`看看这个\n\nAttached files:\n- ${file.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    const page = (await t.call("GET", `/threads/${chat.id}/messages`)).body;
+    assert.deepEqual(page.messages[0].attachments.map((a: any) => a.name), [file.name]);
+    assert.equal(page.messages[0].text, "看看这个", "the words are stored as typed");
+    assert.equal(page.messages[0].authorName, "管理员");
     const back = await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent(file.path.split("/").at(-1))}`);
     assert.equal(await back.text(), "hello file");
     assert.equal((await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent("../../../config.json")}`)).status, 404);
-    await t.call("POST", `/sessions/${key}/messages`, { text: "改一下", quotes: [{ author: "deepseek-flash", role: "agent", ts: "1790383286.536000", text: "第一行\n第二行", comment: "这里不对" }] });
+    await say({ text: "改一下", quotes: [{ author: "deepseek-flash", role: "agent", ts: "1790383286.536000", text: "第一行\n第二行", comment: "这里不对" }] });
     await settle();
     const sent = [...t.claude.last.steers, ...t.claude.last.prompts].join("\n---\n");
     assert.match(sent, /\[Quote\] From your own earlier message 1790383286\.536000 in this conversation:\n> 第一行\n> 第二行\nTheir comment on it: 这里不对\n\n改一下/);
-    const after = await t.call("GET", `/sessions/${key}`);
-    assert.equal(after.body.chats[0].messages.at(-1).quotes[0].comment, "这里不对");
+    const after = (await t.call("GET", `/threads/${chat.id}/messages`)).body;
+    assert.equal(after.messages.at(-1).quotes[0].comment, "这里不对");
     // The agent answers with an image; it is copied into the uploads and measured.
     const png = Buffer.alloc(24); png.writeUInt32BE(0x89504e47, 0); png.write("IHDR", 12, "ascii"); png.writeUInt32BE(320, 16); png.writeUInt32BE(200, 20);
     const shot = join(t.dataDir, "chart.png"); writeFileSync(shot, png);
     const post = t.hub.tools().find((x) => x.name === "chat_post")!;
-    const thread = after.body.chats[0].threadTs;
-    await post.run(summary.key, { to: `EMBER/${thread}`, text: "图在这", files: [shot] });
-    const withImage = await t.call("GET", `/sessions/${key}`);
-    const reply = withImage.body.chats[0].messages.at(-1);
-    assert.equal(reply.role, "agent");
+    await post.run(summary.key, { to: `EMBER/${chat.threadTs}`, text: "图在这", files: [shot] });
+    const reply = (await t.call("GET", `/threads/${chat.id}/messages?after=${after.rev}`)).body.messages.at(-1);
+    assert.deepEqual([reply.authorKind, reply.author, reply.authorName], ["agent", summary.key, "ember"]);
     assert.deepEqual([reply.attachments[0].name, reply.attachments[0].width, reply.attachments[0].height], ["chart.png", 320, 200]);
     assert.match(reply.attachments[0].path, /\/uploads\/.+-chart\.png$/);
-    await assert.rejects(post.run(summary.key, { to: `EMBER/${thread}`, text: "x", files: ["/no/such/file.png"] }), /no such file/);
+    await assert.rejects(post.run(summary.key, { to: `EMBER/${chat.threadTs}`, text: "x", files: ["/no/such/file.png"] }), /no such file/);
   } finally {
     t.close();
   }
@@ -497,20 +533,165 @@ test("a new chat makes a session of its own with the chosen runtime, model and e
     await t.call("PUT", "/profiles/cc", { models: ["deepseek-flash", "deepseek-flash", " glm-5 "] });
     const { body: ov } = await t.call("GET", "/overview");
     assert.deepEqual(ov.profiles.find((p: any) => p.id === "cc").models, ["deepseek-flash", "glm-5"]);
-    const made = await t.call("POST", "/sessions", { runtime: "claude", model: "deepseek-flash", effort: "high" });
+    const made = await t.call("POST", "/sessions", { runtime: "claude", model: "deepseek-flash", effort: "high", title: "新对话" });
     assert.equal(made.status, 200);
+    assert.deepEqual([made.body.thread.surface, made.body.thread.title, made.body.thread.sessions[0].session], ["ember", "新对话", made.body.key]);
     const key = encodeURIComponent(made.body.key);
-    assert.equal((await t.call("POST", `/sessions/${key}/messages`, { text: "开始吧" })).status, 200);
+    assert.equal((await t.call("POST", `/threads/${made.body.thread.id}/messages`, { text: "开始吧" })).status, 200);
     await settle();
     const { body } = await t.call("GET", `/sessions/${key}`);
     assert.equal(body.session.connect, "ember");
     assert.equal(body.session.profile, "cc");
     assert.deepEqual([body.session.model, body.session.effort], ["deepseek-flash", "high"]);
     assert.equal(body.session.creator.via, "local");
-    assert.equal(body.chats[0].messages[0].text, "开始吧");
+    assert.equal(body.threads[0].last.text, "开始吧");
     assert.equal(t.claude.last.options.model, "deepseek-flash");
     assert.match(t.claude.last.prompts[0]!, /开始吧/);
   } finally {
     t.close();
+  }
+});
+
+test("thread messages: the latest page, pages back by seq, and everything changed after a rev", async () => {
+  const t = await setup();
+  try {
+    const { thread } = t.hub.newSession({ runtime: "claude", createdBy: "local" });
+    for (let i = 1; i <= 5; i++) t.hub.say(thread.id, "local", `m${i}`);
+    const latest = (await t.call("GET", `/threads/${thread.id}/messages?limit=2`)).body;
+    assert.deepEqual([latest.messages.map((m: any) => m.text), latest.more], [["m4", "m5"], true]);
+    const back = (await t.call("GET", `/threads/${thread.id}/messages?before=${latest.messages[0].seq}&limit=10`)).body;
+    assert.deepEqual([back.messages.map((m: any) => m.text), back.more], [["m1", "m2", "m3"], false]);
+    const cursor = latest.rev;
+    assert.deepEqual((await t.call("GET", `/threads/${thread.id}/messages?after=${cursor}`)).body.messages, []);
+    // A Slack thread takes edits and deletes; the ember chat here only new messages, which the cursor sees the same way.
+    await t.hub.accept("ds", message({ ts: "7.000001", threadTs: "7.000001", text: "<@UBOT> one" }));
+    await t.hub.accept("ds", message({ ts: "7.000002", threadTs: "7.000001", addressed: false, text: "two" }));
+    const slack = t.store.threadAt("slack:T1", "C1", "7.000001")!;
+    const opened = (await t.call("GET", `/threads/${slack.id}/messages`)).body;
+    await t.hub.receive("ds", { kind: "changed", channel: "C1", ts: "7.000001", text: "<@UBOT> one, edited" });
+    await t.hub.receive("ds", { kind: "deleted", channel: "C1", ts: "7.000002" });
+    t.hub.say(thread.id, "local", "m6");
+    const changed = (await t.call("GET", `/threads/${slack.id}/messages?after=${opened.rev}`)).body;
+    assert.deepEqual(changed.messages.map((m: any) => [m.ts, m.text, m.editedAt !== null, m.deletedAt !== null]), [
+      ["7.000001", "<@UBOT> one, edited", true, false],
+      ["7.000002", "", false, true],
+    ]);
+    assert.ok(changed.rev > opened.rev);
+    assert.deepEqual((await t.call("GET", `/threads/${thread.id}/messages?after=${cursor}`)).body.messages.map((m: any) => m.text), ["m6"]);
+    assert.equal((await t.call("GET", "/threads/999/messages")).status, 404);
+  } finally {
+    t.close();
+  }
+});
+
+test("read positions and unread counts are per viewer, and only move forward", async () => {
+  const access = { teamDomain: "afk", aud: "app-aud" };
+  const t = await setup({ access });
+  const dev = { "cf-connecting-ip": "203.0.113.9", "cf-access-jwt-assertion": jwt({ iss: "https://afk.cloudflareaccess.com", aud: ["app-aud"], email: "dev@example.com", exp: Date.now() / 1000 + 600 }) };
+  try {
+    const { key, thread } = t.hub.newSession({ runtime: "claude", createdBy: "local" });
+    const first = t.hub.say(thread.id, "local", "mine");
+    t.hub.say(thread.id, "dev@example.com", "theirs");
+    t.store.insertMessage({ thread: thread.id, ts: "9.000001", authorKind: "agent", author: key, text: "answer" });
+    const unread = async (headers: Record<string, string> = {}) => (await t.call("GET", `/threads?session=${encodeURIComponent(key)}`, undefined, headers)).body[0].unread;
+    assert.equal(await unread(), 2, "a viewer's own messages are not unread for them");
+    assert.equal(await unread(dev), 2);
+    const localEvents = await follow(`${t.base}/events`);
+    const devEvents = await follow(`${t.base}/events`, dev);
+    const put = await t.call("PUT", `/threads/${thread.id}/read`, { seq: first + 1 });
+    assert.deepEqual(put.body, { viewer: "local", thread: thread.id, seq: first + 1 });
+    assert.equal(await unread(), 1);
+    assert.equal(await unread(dev), 2);
+    assert.deepEqual(await localEvents.next("read"), { viewer: "local", thread: thread.id, seq: first + 1 });
+    await t.call("PUT", `/threads/${thread.id}/read`, { seq: first }, dev);
+    await devEvents.next("read");
+    assert.equal(devEvents.events.filter((e) => e.event === "read").length, 1, "a read goes only to its viewer");
+    assert.equal((await t.call("PUT", `/threads/${thread.id}/read`, { seq: 1 })).body.seq, first + 1, "never back");
+    const [view] = (await t.call("GET", `/threads?session=${encodeURIComponent(key)}`)).body;
+    assert.deepEqual([view.read, view.unread, view.last.text], [first + 1, 1, "answer"]);
+    localEvents.close();
+    devEvents.close();
+  } finally {
+    t.close();
+  }
+});
+
+test("sessions can be archived, shown again, and deleted with their workspace", async () => {
+  const t = await setup();
+  try {
+    await t.hub.accept("ds", message({ text: "<@UBOT> hi" }));
+    await settle();
+    const [summary] = (await t.call("GET", "/sessions")).body;
+    const key = encodeURIComponent(summary.key);
+    const archived = await t.call("POST", `/sessions/${key}/archive`);
+    assert.ok(archived.body.archivedAt > 0);
+    assert.deepEqual((await t.call("GET", "/sessions")).body, []);
+    assert.deepEqual((await t.call("GET", "/sessions?archived=1")).body.map((s: any) => s.key), [summary.key]);
+    await t.call("DELETE", `/sessions/${key}/archive`);
+    assert.equal((await t.call("GET", "/sessions")).body.length, 1);
+    assert.equal(existsSync(summary.workspace), true);
+    assert.equal((await t.call("DELETE", `/sessions/${key}`)).status, 200);
+    assert.equal(existsSync(summary.workspace), false);
+    assert.equal(t.claude.last.disposed, true);
+    assert.equal((await t.call("GET", `/sessions/${key}`)).status, 404);
+    assert.deepEqual((await t.call("GET", "/threads")).body, []);
+  } finally {
+    t.close();
+  }
+});
+
+test("/events announces each kind of change", async () => {
+  let quotas = 0;
+  const t = await setup({ quota: () => quotas++ });
+  try {
+    await t.call("GET", "/overview");
+    assert.equal(quotas, 0, "quotas are not asked while nobody follows");
+    const events = await follow(`${t.base}/events`);
+    await events.next("overview", (o) => o.profiles.some((p: any) => p.quota?.windows[0]?.usedPercent === 12));
+    assert.equal(quotas, 2, "following starts a quota round");
+    await t.hub.accept("ds", message({ ts: "8.000001", threadTs: "8.000001", text: "<@UBOT> hi" }));
+    const key = "ds:C1:8.000001";
+    const session = await events.next("session", (s) => s.key === key && s.process === "running");
+    assert.equal(session.creator.via, "slack");
+    const thread = await events.next("thread", (x) => x.messages.length === 1);
+    assert.deepEqual([thread.messages[0].text, thread.messages[0].authorKind, thread.rev], ["<@UBOT> hi", "person", thread.messages[0].rev]);
+    await events.next("overview", (o) => o.counts.running === 1);
+    let from = events.events.length;
+    await t.call("PUT", "/profiles/cx", { name: "Codex 2" });
+    await events.next("overview", (o) => o.profiles.some((p: any) => p.name === "Codex 2"), from);
+    from = events.events.length;
+    await t.call("POST", "/profiles/cc/check");
+    await events.next("overview", (o) => o.profiles.find((p: any) => p.id === "cc").check?.detail === "fake", from);
+    t.claude.last.end({ kind: "aborted" });
+    await events.next("overview", (o) => o.counts.running === 0 && o.counts.warm === 1);
+    await t.call("DELETE", `/sessions/${encodeURIComponent(key)}`);
+    assert.deepEqual(await events.next("session-removed"), { key });
+    assert.equal(events.events.some((e) => e.event === "host"), false, "host only for those asking");
+    const host = await follow(`${t.base}/events?host=1`);
+    assert.ok((await host.next("host")).cpus > 0);
+    host.close();
+    events.close();
+  } finally {
+    t.close();
+  }
+});
+
+test("profile checks and quotas are kept, so a restart shows them at once", async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "ember-admin-"));
+  const store = new Store(join(dataDir, "ember.db"));
+  const first = await setup({ store, dataDir, quota: () => undefined });
+  try {
+    await first.call("POST", "/profiles/cc/check");
+    await first.call("POST", "/profiles/cc/quota");
+  } finally {
+    first.close();
+  }
+  const again = await setup({ store: new Store(join(dataDir, "ember.db")), dataDir });
+  try {
+    const cc = (await again.call("GET", "/overview")).body.profiles.find((p: any) => p.id === "cc");
+    assert.equal(cc.check.detail, "fake");
+    assert.equal(cc.quota.windows[0].usedPercent, 12);
+  } finally {
+    again.close();
   }
 });

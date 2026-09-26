@@ -3,19 +3,26 @@ import type { ChatMessage, ChatSurface, InboundMessage, ThreadRef } from "../src
 import type { RuntimeKind } from "../src/config.ts";
 import type { AgentDriver, AgentSession, OpenOptions, SessionEvents, TurnOutcome } from "../src/runtime/types.ts";
 
+let postCounter = 1;
+
 export class FakeChat implements ChatSurface {
   readonly botUserId: string;
+  readonly workspace: string | null;
   readonly posts: { thread: ThreadRef; text: string }[] = [];
-  constructor(botUserId = "UBOT") {
+  /** What the platform says was in a thread before ember saw it, by thread ts. */
+  readonly earlier = new Map<string, ChatMessage[]>();
+  constructor(botUserId = "UBOT", workspace: string | null = "T1") {
     this.botUserId = botUserId;
+    this.workspace = workspace;
   }
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
-  async post(thread: ThreadRef, text: string): Promise<void> {
+  async post(thread: ThreadRef, text: string): Promise<string> {
     this.posts.push({ thread: { channel: thread.channel, threadTs: thread.threadTs }, text });
+    return `${9_000_000 + postCounter++}.000200`;
   }
-  async history(): Promise<ChatMessage[]> {
-    return [];
+  async history(thread: ThreadRef, before: string, limit: number): Promise<ChatMessage[]> {
+    return (this.earlier.get(thread.threadTs) ?? []).filter((m) => Number(m.ts) < Number(before)).slice(-limit);
   }
 }
 

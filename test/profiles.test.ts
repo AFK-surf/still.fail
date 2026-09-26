@@ -5,7 +5,14 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { parseConfig } from "../src/config.ts";
 import { codexOverrides } from "../src/profiles.ts";
-import { readUsage } from "../src/transcript.ts";
+import { TranscriptTail } from "../src/transcript.ts";
+import type { RuntimeKind } from "../src/config.ts";
+
+const readUsage = (runtime: RuntimeKind, path: string) => {
+  const tail = new TranscriptTail(runtime, path);
+  tail.read();
+  return tail.usage;
+};
 
 const parse = (profiles: unknown[]) => parseConfig({ profiles: profiles as never }, "/data");
 
@@ -43,7 +50,7 @@ test("codex gets its provider as config overrides, so config.toml stays the user
 test("usage sums model requests; claude's split responses count once", () => {
   const dir = mkdtempSync(join(tmpdir(), "ember-usage-"));
   const write = (name: string, lines: unknown[]) => {
-    writeFileSync(join(dir, name), lines.map((l) => JSON.stringify(l)).join("\n"));
+    writeFileSync(join(dir, name), `${lines.map((l) => JSON.stringify(l)).join("\n")}\n`);
     return join(dir, name);
   };
   const usage = { input_tokens: 100, cache_read_input_tokens: 900, cache_creation_input_tokens: 0, output_tokens: 50 };

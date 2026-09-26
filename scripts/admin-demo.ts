@@ -2,6 +2,7 @@
 // every state, reusing real runtime transcripts found on this machine (read
 // only). For working on the UI without touching a live ember.
 // Usage: node scripts/admin-demo.ts [port]   (then open /admin)
+import { EventEmitter } from "node:events";
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -10,9 +11,9 @@ import { extname, join, normalize } from "node:path";
 import { AdminApi } from "../src/admin/api.ts";
 import type { Connections } from "../src/connections.ts";
 import type { Hub } from "../src/hub.ts";
-import { InternalChat } from "../src/chat/internal.ts";
+import { INTERNAL_CHANNEL, nextTs } from "../src/chat/internal.ts";
 import { LiveHub } from "../src/live.ts";
-import type { Attachment, Quote } from "../src/store.ts";
+import { EMBER_SURFACE, type Attachment, type Quote } from "../src/store.ts";
 import { LoginManager } from "../src/login.ts";
 import { slackManifest } from "../src/admin/slack-manifest.ts";
 import type { SlackApps } from "../src/chat/slack-apps.ts";
@@ -61,18 +62,23 @@ seeds.forEach((seed, i) => {
   const ts = `${Math.floor((now - seed.ago) / 1000)}.${String(i).padStart(6, "0")}`;
   const single = seed.connect === "gpt";
   const key = single ? `${seed.connect}:all` : `${seed.connect}:C0DEMO${i}:${ts}`;
-  store.insertSession({ key, connect: seed.connect, scope: single ? "all" : "thread", channel: `C0DEMO${i}`, threadTs: ts, runtime: seed.runtime, profile: seed.profile, model: null,
+  store.insertSession({ key, connect: seed.connect, scope: single ? "all" : "thread", runtime: seed.runtime, profile: seed.profile, model: null,
     workspace: join(dataDir, "sessions", String(i)), token: `demo-${i}`, createdAt: now - seed.ago - 600_000, lastActiveAt: now - seed.ago });
   if (seed.id) store.setRuntimeSessionId(key, seed.id);
   if (single) { store.setBinding(seed.connect, key); store.setTitle(key, "bridge 值班"); }
-  store.insertInbound({ connect: seed.connect, channel: `C0DEMO${i}`, threadTs: ts, ts, sessionKey: key, user: "U09ABCDEF", text: seed.text, receivedAt: now - seed.ago });
+  const say = (channel: string, threadTs: string, mts: string, text: string, at: number) => {
+    const thread = store.openThread({ surface: "slack:T0DEMO", channel, threadTs, createdBy: `slack:${seed.connect}:U09ABCDEF` });
+    store.joinThread(thread.id, key, seed.connect);
+    const { seq } = store.insertMessage({ thread: thread.id, ts: mts, authorKind: "person", author: "U09ABCDEF", text, createdAt: at });
+    store.deliver(seq, [key]);
+    if (!seed.pending) store.markDelivered(key, [seq]);
+  };
+  say(`C0DEMO${i}`, ts, ts, seed.text, now - seed.ago);
   seed.extra?.forEach((m, j) => {
     const at = now - seed.ago + (j + 1) * 60_000;
     const mts = `${Math.floor(at / 1000)}.${String(j + 1).padStart(6, "0")}`;
-    const threadTs = m.channel === `C0DEMO${i}` ? ts : mts;
-    store.insertInbound({ connect: seed.connect, channel: m.channel, threadTs, ts: mts, sessionKey: key, user: "U09ABCDEF", text: m.text, receivedAt: at });
+    say(m.channel, m.channel === `C0DEMO${i}` ? ts : mts, mts, m.text, at);
   });
-  if (!seed.pending) store.markDelivered(store.pendingInbound(key));
   seed.turns.forEach(([kind, outcome, declared], j) => {
     const id = `${key}-t${j}`;
     store.startTurn(id, key, kind as "input");
@@ -83,26 +89,30 @@ seeds.forEach((seed, i) => {
 
 const demoWorkspace = (botUserId: string, botName: string) => ({ team: "Cue", teamId: "T0DEMO", url: "https://cue.slack.com/", botUserId, botName });
 // ember's own chat works in the demo: messages are recorded; no agent answers.
-const demoChat = new InternalChat(store);
+const openChat = (key: string, user: string, title: string | null = null) => {
+  const thread = store.openThread({ surface: EMBER_SURFACE, channel: INTERNAL_CHANNEL, threadTs: nextTs(), title, createdBy: user });
+  store.joinThread(thread.id, key, "ember");
+  return thread;
+};
 const hub = {
   processState: (key: string) => states.get(key) ?? "cold", stop: async () => {}, evict: async () => {},
   live: new LiveHub(() => undefined),
   newSession: (o: { runtime: "claude" | "codex"; profile?: string; model?: string; effort?: string; createdBy: string }) => {
     const key = `ember:c-${Math.random().toString(16).slice(2, 12)}`;
     const now = Date.now();
-    store.insertSession({ key, connect: "ember", scope: "all", title: null, createdBy: o.createdBy, channel: "", threadTs: "", runtime: o.runtime,
+    store.insertSession({ key, connect: "ember", scope: "all", title: null, createdBy: o.createdBy, runtime: o.runtime,
       profile: o.profile ?? "cc", model: o.model ?? null, effort: o.effort ?? null, workspace: join(dataDir, "sessions", key.replace(":", "-")), token: key, createdAt: now, lastActiveAt: now });
-    return key;
+    return { key, thread: openChat(key, o.createdBy) };
   },
-  openChat: (key: string, user: string) => demoChat.open(key, user, null).threadTs,
-  sayInChat: async (threadTs: string, user: string, text: string, attachments: Attachment[] = []) => { demoChat.say(threadTs, user, text, attachments); },
-  sayToSession: async (key: string, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []) => {
-    const threadTs = store.listChats(key)[0]?.threadTs ?? demoChat.open(key, user, null).threadTs;
-    demoChat.say(threadTs, user, text, attachments, quotes);
-    return threadTs;
-  },
+  openChat,
+  addToThread: (thread: number, key: string) => store.joinThread(thread, key, "ember"),
+  say: (thread: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []) =>
+    store.insertMessage({ thread, ts: nextTs(), authorKind: "person", author: user, text, attachments, quotes }).seq,
+  archive: (key: string, archived: boolean) => store.setArchived(key, archived),
+  deleteSession: async (key: string) => store.deleteSession(key),
 } as unknown as Hub;
 const connections = {
+  changes: new EventEmitter(),
   state: (c: { enabled: boolean; id: string }) => (!c.enabled ? { state: "disabled" } : c.id === "gpt" ? { state: "reconnecting", botUserId: "UGPT", lastError: "socket closed", workspace: demoWorkspace("UGPT", "ember-gpt") } : { state: "connected", botUserId: "U0C4KHKPWTC", lastError: null, workspace: demoWorkspace("U0C4KHKPWTC", "ember") }),
   reconcile: async () => {},
   chats: new Map(["ds", "gpt"].map((id) => [id, {

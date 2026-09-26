@@ -3,7 +3,7 @@ import type { RuntimeKind } from "../config.ts";
 import type { ConnectKind, ConnectMode } from "../config.ts";
 import type { ConnectState } from "../connections.ts";
 import type { LoginJob, LoginState } from "../login.ts";
-import type { Attachment, ChatMessageRow, ChatRow, Quote } from "../store.ts";
+import type { Attachment, AuthorKind, Membership, Quote } from "../store.ts";
 import type { MeshStatus } from "../mesh.ts";
 import type { HostInfo } from "../host.ts";
 import type { LiveMessage, LivePhaseView, LiveStep } from "../live.ts";
@@ -14,7 +14,7 @@ import type { AccessKind, ProfileCheck } from "../profiles.ts";
 import type { TimelineEntry, TranscriptUsage } from "../transcript.ts";
 
 export type { LiveEvent, LiveMessage, LivePhase, LivePhaseView, LiveStep };
-export type { Attachment, Quote, ChatMessageRow, ChatRow, HostInfo, LoginJob, LoginState, MeshStatus, ProfileQuota, QuotaWindow };
+export type { Attachment, AuthorKind, Membership, Quote, HostInfo, LoginJob, LoginState, MeshStatus, ProfileQuota, QuotaWindow };
 export type { AccessKind, ConnectKind, ConnectMode, ConnectState, ProfileCheck, RuntimeKind, TimelineEntry, TranscriptUsage };
 
 export type ProcessState = "running" | "warm" | "cold";
@@ -59,11 +59,11 @@ export interface ProfileView {
   usedBy: string[];
   /** Run on the ember host to sign a subscription profile in. */
   loginCommand: string;
-  /** Latest check, if one ran since ember started. */
+  /** Latest check; kept across restarts, and checked again at start. */
   check: ProfileCheck | null;
   /** The sign-in started from the admin page, running or last finished. */
   login: LoginJob | null;
-  /** How much of the allowance is used, where the provider says; refreshed every few minutes. */
+  /** How much of the allowance is used, where the provider says; refreshed every few minutes while someone follows /events. */
   quota: ProfileQuota | null;
 }
 
@@ -104,12 +104,10 @@ export interface SessionSummary {
   createdBy: string | null;
   /** Single-session connects currently delivering into it. */
   boundTo: string[];
-  /** Who started it, resolved for people; filled in lists and details. */
-  creator?: Creator | null;
-  /** Everyone who wrote in it (Slack and ember's chat), once each, earliest first. */
-  participants?: Creator[];
-  channel: string;
-  threadTs: string;
+  /** Who started it, resolved for people. */
+  creator: Creator | null;
+  /** Everyone who wrote in its threads (Slack and ember's chat), once each, earliest first. */
+  participants: Creator[];
   runtime: RuntimeKind;
   profile: string;
   model: string | null;
@@ -119,9 +117,13 @@ export interface SessionSummary {
   running: boolean;
   createdAt: number;
   lastActiveAt: number;
+  /** Hidden from lists (GET /sessions?archived=1 lists these); null while shown. */
+  archivedAt: number | null;
   process: ProcessState;
   turns: number;
+  /** Messages handed to it that it has not read yet. */
   pending: number;
+  /** The first message it heard. */
   firstText: string | null;
   lastTurn: TurnSummary | null;
 }
@@ -130,31 +132,80 @@ export interface TurnRecord extends TurnSummary {
   id: string;
 }
 
-export interface InboundView {
-  connect: string;
-  channel: string;
-  threadTs: string;
-  ts: string;
-  sessionKey: string;
-  user: string;
-  text: string;
-  status: "pending" | "delivered";
-  receivedAt: number;
-}
-
+/** GET /sessions/:key. Messages are read per thread; the transcript comes from /sessions/:key/live. */
 export interface SessionDetail {
   session: SessionSummary;
-  /** Display names of the people in its threads, by chat user id, where known. */
-  people: Record<string, string>;
-  /** Channel names by id, where known; direct messages have none. */
-  channels: Record<string, string>;
-  /** Chats opened on this session from the admin page, with their messages. */
-  chats: (ChatRow & { creator: Creator | null; messages: ChatMessageRow[] })[];
-  /** The threads the session has messages from, most recent first. */
-  threads: { channel: string; threadTs: string; messages: number; lastTs: string }[];
+  threads: ThreadView[];
   turns: TurnRecord[];
-  inbound: InboundView[];
-  transcript: { path: string; timeline: TimelineEntry[]; usage: TranscriptUsage } | null;
+}
+
+/** Something said in a thread. */
+export interface MessageView {
+  /** Orders the thread; `before` pages back by it. */
+  seq: number;
+  /** The change cursor; `after` follows it. Grows on every insert, edit and delete, across threads. */
+  rev: number;
+  thread: number;
+  ts: string;
+  authorKind: AuthorKind;
+  /** person: Slack user id, email or "local"; agent: its session key; ember: "ember". */
+  author: string;
+  /** Who that is in words, where known: a person's name, the name an agent goes by there. */
+  authorName: string | null;
+  /** Markdown; empty once deleted. */
+  text: string;
+  attachments: Attachment[];
+  quotes: Quote[];
+  /** final or block, when an agent's post ended its work with it. */
+  declared: string | null;
+  createdAt: number;
+  editedAt: number | null;
+  deletedAt: number | null;
+}
+
+/** A thread: a Slack thread or a chat on ember's page. */
+export interface ThreadView {
+  id: number;
+  /** "slack:<team id>" or "ember". */
+  surface: string;
+  channel: string;
+  /** A Slack channel's name, where Slack says; null for direct messages and ember's chats. */
+  channelName: string | null;
+  threadTs: string;
+  title: string | null;
+  createdBy: string | null;
+  creator: Creator | null;
+  createdAt: number;
+  /** The sessions taking part, and the connect each posts through. */
+  sessions: Membership[];
+  last: MessageView | null;
+  /** The thread's latest rev: follow it with GET /threads/:id/messages?after=. */
+  rev: number;
+  /** The viewer's read position (a seq), 0 if never read. */
+  read: number;
+  /** Messages after it, not deleted and not the viewer's own. */
+  unread: number;
+}
+
+/** GET /threads/:id/messages. */
+export interface ThreadMessages {
+  /** The thread's latest rev when this was read: ask `after` it next. */
+  rev: number;
+  messages: MessageView[];
+  /** A page back through history (`before`, or no cursor) may have older messages before it. */
+  more: boolean;
+}
+
+/** What GET /events sends, by event name. */
+export interface StationEvents {
+  session: SessionSummary;
+  "session-removed": { key: string };
+  thread: { id: number; rev: number; messages: MessageView[] };
+  /** Only to the viewer it is about. */
+  read: { viewer: string; thread: number; seq: number };
+  overview: Overview;
+  /** Only to streams opened with ?host=1. */
+  host: HostInfo;
 }
 
 /** PUT /connects/:id. Blank or missing tokens keep the stored ones. */

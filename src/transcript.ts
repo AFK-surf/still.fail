@@ -4,7 +4,7 @@
 //   {type: user|assistant, message: {content: string | blocks}, isSidechain}
 // - codex:  $CODEX_HOME/sessions/**/rollout-*<id>.jsonl, lines of
 //   {type: response_item, payload: message | reasoning | function_call | …}
-import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { RuntimeKind } from "./config.ts";
 
@@ -50,52 +50,6 @@ export interface TranscriptUsage {
   outputTokens: number;
   /** The model the runtime last reported, if any. */
   model: string | null;
-}
-
-function records(path: string): Record<string, any>[] {
-  return readFileSync(path, "utf8").split("\n").filter(Boolean).flatMap((line) => {
-    try {
-      return [JSON.parse(line) as Record<string, any>];
-    } catch {
-      return []; // a line still being written
-    }
-  });
-}
-
-export function readTimeline(runtime: RuntimeKind, path: string): TimelineEntry[] {
-  return runtime === "claude" ? claudeTimeline(records(path)) : codexTimeline(records(path));
-}
-
-/** Token usage summed over the transcript's model requests. */
-export function readUsage(runtime: RuntimeKind, path: string): TranscriptUsage {
-  const usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
-  if (runtime === "claude") {
-    // One API response is split over several lines that share message.id and usage.
-    const seen = new Set<string>();
-    for (const r of records(path)) {
-      const m = r.type === "assistant" ? r.message : undefined;
-      if (!m?.usage || !m.id || seen.has(m.id)) continue;
-      seen.add(m.id);
-      const cached = (m.usage.cache_read_input_tokens ?? 0) + (m.usage.cache_creation_input_tokens ?? 0);
-      usage.modelCalls++;
-      usage.inputTokens += (m.usage.input_tokens ?? 0) + cached;
-      usage.cachedTokens += m.usage.cache_read_input_tokens ?? 0;
-      usage.outputTokens += m.usage.output_tokens ?? 0;
-      if (typeof m.model === "string" && m.model !== "<synthetic>") usage.model = m.model;
-    }
-    return usage;
-  }
-  for (const r of records(path)) {
-    const p = r.payload ?? {};
-    if (r.type === "turn_context" && typeof p.model === "string") usage.model = p.model;
-    const last = r.type === "event_msg" && p.type === "token_count" ? p.info?.last_token_usage : undefined;
-    if (!last) continue;
-    usage.modelCalls++;
-    usage.inputTokens += last.input_tokens ?? 0;
-    usage.cachedTokens += last.cached_input_tokens ?? 0;
-    usage.outputTokens += last.output_tokens ?? 0;
-  }
-  return usage;
 }
 
 function clip(text: string): string {
@@ -169,6 +123,7 @@ function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
  * Reads a transcript as it grows: each read returns the timeline entries of
  * the lines written since the last one, and the usage so far. Lines are
  * independent, so parsing only the new ones gives what a full read would.
+ * Everything read is kept, so watchers joining later are served from memory.
  */
 export class TranscriptTail {
   readonly runtime: RuntimeKind;
@@ -176,7 +131,7 @@ export class TranscriptTail {
   #offset = 0;
   #partial = "";
   /** Timeline entries read so far. */
-  count = 0;
+  readonly entries: TimelineEntry[] = [];
   readonly usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
   readonly #seen = new Set<string>();
 
@@ -187,14 +142,14 @@ export class TranscriptTail {
 
   /** New entries since the last read, with the index of the first. */
   read(): { start: number; entries: TimelineEntry[] } {
-    const start = this.count;
+    const start = this.entries.length;
     let size: number;
     try {
       size = statSync(this.path).size;
     } catch {
       return { start, entries: [] };
     }
-    if (size < this.#offset) { this.#offset = 0; this.#partial = ""; } // rewritten: start over
+    if (size < this.#offset) { this.#offset = 0; this.#partial = ""; this.entries.length = 0; } // rewritten: start over
     if (size === this.#offset) return { start, entries: [] };
     const fd = openSync(this.path, "r");
     const buffer = Buffer.alloc(size - this.#offset);
@@ -216,7 +171,7 @@ export class TranscriptTail {
     });
     this.#addUsage(recs);
     const entries = this.runtime === "claude" ? claudeTimeline(recs) : codexTimeline(recs);
-    this.count += entries.length;
+    this.entries.push(...entries);
     return { start, entries };
   }
 

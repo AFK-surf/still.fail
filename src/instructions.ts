@@ -2,8 +2,7 @@
 // system prompt. Kept short: the runtime already knows how to code. Nothing
 // here pins the session to one conversation: every message says where it came
 // from, because a session may be bound to other conversations later.
-import { INTERNAL_CONNECT } from "./chat/internal.ts";
-import type { InboundRow } from "./store.ts";
+import { EMBER_SURFACE, type MessageRow, type PendingMessage } from "./store.ts";
 
 export function sessionInstructions(options: {
   name: string;
@@ -25,7 +24,7 @@ How you answer:
   - chat_post posts a Markdown message to="CHANNEL/THREAD_TS": always the thread attribute of the message you are answering. There is no default conversation.
   - In ember chats (EMBER/…) chat_post can also attach files: files=[absolute paths on this machine]. Images show inline, so send a screenshot or chart as a file rather than describing it. Slack threads take text only.
   - chat_state records a final or block state without posting.
-  - chat_history reads earlier messages of the thread given as to="CHANNEL/THREAD_TS".
+  - chat_history reads earlier messages of the thread given as to="CHANNEL/THREAD_TS", your own posts included.
 - End every turn with an explicit state. When the work is done, post the result with chat_post and kind "final". When you need a person (a decision, access, information), post what you need with kind "block". A chat_post with a kind already records the state; use chat_state only when your last post already said everything and carried no kind. A turn that ends without a state is sent back to you.
 - Post progress only when it helps the people waiting: a plan change, a partial result, a blocker. No filler.
 
@@ -50,18 +49,50 @@ export function parseThreadAddress(value: string): { channel: string; threadTs: 
 
 const escapeAttr = (value: string) => value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;");
 
-export function formatInbound(messages: readonly InboundRow[], options: { newThreads?: ReadonlySet<string>; names?: ReadonlyMap<string, string> } = {}): string {
+/**
+ * A message's words as the agent reads them: quotes as Zork writes them (which
+ * message, whose, the passage as a blockquote, then the comment), then the
+ * words, then the files as paths.
+ */
+export function messageForAgent(m: Pick<MessageRow, "text" | "attachments" | "quotes">): string {
+  const quoted = m.quotes.map((q) => {
+    const whose = q.role === "agent" ? "your own earlier message" : `a message from ${q.author}`;
+    const which = q.ts ? `${whose} ${q.ts} in this conversation` : whose;
+    const passage = q.text.split("\n").map((l) => `> ${l}`).join("\n");
+    return `[Quote] From ${which}:\n${passage}${q.comment ? `\nTheir comment on it: ${q.comment}` : ""}`;
+  });
+  const files = m.attachments.length ? `Attached files:\n${m.attachments.map((a) => `- ${a.path} (${a.name}, ${a.size} bytes)`).join("\n")}` : "";
+  return [...quoted, m.text, files].filter(Boolean).join("\n\n");
+}
+
+const via = (surface: string) => (surface === EMBER_SURFACE ? "web" : "slack");
+
+/** Messages handed to a session, each with its source and sender, and a hint where a thread is new to it. */
+export function formatInbound(messages: readonly PendingMessage[], options: { newThreads?: ReadonlySet<number>; names?: ReadonlyMap<string, string> } = {}): string {
   const lines: string[] = [];
+  const hinted = new Set<number>();
   for (const m of messages) {
     const address = threadAddress(m.channel, m.threadTs);
-    const from = options.names?.get(m.user);
-    if (options.newThreads?.has(address) && m.ts !== m.threadTs) {
+    const from = options.names?.get(m.author);
+    if (options.newThreads?.has(m.thread) && m.ts !== m.threadTs && !hinted.has(m.thread)) {
+      hinted.add(m.thread);
       lines.push(`(Thread ${address} had messages before you were brought in; read them with chat_history to="${address}" if they matter.)`);
     }
-    const via = m.connect === INTERNAL_CONNECT ? "web" : "slack";
-    lines.push(`<message via="${via}" connect="${escapeAttr(m.connect)}" thread="${address}" from="${escapeAttr(from ? `${from} (${m.user})` : m.user)}" ts="${m.ts}">\n${m.text}\n</message>`);
+    lines.push(`<message via="${via(m.surface)}" connect="${escapeAttr(m.connect)}" thread="${address}" from="${escapeAttr(from ? `${from} (${m.author})` : m.author)}" ts="${m.ts}">\n${messageForAgent(m)}\n</message>`);
   }
   return lines.join("\n");
+}
+
+/** A thread's messages for chat_history: people by name, this session's own posts as "you", other agents and ember marked as bots. */
+export function formatHistory(messages: readonly MessageRow[], options: { surface: string; address: string; self: string; names: ReadonlyMap<string, string> }): string {
+  return messages.filter((m) => m.deletedAt === null).map((m) => {
+    const name = options.names.get(m.author);
+    const from = m.authorKind === "agent" && m.author === options.self ? "you"
+      : m.authorKind === "ember" ? "ember"
+      : name ? `${name} (${m.author})` : m.author;
+    const bot = m.authorKind !== "person" && from !== "you" ? " bot" : "";
+    return `<message via="${via(options.surface)}" thread="${options.address}" from="${escapeAttr(from)}"${bot} ts="${m.ts}">\n${messageForAgent(m)}\n</message>`;
+  }).join("\n");
 }
 
 export const NUDGE = `Your turn ended without a final or block state, so nobody knows whether you are done.

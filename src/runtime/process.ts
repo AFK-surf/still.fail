@@ -63,8 +63,10 @@ export function spawnGroup(options: {
     kill(graceMs = 5000) {
       killing ??= (async () => {
         signalGroup(pgid, "SIGTERM");
-        const deadline = Date.now() + graceMs;
-        while (Date.now() < deadline && groupAlive(pgid)) await new Promise((r) => setTimeout(r, 100));
+        // The leader's exit is the signal the group is done; what outlives it, or a leader that ignores SIGTERM, is killed.
+        let grace: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([exited, new Promise((r) => { grace = setTimeout(r, graceMs); })]);
+        clearTimeout(grace);
         if (groupAlive(pgid)) signalGroup(pgid, "SIGKILL");
         options.registry.forgetProcess(pgid);
       })();

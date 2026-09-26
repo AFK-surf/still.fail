@@ -1,13 +1,16 @@
 // Runs ember-mesh, which makes this station reachable through ember cloud.
 // Once the station is enrolled (<dataDir>/mesh/cloud.json exists, written by
-// `ember station enroll`), ember starts ember-mesh and keeps it running; it
-// picks up an enrollment made while ember is running within seconds. Each
-// start gets a fresh secret, which ember-mesh presents on every request it
-// relays so the admin API can tell them from other local callers.
+// `ember station enroll`), ember starts ember-mesh and keeps it running. It
+// watches the mesh directory, so an enrollment made while ember runs is
+// picked up as it is written, and the binary's directory, so a build made
+// after enrolling starts it. Each start gets a fresh secret, which ember-mesh
+// presents on every request it relays so the admin API can tell them from
+// other local callers.
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { EventEmitter } from "node:events";
+import { existsSync, mkdirSync, readFileSync, watch, type FSWatcher } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { log } from "./log.ts";
 
@@ -29,8 +32,12 @@ export class MeshSupervisor {
   #secret: string | null = null;
   #child: ChildProcess | null = null;
   #timer: ReturnType<typeof setTimeout> | null = null;
+  #watchers: FSWatcher[] = [];
+  #binaryWatched = false;
   #failures = 0;
   #stopped = false;
+  /** Emits "change" whenever status() may say something new. */
+  readonly changes = new EventEmitter();
 
   constructor(options: { dataDir: string; admin: string; binary?: string }) {
     this.#dataDir = options.dataDir;
@@ -61,18 +68,52 @@ export class MeshSupervisor {
 
   start(): void {
     this.#stopped = false;
+    const dir = dirname(this.#statePath);
+    mkdirSync(dir, { recursive: true });
+    this.#watch(dir, false, (file) => {
+      if (file !== basename(this.#statePath)) return;
+      this.changes.emit("change");
+      this.#tick();
+    });
     this.#tick();
+  }
+
+  /**
+   * Waits for the binary to be built. Its directory may not exist before the
+   * first build (mesh/target/release): the nearest of it and two parents that
+   * does is watched, with what is below it.
+   */
+  #watchBinary(): void {
+    if (this.#binaryWatched) return;
+    let near = dirname(this.#binary);
+    for (let up = 0; up < 2 && !existsSync(near); up++) near = dirname(near);
+    if (!existsSync(near)) {
+      log.warn("nothing to watch for the ember-mesh binary; restart ember once it is built", { binary: this.#binary });
+      return;
+    }
+    this.#binaryWatched = true;
+    this.#watch(near, near !== dirname(this.#binary), () => {
+      if (existsSync(this.#binary) && !this.#child && !this.#timer) this.#tick();
+    });
+  }
+
+  #watch(dir: string, recursive: boolean, onEvent: (file: string | null) => void): void {
+    try {
+      const watcher = watch(dir, { recursive, persistent: false }, (_event, file) => onEvent(file));
+      watcher.on("error", (error) => log.warn("cannot watch for ember-mesh changes", { dir, error }));
+      this.#watchers.push(watcher);
+    } catch (error) {
+      log.warn("cannot watch for ember-mesh changes", { dir, error });
+    }
   }
 
   #tick(): void {
     if (this.#stopped || this.#child) return;
-    if (!existsSync(this.#statePath)) {
-      this.#timer = setTimeout(() => this.#tick(), 10_000);
-      return;
-    }
+    if (!existsSync(this.#statePath)) return; // the mesh directory's watcher calls again on enrollment
     if (!existsSync(this.#binary)) {
       log.warn("station is enrolled but ember-mesh is not built; run `cargo build --release` in mesh/", { binary: this.#binary });
-      this.#timer = setTimeout(() => this.#tick(), 60_000);
+      this.changes.emit("change");
+      this.#watchBinary(); // which calls again once it is built
       return;
     }
     this.#secret = randomBytes(32).toString("base64url");
@@ -81,6 +122,7 @@ export class MeshSupervisor {
       stdio: ["ignore", "pipe", "pipe"],
     });
     this.#child = child;
+    this.changes.emit("change");
     const started = Date.now();
     const relay = (chunk: Buffer) => {
       for (const line of chunk.toString("utf8").split("\n")) if (line.trim()) log.info("ember-mesh", { line: line.replace(/\x1b\[[0-9;]*m/g, "").slice(0, 500) });
@@ -91,11 +133,15 @@ export class MeshSupervisor {
     child.on("exit", (code, signal) => {
       this.#child = null;
       this.#secret = null;
+      this.changes.emit("change");
       if (this.#stopped) return;
       this.#failures = Date.now() - started > 60_000 ? 0 : this.#failures + 1;
       const delay = Math.min(60_000, 1000 * 2 ** this.#failures);
       log.warn("ember-mesh exited; restarting", { code, signal, inMs: delay });
-      this.#timer = setTimeout(() => this.#tick(), delay);
+      this.#timer = setTimeout(() => {
+        this.#timer = null;
+        this.#tick();
+      }, delay);
     });
     log.info("ember-mesh started", { binary: this.#binary });
   }
@@ -103,6 +149,9 @@ export class MeshSupervisor {
   async stop(): Promise<void> {
     this.#stopped = true;
     if (this.#timer) clearTimeout(this.#timer);
+    for (const watcher of this.#watchers) watcher.close();
+    this.#watchers = [];
+    this.#binaryWatched = false;
     const child = this.#child;
     if (!child) return;
     await new Promise<void>((resolve) => {

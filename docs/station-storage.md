@@ -45,7 +45,7 @@ CREATE TABLE sessions (
 -- A place people talk.
 CREATE TABLE threads (
   id INTEGER PRIMARY KEY,
-  surface TEXT NOT NULL,              -- "slack:<team id>" | "ember"
+  surface TEXT NOT NULL,              -- "slack:<team id>" ("slack:<connect id>" while unknown) | "ember"
   channel TEXT NOT NULL,              -- Slack channel id; "EMBER" on the page
   thread_ts TEXT NOT NULL,
   title TEXT,
@@ -113,7 +113,24 @@ CREATE TABLE profile_status (
 `chats`, `chat_messages` and `inbound` are gone: an ember chat is a thread
 with surface `ember`; what a person typed there and what came from Slack are
 both messages; what `inbound.status` recorded is `deliveries`. The v9 → v10
-migration moves existing rows over (data only; no code keeps the old shape).
+migration moves existing rows over (data only; no code keeps the old shape):
+
+- threads come from `chats` (surface `ember`), from the threads `inbound`
+  rows came from, and from a session's own first thread when it has no
+  messages; `thread_sessions` from the same, each with the connect its first
+  message came through;
+- a message typed on the page is in both old tables and becomes one message:
+  the `chat_messages` row gives its words, files and quotes (the `inbound`
+  copy held the text formatted for the agent); `inbound.status` becomes the
+  delivery's `delivered_at`; seq (and rev) follow the time things were said;
+- earlier ember notices were stored as the agent's posts and stay agent
+  messages (nothing tells them apart);
+- a Slack thread's surface needs the connect's team: before the store opens,
+  ember asks Slack (`auth.test` with the connect's bot token) once; a connect
+  it cannot ask gets `slack:<connect id>`. New rows follow the same rule — the
+  team of the connection the message came through, `slack:<connect id>`
+  while that is unknown — so migrated and new rows name a thread alike.
+- Schemas before v9 are refused.
 
 ### Writing
 
@@ -121,34 +138,60 @@ migration moves existing rows over (data only; no code keeps the old shape).
   `(thread, ts)` is the same message seen twice — ignored), add a delivery
   for each session in the thread (creating the session and its
   `thread_sessions` row first when the message starts one), then ack Slack.
+  Several connects in one channel share the thread row and its messages;
+  whichever sees a message first delivers it to every session in the thread,
+  and a later connect only brings in its own session.
+- **Joining mid-thread**: when ember starts following a Slack thread at a
+  reply, what Slack has before that reply is recorded first (no deliveries),
+  so the thread is complete and seq keeps Slack's order.
 - **Person on ember's page**: the same, with surface `ember`; quotes and
   attachments are columns, and the text the agent reads (quotes as Zork
   writes them, file paths) is made at delivery, not stored.
 - **Agent posts** (`chat_post`): the surface posts it, returns its ts, and the
   message is recorded with `author_kind = agent`, `author = session key`,
   `declared`. Slack posts are recorded too — the thread on ember's page is
-  complete.
+  complete. A message Slack takes in several parts is recorded once, under
+  the first part's ts. Agents' messages are not delivered to other sessions;
+  ember's own notices are recorded as `author_kind = ember`.
+- **`-stop`** is recorded like any message and stops each session it is
+  delivered to instead of reaching the agent.
 - **Slack edits and deletes** (`message_changed`, `message_deleted`) update
-  the row and bump `rev`.
+  the row and bump `rev` (an "edit" with the same words — Slack sends those
+  for thread roots as replies come — changes nothing). A message still
+  pending reaches the agent as it reads at delivery; a deleted one not at all.
 - Every insert or change takes the next `rev` in the same transaction.
 
 ### Reading
 
-- `GET /threads?session=…` / the thread list of a session: threads with their
-  sessions, last message, and the viewer's unread count.
+- `GET /threads?session=…` / the thread list of a session (all threads
+  without `session`), `GET /threads/:id`: threads with their sessions, last
+  message, rev, and the viewer's read position and unread count (messages
+  after it, not deleted, not the viewer's own).
 - `GET /threads/:id/messages?after=<rev>` — every message changed after that
-  cursor; `?before=<seq>&limit=` pages back through history. A page opens a
-  thread with the last page and follows `after`.
-- `PUT /threads/:id/read {seq}` — the viewer's read position.
+  cursor; `?before=<seq>&limit=` pages back through history (no cursor: the
+  latest page). The answer is `{ rev, messages, more }`: follow `after=rev`;
+  `more` says older messages exist before a page. A page opens a thread with
+  the last page and follows `after`. Messages carry `authorName`.
+- `PUT /threads/:id/read {seq}` — the viewer's read position; it only moves
+  forward, and the answer says where it is.
+- `POST /threads/:id/messages {text, attachments, quotes}` — a person's
+  message in an ember chat (Slack threads are written in Slack);
+  attachments must be uploads of a session in the thread
+  (`POST /sessions/:key/files`). `POST /threads {session, title?}` opens
+  another chat on a session; `POST /threads/:id/sessions {session}` brings
+  another session into an ember chat. `POST /sessions` (a new chat) makes the
+  session and its chat and answers `{ key, thread }`.
 - A session's transcript comes only from `/sessions/:key/live?from=N` (entries
   from index N, then as they are written); the station keeps each watched
   transcript parsed incrementally instead of re-reading the file per request.
 - `GET /sessions/:key` is the session row, its threads, and its turns — no
-  messages, no transcript.
+  messages, no transcript. `GET /sessions` lists shown sessions;
+  `?archived=1` lists the archived ones.
 
 ### Housekeeping
 
-- `POST /sessions/:key/archive` / `DELETE /sessions/:key/archive`: hide and show.
+- `POST /sessions/:key/archive` / `DELETE /sessions/:key/archive`: hide and
+  show; the answer is the session summary.
 - `DELETE /sessions/:key`: ends its process, deletes its rows (turns,
   deliveries, thread_sessions; threads left with no session and their
   messages) and its workspace directory. The runtime's own transcript file is
@@ -163,19 +206,27 @@ when it is small:
 
 | event | data |
 | --- | --- |
-| `session` | the session summary (row, state warm/cold/running, last turn) |
-| `session-removed` | `{ key }` |
-| `thread` | `{ id, rev, messages: [changed rows] }` |
+| `session` | the session summary (row, state warm/cold/running, last turn, creator, participants) |
+| `session-removed` | `{ key }` (threads that went with it get no event of their own) |
+| `thread` | `{ id, rev, messages: [changed rows] }`; `messages: []` when its sessions changed |
 | `read` | `{ viewer, thread, seq }` (only to that viewer) |
-| `overview` | the whole overview — sent when config, connect status, logins, profile checks or quotas change |
+| `overview` | the whole overview — sent when config, connect status, logins, profile checks, quotas, ember-mesh's state, recorded runtime processes or the running/warm counts change |
 | `host` | host info; sampled every 10 s **only while some client asks for it** (`/events?host=1`) and sent when it changed |
 
-Per-session live steps stay on `/sessions/:key/live`.
+Changes within one turn of the event loop are gathered: one `session` event
+per session, one `overview`. Per-session live steps stay on
+`/sessions/:key/live`.
 
 Timers that remain on the station and why: host sampling (above), quota
-refresh while an overview subscriber exists (the provider cannot notify), an
-idle process's eviction deadline (a timer per process, set when it goes idle,
-instead of a sweep every minute), Slack reconnect backoff.
+refresh every five minutes while some `/events` stream is open (the provider
+cannot notify), an idle process's eviction deadline (a timer per process, set
+when it goes idle, instead of a sweep every minute), Slack reconnect and
+rate-limit backoff, ember-mesh's restart backoff, a keepalive comment on open
+event streams every 25 s (proxies close silent ones), a 40 ms coalescing of
+transcript writes for live watchers, a sign-in's 15-minute deadline, and the
+profile checks a few seconds after start. ember-mesh is started when
+`mesh/cloud.json` appears and when its binary is built (both watched with
+`fs.watch`), not on a timer.
 
 ### ember cloud → devices: `GET /v1/events` (WebSocket)
 

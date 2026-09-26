@@ -1,8 +1,9 @@
 // Keeps one chat connection per enabled connect, following config edits: a new
 // or re-credentialed connect is (re)connected, a removed or disabled one
 // disconnected, the rest left alone.
+import { EventEmitter } from "node:events";
 import type { SlackIdentity } from "./chat/slack.ts";
-import type { ChatSurface, InboundMessage } from "./chat/types.ts";
+import type { ChatEvent, ChatSurface } from "./chat/types.ts";
 import type { Config, Connect } from "./config.ts";
 import { log } from "./log.ts";
 
@@ -16,20 +17,24 @@ export type ConnectState =
 export interface Connection extends ChatSurface {
   readonly status: { connected: boolean; lastError: string | null };
   readonly identity: SlackIdentity | null;
+  /** Calls `listener` whenever `status` changes. */
+  onStatus(listener: () => void): void;
 }
 
 export class Connections {
   /** Live connections by connect id; shared with the hub, which reads it on every use. */
   readonly chats = new Map<string, Connection>();
+  /** Emits "change" whenever what state() reports may have changed. */
+  readonly changes = new EventEmitter();
   readonly #tokens = new Map<string, string>();
   readonly #errors = new Map<string, string>();
   readonly #create: (connect: Connect) => Connection;
-  readonly #onMessage: (connectId: string, message: InboundMessage) => Promise<void>;
+  readonly #onEvent: (connectId: string, event: ChatEvent) => Promise<void>;
   #chain: Promise<void> = Promise.resolve();
 
-  constructor(create: (connect: Connect) => Connection, onMessage: (connectId: string, message: InboundMessage) => Promise<void>) {
+  constructor(create: (connect: Connect) => Connection, onEvent: (connectId: string, event: ChatEvent) => Promise<void>) {
     this.#create = create;
-    this.#onMessage = onMessage;
+    this.#onEvent = onEvent;
   }
 
   /** Brings connections in line with `config`. Serialized, so rapid edits apply in order. */
@@ -58,6 +63,14 @@ export class Connections {
   }
 
   async #reconcile(config: Config): Promise<void> {
+    try {
+      await this.#apply(config);
+    } finally {
+      this.changes.emit("change");
+    }
+  }
+
+  async #apply(config: Config): Promise<void> {
     const wanted = new Map(config.connects
       .filter((b) => b.enabled && b.slack.appToken && b.slack.botToken)
       .map((b) => [b.id, b]));
@@ -76,7 +89,8 @@ export class Connections {
       this.#errors.delete(connect.id);
       try {
         const chat = this.#create(connect);
-        await chat.start((message) => this.#onMessage(connect.id, message));
+        chat.onStatus(() => this.changes.emit("change"));
+        await chat.start((event) => this.#onEvent(connect.id, event));
         this.chats.set(connect.id, chat);
         this.#tokens.set(connect.id, tokenKey(connect));
         log.info("connected", { connect: connect.id, botUserId: chat.botUserId });

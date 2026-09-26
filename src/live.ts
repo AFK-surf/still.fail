@@ -1,11 +1,13 @@
 // Live view of sessions: what a running turn is doing as the runtime streams
 // it, and the transcript's new entries as they are written. Nothing here is
 // stored: the steps in flight live in memory until they end, and the
-// transcript stays the record, read incrementally while someone watches.
+// transcript stays the record, parsed incrementally and kept in memory while
+// someone watches, so a watcher asking from entry N is served without
+// reading the file again.
 import { watch, type FSWatcher } from "node:fs";
 import type { RuntimeKind } from "./config.ts";
 import type { LiveEvent, LivePhase, LiveStepKind } from "./runtime/types.ts";
-import { readTimeline, TranscriptTail, type TimelineEntry, type TranscriptUsage } from "./transcript.ts";
+import { TranscriptTail, type TimelineEntry, type TranscriptUsage } from "./transcript.ts";
 
 /** A step in flight, as far as it has streamed. */
 export interface LiveStep {
@@ -96,9 +98,8 @@ export class LiveHub {
     if (!set) this.#listeners.set(key, (set = new Set()));
     set.add(listener);
     const watched = this.#watch(key);
-    if (watched && from < watched.tail.count) {
-      const entries = readTimeline(watched.tail.runtime, watched.tail.path).slice(from, watched.tail.count);
-      listener({ type: "timeline", start: from, entries, usage: { ...watched.tail.usage } });
+    if (watched && from < watched.tail.entries.length) {
+      listener({ type: "timeline", start: from, entries: watched.tail.entries.slice(from), usage: { ...watched.tail.usage } });
     }
     const phase = this.#phase.get(key);
     listener({ type: "steps", steps: [...(this.#steps.get(key)?.values() ?? [])], phase: phase ? { phase: phase.phase, elapsedMs: Date.now() - phase.at } : null });
@@ -109,6 +110,15 @@ export class LiveHub {
         this.#unwatch(key);
       }
     };
+  }
+
+  /** A deleted session: nothing of it is watched or kept any more. */
+  forget(key: string): void {
+    this.#steps.delete(key);
+    this.#phase.delete(key);
+    this.#emit(key, { type: "clear" });
+    this.#listeners.delete(key);
+    this.#unwatch(key);
   }
 
   close(): void {
