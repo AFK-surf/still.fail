@@ -7,7 +7,7 @@ import { Tooltip } from "radix-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from "react-router";
 import { ToastProvider } from "../toast.tsx";
-import { Button, Loading, Select } from "../ui.tsx";
+import { Button, Select, Splash } from "../ui.tsx";
 import { signIn, useAccounts } from "./accounts.ts";
 import { Callback, SignInPage } from "./gate.tsx";
 import { WorkspaceShell } from "./workspace.tsx";
@@ -44,7 +44,7 @@ function Home() {
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [navigate]);
-  if (!list) return <div className="gate"><Loading /></div>;
+  if (!list) return <Splash />;
   if (list.length === 0) return <SignInPage lead={inviteCode() ? "你拿到了 ember 的邀请码。用 Google 账号登录，就能建一个自己的 workspace。" : undefined} />;
   return (
     <Routes>
@@ -115,7 +115,7 @@ function Landing() {
     );
   }
   if (create.error) return <div className="gate"><h1>没能建好 workspace</h1><p>{create.error.message}</p><Button onClick={() => create.run(inviteCode())}>重试</Button></div>;
-  return <div className="gate"><Loading label={ready ? "正在为你建一个 workspace…" : failed ? `没能读取你的 workspace：${failed.message}` : "正在读取你的 workspace…"} /></div>;
+  return <Splash label={ready ? "正在为你建一个 workspace…" : failed ? `没能读取你的 workspace：${failed.message}` : "正在读取你的 workspace…"} now={Boolean(failed)} />;
 }
 
 /** Asks for the invite code a new workspace needs; what the last try said stands under it. */
@@ -139,7 +139,7 @@ function InviteCodeForm({ create }: { create: { run(code: string): void; busy: b
 function WorkspaceRoute() {
   const { ws = "" } = useParams();
   const workspaces = useWorkspaces().value;
-  if (!workspaces) return <div className="gate"><Loading label="正在打开 workspace…" /></div>;
+  if (!workspaces) return <Splash label="正在打开 workspace…" />;
   const owner = workspaces.find((a) => a.workspaces.some((w) => w.id === ws));
   const found = owner?.workspaces.find((w) => w.id === ws);
   if (!owner || !found) return <div className="gate"><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className="btn btn-secondary" href="/">回到 ember</a></div>;
@@ -168,7 +168,7 @@ function Invite() {
     return () => { current = false; };
   }, [sub, token]);
   const accept = useAction(() => cloud.acceptInvitation(sub, token), (w) => location.assign(`/w/${w.id}`));
-  if (!list) return <div className="gate"><Loading /></div>;
+  if (!list) return <Splash />;
   if (list.length === 0) return <SignInPage lead="你收到了一个 ember workspace 的邀请。先用 Google 账号登录，再决定是否加入。" />;
   return (
     <div className="gate invite-page">
@@ -215,9 +215,8 @@ function OpenItem() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (here) return <Navigate to={target} replace />;
   return (
-    <div className="gate">
-      <Loading label="正在用 ember 打开…" />
+    <Splash label="正在用 ember 打开…" now>
       <Button variant="ghost" onClick={() => setHere(true)}>在网页里打开</Button>
-    </div>
+    </Splash>
   );
 }

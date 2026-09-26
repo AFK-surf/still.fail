@@ -28,7 +28,9 @@
   <meta name="twitter:card" content="summary_large_image">
 </head>
 <body>
-  <div id="app"></div>
+  <!-- The splash (src/ui.tsx, Splash) as the first paint, before any script: the app replaces it when it draws. -->
+  <div id="app"><div class="splash" role="status"><img class="splash-mark" id="splash-mark" src="/mark.svg" width="56" height="56" alt=""></div></div>
+  <script>try{var t=document.documentElement.dataset.theme;if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.getElementById("splash-mark").src=document.getElementById("splash-mark").src.replace(/mark\.svg$/,"mark-dark.svg")}catch(e){}</script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

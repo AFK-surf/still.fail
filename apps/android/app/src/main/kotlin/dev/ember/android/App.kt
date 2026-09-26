@@ -3,6 +3,7 @@
 // bar), or a sheet from the bottom.
 package dev.ember.android
 
+import dev.ember.android.ui.Splash
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.FastOutSlowInEasing
 import dev.chrisbanes.haze.hazeSource
@@ -138,7 +139,7 @@ fun EmberApp(app: AppState) {
     Box(Modifier.fillMaxSize().background(C.bg)) {
         val signedIn = accounts.value
         Box(Modifier.fillMaxSize().hazeSource(app.haze).background(C.bg)) { when {
-            signedIn == null -> Loading(accounts.error?.message ?: "正在启动…")
+            signedIn == null -> Splash(accounts.error?.message, now = accounts.error != null)
             signedIn.isEmpty() -> SignInScreen()
             else -> {
                 val entries = workspaces.value?.entries()
@@ -147,7 +148,10 @@ fun EmberApp(app: AppState) {
                 // Only once every account has answered does "no workspace" mean none: not before, not after a failure.
                 val all = workspaces.value
                 if (current == null) {
-                    if (entries == null || all == null || !all.all { it.loaded }) Loading(workspaces.error?.message ?: all?.firstNotNullOfOrNull { it.error }?.let { "没能读取你的 workspace" } ?: "正在读取你的 workspace…")
+                    if (entries == null || all == null || !all.all { it.loaded }) {
+                        val failed = workspaces.error?.message ?: all?.firstNotNullOfOrNull { it.error }?.let { "没能读取你的 workspace" }
+                        Splash(failed ?: "正在读取你的 workspace…", now = failed != null)
+                    }
                     else Landing(signedIn, all)
                 } else {
                     Pages(app, current)

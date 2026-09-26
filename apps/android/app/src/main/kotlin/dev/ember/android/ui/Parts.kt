@@ -2,6 +2,16 @@
 // avatars, rings, toggles, segmented choices, navigation bars and list cards.
 package dev.ember.android.ui
 
+import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.alpha
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
 import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
@@ -330,6 +340,24 @@ fun ListRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> U
 fun Loading(text: String) {
     Box(Modifier.fillMaxSize().background(C.bg).padding(32.dp), contentAlignment = Alignment.Center) {
         Text(text, color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center)
+    }
+}
+
+/**
+ * The app starting (or waiting for what every page needs): the buddy, floating. What it waits for is said only when
+ * it takes a while (after a second), or at once when `now` (a failure).
+ */
+@Composable
+fun Splash(label: String? = null, now: Boolean = false) {
+    val still = reducedMotion()
+    val float = rememberInfiniteTransition(label = "splash")
+    val lift by float.animateFloat(0f, 1f, infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "lift")
+    var shown by remember { mutableStateOf(now) }
+    LaunchedEffect(now) { if (!now) { delay(1000); shown = true } else shown = true }
+    Column(Modifier.fillMaxSize().background(C.bg).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
+        val px = with(LocalDensity.current) { 5.dp.toPx() }
+        Box(Modifier.graphicsLayer { translationY = if (still) 0f else -lift * px }) { Mark(56.dp) }
+        if (label != null) Text(label, color = C.muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.alpha(if (shown) 1f else 0f))
     }
 }
 

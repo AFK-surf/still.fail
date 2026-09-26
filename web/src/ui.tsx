@@ -1,6 +1,7 @@
 // Shared controls on Radix primitives (focus, keyboard, layering and
 // dismissal come from Radix), styled with ember's tokens. Pages compose these
 // instead of styling their own buttons, fields or menus.
+import { Mark } from "./brand.tsx";
 import { Check, ChevronDown, ChevronLeft, Copy, MessageCircle, MoreHorizontal, X } from "lucide-react";
 import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
@@ -320,6 +321,20 @@ export function Loading({ label = "正在加载…", fill = true }: { label?: st
     <div className={fill ? "loading loading-fill" : "loading"} role="status" aria-live="polite">
       <span className="spinner" aria-hidden="true" />
       <span>{label}</span>
+    </div>
+  );
+}
+
+/**
+ * The app starting (or waiting for what every page needs): the buddy, floating. What it waits for is said only when
+ * it takes a while (after a second), or at once when `now` (a failure).
+ */
+export function Splash({ label, now = false, children }: { label?: string; now?: boolean; children?: ReactNode }) {
+  return (
+    <div className="splash" role="status" aria-live="polite">
+      <Mark size={56} className="splash-mark" />
+      {label && <p className="splash-label" data-now={now || undefined}>{label}</p>}
+      {children}
     </div>
   );
 }
