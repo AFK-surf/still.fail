@@ -3,7 +3,8 @@
 // check says it cannot sign in or was rejected, or whose allowance is used
 // up, is passed over. Of the rest, the one with the most allowance left wins; then the
 // one running fewer sessions; then the one picked least recently. A session
-// keeps its profile afterwards, since resuming needs that account's home.
+// keeps its profile while it is usable (its runtime's cache is that account's);
+// its transcripts are shared by all, so when it is not, another takes it on.
 import type { Profile } from "./config.ts";
 import type { ProfileCheck } from "./profiles.ts";
 import type { ProfileQuota } from "./quota.ts";
@@ -22,6 +23,11 @@ export interface PoolSignals {
 function used(quota: ProfileQuota | null): number {
   if (quota?.state !== "ok" || quota.windows.length === 0) return 50;
   return Math.max(...quota.windows.map((w) => w.usedPercent));
+}
+
+/** Whether a profile can run now: it signs in, its key was not rejected, and none of its windows is used up. */
+export function usable(health: ProfileHealth): boolean {
+  return health.check?.state !== "login" && health.check?.state !== "failed" && used(health.quota) < 100;
 }
 
 /** A chosen model needs the profile to have it enabled; no model means the profile's own default. */

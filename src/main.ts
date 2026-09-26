@@ -4,7 +4,7 @@ import { createServer, type ServerResponse } from "node:http";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AdminApi } from "./admin/api.ts";
-import { linkAgentHome } from "./agent-home.ts";
+import { linkAgentHome, linkTranscripts } from "./agent-home.ts";
 import { Connections } from "./connections.ts";
 import { NameBook } from "./chat/names.ts";
 import { SlackSurface, slackTeamOf } from "./chat/slack.ts";
@@ -41,6 +41,7 @@ if (Store.needsTeams(dbPath)) {
 }
 const store = new Store(dbPath, { teams });
 linkAgentHome(settings.config.agentHome, settings.config.profiles);
+linkTranscripts(settings.config.dataDir, settings.config.profiles);
 
 const reaped = await reapStaleGroups(store);
 if (reaped > 0) log.warn("reaped runtime processes left by a previous run", { count: reaped });
@@ -81,6 +82,7 @@ const admin = new AdminApi({ settings, store, hub, connections, logins, names, m
 settings.onChange((config) => {
   reports.update();
   linkAgentHome(config.agentHome, config.profiles);
+  linkTranscripts(config.dataDir, config.profiles);
   void connections.reconcile(config);
 });
 

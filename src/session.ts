@@ -17,6 +17,8 @@ export interface SessionDeps {
   chat(connect: string): Pick<ChatSurface, "post" | "botUserId" | "botName" | "userName"> | undefined;
   drivers: Record<RuntimeKind, AgentDriver>;
   profile(id: string): Profile | undefined;
+  /** The profile a session's runtime starts on now: its own while usable, else another that can take it on. */
+  runOn(key: string): Profile;
   mcpUrl: string;
   reposDir: string;
   memoryPath: string;
@@ -235,8 +237,7 @@ export class SessionActor {
     if (this.#agent) return this.#agent;
     const row = this.#row;
     const driver = this.#deps.drivers[row.runtime];
-    const profile = this.#deps.profile(row.profile);
-    if (!profile) throw new Error(`session ${this.key}: profile ${row.profile} is not configured`);
+    const profile = this.#deps.runOn(this.key);
     const base = {
       profile,
       cwd: row.workspace,

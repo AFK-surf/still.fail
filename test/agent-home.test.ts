@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readlinkSync, readFileSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readlinkSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { linkAgentHome } from "../src/agent-home.ts";
+import { linkAgentHome, linkTranscripts } from "../src/agent-home.ts";
 
 test("profile homes link to the shared memory and skills under their runtime's names", () => {
   const root = mkdtempSync(join(tmpdir(), "ember-agent-"));
@@ -30,4 +30,16 @@ test("a hand-written file in a profile home is left alone", () => {
   writeFileSync(join(root, "cc", "CLAUDE.md"), "mine");
   linkAgentHome(join(root, "agent"), [{ runtimes: ["claude"], home: join(root, "cc") }]);
   assert.equal(readFileSync(join(root, "cc", "CLAUDE.md"), "utf8"), "mine");
+});
+
+test("every profile's transcripts are a runtime's one shared place; a real directory is left alone", () => {
+  const root = mkdtempSync(join(tmpdir(), "ember-transcripts-"));
+  mkdirSync(join(root, "own", "sessions"), { recursive: true });
+  linkTranscripts(root, [
+    { id: "both", runtimes: ["claude", "codex"], home: join(root, "both") },
+    { id: "own", runtimes: ["codex"], home: join(root, "own") },
+  ]);
+  assert.equal(readlinkSync(join(root, "both", "projects")), join(root, "transcripts", "claude"));
+  assert.equal(readlinkSync(join(root, "both", "sessions")), join(root, "transcripts", "codex"));
+  assert.equal(lstatSync(join(root, "own", "sessions")).isDirectory(), true);
 });

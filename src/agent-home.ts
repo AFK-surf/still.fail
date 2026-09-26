@@ -24,6 +24,33 @@ export function linkAgentHome(agentHome: string, profiles: readonly Pick<Profile
   }
 }
 
+/**
+ * One place for each runtime's transcripts, shared by every profile that runs it: a session is the station's, not an
+ * account's, so any account can take it on (another, when one's quota is used up) with all it had. Each profile home's
+ * transcript directory (Claude Code's projects/, Codex's sessions/) is a link there. A real directory in its place is
+ * left alone, with a warning (the profile then keeps its own).
+ */
+export function linkTranscripts(dataDir: string, profiles: readonly Pick<Profile, "id" | "runtimes" | "home">[]): void {
+  for (const profile of profiles) {
+    for (const runtime of profile.runtimes) {
+      const shared = join(dataDir, "transcripts", runtime);
+      mkdirSync(shared, { recursive: true });
+      mkdirSync(profile.home, { recursive: true });
+      const path = join(profile.home, runtime === "claude" ? "projects" : "sessions");
+      if (!existsSync(path) && !isLink(path)) symlinkSync(shared, path);
+      else if (!isLink(path) || readlinkSync(path) !== shared) log.warn("a profile's transcripts are not in the shared place", { profile: profile.id, path });
+    }
+  }
+}
+
+function isLink(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
 function link(target: string, path: string): void {
   let stat;
   try {

@@ -17,7 +17,7 @@ import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
 import { EFFORTS, profilesFor, RUNTIMES, type Config, type Connect, type Profile, type RuntimeKind } from "./config.ts";
-import { pickProfile, type ProfileHealth } from "./pool.ts";
+import { pickProfile, usable, type ProfileHealth } from "./pool.ts";
 import { INTERNAL_CHANNEL, INTERNAL_CONNECT, nextTs, type InternalChat } from "./chat/internal.ts";
 import type { ChatEvent, ChatMessage, ChatSurface, InboundMessage } from "./chat/types.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "./instructions.ts";
@@ -336,9 +336,9 @@ export class Hub {
   }
 
   /**
-   * Moves a session to another profile of its runtime (another account, say, when this one's quota is used up). Its
-   * transcript is copied into that profile's home at the same place, so the next message resumes it there with all it
-   * had; its idle process ends first. Not while a turn runs.
+   * Moves a session to another profile of its runtime, by hand (another account, say). Its transcript is shared by the
+   * runtime's profiles, so the next message resumes it there with all it had; its idle process ends first. Not while
+   * a turn runs.
    */
   async setProfile(key: string, profileId: string): Promise<void> {
     const row = this.#store.getSession(key);
@@ -348,16 +348,29 @@ export class Hub {
     if (!next) throw new Error(`unknown profile ${profileId}`);
     if (!next.runtimes.includes(row.runtime)) throw new Error(`「${next.name}」不能跑 ${row.runtime === "claude" ? "Claude Code" : "Codex"}`);
     if (this.processState(key) === "running") throw new Error("这个会话正在跑，等这一轮结束再换");
+    // Its transcript is in the runtime's shared place (linkTranscripts): the next turn resumes it on this profile.
     await this.evict(key);
-    const old = this.#config.profiles.find((p) => p.id === row.profile);
-    const from = old && row.runtimeSessionId ? transcriptPath(row.runtime, old.home, row.runtimeSessionId) : undefined;
-    if (old && from) {
-      const to = join(next.home, relative(old.home, from));
-      mkdirSync(dirname(to), { recursive: true });
-      copyFileSync(from, to);
-    }
     this.#store.setSessionProfile(key, profileId);
-    log.info("session moved to another profile", { session: key, from: row.profile, to: profileId, transcript: Boolean(from) });
+    log.info("session moved to another profile", { session: key, from: row.profile, to: profileId });
+  }
+
+  /**
+   * The profile a session's runtime starts on: its own while usable (the account's cache is warm there), else the one
+   * the pool picks among those of its runtime (transcripts are shared, so it resumes with all it had there).
+   */
+  #runOn(key: string): Profile {
+    const row = this.#store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    const candidates = this.#config.profiles.filter((p) => p.runtimes.includes(row.runtime));
+    const current = candidates.find((p) => p.id === row.profile);
+    if (current && usable(this.#health(current.id))) return current;
+    if (candidates.length === 0) throw new Error(`session ${key}: no profile runs ${row.runtime}`);
+    const next = this.#pick(candidates, row.model ?? null, false);
+    if (next.id !== row.profile) {
+      this.#store.setSessionProfile(key, next.id);
+      log.info("session taken on by another profile", { session: key, from: row.profile, to: next.id });
+    }
+    return next;
   }
 
   /** Ends the session's runtime process if it is idle; the conversation resumes on the next message. */
@@ -598,6 +611,7 @@ export class Hub {
         chat: (id) => this.#chatOf(id),
         drivers: this.#drivers,
         profile: (id) => this.#config.profiles.find((p) => p.id === id),
+        runOn: (key) => this.#runOn(key),
         mcpUrl: this.#mcpUrl,
         reposDir: this.reposDir,
         memoryPath: agentHomePaths(this.#config.agentHome).memory,
