@@ -213,7 +213,8 @@ export function History({ detail, connect, state, actions, details, slackBase, o
               <HistoryItem key={i} item={item} where={where} person={(id) => member(id)?.name || detail.people[id] || id}
                 mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : detail.people[id] ?? id}`)} />
             ))}
-            {live.filter((s) => !s.subagent).map((s) => <LiveStepView key={s.id} step={s} />)}
+            {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}
+            {live.filter((s) => !s.subagent && s.step !== "tool").map((s) => <LiveStepView key={s.id} step={s} />)}
           </>
         )}
       </div>
