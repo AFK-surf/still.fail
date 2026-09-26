@@ -161,17 +161,18 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
         }
     }
     // The choices, then the composer as a floating capsule, as in a chat.
-    Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Chooser({ IconIn(Icons.Server, 13.dp, C.ink) }, view.name) { pickStation(app, stations, view.station, onStation) }
+    Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Room above and below for the chips' shadows, which the scroll would cut.
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Chooser(haze, { IconIn(Icons.Server, 13.dp, C.ink) }, view.name) { pickStation(app, stations, view.station, onStation) }
             if (runtime == null || model == null) {
                 // Nothing to choose from: the chooser leads to where models are enabled.
-                Chooser(null, "没有可用模型 · 去勾选") { app.push(Screen.Station(view.station)) }
+                Chooser(haze, null, "没有可用模型 · 去勾选") { app.push(Screen.Station(view.station)) }
             } else {
-                Chooser({ MakerIcon(model, runtime.runtime, 14.dp) }, model) {
+                Chooser(haze, { MakerIcon(model, runtime.runtime, 14.dp) }, model) {
                     pickModel(app, view, runtime.runtime, model) { rt, m -> pick(Choice(rt, m, if (rt != runtime.runtime) "" else effort)) }
                 }
-                Chooser(null, "思考 " + (EFFORT_LABEL[effort] ?: "默认")) {
+                Chooser(haze, null, "思考 " + (EFFORT_LABEL[effort] ?: "默认")) {
                     pickEffort(app, runtime.runtime, effort) { e -> pick(Choice(runtime.runtime, model, e)) }
                 }
             }
@@ -204,9 +205,10 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
 }
 
 @Composable
-private fun Chooser(leading: (@Composable () -> Unit)?, label: String, onClick: () -> Unit) {
+private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: String, onClick: () -> Unit) {
+    // The same glass as the composer's capsule under it.
     Row(
-        Modifier.height(30.dp).clip(RoundedCornerShape(15.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(15.dp)).clickable(onClick = onClick).padding(horizontal = 11.dp),
+        Modifier.height(30.dp).floating(haze, RoundedCornerShape(15.dp)).clickable(onClick = onClick).padding(horizontal = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         leading?.invoke()

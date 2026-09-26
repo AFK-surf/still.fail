@@ -243,7 +243,7 @@ fun ChatScreen(station: String, of: ChatOf) {
     var bottomBar by remember { mutableIntStateOf(0) }
     // Its own paper under all of it: the bars are see-through, and what is under the page must not show in them.
     Box(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
-        Messages(station, of, view, agents, draft, Modifier.fillMaxSize().hazeSource(haze).background(C.bg), with(density) { topBar.toDp() }, with(density) { bottomBar.toDp() })
+        Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { bottomBar.toDp() })
         ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze, Edge.Top))
         Composer(station, of, view, agents, draft, haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })
     }
@@ -327,7 +327,7 @@ private class Here(val station: String, val of: ChatOf, val view: ChatView, val 
 
 /** `top` and `bottom`: the bars over it, which the list keeps its ends clear of. */
 @Composable
-private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, modifier: Modifier, top: Dp = 0.dp, bottom: Dp = 0.dp) {
+private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, haze: HazeState, modifier: Modifier, top: Dp = 0.dp, bottom: Dp = 0.dp) {
     val app = LocalApp.current
     val ctx = Here(station, of, view, agents, rememberPeople(station))
     val thread = view.thread
@@ -491,8 +491,9 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     }
 
     Box(modifier.fillMaxWidth()) {
+        // The list is what the bars and capsules over it frost (the button over it too, so it is not in it).
         LazyColumn(
-            Modifier.fillMaxSize(), state = list,
+            Modifier.fillMaxSize().hazeSource(haze).background(C.bg), state = list,
             contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = top, bottom = bottom + 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
         ) {
             items(rows, key = { it.id }) { row ->
@@ -525,7 +526,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         ) {
             Box(
                 // Room round it for its shadow, which the animation's bounds would cut.
-                Modifier.padding(8.dp).size(36.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(C.surface)
+                Modifier.padding(8.dp).size(36.dp).floating(haze, CircleShape)
                     .clickable { scope.launch { follow.jump() } },
                 contentAlignment = Alignment.Center,
             ) { IconIn(Icons.Down, 18.dp, C.ink) }
