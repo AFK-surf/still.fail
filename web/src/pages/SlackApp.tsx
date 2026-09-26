@@ -301,65 +301,6 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
   );
 }
 
-/**
- * Adds a Slack workspace's app configuration token (by its refresh token); `onSaved` gets the workspace. Pasting the
- * refresh token saves it at once; pasting the access token Slack shows above it says which one is wanted.
- */
-export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; onSaved(teamId: string): void }) {
-  const api = useApi();
-  const toast = useToast();
-  const [token, setToken] = useState("");
-  const save = useAction((value: string) => api.addConfigToken(value), ({ teamId }) => { setToken(""); toast("已加上配置 token"); onSaved(teamId); });
-  const wrong = token.startsWith("xoxe.xoxp-") ? "这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。"
-    : token && !token.startsWith("xoxe-") ? "Refresh Token 以 xoxe-1- 开头。" : null;
-  const ready = token.startsWith("xoxe-1-") && token.length > 20;
-  return (
-    <ol className="token-guide">
-      <li>
-        <strong>打开 Slack 的 app 列表</strong>
-        <span className="muted">用要放 bot 的那个 Slack 工作区的账号登录。</span>
-        <a className="btn btn-primary" href="https://api.slack.com/apps" target="_blank" rel="noopener"><ExternalLink {...ICON} />打开 api.slack.com/apps</a>
-      </li>
-      <li>
-        <strong>生成配置 token</strong>
-        <span className="muted">拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。</span>
-      </li>
-      <li>
-        <strong>把 Refresh Token 粘贴到这里</strong>
-        <span className="muted">Slack 会给两个 token，要下面那个以 xoxe-1- 开头的。ember 会自己续期，以后不用再管。</span>
-        <div className="input-row">
-          <input className="input mono" type="password" autoComplete="off" spellCheck={false} value={token} aria-label="Refresh Token"
-            onChange={(e) => setToken(e.target.value.trim())}
-            onPaste={(e) => {
-              const pasted = e.clipboardData.getData("text").trim();
-              if (pasted.startsWith("xoxe-1-") && pasted.length > 20) { e.preventDefault(); setToken(pasted); void save.run(pasted); }
-            }}
-            placeholder="xoxe-1-…" />
-          <Button variant="primary" disabled={!ready} busy={save.busy} onClick={() => void save.run(token)}>{replacing ? "换成这个" : "加上"}</Button>
-        </div>
-        {(wrong || save.error) && <p className="field-error" role="alert">{wrong ?? save.error?.message}</p>}
-      </li>
-    </ol>
-  );
-}
-
-/** Crops an image to a centred square and scales it to 1024 px, the size Slack wants (512–2000). */
-async function toIcon(file: File): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
-    const image = new Image();
-    image.src = url;
-    await image.decode();
-    const side = Math.min(image.naturalWidth, image.naturalHeight);
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 1024;
-    canvas.getContext("2d")!.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 1024, 1024);
-    return canvas.toDataURL("image/png");
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
 function AppForm({ connect, settings, links, onSaved }: { connect: ConnectView; settings: SlackAppSettings; links: SlackAppLinks; onSaved(): void }) {
   const api = useApi();
   const toast = useToast();
