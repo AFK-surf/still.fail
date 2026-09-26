@@ -295,7 +295,12 @@ function Group({ steps, thinking }: { steps: Step[]; thinking: TimelineEntry[] }
   const failed = steps.filter((s) => s.result?.ok === false).length;
   const pending = steps.filter((s) => !s.result).length;
   const firstThought = thinking[0]?.text.split("\n").find((l) => l.trim()) ?? "";
-  const summary = steps.length ? `执行了 ${steps.length} 项操作：${parts.join("、")}` : `思考：${firstThought.slice(0, 80)}`;
+  // Described calls speak for themselves; counting by kind is for the rest.
+  const said = steps.map((s) => describe(s.call)).filter((d): d is string => d !== null);
+  const summary = !steps.length ? `思考：${firstThought.slice(0, 80)}`
+    : said.length === steps.length ? (said.length <= 2 ? said.join("；") : `${said.slice(0, 2).join("；")} 等 ${said.length} 项`)
+    : said.length ? `${said[0]}${steps.length > 1 ? ` 等 ${steps.length} 项操作` : ""}`
+    : `执行了 ${steps.length} 项操作：${parts.join("、")}`;
   return (
     <div className="h-group" data-failed={failed > 0}>
       <button type="button" className="h-group-head" aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -319,14 +324,22 @@ function Group({ steps, thinking }: { steps: Step[]; thinking: TimelineEntry[] }
   );
 }
 
+/** What the agent said a call is for, when the tool takes a description (Bash, Task, …). */
+function describe(entry: TimelineEntry): string | null {
+  const d = parseArgs(entry.text)?.description;
+  return typeof d === "string" && d.trim() ? d.trim().split("\n")[0]!.slice(0, 160) : null;
+}
+
 function StepRow({ step }: { step: Step }) {
+  const said = describe(step.call);
   const took = step.result?.at && step.call.at ? Date.parse(step.result.at) - Date.parse(step.call.at) : null;
   const state = !step.result ? "进行中" : step.result.ok === false ? "失败" : null;
   return (
     <details className="h-step" data-failed={step.result?.ok === false}>
       <summary>
-        <span className="h-step-name">{toolName(step.call.tool)}</span>
-        <span className="h-step-hint">{hint(step.call)}</span>
+        {said
+          ? <span className="h-step-said">{said}</span>
+          : <><span className="h-step-name">{toolName(step.call.tool)}</span><span className="h-step-hint">{hint(step.call)}</span></>}
         <span className="h-step-meta">{state ?? (took !== null && took >= 0 ? duration(took) : "")}</span>
       </summary>
       <pre className="code">{step.call.text}</pre>

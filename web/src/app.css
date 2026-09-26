@@ -936,3 +936,5 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
   [data-enter], .h-phase-text, .composer-quote, .composer-files .file-card, .side-panel { animation: none; }
   .fold-body[data-anim] { transition: none; }
 }
+
+.h-step-said { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
