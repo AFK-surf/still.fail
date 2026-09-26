@@ -86,6 +86,11 @@ for grants.
 | `live` | `station`, `key` | the steps in flight and the phase (`LiveMessage` semantics of `src/live.ts`) |
 | `host` | `station` | `/host` |
 
+`accounts`, `workspaces` and `workspace` follow each account's `/v1/events`
+socket (ember cloud; auth, events and shapes in `docs/station-storage.md`):
+`workspaces` refetches `/v1/me`, `workspace` that workspace, and `station`
+sets the station's `online` in the workspace value without a request.
+
 The core keeps each topic current: the station's `/events` stream says which
 sessions changed (it refetches those topics that are subscribed), `live`
 subscriptions hold `/sessions/:key/live` open and merge its `timeline`

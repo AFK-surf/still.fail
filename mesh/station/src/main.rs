@@ -1,8 +1,8 @@
 //! ember-mesh: an ember station's way into ember cloud.
 //!
 //! `enroll` redeems a one-time token from a workspace admin, proving this
-//! station holds its iroh key. `run` keeps the station reachable: it reports
-//! in to ember cloud, accepts iroh connections from clients that present a
+//! station holds its iroh key. `run` keeps the station reachable: it holds a
+//! presence socket to ember cloud (connected is online), accepts iroh connections from clients that present a
 //! grant signed by ember cloud, and relays each stream's request to the
 //! station's local admin API with the verified identity attached.
 //!
@@ -15,18 +15,19 @@
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{Context, Result, anyhow, bail};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD as B64};
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
 use iroh::{
     Endpoint, RelayMode, RelayUrl, SecretKey,
     endpoint::{Connection, RecvStream, SendStream, presets::Minimal},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use tokio_tungstenite::tungstenite::{self, Message, client::IntoClientRequest};
 use tracing::{info, warn};
 
 const ALPN: &[u8] = b"ember/admin/1";
@@ -34,6 +35,10 @@ const MAX_HEAD: usize = 16 * 1024;
 // Files sent to a session go through here; the station caps them at 50 MB.
 const MAX_BODY: usize = 64 * 1024 * 1024;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// ember cloud expects a "ping" this often and drops a station silent for three of them.
+const PING: Duration = Duration::from_secs(30);
+/// How ember cloud closes the socket of a station removed from its workspace.
+const CLOSE_REMOVED: u16 = 4004;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct CloudState {
@@ -221,7 +226,7 @@ async fn run(data: &Path, admin: String, secret: String) -> Result<()> {
         .await?;
     info!(station = %endpoint.id(), workspace = %state.workspace_name, "ember-mesh listening");
     let station = Arc::new(Station { data: data.to_path_buf(), state: Mutex::new(state), admin, secret, removed: Mutex::new(false) });
-    tokio::spawn(heartbeat(station.clone(), endpoint.secret_key().clone()));
+    tokio::spawn(presence(station.clone(), endpoint.secret_key().clone()));
     while let Some(incoming) = endpoint.accept().await {
         let station = station.clone();
         tokio::spawn(async move {
@@ -238,43 +243,100 @@ async fn run(data: &Path, admin: String, secret: String) -> Result<()> {
     Ok(())
 }
 
-/// Reports in every minute, picking up key rotations; stops serving once the station was removed.
-async fn heartbeat(station: Arc<Station>, key: SecretKey) {
-    let client = http();
+/// Keeps the presence socket open, reconnecting with backoff.
+async fn presence(station: Arc<Station>, key: SecretKey) {
+    let mut backoff = Duration::from_secs(1);
     loop {
-        let (origin, id) = {
-            let s = station.state.lock().unwrap();
-            (s.origin.clone(), s.station.clone())
-        };
-        let ts = now();
-        let signature = hex::encode(key.sign(format!("ember-station-heartbeat-v1:{origin}:{id}:{ts}").as_bytes()).to_bytes());
-        let result = client
-            .post(format!("{origin}/v1/stations/heartbeat"))
-            .json(&json!({ "station": id, "ts": ts, "signature": signature, "version": VERSION }))
-            .send()
-            .await;
-        match result {
-            Ok(r) if r.status().is_success() => {
-                if let Ok(body) = r.json::<Value>().await {
-                    let mut s = station.state.lock().unwrap();
-                    s.workspace = body["workspace"].as_str().unwrap_or(&s.workspace).to_string();
-                    s.name = body["name"].as_str().unwrap_or(&s.name).to_string();
-                    if body["grant_keys"].is_object() {
-                        s.grant_keys = body["grant_keys"].clone();
-                    }
-                    let _ = save_state(&station.data, &s);
-                }
-                *station.removed.lock().unwrap() = false;
-            }
-            Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => {
-                warn!("this station was removed from its workspace; refusing connections");
-                *station.removed.lock().unwrap() = true;
-            }
-            Ok(r) => warn!(status = %r.status(), "heartbeat refused"),
-            Err(error) => warn!(%error, "heartbeat failed; ember cloud unreachable"),
+        let started = Instant::now();
+        match connect(&station, &key).await {
+            Ok(()) => info!("ember cloud closed the presence socket"),
+            Err(error) => warn!(%error, "no presence socket to ember cloud"),
         }
-        tokio::time::sleep(Duration::from_secs(60)).await;
+        // A socket that held a while starts over quickly; failing again and again backs off to a minute.
+        if started.elapsed() > Duration::from_secs(60) {
+            backoff = Duration::from_secs(1);
+        }
+        tokio::time::sleep(backoff).await;
+        backoff = (backoff * 2).min(Duration::from_secs(60));
     }
+}
+
+/// One presence socket, signed at connect like enrollment; returns when it ends.
+async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
+    let (origin, id) = {
+        let s = station.state.lock().unwrap();
+        (s.origin.clone(), s.station.clone())
+    };
+    let ts = now();
+    let signature = hex::encode(key.sign(format!("ember-station-connect-v1:{origin}:{id}:{ts}").as_bytes()).to_bytes());
+    let mut request = format!("{}/v1/stations/connect", origin.replacen("http", "ws", 1)).into_client_request()?;
+    let headers = request.headers_mut();
+    headers.insert("x-ember-station", id.parse()?);
+    headers.insert("x-ember-ts", ts.to_string().parse()?);
+    headers.insert("x-ember-signature", signature.parse()?);
+    headers.insert("x-ember-version", VERSION.parse()?);
+    let (mut socket, _) = match tokio::time::timeout(Duration::from_secs(20), tokio_tungstenite::connect_async(request)).await.context("connect timed out")? {
+        Ok(connected) => connected,
+        Err(tungstenite::Error::Http(response)) if response.status().as_u16() == 404 => {
+            removed(station);
+            bail!("station removed");
+        }
+        Err(error) => return Err(error.into()),
+    };
+    *station.removed.lock().unwrap() = false;
+    info!("online at ember cloud");
+    let mut ping = tokio::time::interval(PING);
+    ping.tick().await;
+    let mut answered = true;
+    loop {
+        tokio::select! {
+            frame = socket.next() => match frame {
+                Some(Ok(Message::Text(text))) if text.as_str() == "pong" => answered = true,
+                Some(Ok(Message::Text(text))) => apply_state(station, text.as_str()),
+                Some(Ok(Message::Close(frame))) => {
+                    if frame.is_some_and(|f| u16::from(f.code) == CLOSE_REMOVED) {
+                        removed(station);
+                    }
+                    return Ok(());
+                }
+                Some(Ok(_)) => {}
+                Some(Err(error)) => return Err(error.into()),
+                None => return Ok(()),
+            },
+            _ = ping.tick() => {
+                // No pong since the last ping: the connection is gone even if the socket has not noticed.
+                if !answered {
+                    bail!("ember cloud stopped answering");
+                }
+                answered = false;
+                socket.send(Message::Text("ping".into())).await?;
+            }
+        }
+    }
+}
+
+fn removed(station: &Station) {
+    warn!("this station was removed from its workspace; refusing connections");
+    *station.removed.lock().unwrap() = true;
+}
+
+/// ember cloud says where the station is and what it is called: on connect and whenever that changes.
+fn apply_state(station: &Station, text: &str) {
+    let Ok(body) = serde_json::from_str::<Value>(text) else { return };
+    if body["type"] != "state" {
+        return;
+    }
+    let mut guard = station.state.lock().unwrap();
+    let s = &mut *guard;
+    for (field, key) in [(&mut s.workspace, "workspace"), (&mut s.workspace_name, "workspace_name"), (&mut s.name, "name")] {
+        if let Some(value) = body[key].as_str() {
+            *field = value.to_string();
+        }
+    }
+    if body["grant_keys"].is_object() {
+        s.grant_keys = body["grant_keys"].clone();
+    }
+    let _ = save_state(&station.data, s);
 }
 
 async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {

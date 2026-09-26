@@ -1,17 +1,20 @@
 // A local ember cloud for trying the whole path without Cloudflare: the
-// Worker in miniflare (Google mocked) behind a small server on :8787 that
-// also serves the web app from dist/cloud-app.
+// Worker in miniflare (Google mocked) behind a small server on :8787 (PORT)
+// that also serves the web app from dist/cloud-app. WebSockets (/v1/events,
+// station presence) are piped to miniflare itself, listening on PORT + 1.
 //   RELAY=http://127.0.0.1:3340 pnpm exec tsx test/dev.ts
 // Development-only routes (never in the Worker):
 //   /__dev/login?user=alice  signs that account into the browser and goes to /
 //   /__dev/grant?device=hex  a grant for the first station of alice's first workspace
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { connect } from "node:net";
 import { extname, join, normalize } from "node:path";
 import { harness } from "./harness.ts";
 
-const origin = "http://127.0.0.1:8787";
-const h = await harness({ origin, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340" });
+const port = Number(process.env.PORT ?? 8787);
+const origin = `http://127.0.0.1:${port}`;
+const h = await harness({ origin, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340" });
 const app = join(import.meta.dirname, "..", "..", "dist", "cloud-app");
 const alice = h.as(await h.login("alice"));
 const workspace = await (await alice("POST", "/v1/workspaces", { name: "Dev" })).json() as { id: string };
@@ -22,7 +25,7 @@ for (const name of ["studio", "mac-mini"]) {
 
 const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".wasm": "application/wasm", ".woff2": "font/woff2" };
 
-createServer(async (req, res) => {
+const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", origin);
   if (url.pathname === "/__dev/login") {
     const tokens = await h.login(url.searchParams.get("user") ?? "alice");
@@ -60,4 +63,17 @@ createServer(async (req, res) => {
     } catch { /* next */ }
   }
   res.writeHead(404).end();
-}).listen(8787, "127.0.0.1", () => console.log("READY ember cloud (dev) on :8787"));
+});
+// The upgrade goes to miniflare byte for byte, Host included, so the Worker sees this origin.
+server.on("upgrade", (req, socket, head) => {
+  const upstream = connect(port + 1, "127.0.0.1", () => {
+    const lines = [`${req.method} ${req.url} HTTP/1.1`];
+    for (let i = 0; i < req.rawHeaders.length; i += 2) lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
+    upstream.write(lines.join("\r\n") + "\r\n\r\n");
+    upstream.write(head);
+    socket.pipe(upstream).pipe(socket);
+  });
+  upstream.on("error", () => socket.destroy());
+  socket.on("error", () => upstream.destroy());
+});
+server.listen(port, "127.0.0.1", () => console.log(`READY ember cloud (dev) on :${port}`));

@@ -2,11 +2,17 @@
 // stations, in one SQLite-backed object so every change is a single
 // transaction. Callers have already verified the account's access token;
 // methods here check what that account may do in a workspace.
+//
+// It also holds the sockets that make this live (hibernatable, so idle ones
+// cost nothing): each device's `/v1/events` socket, tagged `sub:<account>`,
+// to which every change is pushed as the accounts it affects; and each
+// station's presence socket, tagged `station:<id>` — open is online.
 import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
 import type { Env } from "./env";
-import type { InvitationView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import { grantKeys } from "./grants";
+import type { AccountEvent, InvitationView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -15,6 +21,17 @@ const MANAGERS: readonly Role[] = ["owner", "admin"];
 export const INVITATION_TTL_SEC = 7 * 24 * 60 * 60;
 export const ENROLLMENT_TTL_SEC = 60 * 60;
 const LIMITS = { workspacesPerUser: 32, membersPerWorkspace: 200, stationsPerWorkspace: 64, openInvitations: 50 };
+
+export const EVENTS_PROTOCOL = "ember-events";
+/** How often a station sends "ping" on its presence socket (the runtime answers "pong" without waking this object). */
+export const PING_SEC = 30;
+/** A station socket unanswered this long is taken for dead. */
+export const SILENT_MS = 3 * PING_SEC * 1000;
+/** Close codes a station acts on. */
+export const CLOSE = { replaced: 4000, removed: 4004, silent: 4008 } as const;
+
+const LIST: AccountEvent = { type: "workspaces" };
+type Attachment = { station: string; at: number; dropped?: boolean } | { sub: string };
 
 export class DirectoryError extends Error {
   readonly status: number;
@@ -34,6 +51,7 @@ type Row = Record<string, SqlStorageValue>;
 export class Directory extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
     ctx.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS users (sub TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', picture TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_by TEXT NOT NULL, created_at INTEGER NOT NULL);
@@ -64,12 +82,59 @@ export class Directory extends DurableObject<Env> {
     return role;
   }
 
+  // ── notifications ───────────────────────────────────────────────────────
+
+  /** Pushes events to every open events socket of these accounts. */
+  #tell(subs: Iterable<string>, ...events: AccountEvent[]): void {
+    const frames = events.map((event) => JSON.stringify(event));
+    for (const sub of new Set(subs)) {
+      for (const ws of this.ctx.getWebSockets(`sub:${sub}`)) {
+        for (const frame of frames) {
+          try {
+            ws.send(frame);
+          } catch {
+            // Closing already; its device reconnects and refetches.
+          }
+        }
+      }
+    }
+  }
+
+  #members(workspace: string): string[] {
+    return this.#rows("SELECT sub FROM members WHERE workspace = ?", workspace).map((r) => r.sub as string);
+  }
+
+  /** Accounts signed in with this email (invitations are addressed by email). */
+  #byEmail(email: string | null): string[] {
+    return email ? this.#rows("SELECT sub FROM users WHERE lower(email) = lower(?)", email).map((r) => r.sub as string) : [];
+  }
+
+  /** Accounts with an open invitation to this workspace; they see its name. */
+  #invitees(workspace: string): string[] {
+    return this.#rows("SELECT u.sub FROM invitations i JOIN users u ON lower(u.email) = i.email WHERE i.workspace = ? AND i.expires_at > ?", workspace, nowSeconds()).map((r) => r.sub as string);
+  }
+
+  /**
+   * A workspace changed: its members (and `also`) are told, with `workspaces`
+   * too when what their lists show changed (a name, a role, a count).
+   */
+  #changed(workspace: string, list: boolean, also: Iterable<string> = []): void {
+    const subs = [...this.#members(workspace), ...also];
+    this.#tell(subs, ...(list ? [LIST] : []), { type: "workspace", id: workspace });
+  }
+
   upsertUser(identity: Identity): void {
+    const old = this.#one("SELECT email, name, picture FROM users WHERE sub = ?", identity.sub);
     this.#run(
       `INSERT INTO users (sub, email, name, picture, created_at) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (sub) DO UPDATE SET email = excluded.email, name = excluded.name, picture = excluded.picture`,
       identity.sub, identity.email, identity.name, identity.picture, nowSeconds(),
     );
+    if (!old || (old.email === identity.email && old.name === identity.name && old.picture === identity.picture)) return;
+    // Members lists show them; invitations they sent show their name; a new email has other invitations.
+    for (const row of this.#rows("SELECT workspace FROM members WHERE sub = ?", identity.sub)) this.#changed(row.workspace as string, false);
+    const invited = this.#rows("SELECT i.email FROM invitations i WHERE i.created_by = ? AND i.expires_at > ?", identity.sub, nowSeconds()).flatMap((r) => this.#byEmail(r.email as string));
+    this.#tell([...invited, ...(old.email === identity.email ? [] : [identity.sub])], LIST);
   }
 
   me(sub: string): { user: UserView | null; workspaces: WorkspaceSummary[] } {
@@ -92,6 +157,7 @@ export class Directory extends DurableObject<Env> {
       this.#run("INSERT INTO workspaces (id, name, created_by, created_at) VALUES (?, ?, ?, ?)", id, clean, sub, now);
       this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, 'owner', ?)", id, sub, now);
     });
+    this.#tell([sub], LIST);
     return this.workspace(sub, id);
   }
 
@@ -101,7 +167,8 @@ export class Directory extends DurableObject<Env> {
     const members = this.#rows(`
       SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
-    const stations = this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", id) as unknown as StationView[];
+    const stations = this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", id)
+      .map((row) => ({ ...row, online: this.#presence(row.id as string).length > 0 })) as unknown as StationView[];
     const invitations = MANAGERS.includes(role)
       ? this.#rows("SELECT id, role, email, created_by, expires_at FROM invitations WHERE workspace = ? AND expires_at > ? ORDER BY expires_at", id, nowSeconds()) as unknown as InvitationView[]
       : [];
@@ -111,15 +178,21 @@ export class Directory extends DurableObject<Env> {
   renameWorkspace(sub: string, id: string, name: string): WorkspaceView {
     this.#role(sub, id, MANAGERS);
     this.#run("UPDATE workspaces SET name = ? WHERE id = ?", cleanName(name) ?? fail(400, "invalid_name"), id);
+    this.#changed(id, true, this.#invitees(id));
+    for (const row of this.#rows("SELECT id FROM stations WHERE workspace = ?", id)) this.#sendState(row.id as string);
     return this.workspace(sub, id);
   }
 
   deleteWorkspace(sub: string, id: string): void {
     this.#role(sub, id, ["owner"]);
+    const told = [...this.#members(id), ...this.#invitees(id)];
+    const stations = this.#rows("SELECT id FROM stations WHERE workspace = ?", id).map((r) => r.id as string);
     this.ctx.storage.transactionSync(() => {
       for (const table of ["members", "invitations", "stations", "enrollments"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
       this.#run("DELETE FROM workspaces WHERE id = ?", id);
     });
+    this.#tell(told, LIST, { type: "workspace", id });
+    for (const station of stations) this.#disconnect(station, CLOSE.removed, "station_removed");
   }
 
   // ── people ──────────────────────────────────────────────────────────────
@@ -139,6 +212,8 @@ export class Directory extends DurableObject<Env> {
     this.#run("DELETE FROM invitations WHERE workspace = ? AND email = ?", workspace, email!.toLowerCase());
     this.#run("INSERT INTO invitations (id, workspace, token_hash, role, email, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
       id, workspace, await digest(token), role, email!.toLowerCase(), sub, expires);
+    this.#changed(workspace, false);
+    this.#tell(this.#byEmail(email), LIST);
     return { token, id, expires_at: expires };
   }
 
@@ -165,6 +240,7 @@ export class Directory extends DurableObject<Env> {
       if (!existing) this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, ?, ?)", workspace, sub, row!.role, nowSeconds());
       else if (ROLES.indexOf(row!.role as Role) < ROLES.indexOf(existing.role as Role)) this.#run("UPDATE members SET role = ? WHERE workspace = ? AND sub = ?", row!.role, workspace, sub);
     });
+    this.#changed(workspace, true);
     return this.workspace(sub, workspace);
   }
 
@@ -188,16 +264,25 @@ export class Directory extends DurableObject<Env> {
       this.#run("DELETE FROM invitations WHERE id = ?", id);
       if (!existing) this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, ?, ?)", workspace, sub, row!.role, nowSeconds());
     });
+    this.#changed(workspace, true);
     return this.workspace(sub, workspace);
   }
 
   declineById(email: string, id: string): void {
-    this.#run("DELETE FROM invitations WHERE id = ? AND email = ?", id, email.toLowerCase());
+    const row = this.#one("SELECT workspace FROM invitations WHERE id = ? AND email = ?", id, email.toLowerCase());
+    if (!row) return;
+    this.#run("DELETE FROM invitations WHERE id = ?", id);
+    this.#changed(row.workspace as string, false);
+    this.#tell(this.#byEmail(email), LIST);
   }
 
   revokeInvitation(sub: string, workspace: string, id: string): void {
     this.#role(sub, workspace, MANAGERS);
-    this.#run("DELETE FROM invitations WHERE id = ? AND workspace = ?", id, workspace);
+    const row = this.#one("SELECT email FROM invitations WHERE id = ? AND workspace = ?", id, workspace);
+    if (!row) return;
+    this.#run("DELETE FROM invitations WHERE id = ?", id);
+    this.#changed(workspace, false);
+    this.#tell(this.#byEmail(row.email as string | null), LIST);
   }
 
   setRole(sub: string, workspace: string, target: string, role: Role): WorkspaceView {
@@ -207,6 +292,8 @@ export class Directory extends DurableObject<Env> {
     if (!current) fail(404, "member_not_found");
     if (current!.role === "owner" && role !== "owner") this.#keepAnOwner(workspace);
     this.#run("UPDATE members SET role = ? WHERE workspace = ? AND sub = ?", role, workspace, target);
+    this.#changed(workspace, false);
+    this.#tell([target], LIST);
     return this.workspace(sub, workspace);
   }
 
@@ -221,6 +308,7 @@ export class Directory extends DurableObject<Env> {
     }
     if (row!.role === "owner") this.#keepAnOwner(workspace);
     this.#run("DELETE FROM members WHERE workspace = ? AND sub = ?", workspace, target);
+    this.#changed(workspace, true, [target]);
   }
 
   #keepAnOwner(workspace: string): void {
@@ -250,6 +338,7 @@ export class Directory extends DurableObject<Env> {
     const hash = await digest(token);
     const row = this.#one("SELECT workspace, name, created_by FROM enrollments WHERE token_hash = ? AND expires_at > ?", hash, nowSeconds());
     if (!row) fail(404, "enrollment_not_found");
+    const moved = this.#one("SELECT workspace FROM stations WHERE id = ?", station)?.workspace as string | undefined;
     this.ctx.storage.transactionSync(() => {
       this.#run("DELETE FROM enrollments WHERE token_hash = ?", hash);
       this.#run(`INSERT INTO stations (id, workspace, name, enrolled_at, enrolled_by, last_seen, version) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -257,26 +346,27 @@ export class Directory extends DurableObject<Env> {
         station, row!.workspace, row!.name, nowSeconds(), row!.created_by, nowSeconds(), version);
     });
     const w = this.#one("SELECT name FROM workspaces WHERE id = ?", row!.workspace)!;
+    this.#changed(row!.workspace as string, true);
+    if (moved && moved !== row!.workspace) this.#changed(moved, true);
+    // Already connected (re-enrolled while running): it learns where it is now.
+    this.#sendState(station);
     return { workspace: row!.workspace as string, workspace_name: w.name as string, name: row!.name as string };
-  }
-
-  /** A station reports in; returns its workspace, or null once it was removed. */
-  heartbeat(station: string, version: string | null): { workspace: string; name: string } | null {
-    const row = this.#one("SELECT workspace, name FROM stations WHERE id = ?", station);
-    if (!row) return null;
-    this.#run("UPDATE stations SET last_seen = ?, version = COALESCE(?, version) WHERE id = ?", nowSeconds(), version, station);
-    return { workspace: row.workspace as string, name: row.name as string };
   }
 
   renameStation(sub: string, workspace: string, station: string, name: string): WorkspaceView {
     this.#role(sub, workspace, MANAGERS);
     this.#run("UPDATE stations SET name = ? WHERE id = ? AND workspace = ?", cleanName(name) ?? fail(400, "invalid_name"), station, workspace);
+    this.#changed(workspace, false);
+    this.#sendState(station);
     return this.workspace(sub, workspace);
   }
 
   removeStation(sub: string, workspace: string, station: string): void {
     this.#role(sub, workspace, MANAGERS);
-    this.#run("DELETE FROM stations WHERE id = ? AND workspace = ?", station, workspace);
+    if (!this.#one("SELECT 1 AS x FROM stations WHERE id = ? AND workspace = ?", station, workspace)) return;
+    this.#run("DELETE FROM stations WHERE id = ?", station);
+    this.#changed(workspace, true);
+    this.#disconnect(station, CLOSE.removed, "station_removed");
   }
 
   /** What a grant to reach `station` should say about the caller, if it may. */
@@ -285,6 +375,120 @@ export class Directory extends DurableObject<Env> {
     const row = this.#one("SELECT name FROM stations WHERE id = ? AND workspace = ?", station, workspace);
     if (!row) fail(404, "station_not_found");
     return { role, station_name: row!.name as string };
+  }
+
+  // ── sockets ─────────────────────────────────────────────────────────────
+
+  /**
+   * Upgrades reach here only through the Worker, which has authenticated
+   * them: `/events` names the account in `x-ember-sub`, `/stations/connect`
+   * the station (whose signature it checked) in `x-ember-station`.
+   */
+  async fetch(request: Request): Promise<Response> {
+    const path = new URL(request.url).pathname;
+    const pair = new WebSocketPair();
+    if (path === "/events") {
+      const sub = request.headers.get("x-ember-sub")!;
+      this.ctx.acceptWebSocket(pair[1], [`sub:${sub}`]);
+      pair[1].serializeAttachment({ sub } satisfies Attachment);
+      return new Response(null, { status: 101, webSocket: pair[0], headers: { "sec-websocket-protocol": EVENTS_PROTOCOL } });
+    }
+    const station = request.headers.get("x-ember-station")!;
+    const row = this.#one("SELECT workspace FROM stations WHERE id = ?", station);
+    if (!row) return Response.json({ error: "station_removed" }, { status: 404 });
+    // One socket per station: a reconnect replaces the one it gave up on, without an offline in between.
+    const wasOnline = this.#presence(station).length > 0;
+    for (const old of this.#presence(station)) this.#drop(old, CLOSE.replaced, "replaced");
+    this.#run("UPDATE stations SET last_seen = ?, version = COALESCE(?, version) WHERE id = ?", nowSeconds(), request.headers.get("x-ember-version"), station);
+    this.ctx.acceptWebSocket(pair[1], [`station:${station}`]);
+    pair[1].serializeAttachment({ station, at: Date.now() } satisfies Attachment);
+    this.#sendState(station);
+    if (!wasOnline) this.#tell(this.#members(row.workspace as string), { type: "station", workspace: row.workspace as string, id: station, online: true });
+    if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + SILENT_MS);
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  /** The open presence sockets of a station (at most one, but a replaced one may linger). */
+  #presence(station: string): WebSocket[] {
+    return this.ctx.getWebSockets(`station:${station}`).filter((ws) => ws.readyState === WebSocket.OPEN && !(ws.deserializeAttachment() as { dropped?: boolean }).dropped);
+  }
+
+  /** Closes a socket from this side; its close event then changes nothing. */
+  #drop(ws: WebSocket, code: number, reason: string): void {
+    ws.serializeAttachment({ ...(ws.deserializeAttachment() as Attachment), dropped: true });
+    try {
+      ws.close(code, reason);
+    } catch {
+      // Already closed.
+    }
+  }
+
+  #disconnect(station: string, code: number, reason: string): void {
+    for (const ws of this.#presence(station)) this.#drop(ws, code, reason);
+  }
+
+  /** Where a station is and what it is called; sent on connect and when that changes. */
+  #sendState(station: string): void {
+    const sockets = this.#presence(station);
+    if (!sockets.length) return;
+    const row = this.#one("SELECT s.workspace, w.name AS workspace_name, s.name FROM stations s JOIN workspaces w ON w.id = s.workspace WHERE s.id = ?", station);
+    if (!row) return;
+    const frame = JSON.stringify({ type: "state", ...row, grant_keys: grantKeys(this.env) });
+    for (const ws of sockets) ws.send(frame);
+  }
+
+  #offline(station: string): void {
+    if (this.#presence(station).length) return;
+    const row = this.#one("SELECT workspace FROM stations WHERE id = ?", station);
+    if (!row) return;
+    this.#run("UPDATE stations SET last_seen = ? WHERE id = ?", nowSeconds(), station);
+    this.#tell(this.#members(row.workspace as string), { type: "station", workspace: row.workspace as string, id: station, online: false });
+  }
+
+  async webSocketMessage(): Promise<void> {
+    // Nothing is read from sockets; "ping" is answered by the runtime.
+  }
+
+  async webSocketClose(ws: WebSocket, code: number): Promise<void> {
+    const attachment = ws.deserializeAttachment() as Attachment;
+    try {
+      ws.close(code === 1005 || code === 1006 ? 1000 : code);
+    } catch {
+      // The runtime completed the close.
+    }
+    if ("station" in attachment && !attachment.dropped) this.#offline(attachment.station);
+  }
+
+  async webSocketError(ws: WebSocket): Promise<void> {
+    const attachment = ws.deserializeAttachment() as Attachment;
+    if ("station" in attachment && !attachment.dropped) this.#offline(attachment.station);
+  }
+
+  // A station that vanishes without closing (power cut, network gone) can
+  // leave a socket the runtime keeps for a long time. Stations send "ping"
+  // every PING_SEC and the runtime answers without waking this object,
+  // recording when; while any station is connected an alarm looks at those
+  // times every SILENT_MS and drops the silent ones. That is one wake-up per
+  // interval however many stations there are — pinging from here would wake
+  // the object for every ping, and without the check a vanished station would
+  // show online until the runtime happened to notice.
+  async alarm(): Promise<void> {
+    if (this.sweep(Date.now())) await this.ctx.storage.setAlarm(Date.now() + SILENT_MS);
+  }
+
+  /** Drops station sockets silent at `now`; says whether any station is still connected. */
+  protected sweep(now: number): boolean {
+    let connected = false;
+    for (const ws of this.ctx.getWebSockets()) {
+      const attachment = ws.deserializeAttachment() as Attachment;
+      if (!("station" in attachment) || attachment.dropped || ws.readyState !== WebSocket.OPEN) continue;
+      const answered = this.ctx.getWebSocketAutoResponseTimestamp(ws)?.getTime() ?? 0;
+      if (now - Math.max(attachment.at, answered) > SILENT_MS) {
+        this.#drop(ws, CLOSE.silent, "silent");
+        this.#offline(attachment.station);
+      } else connected = true;
+    }
+    return connected;
   }
 }
 

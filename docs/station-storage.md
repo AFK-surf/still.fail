@@ -180,15 +180,54 @@ instead of a sweep every minute), Slack reconnect backoff.
 ### ember cloud → devices: `GET /v1/events` (WebSocket)
 
 A device keeps one WebSocket per account to the directory (hibernatable, so
-idle sockets cost nothing). Events: `workspaces` (the account's list or
-invitations changed), `workspace {id}` (members, roles, stations, names),
-`station {workspace, id, online}`.
+idle sockets cost nothing).
 
-### Station presence
+- **Auth**: browsers cannot set headers on a WebSocket, so the access token
+  travels as a subprotocol: `new WebSocket(url, ["ember-events",
+  "ember-token." + accessToken])`; the answer selects `ember-events`. (A
+  header keeps it out of URLs and so out of request logs; query strings are
+  not accepted.) The token is checked at connect only: it may expire while
+  the socket stays open, since events name what changed and carry nothing a
+  device may not see — it refetches with a fresh token. A refused socket gets
+  401 before the upgrade; a device reconnects with a fresh token.
+- **Keepalive**: the device may send the text `ping`; the runtime answers
+  `pong` without waking the directory.
+- **Events** (JSON text frames), each to exactly the accounts it concerns:
+
+| event | when | to |
+| --- | --- | --- |
+| `{"type":"workspaces"}` | the account's workspace list or its invitations changed (a workspace created, renamed, deleted, joined or left; a role; member or station counts; an invitation to it arrived, went, or its inviter's name changed) | that account |
+| `{"type":"workspace","id"}` | the workspace view changed: members, roles, stations, names, invitations (the managers' list) | its members, and a member who just left or was removed |
+| `{"type":"station","workspace","id","online"}` | a station connected or disconnected | the workspace's members |
+
+A device refetches `/v1/me` on `workspaces` and `/v1/workspaces/:id` on
+`workspace`; `station` is complete in itself. Nothing is replayed: after a
+reconnect the device refetches what it shows.
+
+### Station presence: `GET /v1/stations/connect` (WebSocket)
 
 The station keeps a WebSocket open to ember cloud instead of posting a
 heartbeat: open is online, closed is offline, and both are pushed to devices
-at once. The socket carries the station's version on open.
+at once (`station` above). `StationView.online` says whether it is connected
+now; `last_seen` is when it last connected or disconnected ("last online at").
+
+- **Auth**: signed with the station's key at connect, in headers:
+  `x-ember-station` (its key, hex), `x-ember-ts` (unix seconds, within 5
+  minutes), `x-ember-signature` (hex Ed25519 over
+  `ember-station-connect-v1:<origin>:<station>:<ts>`), and `x-ember-version`.
+  A station that is not enrolled gets 404 and refuses clients until it is.
+- **From the cloud**: `{"type":"state","workspace","workspace_name","name","grant_keys"}`
+  on connect and whenever these change (renamed, moved by re-enrolling).
+  Close codes: 4000 replaced by a newer socket of the same station, 4004
+  removed from its workspace, 4008 silent.
+- **Liveness**: the station sends `ping` every 30 s and the runtime answers
+  `pong` without waking the directory; a station that gets no `pong` before
+  its next ping reconnects. While any station is connected, an alarm every
+  90 s drops station sockets unanswered for 90 s (a station that vanished
+  without closing), so a dead station shows offline within three minutes.
+- The station reconnects with backoff (1 s doubling to a minute; back to 1 s
+  after a socket held a minute). A reconnect replaces the old socket without
+  an offline in between.
 
 ### The client core
 
