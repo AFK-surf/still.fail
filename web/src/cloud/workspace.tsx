@@ -5,6 +5,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, LogOut, Plus, Settings, SquarePen, UserPlus } from "lucide-react";
 import { NewChat } from "../NewChat.tsx";
+import { useRememberChat } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
 import { useMemo, useState, type ReactNode } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
@@ -79,6 +80,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   })), [view.data, entry]);
   const path = useLocation().pathname;
   const navigate = useNavigate();
+  useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/sessions\/.+)$/.test(p));
   const detail = /\/(s\/[^/]+\/.+|settings|new$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);

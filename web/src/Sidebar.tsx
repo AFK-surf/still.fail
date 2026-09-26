@@ -1,6 +1,7 @@
 import { ArrowLeft, KeyRound, Monitor, Plug, Settings, SquarePen } from "lucide-react";
 import { useIsMine, useLink } from "./station.tsx";
 import { useMemo } from "react";
+import { lastChat } from "./lastChat.ts";
 import { MineFilter, PeopleStack, useOnlyMine } from "./components.tsx";
 import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
@@ -27,7 +28,7 @@ function SettingsNav() {
   const connectOpen = useLocation().pathname.startsWith("/connects");
   return (
     <div className="nav-scroll">
-      <NavLink className="nav-row" to={link("/sessions")}><ArrowLeft {...ICON} />返回会话</NavLink>
+      <NavLink className="nav-row" to={link(lastChat("local", "/sessions"))}><ArrowLeft {...ICON} />返回会话</NavLink>
       <div className="nav-heading">设置</div>
       <NavLink className="nav-row" to={link("/settings/connects")} aria-current={connectOpen ? "page" : undefined}><Plug {...ICON} />连接</NavLink>
       <NavLink className="nav-row" to={link("/settings/accounts")}><KeyRound {...ICON} />Profile</NavLink>

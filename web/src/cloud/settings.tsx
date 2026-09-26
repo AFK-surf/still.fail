@@ -14,6 +14,7 @@ import type { Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Loading, Menu, MobileBack, Pill, RuntimeLogo, Section, Select, StatusDot, Time } from "../ui.tsx";
 import { accessToken, signOut, type Account } from "./accounts.ts";
+import { lastChat } from "../lastChat.ts";
 import { cloud, type Role, type StationView, type WorkspaceView } from "./api.ts";
 import { Avatar, online } from "./gate.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
@@ -39,7 +40,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   const base = `/w/${entry.id}/settings`;
   return (
     <div className="nav-scroll">
-      <NavLink className="nav-row" to={`/w/${entry.id}`} end><ArrowLeft {...ICON} />返回会话</NavLink>
+      <NavLink className="nav-row" to={lastChat(entry.id, `/w/${entry.id}`)} end><ArrowLeft {...ICON} />返回会话</NavLink>
       <div className="nav-heading">账号</div>
       <NavLink className="nav-row" to={`${base}/account`}><Avatar account={entry.account} size={18} /><span className="nav-text">{entry.account.email}</span></NavLink>
       <div className="nav-heading">Workspace · {entry.name}</div>

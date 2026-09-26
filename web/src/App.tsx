@@ -1,6 +1,7 @@
 import { Tooltip } from "radix-ui";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { NewChat } from "./NewChat.tsx";
+import { useRememberChat } from "./lastChat.ts";
 import { useStation } from "./station.tsx";
 import { ApiError, useLiveUpdates, useOverview } from "./api.ts";
 import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
@@ -19,6 +20,7 @@ function useDetailOpen(): boolean {
 }
 
 export function App() {
+  useRememberChat("local", (p) => /^\/(new|sessions\/.+)$/.test(p));
   const overview = useOverview();
   const detail = useDetailOpen();
   useLiveUpdates(overview.isSuccess);
