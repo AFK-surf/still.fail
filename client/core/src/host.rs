@@ -45,12 +45,17 @@ pub struct StreamResponse {
     pub body: LocalBoxStream<'static, Result<Vec<u8>, HostError>>,
 }
 
+/// A receive-only WebSocket's text frames. The stream ends when the socket closes; dropping it closes the socket.
+pub type SocketFrames = LocalBoxStream<'static, Result<String, HostError>>;
+
 pub trait Host {
     /// Where ember cloud is: the page's origin on the web, https://ember.3720.org natively.
     fn cloud_origin(&self) -> String;
 
     fn fetch(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>>;
     fn fetch_stream(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<StreamResponse, HostError>>;
+    /// Opens a WebSocket that only listens (ember cloud's `/v1/events`); resolves once it is open.
+    fn websocket(&self, url: String, protocols: Vec<String>) -> LocalBoxFuture<'static, Result<SocketFrames, HostError>>;
 
     /// Small persistent values by key: accounts, the device key, preferences.
     fn storage_get(&self, key: &str) -> LocalBoxFuture<'static, Result<Option<Vec<u8>>, HostError>>;

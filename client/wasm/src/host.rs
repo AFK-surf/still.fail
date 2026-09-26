@@ -2,15 +2,19 @@
 //! (`fetch`, `setTimeout`, `crypto`, `indexedDB`, `location`) rather than
 //! `window`, so the same build also runs on a page when debugging.
 
-use ember_core::host::{Host, HostError, HttpRequest, HttpResponse, StreamResponse};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use ember_core::host::{Host, HostError, HttpRequest, HttpResponse, SocketFrames, StreamResponse};
 use ember_core::{ClientId, CoreError, CoreMessage};
+use futures::channel::{mpsc, oneshot};
 use futures::future::LocalBoxFuture;
 use futures::stream::{self, StreamExt};
 use js_sys::{Array, Function, Promise, Reflect, Uint8Array};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{AbortController, Crypto, Headers, ReadableStreamDefaultReader, Request, RequestInit, Response};
+use web_sys::{AbortController, CloseEvent, Crypto, Headers, MessageEvent, ReadableStreamDefaultReader, Request, RequestInit, Response, WebSocket};
 
 use crate::idb::Storage;
 
@@ -20,6 +24,21 @@ extern "C" {
     fn global_fetch(request: &Request) -> Promise;
     #[wasm_bindgen(js_name = setTimeout)]
     fn set_timeout(handler: &Function, ms: i32) -> JsValue;
+}
+
+/// Keeps a WebSocket's handlers alive with it, and closes it when dropped.
+struct SocketGuard {
+    socket: WebSocket,
+    _handlers: (Closure<dyn FnMut()>, Closure<dyn FnMut(MessageEvent)>, Closure<dyn FnMut(CloseEvent)>),
+}
+
+impl Drop for SocketGuard {
+    fn drop(&mut self) {
+        self.socket.set_onopen(None);
+        self.socket.set_onmessage(None);
+        self.socket.set_onclose(None);
+        let _ = self.socket.close();
+    }
 }
 
 pub struct WebHost {
@@ -134,6 +153,55 @@ impl Host for WebHost {
             let reader = response.body().map(|body| body.get_reader().unchecked_into::<ReadableStreamDefaultReader>());
             let body = stream::unfold(Body { reader, controller }, next_chunk).boxed_local();
             Ok(StreamResponse { status: response.status(), headers: headers(&response), body })
+        })
+    }
+
+    fn websocket(&self, url: String, protocols: Vec<String>) -> LocalBoxFuture<'static, Result<SocketFrames, HostError>> {
+        Box::pin(async move {
+            let list = Array::new();
+            for p in &protocols {
+                list.push(&JsValue::from_str(p));
+            }
+            let socket = WebSocket::new_with_str_sequence(&url, &list).map_err(js_error)?;
+            let (frames, rx) = mpsc::unbounded::<Result<String, HostError>>();
+            let (opened, open) = oneshot::channel::<Result<(), HostError>>();
+            let opened = Rc::new(RefCell::new(Some(opened)));
+            let on_open = {
+                let opened = opened.clone();
+                Closure::<dyn FnMut()>::new(move || {
+                    if let Some(tx) = opened.borrow_mut().take() {
+                        let _ = tx.send(Ok(()));
+                    }
+                })
+            };
+            let on_message = {
+                let frames = frames.clone();
+                Closure::<dyn FnMut(MessageEvent)>::new(move |event: MessageEvent| {
+                    if let Some(text) = event.data().as_string() {
+                        let _ = frames.unbounded_send(Ok(text));
+                    }
+                })
+            };
+            // Before it opened, a close is a refusal; after, the end of the frames.
+            let on_close = {
+                let opened = opened.clone();
+                let frames = frames.clone();
+                Closure::<dyn FnMut(CloseEvent)>::new(move |event: CloseEvent| {
+                    match opened.borrow_mut().take() {
+                        Some(tx) => {
+                            let _ = tx.send(Err(HostError(format!("websocket refused ({})", event.code()))));
+                        }
+                        None => frames.close_channel(),
+                    }
+                })
+            };
+            socket.set_onopen(Some(on_open.as_ref().unchecked_ref()));
+            socket.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+            socket.set_onclose(Some(on_close.as_ref().unchecked_ref()));
+            let guard = SocketGuard { socket, _handlers: (on_open, on_message, on_close) };
+            open.await.map_err(|_| HostError("websocket gone".into()))??;
+            // The guard lives as long as the stream; dropping the stream closes the socket.
+            Ok(stream::unfold((rx, guard), |(mut rx, guard)| async move { rx.next().await.map(|frame| (frame, (rx, guard))) }).boxed_local())
         })
     }
 

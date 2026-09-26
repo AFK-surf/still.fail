@@ -31,6 +31,10 @@ pub struct FakeHost {
     storage: RefCell<HashMap<String, Vec<u8>>>,
     responder: RefCell<Option<Responder>>,
     stream_responder: RefCell<Option<StreamResponder>>,
+    /// The WebSockets opened: url, protocols, and the sender that feeds their frames (dropping it closes the socket).
+    pub sockets: RefCell<Vec<(String, Vec<String>, futures::channel::mpsc::UnboundedSender<Result<String, HostError>>)>>,
+    /// Refuse to open WebSockets (as a browser does when the server says no).
+    pub refuse_sockets: Cell<bool>,
     /// Every request fetched, in order.
     pub requests: RefCell<Vec<HttpRequest>>,
     emitted: RefCell<Vec<(ClientId, CoreMessage)>>,
@@ -46,6 +50,8 @@ impl FakeHost {
             storage: RefCell::default(),
             responder: RefCell::default(),
             stream_responder: RefCell::default(),
+            sockets: RefCell::default(),
+            refuse_sockets: Cell::new(false),
             requests: RefCell::default(),
             emitted: RefCell::default(),
             seed: RefCell::new(0x5eed),
@@ -129,6 +135,15 @@ impl Host for FakeHost {
             None => Err(HostError(format!("no stream responder for {} {}", request.method, request.url))),
         };
         async move { answer }.boxed_local()
+    }
+
+    fn websocket(&self, url: String, protocols: Vec<String>) -> LocalBoxFuture<'static, Result<crate::host::SocketFrames, HostError>> {
+        if self.refuse_sockets.get() {
+            return async { Err(HostError("refused".into())) }.boxed_local();
+        }
+        let (tx, rx) = futures::channel::mpsc::unbounded();
+        self.sockets.borrow_mut().push((url, protocols, tx));
+        async move { Ok(rx.boxed_local()) }.boxed_local()
     }
 
     fn storage_get(&self, key: &str) -> LocalBoxFuture<'static, Result<Option<Vec<u8>>, HostError>> {
