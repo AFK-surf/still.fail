@@ -679,7 +679,8 @@ fn runtimes(overview: Option<&Value>) -> Value {
     let list = RUNTIMES.iter().filter_map(|runtime| {
         let models: BTreeSet<&str> = profiles
             .iter()
-            .filter(|p| p.get("runtime").and_then(Value::as_str) == Some(runtime))
+            // An account run on several runtimes offers its models on each.
+            .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
             .flat_map(|p| p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str))
             .collect();
         (!models.is_empty()).then(|| json!({ "runtime": runtime, "models": models }))
@@ -1093,10 +1094,10 @@ mod tests {
             t.set(workspace(), stations(t.now_s(), true, false));
             t.read(&mut ui, 1).await;
             let overview_a = json!({"connects": [], "profiles": [
-                {"id": "p1", "runtime": "codex", "models": ["o3", "gpt-5"]},
-                {"id": "p2", "runtime": "claude", "models": []},
-                {"id": "p3", "runtime": "claude", "models": ["sonnet"]},
-                {"id": "p4", "runtime": "claude", "models": ["opus", "sonnet"]},
+                {"id": "p1", "runtimes": ["codex"], "models": ["o3", "gpt-5"]},
+                {"id": "p2", "runtimes": ["claude"], "models": []},
+                {"id": "p3", "runtimes": ["claude"], "models": ["sonnet"]},
+                {"id": "p4", "runtimes": ["claude"], "models": ["opus", "sonnet"]},
             ]});
             t.set(overview("ws/a"), overview_a.clone());
             t.set(host_of("ws/a"), json!({"hostname": "studio"}));
