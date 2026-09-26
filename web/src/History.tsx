@@ -415,6 +415,8 @@ function Fold({ children, className }: { children: ReactNode; className?: string
   const box = useRef<HTMLDivElement>(null);
   const [long, setLong] = useState(false);
   const [open, setOpen] = useState(false);
+  // Only a reader's own click animates; folding on arrival happens before the first paint.
+  const [animate, setAnimate] = useState(false);
   // Measured before paint, so a long entry never shows at full height first.
   useLayoutEffect(() => {
     const el = box.current;
@@ -430,8 +432,8 @@ function Fold({ children, className }: { children: ReactNode; className?: string
   }, []);
   return (
     <div className="fold">
-      <div ref={box} className={`fold-body${className ? ` ${className}` : ""}`} data-folded={long && !open ? true : undefined}>{children}</div>
-      {long && <button type="button" className="text-toggle fold-toggle" onClick={() => setOpen(!open)}>{open ? "收起" : "展开"}</button>}
+      <div ref={box} className={`fold-body${className ? ` ${className}` : ""}`} data-folded={long && !open ? true : undefined} data-anim={animate || undefined}>{children}</div>
+      {long && <button type="button" className="text-toggle fold-toggle" onClick={() => { setAnimate(true); setOpen(!open); }}>{open ? "收起" : "展开"}</button>}
     </div>
   );
 }
