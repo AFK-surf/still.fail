@@ -9,3 +9,7 @@ data/
 # built by client/wasm/build.sh
 web/src/core/pkg/
 client/target/
+
+# built by apps/desktop/build.sh
+apps/desktop/build/
+apps/desktop/out/

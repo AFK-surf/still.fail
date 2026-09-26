@@ -2,7 +2,8 @@
 // that runs it, calls with request ids, and subscriptions that survive the
 // worker being replaced. The worker is a SharedWorker so every tab shares one
 // core; a dedicated Worker per tab where SharedWorker is missing (Chrome on
-// Android).
+// Android). In the desktop app (apps/desktop) the core runs in a utility
+// process instead, reached through a MessagePort; the protocol is the same.
 import { captureException } from "../telemetry.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core/src/protocol.rs). */
@@ -309,9 +310,66 @@ export function workerOpener(): Opener {
   };
 }
 
+/** What the desktop app's preload (apps/desktop/src/preload.ts) gives the page. */
+export interface EmberDesktop {
+  /** Asks for a port to the core; it arrives as a window message `{ emberCore: "port", id }`. */
+  openCore(id: number): void;
+}
+
+declare global {
+  interface Window {
+    emberDesktop?: EmberDesktop;
+  }
+}
+
+let nextPort = 1;
+
+/**
+ * Opens a channel to the desktop app's core, in its utility process: each
+ * channel is a port of its own. Messages go out as objects and come back as
+ * the core's JSON. The core's process exiting is announced to every page.
+ */
+export function desktopOpener(desktop: EmberDesktop): Opener {
+  return (onMessage, onFail) => {
+    const id = nextPort++;
+    let port: MessagePort | null = null;
+    // What the client posts before the port is here, in order.
+    const early: unknown[] = [];
+    const arrive = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      const data = event.data as { emberCore?: string; id?: number; reason?: string } | null;
+      if (data?.emberCore === "exit") {
+        onFail(data.reason ?? "核心进程退出了");
+      } else if (data?.emberCore === "port" && data.id === id && !port && event.ports[0]) {
+        port = event.ports[0];
+        port.onmessage = (message) => onMessage(JSON.parse(message.data as string));
+        for (const message of early.splice(0)) port.postMessage(message);
+      }
+    };
+    addEventListener("message", arrive);
+    desktop.openCore(id);
+    return {
+      post: (message) => {
+        if (port) {
+          port.postMessage(message);
+        } else {
+          // Throws now, as posting would, for what cannot be sent.
+          structuredClone(message);
+          early.push(message);
+        }
+      },
+      close: () => {
+        removeEventListener("message", arrive);
+        port?.close();
+      },
+    };
+  };
+}
+
 /** Starts (or joins) the core and keeps the page's client in step with the page's lifecycle. */
 export function connectCore(): CoreClient {
-  const client = new CoreClient(workerOpener(), { onFault: (error) => captureException(error, { source: "core" }) });
+  const open = window.emberDesktop ? desktopOpener(window.emberDesktop) : workerOpener();
+  const client = new CoreClient(open, { onFault: (error) => captureException(error, { source: "core" }) });
   addEventListener("pagehide", () => client.suspend());
   addEventListener("pageshow", (event) => { if (event.persisted) client.resume(); });
   return client;

@@ -1,0 +1,56 @@
+{
+  "name": "@ember/desktop",
+  "productName": "ember",
+  "version": "0.1.0",
+  "description": "ember",
+  "private": true,
+  "main": "build/app/main.js",
+  "scripts": {
+    "build": "sh build.sh",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  },
+  "build": {
+    "appId": "dev.ember.desktop",
+    "productName": "ember",
+    "directories": {
+      "output": "out"
+    },
+    "files": [
+      "build/app/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/web",
+        "to": "web"
+      },
+      {
+        "from": "build/ember_core.node",
+        "to": "ember_core.node"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "ember",
+        "schemes": [
+          "ember"
+        ]
+      }
+    ],
+    "mac": {
+      "target": "dir",
+      "identity": null,
+      "icon": "../../web/public/icon-512.png",
+      "category": "public.app-category.developer-tools"
+    },
+    "electronDist": "node_modules/electron/dist"
+  },
+  "packageManager": "pnpm@10.11.1"
+}
