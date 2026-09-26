@@ -2350,7 +2350,7 @@ mod tests {
             host.settle().await;
             let v = live_of(&sink, "k");
             assert_eq!(v["steps"].as_array().unwrap().len(), 1);
-            assert_eq!((v["steps"][0]["text"].as_str(), v["steps"][0]["subagent"].as_bool(), v["steps"][0]["parent"].as_str()), (Some(""), Some(true), Some("t0")));
+            assert_eq!((v["steps"][0]["step"].as_str(), v["steps"][0]["subagent"].as_bool(), v["steps"][0]["parent"].as_str()), (Some("text"), Some(true), Some("t0")));
             push(json!({"type": "clear"}));
             host.settle().await;
             let v = live_of(&sink, "k");
