@@ -9,7 +9,7 @@ import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
 import type {
-  Attachment, ChatRow, ConnectInput, ConnectView, Creator, HostInfo, LivePhase, LiveStep, LoginJob, MessageView, Overview, ProfileCheck, ProfileInput, ProfileQuota, ProfileView, Quote, RuntimeKind,
+  AccessKind, Attachment, ChatRow, ConnectInput, ConnectView, Creator, HostInfo, LivePhase, LiveStep, LoginJob, MessageView, Overview, ProfileCheck, ProfileInput, ProfileQuota, ProfileView, Quote, RuntimeKind,
   SessionSummary, ThreadView, TimelineEntry, TranscriptUsage, TurnRecord,
 } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
