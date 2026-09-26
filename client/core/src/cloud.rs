@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use crate::accounts::{Accounts, encode_component};
 use crate::error::{CoreError, Result};
 use crate::host::{Host, HttpRequest};
+use crate::trace::{Kind, Tracer, route};
 
 /// POST /v1/workspaces/:ws/stations/:st/grant {device} answers this.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -24,19 +25,27 @@ pub struct Grant {
 pub struct Cloud {
     host: Rc<dyn Host>,
     accounts: Rc<Accounts>,
+    tracer: Rc<Tracer>,
 }
 
 impl Cloud {
-    pub fn new(host: Rc<dyn Host>, accounts: Rc<Accounts>) -> Rc<Cloud> {
-        Rc::new(Cloud { host, accounts })
+    pub fn new(host: Rc<dyn Host>, accounts: Rc<Accounts>, tracer: Rc<Tracer>) -> Rc<Cloud> {
+        Rc::new(Cloud { host, accounts, tracer })
     }
 
     /// One call as `sub`: adds the token (refreshing it), parses JSON, maps errors to CoreError with the cloud's code.
+    /// Inside a trace it is a span of it, and says so to ember cloud with a `traceparent`.
     pub async fn request(&self, sub: &str, method: &str, path: &str, body: Option<Value>) -> Result<Value> {
         let token = self.accounts.access_token(sub).await?;
         let mut headers = vec![("authorization".to_string(), format!("Bearer {token}"))];
         if body.is_some() {
             headers.push(("content-type".into(), "application/json".into()));
+        }
+        let mut span = self.tracer.child(format!("{method} {}", route(path)), Kind::Client);
+        if let Some(span) = &mut span {
+            span.set("http.request.method", method.to_string());
+            span.set("url.path", route(path));
+            headers.push(("traceparent".into(), span.context().traceparent()));
         }
         let request = HttpRequest {
             method: method.into(),
@@ -44,7 +53,21 @@ impl Cloud {
             headers,
             body: body.map(|b| serde_json::to_vec(&b).unwrap()),
         };
-        let response = self.host.fetch(request).await?;
+        let response = self.host.fetch(request).await;
+        if let Some(mut span) = span {
+            match &response {
+                Ok(response) => {
+                    span.set("http.response.status_code", response.status);
+                    span.set("http.response.body.size", response.body.len());
+                    if response.status >= 500 {
+                        span.fail();
+                    }
+                }
+                Err(_) => span.fail(),
+            }
+            span.end();
+        }
+        let response = response?;
         // Like the web app: an unreadable body counts as {}.
         let data: Value = serde_json::from_slice(&response.body).unwrap_or_else(|_| json!({}));
         if !(200..300).contains(&response.status) {
@@ -52,6 +75,22 @@ impl Cloud {
             return Err(cloud_error(&code, response.status));
         }
         Ok(data)
+    }
+
+    /// POST /v1/telemetry/traces as `sub`: a batch of spans (OTLP JSON), which ember cloud passes on to Axiom.
+    pub async fn traces(&self, sub: &str, body: Vec<u8>) -> Result<()> {
+        let token = self.accounts.access_token(sub).await?;
+        let request = HttpRequest {
+            method: "POST".into(),
+            url: format!("{}/v1/telemetry/traces", self.host.cloud_origin()),
+            headers: vec![("authorization".into(), format!("Bearer {token}")), ("content-type".into(), "application/json".into())],
+            body: Some(body),
+        };
+        let response = self.host.fetch(request).await?;
+        if !(200..300).contains(&response.status) {
+            return Err(cloud_error(&format!("http_{}", response.status), response.status));
+        }
+        Ok(())
     }
 
     /// GET /v1/me: {user, workspaces, invitations, relay_url}.
@@ -111,7 +150,7 @@ mod tests {
             access_expires: far,
         };
         host.store(STORAGE_KEY, serde_json::to_vec(&[account]).unwrap());
-        Cloud::new(host.clone(), Accounts::load(host.clone()).await)
+        Cloud::new(host.clone(), Accounts::load(host.clone()).await, Tracer::new(host.clone(), 1.0))
     }
 
     fn header(request: &HttpRequest, name: &str) -> Option<String> {

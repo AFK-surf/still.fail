@@ -15,6 +15,7 @@ pub mod station;
 pub mod store;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
+pub mod trace;
 pub mod views;
 
 pub use crate::core::Core;

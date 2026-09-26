@@ -64,6 +64,11 @@ pub trait Host {
 
     /// Milliseconds since the Unix epoch.
     fn now_ms(&self) -> f64;
+    /// Milliseconds on a clock that only moves forward, for timing spans (web: `performance.now()`); its zero is
+    /// the host's own.
+    fn monotonic_ms(&self) -> f64 {
+        self.now_ms()
+    }
     /// The viewer's time zone at that moment: minutes to add to UTC to get local time.
     fn utc_offset_min(&self, at_ms: f64) -> i32;
     fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()>;

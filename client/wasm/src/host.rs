@@ -24,6 +24,8 @@ extern "C" {
     fn global_fetch(request: &Request) -> Promise;
     #[wasm_bindgen(js_name = setTimeout)]
     fn set_timeout(handler: &Function, ms: i32) -> JsValue;
+    #[wasm_bindgen(js_namespace = performance, js_name = now)]
+    fn performance_now() -> f64;
 }
 
 /// Keeps a WebSocket's handlers alive with it, and closes it when dropped.
@@ -222,6 +224,11 @@ impl Host for WebHost {
 
     fn now_ms(&self) -> f64 {
         js_sys::Date::now()
+    }
+
+    /// Sub-millisecond and never set back, unlike `Date.now()`.
+    fn monotonic_ms(&self) -> f64 {
+        performance_now()
     }
 
     fn utc_offset_min(&self, at_ms: f64) -> i32 {
