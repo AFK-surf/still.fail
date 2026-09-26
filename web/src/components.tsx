@@ -81,7 +81,7 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
 }
 
 /** What is left of the most used window, as a ring: full and green when untouched, shorter and redder as it goes; the
- * number left inside (up to 99; a full ring says 100 by itself). */
+ * number left inside (up to 99; a full ring says 100 by itself). Use eats it clockwise from the top. */
 function QuotaRing({ percent, title }: { percent: number; title: string }) {
   const used = Math.max(0, Math.min(100, Math.round(percent)));
   const left = 100 - used;
@@ -91,7 +91,7 @@ function QuotaRing({ percent, title }: { percent: number; title: string }) {
     <span className="quota-ring" data-level={level(used)} title={title} role="img" aria-label={`剩余 ${left}%`}>
       <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
         <circle className="quota-ring-track" cx="13" cy="13" r={r} />
-        {left > 0 && <circle className="quota-ring-fill" cx="13" cy="13" r={r} strokeDasharray={`${(around * left) / 100} ${around}`} transform="rotate(-90 13 13)" />}
+        {left > 0 && <circle className="quota-ring-fill" cx="13" cy="13" r={r} strokeDasharray={`${(around * left) / 100} ${around}`} transform={`rotate(${-90 + used * 3.6} 13 13)`} />}
       </svg>
       {left < 100 && <span className="quota-ring-number">{left}</span>}
     </span>
