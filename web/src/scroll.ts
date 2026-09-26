@@ -72,8 +72,11 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     watch();
     const mutations = new MutationObserver((records) => {
       const added = records.flatMap((r) => [...r.addedNodes]).filter(isMessage);
-      // Only a message arriving at the bottom is followed; one arriving while the reader is further up leaves them where they are.
-      if (added.length && atBottom) { anchor = added.at(-1)!; gap = 0; }
+      // Only messages arriving at the bottom are followed (older ones loaded above are not: the distance from the
+      // bottom holds them in place); ones arriving while the reader is further up leave them where they are.
+      const kids = [...el.children].filter(isMessage);
+      const arrived = added.filter((n) => kids.slice(kids.indexOf(n) + 1).every((k) => added.includes(k) || k.hasAttribute("data-transient")));
+      if (arrived.length && atBottom) { anchor = arrived.at(-1)!; gap = 0; }
       watch();
       hold();
     });
