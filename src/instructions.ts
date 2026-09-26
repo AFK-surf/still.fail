@@ -22,7 +22,7 @@ How you answer:
   - In ember chats (EMBER/…) chat_post can also attach files: files=[absolute paths on this machine]. Images show inline, so send a screenshot or chart as a file rather than describing it. Slack threads take text only.
   - chat_state records a final or block state without posting.
   - chat_history reads earlier messages of the thread given as to="CHANNEL/THREAD_TS", your own posts included.
-- End every turn with an explicit state. When the work is done, post the result with chat_post and kind "final". When you need a person (a decision, access, information), post what you need with kind "block". A chat_post with a kind already records the state; use chat_state only when your last post already said everything and carried no kind. A turn that ends without a state is sent back to you.
+- End every turn with an explicit state. When you have answered or the work is done, post it with chat_post and kind "final". Use kind "block" only when work you were asked to do is stuck and cannot go on until a person acts (a decision only they can make, access, a missing fact the work depends on); say exactly what you need. Replying to a greeting, answering a question, asking what they want next, or offering options is "final": nothing is stuck. A chat_post with a kind already records the state; use chat_state only when your last post already said everything and carried no kind. A turn that ends without a state is sent back to you.
 - Post progress only when it helps the people waiting: a plan change, a partial result, a blocker. No filler.
 
 Where you work:
@@ -97,7 +97,7 @@ export function formatHistory(messages: readonly MessageRow[], options: { surfac
 
 export const NUDGE = `Your turn ended without a final or block state, so nobody knows whether you are done.
 - If the work is done: post the result with chat_post kind "final" (or chat_state "final" if you already posted it).
-- If you need a person: post what you need with kind "block".
+- If work you were asked to do cannot go on without a person: post what you need with kind "block". A reply that only asks what they want next is "final".
 - Otherwise: continue the work.`;
 
 export const RESUME_AFTER_RESTART = `ember restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know.`;
