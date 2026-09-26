@@ -43,7 +43,7 @@ export class RelayBudget extends DurableObject<Env> {
       balance: LIMITS.burstBytes,
       frameBalance: LIMITS.burstFrames,
       frames: 0,
-    };
+    });
     if (q.minute !== minute) {
       q.minute = minute;
       q.connects = 0;
