@@ -139,6 +139,8 @@ export interface SourcedMessage {
   text: string;
   /** CHANNEL/THREAD_TS, when the prompt said. */
   thread: string | null;
+  /** Said on Slack (`user` is a Slack user id), rather than on ember's page. */
+  slack: boolean;
 }
 
 const unescape = (v: string) => v.replaceAll("&quot;", "\"").replaceAll("&amp;", "&");
@@ -154,11 +156,11 @@ export function parsePrompt(text: string): { messages: SourcedMessage[]; note: s
       const attr = (name: string) => new RegExp(`${name}="([^"]*)"`).exec(attrs)?.[1];
       const from = unescape(attr("from") ?? "");
       const named = /^(.*) \(([^()\s]+)\)$/.exec(from);
-      messages.push({ user: named?.[2] ?? from, name: named?.[1] ?? null, ts: attr("ts") ?? "", text: body, thread: attr("thread") ?? null });
+      messages.push({ user: named?.[2] ?? from, name: named?.[1] ?? null, ts: attr("ts") ?? "", text: body, thread: attr("thread") ?? null, slack: attr("via") === "slack" });
       return "";
     })
     .replace(/<slack user="([^"]*)"(?: bot)? ts="([^"]*)">\n?([\s\S]*?)\n?<\/slack>/g, (_, user: string, ts: string, body: string) => {
-      messages.push({ user, name: null, ts, text: body, thread: null });
+      messages.push({ user, name: null, ts, text: body, thread: null, slack: true });
       return "";
     })
     .replace(/^\(Thread \S+ had messages before you were brought in;.*\)$/gm, "")

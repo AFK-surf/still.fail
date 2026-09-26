@@ -18,11 +18,19 @@ import { track } from "./telemetry.ts";
 /** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
 interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null; session: SessionSummary; live: LiveView | undefined; turns: ChatView["agents"][number]["turns"] }
 
-export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; lives: ReadonlyMap<string, LiveView>; onOpenHistory(key: string): void }) {
+/**
+ * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
+ * `ensureChat` makes the chat with the first message, which `onSent` then follows.
+ */
+export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
+  chat: ChatView; lives: ReadonlyMap<string, LiveView>; onOpenHistory(key: string): void;
+  ensureChat?: () => Promise<{ key: string; thread: number }>; onSent?: (thread: number) => void;
+}) {
   const list = useRef<HTMLDivElement>(null);
   const floor = useRef<HTMLDivElement>(null);
   const sending = useChatSend();
   const { thread, outbox } = chat;
+  const id = thread?.id ?? null;
   // Deleted messages keep their place for the station's cursors; here they are simply gone.
   const messages = chat.messages.filter((m) => m.deletedAt === null);
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
@@ -32,9 +40,11 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
   const isMine = useIsMine();
   const mineOf = (m: MessageView) => m.authorKind === "person" && isMine({ id: m.author, email: m.author });
   useStickToBottom(list, ".msg", floor);
-  useOlderOnScroll(list, chat, () => sending.older(thread.id));
-  useMarkRead(floor, chat, (seq) => sending.read(thread.id, seq));
-  const divider = useUnreadLine(list, chat, messages, mineOf, () => sending.older(thread.id));
+  // Without a chat there is nothing older to load and nothing to read.
+  const older = () => (id === null ? Promise.resolve() : sending.older(id));
+  useOlderOnScroll(list, chat, older);
+  useMarkRead(floor, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
+  const divider = useUnreadLine(list, chat, messages, mineOf, older);
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
   for (const o of outbox) sentHere.current.add(o.text);
@@ -85,7 +95,7 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
     return () => clearTimeout(timer);
   }, [youngest]);
   // Where agents post to reach this chat.
-  const address = `${thread.channel}/${thread.threadTs}`;
+  const address = thread ? `${thread.channel}/${thread.threadTs}` : null;
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = agents[0]?.key ?? null;
   const ownerOf = (file: Attachment) => agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.key ?? keeper;
@@ -161,8 +171,8 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
             <Files owner={ownerOf} files={o.attachments} />
             {o.state === "failed"
               ? <span className="msg-time msg-failed">发送失败{o.error ? `：${o.error}` : ""}
-                  <button type="button" className="inline-link" onClick={() => void sending.retry(thread.id, o.id).catch(() => {})}>重试</button>
-                  <button type="button" className="inline-link" onClick={() => void sending.discard(thread.id, o.id)}>删除</button>
+                  <button type="button" className="inline-link" onClick={() => void (id !== null && sending.retry(id, o.id).catch(() => {}))}>重试</button>
+                  <button type="button" className="inline-link" onClick={() => void (id !== null && sending.discard(id, o.id))}>删除</button>
                 </span>
               : <span className="msg-time msg-waiting msg-sending"><span className="spinner" aria-hidden="true" />正在发送</span>}
           </div>
@@ -172,7 +182,7 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
           let writer: ChatAgent | undefined;
           let text: string | null = null;
           for (const a of agents) {
-            const step = a.live?.steps.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && partialString(s.input, "to") === address);
+            const step = a.live?.steps.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && address !== null && partialString(s.input, "to") === address);
             text = step ? partialString(step.input, "text") : null;
             if (text) { writer = a; break; }
           }
@@ -216,7 +226,8 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
-      <Composer thread={thread.id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
+      <Composer thread={id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)}
+        {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
 }
@@ -231,7 +242,7 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
  */
 function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: MessageView[], mine: (m: MessageView) => boolean, older: () => Promise<unknown>): number | null {
   // What was unread when the chat opened: after the read position, up to the newest message then.
-  const [open] = useState(() => ({ read: chat.thread.read, newest: chat.thread.last?.seq ?? 0, unread: chat.thread.unread > 0 }));
+  const [open] = useState(() => ({ read: chat.thread?.read ?? 0, newest: chat.thread?.last?.seq ?? 0, unread: (chat.thread?.unread ?? 0) > 0 }));
   const first = messages[0]?.seq;
   // Those not loaded yet may hold it: the pages before are loaded first.
   const above = open.unread && chat.more && first !== undefined && first > open.read;
@@ -291,7 +302,7 @@ function useOlderOnScroll(ref: RefObject<HTMLElement | null>, chat: ChatView, ol
  */
 function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
   const newest = chat.messages.at(-1)?.seq ?? 0;
-  const known = chat.thread.read;
+  const known = chat.thread?.read ?? 0;
   const sent = useRef(0);
   const record = useRef(read);
   record.current = read;
@@ -585,7 +596,8 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
       const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
       setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null, ...(preview ? { preview } : {}) }]);
       if (tooBig) continue;
-      target().then(({ key }) => {
+      // Files go to the session's workspace: an agent without a chat yet gets its chat only with the first message.
+      (sessionKey ? Promise.resolve({ key: sessionKey }) : target()).then(({ key }) => {
         if (!key) throw new Error("这个对话里没有 agent，文件无处可放");
         return api.uploadFile(key, file);
       }).then(

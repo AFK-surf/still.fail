@@ -81,7 +81,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
           return (
             <section key={day.daysAgo} aria-label={label}>
               <div className="nav-heading">{label}</div>
-              {day.items.map((item) => <ChatRow key={`${item.station}/${item.thread?.id ?? item.session}`} item={item} />)}
+              {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} />)}
             </section>
           );
         })}
@@ -96,17 +96,18 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
  * state as a dot (block before work before failure).
  */
 function ChatRow({ item }: { item: ChatItem }) {
-  const { thread, connect } = item;
+  const { connect } = item;
   const badge = chatBadge(item.agents);
   return (
-    <NavLink className="nav-row nav-session" to={thread ? `${stationBase(item.station)}/chats/${thread.id}` : `${stationBase(item.station)}/agents/${encodeURIComponent(item.session ?? "")}`} data-unread={item.unread || undefined} onClick={chatClicked}>
+    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`} data-unread={item.unread || undefined} onClick={chatClicked}>
       {item.unread && <span className="unread-dot" role="img" aria-label="有未读消息" />}
       <span className="nav-session-text">
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className="nav-session-head">
           <span className="nav-session-title">{item.title}</span>
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
-          {connect && <Tip label={originLabel(item)} side="right"><span className="session-kind"><ConnectKindIcon kind={connect.kind} size={12} /></span></Tip>}
+          {/* Slack is the only kind of connect there is. */}
+          {connect && <Tip label={originLabel(item)} side="right"><span className="session-kind"><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
         </span>
         {/* People are in the chat itself; here only the last thing said and when. */}
         <span className="nav-session-meta">
@@ -124,11 +125,9 @@ function ChatRow({ item }: { item: ChatItem }) {
 
 /** Where a chat's agent came from, for the connect icon's tip: the Slack workspace, then the thread's channel. */
 function originLabel(item: ChatItem): string {
-  const c = item.connect?.connection;
-  const team = c && (c.state === "connected" || c.state === "reconnecting") ? c.workspace?.team : null;
   const o = item.origin;
   const where = !o ? null : o.channelName ? `#${o.channelName}` : o.channel.startsWith("D") ? "私信" : null;
-  return ["Slack", team, where].filter(Boolean).join(" · ");
+  return ["Slack", o?.teamName, where].filter(Boolean).join(" · ");
 }
 
 /** The last thing said in a chat, on one line: a small picture of who said it (name on hover), then what. */
