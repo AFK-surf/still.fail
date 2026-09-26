@@ -71,7 +71,10 @@ import kotlinx.serialization.Serializable
 @Serializable data class RuntimeModels(val runtime: String, val models: List<String> = emptyList())
 
 /** A model the station can run, with the runtimes it runs on (the core's): the model is chosen first, the runtime only when there are several. */
-@Serializable data class ModelRuntimes(val model: String, val runtimes: List<String> = emptyList())
+@Serializable data class ModelRuntimes(val model: String, val runtimes: List<String> = emptyList(), val spent: Spent? = null)
+
+/** Every account that runs a model has a window used up: when the first of them refills (ms), if known. */
+@Serializable data class Spent(val until: Double? = null)
 
 @Serializable data class StationView(
     val station: String,

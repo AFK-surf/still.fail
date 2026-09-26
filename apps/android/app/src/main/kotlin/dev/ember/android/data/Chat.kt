@@ -30,6 +30,8 @@ import kotlinx.serialization.Serializable
     val declared: String? = null,
     /** Whether it is the viewer's (their bubble), as the core decides. */
     val mine: Boolean = false,
+    /** Said by ember itself (a limit hit, a failure): a notice across the chat, as the core decides. */
+    val system: Boolean = false,
     val createdAt: Long = 0,
     /** When its latest edit came; null if never edited. */
     val editedAt: Long? = null,

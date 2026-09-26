@@ -35,6 +35,14 @@ fun agentLabel(model: String?, effort: String?): String =
 
 private fun hhmm(ms: Long) = Calendar.getInstance().apply { timeInMillis = ms }.let { String.format(Locale.ROOT, "%02d:%02d", it.get(Calendar.HOUR_OF_DAY), it.get(Calendar.MINUTE)) }
 
+/** How long until a time to come, in words: "40 分钟后", "3 小时后", "2 天后". */
+fun timeUntil(ms: Long, now: Long = System.currentTimeMillis()): String {
+    val minutes = ((ms - now) / 60_000).coerceAtLeast(0)
+    if (minutes < 60) return if (minutes <= 1) "1 分钟内" else "$minutes 分钟后"
+    val hours = (minutes + 30) / 60
+    return if (hours < 48) "$hours 小时后" else "${(hours + 12) / 24} 天后"
+}
+
 fun relativeTime(ms: Long, now: Long = System.currentTimeMillis()): String {
     val seconds = Math.round((now - ms) / 1000.0)
     if (seconds < 45) return "刚刚"

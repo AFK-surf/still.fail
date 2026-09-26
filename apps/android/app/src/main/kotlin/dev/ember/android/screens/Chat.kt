@@ -592,6 +592,20 @@ private fun plain(text: String) = text.replace(Regex("[`*#>]"), "").replace(Rege
 @Composable
 private fun Said(ctx: Here, m: MessageView, draft: Draft, list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>, waitingNow: Boolean) {
     val jump = rememberJump(list, rows)
+    // What ember itself says: a notice across the chat, apart from people's and agents' messages.
+    if (m.system) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            Row(
+                Modifier.widthIn(max = 460.dp).clip(RoundedCornerShape(14.dp)).background(C.warn.copy(alpha = 0.12f))
+                    .border(1.dp, C.warn.copy(alpha = 0.25f), RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 9.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(Modifier.padding(top = 2.dp)) { Mark(14.dp) }
+                Box(Modifier.weight(1f, fill = false)) { Markdown(m.text, size = 14) }
+            }
+        }
+        return
+    }
     if (ctx.mine(m)) {
         val (hold, press) = holdMenu(m.text, "你", m.ts, "person", draft)
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {

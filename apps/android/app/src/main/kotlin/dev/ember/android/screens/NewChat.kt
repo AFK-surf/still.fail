@@ -54,6 +54,7 @@ import dev.ember.android.data.EFFORT_LABEL
 import dev.ember.android.data.RUNTIME_LABEL
 import dev.ember.android.data.ModelRuntimes
 import dev.ember.android.data.StationView
+import dev.ember.android.data.timeUntil
 import dev.ember.android.data.Topics
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.ui.C
@@ -163,6 +164,14 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
             if (making) Text("正在 ${view.name} 上创建会话…", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 6.dp))
         }
     }
+    // Chosen anyway (it is the person's call), but said: what is sent waits for its quota.
+    entry?.spent?.let { s ->
+        Text(
+            "${entry.model} 能用的账号额度都用完了" + (s.until?.let { "，${timeUntil(it.toLong())}恢复" } ?: "") + "。现在发的消息要等额度恢复才会有回复；也可以换一个模型。",
+            fontSize = 13.sp, color = C.ink,
+            modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
+        )
+    }
     // The choices, then the composer as a floating capsule, as in a chat.
     Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Room above and below for the chips' shadows, which the scroll would cut.
@@ -241,7 +250,8 @@ private fun pickModel(app: AppState, view: StationView, current: String, onPick:
         SheetHead("用哪个模型")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             view.models.forEach { m ->
-                PickRow(m.model, m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, checked = m.model == current, leading = { ModelMark(m.model, m.runtimes.first(), 36.dp) }) { onPick(m); app.sheet = null }
+                val spent = m.spent?.let { s -> "额度用完" + (s.until?.let { " · ${timeUntil(it.toLong())}恢复" } ?: "") }
+                PickRow(m.model, listOfNotNull(m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, spent).joinToString(" · "), checked = m.model == current, leading = { ModelMark(m.model, m.runtimes.first(), 36.dp) }) { onPick(m); app.sheet = null }
             }
         }
     }
