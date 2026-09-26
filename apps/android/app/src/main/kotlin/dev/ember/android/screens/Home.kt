@@ -196,7 +196,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
                 }
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) { item.last?.let { LastMessage(item, view) } }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item, view) } }
                 if (held) Text(relativeTime(item.lastActiveAt), fontSize = 12.sp, color = C.subtle, maxLines = 1)
                 Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) { StateDot(item.state()) }
             }
@@ -223,7 +223,13 @@ private fun LastMessage(item: ChatItem, view: ChatsView) {
             "agent" -> MakerIcon(agent?.model, agent?.runtime ?: "claude", 13.dp)
             else -> Avatar(last.author, name, 13.dp)
         }
-        Text(text, fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // The line's own height, its glyphs centred in it: level with the picture and the state's dot.
+        Text(
+            text, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+            )),
+        )
     }
 }
 

@@ -65,6 +65,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.rememberUpdatedState
@@ -282,6 +284,8 @@ private sealed interface Entry {
     data class Said(val m: MessageView) : Entry { override val id get() = "m:${m.ts}" }
     data class Out(val o: OutboxItem) : Entry { override val id get() = "o:${o.id}" }
     data class Working(val agent: AgentAtWork) : Entry { override val id get() = "act:${agent.key}" }
+    /** The room an activity that folded away leaves behind (as the web's floor): what is above it does not drop. */
+    data class Floor(val px: Int) : Entry { override val id get() = "floor" }
 }
 
 /** An agent at work: who it is, its transcript and steps in flight, and since when its turn runs. */
@@ -348,6 +352,16 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         }
     }
     val atWork = busy.ifEmpty { lastBusy.value }
+    // The list never gets shorter under the reader: an activity that folds away leaves its height as a floor, which
+    // what comes next (a message, another activity) takes back as it arrives.
+    val heights = remember { HashMap<String, Int>() }
+    var floor by remember { mutableIntStateOf(0) }
+    val gapPx = with(LocalDensity.current) { 14.dp.roundToPx() }
+    val working = atWork.isNotEmpty()
+    LaunchedEffect(working) {
+        if (!working) floor += heights.filterKeys { it.startsWith("act:") }.values.sum().let { if (it > 0) it + gapPx else 0 }
+        heights.keys.removeAll { it.startsWith("act:") }
+    }
 
     val all = buildList {
         if (view.more) add(Entry.Older)
@@ -359,6 +373,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         view.outbox.forEach { add(Entry.Out(it)) }
         // The activity is always the last thing in the chat (a reply comes whole, as a message).
         atWork.forEach { add(Entry.Working(it)) }
+        if (floor > 0) add(Entry.Floor(floor))
     }
 
     val placeKey = "$station:${thread?.id ?: agents.firstOrNull()?.key ?: ""}"
@@ -417,7 +432,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     }
     // A message arriving at the end while it is followed is kept in view from its top (the activity never is: it folds away).
     follow.indexOf = { key -> rows.indexOfFirst { it.id == key } }
-    val newestKey = rows.lastOrNull { it !is Entry.Working }?.id
+    val newestKey = rows.lastOrNull { it !is Entry.Working && it !is Entry.Floor }?.id
     val knownNewest = remember { mutableStateOf<String?>(null) }
     LaunchedEffect(newestKey, follow.placed) {
         if (!follow.placed) return@LaunchedEffect
@@ -459,7 +474,12 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         ) {
             items(rows, key = { it.id }) { row ->
                 val fresh = remember(row.id) { row.id !in known }
-                Box(Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = tween(200)).rise(fresh)) {
+                Box(Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = tween(200)).rise(fresh).onSizeChanged { size ->
+                    if (row is Entry.Floor) return@onSizeChanged
+                    val before = heights.put(row.id, size.height)
+                    // Something new took its place at the bottom: the floor gives that much back.
+                    if (before == null && fresh && floor > 0) floor = (floor - size.height - gapPx).coerceAtLeast(0)
+                }) {
                     when (row) {
                         Entry.Older -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Spinner(16.dp) }
                         Entry.Empty -> Text("在这里发消息，这个对话里的 agent 会在这里回复。", color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 24.dp))
@@ -467,6 +487,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
                         is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.seq in pending && now - row.m.createdAt > 1000)
                         is Entry.Out -> Out(ctx, row.o)
                         is Entry.Working -> Activity(ctx, row.agent, leaving)
+                        is Entry.Floor -> Spacer(Modifier.fillMaxWidth().height(with(LocalDensity.current) { row.px.toDp() }))
                     }
                 }
             }
