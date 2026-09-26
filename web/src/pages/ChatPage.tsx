@@ -323,7 +323,7 @@ function HistorySummary({ agent }: { agent: ChatAgentView }) {
       {agent.attention.map((a, i) => (
         a.kind === "quota" ? (
           <Tip key={i} label={<>{a.label}剩余 {a.left}%{a.until !== null && <><br />{refillsIn(a.until)}</>}</>}>
-            <span className="attention attention-quota"><QuotaRing percent={100 - a.left} size={20} /><span>{mark(a.label).text} 剩 {a.left}%</span></span>
+            <span className="attention attention-quota"><QuotaRing percent={100 - a.left} size={20} /><span className="quota-ring-letter">{mark(a.label).text}</span></span>
           </Tip>
         ) : a.kind === "disk" ? (
           <span key={i} className="attention" data-tone="amber">磁盘剩 {Math.round(a.freeBytes / 1024 ** 3)} GB</span>
