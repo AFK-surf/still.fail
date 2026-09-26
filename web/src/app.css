@@ -171,7 +171,8 @@
 .field[data-invalid] .input { border-color: var(--red); }
 .input::placeholder { color: var(--subtle); }
 /* The track tints whatever it sits on; the chosen option's ground is a thumb that slides. */
-.segmented { --pad: 3px; --gap: 2px; position: relative; isolation: isolate; display: flex; padding: var(--pad); gap: var(--gap); border-radius: 999px; background: color-mix(in oklch, var(--text) 6%, transparent); }
+/* As tall as its options wherever it sits (a stretching row would make the track taller than them and the thumb with it). */
+.segmented { --pad: 3px; --gap: 2px; position: relative; isolation: isolate; display: flex; align-items: center; align-self: center; height: max-content; padding: var(--pad); gap: var(--gap); border-radius: 999px; background: color-mix(in oklch, var(--text) 6%, transparent); }
 .segmented-thumb { position: absolute; z-index: -1; top: var(--pad); bottom: var(--pad); left: var(--pad);
   width: calc((100% - 2 * var(--pad) - (var(--n) - 1) * var(--gap)) / var(--n)); border-radius: 999px;
   background: var(--canvas); box-shadow: 0 1px 2px var(--shadow), 0 0 0 .5px var(--line);
