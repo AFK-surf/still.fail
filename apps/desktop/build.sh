@@ -6,7 +6,8 @@
 # app's own code as build/app, then electron-builder puts them together.
 # CARGO_TARGET_DIR is honoured. SKIP_WEB=1 takes dist/cloud-app as it is.
 set -eu
-export PATH="$HOME/.cargo/bin:$PATH"
+# A non-login shell (ssh studio …) has none of these on its PATH.
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$HOME/.local/node-v24.15.0-darwin-arm64/bin:$PATH"
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
 target=${CARGO_TARGET_DIR:-$root/client/target}
