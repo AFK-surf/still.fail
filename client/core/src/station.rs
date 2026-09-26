@@ -1127,6 +1127,10 @@ impl Stations {
             self.sink.set(&topic, Ok(thread_value(held.first, entries, held.thread, held.title)));
         }
         self.reload(&topic).await;
+        // What it shows is on the device; so is the page before it, for when the viewer goes back.
+        if let Some(first) = self.sink.get(&topic).and_then(|v| v.get("first")?.as_u64()) {
+            self.prefetch_before(station, id, first);
+        }
     }
 
     /// A thread's latest page, read with nothing kept: its topic's first value, and kept.
@@ -1427,7 +1431,32 @@ impl Stations {
             value["first"] = json!(first);
             still = first > 1;
         });
+        // A page ahead again, for the next time.
+        if still {
+            self.prefetch_before(&name, thread, first);
+        }
         Ok(still)
+    }
+
+    /// Keeps a page ahead of what a thread shows: the page before entry `before`, brought onto the device if it is not
+    /// there, so the next `older` has it at once. Nothing when the thread starts there, or its station is offline.
+    fn prefetch_before(&self, station: &str, thread: u64, before: u64) {
+        if before <= 1 || !self.reachable(station) {
+            return;
+        }
+        let Ok(addr) = StationAddr::parse(station) else { return };
+        let (this, name) = (self.rc(), station.to_string());
+        self.spawn(async move {
+            let log = Log::thread(&name, thread);
+            if this.kept.before(&log, before, PAGE).await.is_some() {
+                return;
+            }
+            let Ok(page) = this.json(&addr, "GET", &format!("/threads/{thread}/entries?before={before}&limit={PAGE}"), None).await else { return };
+            let older: Vec<Value> = page.get("entries").and_then(Value::as_array).into_iter().flatten().filter(|e| n_of(e).is_some_and(|n| n < before)).cloned().collect();
+            if let Some(first) = older.first().and_then(n_of) {
+                this.kept.write(&log, first, older, false, None).await;
+            }
+        });
     }
 
     /// Records how far the viewer has read a thread (an entry number); nothing is sent when it is read that far
