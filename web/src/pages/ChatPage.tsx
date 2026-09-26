@@ -4,7 +4,7 @@
 import { StationPreview } from "../Preview.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaBars, QuotaRing, Ring, mark, refillsIn } from "../components.tsx";
-import { Check, ChevronRight, Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
+import { ChevronDown, Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
 import { DropdownMenu, Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
@@ -356,38 +356,8 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
   const name = current?.name ?? profile?.name ?? session.profile;
   return (
     <div className="session-details">
-      {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota), each a
-          menu. The account is the station's pick unless kept to one here. */}
-      <div className="run-model">
-        {/* Another model is three picks in one: the model, how hard it thinks, and who runs it. Only the last one changes
-            anything, so a pick left halfway leaves it as it was. */}
-        <Chooser className="chooser run-chip" title="换模型" label={<><ModelLogo model={session.model} runtime={session.runtime} size={13} />{session.model ?? "运行时默认"}</>}>
-          {agent.choices.map((c) => (
-            <Step key={c.model} checked={session.model === c.model} label={<><ModelLogo model={c.model} runtime={session.runtime} size={12} />{c.model}</>}>
-              {[null, ...EFFORTS[session.runtime]].map((e) => (
-                <Step key={e ?? ""} checked={session.model === c.model && session.effort === e} label={e ?? "默认深度"}>
-                  <ProfileItems profiles={c.profiles} runtime={session.runtime} pinned={session.model === c.model && session.effort === e && session.profilePinned}
-                    onPick={(profile) => void change.run({ model: c.model, effort: e, profile })} />
-                </Step>
-              ))}
-            </Step>
-          ))}
-        </Chooser>
-        <Chooser className="chooser run-chip" title="换思考深度" label={session.effort ?? "默认深度"}>
-          <ChooserItem checked={!session.effort} onSelect={() => void change.run({ effort: null })}>运行时默认</ChooserItem>
-          {EFFORTS[session.runtime].map((e) => <ChooserItem key={e} checked={session.effort === e} onSelect={() => void change.run({ effort: e })}>{EFFORT_LABEL[e] ?? e}（{e}）</ChooserItem>)}
-        </Chooser>
-        <Chooser className="chooser run-chip" title={session.profilePinned ? "手动指定的 Profile" : "station 自动分配的 Profile"}
-          label={(
-            <>
-              <ProviderLogo runtime={session.runtime} kind={current?.kind ?? profile?.access.kind ?? "env"} size={13} />
-              {session.profilePinned ? name : `自动 · ${name}`}
-              <QuotaBars quota={current?.quota ?? profile?.quota} compact />
-            </>
-          )}>
-          <ProfileItems profiles={agent.profiles} runtime={session.runtime} pinned={session.profilePinned} onPick={(profile) => void change.run({ profile })} />
-        </Chooser>
-      </div>
+      {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota). */}
+      <RunPicker agent={agent} onPick={(input) => void change.run(input)} />
       {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
       {/* What it used: a line, quiet. */}
       <p className="run-usage muted">
@@ -410,36 +380,68 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
   );
 }
 
-/** A step of a pick made in steps: its choices open beside it. */
-function Step({ checked, label, children }: { checked: boolean; label: ReactNode; children: ReactNode }) {
+/**
+ * How a session runs, picked in one panel: a model, how hard it thinks, and who runs it, in that order. The first two
+ * only mark a pick; picking who runs it makes it, all three at once, so a panel left halfway leaves it as it was.
+ */
+function RunPicker({ agent, onPick }: { agent: ChatAgentView; onPick(input: { model: string; effort: string | null; profile: string | null }): void }) {
+  const { session, profile } = agent;
+  const [open, setOpen] = useState(false);
+  const [model, setModel] = useState(session.model);
+  const [effort, setEffort] = useState(session.effort);
+  const current = agent.profiles.find((p) => p.current);
+  const name = current?.name ?? profile?.name ?? session.profile;
+  const choice = agent.choices.find((c) => c.model === model);
+  // Where it is now: a pick of it marks what it has.
+  const same = model === session.model && effort === session.effort;
   return (
-    <DropdownMenu.Sub>
-      <DropdownMenu.SubTrigger className="menu-item chooser-item chooser-step">
-        <span className="chooser-check">{checked && <Check size={13} />}</span>{label}<ChevronRight size={13} className="chooser-step-arrow" />
-      </DropdownMenu.SubTrigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.SubContent className="popover menu-list chooser-menu" sideOffset={4} collisionPadding={8}>{children}</DropdownMenu.SubContent>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Sub>
-  );
-}
-
-/** Who runs it: the station's pick, or one kept to by hand (`pinned`: it is), each with its quota. */
-function ProfileItems({ profiles, runtime, pinned, onPick }: { profiles: RunnableProfile[]; runtime: RuntimeKind; pinned: boolean; onPick(profile: string | null): void }) {
-  return (
-    <>
-      <ChooserItem checked={!pinned && profiles.some((p) => p.current)} onSelect={() => onPick(null)}>
-        <span className="run-option-text"><strong>自动分配</strong><span className="muted">能用就留在当前账号；额度用完或登录失效时，换一个还有额度的</span></span>
-      </ChooserItem>
-      <DropdownMenu.Separator className="menu-separator" />
-      {profiles.map((p) => (
-        <ChooserItem key={p.id} checked={pinned && p.current} onSelect={() => onPick(p.id)}>
-          <ProviderLogo runtime={p.runtime ?? runtime} kind={p.kind ?? "env"} size={15} />
-          <span className="run-option-text"><span>{p.name}</span>{p.current && !pinned && <span className="muted">当前</span>}</span>
-          <QuotaBars quota={p.quota} compact />
-        </ChooserItem>
-      ))}
-    </>
+    <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (next) { setModel(session.model); setEffort(session.effort); } }}>
+      <Popover.Trigger className="run-model" title="换模型、思考深度和账号">
+        <span className="run-chip"><ModelLogo model={session.model} runtime={session.runtime} size={13} />{session.model ?? "运行时默认"}</span>
+        <span className="run-chip">{session.effort ?? "默认深度"}</span>
+        <span className="run-chip">
+          <ProviderLogo runtime={session.runtime} kind={current?.kind ?? profile?.access.kind ?? "env"} size={13} />
+          {session.profilePinned ? name : `自动 · ${name}`}
+          <QuotaBars quota={current?.quota ?? profile?.quota} compact />
+        </span>
+        <ChevronDown size={12} className="chooser-chevron" />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content className="popover run-picker" align="start" sideOffset={6} collisionPadding={8}>
+          <div className="run-picker-column">
+            <h4>模型</h4>
+            {agent.choices.map((c) => (
+              <button key={c.model} type="button" className="run-picker-option" aria-pressed={model === c.model} onClick={() => setModel(c.model)}>
+                <ModelLogo model={c.model} runtime={session.runtime} size={13} />{c.model}
+              </button>
+            ))}
+          </div>
+          <div className="run-picker-column">
+            <h4>思考深度</h4>
+            {[null, ...EFFORTS[session.runtime]].map((e) => (
+              <button key={e ?? ""} type="button" className="run-picker-option" aria-pressed={effort === e} onClick={() => setEffort(e)}>{e ?? "默认"}</button>
+            ))}
+          </div>
+          <div className="run-picker-column run-picker-accounts">
+            <h4>账号</h4>
+            {!choice ? <p className="muted">先选一个模型</p> : (
+              <>
+                <button type="button" className="run-picker-option" aria-pressed={same && !session.profilePinned} onClick={() => { setOpen(false); onPick({ model: choice.model, effort, profile: null }); }}>
+                  <span className="run-option-text"><strong>自动分配</strong><span className="muted">额度用完或登录失效时换一个</span></span>
+                </button>
+                {choice.profiles.map((p) => (
+                  <button key={p.id} type="button" className="run-picker-option" aria-pressed={same && session.profilePinned && p.current} onClick={() => { setOpen(false); onPick({ model: choice.model, effort, profile: p.id }); }}>
+                    <ProviderLogo runtime={p.runtime ?? session.runtime} kind={p.kind ?? "env"} size={15} />
+                    <span className="run-option-text"><span>{p.name}</span>{same && p.current && !session.profilePinned && <span className="muted">当前</span>}</span>
+                    <QuotaBars quota={p.quota} compact />
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 

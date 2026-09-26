@@ -674,7 +674,19 @@
 .run-option-text { display: grid; gap: 1px; flex: 1; min-width: 0; }
 .run-option-text .muted { font-size: var(--text-xs); white-space: normal; max-width: 260px; }
 .chooser-item .quota-rings { margin-left: 12px; }
-.run-model { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-left: -8px; }
+.run-model { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-left: -8px; padding: 0 8px 0 0; height: 30px; border: 0; border-radius: calc(8px * var(--corner-scale)); background: none; color: var(--text); font: inherit; font-size: var(--text-sm); cursor: pointer; corner-shape: var(--corner-shape); }
+.run-model:hover, .run-model[data-state="open"] { background: var(--hover); }
+.run-model .run-chip { display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; white-space: nowrap; }
+.run-model .run-chip + .run-chip { padding-left: 4px; }
+.run-model .chooser-chevron { color: var(--muted); }
+.run-picker { display: flex; gap: 4px; padding: 6px; max-height: 420px; }
+.run-picker-column { display: flex; flex-direction: column; gap: 1px; min-width: 110px; overflow-y: auto; }
+.run-picker-accounts { min-width: 260px; }
+.run-picker-column h4 { margin: 4px 8px 6px; font-size: var(--text-xs); font-weight: 500; color: var(--muted); }
+.run-picker-option { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 8px; border: 0; border-radius: calc(6px * var(--corner-scale)); background: none; color: var(--text); font: inherit; font-size: var(--text-sm); text-align: left; cursor: pointer; corner-shape: var(--corner-shape); }
+.run-picker-option:hover { background: var(--hover); }
+.run-picker-option[aria-pressed="true"] { background: var(--hover); font-weight: 600; }
+.run-picker-option .quota-rings { margin-left: auto; padding-left: 12px; }
 .run-chip { color: var(--text); font-size: var(--text-sm); }
 .run-chip .quota-rings { margin-left: 4px; }
 .run-chip .quota-ring-letter { display: none; }
@@ -1191,7 +1203,6 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .chooser-menu { max-height: 360px; overflow-y: auto; min-width: 220px; }
 .chooser-group { display: flex; align-items: center; gap: 6px; }
 .chooser-item { display: flex; align-items: center; gap: 6px; }
-.chooser-step-arrow { margin-left: auto; padding-left: 12px; box-sizing: content-box; }
 .chooser-check { width: 14px; display: inline-grid; place-items: center; flex: none; }
 .nav-new { padding: 6px 8px 2px; }
 
