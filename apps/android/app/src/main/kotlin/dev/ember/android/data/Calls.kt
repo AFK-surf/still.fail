@@ -80,10 +80,10 @@ class StationApi(private val core: EmberCore, val station: String) {
         request("PUT", "/profiles/${at(profile)}", buildJsonObject { putJsonArray("models") { models.forEach { add(JsonPrimitive(it)) } } })
     }
 
-    /** Puts a file in the session's workspace on the station; send the result with a message. */
-    suspend fun upload(key: String, name: String, bytes: ByteArray, width: Int?, height: Int?): Attachment {
+    /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
+    suspend fun upload(name: String, bytes: ByteArray, width: Int?, height: Int?): Attachment {
         val saved = decode(Attachment.serializer(), core.call("station.upload", buildJsonObject {
-            put("station", station); put("key", key); put("name", name); put("bytes", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            put("station", station); put("name", name); put("bytes", Base64.encodeToString(bytes, Base64.NO_WRAP))
         }))
         // An image's size travels with it, so every page can hold its place before it loads.
         return if (width != null && height != null) saved.copy(width = width, height = height) else saved

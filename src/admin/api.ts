@@ -4,9 +4,10 @@
 // Clients follow GET /events instead of asking again on a timer: every change
 // to what the API shows is announced there (see docs/station-storage.md).
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import type { EventEmitter } from "node:events";
-import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, renameSync } from "node:fs";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, extname, join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Connections } from "../connections.ts";
@@ -411,10 +412,12 @@ export class AdminApi {
       createReadStream(path).pipe(res);
       return;
     }
-    if (resource === "sessions" && id && action === "files" && method === "POST") {
-      const session = this.#deps.store.getSession(id);
-      if (!session) throw new HttpError(404, `unknown session ${id}`);
-      return send(res, 200, await saveUpload(req, session.workspace, url.searchParams.get("name") ?? "file"));
+    if (method === "POST" && path === "/uploads") {
+      // Files wait here, in no chat, until a message takes them into its chat (#attachments): choosing a file for a
+      // new chat makes nothing.
+      const dir = this.#staged();
+      await sweepStaged(dir);
+      return send(res, 200, await saveUpload(req, dir, url.searchParams.get("name") ?? "file"));
     }
     if (resource === "sessions" && id && action === "title" && method === "POST") {
       const input = await body(req);
@@ -1065,15 +1068,34 @@ export class AdminApi {
   // ── writes ──────────────────────────────────────────────────────────────
 
   /** Files named in a message: only ones uploaded into a session of the thread (POST /sessions/:key/files). */
+  /** Where uploaded files wait for the message that sends them. */
+  #staged(): string {
+    return join(this.#deps.settings.config.dataDir, "uploads");
+  }
+
+  /**
+   * Files named in a message: ones waiting in the uploads (they move into the upload directory of the chat's first
+   * session, where its agents read them), or ones already in the upload directory of one of its sessions.
+   */
   #attachments(thread: number, input: unknown): Attachment[] {
     const dirs = this.#deps.store.threadSessions(thread)
       .map((m) => this.#deps.store.getSession(m.session))
       .filter((s) => s !== undefined)
       .map((s) => resolve(s.workspace, "uploads") + sep);
+    const staged = resolve(this.#staged()) + sep;
     return (Array.isArray(input) ? input : []).slice(0, 20).map((a: Record<string, unknown>) => {
-      const path = resolve(String(a.path ?? ""));
+      let path = resolve(String(a.path ?? ""));
+      if (path.startsWith(staged) && dirs[0]) {
+        const into = join(dirs[0], basename(path));
+        // Sent again (a retry after the first try got here): it has moved already.
+        if (existsSync(path)) {
+          mkdirSync(dirs[0], { recursive: true });
+          renameSync(path, into);
+        }
+        path = into;
+      }
       const uploads = dirs.find((d) => path.startsWith(d));
-      if (!uploads || !existsSync(path)) throw new HttpError(400, "附件不在这个对话里会话的上传目录里");
+      if (!uploads || !existsSync(path)) throw new HttpError(400, "附件不在上传目录里");
       const w = Number(a.width), h = Number(a.height);
       return {
         name: String(a.name ?? path.slice(uploads.length)).slice(0, 200), path, size: Number(a.size) || 0,
@@ -1280,12 +1302,24 @@ const MIME: Record<string, string> = {
 };
 
 /** Streams one uploaded file into <workspace>/uploads under a name that cannot escape it. */
-async function saveUpload(req: IncomingMessage, workspace: string, name: string): Promise<Attachment> {
+/** Files that waited in the uploads a day without a message taking them are dropped. */
+const STAGED_FOR_MS = 24 * 3600_000;
+
+async function sweepStaged(dir: string): Promise<void> {
+  const now = Date.now();
+  for (const name of await readdir(dir).catch(() => [] as string[])) {
+    const path = join(dir, name);
+    const info = await stat(path).catch(() => null);
+    if (info?.isFile() && now - info.mtimeMs > STAGED_FOR_MS) await rm(path, { force: true });
+  }
+}
+
+/** Saves a request's body in `dir` under its name, made safe and unique. */
+async function saveUpload(req: IncomingMessage, dir: string, name: string): Promise<Attachment> {
   const safe = basename(name.replace(/\\/g, "/")).replace(/[\\/\u0000-\u001f]/g, "_").replace(/^\.+/, "").slice(0, 120) || "file";
-  const dir = join(workspace, "uploads");
   await mkdir(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const path = join(dir, `${stamp}-${safe}`);
+  const path = join(dir, `${stamp}-${randomBytes(3).toString("hex")}-${safe}`);
   let size = 0;
   const out = createWriteStream(path, { flags: "wx" });
   try {

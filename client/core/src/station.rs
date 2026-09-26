@@ -502,9 +502,10 @@ impl Stations {
         self.call(station, method, path, headers, bytes).await
     }
 
-    /// POST /sessions/:key/files?name= with the raw bytes; answers the attachment.
-    pub async fn upload(&self, station: &StationAddr, key: &str, name: &str, bytes: Vec<u8>) -> Result<Value> {
-        let path = format!("/sessions/{}/files?name={}", encode(key), encode(name));
+    /// POST /uploads?name= with the raw bytes: the file waits on the station, in no chat, until a message sends it.
+    /// Answers the attachment.
+    pub async fn upload(&self, station: &StationAddr, name: &str, bytes: Vec<u8>) -> Result<Value> {
+        let path = format!("/uploads?name={}", encode(name));
         self.call(station, "POST", &path, vec![("content-type".into(), "application/octet-stream".into())], bytes).await
     }
 
@@ -516,6 +517,13 @@ impl Stations {
             return Err(CoreError::new(format!("http_{status}"), "读不到文件").with_status(status));
         }
         Ok((kind, bytes))
+    }
+
+    /// A request to a web service on the station's machine (`localhost:port`), passed through as it is: for a page
+    /// of that service shown here. Answers its status, headers and body whatever the status.
+    pub async fn preview(&self, station: &StationAddr, port: u16, method: &str, path: &str, headers: Vec<(String, String)>, body: Vec<u8>) -> Result<(u16, Vec<(String, String)>, Vec<u8>)> {
+        let path = format!("/preview/{port}{}", if path.starts_with('/') { path.to_string() } else { format!("/{path}") });
+        self.exchange(station, method, &path, headers, body, |reply| reply.headers.clone()).await
     }
 
     /// Starts a request: its span (under the current trace, or a trace of its own), whose `traceparent` the
@@ -1809,8 +1817,8 @@ mod tests {
     fn uploads_and_reads_files() {
         run(async {
             let (_host, _sink, wire, stations) = setup();
-            wire.answer("POST /admin/api/sessions/k%201/files?name=a%20b.png", 200, json!({"name": "a b.png"}));
-            let saved = stations.upload(&remote(), "k 1", "a b.png", vec![1, 2, 3]).await.unwrap();
+            wire.answer("POST /admin/api/uploads?name=a%20b.png", 200, json!({"name": "a b.png"}));
+            let saved = stations.upload(&remote(), "a b.png", vec![1, 2, 3]).await.unwrap();
             assert_eq!(saved["name"], "a b.png");
             assert_eq!(wire.calls.borrow()[0].3, vec![1, 2, 3]);
             wire.answer("GET /admin/api/sessions/k/files?name=x", 404, json!({"error": "没有这个文件"}));

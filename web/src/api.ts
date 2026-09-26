@@ -169,8 +169,8 @@ export function useIsMine(): (creator: { id: string; email?: string | null } | n
 
 export interface StationCall {
   request<T>(method: string, path: string, body?: unknown): Promise<T>;
-  /** Puts a file in the session's workspace on the station; send the result with a message. */
-  upload(key: string, file: File): Promise<Attachment>;
+  /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
+  upload(file: File): Promise<Attachment>;
   /** A file sent to the session, as a blob for previews. */
   file(key: string, name: string): Promise<Blob>;
 }
@@ -190,8 +190,8 @@ export function useStationCall(station: string): StationCall {
   return useMemo(() => ({
     request: <T,>(method: string, path: string, body?: unknown) =>
       call("station.request", { station, method, path, ...(body === undefined ? {} : { body }) }) as Promise<T>,
-    upload: async (key, file) => {
-      const saved = await call("station.upload", { station, key, name: file.name, bytes: await toBase64(file) }) as Attachment;
+    upload: async (file) => {
+      const saved = await call("station.upload", { station, name: file.name, bytes: await toBase64(file) }) as Attachment;
       // An image's size travels with it, so every page can hold its place before it loads.
       if (file.type.startsWith("image/")) {
         try {
@@ -231,7 +231,7 @@ export function stationApi(t: StationCall) {
       request<{ session: string }>("POST", `/connects/${at(connect)}/session`, { session, ...(title ? { title } : {}) }),
     /** Starts the session's runtime ahead of a message. */
     warm: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/warm`),
-    /** A new chat: its session and its thread, made before its first message so files can go into it. */
+    /** A new chat: its session and its thread, made with its first message. */
     newChat: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => request<{ key: string; thread: ThreadView }>("POST", "/sessions", input),
     file: t.file,
     uploadFile: t.upload,

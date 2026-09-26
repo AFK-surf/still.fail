@@ -374,12 +374,16 @@ impl Inner {
                 self.stations.read(&StationAddr::parse(&station)?, thread, seq).await?;
                 Ok(Value::Null)
             }
-            Call::StationUpload { station, key, name, bytes } => {
-                self.stations.upload(&StationAddr::parse(&station)?, &key, &name, bytes).await
+            Call::StationUpload { station, name, bytes } => {
+                self.stations.upload(&StationAddr::parse(&station)?, &name, bytes).await
             }
             Call::StationFile { station, key, name } => {
                 let (kind, bytes) = self.stations.file(&StationAddr::parse(&station)?, &key, &name).await?;
                 Ok(json!({ "type": kind, "bytes": BASE64.encode(bytes) }))
+            }
+            Call::StationPreview { station, port, method, path, headers, body } => {
+                let (status, headers, bytes) = self.stations.preview(&StationAddr::parse(&station)?, port, &method, &path, headers, body).await?;
+                Ok(json!({ "status": status, "headers": headers, "body": BASE64.encode(bytes) }))
             }
             Call::Migrate { accounts, device } => {
                 if let Some(accounts) = accounts {
@@ -883,8 +887,9 @@ enum Call {
     ChatDiscard { station: String, thread: u64, id: String },
     ChatOlder { station: String, thread: u64 },
     ChatRead { station: String, thread: u64, seq: u64 },
-    StationUpload { station: String, key: String, name: String, bytes: Vec<u8> },
+    StationUpload { station: String, name: String, bytes: Vec<u8> },
     StationFile { station: String, key: String, name: String },
+    StationPreview { station: String, port: u16, method: String, path: String, headers: Vec<(String, String)>, body: Vec<u8> },
     Migrate { accounts: Option<Value>, device: Option<Vec<u8>> },
 }
 
@@ -894,6 +899,7 @@ impl Call {
         match self {
             Call::StationRequest { station, .. } | Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
+            Call::StationPreview { station, .. } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::CloudRequest { .. } | Call::Migrate { .. } => None,
         }
     }
@@ -962,7 +968,6 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
     #[derive(Deserialize)]
     struct Upload {
         station: String,
-        key: String,
         name: String,
         bytes: String,
     }
@@ -971,6 +976,17 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         station: String,
         key: String,
         name: String,
+    }
+    #[derive(Deserialize)]
+    struct Preview {
+        station: String,
+        port: u16,
+        method: String,
+        path: String,
+        #[serde(default)]
+        headers: Vec<(String, String)>,
+        #[serde(default)]
+        body: String,
     }
     #[derive(Deserialize)]
     struct Migrate {
@@ -1022,11 +1038,15 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "station.upload" => {
             let p: Upload = read(params)?;
-            Call::StationUpload { bytes: base64(&p.bytes, "文件内容")?, station: p.station, key: p.key, name: p.name }
+            Call::StationUpload { bytes: base64(&p.bytes, "文件内容")?, station: p.station, name: p.name }
         }
         "station.file" => {
             let p: File = read(params)?;
             Call::StationFile { station: p.station, key: p.key, name: p.name }
+        }
+        "station.preview" => {
+            let p: Preview = read(params)?;
+            Call::StationPreview { body: base64(&p.body, "请求内容")?, station: p.station, port: p.port, method: p.method, path: p.path, headers: p.headers }
         }
         "migrate" => {
             let p: Migrate = read(params)?;
@@ -1118,8 +1138,8 @@ mod tests {
             Call::StationRequest { station: "local".into(), method: "GET".into(), path: "/sessions".into(), body: None }
         );
         assert_eq!(
-            parse_call("station.upload", json!({"station": "w/s", "key": "k", "name": "a.png", "bytes": "aGVsbG8="})).unwrap(),
-            Call::StationUpload { station: "w/s".into(), key: "k".into(), name: "a.png".into(), bytes: b"hello".to_vec() }
+            parse_call("station.upload", json!({"station": "w/s", "name": "a.png", "bytes": "aGVsbG8="})).unwrap(),
+            Call::StationUpload { station: "w/s".into(), name: "a.png".into(), bytes: b"hello".to_vec() }
         );
         assert_eq!(
             parse_call("station.file", json!({"station": "w/s", "key": "k", "name": "a.png"})).unwrap(),
@@ -1150,7 +1170,7 @@ mod tests {
         assert!(missing.message.contains("device_name"), "{}", missing.message);
         assert_eq!(code(parse_call("auth.signOut", Value::Null)), "invalid_params");
         assert_eq!(code(parse_call("cloud.request", json!({"account": "a", "method": 1, "path": "/"}))), "invalid_params");
-        assert_eq!(code(parse_call("station.upload", json!({"station": "w/s", "key": "k", "name": "n", "bytes": "not base64!"}))), "invalid_params");
+        assert_eq!(code(parse_call("station.upload", json!({"station": "w/s", "name": "n", "bytes": "not base64!"}))), "invalid_params");
     }
 
     #[test]

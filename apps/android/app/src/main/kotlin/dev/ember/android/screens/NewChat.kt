@@ -143,7 +143,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
         }
         made!!.await()
     }
-    val launchers = AttachLaunchers { app.upload(draft, view.station, { ensure().first }, it, scope) }
+    val launchers = AttachLaunchers { app.upload(draft, view.station, it, scope) }
     val haze = remember { HazeState() }
     Column(Modifier.weight(1f).hazeSource(haze).verticalScroll(rememberScrollState())) {
         Column(Modifier.fillMaxWidth().padding(start = 30.dp, end = 30.dp, top = 30.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {

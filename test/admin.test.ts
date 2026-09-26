@@ -527,7 +527,7 @@ test("the station reports the machine it runs on", async () => {
   }
 });
 
-test("files sent to a session land in its workspace and reach the agent as paths", async () => {
+test("files wait in the uploads, move into the chat's session when a message sends them, and reach the agent as paths", async () => {
   const t = await setup();
   try {
     await t.hub.accept("ds", message({ text: "<@UBOT> hi" }));
@@ -536,17 +536,28 @@ test("files sent to a session land in its workspace and reach the agent as paths
     const key = encodeURIComponent(summary.key);
     const chat = (await t.call("POST", "/threads", { session: summary.key })).body;
     const say = (input: unknown) => t.call("POST", `/threads/${chat.id}/messages`, input);
-    const upload = await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent("../../report.txt")}`, { method: "POST", body: "hello file" });
-    const file = await upload.json() as any;
+    const threadsBefore = (await t.call("GET", "/threads")).body.length;
+    const upload = await fetch(`${t.base}/uploads?name=${encodeURIComponent("../../report.txt")}`, { method: "POST", body: "hello file" });
+    const staged = await upload.json() as any;
     assert.equal(upload.status, 200);
-    assert.match(file.path, /\/uploads\/[^/]+-report\.txt$/, "a name cannot climb out of the upload directory");
-    assert.equal(readFileSync(file.path, "utf8"), "hello file");
-    assert.equal((await say({ text: "看看", attachments: [{ ...file, path: "/etc/hosts" }] })).status, 400);
-    assert.equal((await say({ text: "看看这个", attachments: [file] })).status, 200);
+    assert.equal(staged.path, join(t.dataDir, "uploads", staged.path.split("/").at(-1)), "a name cannot climb out of the uploads");
+    assert.match(staged.path, /-report\.txt$/);
+    assert.equal(readFileSync(staged.path, "utf8"), "hello file");
+    assert.equal((await t.call("GET", "/threads")).body.length, threadsBefore, "a file waiting makes no chat");
+    assert.equal((await say({ text: "看看", attachments: [{ ...staged, path: "/etc/hosts" }] })).status, 400);
+    const said = await say({ text: "看看这个", attachments: [staged] });
+    assert.equal(said.status, 200);
     await settle();
-    assert.match(t.claude.last.steers.at(-1) ?? t.claude.last.prompts.at(-1)!, new RegExp(`看看这个\n\nAttached files:\n- ${file.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    const file = (await t.call("GET", `/threads/${chat.id}/entries`)).body.entries[0].attachments[0];
+    assert.match(file.path, /\/workspace\/uploads\/[^/]+-report\.txt$|\/uploads\/[^/]+-report\.txt$/);
+    assert.notEqual(file.path, staged.path, "it moved into the session's uploads");
+    assert.equal(existsSync(staged.path), false);
+    assert.equal(readFileSync(file.path, "utf8"), "hello file");
+    assert.equal((await say({ text: "再发一次", attachments: [staged] })).status, 200, "sent again, it is found where it moved");
+    await settle();
+    assert.match([...t.claude.last.steers, ...t.claude.last.prompts].join("\n"), new RegExp(`看看这个\n\nAttached files:\n- ${file.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     const page = (await t.call("GET", `/threads/${chat.id}/entries`)).body;
-    assert.deepEqual(page.entries[0].attachments.map((a: any) => a.name), [file.name]);
+    assert.deepEqual(page.entries[0].attachments.map((a: any) => a.name), [staged.name]);
     assert.equal(page.entries[0].text, "看看这个", "the words are stored as typed");
     assert.equal(page.entries[0].authorName, "管理员");
     const back = await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent(file.path.split("/").at(-1))}`);

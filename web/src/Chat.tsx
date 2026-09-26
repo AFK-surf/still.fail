@@ -564,7 +564,7 @@ interface Pending { id: number; name: string; size: number; done: Attachment | n
  * soon as they are added.
  */
 export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, toolbar, placeholder = "发消息", locked = false, roomy = false }: {
-  /** The chat written to, and the session its files go to; both null for a new chat, made by `ensureChat` on the first file or message. */
+  /** The chat written to, and its session; both null for a new chat, made by `ensureChat` with the first message. */
   thread: number | null;
   sessionKey: string | null;
   quotes?: DraftQuote[]; setQuotes?(update: (all: DraftQuote[]) => DraftQuote[]): void;
@@ -639,11 +639,8 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
       const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
       setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null, ...(preview ? { preview } : {}) }]);
       if (tooBig) continue;
-      // Files go to the session's workspace: an agent without a chat yet gets its chat only with the first message.
-      (sessionKey ? Promise.resolve({ key: sessionKey }) : target()).then(({ key }) => {
-        if (!key) throw new Error("这个对话里没有 agent，文件无处可放");
-        return api.uploadFile(key, file);
-      }).then(
+      // The file waits on the station in no chat: a new chat is made only with the first message, which takes it in.
+      api.uploadFile(file).then(
         (done) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, done } : f))),
         (error: unknown) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, error: error instanceof Error ? error.message : "上传失败" } : f))),
       );

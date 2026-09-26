@@ -910,14 +910,15 @@ fun photoPicked(bitmap: Bitmap): Picked {
     return Picked("photo-${System.currentTimeMillis()}.jpg", bytes, bitmap.width, bitmap.height, bitmap.asImageBitmap())
 }
 
-/** Files go to the station as soon as they are added, into the session `key()` names (a new chat makes it then). */
-fun AppState.upload(draft: Draft, station: String, key: suspend () -> String, picked: Picked, scope: CoroutineScope) {
+/** Files go to the station as soon as they are added, and wait there in no chat: the message that sends them takes them
+ * into its chat (a new chat is made only then). */
+fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: CoroutineScope) {
     val p = Pending(System.nanoTime(), picked.name, picked.bytes.size.toLong(), picked.preview)
     draft.files += p
     if (picked.bytes.size > MAX_FILE) { p.error = "超过 50 MB"; return }
     scope.launch {
         try {
-            p.done = api(station).upload(key(), picked.name, picked.bytes, picked.width, picked.height)
+            p.done = api(station).upload(picked.name, picked.bytes, picked.width, picked.height)
         } catch (e: CoreException) {
             p.error = e.message
         }
@@ -1048,11 +1049,8 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<C
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val api = app.api(station)
-    // Files are kept in a session's workspace: what is sent here goes to the first agent's.
     val keeper = agents.firstOrNull()?.key
-    val launchers = AttachLaunchers { picked ->
-        app.upload(draft, station, { keeper ?: throw CoreException("no_agent", "这个对话里没有 agent，文件无处可放", null) }, picked, scope)
-    }
+    val launchers = AttachLaunchers { picked -> app.upload(draft, station, picked, scope) }
     val thread = view.thread
     // A capsule floating over the list, which runs on around it.
     Column(
