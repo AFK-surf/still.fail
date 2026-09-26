@@ -75,6 +75,8 @@ sealed interface Screen {
     data object NewChat : Screen { override val id = "new" }
     data object Stations : Screen { override val id = "stations" }
     data class Station(val address: String) : Screen { override val id = "station/$address" }
+    /** How an agent runs, changed: its model, how hard it thinks, who runs it. */
+    data class RunSettings(val station: String, val of: ChatOf, val key: String) : Screen { override val id = "run/$station/$key" }
     /** A profile's models, to pick which may be used. */
     data class Profile(val address: String, val profile: String) : Screen { override val id = "profile/$address/$profile" }
     data object Me : Screen { override val id = "me" }
@@ -187,6 +189,7 @@ private fun Pages(app: AppState, current: dev.ember.android.data.WorkspaceEntry)
                     Screen.Stations -> StationsScreen(current)
                     is Screen.Station -> StationScreen(current, screen.address)
                     is Screen.Profile -> ProfileScreen(current, screen.address, screen.profile)
+                    is Screen.RunSettings -> dev.ember.android.screens.RunSettingsScreen(screen.station, screen.of, screen.key)
                     Screen.Me -> MeScreen(current)
                 }
             }

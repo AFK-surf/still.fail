@@ -6,6 +6,11 @@
 package dev.ember.android.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsets
+import dev.ember.android.ui.NavBar
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -141,7 +146,7 @@ private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String, e
     }
     Summary(agent)
     Box(Modifier.weight(1f).fillMaxWidth()) {
-        if (tab == 0) Steps(station, of, agent, live.value, entry) else Details(station, agent, live.value, host.value)
+        if (tab == 0) Steps(station, of, agent, live.value, entry) else Details(station, of, agent, live.value, host.value)
     }
 }
 
@@ -456,15 +461,14 @@ private fun PhaseLine(phase: ShownPhase, runtime: String) {
 
 /** How it runs (which can be changed here), what it has used, the station. */
 @Composable
-private fun Details(station: String, agent: ChatAgentView, live: LiveView?, host: HostInfo?) {
-    // Changing how it runs is a page of its own, in place of the details, with a way back.
-    var picking by rememberSaveable { mutableStateOf(false) }
-    if (picking) return RunPickerPage(station, agent) { picking = false }
+private fun Details(station: String, of: ChatOf, agent: ChatAgentView, live: LiveView?, host: HostInfo?) {
+    val app = LocalApp.current
     val s = agent.session
     val usage = live?.usage
     val hit = usage?.takeIf { it.inputTokens > 0 }?.let { Math.round(it.cachedTokens * 100.0 / it.inputTokens) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
-        RunRow(agent) { picking = true }
+        // Changing how it runs is a screen of its own.
+        RunRow(agent) { app.push(Screen.RunSettings(station, of, s.key)) }
         Column(Modifier.padding(top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Detail("运行时", RUNTIME_LABEL[s.runtime] ?: s.runtime)
             Detail("进程", PROCESS_LABEL[s.process] ?: s.process)
@@ -508,67 +512,84 @@ private fun RunRow(agent: ChatAgentView, onOpen: () -> Unit) {
 }
 
 /**
- * Changing how it runs: the model, how hard it thinks, who runs it (the station's pick, or one kept to), as on the web.
- * Picks are a draft until 确定 (不变 when nothing changed); back leaves it as it was. A profile kept to that does not
- * run the model drafted gives way to the station's pick, said so.
+ * Changing how an agent runs, full screen: what it is now, then the model, how hard it thinks and who runs it (the
+ * station's pick, or one profile kept to), each said in plain words. Picks are a draft; the button at the bottom says
+ * what it becomes (不变 when nothing changed); back leaves it as it was. A profile kept to that does not run the model
+ * picked gives way to the station's pick, said so.
  */
 @Composable
-private fun RunPickerPage(station: String, agent: ChatAgentView, onClose: () -> Unit) {
+fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    val s = agent.session
-    val current = agent.profiles.firstOrNull { it.current }
-    val kept = if (s.profilePinned) s.profile else null
-    var model by remember { mutableStateOf(s.model) }
-    var effort by remember { mutableStateOf(s.effort) }
-    var profile by remember { mutableStateOf(kept) }
-    var busy by remember { mutableStateOf(false) }
-    val choice = agent.choices.firstOrNull { it.model == model }
-    val accounts = choice?.profiles.orEmpty()
-    val chosen = profile?.takeIf { p -> accounts.any { it.id == p } }
-    val dropped = profile != null && chosen == null
-    val efforts = listOf<String?>(null) + EFFORTS[s.runtime].orEmpty()
-    val changed = model != s.model || effort != s.effort || chosen != kept
-    androidx.activity.compose.BackHandler(onBack = onClose)
+    val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
+    val agent = chat.value?.agents?.firstOrNull { it.session.key == key }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 2.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) { IconIn(Icons.Back, 18.dp, C.ink) }
-            Text("换模型", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        }
+        NavBar("返回", app::pop, "换模型")
+        if (agent == null) return Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
+        val s = agent.session
+        val current = agent.profiles.firstOrNull { it.current }
+        val currentName = current?.name ?: agent.profile?.name ?: s.profile
+        val kept = if (s.profilePinned) s.profile else null
+        var model by remember { mutableStateOf(s.model) }
+        var effort by remember { mutableStateOf(s.effort) }
+        var profile by remember { mutableStateOf(kept) }
+        var busy by remember { mutableStateOf(false) }
+        val choice = agent.choices.firstOrNull { it.model == model }
+        val accounts = choice?.profiles.orEmpty()
+        val chosen = profile?.takeIf { p -> accounts.any { it.id == p } }
+        val dropped = profile != null && chosen == null
+        val efforts = listOf<String?>(null) + EFFORTS[s.runtime].orEmpty()
+        val changed = model != s.model || effort != s.effort || chosen != kept
+        val accountText = { id: String? -> if (id == null) "自动分配" else accounts.firstOrNull { it.id == id }?.name ?: id }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
+            // What it is now.
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("现在", fontSize = 12.sp, color = C.muted)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MakerIcon(s.model, s.runtime, 16.dp)
+                    Text("${s.model ?: "默认模型"} · ${s.effort ?: "默认深度"}", fontSize = 15.sp, color = C.ink, fontWeight = FontWeight.SemiBold)
+                }
+                Text(if (kept != null) "固定用「$currentName」" else "自动分配，现在在「$currentName」", fontSize = 13.sp, color = C.muted)
+                Text("改了以后从下一轮开始生效。", fontSize = 12.sp, color = C.subtle)
+            }
             GroupLabel("模型")
             agent.choices.forEach { c ->
                 PickLine(c.model, checked = c.model == model, onClick = { model = c.model }, leading = { MakerIcon(c.model, s.runtime, 18.dp) })
             }
             GroupLabel("思考深度")
+            Text("想得越深越慢，也越费额度。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
             Seg(efforts.map { it ?: "默认" }, efforts.indexOf(effort).coerceAtLeast(0), { effort = efforts[it] }, fill = true, height = 36.dp)
             GroupLabel("账号")
+            Text("谁来跑它。自动分配时，额度用完或登录失效会换一个。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 4.dp))
             if (dropped) Text("指定的账号没有启用 $model，改成了自动分配", fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(bottom = 4.dp))
-            PickLine(
-                "自动分配", sub = "额度用完或登录失效时换一个" + (if (kept == null && current != null) "；现在：${current.name}" else ""),
-                checked = chosen == null, onClick = { profile = null },
-            )
+            PickLine("自动分配", checked = chosen == null, onClick = { profile = null })
             accounts.forEach { p ->
                 PickLine(p.name, checked = chosen == p.id, onClick = { profile = p.id },
                     leading = { ProviderMark(p.runtime ?: s.runtime, p.kind, 18.dp) }, trailing = { QuotaRings(p.quota) })
             }
-            Box(Modifier.height(12.dp))
+            Box(Modifier.height(16.dp))
         }
         val go = changed && choice != null && !busy
         Box(
-            Modifier.padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp))
-                .background(if (changed) C.accent else C.chip)
+            Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().heightIn(min = 52.dp)
+                .clip(RoundedCornerShape(16.dp)).background(if (changed) C.accent else C.chip)
                 .clickable(enabled = !busy) {
-                    if (!go) { onClose(); return@clickable }
+                    if (!go) { app.pop(); return@clickable }
                     busy = true
                     scope.launch {
-                        try { app.api(station).sessionSettings(s.key, choice!!.model, effort, chosen); app.toast = "已改，下一轮起生效"; onClose() }
+                        try { app.api(station).sessionSettings(s.key, choice!!.model, effort, chosen); app.toast = "已改，下一轮起生效"; app.pop() }
                         catch (err: CoreException) { app.toast = err.message }
                         finally { busy = false }
                     }
-                },
+                }
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center,
-        ) { Text(if (changed) "确定" else "不变", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.accentInk else C.ink) }
+        ) {
+            Text(
+                if (changed) "改成 ${model ?: "默认模型"} · ${effort ?: "默认深度"} · ${accountText(chosen)}" else "不变",
+                fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.accentInk else C.ink, maxLines = 2, textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
