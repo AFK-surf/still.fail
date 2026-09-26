@@ -11,13 +11,18 @@ use std::sync::mpsc;
 use ember_core::host::{Host, HostError, HttpRequest, HttpResponse, StreamResponse};
 use ember_core::{ClientId, CoreError, CoreMessage};
 use futures::future::LocalBoxFuture;
+use futures::stream::{self, LocalBoxStream};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
+use tokio_tungstenite::Connector;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 
 use crate::{Command, CoreListener};
 
 pub struct NativeHost {
     cloud_origin: String,
+    tls: Arc<rustls::ClientConfig>,
     http: reqwest::Client,
     storage: Storage,
     listener: Arc<dyn CoreListener>,
@@ -27,23 +32,68 @@ pub struct NativeHost {
 
 impl NativeHost {
     pub fn new(data_dir: PathBuf, cloud_origin: String, listener: Arc<dyn CoreListener>, commands: UnboundedSender<Command>) -> NativeHost {
-        NativeHost { cloud_origin, http: http_client(), storage: Storage::new(data_dir), listener, commands }
+        let tls = Arc::new(tls_config());
+        let http = reqwest::Client::builder()
+            .tls_backend_preconfigured((*tls).clone())
+            .connect_timeout(std::time::Duration::from_secs(15))
+            .build()
+            .expect("reqwest client");
+        NativeHost { cloud_origin, tls, http, storage: Storage::new(data_dir), listener, commands }
+    }
+
+    /// `Host::websocket` (it arrives with the core's `/v1/events` topic): a receive-only WebSocket's text frames.
+    #[allow(dead_code)] // until the Host trait has it
+    pub fn websocket(&self, url: String, protocols: Vec<String>) -> LocalBoxFuture<'static, Result<SocketFrames, HostError>> {
+        websocket(self.tls.clone(), url, protocols)
     }
 }
 
-fn http_client() -> reqwest::Client {
+/// The crypto provider is iroh's (ring); the roots Mozilla's, as iroh's own TLS
+/// uses, so nothing needs the Android platform verifier's JNI setup.
+fn tls_config() -> rustls::ClientConfig {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let roots = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
-    let tls = rustls::ClientConfig::builder_with_provider(provider)
+    rustls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
         .expect("ring supports the default protocol versions")
         .with_root_certificates(roots)
-        .with_no_client_auth();
-    reqwest::Client::builder()
-        .tls_backend_preconfigured(tls)
-        .connect_timeout(std::time::Duration::from_secs(15))
-        .build()
-        .expect("reqwest client")
+        .with_no_client_auth()
+}
+
+/// A receive-only WebSocket's text frames. The stream ends when the socket closes; dropping it closes the socket.
+pub type SocketFrames = LocalBoxStream<'static, Result<String, HostError>>;
+
+/// Opens a WebSocket that only listens; resolves once it is open. `protocols`
+/// are its subprotocols (ember cloud reads the token from one of them).
+fn websocket(tls: Arc<rustls::ClientConfig>, url: String, protocols: Vec<String>) -> LocalBoxFuture<'static, Result<SocketFrames, HostError>> {
+    Box::pin(async move {
+        let mut request = url.as_str().into_client_request().map_err(ws_error)?;
+        if !protocols.is_empty() {
+            let value = protocols.join(", ").parse().map_err(|_| HostError("websocket 子协议不对".into()))?;
+            request.headers_mut().insert("sec-websocket-protocol", value);
+        }
+        let (socket, _) = tokio_tungstenite::connect_async_tls_with_config(request, None, false, Some(Connector::Rustls(tls))).await.map_err(ws_error)?;
+        // Read as one stream (not split): reading is also what answers the server's pings.
+        let frames = stream::unfold(Some(socket), |socket| async move {
+            let mut socket = socket?;
+            loop {
+                match socket.next().await {
+                    Some(Ok(Message::Text(text))) => return Some((Ok(text.as_str().to_owned()), Some(socket))),
+                    Some(Ok(Message::Close(_))) | Some(Err(WsError::ConnectionClosed | WsError::AlreadyClosed)) | None => return None,
+                    Some(Ok(_)) => {}
+                    Some(Err(error)) => return Some((Err(ws_error(error)), None)),
+                }
+            }
+        });
+        Ok(frames.boxed_local())
+    })
+}
+
+fn ws_error(error: WsError) -> HostError {
+    match error {
+        WsError::Http(response) => HostError(format!("websocket refused ({})", response.status().as_u16())),
+        error => HostError(format!("websocket: {error}")),
+    }
 }
 
 fn http_error(error: reqwest::Error) -> HostError {
@@ -239,6 +289,41 @@ impl Storage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+
+    #[test]
+    fn a_websocket_hands_over_its_text_frames_until_it_closes() {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        tokio::task::LocalSet::new().block_on(&runtime, async {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let server = tokio::spawn(async move {
+                let (tcp, _) = listener.accept().await.unwrap();
+                let mut asked = None;
+                let mut socket = tokio_tungstenite::accept_hdr_async(tcp, |request: &Request, mut response: Response| {
+                    asked = request.headers().get("sec-websocket-protocol").map(|v| v.to_str().unwrap().to_string());
+                    response.headers_mut().insert("sec-websocket-protocol", "ember-events".parse().unwrap());
+                    Ok(response)
+                })
+                .await
+                .unwrap();
+                use futures::SinkExt;
+                for frame in [Message::text("one"), Message::Ping(vec![1].into()), Message::binary(vec![2]), Message::text("two")] {
+                    socket.send(frame).await.unwrap();
+                }
+                socket.close(None).await.unwrap();
+                asked
+            });
+            let protocols = vec!["ember-events".to_string(), "ember-token.abc".to_string()];
+            let frames = websocket(Arc::new(tls_config()), format!("ws://127.0.0.1:{port}/v1/events"), protocols).await.unwrap();
+            let frames: Vec<_> = frames.collect().await;
+            assert_eq!(frames, vec![Ok("one".to_string()), Ok("two".to_string())]);
+            assert_eq!(server.await.unwrap().as_deref(), Some("ember-events, ember-token.abc"));
+
+            let refused = websocket(Arc::new(tls_config()), "ws://127.0.0.1:9/".into(), vec![]).await;
+            assert!(refused.is_err());
+        });
+    }
 
     #[test]
     fn keys_become_safe_file_names() {
