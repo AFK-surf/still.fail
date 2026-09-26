@@ -15,9 +15,6 @@ importers:
       '@fontsource-variable/inter':
         specifier: ^5.2.0
         version: 5.3.0
-      '@tanstack/react-query':
-        specifier: ^5.90.0
-        version: 5.103.2(react@19.3.0)
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.6
@@ -1187,14 +1184,6 @@ packages:
 
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
-
-  '@tanstack/query-core@5.103.2':
-    resolution: {integrity: sha512-I8DkFXls5jXLqtm8+QpOhEmG07hIblhSZFzafg9wHsMSEvMzULy9hK17wU1T/ahfhMbtITJhbxutwwCoihkR7A==}
-
-  '@tanstack/react-query@5.103.2':
-    resolution: {integrity: sha512-B+fWiYZBc+0uUD5zDZAeLw9dKj7XEsdnuu6zRZ+no6LNKpeE3P3bJ+N6HINjcIlWR6fW3vUoTneEaGa2V6ehqw==}
-    peerDependencies:
-      react: ^18 || ^19
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -2932,13 +2921,6 @@ snapshots:
       '@types/hast': 3.0.5
 
   '@shikijs/vscode-textmate@10.0.2': {}
-
-  '@tanstack/query-core@5.103.2': {}
-
-  '@tanstack/react-query@5.103.2(react@19.3.0)':
-    dependencies:
-      '@tanstack/query-core': 5.103.2
-      react: 19.3.0
 
   '@types/babel__core@7.20.5':
     dependencies:
