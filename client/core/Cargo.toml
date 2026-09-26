@@ -20,7 +20,7 @@ iroh = { version = "=1.0.3", default-features = false, features = ["tls-ring"] }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 iroh = { version = "=1.0.3" }
 
-tokio = { version = "1", features = ["rt", "macros", "time"], optional = true }
+tokio = { version = "1", features = ["rt", "macros", "time", "net", "io-util"], optional = true }
 
 [features]
 # The fake host for tests (this crate's and its bindings').

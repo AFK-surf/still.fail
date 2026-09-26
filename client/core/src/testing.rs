@@ -89,7 +89,7 @@ pub fn json_response(status: u16, value: serde_json::Value) -> Result<HttpRespon
 
 /// Runs a test body on a current-thread runtime with a LocalSet (for !Send futures and `spawn_local`).
 pub fn run<F: std::future::Future<Output = ()>>(body: F) {
-    let runtime = tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap();
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
     let local = tokio::task::LocalSet::new();
     local.block_on(&runtime, body);
 }
