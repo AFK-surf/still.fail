@@ -30,6 +30,7 @@ import { checkProfile, loginCommand, type ProfileCheck } from "../profiles.ts";
 import { AccessDenied, AccessGate, viewerId, viewerName, type Viewer } from "./access.ts";
 import { verifySlackTokens } from "../chat/slack.ts";
 import { createAppUrl, slackManifest } from "./slack-manifest.ts";
+import { previewTarget, proxyPreview } from "./preview.ts";
 import type { ChatRow, ChatRowAgent, Creator, EntryView, MessageView, Overview, ProcessState, SessionDetail, SessionSummary, StationEvents, ThreadEntries, ThreadView } from "./types.ts";
 
 const SECRET_KEY = /KEY|TOKEN|SECRET|PASSWORD|AUTH/i;
@@ -279,6 +280,8 @@ export class AdminApi {
     const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
     const [resource, id, action] = parts;
 
+    const preview = previewTarget(path);
+    if (preview) return proxyPreview(req, res, preview.port, preview.path + url.search);
     if (method === "GET" && path === "/host") return send(res, 200, await hostInfo(this.#deps.settings.config.dataDir));
     if (method === "GET" && path === "/overview") return send(res, 200, this.#overview(viewer));
     if (method === "GET" && path === "/events") {

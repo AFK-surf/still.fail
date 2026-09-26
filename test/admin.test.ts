@@ -862,3 +862,36 @@ test("a viewer can say a Slack user is them: the station then takes that user fo
     t.close();
   }
 });
+
+test("a web service on the machine is reached through /preview/<port>, as it answers, framing allowed", async () => {
+  const t = await setup();
+  const service = createServer((req, res) => {
+    if (req.url === "/old") return void res.writeHead(302, { location: `http://localhost:${port}/new?x=1` }).end();
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "text/plain", "x-frame-options": "DENY", "content-security-policy": "frame-ancestors 'none'", "x-seen": `${req.method} ${req.url} ${req.headers.host} ${req.headers.traceparent ?? "-"} ${body}` });
+      res.end("hello from the service");
+    });
+  });
+  await new Promise<void>((r) => service.listen(0, "127.0.0.1", r));
+  const port = (service.address() as { port: number }).port;
+  try {
+    const got = await fetch(`${t.base}/preview/${port}/a/b?q=1`, { method: "POST", body: "x=1", headers: { traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01" } });
+    assert.equal(got.status, 200);
+    assert.equal(await got.text(), "hello from the service");
+    assert.equal(got.headers.get("x-seen"), `POST /a/b?q=1 localhost:${port} - x=1`, "the path and query as asked, the service's own host, none of the admin call's headers");
+    assert.equal(got.headers.get("x-frame-options"), null);
+    assert.equal(got.headers.get("content-security-policy"), null);
+    const moved = await fetch(`${t.base}/preview/${port}/old`, { redirect: "manual" });
+    assert.equal(moved.headers.get("location"), "/new?x=1", "a redirect to the service stays on it");
+    service.close();
+    const gone = await fetch(`${t.base}/preview/${port}/`);
+    assert.equal(gone.status, 502);
+    assert.match(await gone.text(), new RegExp(`localhost:${port} 没有回应`));
+    assert.equal((await fetch(`${t.base}/preview/99999/`)).status, 404, "not a port");
+  } finally {
+    service.close();
+    t.close();
+  }
+});
