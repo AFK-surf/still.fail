@@ -578,6 +578,9 @@
 /* The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks. */
 .session-kind .kind-mark { margin: -1px; }
 .nav-session-meta .nav-time { margin-left: auto; flex: none; }
+/* When is rarely what one looks for in the list: it shows on hover (and keyboard focus), giving its room to the message otherwise. */
+.nav-session .nav-time { display: none; }
+.nav-session:hover .nav-time, .nav-session:focus-visible .nav-time { display: inline; }
 
 /* ── waiting ─────────────────────────────────────────────────────────── */
 .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-sm); animation: appear 0s linear 200ms both; }
