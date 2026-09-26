@@ -2,6 +2,7 @@
 // subscribe to the views the core puts together, writes go through
 // `station.request` and the core refreshes whatever they touch. Types come
 // straight from the server code.
+import type { Badge, Status } from "./format.ts";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
@@ -69,7 +70,8 @@ export interface OutboxMessage {
 }
 
 /** An agent taking part in a chat: its session, the connect that started it, its profile, its turns and every thread it is in. */
-export interface ChatAgentView { session: SessionSummary; connect: ConnectView | null; profile: ProfileView | null; turns: TurnRecord[]; threads: ThreadView[] }
+/** An agent of a chat; where it stands (status, badge) is the core's (present.rs). */
+export interface ChatAgentView { session: SessionSummary; status: Status; badge: Badge | null; connect: ConnectView | null; profile: ProfileView | null; turns: TurnRecord[]; threads: ThreadView[] }
 
 /**
  * An item's page: its chat's thread (with the viewer's read position), what it
@@ -83,7 +85,8 @@ export interface ChatView {
   title: string;
   people: Creator[];
   agents: ChatAgentView[];
-  messages: MessageView[];
+  /** Each says whose it is (`mine`: the viewer's), as the core decides. */
+  messages: (MessageView & { mine: boolean })[];
   more: boolean;
   outbox: OutboxMessage[];
   link: LinkView;

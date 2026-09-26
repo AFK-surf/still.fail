@@ -12,7 +12,7 @@ import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall
 import { History } from "../History.tsx";
 import { ChatPanel } from "../Chat.tsx";
 import {
-  BADGE_LABEL, PROCESS_LABEL, RUNTIME_LABEL, absoluteTime, agentLabel, compactNumber, sessionStatus, slackThreadUrl, slackWorkspaceUrl, statusBadge,
+  BADGE_LABEL, PROCESS_LABEL, RUNTIME_LABEL, absoluteTime, agentLabel, compactNumber, slackThreadUrl, slackWorkspaceUrl, type Status,
 } from "../format.ts";
 import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
@@ -136,7 +136,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a) => {
             const model = lives.get(a.session.key)?.usage?.model ?? a.session.model;
-            const badge = statusBadge(sessionStatus(a.session));
+            const badge = a.badge;
             return (
               <Tip key={a.session.key} label={`${agentLabel(model, a.session.effort)}${badge ? ` · ${BADGE_LABEL[badge]}` : ""} · 执行历史`}>
                 <button type="button" className="agent-mark-btn" onClick={() => toggleHistory(a.session.key)} aria-label={`${agentLabel(model, a.session.effort)} 的执行历史`}>
@@ -189,7 +189,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               if (!a) return <Tabs.Content key={key} className="side-content" value={key} />;
               return (
                 <Tabs.Content key={key} className="side-content" value={key}>
-                  <History session={a.session} threads={a.threads} connect={a.connect ?? undefined} live={live} actions={<SessionActions session={a.session} />}
+                  <History session={a.session} threads={a.threads} connect={a.connect ?? undefined} live={live} actions={<SessionActions session={a.session} status={a.status} />}
                     focus={focus?.key === key ? focus : null}
                     summary={<HistorySummary live={live} profile={a.profile} />}
                     details={<SessionDetails session={a.session} live={live} profile={a.profile} />} />
@@ -246,8 +246,7 @@ function ChatInfo({ chat, thread, lives }: { chat: ChatView; thread: ThreadView;
 /** `model` is the one actually running (the live usage's), else the session's. */
 function AgentLine({ agent, model }: { agent: ChatAgentView; model: string | null }) {
   const { session, connect } = agent;
-  const status = sessionStatus(session);
-  const badge = statusBadge(status);
+  const { status, badge } = agent;
   return (
     <li>
       <span className="detail-inline"><AgentMark model={model} runtime={session.runtime} badge={badge} size={14} />{agentLabel(model, session.effort)}</span>
@@ -322,12 +321,11 @@ function SessionDetails({ session, live, profile }: { session: SessionSummary; l
 }
 
 /** What can be done to it right now: stop a turn, release an idle process. */
-function SessionActions({ session }: { session: SessionSummary }) {
+function SessionActions({ session, status }: { session: SessionSummary; status: Status }) {
   const api = useApi();
   const toast = useToast();
   const stop = useAction(() => api.stop(session.key), () => toast("已请求停止"));
   const evict = useAction(() => api.evict(session.key), () => toast("已释放进程"));
-  const status = sessionStatus(session);
   return (
     <>
       {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Square} onClick={() => void stop.run()} disabled={stop.busy} />}

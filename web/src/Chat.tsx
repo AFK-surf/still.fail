@@ -35,7 +35,8 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
   const member = usePerson();
   const isMine = useIsMine();
-  const mineOf = (m: MessageView) => m.authorKind === "person" && isMine({ id: m.author, email: m.author });
+  // Whose a message is, the core says.
+  const mineOf = (m: MessageView & { mine?: boolean }) => m.mine === true;
   useStickToBottom(list, ".msg", floor);
   // Without a chat there is nothing older to load and nothing to read.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
@@ -60,7 +61,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   const lastAgents = useRef<AgentAtWork[] | null>(null);
   const [, rerender] = useState(0);
   const wasBusy = useRef(false);
-  const working = agents.filter((a) => ["running", "queued"].includes(sessionStatus(a.session)));
+  const working = agents.filter((a) => a.status === "running" || a.status === "queued");
   // A message on its way already counts: the activity shows at once (for every agent it goes to) instead of after the station answers.
   const sendingNow = outbox.some((o) => o.state === "sending");
   const busyAgents = working.length ? working : sendingNow ? agents : [];
