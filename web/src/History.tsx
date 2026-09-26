@@ -8,6 +8,7 @@ import { agentLabel, botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo } from "./ui.tsx";
 import { usePerson } from "./station.tsx";
 import { Prose } from "./Prose.tsx";
+import { useStickToBottom } from "./scroll.ts";
 
 export function parseArgs(text: string): Record<string, unknown> | null {
   try {
@@ -154,21 +155,8 @@ export function History({ detail, connect, state, actions, details, slackBase, o
   };
   const [usageOpen, setUsageOpen] = useState(false);
   const body = useRef<HTMLDivElement>(null);
-  const count = detail.transcript?.timeline.length ?? 0;
   // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
-  const pinned = useRef(true);
-  useEffect(() => {
-    const el = body.current;
-    if (!el) return;
-    const onScroll = () => { pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; };
-    el.addEventListener("scroll", onScroll);
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-  // Streaming grows the last step without adding entries; follow that too.
-  const growth = live.reduce((n, s) => n + s.text.length + s.input.length + s.output.length, live.length);
-  useEffect(() => {
-    if (pinned.current && body.current) body.current.scrollTop = body.current.scrollHeight;
-  }, [count, growth]);
+  useStickToBottom(body);
   const { session, transcript } = detail;
   const items = useMemo(() => toItems(transcript?.timeline ?? []), [transcript]);
   // What was there when the history opened shows at once; only what comes later animates.

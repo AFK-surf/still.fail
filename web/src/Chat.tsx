@@ -3,7 +3,7 @@
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, ChevronDown, ChevronUp, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
@@ -11,6 +11,8 @@ import { absoluteTime, agentLabel, relativeTime, sessionStatus } from "./format.
 import { useIsMine, usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
+import { Dialog as RDialog } from "radix-ui";
+import { useStickToBottom } from "./scroll.ts";
 
 export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory }: {
   detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; live?: ShownStep[]; phase?: ShownPhase | null; onOpenHistory(): void;
@@ -20,9 +22,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
-  useEffect(() => {
-    if (list.current) list.current.scrollTop = list.current.scrollHeight;
-  }, [messages.length]);
+  useStickToBottom(list);
   // Messages there when the chat opened show at once; later ones ease in, except a reply that already streamed in place.
   const firstCount = useRef<number | null>(null);
   if (firstCount.current === null) firstCount.current = messages.length;
@@ -209,18 +209,43 @@ function Files({ sessionKey, files }: { sessionKey: string; files: Attachment[] 
   return <div className="msg-files">{files.map((f) => <FileItem key={f.path} sessionKey={sessionKey} file={f} />)}</div>;
 }
 
-/** Images show themselves at their own proportions; other files are a card that opens them. */
+/** Images show themselves at their own proportions and open in a lightbox; other files are a card. */
 function FileItem({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
   const image = IMAGE.test(file.name);
   const url = useFileUrl(sessionKey, file, image);
+  const [open, setOpen] = useState(false);
   if (image) {
     return (
-      <a className="msg-image" href={url ?? undefined} target="_blank" rel="noopener" title={file.path}>
-        {url ? <img src={url} alt={file.name} /> : <span className="msg-image-wait" />}
-      </a>
+      <>
+        <button type="button" className="msg-image" onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`}>
+          {url ? <img src={url} alt={file.name} /> : <span className="msg-image-wait" />}
+        </button>
+        {url && <Lightbox open={open} onClose={() => setOpen(false)} url={url} file={file} />}
+      </>
     );
   }
   return <FileCard file={file} />;
+}
+
+/** An image at full size over a dimmed page; Esc or a click outside closes it. */
+function Lightbox({ open, onClose, url, file }: { open: boolean; onClose(): void; url: string; file: Attachment }) {
+  return (
+    <RDialog.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <RDialog.Portal>
+        <RDialog.Overlay className="lightbox-overlay" />
+        <RDialog.Content className="lightbox" aria-describedby={undefined} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+          <RDialog.Title className="sr-only">{file.name}</RDialog.Title>
+          <img className="lightbox-image" src={url} alt={file.name} />
+          <div className="lightbox-bar">
+            <span className="lightbox-name">{file.name}</span>
+            <span className="lightbox-size">{fileSize(file.size)}</span>
+            <a className="lightbox-action" href={url} download={file.name}><Download size={14} />下载</a>
+            <RDialog.Close className="lightbox-action" aria-label="关闭"><X size={14} /></RDialog.Close>
+          </div>
+        </RDialog.Content>
+      </RDialog.Portal>
+    </RDialog.Root>
+  );
 }
 
 function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; error?: string | null }) {
@@ -420,7 +445,7 @@ function Activity({ agent, collapsed, onToggle, onOpen }: { agent: AgentAtWork; 
   const shown = rows.slice(-(count + 1));
   const newest = shown.at(-1)?.key ?? "none";
   return (
-    <div className="msg msg-row activity" data-collapsed={collapsed || undefined}>
+    <div className="msg msg-row agent-activity" data-collapsed={collapsed || undefined}>
       <div className="msg-main">
         <div className="msg-head">
           <span className="msg-avatar msg-avatar-agent"><ModelLogo model={agent.model} runtime={agent.runtime} size={12} /></span>
@@ -434,7 +459,7 @@ function Activity({ agent, collapsed, onToggle, onOpen }: { agent: AgentAtWork; 
           <div key={newest} className="activity-rows" data-shift={shown.length > count || undefined}>
             {shown.map((r) => (
               <span key={r.key} className="activity-row" data-live={r.live || undefined}>
-                {r.live ? <span className="activity-pulse inline" aria-hidden="true" /> : <span className="activity-done" aria-hidden="true" />}
+                <span className="activity-mark" aria-hidden="true">{r.live ? <span className="activity-pulse" /> : <span className="activity-done" />}</span>
                 <span className="activity-what">{r.text}{r.live ? "…" : ""}</span>
               </span>
             ))}
