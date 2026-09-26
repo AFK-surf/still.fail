@@ -771,24 +771,26 @@ test("the sidebar is one kind of item, an agent merged with its internal chat; a
 
     // A chat made on ember: its item, from no connect.
     const made = (await t.call("POST", "/sessions", { runtime: "claude" })).body;
-    const own = (await rows()).find((r) => r.id === String(made.thread.id));
+    // An item's id is its agent's session, chat or no chat.
+    const own = (await rows()).find((r) => r.id === made.key);
     assert.deepEqual([own.thread, own.session, own.title, own.connect, own.origin, own.last, own.mine], [made.thread.id, made.key, "（还没有消息）", null, null, null, true]);
 
     // The Slack agent's internal chat: the same item, now with its chat, titled by the Slack thread until it has words of its own.
     const chat = (await t.call("POST", "/threads", { session: slackKey })).body;
     let list = await rows();
-    assert.equal(list.some((r) => r.id === slackKey), false);
-    let row = list.find((r) => r.id === String(chat.id));
+    assert.equal(list.filter((r) => r.id === slackKey).length, 1, "still one item, at the same id");
+    let row = list.find((r) => r.id === slackKey);
+    assert.equal(row.thread, chat.id);
     assert.deepEqual([row.session, row.title, row.connect, row.origin, row.agents.map((a: any) => a.key)], [slackKey, "部署挂了", "ds", origin, [slackKey]]);
     t.hub.say(chat.id, "local", "看看日志");
-    row = (await rows()).find((r) => r.id === String(chat.id));
+    row = (await rows()).find((r) => r.id === slackKey);
     assert.deepEqual([row.title, row.last.text, row.last.authorKind, row.unread, row.mine], ["看看日志", "看看日志", "person", false, true]);
     // What the agent says is unread until read; the Slack thread's messages never show in the chat.
     const said = t.store.insertMessage({ thread: chat.id, ts: "9.000001", authorKind: "agent", author: slackKey, text: "x".repeat(300) }).n;
-    row = (await rows()).find((r) => r.id === String(chat.id));
+    row = (await rows()).find((r) => r.id === slackKey);
     assert.deepEqual([row.unread, row.last.text.length, row.last.seq], [true, 200, said]);
     await t.call("PUT", `/threads/${chat.id}/read`, { n: said });
-    assert.equal((await rows()).find((r) => r.id === String(chat.id)).unread, false);
+    assert.equal((await rows()).find((r) => r.id === slackKey).unread, false);
     assert.deepEqual((await t.call("GET", `/threads/${chat.id}/entries`)).body.entries.map((e: any) => e.text), ["看看日志", "x".repeat(300)]);
 
     // Archived: its item goes.
@@ -837,11 +839,12 @@ test("a viewer can say a Slack user is them: the station then takes that user fo
     assert.equal(await mine(dev), false);
     assert.equal(await slackUnread(dev), 2);
 
-    // Items come and go on the stream: the agent's item, once it has a chat, is at its chat's id.
+    // Items change on the stream: the agent's item, once it has a chat, is the same item (its id is the session) with it.
     const from = localEvents.events.length;
     const chat = (await t.call("POST", "/threads", { session: key })).body;
-    assert.equal((await localEvents.next("chat", (r) => r.thread === chat.id, from)).title, "看一下");
-    assert.deepEqual(await localEvents.next("chat-removed", () => true, from), { id: key });
+    const changed = await localEvents.next("chat", (r) => r.thread === chat.id, from);
+    assert.deepEqual([changed.id, changed.title], [key, "看一下"]);
+    assert.ok(!localEvents.events.slice(from).some((e) => e.event === "chat-removed"), "nothing leaves the sidebar");
     devEvents.close();
     localEvents.close();
   } finally {
