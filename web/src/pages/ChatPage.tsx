@@ -147,7 +147,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           })}
         </div>
         <div className="page-bar-actions">
-          {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
+          {chat.thread && <ChatInfo chat={chat} thread={chat.thread} lives={lives} />}
           {slackUrl && (
             <Tip label="在 Slack 中打开">
               <a className="icon-btn" href={slackUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
@@ -204,7 +204,7 @@ function slackConnect(chat: ChatView) {
 }
 
 /** The chat itself: where it came from, who started it and takes part, its agents. Opens from the title bar. */
-function ChatInfo({ chat, thread }: { chat: ChatView; thread: ThreadView }) {
+function ChatInfo({ chat, thread, lives }: { chat: ChatView; thread: ThreadView; lives: ReadonlyMap<string, LiveView> }) {
   const link = useLink();
   const connect = slackConnect(chat);
   const row = (label: string, value: ReactNode) => <div className="detail-row"><dt>{label}</dt><dd>{value}</dd></div>;
@@ -229,7 +229,7 @@ function ChatInfo({ chat, thread }: { chat: ChatView; thread: ThreadView }) {
           </dl>
           {chat.agents.length > 0 && (
             <ul className="details-list">
-              {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
+              {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} model={lives.get(a.session.key)?.usage?.model ?? a.session.model} />)}
             </ul>
           )}
         </Popover.Content>
@@ -239,13 +239,14 @@ function ChatInfo({ chat, thread }: { chat: ChatView; thread: ThreadView }) {
 }
 
 /** An agent of the chat in its info: what it runs, where it came from, and how it stands. */
-function AgentLine({ agent }: { agent: ChatAgentView }) {
+/** `model` is the one actually running (the live usage's), else the session's. */
+function AgentLine({ agent, model }: { agent: ChatAgentView; model: string | null }) {
   const { session, connect } = agent;
   const status = sessionStatus(session);
   const badge = statusBadge(status);
   return (
     <li>
-      <span className="detail-inline"><AgentMark model={session.model} runtime={session.runtime} badge={badge} size={14} />{agentLabel(session.model, session.effort)}</span>
+      <span className="detail-inline"><AgentMark model={model} runtime={session.runtime} badge={badge} size={14} />{agentLabel(model, session.effort)}</span>
       <span className="muted">
         {connect ? <><ConnectKindIcon kind={connect.kind} size={11} /> {connect.name} · </> : null}{PROCESS_LABEL[session.process]} · 最近活动 <Time at={session.lastActiveAt} />
       </span>

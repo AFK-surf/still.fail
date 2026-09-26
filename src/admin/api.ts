@@ -755,7 +755,8 @@ export class AdminApi {
         agents,
         last: last && {
           seq: last.seq, authorKind: last.authorKind, author: last.author, authorName: last.authorName,
-          text: [...last.text].slice(0, LAST_CHARS).join(""), createdAt: last.createdAt,
+          // Something to show when there are no words: a message that only quotes says so.
+          text: [...(last.text.trim() || (last.quotes?.length ? "引用了一条消息" : ""))].slice(0, LAST_CHARS).join(""), createdAt: last.createdAt,
         },
         unread: t.unread > 0,
         // Mine: the viewer takes part in the chat, or started one of its sessions (through a connect or on ember).
