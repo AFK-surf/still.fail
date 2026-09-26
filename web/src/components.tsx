@@ -2,7 +2,7 @@
 import { useAppearance } from "./theme.ts";
 import { useIsMine, type Creator, type HostInfo, type ProcessView, type ProfileQuota } from "./api.ts";
 import { useOnlyMine, usePerson } from "./station.tsx";
-import { Tip } from "./ui.tsx";
+import { Segmented, Tip } from "./ui.tsx";
 import { Check, ListFilter } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 
