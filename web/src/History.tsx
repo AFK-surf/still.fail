@@ -468,3 +468,16 @@ function PhaseLine({ phase, runtime }: { phase: ShownPhase; runtime: string }) {
     </div>
   );
 }
+
+const DOING: Record<Category, string> = {
+  read: "正在读取文件", search: "正在搜索", edit: "正在编辑文件", command: "正在运行命令",
+  web: "正在访问网页", agent: "正在派出子 agent", thread: "正在读取对话", other: "正在执行操作",
+};
+
+/** What a running tool call is doing, in words: its own description when it has one, else its kind. */
+export function activityText(tool: string | undefined, input: string): string {
+  const said = partialString(input, "description")?.trim();
+  if (said) return said;
+  if (toolName(tool) === "chat_post") return "正在写回复";
+  return DOING[categorize(tool ?? "")];
+}

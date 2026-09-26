@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownPhase, type ShownStep } from "./api.ts";
-import { partialString, toolName } from "./History.tsx";
+import { activityText, partialString, toolName } from "./History.tsx";
 import { absoluteTime, agentLabel, relativeTime, sessionStatus } from "./format.ts";
 import { useIsMine, usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
@@ -130,7 +130,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
           const doing = live.filter((s) => !s.ended && !s.subagent).at(-1);
           const what = phase?.phase === "starting" ? "正在启动 agent…"
             : phase?.phase === "requesting" ? "等待模型响应…"
-            : !doing ? "正在处理…" : doing.step === "thinking" ? "正在思考…" : doing.step === "tool" ? `正在运行 ${toolName(doing.tool)}…` : "正在写…";
+            : !doing ? "正在处理…" : doing.step === "thinking" ? "正在思考…" : doing.step === "tool" ? `${activityText(doing.tool, doing.input)}…` : "正在写…";
           return <button type="button" className="chat-typing" onClick={onOpenHistory}><span className="activity-pulse inline" aria-hidden="true" />{what}</button>;
         })()}
       </div>
