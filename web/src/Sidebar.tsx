@@ -63,7 +63,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
   return (
     <MeContext.Provider value={view?.me ?? null}>
       <div className="nav-new"><NavLink className="nav-row" to={newChat}><SquarePen {...ICON} />新建对话</NavLink></div>
-      <MineFilter label="会话" />
+      <MineFilter label="会话" mine="我参与的" />
       <div className="nav-scroll">
         {connecting.map((s) => <p key={s.station} className="nav-connecting"><span className="spinner" aria-hidden="true" />正在连接 {s.name}…</p>)}
         {failed.map((s) => <p key={s.station} className="nav-empty nav-error" title={s.message ?? undefined}>连不上「{s.name}」，正在重试…</p>)}
@@ -71,7 +71,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
         {days.length === 0 && loading && !chats.error && <SkeletonRows />}
         {offline.length > 0 && <p className="nav-empty">{offline.map((s) => s.name).join("、")} 离线，它们的会话暂时看不到。</p>}
         {days.length === 0 && view && !loading && !failed.length && !connecting.length && (
-          <p className="nav-empty">{onlyMine ? "没有你发起的会话。"
+          <p className="nav-empty">{onlyMine ? "没有你参与的会话。"
             : stations.length ? <>还没有会话。在 Slack 里 @ {stations.length > 1 ? "它们" : "它"}，或者 <NavLink className="inline-link" to={newChat}>新建对话</NavLink>。</>
             : <>还没有 station，到 <NavLink className="inline-link" to={`${settings}/stations`}>设置 → Station</NavLink> 添加。</>}</p>
         )}

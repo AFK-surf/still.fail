@@ -158,7 +158,7 @@ are small, while `chat` carries the whole transcript.
     "connect": { … } | null                        // the connect it belongs to, from that station's overview
   }] }]
   // days: most recent first, grouped by the viewer's local calendar day; items by lastActiveAt, newest first;
-  // with mine = true only sessions the viewer created (creator id or email matches me).
+  // with mine = true only sessions the viewer takes part in: the creator or a participant matches me (id, or email case-insensitively).
 }
 
 // stations
