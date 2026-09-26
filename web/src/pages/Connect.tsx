@@ -1,10 +1,10 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
-import { useStation, useLink } from "../station.tsx";
+import { scopeOf, useStation, useLink } from "../station.tsx";
 import { MessageCircle, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, useSessions, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
+import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind } from "../api.ts";
 import { agentLabel, connectionText, EFFORT_LABEL, EFFORTS, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, slug, STATUS_LABEL, statusTone } from "../format.ts";
 import { SlackAppSection } from "./SlackApp.tsx";
 import { OwnerLabel } from "../components.tsx";
@@ -30,9 +30,15 @@ function useSaveConnect(id: string) {
   return { ...save, put: (input: ConnectInput, done?: () => void) => void save.run(input).then((saved) => { if (saved) done?.(); }) };
 }
 
-export function connectSubtitle(c: ConnectView, profiles: ProfileView[]): string {
-  const account = profiles.find((p) => p.id === c.bind.profiles[0]);
-  return `${RUNTIME_LABEL[c.bind.runtime]} · ${agentLabel(c.bind.model ?? account?.model, c.bind.effort)}`;
+export function connectSubtitle(c: ConnectView): string {
+  return `${RUNTIME_LABEL[c.bind.runtime]} · ${agentLabel(c.bind.model ?? undefined, c.bind.effort)}`;
+}
+
+/** The models the station's profiles of a runtime have enabled, as the core puts them together (the station's `runtimes`). */
+function useRuntimeModels(runtime: RuntimeKind): string[] {
+  const station = useStation();
+  const view = useStations(scopeOf(station.address)).value?.find((s) => s.station === station.address);
+  return view?.runtimes.find((r) => r.runtime === runtime)?.models ?? [];
 }
 
 function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: Overview }) {
@@ -69,7 +75,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
             {station.name && <span className="station-tag">{station.name}</span>}
             <span className="kind-tag"><SlackLogo size={13} />Slack</span>
             <span>{modeText(connect.mode, connect.requireMention)}</span>
-            <span>{connectSubtitle(connect, overview.profiles)}</span>
+            <span>{connectSubtitle(connect)}</span>
             <span className="owner-line">所属 <OwnerLabel owner={connect.createdBy} /></span>
           </p>
         </div>
@@ -88,7 +94,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
       <SlackSection connect={connect} />
       <ModeSection connect={connect} />
       {connect.mode === "single-session" && <BoundSession connect={connect} />}
-      <BindSection connect={connect} overview={overview} />
+      <BindSection connect={connect} />
       <SlackAppSection connect={connect} />
       <ConnectSessions connect={connect} />
 
@@ -314,46 +320,31 @@ function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClo
   );
 }
 
-/** Model choice: the account's model list when it has been checked, free text otherwise. */
-export function ModelPicker({ id, account, value, onChange }: { id: string; account: ProfileView | undefined; value: string; onChange(value: string): void }) {
+/** Model choice: the models the runtime's profiles have enabled; the session's profile is picked among those that have it. */
+export function ModelPicker({ id, runtime, value, onChange }: { id: string; runtime: RuntimeKind; value: string; onChange(value: string): void }) {
   const link = useLink();
-  // Only models enabled on the profile can be bound.
-  const models = account?.models ?? [];
-  const fallback = account?.model ? `账号默认（${account.model}）` : "运行时默认";
+  const models = useRuntimeModels(runtime);
   if (models.length === 0) {
-    // Nothing to choose from: the field leads to where this profile's models are enabled.
-    return <Link id={id} className="input input-link" to={link(account ? `/settings/accounts/${account.id}` : "/settings/accounts")}>这个 Profile 还没有启用模型 · 去勾选</Link>;
+    // Nothing to choose from: the field leads to where profiles' models are enabled.
+    return <Link id={id} className="input input-link" to={link("/settings/accounts")}>{RUNTIME_LABEL[runtime]} 的 Profile 还没有启用模型 · 去勾选</Link>;
   }
-  const options = [{ value: "", label: fallback }, ...[...new Set([...(value ? [value] : []), ...models])].map((m) => ({ value: m, label: m }))];
+  const options = [{ value: "", label: "运行时默认" }, ...[...new Set([...(value ? [value] : []), ...models])].map((m) => ({ value: m, label: m }))];
   return <Select id={id} value={value} onChange={onChange} options={options} label="模型" />;
 }
 
-function BindSection({ connect, overview }: { connect: ConnectView; overview: Overview }) {
-  const link = useLink();
+function BindSection({ connect }: { connect: ConnectView }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
-  const accounts = overview.profiles.filter((p) => p.runtime === connect.bind.runtime);
-  const [account, setAccount] = useState(connect.bind.profiles[0] ?? "");
   const [model, setModel] = useState(connect.bind.model ?? "");
   const [effort, setEffort] = useState(connect.bind.effort ?? "");
-  const chosen = accounts.find((p) => p.id === account);
-  const dirty = account !== (connect.bind.profiles[0] ?? "") || model.trim() !== (connect.bind.model ?? "") || effort !== (connect.bind.effort ?? "");
-  const reset = () => { setAccount(connect.bind.profiles[0] ?? ""); setModel(connect.bind.model ?? ""); setEffort(connect.bind.effort ?? ""); };
+  const dirty = model.trim() !== (connect.bind.model ?? "") || effort !== (connect.bind.effort ?? "");
+  const reset = () => { setModel(connect.bind.model ?? ""); setEffort(connect.bind.effort ?? ""); };
   return (
-    <Section title="模型" description="新会话用这里的设置；进行中的会话继续用开始时的 Profile、模型和思考深度。">
+    <Section title="模型" description="新会话用这里的设置，在启用了这个模型的 Profile 里自动挑一个来跑；进行中的会话继续用开始时的。">
       <div className="card">
         <div className="field-grid">
-          <Field label="运行时">
-            <p className="static-value">{RUNTIME_LABEL[connect.bind.runtime]}</p>
-          </Field>
-          <Field label="Profile" htmlFor="bind-account">
-            <Select id="bind-account" value={account} onChange={(v) => { setAccount(v); setModel(""); }}
-              options={accounts.map((p) => ({ value: p.id, label: p.name }))} />
-          </Field>
-        </div>
-        <div className="field-grid">
-          <Field label="模型" htmlFor="bind-model" hint={chosen?.models.length ? `这个 Profile 启用了 ${chosen.models.length} 个模型。` : <>在 <Link className="inline-link" to={link(chosen ? `/settings/accounts/${chosen.id}` : "/settings/accounts")}>Profile 页面</Link> 勾选模型后，这里才能选。</>}>
-            <ModelPicker id="bind-model" account={chosen} value={model} onChange={setModel} />
+          <Field label="模型" htmlFor="bind-model">
+            <ModelPicker id="bind-model" runtime={connect.bind.runtime} value={model} onChange={setModel} />
           </Field>
           <Field label="思考深度" htmlFor="bind-effort">
             <EffortPicker id="bind-effort" runtime={connect.bind.runtime} value={effort} onChange={setEffort} />
@@ -362,13 +353,10 @@ function BindSection({ connect, overview }: { connect: ConnectView; overview: Ov
         {dirty && (
           <div className="card-actions">
             <Button variant="ghost" onClick={reset}>还原</Button>
-            <Button variant="primary" busy={save.busy} onClick={() => save.put(
-              { bind: { profiles: [account, ...connect.bind.profiles.filter((p) => p !== account)], model: model.trim(), effort } },
-              () => toast("已保存，新会话会用新的模型"),
-            )}>保存</Button>
+            <Button variant="primary" busy={save.busy} onClick={() => save.put({ bind: { model: model.trim(), effort } }, () => toast("已保存，新会话会用新的模型"))}>保存</Button>
           </div>
         )}
-        <p className="card-foot muted">运行时在创建后不能换；要用另一种运行时，新建一个连接。</p>
+        <p className="card-foot muted">运行时：{RUNTIME_LABEL[connect.bind.runtime]}。创建后不能换；要用另一种运行时，新建一个连接。</p>
       </div>
     </Section>
   );
@@ -416,26 +404,24 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const [id, setId] = useState("");
   const [idTouched, setIdTouched] = useState(false);
   const [runtime, setRuntime] = useState<RuntimeKind>("claude");
-  const [account, setAccount] = useState("");
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
   const [mode, setMode] = useState<{ mode: ConnectMode; requireMention: boolean }>({ mode: "multi-session", requireMention: true });
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
 
-  const accounts = (overview.value?.profiles ?? []).filter((p) => p.runtime === runtime);
-  const chosen = accounts.find((p) => p.id === account) ?? accounts[0];
+  const models = useRuntimeModels(runtime);
   const connectId = idTouched ? id : slug(name);
   const taken = overview.value?.connects.some((c) => c.id === connectId) ?? false;
   const idValid = /^[a-z0-9][a-z0-9-]*$/.test(connectId) && !taken;
 
   const close = () => {
-    setStep(1); setName(""); setId(""); setIdTouched(false); setAccount(""); setModel(""); setTokens(emptyTokens);
+    setStep(1); setName(""); setId(""); setIdTouched(false); setModel(""); setTokens(emptyTokens);
     setMode({ mode: "multi-session", requireMention: true });
     onClose();
   };
   const create = useAction((withTokens: boolean) => api.putConnect(connectId, {
     name: name.trim(), kind: "slack", ...mode,
-    bind: { runtime, profiles: chosen ? [chosen.id] : [], model: model.trim(), effort },
+    bind: { runtime, model: model.trim(), effort },
     ...(withTokens ? { slack: { appToken: tokens.appToken, botToken: tokens.botToken } } : {}),
   }), (_, withTokens) => {
     toast(withTokens ? "已添加连接，正在连接 Slack" : "已添加连接");
@@ -452,7 +438,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   ) : step === 2 ? (
     <>
       <Button variant="ghost" onClick={() => setStep(1)}>上一步</Button>
-      <Button variant="primary" disabled={!chosen} onClick={() => setStep(3)}>下一步</Button>
+      <Button variant="primary" disabled={models.length === 0} onClick={() => setStep(3)}>下一步</Button>
     </>
   ) : (
     <>
@@ -483,17 +469,12 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
       {step === 2 && (
         <>
           <Field label="运行时">
-            <Segmented label="运行时" value={runtime} onChange={(r) => { setRuntime(r); setAccount(""); setModel(""); setEffort(""); }}
+            <Segmented label="运行时" value={runtime} onChange={(r) => { setRuntime(r); setModel(""); setEffort(""); }}
               options={[{ value: "claude", label: "Claude Code" }, { value: "codex", label: "Codex" }]} />
           </Field>
           <div className="field-grid">
-            <Field label="Profile" htmlFor="new-connect-account"
-              error={accounts.length === 0 ? <>还没有 {RUNTIME_LABEL[runtime]} 的 Profile，先到 <Link className="inline-link" to={link("/settings/accounts")}>设置 → Profile</Link> 添加。</> : undefined}>
-              <Select id="new-connect-account" value={chosen?.id ?? ""} onChange={(v) => { setAccount(v); setModel(""); }} disabled={accounts.length === 0}
-                options={accounts.map((p) => ({ value: p.id, label: p.name }))} placeholder="没有可用账号" />
-            </Field>
             <Field label="模型" htmlFor="new-connect-model">
-              <ModelPicker id="new-connect-model" account={chosen} value={model} onChange={setModel} />
+              <ModelPicker id="new-connect-model" runtime={runtime} value={model} onChange={setModel} />
             </Field>
             <Field label="思考深度" htmlFor="new-connect-effort">
               <EffortPicker id="new-connect-effort" runtime={runtime} value={effort} onChange={setEffort} />

@@ -26,7 +26,7 @@ export interface ConnectView {
   kind: ConnectKind;
   mode: ConnectMode;
   requireMention: boolean;
-  bind: { runtime: RuntimeKind; profiles: string[]; model: string | null; effort: string | null };
+  bind: { runtime: RuntimeKind; model: string | null; effort: string | null };
   /** Masked; empty when unset. */
   slack: { appToken: string; botToken: string };
   connection: ConnectState;
@@ -278,7 +278,7 @@ export interface ConnectInput {
   kind?: ConnectKind;
   mode?: ConnectMode;
   requireMention?: boolean;
-  bind?: { runtime?: RuntimeKind; profiles?: string[]; model?: string; effort?: string };
+  bind?: { runtime?: RuntimeKind; model?: string; effort?: string };
   slack?: { appToken?: string; botToken?: string };
   /** Hands the connect to someone else (an email). Owners, admins, the station itself, or the current owner. */
   owner?: { id: string; name?: string };

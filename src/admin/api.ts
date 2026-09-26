@@ -31,6 +31,7 @@ import { AccessDenied, AccessGate, viewerId, viewerName, type Viewer } from "./a
 import { verifySlackTokens } from "../chat/slack.ts";
 import { createAppUrl, slackManifest } from "./slack-manifest.ts";
 import { previewTarget, proxyPreview } from "./preview.ts";
+import { serves } from "../pool.ts";
 import type { ChatRow, ChatRowAgent, Creator, EntryView, MessageView, Overview, ProcessState, SessionDetail, SessionSummary, StationEvents, ThreadEntries, ThreadView } from "./types.ts";
 
 const SECRET_KEY = /KEY|TOKEN|SECRET|PASSWORD|AUTH/i;
@@ -611,7 +612,7 @@ export class AdminApi {
       mesh: this.#deps.mesh?.status() ?? null,
       connects: config.connects.map((c) => ({
         id: c.id, name: c.name, enabled: c.enabled, kind: c.kind, mode: c.mode, requireMention: c.requireMention,
-        bind: { runtime: c.bind.runtime, profiles: c.bind.profiles, model: c.bind.model ?? null, effort: c.bind.effort ?? null },
+        bind: { runtime: c.bind.runtime, model: c.bind.model ?? null, effort: c.bind.effort ?? null },
         slack: { appToken: mask(c.slack.appToken), botToken: mask(c.slack.botToken) },
         connection: this.#deps.connections.state(c),
         createdBy: c.createdBy ?? null,
@@ -622,7 +623,8 @@ export class AdminApi {
         id: p.id, name: p.name, runtime: p.runtime, access: { kind: p.access.kind, key: mask(p.access.key) },
         home: p.home, homeExists: existsSync(p.home), model: p.model ?? null, models: p.models,
         env: Object.entries(p.customEnv).map(([key, value]) => ({ key, secret: SECRET_KEY.test(key), value: SECRET_KEY.test(key) ? mask(value) : value })),
-        usedBy: config.connects.filter((c) => c.bind.profiles.includes(p.id)).map((c) => c.id),
+        // Connects whose sessions can run on it: of its runtime, and its models have theirs.
+        usedBy: config.connects.filter((c) => c.bind.runtime === p.runtime && serves(p, c.bind.model ?? null)).map((c) => c.id),
         loginCommand: loginCommand(p.runtime, p.home),
         check: this.#checks.get(p.id) ?? null,
         login: this.#deps.logins.get(p.id),
@@ -1142,8 +1144,8 @@ export class AdminApi {
           ? { slack: { ...(appToken ? { appToken } : {}), ...(botToken ? { botToken } : {}), ...(existing?.slack?.appId ? { appId: existing.slack.appId } : {}) } }
           : {}),
         bind: {
-          runtime: (bind.runtime ?? existing?.bind.runtime) as RuntimeKind,
-          profiles: Array.isArray(bind.profiles) ? bind.profiles.map(String) : existing?.bind.profiles ?? [],
+          // A connect's runtime is chosen when it is made: its sessions and their history belong to it.
+          runtime: (existing?.bind.runtime ?? bind.runtime) as RuntimeKind,
           ...(typeof model === "string" && model.trim() ? { model: model.trim() } : {}),
           ...(typeof effort === "string" && effort.trim() ? { effort: effort.trim() } : {}),
         },
@@ -1187,9 +1189,7 @@ export class AdminApi {
       if (typeof model === "string" && model.trim()) next.model = model.trim();
       const models = input.models === undefined ? existing?.models : input.models;
       if (Array.isArray(models) && models.length) next.models = [...new Set(models.map(String).map((m) => m.trim()).filter(Boolean))].slice(0, 200);
-      if (existing && existing.runtime !== next.runtime && raw.connects?.some((c) => (c.bind.profiles ?? []).includes(id))) {
-        throw new Error(`profile ${id} is used by a connect; its runtime cannot change`);
-      }
+      if (existing && existing.runtime !== next.runtime) lastOfRuntime(raw, existing.runtime, id);
       return { ...raw, profiles: existing ? profiles.map((p) => (p.id === id ? next : p)) : [...profiles, next] };
     });
   }
@@ -1222,12 +1222,19 @@ export class AdminApi {
 
   #deleteProfile(id: string, viewer: Viewer) {
     return this.#save(viewer, `delete profile ${id}`, (raw) => {
-      const users = (raw.connects ?? []).filter((c) => (c.bind.profiles ?? []).includes(id)).map((c) => c.id);
-      if (users.length > 0) throw new Error(`profile ${id} is used by ${users.join(", ")}`);
-      if (!raw.profiles?.some((p) => p.id === id)) throw new Error(`unknown profile ${id}`);
+      const profile = raw.profiles?.find((p) => p.id === id);
+      if (!profile) throw new Error(`unknown profile ${id}`);
+      lastOfRuntime(raw, profile.runtime, id);
       return { ...raw, profiles: raw.profiles.filter((p) => p.id !== id) };
     });
   }
+}
+
+/** A profile leaving its runtime (deleted, or moved to another): refused when it is the last one of a runtime that connects run. */
+function lastOfRuntime(raw: RawConfig, runtime: RuntimeKind, id: string): void {
+  if ((raw.profiles ?? []).some((p) => p.id !== id && p.runtime === runtime)) return;
+  const users = (raw.connects ?? []).filter((c) => c.bind.runtime === runtime).map((c) => c.name ?? c.id);
+  if (users.length) throw new Error(`它是最后一个 ${runtime} 的 Profile，${users.join("、")} 还要用它运行`);
 }
 
 /** Slack's error codes in words people can act on. */

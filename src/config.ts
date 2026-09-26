@@ -59,8 +59,7 @@ export interface Binding {
   runtime: RuntimeKind;
   /** How hard the model thinks; the runtime's default when absent. */
   effort?: string;
-  /** Accounts in order of preference; all of `runtime`. */
-  profiles: string[];
+  /** Sessions run on the profiles of `runtime` that have this model enabled, picked per session (pool.ts). */
   model?: string;
 }
 
@@ -114,7 +113,7 @@ export interface RawConnect {
   requireMention?: boolean;
   slack?: { appToken?: string; botToken?: string; appId?: string };
   createdBy?: { id: string; name: string };
-  bind: { runtime: RuntimeKind; profiles?: string[]; model?: string; effort?: string };
+  bind: { runtime: RuntimeKind; model?: string; effort?: string };
 }
 
 /** The previous config shape: one Slack app per bot, always multi-session. */
@@ -167,7 +166,7 @@ export function upgradeRawConfig(raw: RawConfig): RawConfig {
     kind: "slack",
     mode: "multi-session",
     ...(b.slack ? { slack: b.slack } : {}),
-    bind: { runtime: b.runtime, profiles: b.profiles ?? (b.profile ? [b.profile] : []), ...(b.model ? { model: b.model } : {}) },
+    bind: { runtime: b.runtime, ...(b.model ? { model: b.model } : {}) },
   }));
   return { ...rest, connects: [...(raw.connects ?? []), ...converted] };
 }
@@ -208,13 +207,6 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
     const runtime = c.bind?.runtime;
     if (!RUNTIMES.includes(runtime)) throw new Error(`connect ${c.id}: unknown runtime ${String(runtime)}`);
     if (c.bind.effort && !EFFORTS[runtime].includes(c.bind.effort)) throw new Error(`connect ${c.id}: ${runtime} has no effort ${c.bind.effort}; use ${EFFORTS[runtime].join(", ")}`);
-    const ids = c.bind.profiles ?? [];
-    if (ids.length === 0) throw new Error(`connect ${c.id}: bind at least one account`);
-    for (const id of ids) {
-      const profile = profiles.find((p) => p.id === id);
-      if (!profile) throw new Error(`connect ${c.id}: unknown profile ${id}`);
-      if (profile.runtime !== runtime) throw new Error(`connect ${c.id}: profile ${id} is ${profile.runtime}, the connect runs ${runtime}`);
-    }
     return {
       id: c.id,
       name: c.name?.trim() || c.id,
@@ -223,7 +215,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
       mode,
       requireMention: mode === "multi-session" ? true : c.requireMention ?? true,
       slack: { appToken: c.slack?.appToken ?? "", botToken: c.slack?.botToken ?? "", ...(c.slack?.appId ? { appId: c.slack.appId } : {}) },
-      bind: { runtime, profiles: ids, ...(c.bind.model ? { model: c.bind.model } : {}), ...(c.bind.effort ? { effort: c.bind.effort } : {}) },
+      bind: { runtime, ...(c.bind.model ? { model: c.bind.model } : {}), ...(c.bind.effort ? { effort: c.bind.effort } : {}) },
       ...(c.createdBy?.id ? { createdBy: { id: c.createdBy.id, name: c.createdBy.name ?? "" } } : {}),
     };
   });
@@ -256,11 +248,9 @@ function unique(kind: string, ids: string[]): void {
   }
 }
 
-/** The profile a new session of `connect` runs on. Account pooling comes later; for now the first. */
-export function profileFor(config: Config, connect: Connect): Profile {
-  const profile = config.profiles.find((p) => p.id === connect.bind.profiles[0]);
-  if (!profile) throw new Error(`connect ${connect.id}: profile ${connect.bind.profiles[0]} is not configured`);
-  return profile;
+/** The profiles a connect's sessions can run on: every profile of its runtime (pool.ts picks one per session). */
+export function profilesFor(config: Config, connect: Connect): Profile[] {
+  return config.profiles.filter((p) => p.runtime === connect.bind.runtime);
 }
 
 export function expandRoute(env: Record<string, string>, route: string): Record<string, string> {

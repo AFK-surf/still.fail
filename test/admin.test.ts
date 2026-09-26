@@ -129,7 +129,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string }; st
       { id: "cc", runtime: "claude", home: "homes/cc", env: { ANTHROPIC_API_KEY: "sk-very-secret-value", ANTHROPIC_BASE_URL: "https://example" } },
       { id: "cx", runtime: "codex", home: "homes/cx" },
     ],
-    connects: [{ id: "ds", name: "ember", kind: "slack", mode: "multi-session", bind: { runtime: "claude", profiles: ["cc"] }, slack: { appToken: "xapp-1-aaaaaaaaaaaa", botToken: "xoxb-bbbbbbbbbbbb", appId: "A0DS" } }],
+    connects: [{ id: "ds", name: "ember", kind: "slack", mode: "multi-session", bind: { runtime: "claude" }, slack: { appToken: "xapp-1-aaaaaaaaaaaa", botToken: "xoxb-bbbbbbbbbbbb", appId: "A0DS" } }],
   }));
   const settings = new Settings(path, dataDir);
   const store = options.store ?? new Store(":memory:");
@@ -291,9 +291,11 @@ test("adding, disabling and deleting connects follows through to connections", a
   const t = await setup();
   try {
     assert.equal(t.connections.length, 1);
-    await t.call("PUT", "/connects/gpt", { bind: { runtime: "codex", profiles: ["cx"] }, slack: { appToken: "xapp-2-cccccccccc", botToken: "xoxb-dddddddddd" } });
+    await t.call("PUT", "/connects/gpt", { bind: { runtime: "codex" }, slack: { appToken: "xapp-2-cccccccccc", botToken: "xoxb-dddddddddd" } });
     await t.conns.reconcile(t.settings.config);
     assert.deepEqual([...t.conns.chats.keys()].sort(), ["ds", "gpt"]);
+    await t.call("PUT", "/connects/gpt", { bind: { runtime: "claude" } });
+    assert.equal(t.settings.config.connects.find((c) => c.id === "gpt")!.bind.runtime, "codex", "a connect's runtime stays as it was made");
     await t.call("PUT", "/connects/gpt", { enabled: false });
     await t.conns.reconcile(t.settings.config);
     assert.deepEqual([...t.conns.chats.keys()], ["ds"]);
@@ -311,14 +313,12 @@ test("invalid edits are refused and leave the config unchanged", async () => {
   const t = await setup();
   try {
     const before = readFileSync(t.path, "utf8");
-    const bad = await t.call("PUT", "/connects/x", { bind: { runtime: "claude", profiles: ["nope"] } });
+    const bad = await t.call("PUT", "/connects/x", { bind: { runtime: "nope" } });
     assert.equal(bad.status, 400);
-    assert.match(bad.body.error, /unknown profile nope/);
-    const mismatch = await t.call("PUT", "/connects/x", { bind: { runtime: "codex", profiles: ["cc"] } });
-    assert.match(mismatch.body.error, /profile cc is claude/);
-    const inUse = await t.call("DELETE", "/profiles/cc");
-    assert.equal(inUse.status, 400);
-    assert.match(inUse.body.error, /used by ds/);
+    assert.match(bad.body.error, /unknown runtime/);
+    const last = await t.call("DELETE", "/profiles/cc");
+    assert.equal(last.status, 400);
+    assert.match(last.body.error, /最后一个 claude 的 Profile，ember 还要用它运行/);
     assert.equal(readFileSync(t.path, "utf8"), before);
   } finally {
     t.close();
@@ -416,7 +416,7 @@ test("a legacy bots config is rewritten as connects on load", async () => {
   assert.deepEqual(settings.config.connects.map((c) => [c.id, c.mode, c.bind.model]), [["ds", "multi-session", "m"]]);
   const saved = JSON.parse(readFileSync(path, "utf8"));
   assert.equal(saved.bots, undefined);
-  assert.deepEqual(saved.connects[0].bind, { runtime: "claude", profiles: ["cc"], model: "m" });
+  assert.deepEqual(saved.connects[0].bind, { runtime: "claude", model: "m" });
 });
 
 test("a subscription sign-in runs on the ember host and relays the link, the code and the result", async () => {
@@ -480,7 +480,7 @@ test("a connect's Slack app is edited through its manifest; new permissions need
 test("connects, sessions and chats remember who created them", async () => {
   const t = await setup();
   try {
-    await t.call("PUT", "/connects/fresh", { bind: { runtime: "claude", profiles: ["cc"] } });
+    await t.call("PUT", "/connects/fresh", { bind: { runtime: "claude" } });
     assert.deepEqual(t.settings.config.connects.find((c) => c.id === "fresh")!.createdBy, { id: "local", name: "本机管理页" });
     await t.call("PUT", "/connects/fresh", { name: "renamed" });
     assert.equal(t.settings.config.connects.find((c) => c.id === "fresh")!.createdBy?.id, "local", "editing keeps the creator");

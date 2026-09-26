@@ -16,7 +16,7 @@ import { randomBytes } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
-import { EFFORTS, profileFor, RUNTIMES, type Config, type Connect, type Profile, type RuntimeKind } from "./config.ts";
+import { EFFORTS, profilesFor, RUNTIMES, type Config, type Connect, type Profile, type RuntimeKind } from "./config.ts";
 import { pickProfile, type ProfileHealth } from "./pool.ts";
 import { INTERNAL_CHANNEL, INTERNAL_CONNECT, nextTs, type InternalChat } from "./chat/internal.ts";
 import type { ChatEvent, ChatMessage, ChatSurface, InboundMessage } from "./chat/types.ts";
@@ -550,8 +550,8 @@ export class Hub {
   }
 
   #createSession(key: string, connect: Connect, scope: SessionScope, message: InboundMessage | null, title: string | null = null, createdBy: string | null = null): void {
-    const bound = connect.bind.profiles.map((id) => this.#config.profiles.find((p) => p.id === id)).filter((p): p is Profile => Boolean(p));
-    const profile = bound.length ? this.#pick(bound, connect.bind.model ?? null, false) : profileFor(this.#config, connect);
+    // Any profile of the connect's runtime, the model's first (pool.ts).
+    const profile = this.#pick(profilesFor(this.#config, connect), connect.bind.model ?? null, false);
     const dir = scope === "all" ? key.slice(connect.id.length + 1) : `${message!.channel}-${message!.threadTs.replace(".", "-")}`;
     const workspace = join(this.#config.dataDir, "sessions", connect.id, dir, "workspace");
     mkdirSync(workspace, { recursive: true });

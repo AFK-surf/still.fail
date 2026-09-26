@@ -69,6 +69,6 @@ test("usage sums model requests; claude's split responses count once", () => {
 
 test("a connect's effort must be one its runtime knows", () => {
   const profiles = [{ id: "cc", runtime: "claude" as const, home: "h" }];
-  assert.throws(() => parseConfig({ profiles, connects: [{ id: "a", bind: { runtime: "claude", profiles: ["cc"], effort: "minimal" } }] }, "/d"), /has no effort minimal/);
-  assert.equal(parseConfig({ profiles, connects: [{ id: "a", bind: { runtime: "claude", profiles: ["cc"], effort: "max" } }] }, "/d").connects[0]!.bind.effort, "max");
+  assert.throws(() => parseConfig({ profiles, connects: [{ id: "a", bind: { runtime: "claude", effort: "minimal" } }] }, "/d"), /has no effort minimal/);
+  assert.equal(parseConfig({ profiles, connects: [{ id: "a", bind: { runtime: "claude", effort: "max" } }] }, "/d").connects[0]!.bind.effort, "max");
 });

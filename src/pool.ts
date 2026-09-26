@@ -25,7 +25,7 @@ function used(quota: ProfileQuota | null): number {
 }
 
 /** A chosen model needs the profile to have it enabled; no model means the profile's own default. */
-function serves(profile: Profile, model: string | null): boolean {
+export function serves(profile: Profile, model: string | null): boolean {
   return !model || profile.models.includes(model);
 }
 
