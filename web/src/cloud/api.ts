@@ -59,12 +59,13 @@ export const cloud = {
   revokeLoginSession: (sub: string, id: string) => call<{ ok: true }>(sub, "DELETE", `/v1/auth/sessions/${id}`),
 };
 
-/** The admin's console; every call is a 404 for other accounts. */
+/** The admin's console (on its own host, src/admin/); every call is a 404 for other accounts. */
 export const admin = {
   me: (sub: string) => call<{ email: string }>(sub, "GET", "/v1/admin/me"),
   users: (sub: string) => call<{ users: AdminUser[] }>(sub, "GET", "/v1/admin/users").then((r) => r.users),
   workspaces: (sub: string) => call<{ workspaces: AdminWorkspace[] }>(sub, "GET", "/v1/admin/workspaces").then((r) => r.workspaces),
-  codes: (sub: string) => call<{ codes: InviteCodeView[] }>(sub, "GET", "/v1/admin/invite-codes").then((r) => r.codes),
+  /** Each with its sign-up link on the web app. */
+  codes: (sub: string) => call<{ codes: (InviteCodeView & { url: string })[] }>(sub, "GET", "/v1/admin/invite-codes").then((r) => r.codes),
   createCode: (sub: string, note: string, days: number) => call<InviteCodeView & { url: string }>(sub, "POST", "/v1/admin/invite-codes", { note, days }),
   revokeCode: (sub: string, code: string) => call<{ ok: true }>(sub, "POST", `/v1/admin/invite-codes/${encodeURIComponent(code)}/revoke`),
 };

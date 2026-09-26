@@ -1175,6 +1175,8 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .admin-line-text .muted { font-size: var(--text-xs); }
 .admin-code { font-size: var(--text-body); letter-spacing: .04em; }
 .admin-note { font-weight: 400; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.admin-foot { padding: 8px; }
+.admin-account { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 6px; }
 .invite-code { display: grid; gap: 6px; width: min(420px, 90vw); margin-top: 8px; }
 .invite-code .btn { margin-top: 0; }
 .gate .invite-code .field-error { color: var(--red); }
