@@ -9,6 +9,8 @@ import {
 import { Link } from "react-router";
 import { forwardRef, useEffect, useId, useState, type ButtonHTMLAttributes, type ComponentType, type ReactNode } from "react";
 
+import { absoluteTime, relativeTime } from "./format.ts";
+
 export const ICON = { size: 16, strokeWidth: 1.7 } as const;
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number }>;
@@ -373,5 +375,58 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
         handle.addEventListener("pointerup", up);
         e.preventDefault();
       }} />
+  );
+}
+
+/** Model makers, by what their model names look like. Marks from Zork's provider set and lobehub icons (MIT). */
+const MODEL_MAKERS: [RegExp, string, string, boolean][] = [
+  [/claude|opus|sonnet|haiku|fable/i, "anthropic", "Anthropic", true],
+  [/gpt|^o\d|codex|openai/i, "openai", "OpenAI", true],
+  [/deepseek/i, "deepseek", "DeepSeek", false],
+  [/qwen|qwq/i, "qwen", "Qwen", false],
+  [/glm|zhipu/i, "zhipu", "智谱", false],
+  [/gemini|gemma/i, "gemini", "Google", false],
+  [/kimi|moonshot/i, "kimi", "Kimi", true],
+  [/minimax|abab/i, "minimax", "MiniMax", false],
+  [/grok/i, "xai", "xAI", true],
+];
+
+/** The mark of the company that made a model; the runtime's mark when the model is unknown. */
+export function ModelLogo({ model, runtime, size = 14 }: { model: string | null | undefined; runtime: "claude" | "codex"; size?: number }) {
+  const maker = model ? MODEL_MAKERS.find(([re]) => re.test(model)) : undefined;
+  if (!maker) return <RuntimeLogo runtime={runtime} size={size} />;
+  const [, file, name, mono] = maker;
+  return <img className="model-logo" src={`${import.meta.env.BASE_URL}models/${file}.svg`} alt={name} title={name} width={size} height={size} data-mono={mono || undefined} />;
+}
+
+const TIME_MODE = "ember.absoluteTime";
+/** Every relative time on the page follows one switch: a click on any of them flips all between "3 分钟前" and the date. */
+function useAbsoluteTime(): [boolean, () => void] {
+  const [absolute, setAbsolute] = useState(() => localStorage.getItem(TIME_MODE) === "1");
+  useEffect(() => {
+    const sync = () => setAbsolute(localStorage.getItem(TIME_MODE) === "1");
+    window.addEventListener("ember-time", sync);
+    return () => window.removeEventListener("ember-time", sync);
+  }, []);
+  return [absolute, () => {
+    localStorage.setItem(TIME_MODE, absolute ? "0" : "1");
+    window.dispatchEvent(new Event("ember-time"));
+  }];
+}
+
+export function Time({ at, className }: { at: number; className?: string }) {
+  const [absolute, flip] = useAbsoluteTime();
+  // Re-render now and then so "刚刚" becomes "1 分钟前" without other changes.
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (absolute) return;
+    const timer = setInterval(() => tick((n) => n + 1), 30_000);
+    return () => clearInterval(timer);
+  }, [absolute]);
+  return (
+    <time className={`time-toggle${className ? ` ${className}` : ""}`} dateTime={new Date(at).toISOString()} title={absolute ? relativeTime(at) : absoluteTime(at)}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); flip(); }}>
+      {absolute ? absoluteTime(at) : relativeTime(at)}
+    </time>
   );
 }

@@ -8,7 +8,7 @@ import { useApi, keys, useOverview, type AccessKind, type Overview, type Profile
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
-import { RuntimeLogo, Button, Choices, Loading, ConnectKindIcon, Confirm, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, Pill, RuntimeLogo, Section, Segmented, Select, Time } from "../ui.tsx";
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
 function OpenCodeMark({ size = 16 }: { size?: number; strokeWidth?: number }) {
@@ -192,7 +192,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
           <Pill tone={tone.tone}>{tone.label}</Pill>
           <div className="card-row-text">
             <span>{latest?.detail ?? "还没检查过。"}</span>
-            {latest && <span className="muted">{relativeTime(latest.checkedAt)}检查</span>}
+            {latest && <span className="muted"><Time at={latest.checkedAt} />检查</span>}
           </div>
         </div>
         {profile.access.kind === "subscription" && <SignIn profile={profile} needed={latest?.state === "login"} />}
@@ -407,7 +407,7 @@ function QuotaSection({ profile }: { profile: ProfileView }) {
   const refresh = useMutation({ mutationFn: () => api.refreshQuota(profile.id) });
   const quota = refresh.data ?? profile.quota;
   return (
-    <Section title="额度" description={quota?.checkedAt ? `${relativeTime(quota.checkedAt)}查询；每几分钟自动更新。` : undefined}
+    <Section title="额度" description={quota?.checkedAt ? <><Time at={quota.checkedAt} />查询；每几分钟自动更新。</> : undefined}
       actions={<Button icon={RefreshCw} busy={refresh.isPending} onClick={() => refresh.mutate()}>刷新</Button>}>
       <div className="card"><QuotaBars quota={quota} /></div>
     </Section>

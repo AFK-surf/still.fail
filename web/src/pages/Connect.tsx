@@ -13,8 +13,7 @@ import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
-import {
-  Button, Choices, ConnectKindIcon, Loading, Confirm, Dialog, Empty, Field, ICON, IconButton, Menu, MobileBack, Pill, Section, Segmented, Select, StatusDot, SwitchRow, SlackLogo } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, Pill, Section, Segmented, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
 
 export function ConnectPage() {
   const { id } = useParams();
@@ -261,7 +260,7 @@ function BoundSession({ connect }: { connect: ConnectView }) {
         <Link className="card card-row card-link" to={link(`/sessions/${encodeURIComponent(bound.key)}`)}>
           <div className="card-row-text">
             <strong>{sessionTitle(bound, connect.name)}</strong>
-            <span className="muted">{RUNTIME_LABEL[bound.runtime]} · {bound.turns} 轮 · 最近活动 {relativeTime(bound.lastActiveAt)}</span>
+            <span className="muted">{RUNTIME_LABEL[bound.runtime]} · {bound.turns} 轮 · 最近活动 <Time at={bound.lastActiveAt} /></span>
           </div>
           <Pill tone={statusTone(sessionStatus(bound))}>{STATUS_LABEL[sessionStatus(bound)]}</Pill>
         </Link>
@@ -387,7 +386,7 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
                 <Link className="list-row" to={link(`/sessions/${encodeURIComponent(s.key)}`)}>
                   <span className="list-row-title">{sessionTitle(s, connect.name)}</span>
                   <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
-                  <span className="muted list-row-time">{relativeTime(s.lastActiveAt)}</span>
+                  <Time className="muted list-row-time" at={s.lastActiveAt} />
                 </Link>
               </li>
             );

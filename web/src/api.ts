@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useStation } from "./station.tsx";
 import type { Transport } from "./transport.ts";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
-import type { Attachment, ConnectInput, HostInfo, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type { Attachment, Quote, ConnectInput, HostInfo, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
 
 export type * from "../../src/admin/types.ts";
@@ -52,8 +52,14 @@ export function makeApi(t: Transport) {
   bindSession: (connect: string, session: string | null, title?: string) =>
     request<{ session: string }>("POST", `/connects/${encodeURIComponent(connect)}/session`, { session, ...(title ? { title } : {}) }),
   openChat: (key: string, title?: string) => request<{ threadTs: string }>("POST", `/sessions/${encodeURIComponent(key)}/chats`, title ? { title } : {}),
-  sayToSession: (key: string, text: string, attachments: Attachment[] = []) =>
-    request<{ threadTs: string }>("POST", `/sessions/${encodeURIComponent(key)}/messages`, { text, attachments }),
+  sayToSession: (key: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []) =>
+    request<{ threadTs: string }>("POST", `/sessions/${encodeURIComponent(key)}/messages`, { text, attachments, quotes }),
+  /** A file sent to the session, as a blob for previews. */
+  file: async (key: string, name: string) => {
+    const r = await t.bytes(`/sessions/${encodeURIComponent(key)}/files?name=${encodeURIComponent(name)}`);
+    if (r.status !== 200) throw new ApiError(r.status, "读不到文件");
+    return new Blob([r.data as Uint8Array<ArrayBuffer>], { type: r.type });
+  },
   /** Puts a file in the session's workspace on the station; send the result with a message. */
   uploadFile: async (key: string, file: File) =>
     request<Attachment>("POST", `/sessions/${encodeURIComponent(key)}/files?name=${encodeURIComponent(file.name)}`, new Uint8Array(await file.arrayBuffer())),

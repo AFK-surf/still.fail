@@ -7,7 +7,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ConnectView, SessionDetail, TimelineEntry } from "./api.ts";
 import { agentLabel, botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, slackThreadUrl, splitThread, threadNamer } from "./format.ts";
-import { Avatar, ICON, Pill, SlackLogo } from "./ui.tsx";
+import { Avatar, ICON, ModelLogo, Pill, SlackLogo } from "./ui.tsx";
 import { usePerson } from "./station.tsx";
 
 export function parseArgs(text: string): Record<string, unknown> | null {
@@ -175,7 +175,7 @@ export function History({ detail, connect, state, actions, details, slackBase, o
     <section className="history" aria-label="执行历史">
       <header className="history-head">
         <div className="history-identity">
-          <span className="history-name">{agentLabel(model, session.effort)}</span>
+          <span className="history-name"><ModelLogo model={model} runtime={session.runtime} size={13} />{agentLabel(model, session.effort)}</span>
           <span className="history-sep">·</span>
           <span>{RUNTIME_LABEL[session.runtime]}</span>
           {usage && <><span className="history-sep">·</span><span>{compactNumber(usage.inputTokens + usage.outputTokens)} tokens</span></>}
@@ -191,7 +191,7 @@ export function History({ detail, connect, state, actions, details, slackBase, o
         </div>
       </header>
       {usageOpen && details && <div className="history-details">{details}</div>}
-      {usageOpen && usage && (
+      {usageOpen && usage && !details && (
         <dl className="usage">
           <div><dt>模型调用</dt><dd>{usage.modelCalls} 次</dd></div>
           <div><dt>输入</dt><dd>{compactNumber(usage.inputTokens)}</dd></div>

@@ -462,6 +462,15 @@ test("files sent to a session land in its workspace and reach the agent as paths
     assert.match(t.claude.last.steers.at(-1) ?? t.claude.last.prompts.at(-1)!, new RegExp(`Attached files:\\n- ${file.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     const detail = await t.call("GET", `/sessions/${key}`);
     assert.deepEqual(detail.body.chats[0].messages[0].attachments.map((a: any) => a.name), [file.name]);
+    const back = await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent(file.path.split("/").at(-1))}`);
+    assert.equal(await back.text(), "hello file");
+    assert.equal((await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent("../../../config.json")}`)).status, 404);
+    await t.call("POST", `/sessions/${key}/messages`, { text: "改一下", quotes: [{ author: "agent", text: "第一行\n第二行", comment: "这里不对" }] });
+    await settle();
+    const sent = [...t.claude.last.steers, ...t.claude.last.prompts].join("\n---\n");
+    assert.match(sent, /agent\n> 第一行\n> 第二行\n\n这里不对\n\n改一下/);
+    const after = await t.call("GET", `/sessions/${key}`);
+    assert.equal(after.body.chats[0].messages.at(-1).quotes[0].comment, "这里不对");
   } finally {
     t.close();
   }

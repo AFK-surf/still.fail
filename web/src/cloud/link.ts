@@ -94,6 +94,16 @@ export class StationTransport implements Transport {
     return { status: head.status, data };
   }
 
+  async bytes(path: string) {
+    const { reply, head } = await this.#send("GET", path);
+    const parts: Uint8Array[] = [];
+    for (let chunk = await reply.next(); chunk; chunk = await reply.next()) parts.push(chunk);
+    const data = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let at = 0;
+    for (const p of parts) { data.set(p, at); at += p.length; }
+    return { status: head.status, type: head.headers["content-type"] ?? "", data };
+  }
+
   events(onEvent: (name: string, data: string) => void, onOpen: () => void): () => void {
     let stopped = false;
     let current: { cancel(): void } | null = null;

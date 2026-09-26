@@ -733,3 +733,88 @@ a.h-place:hover, button.h-place:hover { background: var(--hover); text-decoratio
 /* Other people's messages stay on the left, with their name; yours alone sit right. */
 .msg-human:not([data-mine]) { justify-items: start; }
 .msg-human:not([data-mine]) .msg-files { justify-content: flex-start; }
+
+/* The side panel's bar: tabs on the left, the panel switch in the top-right corner. */
+.side-bar { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px 0 8px; border-bottom: 1px solid var(--line); flex: none; }
+.side-bar .side-tab-list { flex: 1; min-width: 0; height: auto; padding: 0; border-bottom: 0; }
+
+/* ── chat, after Zork ───────────────────────────────────────────────── */
+/* The page itself never scrolls or bounces; only the panes inside do. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+.chat-list { gap: 14px; }
+.msg-mine { display: grid; justify-items: end; gap: 4px; }
+.msg-mine .msg-bubble { max-width: min(78%, 560px); padding: 8px 14px; border-radius: 18px; background: var(--neutral-bg); }
+.msg-row { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; }
+.msg-main { min-width: 0; display: grid; gap: 4px; }
+.msg-avatar { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; object-fit: cover; }
+.msg-avatar .avatar { border-radius: 50% !important; }
+.msg-avatar-agent { background: var(--neutral-bg); }
+.msg-head { display: flex; align-items: baseline; gap: 8px; min-height: 24px; align-items: center; }
+.msg-head .msg-name { font-weight: 500; font-size: var(--text-sm); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-time { font-size: 10px; color: var(--muted); }
+.msg-plain { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-sm); line-height: 1.55; }
+.msg-quotes { display: grid; gap: 8px; margin-bottom: 4px; }
+.msg-quote { display: grid; gap: 2px; }
+.msg-quote-author { font-size: var(--text-xs); color: var(--muted); }
+.msg-quote blockquote {
+  margin: 0; padding: 0 0 0 10px; border-left: 2px solid var(--line-strong); color: var(--muted); font-size: var(--text-sm);
+  white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
+.msg-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.msg-mine .msg-files { justify-content: flex-end; }
+.file-card {
+  display: inline-flex; align-items: center; gap: 10px; width: 236px; max-width: 100%; padding: 8px 10px;
+  border-radius: 8px; background: var(--neutral-bg); color: var(--text); text-align: left;
+}
+.file-card[data-error] .file-card-meta { color: var(--red); }
+.file-card .spinner { width: 14px; height: 14px; flex: none; }
+.file-card svg { flex: none; color: var(--muted); }
+.file-card-text { flex: 1; min-width: 0; display: grid; }
+.file-card-name { font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-card-meta { font-size: 11px; color: var(--muted); }
+.file-card-remove { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; flex: none; }
+.file-card-remove:hover { background: var(--hover); color: var(--text); }
+.msg-image { display: block; border-radius: 10px; overflow: hidden; max-width: min(100%, 360px); }
+.msg-image img { display: block; max-width: 100%; max-height: 300px; width: auto; height: auto; }
+.msg-image-wait { display: block; width: 200px; height: 140px; background: var(--neutral-bg); }
+
+/* Quoting: a small button at the selection, then an editor for the comment. */
+.quote-pop {
+  position: fixed; z-index: 40; transform: translate(-50%, calc(-100% - 6px)); display: inline-flex; align-items: center; gap: 5px;
+  height: 28px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--canvas); color: var(--text);
+  font-size: var(--text-xs); box-shadow: 0 4px 14px var(--shadow); cursor: pointer;
+}
+.quote-pop:hover { background: var(--hover); }
+.quote-editor {
+  position: fixed; z-index: 41; width: 340px; display: grid; gap: 8px; padding: 12px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); box-shadow: 0 10px 32px var(--shadow);
+}
+.quote-editor-source { font-size: var(--text-xs); color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.quote-editor-input { width: 100%; resize: none; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--canvas); color: var(--text); font: inherit; font-size: var(--text-sm); outline: none; }
+.quote-editor-input:focus { border-color: var(--field-focus); }
+.quote-editor-actions { display: flex; justify-content: flex-end; gap: 6px; }
+
+/* What waits to be sent: files, then quotes, above the composer. */
+.composer-queue { display: grid; gap: 4px; margin-bottom: 6px; }
+.composer-queue .composer-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; }
+.queued-quote { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: var(--neutral-bg); }
+.queued-quote-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.queued-quote-source { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queued-quote-comment { font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-sm { height: 28px; padding: 0 10px; font-size: var(--text-xs); }
+
+/* Attach sits left of the text on one line, and at the toolbar's left when the text wraps. */
+.composer-box:not([data-multiline]) .composer-toolbar { display: contents; }
+.composer-box:not([data-multiline]) .composer-toolbar .attach-btn { order: -1; }
+.composer-box:not([data-multiline]) { padding-left: 6px; }
+.model-logo { flex: none; display: inline-block; vertical-align: -2px; }
+@media (prefers-color-scheme: dark) { .model-logo[data-mono] { filter: invert(1); } }
+
+/* Session details in three groups: the conversation, the model it runs on, the station it runs at. */
+.session-details .details-group { display: grid; gap: 6px; }
+.session-details .details-group + .details-group { padding-top: 10px; border-top: 1px solid var(--line); }
+.session-details .details-group h3 { margin: 0; font-size: var(--text-xs); font-weight: 600; color: var(--muted); }
+.history-name { display: inline-flex; align-items: center; gap: 5px; }
+.msg-avatar-agent img { width: 14px; height: 14px; }
+.time-toggle { cursor: pointer; }
+.time-toggle:hover { text-decoration: underline dotted; text-underline-offset: 2px; }

@@ -12,7 +12,7 @@ import { ACCESS, checkTone, relativeTime, RUNTIME_LABEL, timeUntil } from "../fo
 import { DeviceCard, QuotaBars } from "../components.tsx";
 import type { Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
-import { RuntimeLogo, Button, Confirm, Loading, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
+import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Loading, Menu, MobileBack, Pill, RuntimeLogo, Section, Select, StatusDot, Time } from "../ui.tsx";
 import { accessToken, signOut, type Account } from "./accounts.ts";
 import { cloud, type Role, type StationView, type WorkspaceView } from "./api.ts";
 import { Avatar, online } from "./gate.tsx";
@@ -106,7 +106,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
               <li key={s.id} className="list-row">
                 <span className="list-row-text">
                   <span className="list-row-title">{s.name || "未命名设备"}{s.current && <span className="choice-badge">这里</span>}</span>
-                  <span className="muted">{relativeTime(s.created_at * 1000)}登录 · {timeUntil(s.expires_at * 1000)}过期</span>
+                  <span className="muted"><Time at={s.created_at * 1000} />登录 · {timeUntil(s.expires_at * 1000)}过期</span>
                 </span>
                 {!s.current && <Button variant="ghost" busy={revoke.isPending && revoke.variables === s.id} onClick={() => revoke.mutate(s.id)}>退出</Button>}
               </li>
@@ -291,7 +291,7 @@ function Stations({ view, account, manager, live }: { view: WorkspaceView; accou
               <span className="list-row-text">
                 <span className="list-row-title">{s.name}</span>
                 <span className="muted">
-                  {online(s) ? "在线" : s.last_seen ? `${relativeTime(s.last_seen * 1000)}在线` : "还没上线"}
+                  {online(s) ? "在线" : s.last_seen ? <><Time at={s.last_seen * 1000} />在线</> : "还没上线"}
                   {s.version ? ` · ember-mesh ${s.version}` : ""} · <span className="mono">{s.id.slice(0, 12)}</span>
                 </span>
               </span>

@@ -5,7 +5,7 @@ import { MineFilter, PeopleStack, useOnlyMine } from "./components.tsx";
 import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
 import { dayLabel, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
-import { ConnectKindIcon, ICON, ResizeHandle, SkeletonRows, Tip } from "./ui.tsx";
+import { ConnectKindIcon, ICON, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 
 export function Sidebar() {
   const path = useLocation().pathname;
@@ -102,7 +102,7 @@ export function SessionRow({ session: s, connect, station }: { session: SessionS
           <Tip label={connect ? `来自 ${connect.name}` : "来自连接"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>
           {station && <span className="station-tag small">{station}</span>}
           <PeopleStack people={s.participants} />
-          <span className="nav-time">{relativeTime(s.lastActiveAt)}</span>
+          <Time className="nav-time" at={s.lastActiveAt} />
         </span>
       </span>
       {marker && (

@@ -20,7 +20,7 @@ import { log } from "./log.ts";
 import type { Tool } from "./mcp.ts";
 import type { AgentDriver } from "./runtime/types.ts";
 import { SessionActor, type DeclaredState } from "./session.ts";
-import type { Attachment, SessionRow, SessionScope, Store } from "./store.ts";
+import type { Attachment, Quote, SessionRow, SessionScope, Store } from "./store.ts";
 
 /** A multi-session connect's session for one thread. */
 export function sessionKey(connect: string, channel: string, threadTs: string): string {
@@ -176,20 +176,20 @@ export class Hub {
    * such chat, made on its first message; earlier sessions may have several,
    * of which the first is used.
    */
-  async sayToSession(sessionKey: string, user: string, text: string, attachments: Attachment[] = []): Promise<string> {
+  async sayToSession(sessionKey: string, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []): Promise<string> {
     const threadTs = this.#store.listChats(sessionKey)[0]?.threadTs ?? this.openChat(sessionKey, user);
-    await this.sayInChat(threadTs, user, text, attachments);
+    await this.sayInChat(threadTs, user, text, attachments, quotes);
     return threadTs;
   }
 
   /** A person's message in an admin-page chat: recorded there and delivered to the chat's session like any chat message. */
-  async sayInChat(threadTs: string, user: string, text: string, attachments: Attachment[] = []): Promise<void> {
+  async sayInChat(threadTs: string, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []): Promise<void> {
     if (!this.#internal) throw new Error("ember chat is not available");
     const chat = this.#store.getChat(threadTs);
     if (!chat) throw new Error(`unknown chat ${threadTs}`);
     const row = this.#store.getSession(chat.sessionKey);
     if (!row) throw new Error(`unknown session ${chat.sessionKey}`);
-    const message = this.#internal.say(threadTs, user, text, attachments);
+    const message = this.#internal.say(threadTs, user, text, attachments, quotes);
     this.#store.insertInbound({
       connect: INTERNAL_CONNECT, channel: message.channel, threadTs, ts: message.ts, sessionKey: row.key,
       user, text: message.text, receivedAt: Date.now(),

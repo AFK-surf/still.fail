@@ -1,16 +1,16 @@
 // The admin API behind /admin. Local visits are trusted; visits through the
 // Cloudflare tunnel must carry a valid Access identity (see access.ts).
 import { execFileSync } from "node:child_process";
-import { createWriteStream, existsSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, statSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
-import { basename, join, resolve, sep } from "node:path";
+import { basename, extname, join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Connections } from "../connections.ts";
 import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from "../config.ts";
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
 import type { MeshStatus } from "../mesh.ts";
-import type { Attachment } from "../store.ts";
+import type { Attachment, Quote } from "../store.ts";
 import { hostInfo } from "../host.ts";
 import type { ProfileQuota } from "../quota.ts";
 import type { Profile } from "../config.ts";
@@ -177,6 +177,18 @@ export class AdminApi {
       const title = typeof input.title === "string" && input.title.trim() ? input.title.trim().slice(0, 80) : null;
       return send(res, 200, { threadTs: this.#deps.hub.openChat(id, viewerId(viewer), title) });
     }
+    if (resource === "sessions" && id && action === "files" && method === "GET") {
+      // A file sent to the session, for previews: only from its upload directory.
+      const session = this.#deps.store.getSession(id);
+      if (!session) throw new HttpError(404, `unknown session ${id}`);
+      const uploads = resolve(session.workspace, "uploads") + sep;
+      const path = resolve(uploads, basename(url.searchParams.get("name") ?? ""));
+      if (!path.startsWith(uploads) || !existsSync(path)) throw new HttpError(404, "没有这个文件");
+      const type = MIME[extname(path).toLowerCase()] ?? "application/octet-stream";
+      res.writeHead(200, { "content-type": type, "cache-control": "private, max-age=3600" });
+      createReadStream(path).pipe(res);
+      return;
+    }
     if (resource === "sessions" && id && action === "files" && method === "POST") {
       const session = this.#deps.store.getSession(id);
       if (!session) throw new HttpError(404, `unknown session ${id}`);
@@ -194,8 +206,11 @@ export class AdminApi {
         if (!path.startsWith(uploads) || !existsSync(path)) throw new HttpError(400, "附件不在这个会话的上传目录里");
         return { name: String(a.name ?? path.slice(uploads.length)).slice(0, 200), path, size: Number(a.size) || 0 };
       });
-      if (!text && attachments.length === 0) throw new HttpError(400, "消息是空的");
-      return send(res, 200, { threadTs: await this.#deps.hub.sayToSession(id, viewerId(viewer), text, attachments) });
+      const quotes: Quote[] = (Array.isArray(input.quotes) ? input.quotes : []).slice(0, 20).map((q: Record<string, unknown>) => ({
+        author: String(q.author ?? "消息").slice(0, 100), text: String(q.text ?? "").slice(0, 4000), comment: String(q.comment ?? "").slice(0, 4000),
+      })).filter((q: Quote) => q.text.trim());
+      if (!text && attachments.length === 0 && quotes.length === 0) throw new HttpError(400, "消息是空的");
+      return send(res, 200, { threadTs: await this.#deps.hub.sayToSession(id, viewerId(viewer), text, attachments, quotes) });
     }
     if (resource === "chats" && id && action === "messages" && method === "POST") {
       const input = await body(req);
@@ -499,6 +514,56 @@ export class AdminApi {
     };
   }
 
+  #watchers = 0;
+  #watchTimer: ReturnType<typeof setInterval> | null = null;
+  readonly #seen = new Map<string, string>();
+  readonly #paths = new Map<string, string>();
+
+  /**
+   * A running turn writes its steps to the runtime's transcript, not to the
+   * store, so nothing else would say the history grew. While someone follows
+   * the event stream, running sessions' transcripts are checked each second
+   * and a change is announced like any other session change.
+   */
+  #watch(): void {
+    if (this.#watchTimer) return;
+    this.#watchTimer = setInterval(() => {
+      for (const s of this.#deps.store.listSessions()) {
+        if (!s.running || !s.runtimeSessionId) {
+          this.#seen.delete(s.key);
+          this.#paths.delete(s.key);
+          continue;
+        }
+        // Finding a transcript can mean walking a directory tree; do it once per session.
+        let path = this.#paths.get(s.key);
+        if (!path) {
+          const profile = this.#deps.settings.config.profiles.find((p) => p.id === s.profile);
+          path = profile ? transcriptPath(s.runtime, profile.home, s.runtimeSessionId) : undefined;
+          if (!path) continue;
+          this.#paths.set(s.key, path);
+        }
+        let mark: string;
+        try {
+          const st = statSync(path);
+          mark = `${st.size}:${st.mtimeMs}`;
+        } catch {
+          continue;
+        }
+        const before = this.#seen.get(s.key);
+        this.#seen.set(s.key, mark);
+        if (before !== undefined && before !== mark) this.#deps.store.notify(s.key);
+      }
+    }, 1000);
+    this.#watchTimer.unref?.();
+  }
+
+  #unwatch(): void {
+    if (this.#watchTimer) clearInterval(this.#watchTimer);
+    this.#watchTimer = null;
+    this.#seen.clear();
+    this.#paths.clear();
+  }
+
   #events(req: IncomingMessage, res: ServerResponse): void {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
     res.write("retry: 3000\n\n");
@@ -509,8 +574,11 @@ export class AdminApi {
     this.#deps.store.changes.on("session", onSession);
     const unsubscribe = this.#deps.settings.onChange(onConfig);
     const ping = setInterval(() => res.write(": ping\n\n"), 25_000); // keep proxies from closing an idle stream
+    this.#watchers++;
+    this.#watch();
     req.on("close", () => {
       clearInterval(ping);
+      if (--this.#watchers === 0) this.#unwatch();
       this.#deps.store.changes.off("session", onSession);
       this.#deps.logins.changes.off("change", onLogin);
       unsubscribe();
@@ -679,6 +747,10 @@ function ownerOf(current: { id: string; name: string } | undefined, requested: u
 }
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
+const MIME: Record<string, string> = {
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
+  ".pdf": "application/pdf", ".txt": "text/plain; charset=utf-8", ".md": "text/markdown; charset=utf-8", ".json": "application/json",
+};
 
 /** Streams one uploaded file into <workspace>/uploads under a name that cannot escape it. */
 async function saveUpload(req: IncomingMessage, workspace: string, name: string): Promise<Attachment> {

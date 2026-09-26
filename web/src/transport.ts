@@ -5,6 +5,8 @@
 export interface Transport {
   /** One request; resolves to status and parsed JSON body. Bytes go as they are, anything else as JSON. */
   request(method: string, path: string, body?: unknown): Promise<{ status: number; data: unknown }>;
+  /** One GET whose body is kept as bytes: files for previews. */
+  bytes(path: string): Promise<{ status: number; type: string; data: Uint8Array }>;
   /** Follows /admin/api/events; `onEvent(name, data)` per event, `onOpen` on each (re)connect. Returns a stop function. */
   events(onEvent: (name: string, data: string) => void, onOpen: () => void): () => void;
 }
@@ -19,6 +21,10 @@ export const localTransport: Transport = {
       ...(body === undefined ? {} : { body: body instanceof Uint8Array ? new Blob([body as Uint8Array<ArrayBuffer>]) : JSON.stringify(body) }),
     });
     return { status: response.status, data: await response.json().catch(() => ({})) };
+  },
+  async bytes(path) {
+    const response = await fetch(`/admin/api${path}`, { credentials: "same-origin" });
+    return { status: response.status, type: response.headers.get("content-type") ?? "", data: new Uint8Array(await response.arrayBuffer()) };
   },
   events(onEvent, onOpen) {
     const source = new EventSource("/admin/api/events");

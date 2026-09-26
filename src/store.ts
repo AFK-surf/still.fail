@@ -73,7 +73,12 @@ export interface ChatMessageRow {
   createdAt: number;
   /** Files sent with the message, stored in the session's workspace. */
   attachments?: Attachment[];
+  /** Passages of earlier messages this one answers, Zork-style comments. */
+  quotes?: Quote[];
 }
+
+/** A passage quoted from an earlier message, and what the sender says about it. */
+export interface Quote { author: string; text: string; comment: string }
 
 /** A file someone sent to a session; `path` is where the agent finds it on the station. */
 export interface Attachment { name: string; path: string; size: number }
@@ -91,7 +96,7 @@ export type TurnKind = "input" | "nudge" | "resume";
  * Bump on schema changes and add a step to MIGRATIONS that brings the
  * previous version up. Versions without a migration path are refused.
  */
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 const MIGRATIONS: Record<number, string> = {
   // v2 → v3: bots became connects; sessions may span all threads; messages remember their thread.
@@ -116,6 +121,8 @@ const MIGRATIONS: Record<number, string> = {
   6: "ALTER TABLE sessions ADD COLUMN effort TEXT;",
   // v7 → v8: files sent with a chat message.
   7: "ALTER TABLE chat_messages ADD COLUMN attachments TEXT;",
+  // v8 → v9: passages of earlier messages quoted in a message, with what was said about each.
+  8: "ALTER TABLE chat_messages ADD COLUMN quotes TEXT;",
 };
 
 const SCHEMA = `
@@ -153,6 +160,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   text TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   attachments TEXT,
+  quotes TEXT,
   PRIMARY KEY (thread_ts, ts)
 );
 CREATE TABLE IF NOT EXISTS bindings (
@@ -463,8 +471,8 @@ export class Store {
   }
 
   insertChatMessage(m: ChatMessageRow): void {
-    this.#db.prepare("INSERT INTO chat_messages (thread_ts, ts, role, user, text, created_at, attachments) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .run(m.threadTs, m.ts, m.role, m.user, m.text, m.createdAt, m.attachments?.length ? JSON.stringify(m.attachments) : null);
+    this.#db.prepare("INSERT INTO chat_messages (thread_ts, ts, role, user, text, created_at, attachments, quotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(m.threadTs, m.ts, m.role, m.user, m.text, m.createdAt, m.attachments?.length ? JSON.stringify(m.attachments) : null, m.quotes?.length ? JSON.stringify(m.quotes) : null);
     const chat = this.getChat(m.threadTs);
     if (chat) this.notify(chat.sessionKey);
   }
@@ -478,6 +486,7 @@ export class Store {
       threadTs: r.thread_ts as string, ts: r.ts as string, role: r.role as ChatMessageRow["role"],
       user: r.user as string, text: r.text as string, createdAt: r.created_at as number,
       ...(r.attachments ? { attachments: JSON.parse(r.attachments as string) as Attachment[] } : {}),
+      ...(r.quotes ? { quotes: JSON.parse(r.quotes as string) as Quote[] } : {}),
     }));
   }
 

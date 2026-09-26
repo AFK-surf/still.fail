@@ -11,7 +11,7 @@ import { AdminApi } from "../src/admin/api.ts";
 import type { Connections } from "../src/connections.ts";
 import type { Hub } from "../src/hub.ts";
 import { InternalChat } from "../src/chat/internal.ts";
-import type { Attachment } from "../src/store.ts";
+import type { Attachment, Quote } from "../src/store.ts";
 import { LoginManager } from "../src/login.ts";
 import { slackManifest } from "../src/admin/slack-manifest.ts";
 import type { SlackApps } from "../src/chat/slack-apps.ts";
@@ -87,9 +87,9 @@ const hub = {
   processState: (key: string) => states.get(key) ?? "cold", stop: async () => {}, evict: async () => {},
   openChat: (key: string, user: string) => demoChat.open(key, user, null).threadTs,
   sayInChat: async (threadTs: string, user: string, text: string, attachments: Attachment[] = []) => { demoChat.say(threadTs, user, text, attachments); },
-  sayToSession: async (key: string, user: string, text: string, attachments: Attachment[] = []) => {
+  sayToSession: async (key: string, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []) => {
     const threadTs = store.listChats(key)[0]?.threadTs ?? demoChat.open(key, user, null).threadTs;
-    demoChat.say(threadTs, user, text, attachments);
+    demoChat.say(threadTs, user, text, attachments, quotes);
     return threadTs;
   },
 } as unknown as Hub;
