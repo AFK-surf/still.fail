@@ -85,7 +85,7 @@ function ChatPane({ chats, scope, onlyMine, newChat, settings, hidden }: { chats
       {failed.map((s) => <p key={s.station} className="nav-empty nav-error" title={s.message ?? undefined}>连不上「{s.name}」，正在重试…</p>)}
       {chats.error && !view && <p className="nav-empty nav-error">{chats.error.message}</p>}
       {days.length === 0 && loading && !chats.error && <SkeletonRows />}
-      {offline.length > 0 && <p className="nav-empty">{offline.map((s) => s.name).join("、")} 离线，它们的会话暂时看不到。</p>}
+      {offline.length > 0 && <p className="nav-empty">{offline.map((s) => s.name).join("、")} 离线：列出的是之前读到的会话，暂时不能发消息。</p>}
       {days.length === 0 && view && !loading && !failed.length && !connecting.length && (
         <p className="nav-empty">{onlyMine ? "没有你参与的会话。"
           : stations.length ? <>还没有会话。在 Slack 里 @ {stations.length > 1 ? "它们" : "它"}，或者 <NavLink className="inline-link" to={newChat}>新建对话</NavLink>。</>

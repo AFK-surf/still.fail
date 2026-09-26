@@ -214,7 +214,7 @@ export function History({ session, threads, connect, summary, actions, details, 
         {!live?.loaded && !items.length ? (
           <p className="history-edge">正在读取执行历史…</p>
         ) : !items.length && !steps.length && !phase ? (
-          <p className="history-edge">{session.runtimeSessionId ? "找不到运行时记录，可能已归档。" : "运行时还没开始这个会话。"}</p>
+          <p className="history-edge">{live?.offline ? "station 离线，这台设备上还没有这个会话的执行历史。" : session.runtimeSessionId ? "找不到运行时记录，可能已归档。" : "运行时还没开始这个会话。"}</p>
         ) : (
           <>
             <p className="history-edge">已到 Session 开始处</p>

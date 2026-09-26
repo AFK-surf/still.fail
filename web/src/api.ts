@@ -102,7 +102,7 @@ export type ShownStep = LiveStep & { ended?: boolean };
 /** Where the turn stands with the model, since when. */
 export interface ShownPhase { phase: LivePhase; since: number }
 /** A session as it runs: its transcript (all of it once `loaded`), the model's use, and the steps in flight. */
-export interface LiveView { loaded: boolean; timeline: TimelineEntry[]; usage: TranscriptUsage | null; steps: ShownStep[]; phase: ShownPhase | null; activity?: ActivityView }
+export interface LiveView { loaded: boolean; timeline: TimelineEntry[]; usage: TranscriptUsage | null; steps: ShownStep[]; phase: ShownPhase | null; activity?: ActivityView; /** Its station is offline: this is what was kept. */ offline?: boolean }
 
 /** What an agent at work is doing, as the core puts it together (client/core/src/activity.rs): a status line and this turn's rows. */
 export interface ActivityView {

@@ -1603,6 +1603,11 @@ impl Source for Stations {
                     if let Some((_, entries)) = this.kept.open(&Log::transcript(&station, &key), u64::MAX).await {
                         start["timeline"] = json!(entries);
                     }
+                    // Offline, what was kept is all there is to read: it is loaded, and says why it ends there.
+                    if !this.reachable(&station) {
+                        start["loaded"] = json!(true);
+                        start["offline"] = json!(true);
+                    }
                     if this.is_live(&topic) && this.sink.get(&topic).is_none() {
                         this.sink.set(&topic, Ok(start));
                     }

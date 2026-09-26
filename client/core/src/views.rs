@@ -438,7 +438,8 @@ impl Views {
             Err(error) => return Some(Err(error)),
         };
         let items = stations.iter().map(|s| {
-            let read = |topic: Topic| if s.online { self.ok(topic) } else { None };
+            // Offline, what was kept of it still shows (the data center holds its overview).
+            let read = |topic: Topic| self.ok(topic);
             let overview = read(Topic::Overview { station: s.address.clone() });
             let host = read(Topic::Host { station: s.address.clone() });
             json!({

@@ -224,7 +224,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
           <Section key={station.id}
             title={<span className="station-heading"><StatusDot state={station.online ? "online" : "offline"} label={station.online ? "在线" : "离线"} />{station.name}</span>}
             actions={station.online && online.length > 1 && <Button variant="ghost" icon={Plus} onClick={() => setAdding(station.station)}>添加</Button>}>
-            {!station.online ? <div className="card"><p className="muted card-foot">离线，暂时看不到它的 Profile。</p></div>
+            {!station.online && !overview ? <div className="card"><p className="muted card-foot">离线，还没有读到过它的 Profile。</p></div>
               : !overview ? <div className="card"><Loading label={`正在连接 ${station.name}…`} fill={false} /></div>
               : overview.profiles.length === 0 ? <div className="card"><p className="muted card-foot">还没有 Profile。</p></div>
               : (
