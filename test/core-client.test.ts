@@ -136,7 +136,7 @@ test("desktop: posts wait for the core's port, go out as objects and come back a
   const asked: number[] = [];
   const received: unknown[] = [];
   const failed: string[] = [];
-  const channel = desktopOpener({ openCore: (id) => asked.push(id) })((data) => received.push(data), (reason) => failed.push(reason));
+  const channel = desktopOpener({ openCore: (id) => asked.push(id), previewHost: async () => null })((data) => received.push(data), (reason) => failed.push(reason));
   assert.equal(asked.length, 1);
   channel.post({ id: 1, call: "migrate", params: { accounts: [] } });
   assert.throws(() => channel.post({ id: 2, call: "x", params: { f: () => undefined } }));

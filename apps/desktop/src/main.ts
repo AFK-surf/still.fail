@@ -115,9 +115,11 @@ async function preview(request: Request): Promise<Response> {
   const station = host ? previewStations.get(host[2]!) : undefined;
   if (!host || !station) return plain(404, "预览已经失效：在 ember 里重新打开它。");
   const body = request.method === "GET" || request.method === "HEAD" ? "" : Buffer.from(await request.arrayBuffer()).toString("base64");
+  const headers: [string, string][] = [];
+  request.headers.forEach((value, name) => headers.push([name, value]));
   try {
     const answer = await coreCall("station.preview", {
-      station, port: Number(host[1]), method: request.method, path: url.pathname + url.search, headers: [...request.headers], body,
+      station, port: Number(host[1]), method: request.method, path: url.pathname + url.search, headers, body,
     }) as { status: number; headers: [string, string][]; body: string };
     const empty = request.method === "HEAD" || [101, 204, 205, 304].includes(answer.status);
     return new Response(empty ? null : Buffer.from(answer.body, "base64"), { status: answer.status, headers: answer.headers });
