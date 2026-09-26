@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "../ui.tsx";
 import { accounts, signIn, type Account } from "./accounts.ts";
 import type { StationView } from "./api.ts";
+import { Illustration } from "../brand.tsx";
 
 /** Seen within the last few heartbeats (one a minute). */
 export const online = (s: StationView) => s.last_seen !== null && Date.now() / 1000 - s.last_seen < 150;
@@ -32,7 +33,7 @@ export function Avatar({ account, size = 24 }: { account: { name: string; email:
 export function SignInPage({ lead }: { lead?: ReactNode }) {
   return (
     <div className="gate sign-in-page">
-      <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={44} height={44} />
+      <Illustration name="sign-in" />
       <h1>登录 ember</h1>
       <p>{lead ?? "用 Google 账号登录，管理你的 workspace 和里面的 station。"}</p>
       <Button variant="primary" onClick={() => void signIn()}>使用 Google 账号登录</Button>

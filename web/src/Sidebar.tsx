@@ -7,6 +7,7 @@ import { NavLink, useLocation, useParams } from "react-router";
 import { useOverview, useSessions, type SessionSummary } from "./api.ts";
 import { dayLabel, relativeTime, sessionStatus, sessionTitle } from "./format.ts";
 import { ConnectKindIcon, ICON, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
+import { Lockup, Mark } from "./brand.tsx";
 
 export function Sidebar() {
   const path = useLocation().pathname;
@@ -15,8 +16,7 @@ export function Sidebar() {
     <nav className="sidebar" aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className="brand">
-        <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={22} height={22} />
-        <span className="brand-word">ember</span>
+        <Lockup />
       </div>
       {settings ? <SettingsNav /> : <MainNav />}
     </nav>
@@ -102,7 +102,7 @@ export function SessionRow({ session: s, connect, station }: { session: SessionS
         <span className="nav-session-title">{sessionTitle(s, name)}</span>
         <span className="nav-session-meta">
           {s.connect === "ember"
-            ? <Tip label="ember 对话" side="right"><span className="session-kind"><img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={12} height={12} /></span></Tip>
+            ? <Tip label="ember 对话" side="right"><span className="session-kind"><Mark size={12} /></span></Tip>
             : <Tip label={connect ? `来自 ${connect.name}` : "来自连接"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
           {station && <span className="station-tag small">{station}</span>}
           <PeopleStack people={s.participants} />

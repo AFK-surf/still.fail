@@ -9,6 +9,7 @@ import { Avatar, ICON, ModelLogo, Pill, SlackLogo } from "./ui.tsx";
 import { usePerson } from "./station.tsx";
 import { Prose } from "./Prose.tsx";
 import { useStickToBottom } from "./scroll.ts";
+import { Mark } from "./brand.tsx";
 
 export function parseArgs(text: string): Record<string, unknown> | null {
   try {
@@ -143,7 +144,7 @@ export function History({ detail, connect, state, actions, details, slackBase, o
     if (t.channel === "EMBER") {
       return (
         <button type="button" className="h-place" onClick={onOpenChat} title="打开对话">
-          <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={13} height={13} />{name}
+          <Mark size={13} />{name}
         </button>
       );
     }

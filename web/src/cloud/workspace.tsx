@@ -25,6 +25,7 @@ import { cloud, type PendingInvitation, type WorkspaceView } from "./api.ts";
 export type { PendingInvitation };
 import { Avatar, online, useAccounts } from "./gate.tsx";
 import { StationTransport } from "./link.ts";
+import { Illustration, Lockup } from "../brand.tsx";
 
 export interface WorkspaceEntry { id: string; name: string; account: Account; relay: string; stations: number; members: number }
 
@@ -93,7 +94,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
       <div className="shell" data-detail={detail}>
         {stations.filter((s) => s.online).map((s) => <Live key={s.id} station={s} />)}
         {settings
-          ? <nav className="sidebar" aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className="account-slot"><WorkspaceSwitcher current={entry} /></div><SettingsNav entry={entry} /></nav>
+          ? <nav className="sidebar" aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className="brand brand-compact"><Lockup /></div><div className="account-slot"><WorkspaceSwitcher current={entry} /></div><SettingsNav entry={entry} /></nav>
           : <WorkspaceSidebar entry={entry} stations={stations} loading={view.isPending} />}
         <main className="main">
           <Routes>
@@ -130,7 +131,7 @@ function StationPages({ stations }: { stations: Station[] }) {
   const { station: id } = useParams();
   const station = stations.find((s) => s.id === id);
   if (!station) return <Empty><p>这个 workspace 里没有这台 station。</p></Empty>;
-  if (!station.online) return <Empty><h2>「{station.name}」离线</h2><p>它最近没有和 ember cloud 联系。确认那台机器上的 ember 在运行。</p></Empty>;
+  if (!station.online) return <Empty><Illustration name="station-offline" /><h2>「{station.name}」离线</h2><p>它最近没有和 ember cloud 联系。确认那台机器上的 ember 在运行。</p></Empty>;
   return (
     <StationContext.Provider value={station}>
       <Routes>
@@ -151,7 +152,7 @@ function WorkspaceHome({ view, stations }: { view: WorkspaceView | undefined; st
   const up = stations.filter((s) => s.online).length;
   return (
     <Empty>
-      <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={36} height={36} />
+      <Illustration name="no-station" />
       <h2>{stations.length ? "选一个会话" : "这个 workspace 还没有 station"}</h2>
       <p>{stations.length
         ? `左边是 ${stations.length} 台 station 上的会话${up < stations.length ? `（${stations.length - up} 台离线）` : ""}，最近活动的在最上面。`
@@ -177,6 +178,7 @@ function WorkspaceSidebar({ entry, stations, loading }: { entry: WorkspaceEntry;
   return (
     <nav className="sidebar" aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
+      <div className="brand brand-compact"><Lockup /></div>
       <div className="account-slot"><WorkspaceSwitcher current={entry} /></div>
       <div className="nav-new"><NavLink className="nav-row" to={`/w/${entry.id}/new`}><SquarePen {...ICON} />新建对话</NavLink></div>
       <MineFilter label="会话" />
