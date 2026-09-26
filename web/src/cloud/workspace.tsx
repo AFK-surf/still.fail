@@ -11,7 +11,7 @@ import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, usePa
 import { useStations } from "../api.ts";
 import { AccountPage, AccountsPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
-import { ChatPage } from "../pages/ChatPage.tsx";
+import { AgentChatPage, ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList } from "../Sidebar.tsx";
 import { AccountSettings, ConnectsSettings, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
 import { PeopleContext, StationContext, stationBase, type Station } from "../station.tsx";
@@ -80,6 +80,7 @@ function StationPages({ stations }: { stations: Station[] }) {
     <StationContext.Provider value={station}>
       <Routes>
         <Route path="chats/:thread?" element={<ChatPage />} />
+        <Route path="agents/:key" element={<AgentChatPage />} />
         <Route path="connects/:id" element={<ConnectPage />} />
         <Route path="settings/accounts" element={<AccountsPage />} />
         <Route path="settings/accounts/:id" element={<AccountPage />} />

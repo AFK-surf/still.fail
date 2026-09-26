@@ -1,16 +1,16 @@
 // A chat: a thread (a Slack thread or a chat on ember's page) with its people
 // and agents. The messages are the page; each agent's execution history can
 // be opened beside them, one tab per agent.
-import { useLink, useStation } from "../station.tsx";
+import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, Ring } from "../components.tsx";
 import { Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, Navigate, useParams } from "react-router";
+import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
-import { useAction, useApi, useChat, useHost, useLives, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type SessionSummary } from "../api.ts";
+import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type SessionSummary } from "../api.ts";
 import { History } from "../History.tsx";
-import { ChatPanel } from "../Chat.tsx";
+import { ChatPanel, Composer } from "../Chat.tsx";
 import {
   BADGE_LABEL, PROCESS_LABEL, RUNTIME_LABEL, absoluteTime, agentLabel, compactNumber, sessionStatus, slackThreadUrl, slackWorkspaceUrl, statusBadge,
 } from "../format.ts";
@@ -25,6 +25,43 @@ export function ChatPage() {
   // There is always a chat in view: the one last open, or a new one. In ember cloud the workspace decides which.
   if (!thread || !Number.isInteger(id)) return <Navigate to={station.base ? station.base.replace(/\/s\/[^/]+$/, "") : lastChat("local", "/new")} replace />;
   return <ChatScreen key={id} thread={id} />;
+}
+
+/**
+ * An agent with no internal chat yet: an empty chat and its composer. The
+ * chat is made, bound to the agent's session, when the first message is sent,
+ * and the page moves to it.
+ */
+export function AgentChatPage() {
+  const { key = "" } = useParams();
+  const station = useStation();
+  const navigate = useNavigate();
+  const call = useStationCall(station.address);
+  const chats = useChats(scopeOf(station.address), false);
+  const item = chats.value?.days.flatMap((d) => d.items).find((i) => i.station === station.address && i.agents.some((a) => a.key === key));
+  if (item?.thread) return <Navigate to={`${station.base}/chats/${item.thread.id}`} replace />;
+  if (!chats.value) return <Loading label="正在读取…" />;
+  if (!item) return <Empty><p>找不到这个 agent。</p></Empty>;
+  const agent = item.agents[0]!;
+  return (
+    <div className="session-page" data-panel={false}>
+      <div className="session-main">
+        <header className="page-bar">
+          <MobileBack to={`${station.base}/chats`} label="会话" />
+          <div className="page-bar-title">
+            <h1>{item.title}</h1>
+            <AgentMark model={agent.model} runtime={agent.runtime} badge={null} size={20} />
+          </div>
+        </header>
+        <section className="chat" aria-label="对话">
+          <div className="chat-list"><div className="chat-empty"><p>在这里发消息，agent 会在这里回复。</p></div></div>
+          <Composer thread={null} sessionKey={key}
+            ensureChat={async () => ({ key, thread: (await call.request<{ id: number }>("POST", "/threads", { session: key })).id })}
+            onSent={(thread) => navigate(`${station.base}/chats/${thread}`, { replace: true })} />
+        </section>
+      </div>
+    </div>
+  );
 }
 
 /** Reports how long the chat took to show its messages, once, when they first do. */

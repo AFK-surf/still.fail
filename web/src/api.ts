@@ -32,12 +32,13 @@ export interface LinkView { state: "connecting" | "online" | "offline" | "error"
 /** An agent of a chat as the sidebar has it: what it runs on and where its work stands (what `sessionStatus` reads). */
 export type ChatAgent = Pick<SessionSummary, "key" | "runtime" | "model" | "effort" | "process" | "pending" | "lastTurn">;
 /**
- * A chat in the sidebar: a thread (a Slack thread or a chat on ember's page), what it is called, its agents and
- * people, the last thing said, whether the viewer has read everything in it, and the connect a Slack thread came through.
+ * A row in the sidebar: an internal chat (ember's own, with its agents and people), or — `thread` null — an agent
+ * that has none yet (`session`), whose chat is made with the first message. `connect` is where its agent came from.
  */
 export interface ChatItem {
   station: string; stationName: string;
-  thread: Pick<ThreadView, "id" | "surface" | "channel" | "channelName" | "threadTs" | "title" | "createdAt" | "creator">;
+  thread: Pick<ThreadView, "id" | "surface" | "channel" | "channelName" | "threadTs" | "title" | "createdAt" | "creator"> | null;
+  session: string | null;
   title: string;
   agents: ChatAgent[];
   people: Creator[];

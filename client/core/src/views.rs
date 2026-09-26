@@ -221,9 +221,6 @@ impl Views {
                 topics.insert(Topic::Threads { station: station.clone() });
                 topics.insert(Topic::Sessions { station: station.clone() });
                 topics.insert(Topic::Thread { station: station.clone(), thread: *thread });
-                if let Some(companion) = self.companion(station, *thread) {
-                    topics.insert(Topic::Thread { station: station.clone(), thread: companion });
-                }
                 topics.insert(Topic::Overview { station: station.clone() });
                 topics.insert(Topic::Link { station: station.clone() });
                 return topics;
@@ -277,40 +274,6 @@ impl Views {
     }
 
     /// A thread as the station's `threads` topic has it.
-    /**
-     * A Slack chat's internal chat on ember: the ember thread of one of its
-     * agents (the oldest). What is written on ember's page in the Slack chat
-     * goes there — it reaches the agent like a Slack message, and the agent
-     * answers there, not in Slack — and the page shows both together.
-     */
-    fn companion(&self, station: &str, id: u64) -> Option<u64> {
-        let threads = self.ok(Topic::Threads { station: station.to_string() })?;
-        let list = threads.as_array()?;
-        let thread = list.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id))?;
-        if thread.get("surface").and_then(Value::as_str) == Some("ember") {
-            return None;
-        }
-        let keys = members(thread);
-        list.iter()
-            .filter(|t| t.get("surface").and_then(Value::as_str) == Some("ember"))
-            .filter(|t| members(t).iter().any(|k| keys.contains(k)))
-            .filter_map(|t| t.get("id").and_then(Value::as_u64))
-            .min()
-    }
-
-    /// Where a message written in this chat goes: the chat itself, a Slack chat's internal chat, or — a Slack chat
-    /// whose agent has none yet — a new one to make for that agent's session first.
-    pub fn send_target(&self, station: &str, id: u64) -> SendTarget {
-        let Some(thread) = self.thread_of(station, id) else { return SendTarget::Thread(id) };
-        if thread.get("surface").and_then(Value::as_str) == Some("ember") {
-            return SendTarget::Thread(id);
-        }
-        match self.companion(station, id) {
-            Some(companion) => SendTarget::Thread(companion),
-            None => members(&thread).into_iter().next().map_or(SendTarget::Thread(id), SendTarget::NewChatFor),
-        }
-    }
-
     fn thread_of(&self, station: &str, id: u64) -> Option<Value> {
         self.ok(Topic::Threads { station: station.to_string() })?.as_array()?.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned()
     }
@@ -354,9 +317,33 @@ impl Views {
                     (Some(Ok(sessions)), Some(Ok(threads))) => {
                         let connects = self.ok(Topic::Overview { station: s.address.clone() }).and_then(|o| o.get("connects").cloned());
                         let shown: HashMap<&str, &Value> = sessions.as_array().into_iter().flatten().filter_map(|summary| Some((summary.get("key")?.as_str()?, summary))).collect();
-                        for thread in threads.as_array().into_iter().flatten() {
-                            if let Some(row) = chat_row(&me, mine, s, thread, &shown, connects.as_ref()) {
+                        // Chats are ember's own (internal) chats. A Slack thread is Slack's: it is not a chat here, and
+                        // only lends its agent a title and a connect. An agent with no internal chat yet has a row of
+                        // its own, whose chat is made when the first message is written in it.
+                        let all: Vec<&Value> = threads.as_array().into_iter().flatten().collect();
+                        let is_ember = |t: &&Value| t.get("surface").and_then(Value::as_str) == Some("ember");
+                        let mut origin: HashMap<String, &Value> = HashMap::new();
+                        let mut chatted: HashSet<String> = HashSet::new();
+                        for t in &all {
+                            for key in members(t) {
+                                if is_ember(t) {
+                                    chatted.insert(key);
+                                } else {
+                                    origin.entry(key).or_insert(t);
+                                }
+                            }
+                        }
+                        for thread in all.iter().filter(|t| is_ember(t)) {
+                            let from = members(thread).iter().find_map(|k| origin.get(k).copied());
+                            if let Some(row) = chat_row(&me, mine, s, thread, from, &shown, connects.as_ref()) {
                                 rows.push(row);
+                            }
+                        }
+                        for (key, summary) in &shown {
+                            if !chatted.contains(*key) {
+                                if let Some(row) = agent_row(&me, mine, s, summary, origin.get(*key).copied(), connects.as_ref()) {
+                                    rows.push(row);
+                                }
                             }
                         }
                         // Chats already read stay in view while the link comes back.
@@ -479,18 +466,9 @@ impl Views {
                 "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
             }));
         }
-        let mut messages = page.get("messages").cloned().unwrap_or_else(|| json!([]));
-        // A Slack chat also shows its internal chat: what was said to its agent on ember, and the answers.
-        let companion = self.companion(station, id);
-        if let Some(Ok(extra)) = companion.and_then(|c| self.store.value(&Topic::Thread { station: station.to_string(), thread: c })) {
-            if let (Some(list), Some(more)) = (messages.as_array_mut(), extra.get("messages").and_then(Value::as_array)) {
-                list.extend(more.iter().cloned());
-                let key = |m: &Value| (m.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0), m.get("seq").and_then(Value::as_u64).unwrap_or(0));
-                list.sort_by(|a, b| key(a).partial_cmp(&key(b)).unwrap_or(std::cmp::Ordering::Equal));
-            }
-        }
-        // A sent message leaves the outbox as its own copy (or anything later) arrives; seqs grow across threads.
-        let newest = messages.as_array().and_then(|m| m.iter().filter_map(|m| m.get("seq")?.as_u64()).max());
+        let messages = page.get("messages").cloned().unwrap_or_else(|| json!([]));
+        // A sent message leaves the outbox as its own copy (or anything later) arrives.
+        let newest = messages.as_array().and_then(|m| m.last()).and_then(|m| m.get("seq")?.as_u64());
         let at = (station.to_string(), id);
         let outbox = {
             let mut all = self.outbox.borrow_mut();
@@ -512,17 +490,10 @@ impl Views {
             "messages": messages,
             "more": page.get("more").cloned().unwrap_or(json!(false)),
             "outbox": outbox,
-            "sendTo": companion,
             "link": self.link(station, true),
             "thread": thread,
         })))
     }
-}
-
-/// See [`Views::send_target`].
-pub enum SendTarget {
-    Thread(u64),
-    NewChatFor(String),
 }
 
 /// The session keys taking part in a thread.
@@ -532,7 +503,34 @@ fn members(thread: &Value) -> Vec<String> {
 
 /// A thread as a row of the sidebar; `None` when none of its agents is shown (all archived), or with `mine` when the
 /// viewer takes no part in it (started it or wrote in it).
-fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, shown: &HashMap<&str, &Value>, connects: Option<&Value>) -> Option<Value> {
+/// An agent without an internal chat yet: its row opens an empty chat, made with the first message.
+fn agent_row(me: &Value, mine: bool, station: &StationInfo, session: &Value, origin: Option<&Value>, connects: Option<&Value>) -> Option<Value> {
+    let origin_people = origin.and_then(|o| o.get("people")).and_then(Value::as_array);
+    let takes_part = is_mine(me, session.get("creator"))
+        || origin.is_some_and(|o| is_mine(me, o.get("creator")))
+        || origin_people.is_some_and(|people| people.iter().any(|p| is_mine(me, Some(p))));
+    if mine && !takes_part {
+        return None;
+    }
+    let field = |name: &str| session.get(name).cloned().unwrap_or(Value::Null);
+    let title = session.get("title").and_then(Value::as_str).filter(|t| !t.trim().is_empty()).map(str::to_string).or_else(|| origin.map(chat_title)).unwrap_or_else(|| "（还没有消息）".to_string());
+    let connect = session.get("connect").filter(|c| c.as_str() != Some("ember")).map_or(Value::Null, |c| find(connects, Some(c)));
+    Some(json!({
+        "station": station.address,
+        "stationName": station.name,
+        "thread": Value::Null,
+        "session": field("key"),
+        "title": title,
+        "agents": [{ "key": field("key"), "runtime": field("runtime"), "model": field("model"), "effort": field("effort"), "process": field("process"), "pending": field("pending"), "lastTurn": field("lastTurn") }],
+        "people": [],
+        "last": Value::Null,
+        "unread": false,
+        "lastActiveAt": field("lastActiveAt"),
+        "connect": connect,
+    }))
+}
+
+fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, origin: Option<&Value>, shown: &HashMap<&str, &Value>, connects: Option<&Value>) -> Option<Value> {
     let memberships: Vec<&Value> = thread.get("sessions").and_then(Value::as_array).into_iter().flatten().collect();
     let agents: Vec<Value> = memberships
         .iter()
@@ -549,15 +547,21 @@ fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, shown
         return None;
     }
     let people = thread.get("people").cloned().unwrap_or_else(|| json!([]));
-    let takes_part = is_mine(me, thread.get("creator")) || people.as_array().is_some_and(|people| people.iter().any(|p| is_mine(me, Some(p))));
+    let origin_people = origin.and_then(|o| o.get("people")).and_then(Value::as_array);
+    let takes_part = is_mine(me, thread.get("creator"))
+        || people.as_array().is_some_and(|people| people.iter().any(|p| is_mine(me, Some(p))))
+        || origin.is_some_and(|o| is_mine(me, o.get("creator")))
+        || origin_people.is_some_and(|people| people.iter().any(|p| is_mine(me, Some(p))));
     if mine && !takes_part {
         return None;
     }
     let last = thread.get("last").filter(|l| l.is_object());
     let created = thread.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0);
     let last_active = last.and_then(|l| l.get("createdAt")?.as_f64()).map_or(created, |at| at.max(created));
-    // Where it came from: the connect of a Slack thread; ember's own chats have none.
-    let connect = memberships.iter().filter_map(|m| m.get("connect")).find(|c| c.as_str() != Some("ember")).map_or(Value::Null, |c| find(connects, Some(c)));
+    // Where its agent came from: the connect of its session's Slack thread; an agent made on ember has none.
+    let connect = origin
+        .and_then(|o| o.get("sessions").and_then(Value::as_array)?.iter().filter_map(|m| m.get("connect")).find(|c| c.as_str() != Some("ember")))
+        .map_or(Value::Null, |c| find(connects, Some(c)));
     let pick = |from: &Value, names: &[&str]| Value::Object(names.iter().map(|n| (n.to_string(), from.get(*n).cloned().unwrap_or(Value::Null))).collect());
     let last = last.map_or(Value::Null, |l| {
         let mut short = pick(l, &["seq", "authorKind", "author", "authorName", "createdAt", "deletedAt"]);
@@ -568,7 +572,8 @@ fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, shown
         "station": station.address,
         "stationName": station.name,
         "thread": pick(thread, &["id", "surface", "channel", "channelName", "threadTs", "title", "createdAt", "creator"]),
-        "title": chat_title(thread),
+        "title": if has_words(thread) { chat_title(thread) } else { origin.map_or_else(|| chat_title(thread), chat_title) },
+        "session": Value::Null,
         "agents": agents,
         "people": people,
         "last": last,
@@ -580,6 +585,11 @@ fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, shown
 
 /// What a chat is called: its title, else the first line a person wrote in it (Slack mentions left out), else its
 /// Slack channel.
+/// Whether a chat has a title of its own or something said in it to take one from.
+fn has_words(thread: &Value) -> bool {
+    ["title", "firstText"].iter().any(|name| thread.get(*name).and_then(Value::as_str).is_some_and(|t| !t.trim().is_empty()))
+}
+
 pub fn chat_title(thread: &Value) -> String {
     let text = |name: &str| thread.get(name).and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty());
     if let Some(title) = text("title") {

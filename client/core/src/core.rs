@@ -34,7 +34,7 @@ use crate::mesh::{GrantSource, Mesh};
 use crate::protocol::{ClientId, ClientMessage, CoreMessage, RequestId, Topic};
 use crate::station::{self, MeshSource, StationAddr, StationGrants, Stations, TopicSink};
 use crate::store::{Source, Store};
-use crate::views::{EmailOf, SendTarget, Views};
+use crate::views::{EmailOf, Views};
 
 /// The first wait before an events socket is opened again; it doubles up to [`SOCKET_RETRY_MAX_MS`], and starts
 /// over once a socket held for a minute.
@@ -303,20 +303,8 @@ impl Inner {
 
     /// Posts an outgoing message into a chat. The entry leaves the outbox in the emission that brings the message
     /// into the chat's messages; a failure leaves it there as `failed`.
-    /// Posts an outgoing message where the chat's messages go (see `Views::send_target`); the outbox stays the chat's.
     async fn deliver(&self, station: &str, thread: u64, id: &str, message: Value) -> Result<Value> {
-        let result = async {
-            let addr = StationAddr::parse(station)?;
-            let target = match self.views.send_target(station, thread) {
-                SendTarget::Thread(target) => target,
-                SendTarget::NewChatFor(session) => {
-                    let made = self.stations.request(&addr, "POST", "/threads", Some(json!({ "session": session }))).await?;
-                    made.get("id").and_then(Value::as_u64).ok_or_else(|| CoreError::invalid("station 没有给出新对话的 id"))?
-                }
-            };
-            self.stations.post(&addr, target, message).await
-        }
-        .await;
+        let result = async { self.stations.post(&StationAddr::parse(station)?, thread, message).await }.await;
         match result {
             Ok(seq) => {
                 self.views.outbox_sent(station, thread, id, seq);

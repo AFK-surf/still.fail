@@ -81,7 +81,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
           return (
             <section key={day.daysAgo} aria-label={label}>
               <div className="nav-heading">{label}</div>
-              {day.items.map((item) => <ChatRow key={`${item.station}/${item.thread.id}`} item={item} />)}
+              {day.items.map((item) => <ChatRow key={`${item.station}/${item.thread?.id ?? item.session}`} item={item} />)}
             </section>
           );
         })}
@@ -99,13 +99,13 @@ function ChatRow({ item }: { item: ChatItem }) {
   const { thread, connect } = item;
   const badge = chatBadge(item.agents);
   return (
-    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${thread.id}`} data-unread={item.unread || undefined} onClick={chatClicked}>
+    <NavLink className="nav-row nav-session" to={thread ? `${stationBase(item.station)}/chats/${thread.id}` : `${stationBase(item.station)}/agents/${encodeURIComponent(item.session ?? "")}`} data-unread={item.unread || undefined} onClick={chatClicked}>
       <span className="nav-session-text">
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className="nav-session-head">
           <span className="nav-session-title">{item.title}</span>
-          {/* Only a chat that lives elsewhere (Slack) says so; ember's own chats need no mark. */}
-          {thread.surface !== "ember" && <Tip label={connect ? `来自 ${connect.name}` : "来自 Slack"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
+          {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
+          {connect && <Tip label={`来自 ${connect.name}`} side="right"><span className="session-kind"><ConnectKindIcon kind={connect.kind} size={12} /></span></Tip>}
         </span>
         {/* People are in the chat itself; here only the last thing said and when. */}
         <span className="nav-session-meta">
