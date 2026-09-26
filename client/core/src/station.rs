@@ -2166,6 +2166,24 @@ mod tests {
     }
 
     #[test]
+    fn a_thread_keeps_a_page_ahead_so_going_back_does_not_wait() {
+        run(async {
+            let (host, _sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 300, "entries": entries(251, 300)}));
+            wire.answer("GET /admin/api/threads/7/entries?before=251&limit=50", 200, json!({"last": 300, "entries": entries(201, 250)}));
+            stations.start(&thread(7));
+            host.settle().await;
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?before=251&limit=50"), 1, "the page before, brought in ahead");
+            // Going back shows it from the device at once, and brings the next one in.
+            wire.answer("GET /admin/api/threads/7/entries?before=201&limit=50", 200, json!({"last": 300, "entries": entries(151, 200)}));
+            assert!(stations.older(&remote(), 7).await.unwrap());
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?before=251&limit=50"), 1, "not asked again");
+            host.settle().await;
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?before=201&limit=50"), 1);
+        });
+    }
+
+    #[test]
     fn a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after() {
         run(async {
             let (host, sink, wire, stations) = setup();
