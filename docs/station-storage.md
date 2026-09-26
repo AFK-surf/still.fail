@@ -197,6 +197,59 @@ migration moves existing rows over (data only; no code keeps the old shape):
   messages) and its workspace directory. The runtime's own transcript file is
   left alone (it is in the profile's home, which may be a person's own).
 
+## Append-only threads (schema v11 — next)
+
+A thread is a log: entries are appended and never changed, so whatever a
+client has fetched stays true forever and can be kept on the device. Changes
+are new entries the client merges.
+
+```sql
+CREATE TABLE entries (
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,                 -- 1, 2, 3 … within the thread, no gaps
+  kind TEXT NOT NULL,                 -- message | edit | delete
+  target INTEGER,                     -- edit/delete: the n of the message it changes
+  ts TEXT,                            -- message: the platform's id (Slack ts), unique per thread
+  author_kind TEXT NOT NULL,          -- person | agent | ember
+  author TEXT NOT NULL,
+  text TEXT,                          -- message and edit: Markdown
+  attachments TEXT, quotes TEXT,      -- message and edit: JSON
+  declared TEXT,                      -- message: an agent's final | block
+  at INTEGER NOT NULL,
+  PRIMARY KEY (thread, n)
+);
+```
+
+- `messages` goes (v10 → v11 moves each message to an entry in thread order;
+  an edited one becomes its message with the edited text — there is no older
+  text to keep; a deleted one becomes a message followed by a delete).
+  `deliveries` and `reads` point at `(thread, n)`.
+- Slack `message_changed` appends an `edit`, `message_deleted` a `delete`.
+- The only way entries disappear is with their whole thread (deleting a
+  session removes threads left without one): `thread-removed {id}` tells
+  clients to drop what they keep of it.
+
+Reading: `GET /threads/:id/entries?after=n` (what came since),
+`?before=n&limit=` (older pages), `?from=a&to=b` (a gap). Thread summaries
+carry `last` (the last n) and the latest message as merged, for lists.
+The `thread` event carries the new entries, always contiguous: a client whose
+last n is below the first one it receives asks for the gap.
+
+Merging (in the client core, one place): a message shows its latest edit's
+text, attachments and quotes, marked edited; a deleted message is gone from
+the view. Unread and read positions are entry numbers.
+
+The client core keeps entries on the device, through `Host` storage in
+chunks — `thread/<station>/<thread>/<chunk>` holding entries
+`chunk*256+1 … chunk*256+256`, plus `thread/<station>/<thread>/meta`
+(`{ first, last }` it holds). Opening a chat shows what is kept at once, then
+asks for `after=last`; scrolling up reads kept chunks before asking the
+station. A session's transcript is append-only too (its entries are indexed
+from 0 in `/sessions/:key/live?from=N`) and is kept the same way under
+`transcript/<station>/<session>/<chunk>`. Kept data is bounded (least
+recently opened threads go first past a size limit) and is dropped for a
+station the account can no longer reach and on sign-out.
+
 ## Notifications
 
 ### Station → clients: `GET /events`
