@@ -181,7 +181,9 @@ function arrived(url: string): void {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.setAsDefaultProtocolClient("ember");
+  // Run from the source (Electron's own app with this directory, dev.sh), ember:// opens it with the directory.
+  if (app.isPackaged) app.setAsDefaultProtocolClient("ember");
+  else app.setAsDefaultProtocolClient("ember", process.execPath, [app.getAppPath()]);
   // macOS hands the app its URLs here (possibly before it is ready); elsewhere they start a second instance.
   app.on("open-url", (event, url) => {
     event.preventDefault();
