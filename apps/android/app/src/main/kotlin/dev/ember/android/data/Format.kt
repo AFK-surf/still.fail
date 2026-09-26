@@ -31,7 +31,8 @@ fun cleanText(text: String?): String = (text ?: "").replace(Regex("<@[A-Z0-9]+>"
 
 /** How an agent is named: it has no name, only its model and how hard it thinks. */
 fun agentLabel(model: String?, effort: String?): String =
-    listOfNotNull(model?.takeIf { it.isNotEmpty() } ?: "默认模型", effort?.let { "思考${EFFORT_LABEL[it] ?: it}" }).joinToString(" · ")
+    // The effort as it is (medium, high): 思考中 for medium read as "thinking now".
+    listOfNotNull(model?.takeIf { it.isNotEmpty() } ?: "默认模型", effort).joinToString(" · ")
 
 private fun hhmm(ms: Long) = Calendar.getInstance().apply { timeInMillis = ms }.let { String.format(Locale.ROOT, "%02d:%02d", it.get(Calendar.HOUR_OF_DAY), it.get(Calendar.MINUTE)) }
 

@@ -258,7 +258,8 @@ export const EFFORT_LABEL: Record<string, string> = { minimal: "最低", low: "�
 
 /** How the agent is named: it has no name, only its model and how hard it thinks. */
 export function agentLabel(model: string | null | undefined, effort: string | null | undefined): string {
+  // The effort as it is (medium, high): 思考中 for medium read as "thinking now".
   const parts = [model || "默认模型"];
-  if (effort) parts.push(`思考${EFFORT_LABEL[effort] ?? effort}`);
+  if (effort) parts.push(effort);
   return parts.join(" · ");
 }

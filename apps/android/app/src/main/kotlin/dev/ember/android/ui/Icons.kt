@@ -50,7 +50,6 @@ object Icons {
     val Down = stroked("down", 2.4f, "M12 5v14M5 12l7 7 7-7")
     val Received = stroked("received", 2f, "M12 3v12M7 10l5 5 5-5", "M5 21h14")
     val Send = stroked("send", 2f, "M22 2L11 13", "M22 2l-7 20-4-9-9-4z")
-    val CameIn = stroked("came-in", 2.2f, "M17 7L7 17", "M17 17H7V7")
     val Said = stroked("said", 2f, "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z")
     val Stop = stroked("stop", 2f, roundRect(6f, 6f, 12f, 12f, 2f))
     val Unplug = stroked("unplug", 2f, "M19 5l3-3", "M2 22l3-3", "M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4z", "M7.5 13.5L10 11", "M10.5 16.5L13 14", "M12 6l6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0z")
