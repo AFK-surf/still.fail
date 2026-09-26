@@ -1041,8 +1041,8 @@ mod tests {
             {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0}, "kind": null, "runtime": null, "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}},
         ]));
         // Every model of its runtime, each with who runs it.
-        let models: Vec<&str> = choices(Some(&overview), &session).as_array().unwrap().iter().map(|c| c["model"].as_str().unwrap()).collect();
-        assert!(models.contains(&"m"));
+        let choices = choices(Some(&overview), &session);
+        assert!(choices.as_array().unwrap().iter().any(|c| c["model"] == "m" && c["profiles"].as_array().unwrap().len() == 2));
     }
 
     #[test]
