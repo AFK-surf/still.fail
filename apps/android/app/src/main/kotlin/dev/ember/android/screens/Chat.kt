@@ -120,7 +120,6 @@ import androidx.lifecycle.compose.currentStateAsState
 import dev.ember.android.AppState
 import dev.ember.android.LocalApp
 import dev.ember.android.Screen
-import dev.ember.android.data.ActivityRow
 import dev.ember.android.data.Attachment
 import dev.ember.android.data.ChatAgentView
 import dev.ember.android.data.ChatOf
