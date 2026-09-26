@@ -237,7 +237,6 @@ function HistoryItem({ item, mention, person, where }: {
           <div className="h-label">
             <Send {...ICON} size={14} />
             发送到 {where(typeof args.to === "string" ? args.to : null) ?? <span className="h-place"><SlackLogo size={13} />Slack</span>}
-            {kind === "final" && <Pill tone="green">已完成</Pill>}
             {kind === "block" && <Pill tone="blue">Block</Pill>}
             {failed && <Pill tone="red">发送失败</Pill>}
           </div>
