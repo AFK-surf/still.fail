@@ -456,6 +456,8 @@ export class AdminApi {
     }
     if (resource === "connects" && id && action === "reconnect" && method === "POST") {
       await this.#deps.connections.reconcile(this.#deps.settings.config);
+      // Who the bot is, read again: a name changed in Slack shows now.
+      await this.#deps.connections.refreshIdentity(id).catch((error) => log.warn("slack identity refresh failed", { connect: id, error }));
       return send(res, 200, { ok: true });
     }
     // A new keyed profile: made only once its key is checked and works.
@@ -640,6 +642,12 @@ export class AdminApi {
       throw new HttpError(400, `Slack 没接受这次修改：${slackError(error)}`);
     }
     const iconError = typeof input.icon === "string" && input.icon ? await this.#setIcon(viewerId(viewer), appId, input.icon) : null;
+    // Its name here is its bot's in Slack: read again now, and once more when Slack has surely taken the change.
+    if (edit.name !== undefined || edit.displayName !== undefined) {
+      const refresh = () => this.#deps.connections.refreshIdentity(connectId).catch((error) => log.warn("slack identity refresh failed", { connect: connectId, error }));
+      void refresh();
+      setTimeout(refresh, 8000).unref();
+    }
     log.info("slack app updated from the admin page", { connect: connectId, appId, permissionsUpdated, by: viewerId(viewer) });
     return { permissionsUpdated, iconError, links: slackAppLinks(appId) };
   }

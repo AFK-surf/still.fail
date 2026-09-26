@@ -19,6 +19,8 @@ export interface Connection extends ChatSurface {
   readonly identity: SlackIdentity | null;
   /** Calls `listener` whenever `status` changes. */
   onStatus(listener: () => void): void;
+  /** Reads again who the bot is and where (its name changed in Slack, say); listeners hear of it. */
+  refreshIdentity?(): Promise<void>;
 }
 
 export class Connections {
@@ -31,6 +33,11 @@ export class Connections {
   readonly #create: (connect: Connect) => Connection;
   readonly #onEvent: (connectId: string, event: ChatEvent) => Promise<void>;
   #chain: Promise<void> = Promise.resolve();
+
+  /** Reads again who a connect's bot is (its name, its workspace), as Slack says now. */
+  async refreshIdentity(id: string): Promise<void> {
+    await this.chats.get(id)?.refreshIdentity?.();
+  }
 
   constructor(create: (connect: Connect) => Connection, onEvent: (connectId: string, event: ChatEvent) => Promise<void>) {
     this.#create = create;

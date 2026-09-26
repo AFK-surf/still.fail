@@ -128,6 +128,11 @@ export class SlackSurface implements ChatSurface {
     for (const listener of this.#statusListeners) listener();
   }
 
+  async refreshIdentity(): Promise<void> {
+    this.#identity = await identityOf(await this.#api("auth.test", {}, this.#botToken), (id) => this.#api("users.info", { user: id }, this.#botToken));
+    for (const listener of this.#statusListeners) listener();
+  }
+
   async start(handler: (event: ChatEvent) => Promise<void>): Promise<void> {
     this.#identity = await identityOf(await this.#api("auth.test", {}, this.#botToken), (id) => this.#api("users.info", { user: id }, this.#botToken));
     log.info("slack authenticated", { botUserId: this.#identity.botUserId, team: this.#identity.team });
