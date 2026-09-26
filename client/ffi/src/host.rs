@@ -8,10 +8,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use ember_core::host::{Host, HostError, HttpRequest, HttpResponse, StreamResponse};
+use ember_core::host::{Host, HostError, HttpRequest, HttpResponse, SocketFrames, StreamResponse};
 use ember_core::{ClientId, CoreError, CoreMessage};
 use futures::future::LocalBoxFuture;
-use futures::stream::{self, LocalBoxStream};
+use futures::stream;
 use futures::{FutureExt, StreamExt};
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
 use tokio_tungstenite::Connector;
@@ -40,12 +40,6 @@ impl NativeHost {
             .expect("reqwest client");
         NativeHost { cloud_origin, tls, http, storage: Storage::new(data_dir), listener, commands }
     }
-
-    /// `Host::websocket` (it arrives with the core's `/v1/events` topic): a receive-only WebSocket's text frames.
-    #[allow(dead_code)] // until the Host trait has it
-    pub fn websocket(&self, url: String, protocols: Vec<String>) -> LocalBoxFuture<'static, Result<SocketFrames, HostError>> {
-        websocket(self.tls.clone(), url, protocols)
-    }
 }
 
 /// The crypto provider is iroh's (ring); the roots Mozilla's, as iroh's own TLS
@@ -59,9 +53,6 @@ fn tls_config() -> rustls::ClientConfig {
         .with_root_certificates(roots)
         .with_no_client_auth()
 }
-
-/// A receive-only WebSocket's text frames. The stream ends when the socket closes; dropping it closes the socket.
-pub type SocketFrames = LocalBoxStream<'static, Result<String, HostError>>;
 
 /// Opens a WebSocket that only listens; resolves once it is open. `protocols`
 /// are its subprotocols (ember cloud reads the token from one of them).
@@ -137,6 +128,10 @@ impl Host for NativeHost {
             let body = response.bytes().await.map_err(http_error)?.to_vec();
             Ok(HttpResponse { status, headers, body })
         })
+    }
+
+    fn websocket(&self, url: String, protocols: Vec<String>) -> LocalBoxFuture<'static, Result<SocketFrames, HostError>> {
+        websocket(self.tls.clone(), url, protocols)
     }
 
     fn fetch_stream(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<StreamResponse, HostError>> {
