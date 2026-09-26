@@ -1457,3 +1457,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 :is(.session-details, .card) > .model-triple-fit { margin-left: -11px; }
 .team-more { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .team-more .token-manual { margin: 0; color: var(--muted); }
+.run-picker-models { min-width: 200px; }
+.run-picker-filter { height: 30px; margin: 0 4px 6px; font-size: var(--text-sm); }
+.run-picker-group h5 { margin: 8px 8px 2px; font-size: var(--text-xs); font-weight: 500; color: var(--subtle); }
+.run-picker-empty { margin: 4px 8px; font-size: var(--text-xs); }

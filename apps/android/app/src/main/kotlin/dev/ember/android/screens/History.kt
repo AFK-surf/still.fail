@@ -65,6 +65,9 @@ import dev.ember.android.Screen
 import dev.ember.android.data.ChatAgentView
 import dev.ember.android.data.ChatOf
 import dev.ember.android.data.ChatView
+import dev.ember.android.data.RunnableProfile
+import dev.ember.android.data.maker
+import dev.ember.android.data.Maker
 import dev.ember.android.data.EFFORTS
 import dev.ember.android.data.HistoryItem
 import dev.ember.android.data.HostInfo
@@ -523,8 +526,11 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
     val scope = rememberCoroutineScope()
     val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
     val agent = chat.value?.agents?.firstOrNull { it.session.key == key }
+    // A long list (the models, the accounts) is a list of its own, picked from and back.
+    var list by remember { mutableStateOf<String?>(null) }
+    androidx.activity.compose.BackHandler(enabled = list != null) { list = null }
     Column(Modifier.fillMaxSize()) {
-        NavBar("返回", app::pop, "换模型")
+        NavBar(if (list != null) "换模型" else "返回", { if (list != null) list = null else app.pop() }, when (list) { "model" -> "选模型"; "account" -> "选账号"; else -> "换模型" })
         if (agent == null) return Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
         val s = agent.session
         val current = agent.profiles.firstOrNull { it.current }
@@ -541,6 +547,8 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
         val efforts = listOf<String?>(null) + EFFORTS[s.runtime].orEmpty()
         val changed = model != s.model || effort != s.effort || chosen != kept
         val accountText = { id: String? -> if (id == null) "自动分配" else accounts.firstOrNull { it.id == id }?.name ?: id }
+        if (list == "model") return ModelList(agent.choices.map { it.model }, s.runtime, model) { model = it; list = null }
+        if (list == "account") return AccountList(accounts, s.runtime, chosen) { profile = it; list = null }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             // What it is now.
             Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -553,19 +561,15 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 Text("改了以后从下一轮开始生效。", fontSize = 12.sp, color = C.subtle)
             }
             GroupLabel("模型")
-            agent.choices.forEach { c ->
-                PickLine(c.model, checked = c.model == model, onClick = { model = c.model }, leading = { MakerIcon(c.model, s.runtime, 18.dp) })
-            }
+            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(model, s.runtime, 18.dp) }) { Text(model ?: "选一个模型", fontSize = 15.sp, color = C.ink) }
             GroupLabel("思考深度")
             Text("想得越深越慢，也越费额度。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
             EffortChips(efforts, effort) { effort = it }
             GroupLabel("账号")
-            Text("谁来跑它。自动分配时，额度用完或登录失效会换一个。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 4.dp))
             if (dropped) Text("指定的账号没有启用 $model，改成了自动分配", fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(bottom = 4.dp))
-            PickLine("自动分配", checked = chosen == null, onClick = { profile = null })
-            accounts.forEach { p ->
-                PickLine(p.name, checked = chosen == p.id, onClick = { profile = p.id },
-                    leading = { ProviderMark(p.runtime ?: s.runtime, p.kind, 18.dp) }, trailing = { QuotaRings(p.quota) })
+            SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp) } }) {
+                Text(accountText(chosen), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (chosen == null) "额度用完或登录失效时换一个" else "固定用它", fontSize = 12.sp, color = C.muted)
             }
             Box(Modifier.height(16.dp))
         }
@@ -590,6 +594,54 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.accentInk else C.ink, maxLines = 2, textAlign = TextAlign.Center,
             )
         }
+    }
+}
+
+/** A line that leads to a list: what is chosen, and an arrow. */
+@Composable
+private fun SettingRow(onClick: () -> Unit, leading: @Composable () -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.chip).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        leading()
+        Column(Modifier.weight(1f), content = content)
+        IconIn(Icons.ChevronRight, 16.dp, C.muted)
+    }
+}
+
+/** Every model it can move to, by who made it; a filter once there are many. */
+@Composable
+private fun ModelList(models: List<String>, runtime: String, picked: String?, onPick: (String) -> Unit) {
+    var filter by remember { mutableStateOf("") }
+    val shown = models.filter { it.contains(filter.trim(), ignoreCase = true) }
+    val groups = shown.groupBy { maker(it, runtime) }.toSortedMap(compareBy { it.name })
+    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
+        if (models.size > 8) Field(filter, { filter = it }, "搜索模型", modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            groups.forEach { (who, list) ->
+                if (groups.size > 1) GroupLabel(MAKER_NAME[who] ?: who.name)
+                list.forEach { m -> PickLine(m, checked = m == picked, onClick = { onPick(m) }, leading = { MakerIcon(m, runtime, 18.dp) }) }
+            }
+            if (shown.isEmpty()) Text("没有叫这个的模型", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(vertical = 16.dp))
+            Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars).height(16.dp))
+        }
+    }
+}
+
+private val MAKER_NAME = mapOf(Maker.Anthropic to "Anthropic", Maker.OpenAI to "OpenAI", Maker.DeepSeek to "DeepSeek", Maker.Zhipu to "智谱")
+
+/** Who can run the model picked: the station's pick, or one kept to, with its quota. */
+@Composable
+private fun AccountList(accounts: List<RunnableProfile>, runtime: String, picked: String?, onPick: (String?) -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
+        Text("自动分配时，额度用完或登录失效会换一个；指定了就一直用它。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+        PickLine("自动分配", checked = picked == null, onClick = { onPick(null) })
+        accounts.forEach { p ->
+            PickLine(p.name, checked = picked == p.id, onClick = { onPick(p.id) },
+                leading = { ProviderMark(p.runtime ?: runtime, p.kind, 18.dp) }, trailing = { QuotaRings(p.quota) })
+        }
+        Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars).height(16.dp))
     }
 }
 

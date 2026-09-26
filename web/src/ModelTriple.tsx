@@ -7,7 +7,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ProfileView, RunnableProfile, RuntimeKind } from "./api.ts";
 import { QuotaBars } from "./components.tsx";
 import { EFFORTS, RUNTIME_LABEL, timeUntil } from "./format.ts";
-import { ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
+import { makerName, ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
 
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
 const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
@@ -56,6 +56,14 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
   const shown = kept ?? current;
   const valueOption = options.find((o) => o.model === value.model);
   const set = (patch: Partial<Pick>) => setDraft((d) => ({ ...d, ...patch }));
+  const [filter, setFilter] = useState("");
+  const shown = options.filter((o) => o.model.toLowerCase().includes(filter.trim().toLowerCase()));
+  const byMaker = new Map<string, ModelOption[]>();
+  for (const o of shown) {
+    const who = makerName(o.model) ?? "其他";
+    byMaker.set(who, [...(byMaker.get(who) ?? []), o]);
+  }
+  const groups = [...byMaker].sort(([a], [b]) => (a === "其他" ? 1 : b === "其他" ? -1 : a.localeCompare(b)));
   // Shown within the room it has: the most it can say that fits, dropping what matters least first.
   const fit = useRef<HTMLSpanElement>(null);
   const [drop, setDrop] = useState(0);
@@ -80,7 +88,7 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
   }, [label]);
 
   return (
-    <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) setDraft(value); }}>
+    <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) { setDraft(value); setFilter(""); } }}>
       <span className="model-triple-fit" ref={fit}>
         <Popover.Trigger className="model-triple" title={title} disabled={options.length === 0} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className="triple-model">没有可用模型</span> : (
@@ -102,14 +110,24 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
       <Popover.Portal>
         <Popover.Content className="popover run-picker-panel" side={side} align="start" sideOffset={6} collisionPadding={8}>
           <div className="run-picker">
-            <div className="run-picker-column">
+            <div className="run-picker-column run-picker-models">
               <h4>模型</h4>
-              {options.map((o) => (
-                <button key={o.model} type="button" className="run-picker-option" aria-pressed={next.model === o.model} onClick={() => set({ model: o.model })}>
-                  <ModelLogo model={o.model} runtime={o.runtimes[0] ?? value.runtime} size={13} />
-                  <span className="run-option-text"><span>{o.model}</span>{o.spent && <span className="run-picker-spent">额度用完{o.spent.until ? ` · ${timeUntil(o.spent.until)}恢复` : ""}</span>}</span>
-                </button>
+              {/* Many models: a filter, and the models by who made them. */}
+              {options.length > 8 && (
+                <input className="input run-picker-filter" placeholder="搜索模型" value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
+              )}
+              {groups.map(([who, list]) => (
+                <div key={who} className="run-picker-group">
+                  {groups.length > 1 && <h5>{who}</h5>}
+                  {list.map((o) => (
+                    <button key={o.model} type="button" className="run-picker-option" aria-pressed={next.model === o.model} onClick={() => set({ model: o.model })}>
+                      <ModelLogo model={o.model} runtime={o.runtimes[0] ?? value.runtime} size={13} />
+                      <span className="run-option-text"><span>{o.model}</span>{o.spent && <span className="run-picker-spent">额度用完{o.spent.until ? ` · ${timeUntil(o.spent.until)}恢复` : ""}</span>}</span>
+                    </button>
+                  ))}
+                </div>
               ))}
+              {shown.length === 0 && <p className="muted run-picker-empty">没有叫这个的模型</p>}
             </div>
             {askRuntime && (
               <div className="run-picker-column">

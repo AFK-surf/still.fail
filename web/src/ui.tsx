@@ -449,6 +449,11 @@ const MODEL_MAKERS: [RegExp, string, string, boolean][] = [
   [/grok/i, "xai", "xAI", true],
 ];
 
+/** Who made a model, by name; null when the marks here do not know it. */
+export function makerName(model: string): string | null {
+  return MODEL_MAKERS.find(([re]) => re.test(model))?.[2] ?? null;
+}
+
 /** The mark of the company that made a model; the runtime's mark when the model is unknown. */
 export function ModelLogo({ model, runtime, size = 14 }: { model: string | null | undefined; runtime: "claude" | "codex"; size?: number }) {
   const maker = model ? MODEL_MAKERS.find(([re]) => re.test(model)) : undefined;
