@@ -50,7 +50,6 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
   // The account stays as it is: the one kept to runs the model; the station's pick, which for a session is the account
   // it is on (a model that one does not run moves it, so it is picked again).
   const stays = value.profile ? accounts.some((a) => a.id === value.profile) : !current || accounts.some((a) => a.id === current.id);
-  const same = model === value.model && on === value.runtime && effort === value.effort;
   const done = (pick: Pick) => { setOpen(false); onPick(pick); };
   const kept = value.profile ? profilesFor(value.model, value.runtime).find((a) => a.id === value.profile) ?? current : undefined;
   const shown = kept ?? current;
@@ -111,13 +110,16 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
             {!option ? <p className="muted">先选一个模型</p> : (
               <>
                 {!stays && <p className="run-picker-note">{value.profile ? "指定的" : "现在的"}账号没有启用 {option.model}，选一个</p>}
-                <button type="button" className="run-picker-option" aria-pressed={same && !value.profile} onClick={() => done({ model: option.model, runtime: on, effort, profile: null })}>
+                {/* Nothing here is marked as picked: picking one is what makes the choice. What it has now says 当前. */}
+                <button type="button" className="run-picker-option" onClick={() => done({ model: option.model, runtime: on, effort, profile: null })}>
                   <span className="run-option-text"><strong>自动分配</strong><span className="muted">额度用完或登录失效时换一个</span></span>
+                  {!value.profile && <span className="run-picker-current">当前</span>}
                 </button>
                 {accounts.map((a) => (
-                  <button key={a.id} type="button" className="run-picker-option" aria-pressed={same && value.profile === a.id} onClick={() => done({ model: option.model, runtime: on, effort, profile: a.id })}>
+                  <button key={a.id} type="button" className="run-picker-option" onClick={() => done({ model: option.model, runtime: on, effort, profile: a.id })}>
                     <ProviderLogo runtime={on} kind={a.kind ?? "env"} size={15} />
-                    <span className="run-option-text"><span>{a.name}</span>{same && !value.profile && current?.id === a.id && <span className="muted">当前</span>}</span>
+                    <span className="run-option-text"><span>{a.name}</span>{!value.profile && current?.id === a.id && <span className="muted">自动分配到这里</span>}</span>
+                    {value.profile === a.id && <span className="run-picker-current">当前</span>}
                     <QuotaBars quota={a.quota} compact />
                   </button>
                 ))}
