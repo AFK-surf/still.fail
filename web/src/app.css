@@ -1099,3 +1099,8 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 /* The quoted passage, highlighted where it was said after following a quote. */
 ::highlight(quote-flash) { background-color: color-mix(in oklch, var(--accent) 28%, transparent); color: inherit; }
 :root[data-quote-flash="fading"] ::highlight(quote-flash) { background-color: color-mix(in oklch, var(--accent) 12%, transparent); }
+/* Inside the composer, cards follow its curve: inner radius = the frame's radius less its padding. */
+.composer-quote .quote-card { border-radius: calc(32px * var(--corner-scale) - 12px); }
+.composer-quote .quote-card-source { padding: 9px 34px 0 16px; }
+.composer-quote .quote-card-comment { padding: 3px 16px 10px; }
+.composer-quote .quote-card-remove { top: 8px; right: 10px; }
