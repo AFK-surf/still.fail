@@ -680,8 +680,8 @@ private fun EffortChips(efforts: List<String?>, picked: String?, onPick: (String
         efforts.forEach { e ->
             val on = e == picked
             Text(
-                e ?: "默认", fontSize = 14.sp, color = if (on) C.accentInk else C.ink, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) C.accent else C.chip).clickable { onPick(e) }.padding(horizontal = 16.dp, vertical = 9.dp),
+                e ?: "默认", fontSize = 14.sp, color = if (on) C.bg else C.ink, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) C.ink else C.chip).clickable { onPick(e) }.padding(horizontal = 16.dp, vertical = 9.dp),
             )
         }
     }
