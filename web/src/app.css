@@ -652,6 +652,7 @@
 .model-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--hover); font-size: var(--text-sm); }
 /* A profile's state under its name: the check, when, and checking again. */
 .profile-state { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.profile-state [data-busy] svg { animation: spin 0.9s linear infinite; }
 /* The runtimes a profile runs, after its name. */
 .runtime-tags { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: 1px; }
 .runtime-tag { display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; height: 17px; border-radius: 5px; background: var(--hover); color: var(--muted); font-size: 11px; font-weight: 500; }

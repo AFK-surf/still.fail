@@ -179,7 +179,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
             <Pill tone={tone.tone}>{tone.label}</Pill>
             <span>{latest?.detail ?? "还没检查过"}</span>
             {latest && <span className="muted"><Time at={latest.checkedAt} />检查</span>}
-            <IconButton label="重新检查" icon={RefreshCw} busy={check.busy} onClick={() => void check.run()} />
+            <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={RefreshCw} disabled={check.busy} data-busy={check.busy || undefined} onClick={() => void check.run()} />
           </p>
         </div>
         <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash2, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
