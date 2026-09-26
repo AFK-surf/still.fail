@@ -331,6 +331,7 @@ export function ModelPicker({ id, account, value, onChange }: { id: string; acco
 }
 
 function BindSection({ connect, overview }: { connect: ConnectView; overview: Overview }) {
+  const link = useLink();
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const accounts = overview.profiles.filter((p) => p.runtime === connect.bind.runtime);
