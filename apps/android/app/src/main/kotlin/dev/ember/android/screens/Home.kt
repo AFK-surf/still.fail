@@ -64,6 +64,7 @@ import dev.ember.android.R
 import dev.ember.android.Screen
 import dev.ember.android.data.ChatItem
 import dev.ember.android.data.ChatState
+import dev.ember.android.data.badgeState
 import dev.ember.android.data.ChatsView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceEntry
@@ -208,8 +209,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // The state rides on the agent's picture, when the agent said the last thing; nowhere else.
-                val onPicture = item.last?.authorKind == "agent" && item.agents.any { it.key == item.last.author }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item, view, if (onPicture) item.state() else null) } }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item) } }
                 if (held) Text(relativeTime(item.lastActiveAt), fontSize = 12.sp, color = C.subtle, maxLines = 1)
             }
         }
@@ -218,25 +218,20 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
 
 /** The last thing said, on one line: a small picture of who said it, then what, in the secondary colour. */
 @Composable
-private fun LastMessage(item: ChatItem, view: ChatsView, state: ChatState?) {
+private fun LastMessage(item: ChatItem) {
+    // Who said it, and an agent's state on its picture, are the core's (present.rs).
     val last = item.last!!
-    val agent = if (last.authorKind == "agent") item.agents.firstOrNull { it.key == last.author } else null
-    val mine = last.authorKind == "person" && view.me.isMe(last.author)
-    val name = when {
-        last.authorKind == "ember" -> "ember"
-        last.authorKind == "agent" -> agent?.model ?: last.authorName ?: "agent"
-        mine -> "你"
-        else -> last.authorName ?: last.author
-    }
+    val by = last.by
+    val name = by?.name ?: last.authorName ?: last.author
     val text = cleanText(last.text).ifEmpty { "（文件）" }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "$name：$text" }) {
-        when (last.authorKind) {
+        when (by?.kind) {
             "ember" -> Mark(13.dp)
             "agent" -> Box {
-                MakerIcon(agent?.model, agent?.runtime ?: "claude", 13.dp)
-                if (state != null && state != ChatState.Done) Box(Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp)) { Badge(state, 8.dp, 1.5.dp, C.bg) }
+                MakerIcon(by.model, by.runtime, 13.dp)
+                badgeState(by.state)?.let { state -> Box(Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp)) { Badge(state, 8.dp, 1.5.dp, C.bg) } }
             }
-            else -> Avatar(last.author, name, 13.dp)
+            else -> Avatar(last.author, name, 13.dp, picture = by?.picture)
         }
         // The line's own height, its glyphs centred in it: level with the picture and the state's dot.
         Text(

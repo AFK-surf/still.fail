@@ -57,7 +57,26 @@ import kotlinx.serialization.Serializable
     val authorName: String? = null,
     val text: String = "",
     val createdAt: Long = 0,
+    /** Who said it, as the core puts it (client/core/src/present.rs). */
+    val by: LastBy? = null,
 )
+
+/** A row's last speaker: kind (agent | person | ember), name, picture; an agent's state (block | run | failed) rides on it. */
+@Serializable data class LastBy(
+    val kind: String = "person",
+    val name: String = "",
+    val mine: Boolean = false,
+    val model: String? = null,
+    val runtime: String = "claude",
+    val state: String? = null,
+    val id: String? = null,
+    val picture: String? = null,
+)
+
+/** A badge the core names (block | run | failed) as the app's state. */
+fun badgeState(badge: String?): ChatState? = when (badge) {
+    "block" -> ChatState.Block; "run" -> ChatState.Running; "failed" -> ChatState.Failed; else -> null
+}
 
 /** The Slack thread a row's agent came from. */
 @Serializable data class Origin(val teamName: String? = null, val channel: String = "", val channelName: String? = null, val threadTs: String = "")
@@ -84,6 +103,8 @@ import kotlinx.serialization.Serializable
     /** The connect its agent came from; null for one made on ember. */
     val connect: String? = null,
     val origin: Origin? = null,
+    /** Its state, as the core puts it from its agents: block | run | failed, or none. */
+    val state: String? = null,
 )
 
 @Serializable data class ChatDay(val daysAgo: Int, val at: Long, val items: List<ChatItem> = emptyList())
@@ -111,11 +132,6 @@ fun agentState(process: String, pending: Int, lastTurn: TurnSummary?): ChatState
 fun SessionSummary.state(): ChatState = agentState(process, pending, lastTurn)
 fun RowAgent.state(): ChatState = agentState(process, pending, lastTurn)
 
-/** A row's badge, from its agents': one that is blocked comes first, then one at work, then one that failed. */
-fun ChatItem.state(): ChatState {
-    val states = agents.map { it.state() }.toSet()
-    return listOf(ChatState.Block, ChatState.Running, ChatState.Failed).firstOrNull { it in states } ?: ChatState.Done
-}
 
 fun Me.isMe(c: Creator?): Boolean = c != null && (c.id == id || (email != null && c.email.equals(email, ignoreCase = true)))
 
