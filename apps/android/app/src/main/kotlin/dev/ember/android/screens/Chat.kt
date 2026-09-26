@@ -140,7 +140,6 @@ import dev.ember.android.data.isMe
 import dev.ember.android.data.relativeTime
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.data.state
-import dev.ember.android.data.writingNow
 import dev.ember.android.ui.Avatar
 import dev.ember.android.ui.C
 import dev.ember.android.ui.IconIn
@@ -288,7 +287,6 @@ private sealed interface Entry {
     data object Line : Entry { override val id = "line" }
     data class Said(val m: MessageView) : Entry { override val id get() = "m:${m.ts}" }
     data class Out(val o: OutboxItem) : Entry { override val id get() = "o:${o.id}" }
-    data class Writing(val agent: ChatAgent, val text: String) : Entry { override val id get() = "writing" }
     data class Working(val agent: AgentAtWork) : Entry { override val id get() = "act:${agent.key}" }
 }
 
@@ -337,16 +335,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         if (youngest > 0 && wait > 0) { delay(wait + 20); now = System.currentTimeMillis() }
     }
 
-    // The reply an agent is writing to this chat right now; once written it stays until the posted message arrives, so it never blinks out.
-    val address = thread?.let { "${it.channel}/${it.threadTs}" }
-    val writer = address?.let { a -> agents.firstNotNullOfOrNull { ag -> ag.live?.let { writingNow(it.steps, a) }?.let { ag to it } } }
-    val held = remember { mutableStateOf<Triple<ChatAgent, String, Int>?>(null) }
-    val reply = when {
-        writer != null -> writer.also { held.value = Triple(it.first, it.second, messages.size) }
-        held.value?.third == messages.size -> held.value!!.let { it.first to it.second }
-        else -> { held.value = null; null }
-    }
-
     // Agents at work; a message on its way already counts, for every agent it goes to.
     val working = agents.filter { it.state == ChatState.Running }
     val sendingNow = view.outbox.any { it.state == "sending" }
@@ -375,8 +363,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
             add(Entry.Said(m))
         }
         view.outbox.forEach { add(Entry.Out(it)) }
-        // The activity is always the last thing in the chat; the reply being written comes before it.
-        reply?.let { add(Entry.Writing(it.first, it.second)) }
+        // The activity is always the last thing in the chat (a reply comes whole, as a message).
         atWork.forEach { add(Entry.Working(it)) }
     }
 
@@ -485,10 +472,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
                         Entry.Line -> UnreadLine()
                         is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.seq in pending && now - row.m.createdAt > 1000)
                         is Entry.Out -> Out(ctx, row.o)
-                        is Entry.Writing -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            AgentHead(row.agent.key, row.agent.who, row.agent.model, row.agent.runtime, "正在输入", ctx)
-                            Markdown(row.text)
-                        }
                         is Entry.Working -> Activity(ctx, row.agent, leaving)
                     }
                 }

@@ -395,21 +395,10 @@ private fun Code(text: String, failed: Boolean = false) {
     }
 }
 
-/** A step the runtime is streaming: the reply as it is written (its last five lines), or thinking (its last line). */
+/** A step in flight, as the station tells it (its turning points): writing or thinking; what it wrote comes with its entry. */
 @Composable
 private fun LiveStepView(step: LiveStep) {
-    if (step.step == "text") {
-        if (step.text.isNotEmpty()) Box(Modifier.fillMaxWidth().clipToBounds().layout { m, c ->
-            // A window onto the end of the growing reply, five lines tall at most.
-            val p = m.measure(c.copy(maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
-            val max = (21.dp * 5).roundToPx()
-            val h = minOf(p.height, max)
-            layout(p.width, h) { p.place(0, h - p.height) }
-        }) { Markdown(step.text, size = 14) }
-        return
-    }
-    val last = step.text.trim().lineSequence().lastOrNull() ?: ""
-    Text("思考：$last", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(if (step.step == "text") "正在输出…" else "正在思考…", fontSize = 13.sp, color = C.muted, maxLines = 1)
 }
 
 /** The turn's state with the model, with a running clock: starting up, waiting for the first token, working, or thinking. */

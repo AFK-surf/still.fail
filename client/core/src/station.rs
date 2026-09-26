@@ -1451,12 +1451,11 @@ fn apply_step(view: &mut LiveView, event: &Value, now: f64) {
         "phase" => view.phase = Some(json!({ "phase": event.get("phase").cloned().unwrap_or(Value::Null), "since": now })),
         "start" => {
             view.steps.retain(|s| s.get("id") != Some(&id));
+            // What it is; what it writes comes with its transcript entry (the station tells no deltas).
             let mut step = json!({
                 "id": id,
                 "step": event.get("step").cloned().unwrap_or(Value::Null),
-                "text": "",
                 "input": event.get("input").and_then(Value::as_str).unwrap_or(""),
-                "output": "",
                 "startedAt": now,
             });
             if let Some(tool) = event.get("tool").filter(|t| t.as_str().is_some_and(|t| !t.is_empty())) {
@@ -1469,13 +1468,6 @@ fn apply_step(view: &mut LiveView, event: &Value, now: f64) {
                 step["parent"] = parent.clone();
             }
             view.steps.push(step);
-        }
-        "delta" => {
-            let (Some(field), Some(text)) = (event.get("field").and_then(Value::as_str), event.get("text").and_then(Value::as_str)) else { return };
-            for step in view.steps.iter_mut().filter(|s| s.get("id") == Some(&id)) {
-                let joined = format!("{}{}", step.get(field).and_then(Value::as_str).unwrap_or(""), text);
-                step[field] = Value::String(joined);
-            }
         }
         "end" => {
             for step in view.steps.iter_mut().filter(|s| s.get("id") == Some(&id)) {

@@ -349,12 +349,6 @@ function StepRow({ step }: { step: Step }) {
   );
 }
 
-/** The last lines of a stream, so a long command output shows where it is now. */
-function lastLines(text: string, n: number): string {
-  const lines = text.split("\n");
-  return lines.length > n ? lines.slice(-n).join("\n") : text;
-}
-
 /** A value being written as JSON, read before it is complete: the string at `field`, as far as it has arrived. */
 export function partialString(json: string, field: string): string | null {
   const m = new RegExp(`"${field}"\\s*:\\s*"`).exec(json);
@@ -378,45 +372,23 @@ export function partialString(json: string, field: string): string | null {
   return out;
 }
 
-/** A window onto the end of growing content, five lines tall at most, the start fading out above. */
-function LiveTail({ children }: { children: ReactNode }) {
-  const box = useRef<HTMLDivElement>(null);
-  const [over, setOver] = useState(false);
-  useLayoutEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const check = () => setOver(el.scrollHeight > el.clientHeight + 1);
-    check();
-    const observer = new ResizeObserver(check);
-    observer.observe(el.firstElementChild ?? el);
-    return () => observer.disconnect();
-  }, []);
-  return <div ref={box} className="live-tail" data-over={over || undefined}>{children}</div>;
-}
-
-/** A step the runtime is streaming: the reply as it is written, thinking, or a tool running with its output. */
+/**
+ * A step in flight, as the station tells it (its turning points, not what it writes as it goes): writing, thinking,
+ * or a tool running with what it runs. What it wrote comes with its entry.
+ */
 function LiveStepView({ step }: { step: ShownStep }) {
-  if (step.step === "text") {
-    // Five lines at most, the newest at the bottom: the same height the finished reply folds to, so nothing jumps when it lands.
-    return step.text ? <LiveTail><div className="h-text markdown h-live"><Prose>{step.text}</Prose></div></LiveTail> : null;
-  }
-  if (step.step === "thinking") {
-    // One line, like the finished thinking in its group.
-    const last = step.text.trim().split("\n").at(-1) ?? "";
-    return <div className="h-live-thinking">思考：{last}</div>;
-  }
+  if (step.step === "text") return <div className="h-live-thinking">正在输出…</div>;
+  if (step.step === "thinking") return <div className="h-live-thinking">正在思考…</div>;
   const name = toolName(step.tool);
-  const said = name === "chat_post" ? partialString(step.input, "text") : null;
-  const hintText = said === null ? hint({ kind: "tool_call", tool: step.tool ?? "", text: step.input, at: null } as TimelineEntry) || step.input.slice(0, 160) : "";
+  const posting = name === "chat_post";
+  const hintText = posting ? "" : hint({ kind: "tool_call", tool: step.tool ?? "", text: step.input, at: null } as TimelineEntry) || step.input.slice(0, 160);
   return (
     <div className="h-live-tool" data-ended={step.ended || undefined}>
       <div className="h-live-tool-head">
         {step.ended ? <span className="h-live-done" aria-hidden="true">✓</span> : <span className="spinner" aria-hidden="true" />}
-        <strong>{said !== null ? "正在发送消息" : name}</strong>
+        <strong>{posting ? "正在发送消息" : name}</strong>
         {hintText && <code>{hintText}</code>}
       </div>
-      {said && <div className="markdown h-live-said"><Prose>{said}</Prose></div>}
-      {step.output && <pre className="h-live-output">{lastLines(step.output, 12)}</pre>}
     </div>
   );
 }

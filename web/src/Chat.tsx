@@ -5,7 +5,7 @@
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
-import { activityText, partialString, toolName } from "./History.tsx";
+import { activityText, toolName } from "./History.tsx";
 import { agentLabel, botUserIdOf, sessionStatus } from "./format.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
@@ -51,9 +51,6 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   // Messages there when the chat opened (and older pages loaded later) show at once; newer ones ease in, except a reply that already streamed in place.
   const firstSeq = useRef<number | null>(null);
   if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
-  const wasWriting = useRef(false);
-  const heldReply = useRef<{ agent: ChatAgent; text: string; count: number } | null>(null);
-  const streamedTs = useRef(new Set<string>());
   const agents: ChatAgent[] = chat.agents.map(({ session, turns }) => {
     const live = lives.get(session.key);
     const model = live?.usage?.model ?? session.model;
@@ -138,12 +135,8 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
         )}
         {messages.map((m) => {
           const fresh = m.seq > firstSeq.current!;
-          if (fresh && m.authorKind === "agent" && wasWriting.current && !streamedTs.current.has(m.ts)) {
-            streamedTs.current.add(m.ts);
-            wasWriting.current = false;
-          }
           const mine = mineOf(m);
-          const enter = fresh && !streamedTs.current.has(m.ts) && !(mine && sentHere.current.has(m.text)) ? true : undefined;
+          const enter = fresh && !(mine && sentHere.current.has(m.text)) ? true : undefined;
           const line = m.seq === divider ? <div key={`new-${m.seq}`} className="chat-unread-line" data-unread-line role="separator"><span>以下是新消息</span></div> : null;
           if (mine) {
             return [line, (
@@ -192,44 +185,16 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
           </div>
         ))}
         {(() => {
-          // An agent writing to this chat right now: its chat_post, as far as it has streamed.
-          let writer: ChatAgent | undefined;
-          let text: string | null = null;
-          for (const a of agents) {
-            const step = a.live?.steps.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && address !== null && partialString(s.input, "to") === address);
-            text = step ? partialString(step.input, "text") : null;
-            if (text) { writer = a; break; }
-          }
-          // Once written, the reply stays in place until the posted message arrives, so it never blinks out between the two.
-          let reply: { agent: ChatAgent; text: string } | null = null;
-          if (text && writer) {
-            reply = { agent: writer, text };
-            heldReply.current = { ...reply, count: messages.length };
-          } else if (heldReply.current && messages.length === heldReply.current.count) reply = heldReply.current;
-          else heldReply.current = null;
-          if (reply) wasWriting.current = true;
-          // The reply being written, under the activity (which stays while the agent works).
-          const writingNow = reply ? (
-            <div className="msg msg-row" data-author={reply.agent.who}>
-              <div className="msg-main">
-                <div className="msg-head">
-                  <span className="msg-avatar msg-avatar-agent"><ModelLogo model={reply.agent.model} runtime={reply.agent.runtime} size={12} /></span>
-                  <button type="button" className="msg-name msg-agent" onClick={() => onOpenHistory(reply.agent.key)}>{reply.agent.who}</button>
-                  <span className="msg-time">正在输入</span>
-                </div>
-                <div className="markdown h-live"><Prose>{reply.text}</Prose></div>
-              </div>
-            </div>
-          ) : null;
-          if (!busy && !lastAgents.current) return writingNow;
+          // A reply comes whole, as a message: while the agent works, its activity says what it is doing.
+          if (!busy && !lastAgents.current) return null;
           const atWork: AgentAtWork[] = busy ? busyAgents.map((a) => ({
             key: a.key, who: a.who, runtime: a.runtime, model: a.model,
             timeline: a.live?.timeline ?? [], live: a.live?.steps ?? [], phase: a.live?.phase ?? null,
             since: a.turns.at(-1)?.endedAt == null ? a.turns.at(-1)?.startedAt ?? null : null,
           })) : lastAgents.current!;
           if (busy) lastAgents.current = atWork;
-          // The activity is always the last thing in the chat; the reply being written comes before it.
-          return <>{writingNow}<Activities onOpenHistory={onOpenHistory} agents={atWork} leaving={leaving} /></>;
+          // The activity is always the last thing in the chat.
+          return <Activities onOpenHistory={onOpenHistory} agents={atWork} leaving={leaving} />;
         })()}
         <div ref={floor} className="chat-floor" aria-hidden="true" />
       </div>

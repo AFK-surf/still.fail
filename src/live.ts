@@ -1,5 +1,10 @@
-// Live view of sessions: what a running turn is doing as the runtime streams
-// it, and the transcript's new entries as they are written. Nothing here is
+// Live view of sessions: what a running turn is doing, told at its turning
+// points — the phase (asking the model, thinking, working), each step starting
+// (thinking, writing, a tool with its input) and ending — and the transcript's
+// entries as each is written whole. What a step writes as it goes (the
+// runtime's deltas) is not sent: a step's words come with its entry. It goes
+// over the relay when a link cannot be direct, where every frame counts.
+// Nothing here is
 // stored: the steps in flight live in memory until they end, and the
 // transcript stays the record, parsed incrementally and kept in memory while
 // someone watches, so a watcher asking from entry N is served without
@@ -9,7 +14,7 @@ import type { RuntimeKind } from "./config.ts";
 import type { LiveEvent, LivePhase, LiveStepKind } from "./runtime/types.ts";
 import { TranscriptTail, type TimelineEntry, type TranscriptUsage } from "./transcript.ts";
 
-/** A step in flight, as far as it has streamed. */
+/** A step in flight: what it is, not what it has written so far. */
 export interface LiveStep {
   id: string;
   step: LiveStepKind;
@@ -17,9 +22,8 @@ export interface LiveStep {
   subagent?: boolean;
   /** For a sub-agent's step: the tool call that started the sub-agent. */
   parent?: string;
-  text: string;
+  /** A tool's input as it started (a command), cut short. */
   input: string;
-  output: string;
   startedAt: number;
 }
 
@@ -34,9 +38,8 @@ export type LiveMessage =
 
 type Listener = (message: LiveMessage) => void;
 
-/** Caps what one step keeps, so a runaway command cannot grow memory without bound. */
-const MAX_FIELD = 64 * 1024;
-const keepTail = (text: string) => (text.length > MAX_FIELD ? text.slice(text.length - MAX_FIELD) : text);
+/** How much of a tool's input a step carries: enough to say what it runs. */
+const INPUT_CHARS = 300;
 
 interface Watched {
   tail: TranscriptTail;
@@ -65,19 +68,19 @@ export class LiveHub {
     }
     let steps = this.#steps.get(key);
     if (!steps) this.#steps.set(key, (steps = new Map()));
+    // What a step writes as it goes is not told (see the top): its words come with its transcript entry.
+    if (event.kind === "delta") return;
     if (event.kind === "start") {
+      const input = (event.input ?? "").slice(0, INPUT_CHARS);
       steps.set(event.id, {
-        id: event.id, step: event.step, text: "", input: event.input ?? "", output: "", startedAt: Date.now(),
+        id: event.id, step: event.step, input, startedAt: Date.now(),
         ...(event.tool ? { tool: event.tool } : {}), ...(event.subagent ? { subagent: true } : {}), ...(event.parent ? { parent: event.parent } : {}),
       });
-    } else if (event.kind === "delta") {
-      const step = steps.get(event.id);
-      if (!step) return;
-      step[event.field] = keepTail(step[event.field] + event.text);
-    } else {
-      if (!steps.delete(event.id)) return;
-      this.#soon(key);
+      this.#emit(key, { type: "step", event: { ...event, input } });
+      return;
     }
+    if (!steps.delete(event.id)) return;
+    this.#soon(key);
     this.#emit(key, { type: "step", event });
   }
 

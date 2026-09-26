@@ -115,9 +115,8 @@ import kotlinx.serialization.Serializable
     val step: String,
     val tool: String? = null,
     val subagent: Boolean = false,
-    val text: String = "",
+    /** A tool's input as it started (a command), cut short; what a step writes comes with its entry. */
     val input: String = "",
-    val output: String = "",
     val startedAt: Long = 0,
     val ended: Boolean = false,
 )

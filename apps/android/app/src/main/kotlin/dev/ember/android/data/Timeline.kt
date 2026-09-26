@@ -125,11 +125,6 @@ fun activityRows(timeline: List<TimelineEntry>, live: List<LiveStep>, phase: Sho
     return rows
 }
 
-/** The reply an agent is writing to the chat at `address` (CHANNEL/THREAD_TS) right now, as far as it has streamed. */
-fun writingNow(live: List<LiveStep>, address: String): String? =
-    live.firstOrNull { it.step == "tool" && !it.ended && toolName(it.tool) == "chat_post" && partialString(it.input, "to") == address }
-        ?.let { partialString(it.input, "text") }?.takeIf { it.isNotEmpty() }
-
 // ── the execution history ──────────────────────────────────────────────
 
 data class Step(val call: TimelineEntry, var result: TimelineEntry?)
