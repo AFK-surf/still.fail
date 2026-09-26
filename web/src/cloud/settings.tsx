@@ -3,7 +3,7 @@
 // workspace itself (its name, members, stations, connects and the stations'
 // runtime accounts).
 import { ArrowLeft, Check, KeyRound, LogOut, Plug, Plus, Server, Settings2, Trash2, UserPlus, Users } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
@@ -16,6 +16,7 @@ import { signOut, type Account } from "./accounts.ts";
 import { lastChat } from "../lastChat.ts";
 import { cloud, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
 import { Avatar } from "./gate.tsx";
+import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", admin: "管理员", member: "成员" };
@@ -288,6 +289,10 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
   const [known] = useState(() => new Set(stations.map((s) => s.id)));
   const enroll = useAction(() => cloud.enroll(account.sub, view.id, name));
   const joined = enroll.result && stations.find((s) => !known.has(s.id));
+  // From the command shown to the station in the list: how long adding one takes.
+  const shown = useRef(0);
+  useEffect(() => { if (enroll.result) shown.current = performance.now(); }, [enroll.result]);
+  useEffect(() => { if (joined) track("station_added", { ms: Math.round(performance.now() - shown.current) }); }, [Boolean(joined)]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Dialog open onClose={onClose} wide title="添加 station"
       description="station 是一台运行 ember 的机器。给它起个名字，然后在那台机器上执行生成的命令。"

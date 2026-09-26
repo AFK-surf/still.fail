@@ -78,6 +78,20 @@ test("a failed worker is replaced: calls in flight fail, subscriptions come back
   assert.deepEqual(workers.last.sent.at(-1), { id: 4, call: "x", params: {} });
 });
 
+test("faults the worker reports and the worker failing go to onFault, not to calls", async () => {
+  const workers = new FakeWorkers();
+  const faults: Error[] = [];
+  const client = new CoreClient(workers.opener, { schedule: (_ms, run) => run(), onFault: (error) => faults.push(error) });
+  const pending = client.call("x");
+  workers.last.reply({ fault: { name: "TypeError", message: "boom", stack: "TypeError: boom\n    at worker.js:1:1" } });
+  workers.last.reply({ id: 1, ok: 1 });
+  assert.equal(await pending, 1);
+  workers.last.reply({ fatal: "panic" });
+  workers.last.fail("load");
+  assert.deepEqual(faults.map((e) => [e.name, e.message]), [["TypeError", "boom"], ["CoreFailed", "panic"], ["CoreFailed", "load"]]);
+  assert.equal(faults[0]!.stack, "TypeError: boom\n    at worker.js:1:1");
+});
+
 test("a worker that keeps failing is retried with growing pauses, reset by a healthy answer", () => {
   const workers = new FakeWorkers();
   workers.client();

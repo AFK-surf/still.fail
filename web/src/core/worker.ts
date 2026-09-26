@@ -2,6 +2,7 @@
 // tab connects a port; as a dedicated Worker (no SharedWorker, e.g. Chrome on
 // Android) the global scope is the one port. Each port is one core client.
 import init, { start, type EmberCore } from "./pkg/ember_core_wasm.js";
+import type { WorkerFault } from "./client.ts";
 
 // Typed by hand: the web tsconfig has the DOM lib, not the worker's.
 interface Port {
@@ -54,12 +55,29 @@ function fatal(reason: string): void {
   scope.close();
 }
 
+/**
+ * An error the core survives: logged here, and handed to one page for error
+ * tracking (a worker's console is out of the page's reach). One page, so that
+ * several tabs do not report it several times; the page reports the fatal ones itself.
+ */
+function fault(error: unknown): void {
+  console.error("ember core:", error);
+  const port = clients.values().next().value;
+  if (!port) return;
+  const fault: WorkerFault = error instanceof Error
+    ? { name: error.name, message: error.message, ...(error.stack ? { stack: error.stack } : {}) }
+    : { name: "Error", message: String(error) };
+  try {
+    port.postMessage({ fault });
+  } catch { /* gone; its client is dropped on the next emit */ }
+}
+
 function guard(run: () => void): void {
   try {
     run();
   } catch (error) {
     if (error instanceof WebAssembly.RuntimeError) fatal(String(error));
-    else console.error("ember core:", error);
+    else fault(error);
   }
 }
 
@@ -99,13 +117,13 @@ function serve(port: Port): void {
 // Errors in the core's own tasks surface here, not at a call.
 scope.addEventListener("error", (event) => {
   if (event.error instanceof WebAssembly.RuntimeError) fatal(String(event.error));
-  else console.error("ember core:", event.error ?? event.message);
+  else fault(event.error ?? event.message);
   // Handled: a dedicated Worker's page would otherwise take it as the worker failing.
   event.preventDefault();
 });
 scope.addEventListener("unhandledrejection", (event) => {
   if (event.reason instanceof WebAssembly.RuntimeError) fatal(String(event.reason));
-  else console.error("ember core:", event.reason);
+  else fault(event.reason);
   event.preventDefault();
 });
 

@@ -21,6 +21,7 @@ import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
 import { Avatar } from "./gate.tsx";
 import { Illustration, Lockup } from "../brand.tsx";
+import { identify, track } from "../telemetry.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
@@ -41,6 +42,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
   const people = useMemo(() => new Map((view?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view]);
+  useEffect(() => identify(entry.account), [entry.account]);
 
   return (
     <PeopleContext.Provider value={people}>
@@ -207,7 +209,7 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
   const [owner, setOwner] = useState(list[0]?.sub ?? "");
   // Sent every time: the server looks at it only for an account not let in yet, and then asks for it when it is missing or wrong.
   const [code, setCode] = useState(inviteCode);
-  const create = useAction(() => cloud.createWorkspace(owner || list[0]!.sub, name, code.trim()), (w) => { setName(""); forgetInviteCode(); onClose(); navigate(`/w/${w.id}`); });
+  const create = useAction(() => cloud.createWorkspace(owner || list[0]!.sub, name, code.trim()), (w) => { track("workspace_created", { first: false }); setName(""); forgetInviteCode(); onClose(); navigate(`/w/${w.id}`); });
   const [asked, setAsked] = useState(false);
   useEffect(() => { if (needsInviteCode(create.error)) setAsked(true); }, [create.error]);
   const asking = asked || needsInviteCode(create.error);

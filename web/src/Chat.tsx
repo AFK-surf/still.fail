@@ -13,6 +13,7 @@ import { Avatar, ModelLogo, SlackLogo, Time, Tip } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
 import { useStickToBottom } from "./scroll.ts";
+import { track } from "./telemetry.ts";
 
 /** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
 interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null; session: SessionSummary; live: LiveView | undefined; turns: ChatView["agents"][number]["turns"] }
@@ -585,7 +586,12 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
       setStarting(false);
     }
     for (const f of kept.files) if (f.preview) URL.revokeObjectURL(f.preview);
-    void chat.send(to, value, attachments, sent).catch(() => {});
+    const at = performance.now();
+    const counts = { attachments: attachments.length, quotes: sent.length, first: thread === null };
+    void chat.send(to, value, attachments, sent).then(
+      () => track("message_sent", { ...counts, ok: true, ms: Math.round(performance.now() - at) }),
+      () => track("message_sent", { ...counts, ok: false }),
+    );
     onSent?.(to);
   };
   const add = (list: FileList | File[]) => {
