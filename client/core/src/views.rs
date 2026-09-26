@@ -1138,7 +1138,7 @@ mod tests {
             assert_eq!(
                 v[1],
                 json!({"station": "ws/b", "id": "b", "name": "beta", "online": false, "lastSeen": v[1]["lastSeen"], "version": null,
-                    "link": {"state": "offline", "message": null}, "overview": null, "host": null, "runtimes": []})
+                    "link": {"state": "offline", "message": null}, "overview": null, "host": null, "runtimes": [], "models": []})
             );
             assert_eq!(v[2]["lastSeen"], Value::Null);
         });
