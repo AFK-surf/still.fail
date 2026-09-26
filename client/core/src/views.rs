@@ -888,6 +888,8 @@ mod tests {
             let mut shown = slack;
             shown["station"] = json!("ws/a");
             shown["stationName"] = json!("alpha");
+            // What clients draw of it is the core's: its state (none: its agent is idle).
+            shown["state"] = Value::Null;
             assert_eq!(items[2], shown);
 
             // One station failing shows as that station's state; the other's rows stay.
