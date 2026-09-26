@@ -1225,7 +1225,7 @@ export class AdminApi {
       const profile = raw.profiles?.find((p) => p.id === id);
       if (!profile) throw new Error(`unknown profile ${id}`);
       lastOfRuntime(raw, profile.runtime, id);
-      return { ...raw, profiles: raw.profiles.filter((p) => p.id !== id) };
+      return { ...raw, profiles: (raw.profiles ?? []).filter((p) => p.id !== id) };
     });
   }
 }
