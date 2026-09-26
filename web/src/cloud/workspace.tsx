@@ -94,7 +94,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
         <main className="main">
           <Routes>
             <Route index element={<WorkspaceHome view={view.data} stations={stations} />} />
-            <Route path="settings" element={<Navigate to="general" replace />} />
+            <Route path="settings" element={<Navigate to="stations" replace />} />
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
             <Route path="settings/general" element={<GeneralSettings entry={entry} />} />
             <Route path="settings/members" element={<MembersSettings entry={entry} />} />
