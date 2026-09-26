@@ -20,6 +20,14 @@ export interface Station {
 
 export const LOCAL_STATION: Station = { id: "local", name: "", base: "", address: "local", online: true, settings: "/settings" };
 
+/**
+ * Where a station's profiles are listed: in ember cloud, the workspace's one Profile page (every station's, each with
+ * its own add button); on a station's own page, its list.
+ */
+export function profilesPage(station: Station): string {
+  return station.address === "local" ? "/settings/accounts" : `${station.settings}/profiles`;
+}
+
 /** Path prefix of a station's pages, from its address. */
 export function stationBase(address: string): string {
   if (address === "local") return "";

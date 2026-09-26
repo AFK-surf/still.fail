@@ -11,12 +11,12 @@ import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, usePa
 import { useStations } from "../api.ts";
 import type { Topic } from "../core/client.ts";
 import { useTopics } from "../core/react.ts";
-import { AccountPage, AccountsPage } from "../pages/Accounts.tsx";
+import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList } from "../Sidebar.tsx";
 import { AccountSettings, ConnectsSettings, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
-import { PeopleContext, StationContext, stationBase, type Station } from "../station.tsx";
+import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
 import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
@@ -95,7 +95,8 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
       <Routes>
         <Route path="chats/:chat?" element={<ChatPage />} />
         <Route path="connects/:id" element={<ConnectPage />} />
-        <Route path="settings/accounts" element={<AccountsPage />} />
+        {/* One Profile page for the workspace: a station's own list is it. */}
+        <Route path="settings/accounts" element={<Navigate to={profilesPage(station)} replace />} />
         <Route path="settings/accounts/:id" element={<AccountPage />} />
         <Route path="*" element={<Navigate to="chats" replace />} />
       </Routes>

@@ -1,4 +1,4 @@
-import { useStation, useLink } from "../station.tsx";
+import { profilesPage, useStation, useLink } from "../station.tsx";
 import { ChevronRight, ExternalLink, LogIn, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -68,7 +68,7 @@ type Choice = keyof typeof CHOICES;
  * A new profile: a subscription is signed in first and the station makes the profile once that succeeds (named by the
  * account); a key is checked first and the profile made only if it works. Nothing is left behind by one that did not.
  */
-function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void }) {
+export function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const api = useApi();
   const link = useLink();
   const overview = useOverview(useStation().address);
@@ -140,13 +140,14 @@ export function AccountPage() {
 
 function AccountView({ profile, overview }: { profile: ProfileView; overview: Overview }) {
   const api = useApi();
+  const station = useStation();
   const link = useLink();
   const navigate = useNavigate();
   const toast = useToast();
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(profile.name);
   const save = useAction((input: ProfileInput) => api.putProfile(profile.id, input));
-  const remove = useAction(() => api.deleteProfile(profile.id), () => { toast("已删除 Profile"); navigate(link("/settings/accounts")); });
+  const remove = useAction(() => api.deleteProfile(profile.id), () => { toast("已删除 Profile"); navigate(profilesPage(station)); });
   const check = useAction(() => api.checkProfile(profile.id));
   const saveThen = (input: ProfileInput, done: () => void) => void save.run(input).then((ok) => { if (ok) done(); });
   const rename = () => {
@@ -163,7 +164,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
   const signingIn = profile.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(profile.login.state);
   return (
     <div className="page page-narrow">
-      <BackLink to={link("/settings/accounts")} label="Profile" />
+      <BackLink to={profilesPage(station)} label="Profile" />
       {/* Who the account is and whether it works now: its provider, name, runtimes, and its last check. */}
       <header className="identity">
         <span className="mark runtime-mark" style={{ width: 48, height: 48 }}><ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={26} /></span>

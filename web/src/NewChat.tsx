@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useStations, type RuntimeKind, type StationView } from "./api.ts";
 import { Composer } from "./Chat.tsx";
 import { EFFORTS, EFFORT_LABEL, RUNTIME_LABEL, timeUntil } from "./format.ts";
-import { StationContext, stationBase, type Station } from "./station.tsx";
+import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { ModelLogo, RuntimeLogo } from "./ui.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
@@ -114,7 +114,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       )}
       {!runtime || !model ? (
         // Nothing to choose from: the chooser leads to where models are enabled.
-        <Link className="chooser" to={`${station.base}/settings/accounts`} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
+        <Link className="chooser" to={profilesPage(station)} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
       ) : (
       <Chooser label={<><ModelLogo model={model} runtime={runtime} size={13} />{modelLabel}</>} title="用哪个模型">
         {view.models.map((m) => (
@@ -147,8 +147,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         <h1 className="new-chat-title">新对话</h1>
         <p className="new-chat-sub">说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
         {!view.overview ? <p className="muted">正在读取 {station.name} 的 Profile…</p>
-          : profiles.length === 0 ? <p className="field-error">这台 station 还没有 Profile，先到 <Link className="inline-link" to={`${station.base}/settings/accounts`}>设置 → Profile</Link> 里加一个。</p>
-          : !runtimes.length && <p className="field-error">这台 station 的 Profile 都还没有启用模型。到 <Link className="inline-link" to={`${station.base}/settings/accounts`}>设置 → Profile</Link> 里勾选可以用的模型。</p>}
+          : profiles.length === 0 ? <p className="field-error">这台 station 还没有 Profile，先到 <Link className="inline-link" to={profilesPage(station)}>设置 → Profile</Link> 里加一个。</p>
+          : !runtimes.length && <p className="field-error">这台 station 的 Profile 都还没有启用模型。到 <Link className="inline-link" to={profilesPage(station)}>设置 → Profile</Link> 里勾选可以用的模型。</p>}
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
         {entry?.spent && (
           <p className="spent-notice" role="status">

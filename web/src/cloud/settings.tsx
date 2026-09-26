@@ -9,7 +9,8 @@ import { useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, checkTone, RUNTIME_LABEL, timeUntil } from "../format.ts";
 import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
-import { stationBase, type Station } from "../station.tsx";
+import { StationContext, stationBase, type Station } from "../station.tsx";
+import { AddAccountDialog } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, Time } from "../ui.tsx";
@@ -47,11 +48,11 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-function Page({ title, lead, back, children }: { title: string; lead?: string; back: string; children: React.ReactNode }) {
+function Page({ title, lead, back, actions, children }: { title: string; lead?: string; back: string; actions?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="page page-narrow">
       <MobileBack to={back} label="设置" />
-      <header className="page-head"><div><h1>{title}</h1>{lead && <p className="page-sub">{lead}</p>}</div></header>
+      <header className="page-head"><div><h1>{title}</h1>{lead && <p className="page-sub">{lead}</p>}</div>{actions}</header>
       {children}
     </div>
   );
@@ -197,18 +198,32 @@ export function ConnectsSettings({ entry }: { entry: WorkspaceEntry }) {
   return <ConnectList scope={entry.id} settings={`/w/${entry.id}/settings`} />;
 }
 
+/**
+ * Every station's profiles on one page, each station with its own add button (and one at the top when there is only
+ * one station): a profile is added where it runs.
+ */
 export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   const stations = useStations(entry.id).value ?? [];
+  const [adding, setAdding] = useState<string | null>(null);
+  const online = stations.filter((s) => s.online);
+  const asStation = (s: (typeof stations)[number]): Station => ({ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings` });
+  const addingTo = stations.find((s) => s.station === adding);
   return (
-    <Page title="Profile" lead="每台 station 有自己的 Profile：用哪份订阅、或者接到哪个模型服务来运行 Claude Code 和 Codex。额度每几分钟更新一次。" back={`/w/${entry.id}/settings`}>
+    <Page title="Profile" lead="Profile 是 agent 用来跑模型的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行，能跑哪些运行时，ember 会自己配好。" back={`/w/${entry.id}/settings`}
+      actions={online.length === 1 && <Button icon={Plus} onClick={() => setAdding(online[0]!.station)}>添加 Profile</Button>}>
       {stations.length === 0 && <Empty><p>还没有 station。</p></Empty>}
+      {addingTo && (
+        <StationContext.Provider value={asStation(addingTo)}>
+          <AddAccountDialog open onClose={() => setAdding(null)} />
+        </StationContext.Provider>
+      )}
       {stations.map((station) => {
         const { overview } = station;
         const base = stationBase(station.station);
         return (
           <Section key={station.id}
             title={<span className="station-heading"><StatusDot state={station.online ? "online" : "offline"} label={station.online ? "在线" : "离线"} />{station.name}</span>}
-            actions={station.online && <Link className="btn btn-secondary" to={`${base}/settings/accounts`}>管理</Link>}>
+            actions={station.online && online.length > 1 && <Button variant="ghost" icon={Plus} onClick={() => setAdding(station.station)}>添加</Button>}>
             {!station.online ? <div className="card"><p className="muted card-foot">离线，暂时看不到它的 Profile。</p></div>
               : !overview ? <div className="card"><Loading label={`正在连接 ${station.name}…`} fill={false} /></div>
               : overview.profiles.length === 0 ? <div className="card"><p className="muted card-foot">还没有 Profile。</p></div>
@@ -260,7 +275,6 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
                   {s.version ? ` · ember-mesh ${s.version}` : ""} · <span className="mono">{s.id.slice(0, 12)}</span>
                 </span>
               </span>
-              <Link className="btn btn-ghost" to={`${stationBase(s.station)}/settings/accounts`}>Profile</Link>
               {manager && <Menu items={[
                 { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.run({ id: s.id, name: n.trim() }); } },
                 { label: "从 workspace 移除", icon: Trash2, danger: true, onSelect: () => setRemoving(s) },

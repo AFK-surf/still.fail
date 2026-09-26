@@ -1,6 +1,6 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
-import { scopeOf, useStation, useLink } from "../station.tsx";
+import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
 import { ExternalLink, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -330,11 +330,11 @@ function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClo
 
 /** Model choice: the models the runtime's profiles have enabled; the session's profile is picked among those that have it. */
 export function ModelPicker({ id, runtime, value, onChange }: { id: string; runtime: RuntimeKind; value: string; onChange(value: string): void }) {
-  const link = useLink();
+  const station = useStation();
   const models = useRuntimeModels(runtime);
   if (models.length === 0) {
     // Nothing to choose from: the field leads to where profiles' models are enabled.
-    return <Link id={id} className="input input-link" to={link("/settings/accounts")}>{RUNTIME_LABEL[runtime]} 的 Profile 还没有启用模型 · 去勾选</Link>;
+    return <Link id={id} className="input input-link" to={profilesPage(station)}>{RUNTIME_LABEL[runtime]} 的 Profile 还没有启用模型 · 去勾选</Link>;
   }
   const options = [{ value: "", label: "运行时默认" }, ...[...new Set([...(value ? [value] : []), ...models])].map((m) => ({ value: m, label: m }))];
   return <Select id={id} value={value} onChange={onChange} options={options} label="模型" />;
@@ -477,7 +477,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
           <div className="field-grid">
             <Field label="模型" htmlFor="new-connect-model">
               {models.length === 0
-                ? <Link id="new-connect-model" className="input input-link" to={link("/settings/accounts")}>Profile 还没有启用模型 · 去勾选</Link>
+                ? <Link id="new-connect-model" className="input input-link" to={profilesPage(station)}>Profile 还没有启用模型 · 去勾选</Link>
                 : <Select id="new-connect-model" value={entry?.model ?? ""} onChange={(m) => { setModel(m); setEffort(""); }} label="模型"
                     options={models.map((m) => ({ value: m.model, label: m.model }))} />}
             </Field>
