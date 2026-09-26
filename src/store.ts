@@ -32,7 +32,10 @@ export interface SessionRow {
    */
   createdBy: string | null;
   runtime: RuntimeKind;
+  /** The profile it last ran on. */
   profile: string;
+  /** Kept to `profile` by hand; otherwise the station picks one each time it starts (Hub.#runOn). */
+  profilePinned: boolean;
   model: string | null;
   /** Reasoning effort, as the connect set it when the session started; null for the runtime's default. */
   effort: string | null;
@@ -183,7 +186,7 @@ export const EMBER_SURFACE = "ember";
  * Bump on schema changes. A database of another version is refused: there is one station, and its data is moved by
  * hand when the schema changes (no migrations are kept in the code).
  */
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 /** Where a Slack connect's threads live: its team, or the connect itself while the team is unknown. */
 export function slackSurface(connect: string, teamId: string | null | undefined): string {
@@ -282,6 +285,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_by TEXT,
   runtime TEXT NOT NULL,
   profile TEXT NOT NULL,
+  profile_pinned INTEGER NOT NULL DEFAULT 0,
   model TEXT,
   effort TEXT,
   runtime_session_id TEXT,
@@ -332,6 +336,7 @@ function toSession(row: Row): SessionRow {
     createdBy: (row.created_by as string | null) ?? null,
     runtime: row.runtime as RuntimeKind,
     profile: row.profile as string,
+    profilePinned: row.profile_pinned === 1,
     model: (row.model as string | null) ?? null,
     effort: (row.effort as string | null) ?? null,
     runtimeSessionId: (row.runtime_session_id as string | null) ?? null,
@@ -488,9 +493,9 @@ export class Store {
     this.notify(s.key);
   }
 
-  /** Moves a session to another profile (its transcripts are shared by its runtime's profiles). */
-  setSessionProfile(key: string, profile: string): void {
-    this.#db.prepare("UPDATE sessions SET profile = ? WHERE key = ?").run(profile, key);
+  /** Moves a session to another profile (its transcripts are shared by its runtime's profiles); `pinned` keeps it there. */
+  setSessionProfile(key: string, profile: string, pinned: boolean): void {
+    this.#db.prepare("UPDATE sessions SET profile = ?, profile_pinned = ? WHERE key = ?").run(profile, pinned ? 1 : 0, key);
     this.notify(key);
   }
 

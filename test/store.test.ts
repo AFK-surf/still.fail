@@ -12,7 +12,7 @@ test("a database of another schema version is refused: its data is moved by hand
   const db = new DatabaseSync(path);
   db.exec("CREATE TABLE sessions (key TEXT); PRAGMA user_version = 8;");
   db.close();
-  assert.throws(() => new Store(path), /schema version 8; this ember uses 11/);
+  assert.throws(() => new Store(path), /schema version 8; this ember uses 12/);
 });
 
 function session(store: Store, key: string): void {

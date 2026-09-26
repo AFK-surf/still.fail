@@ -547,7 +547,10 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   (config.profiles.find((p) => p.id === "cc2")!.models as string[]).push("sonnet");
   await hub.configure(key, { model: "sonnet", effort: "low" });
   assert.deepEqual([store.getSession(key)!.model, store.getSession(key)!.effort], ["sonnet", "low"]);
-  // Its own used up: the next start of its runtime runs on the other one, which takes it on.
+  assert.equal(store.getSession(key)!.profilePinned, true, "kept to it by hand");
+  // Given back to the station, and its own used up: the next start runs on the other one, which takes it on.
+  await hub.configure(key, { profile: null });
+  assert.equal(store.getSession(key)!.profilePinned, false);
   await hub.evict(key);
   hub.setProfileHealth((id) => ({ check: null, quota: id === "cc2" ? { state: "ok", windows: [{ label: "每周", usedPercent: 100, resetsAt: null }], detail: null, checkedAt: 0 } : null }));
   await accept(message({ text: "<@UBOT> and the tests", threadTs: m.threadTs }));

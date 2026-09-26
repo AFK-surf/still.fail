@@ -340,11 +340,12 @@ export class Hub {
    * model it can run, another effort. Its transcript is shared by the runtime's profiles, so the next message resumes it
    * with all it had; its idle process ends first so the change takes. Not while a turn runs.
    */
-  async configure(key: string, change: { profile?: string; model?: string | null; effort?: string | null }): Promise<void> {
+  async configure(key: string, change: { profile?: string | null; model?: string | null; effort?: string | null }): Promise<void> {
     const row = this.#store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
     const runtimeName = row.runtime === "claude" ? "Claude Code" : "Codex";
-    if (change.profile !== undefined && change.profile !== row.profile) {
+    // A profile given keeps the session to it; null gives the choice back to the station.
+    if (change.profile) {
       const next = this.#config.profiles.find((p) => p.id === change.profile);
       if (!next) throw new Error(`unknown profile ${change.profile}`);
       if (!next.runtimes.includes(row.runtime)) throw new Error(`「${next.name}」不能跑 ${runtimeName}`);
@@ -358,7 +359,7 @@ export class Hub {
     if (change.effort && effort && !EFFORTS[row.runtime].includes(effort)) throw new Error(`${runtimeName} 的思考深度只有 ${EFFORTS[row.runtime].join("、")}`);
     if (this.processState(key) === "running") throw new Error("这个会话正在跑，等这一轮结束再改");
     await this.evict(key);
-    if (change.profile !== undefined && change.profile !== row.profile) this.#store.setSessionProfile(key, change.profile);
+    if (change.profile !== undefined) this.#store.setSessionProfile(key, change.profile ?? row.profile, change.profile !== null);
     if (model !== row.model || effort !== row.effort) this.#store.setSessionModel(key, model, effort);
     log.info("session changed", { session: key, profile: change.profile, model, effort });
   }
@@ -372,12 +373,14 @@ export class Hub {
     if (!row) throw new Error(`unknown session ${key}`);
     const candidates = this.#config.profiles.filter((p) => p.runtimes.includes(row.runtime));
     const current = candidates.find((p) => p.id === row.profile);
-    // Its own while it can run it: usable, and with its model enabled.
+    // Kept to it by hand: that one, whatever it says. Otherwise its own while it can run it: usable, and with its model
+    // enabled.
+    if (current && row.profilePinned) return current;
     if (current && usable(this.#health(current.id)) && serves(current, row.model ?? null)) return current;
     if (candidates.length === 0) throw new Error(`session ${key}: no profile runs ${row.runtime}`);
     const next = this.#pick(candidates, row.model ?? null, false);
     if (next.id !== row.profile) {
-      this.#store.setSessionProfile(key, next.id);
+      this.#store.setSessionProfile(key, next.id, false);
       log.info("session taken on by another profile", { session: key, from: row.profile, to: next.id });
     }
     return next;

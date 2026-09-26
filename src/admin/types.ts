@@ -120,6 +120,8 @@ export interface SessionSummary {
   participants: Creator[];
   runtime: RuntimeKind;
   profile: string;
+  /** Kept to `profile` by hand; otherwise the station picks one each time it starts. */
+  profilePinned: boolean;
   model: string | null;
   effort: string | null;
   runtimeSessionId: string | null;
