@@ -1217,6 +1217,32 @@ mod tests {
     }
 
     #[test]
+    fn what_was_known_shows_after_a_restart_with_no_network() {
+        run(async {
+            let (host, core) = cloud_core().await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Workspace { workspace: "ws".into() } });
+            host.settle().await;
+            drop(core);
+            host.take_emitted();
+            // Started again, offline.
+            host.on_fetch(|_| json_response(503, json!({"error": "unavailable"})));
+            let core = Core::new(host.clone()).await;
+            let ui = core.connect();
+            let mut values = HashMap::new();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Workspace { workspace: "ws".into() } });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1][0]["workspaces"][0]["id"], "ws");
+            // Kept, not confirmed: a UI does not take it for "no workspace yet".
+            assert_eq!(values[&1][0]["loaded"], false);
+            assert_eq!(values[&2]["stations"][0]["id"], "st");
+        });
+    }
+
+    #[test]
     fn account_topics_follow_the_cloud_socket() {
         run(async {
             let (host, core) = cloud_core().await;

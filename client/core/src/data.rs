@@ -336,3 +336,87 @@ impl crate::station::TopicSink for Center {
         if holds(topic) { self.data.get(topic) } else { self.store.get(topic) }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::{FakeHost, run};
+    use serde_json::json;
+
+    fn rows(station: &str) -> Topic {
+        Topic::ChatRows { station: station.into() }
+    }
+
+    #[test]
+    fn what_it_holds_is_there_after_a_restart() {
+        run(async {
+            let host = FakeHost::new();
+            let data = Data::new(host.clone());
+            data.set(&rows("w/s"), json!([{"id": "b", "title": "二"}, {"id": "a", "title": "一"}]));
+            data.set(&Topic::Overview { station: "w/s".into() }, json!({"connects": []}));
+            host.settle().await;
+            let again = Data::new(host.clone());
+            assert_eq!(again.get(&rows("w/s")), None, "nothing before it loads");
+            again.load().await;
+            // The order the station gave is kept.
+            assert_eq!(again.get(&rows("w/s")), Some(json!([{"id": "b", "title": "二"}, {"id": "a", "title": "一"}])));
+            assert_eq!(again.get(&Topic::Overview { station: "w/s".into() }), Some(json!({"connects": []})));
+        });
+    }
+
+    #[test]
+    fn a_list_writes_what_changed_and_forgets_what_left() {
+        run(async {
+            let host = FakeHost::new();
+            let data = Data::new(host.clone());
+            let told = Rc::new(RefCell::new(Vec::new()));
+            data.on_change({
+                let told = told.clone();
+                Rc::new(move |topic: &Topic| told.borrow_mut().push(topic.clone()))
+            });
+            data.set(&rows("w/s"), json!([{"id": "a", "n": 1}, {"id": "b", "n": 1}]));
+            data.set(&rows("w/s"), json!([{"id": "a", "n": 1}, {"id": "b", "n": 1}]));
+            assert_eq!(told.borrow().len(), 1, "the same value again changes nothing");
+            data.set(&rows("w/s"), json!([{"id": "a", "n": 2}]));
+            host.settle().await;
+            let keys: Vec<String> = host.db.borrow().keys().filter(|(t, _)| t == "row").map(|(_, k)| k.clone()).collect();
+            assert_eq!(keys, vec![format!("w/s{SEP}a")]);
+            assert_eq!(data.get(&rows("w/s")), Some(json!([{"id": "a", "n": 2}])));
+            // Read and empty is known; never read is not.
+            data.set(&rows("w/s"), json!([]));
+            assert_eq!(data.get(&rows("w/s")), Some(json!([])));
+            assert_eq!(data.get(&rows("w/t")), None);
+        });
+    }
+
+    #[test]
+    fn an_update_changes_what_is_known_only() {
+        run(async {
+            let host = FakeHost::new();
+            let data = Data::new(host.clone());
+            let overview = Topic::Overview { station: "w/s".into() };
+            data.update(&overview, &mut |v| v["x"] = json!(1));
+            assert_eq!(data.get(&overview), None);
+            data.set(&overview, json!({"x": 0}));
+            data.update(&overview, &mut |v| v["x"] = json!(1));
+            assert_eq!(data.get(&overview), Some(json!({"x": 1})));
+        });
+    }
+
+    #[test]
+    fn retain_forgets_the_stations_no_one_reaches() {
+        run(async {
+            let host = FakeHost::new();
+            let data = Data::new(host.clone());
+            data.set(&rows("w1/s"), json!([{"id": "a"}]));
+            data.set(&rows("w2/s"), json!([{"id": "a"}]));
+            data.set(&Topic::Workspace { workspace: "w2".into() }, json!({"id": "w2"}));
+            data.retain(|station| station.starts_with("w1/"), Some(&HashSet::from(["w1".to_string()])));
+            host.settle().await;
+            assert!(data.get(&rows("w1/s")).is_some());
+            assert_eq!(data.get(&rows("w2/s")), None);
+            assert_eq!(data.get(&Topic::Workspace { workspace: "w2".into() }), None);
+            assert!(host.db.borrow().keys().all(|(_, k)| !k.starts_with("w2")));
+        });
+    }
+}
