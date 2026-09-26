@@ -338,7 +338,8 @@ impl Store {
             (std::mem::take(&mut entry.stale), source)
         };
         // Computed with nothing borrowed: the source reads and watches other topics.
-        let computed = if stale { source.and_then(|s| s.compute(topic)) } else { None };
+        // A data center topic's value is read there; a view's, computed by its source.
+        let computed = if stale { self.held(topic).map(Ok).or_else(|| source.and_then(|s| s.compute(topic))) } else { None };
         let (subscribers, out, watchers) = {
             let mut inner = self.inner.borrow_mut();
             let Some(entry) = inner.topics.get_mut(topic) else { return };
