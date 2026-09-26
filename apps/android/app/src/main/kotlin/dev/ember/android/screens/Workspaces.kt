@@ -282,7 +282,7 @@ private fun ColumnScope.NewWorkspaceSheet(app: AppState) {
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("workspace 是一组人和他们共用的 station。你会成为它的 owner。", fontSize = 14.sp, color = C.muted)
         Label0("名字")
-        Field(name, { name = it }, "例如：Cue 团队")
+        Field(name, { name = it }, "例如：产品团队")
         if (list.size > 1) {
             Label0("属于哪个账号")
             list.forEach { a -> PickRow(a.email, checked = a.sub == sub) { owner = a.sub } }

@@ -18,7 +18,7 @@ const people = { me: { name: "左子健", short: "左", color: "#5B7BB2" }, bob:
 const peopleStack = (ids, size = 18) => `<span class="pstack">${ids.map((id) => `<span class="pav" style="width:${size}px;height:${size}px;font-size:${Math.round(size * .5)}px;background:${people[id].color}">${people[id].short}</span>`).join("")}</span>`;
 const workspaces = [
   { id: "3720", name: "3720", account: "zuozijian@gmail.com", stations: 3 },
-  { id: "cue", name: "Cue", account: "zuozijian@gmail.com", stations: 1 },
+  { id: "acme", name: "产品团队", account: "zuozijian@gmail.com", stations: 1 },
   { id: "dev", name: "Dev 测试", account: "alice@example.test", stations: 2 },
 ];
 let ws = workspaces[0];
@@ -39,18 +39,18 @@ const stations = [
 ];
 
 const sessions = [
-  { id: "cue", title: "Cue 的 staging 早上发不出通知", station: "studio", source: "slack", model: "deepseek-flash", models: ["deepseek-flash", "gpt-6-astra"], people: ["me", "bob"], effort: "high", state: "block", when: "3 分钟前",
+  { id: "staging", title: "staging 早上发不出通知", station: "studio", source: "slack", model: "deepseek-flash", models: ["deepseek-flash", "gpt-6-astra"], people: ["me", "bob"], effort: "high", state: "block", when: "3 分钟前",
     question: "要我把告警规则改成 UTC 并重启 notifier 吗？重启会让推送中断大约 1 分钟。",
     quick: ["改吧，现在重启", "先别重启", "我来看看"],
     messages: [
-      { mine: true, text: "帮我看一下 Cue 的 staging 为什么今天早上发不出通知，日志在 backroom" },
+      { mine: true, text: "帮我看一下 staging 为什么今天早上发不出通知，日志在 backroom" },
       { agent: true, model: "deepseek-flash", html: "<p>找到原因了：通知服务的日志时间戳是 <code>UTC</code>，但告警规则按北京时间配置，所以早上 8 点前的通知全被过滤掉了。</p><pre>rule: quiet_hours 00:00–08:00 (Asia/Shanghai)\nlog:  2026-09-26T00:12:04Z  suppressed</pre>" },
       { person: "bob", text: "mac-mini 上那套也是一样的配置，顺便一起看看？" },
       { agent: true, model: "gpt-6-astra", html: "<p>我看了 mac-mini：同一份规则文件，改一处两边都会生效。</p>" },
       { agent: true, model: "deepseek-flash", block: true, html: "<p>要我把告警规则改成 UTC 并重启 notifier 吗？重启会让推送中断大约 1 分钟。</p>" },
     ],
     history: [
-      ["recv", "收到来自 左 的消息", "帮我看一下 Cue 的 staging 为什么今天早上发不出通知…"],
+      ["recv", "收到来自 左 的消息", "帮我看一下 staging 为什么今天早上发不出通知…"],
       ["group", "读取 backroom 日志 · 共 4 项"],
       ["group", "对比告警规则和日志时区 · 共 3 项"],
       ["post", "发出回复", "找到原因了：通知服务的日志时间戳是 UTC…"],
@@ -298,7 +298,7 @@ render.station = (el, id) => {
       ${st.profiles.map((p) => `<div class="card"><b>${esc(p.name)}</b><div style="font-size:13px;color:var(--muted)">额度已用 ${p.quota}% · 5 小时窗口</div>
         <div class="model-list">${p.models.map((m) => `<span class="${p.on.includes(m) ? "on" : ""}" data-m="${m}">${p.on.includes(m) ? "✓ " : ""}${m}</span>`).join("")}</div></div>`).join("") || `<div class="card" style="color:var(--muted)">这台机器还没有 Profile。</div>`}
       <div class="section-h" style="padding-left:24px"><b>连接</b></div>
-      <div class="list-card"><div class="li"><i class="i i-slack"></i>ember · Cue Slack<small>在线</small></div><div class="li"><i class="i i-ember"></i>ember 对话<small>内置</small></div></div>
+      <div class="list-card"><div class="li"><i class="i i-slack"></i>ember · Acme Slack<small>在线</small></div><div class="li"><i class="i i-ember"></i>ember 对话<small>内置</small></div></div>
       <div class="pad-bottom"></div></div>`;
   $(".nav-back", el).onclick = pop;
   el.querySelectorAll("[data-m]").forEach((sp) => (sp.onclick = () => { sp.classList.toggle("on"); sp.textContent = (sp.classList.contains("on") ? "✓ " : "") + sp.dataset.m; }));
@@ -330,10 +330,10 @@ render.lock = (el) => {
   el.innerHTML = `<div class="lock"><div class="lock-date">9 月 26 日 星期五</div><div class="lock-time">9:41</div>
     <div class="la"><div class="la-head">${modelLogo(s.model, "la-logo")}<div class="t"><b>${esc(s.title)}</b><small data-la-step>正在${esc(s.steps[s.step ?? 0])}</small></div><small style="opacity:.8">studio</small></div>
       <div class="la-bar"><div data-la-bar style="width:${((s.step ?? 0) + 1) / s.steps.length * 100}%"></div></div><div class="la-foot"><span>gpt-6-astra · medium</span><span>已运行 2 分 14 秒</span></div></div>
-    <div class="lock-note"><div class="banner-head"><img src="assets/blocked.svg" alt="">ember · studio<span>3 分钟前</span></div><b>Cue 的 staging：需要你决定</b><p>要我把告警规则改成 UTC 并重启 notifier 吗？</p>
+    <div class="lock-note"><div class="banner-head"><img src="assets/blocked.svg" alt="">ember · studio<span>3 分钟前</span></div><b>staging 告警：需要你决定</b><p>要我把告警规则改成 UTC 并重启 notifier 吗？</p>
       <div class="quick"><button>改吧</button><button>先别</button><button>打开</button></div></div>
     <div class="lock-hint">长按通知可以直接回复 · 上滑解锁</div></div>`;
-  el.querySelectorAll(".lock-note .quick button").forEach((b, i) => (b.onclick = () => { if (i === 2) go("chat:cue"); else { answerBlock(byId("cue"), i === 0 ? "改吧，现在重启" : "先别重启"); b.closest(".lock-note").innerHTML = `<p>已回复：${i === 0 ? "改吧，现在重启" : "先别重启"}</p>`; } }));
+  el.querySelectorAll(".lock-note .quick button").forEach((b, i) => (b.onclick = () => { if (i === 2) go("chat:staging"); else { answerBlock(byId("staging"), i === 0 ? "改吧，现在重启" : "先别重启"); b.closest(".lock-note").innerHTML = `<p>已回复：${i === 0 ? "改吧，现在重启" : "先别重启"}</p>`; } }));
 };
 
 function ring(p, label) {
@@ -482,12 +482,12 @@ setInterval(() => {
 
 // ── push & theme ─────────────────────────────────────────────────
 $("#sim-push").onclick = () => {
-  const s = byId("cue");
+  const s = byId("staging");
   if (s.state !== "block") Object.assign(s, { state: "block", when: "刚刚" });
   const b = $("#banner");
-  b.innerHTML = `<div class="banner-head"><img src="assets/blocked.svg" alt="">ember · studio<span>现在</span></div><b>Cue 的 staging：需要你决定</b><p>要我把告警规则改成 UTC 并重启 notifier 吗？</p>`;
+  b.innerHTML = `<div class="banner-head"><img src="assets/blocked.svg" alt="">ember · studio<span>现在</span></div><b>staging 告警：需要你决定</b><p>要我把告警规则改成 UTC 并重启 notifier 吗？</p>`;
   b.hidden = false; requestAnimationFrame(() => b.classList.add("show"));
-  b.onclick = () => { b.classList.remove("show"); go("chat:cue"); };
+  b.onclick = () => { b.classList.remove("show"); go("chat:staging"); };
   setTimeout(() => b.classList.remove("show"), 5000);
   if (stack.at(-1)?.name === "home") refreshHome();
 };

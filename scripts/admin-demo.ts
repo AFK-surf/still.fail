@@ -53,7 +53,7 @@ const now = Date.now();
 const states = new Map<string, "running" | "warm" | "cold">();
 type Seed = { connect: string; extra?: { channel: string; text: string }[]; runtime: "claude" | "codex"; profile: string; id: string | undefined; text: string; ago: number; process: "running" | "warm" | "cold"; turns: [string, string | null, string | null][]; pending?: number };
 const seeds: Seed[] = [
-  { connect: "ds", runtime: "claude", profile: "claude-ocg", id: claudeIds[0], text: "<@U0C4KHKPWTC> 帮我看一下 Cue 的 staging 为什么今天早上发不出通知，日志在 backroom", ago: 40_000, process: "running", turns: [["input", "completed", "final"], ["input", null, null]] },
+  { connect: "ds", runtime: "claude", profile: "claude-ocg", id: claudeIds[0], text: "<@U0C4KHKPWTC> 帮我看一下 staging 为什么今天早上发不出通知，日志在 backroom", ago: 40_000, process: "running", turns: [["input", "completed", "final"], ["input", null, null]] },
   { connect: "gpt", runtime: "codex", profile: "codex-ocg", id: codexIds[0], text: "把 bridge 的 release note 模板改成新的格式，开个 draft PR", ago: 6 * 60_000, process: "warm", turns: [["input", "completed", "block"], ["input", "completed", "final"]],
     extra: [{ channel: "C0OPS", text: "顺便看下 staging 的磁盘告警" }, { channel: "C0DEMO1", text: "PR 里记得附上截图" }] },
   { connect: "ds", runtime: "claude", profile: "claude-ocg", id: claudeIds[1], text: "<@U0C4KHKPWTC> 跑一下 zork 的 android 测试，失败的话看看是哪个", ago: 25 * 60_000, process: "cold", turns: [["input", "failed", null]] },
@@ -90,7 +90,7 @@ seeds.forEach((seed, i) => {
   states.set(key, seed.process);
 });
 
-const demoWorkspace = (botUserId: string, botName: string) => ({ team: "Cue", teamId: "T0DEMO", url: "https://cue.slack.com/", botUserId, botName });
+const demoWorkspace = (botUserId: string, botName: string) => ({ team: "Acme", teamId: "T0DEMO", url: "https://acme.slack.com/", botUserId, botName });
 // ember's own chat works in the demo: messages are recorded; no agent answers.
 const openChat = (key: string, user: string, title: string | null = null) => {
   const thread = store.openThread({ surface: EMBER_SURFACE, channel: INTERNAL_CHANNEL, threadTs: nextTs(), title, createdBy: user });
@@ -126,7 +126,7 @@ const connections = {
   reconcile: async () => {},
   chats: new Map(["ds", "gpt"].map((id) => [id, {
     userName: async (user: string) => ({ U09ABCDEF: "左子健", U09KY0GE28K: "左子健" } as Record<string, string>)[user] ?? null,
-    channelName: async (channel: string) => ({ C0OPS: "ops", C0DEMO0: "cue-dev", C0DEMO1: "bridge" } as Record<string, string>)[channel] ?? null,
+    channelName: async (channel: string) => ({ C0OPS: "ops", C0DEMO0: "app-dev", C0DEMO1: "bridge" } as Record<string, string>)[channel] ?? null,
   }])),
 } as unknown as Connections;
 // A stand-in login command that behaves like `claude auth login` / `codex login --device-auth` without signing anything in.

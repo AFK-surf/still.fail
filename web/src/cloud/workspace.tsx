@@ -217,7 +217,7 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
     <Dialog open={open} onClose={onClose} title="新建 workspace" description="workspace 是一组人和他们共用的 station。你会成为它的 owner。"
       footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="primary" disabled={!name.trim()} busy={create.busy} onClick={() => create.run()}>新建</Button></>}>
       <Field label="名字" htmlFor="ws-name">
-        <input id="ws-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="例如：Cue 团队" maxLength={80}
+        <input id="ws-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="例如：产品团队" maxLength={80}
           onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.run(); }} />
       </Field>
       {list.length > 1 && (

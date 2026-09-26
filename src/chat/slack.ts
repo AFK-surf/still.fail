@@ -13,7 +13,7 @@ const CONTENT_SUBTYPES = new Set([undefined, "file_share", "thread_broadcast"]);
 export interface SlackIdentity {
   team: string;
   teamId: string;
-  /** Workspace URL, e.g. https://cue.slack.com/ */
+  /** Workspace URL, e.g. https://acme.slack.com/ */
   url: string;
   botUserId: string;
   botName: string;

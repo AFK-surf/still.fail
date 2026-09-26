@@ -253,7 +253,7 @@ unread marks and who takes part are the viewer's:
   "mine": true,
   "lastActiveAt": 1790000000000,  // the latest message's time, else the chat's; without a chat: the session's
   "connect": "ds" | null,         // the connect its agent came from; null for one made on ember
-  "origin": { "teamName": "Cue", "channel": "C1", "channelName": "ops", "threadTs": "…" } | null
+  "origin": { "teamName": "Acme", "channel": "C1", "channelName": "ops", "threadTs": "…" } | null
 }
 ```
 

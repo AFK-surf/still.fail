@@ -19,7 +19,7 @@ import { FakeChat, FakeDriver, message, settle } from "./fakes.ts";
 
 class FakeConnection extends FakeChat implements Connection {
   readonly status = { connected: true, lastError: null };
-  readonly identity = { team: "Cue", teamId: "T1", url: "https://cue.slack.com/", botUserId: "UBOT", botName: "ember" };
+  readonly identity = { team: "Acme", teamId: "T1", url: "https://acme.slack.com/", botUserId: "UBOT", botName: "ember" };
   started = 0;
   stopped = 0;
   override async start(): Promise<void> {
@@ -759,7 +759,7 @@ test("the sidebar is one kind of item, an agent merged with its internal chat; a
     await t.hub.accept("ds", message({ ts: "5.000001", threadTs: "5.000001", user: "U42", text: "<@UBOT>  部署挂了\n第二行" }));
     await settle();
     const slackKey = "ds:C1:5.000001";
-    const origin = { teamName: "Cue", channel: "C1", channelName: null, threadTs: "5.000001" };
+    const origin = { teamName: "Acme", channel: "C1", channelName: null, threadTs: "5.000001" };
     const rows = async () => (await t.call("GET", "/chats")).body as any[];
     const agentRow = (await rows()).find((r) => r.id === slackKey);
     assert.deepEqual({ ...agentRow, agents: undefined, lastActiveAt: undefined }, {

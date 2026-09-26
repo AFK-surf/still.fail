@@ -826,7 +826,7 @@ mod tests {
             let now = t.host.now_ms();
             let mut slack = row("s1", now - 2000.0);
             slack["connect"] = json!("c1");
-            slack["origin"] = json!({"teamName": "Cue", "channel": "C1", "channelName": "ops", "threadTs": "1.0"});
+            slack["origin"] = json!({"teamName": "Acme", "channel": "C1", "channelName": "ops", "threadTs": "1.0"});
             t.set(link("ws/a"), json!({"state": "online"}));
             t.set(rows("ws/a"), json!([row("1", now - 1000.0), slack.clone()]));
             t.set(link("ws/b"), json!({"state": "online"}));

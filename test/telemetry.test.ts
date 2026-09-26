@@ -105,5 +105,5 @@ test("web paths lose their ids", () => {
   assert.equal(pathTemplate("/w/ws1/settings/stations"), "/w/:workspace/settings/stations");
   assert.equal(pathTemplate("/admin/settings/accounts/claude-a"), "/admin/settings/accounts/:profile");
   assert.equal(pathTemplate("/admin/chats"), "/admin/chats");
-  assert.equal(pathTemplate("/admin/connects/cue"), "/admin/connects/:connect");
+  assert.equal(pathTemplate("/admin/connects/acme"), "/admin/connects/:connect");
 });

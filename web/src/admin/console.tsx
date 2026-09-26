@@ -280,7 +280,7 @@ function NewCodeDialog({ account, onMade, onClose }: { account: Account; onMade(
       ) : (
         <>
           <Field label="备注" htmlFor="code-note" hint="可选：给谁的，方便之后认出来。">
-            <input id="code-note" className="input" value={note} autoFocus maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="例如：给 Cue 团队的小王"
+            <input id="code-note" className="input" value={note} autoFocus maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="例如：给产品团队的小王"
               onKeyDown={(e) => { if (e.key === "Enter") make.run(); }} />
           </Field>
           <Field label="有效期">
