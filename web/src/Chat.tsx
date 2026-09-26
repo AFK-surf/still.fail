@@ -26,6 +26,16 @@ export function ChatPanel({ detail, chat, live = [], onOpenHistory }: { detail: 
   const member = usePerson();
   const isMine = useIsMine();
   const name = (id: string) => member(id)?.name || detail.people[id] || (id === "local" ? "本机" : id);
+  // Your messages the runtime has not taken yet; after a second they show that they wait.
+  const pendingTs = new Set(detail.inbound.filter((i) => i.status === "pending").map((i) => i.ts));
+  const [, tick] = useState(0);
+  const youngest = messages.filter((m) => pendingTs.has(m.ts)).reduce((t, m) => Math.max(t, m.createdAt), 0);
+  useEffect(() => {
+    const wait = youngest + 1000 - Date.now();
+    if (!youngest || wait <= 0) return;
+    const timer = setTimeout(() => tick((n) => n + 1), wait + 20);
+    return () => clearTimeout(timer);
+  }, [youngest]);
   const agent = agentLabel(detail.transcript?.usage?.model ?? detail.session.model, detail.session.effort);
 
   // Selecting text inside one message offers to quote it.
@@ -61,7 +71,9 @@ export function ChatPanel({ detail, chat, live = [], onOpenHistory }: { detail: 
                   </div>
                 ) : null}
                 <Files sessionKey={detail.session.key} files={m.attachments} />
-                <Time className="msg-time" at={m.createdAt} />
+                {pendingTs.has(m.ts) && Date.now() - m.createdAt > 1000
+                  ? <span className="msg-time msg-waiting"><span className="spinner" aria-hidden="true" />等待 agent 接收</span>
+                  : <Time className="msg-time" at={m.createdAt} />}
               </div>
             );
           }
