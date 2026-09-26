@@ -361,3 +361,12 @@ test("command parsing", () => {
   assert.equal(isStopCommand("<@UBOT>  -stop "), true);
   assert.equal(isStopCommand("please -stop now"), false);
 });
+
+test("chat_post attaches files to an ember chat, measuring images; Slack refuses them", async () => {
+  const { sizeOf } = await import("../src/image-size.ts");
+  const png = Buffer.alloc(24); png.writeUInt32BE(0x89504e47, 0); png.write("IHDR", 12, "ascii"); png.writeUInt32BE(640, 16); png.writeUInt32BE(480, 20);
+  assert.deepEqual(sizeOf(png), { width: 640, height: 480 });
+  const gif = Buffer.from("GIF89a\x20\x00\x10\x00", "latin1");
+  assert.deepEqual(sizeOf(gif), { width: 32, height: 16 });
+  assert.equal(sizeOf(Buffer.from("not an image")), null);
+});

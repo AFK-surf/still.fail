@@ -52,9 +52,9 @@ export class InternalChat implements ChatSurface {
     return { channel: INTERNAL_CHANNEL, threadTs, ts, user, text: forAgent, addressed: true };
   }
 
-  async post(thread: ThreadRef, markdown: string): Promise<void> {
+  async post(thread: ThreadRef, markdown: string, files: Attachment[] = []): Promise<void> {
     if (thread.channel !== INTERNAL_CHANNEL || !this.#store.getChat(thread.threadTs)) throw new Error(`no ember chat ${thread.channel}/${thread.threadTs}`);
-    this.#store.insertChatMessage({ threadTs: thread.threadTs, ts: nextTs(), role: "agent", user: INTERNAL_BOT_USER, text: markdown, createdAt: Date.now() });
+    this.#store.insertChatMessage({ threadTs: thread.threadTs, ts: nextTs(), role: "agent", user: INTERNAL_BOT_USER, text: markdown, createdAt: Date.now(), attachments: files });
   }
 
   async history(thread: ThreadRef, before: string | undefined, limit: number): Promise<ChatMessage[]> {

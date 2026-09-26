@@ -471,6 +471,18 @@ test("files sent to a session land in its workspace and reach the agent as paths
     assert.match(sent, /agent\n> 第一行\n> 第二行\n\n这里不对\n\n改一下/);
     const after = await t.call("GET", `/sessions/${key}`);
     assert.equal(after.body.chats[0].messages.at(-1).quotes[0].comment, "这里不对");
+    // The agent answers with an image; it is copied into the uploads and measured.
+    const png = Buffer.alloc(24); png.writeUInt32BE(0x89504e47, 0); png.write("IHDR", 12, "ascii"); png.writeUInt32BE(320, 16); png.writeUInt32BE(200, 20);
+    const shot = join(t.dataDir, "chart.png"); writeFileSync(shot, png);
+    const post = t.hub.tools().find((x) => x.name === "chat_post")!;
+    const thread = after.body.chats[0].threadTs;
+    await post.run(summary.key, { to: `EMBER/${thread}`, text: "图在这", files: [shot] });
+    const withImage = await t.call("GET", `/sessions/${key}`);
+    const sent = withImage.body.chats[0].messages.at(-1);
+    assert.equal(sent.role, "agent");
+    assert.deepEqual([sent.attachments[0].name, sent.attachments[0].width, sent.attachments[0].height], ["chart.png", 320, 200]);
+    assert.match(sent.attachments[0].path, /\/uploads\/.+-chart\.png$/);
+    await assert.rejects(post.run(summary.key, { to: `EMBER/${thread}`, text: "x", files: ["/no/such/file.png"] }), /no such file/);
   } finally {
     t.close();
   }

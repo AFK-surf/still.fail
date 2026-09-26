@@ -3,6 +3,7 @@
 import { log } from "../log.ts";
 import { splitForSlack, toMrkdwn } from "./mrkdwn.ts";
 import type { ChatMessage, ChatSurface, InboundMessage, ThreadRef } from "./types.ts";
+import type { Attachment } from "../store.ts";
 
 /** Message subtypes that are still a person talking. */
 const CONTENT_SUBTYPES = new Set([undefined, "file_share", "thread_broadcast"]);
@@ -107,7 +108,8 @@ export class SlackSurface implements ChatSurface {
     this.#socket?.close();
   }
 
-  async post(thread: ThreadRef, markdown: string): Promise<void> {
+  async post(thread: ThreadRef, markdown: string, files: Attachment[] = []): Promise<void> {
+    if (files.length) throw new Error("attaching files is not supported in Slack yet; mention the file paths in the text instead");
     for (const text of splitForSlack(toMrkdwn(markdown))) {
       await this.#api("chat.postMessage", { channel: thread.channel, thread_ts: thread.threadTs, text, unfurl_links: "false" }, this.#botToken);
     }

@@ -1,4 +1,5 @@
 // What ember needs from a chat platform. Slack is the first implementation.
+import type { Attachment } from "../store.ts";
 
 export interface ThreadRef {
   channel: string;
@@ -29,7 +30,8 @@ export interface ChatSurface {
    */
   start(handler: (message: InboundMessage) => Promise<void>): Promise<void>;
   /** Posts Markdown into the thread. */
-  post(thread: ThreadRef, markdown: string): Promise<void>;
+  /** `files` are attachments already copied into the session's uploads; surfaces that cannot carry files refuse them. */
+  post(thread: ThreadRef, markdown: string, files?: Attachment[]): Promise<void>;
   /** A person's display name, or null if unknown. Optional: not every platform can say. */
   userName?(userId: string): Promise<string | null>;
   /** A person's email, where the platform shares it. */

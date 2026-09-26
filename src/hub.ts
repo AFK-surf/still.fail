@@ -9,8 +9,8 @@
 // thread it answers, so a session never assumes it belongs to one conversation;
 // replies go out through whichever connect the thread came in on.
 import { randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { copyFileSync, mkdirSync, statSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
 import { profileFor, RUNTIMES, type Config, type Connect, type RuntimeKind } from "./config.ts";
 import { INTERNAL_CONNECT, type InternalChat } from "./chat/internal.ts";
@@ -23,6 +23,7 @@ import { SessionActor, type DeclaredState } from "./session.ts";
 import type { Attachment, Quote, SessionRow, SessionScope, Store } from "./store.ts";
 import { LiveHub } from "./live.ts";
 import { transcriptPath } from "./transcript.ts";
+import { imageSize } from "./image-size.ts";
 
 /** A multi-session connect's session for one thread. */
 export function sessionKey(connect: string, channel: string, threadTs: string): string {
@@ -231,6 +232,36 @@ export class Hub {
     return this.#actors.get(key)?.evict() ?? Promise.resolve();
   }
 
+  /**
+   * Copies files the agent attaches into the session's uploads, so the
+   * message keeps them even if the originals change, and measures images so
+   * pages can hold their place.
+   */
+  #attach(key: string, paths: string[]): Attachment[] {
+    const row = this.#store.getSession(key);
+    if (!row) throw new Error("unknown session");
+    if (paths.length > 10) throw new Error("at most 10 files per message");
+    const dir = join(row.workspace, "uploads");
+    mkdirSync(dir, { recursive: true });
+    return paths.map((given) => {
+      const path = resolve(row.workspace, given);
+      let st;
+      try {
+        st = statSync(path);
+      } catch {
+        throw new Error(`no such file: ${given}`);
+      }
+      if (!st.isFile()) throw new Error(`not a file: ${given}`);
+      if (st.size > 50 * 1024 * 1024) throw new Error(`too large (over 50 MB): ${given}`);
+      const name = basename(path);
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const copy = join(dir, `${stamp}-${name.replace(/[\\/\u0000-\u001f]/g, "_")}`);
+      copyFileSync(path, copy);
+      const size = /\.(png|jpe?g|gif|webp)$/i.test(name) ? imageSize(copy) : null;
+      return { name, path: copy, size: st.size, ...(size ?? {}) };
+    });
+  }
+
   /** Starts a session's runtime ahead of a message; see SessionActor.warm. */
   warm(key: string): Promise<void> {
     const row = this.#store.getSession(key);
@@ -272,16 +303,19 @@ export class Hub {
             to,
             text: { type: "string", description: "Markdown message." },
             kind: { type: "string", enum: ["final", "block"], description: "Omit for a progress update." },
+            files: { type: "array", items: { type: "string" }, description: "Absolute paths of files on this machine to attach (ember chat only; images show inline). Up to 10, 50 MB each." },
           },
-          required: ["to", "text"],
+          required: ["to"],
           additionalProperties: false,
         },
         run: async (key, args) => {
           const text = String(args.text ?? "").trim();
-          if (!text) throw new Error("text is empty");
+          const paths = Array.isArray(args.files) ? args.files.map(String) : [];
+          if (!text && !paths.length) throw new Error("text is empty");
           const kind = stateArg(args.kind);
           const { chat, thread } = target(key, args.to);
-          await chat.post(thread, text);
+          const files = paths.length ? this.#attach(key, paths) : [];
+          await chat.post(thread, text, files);
           if (kind) this.#actors.get(key)?.declare(kind);
           const where = threadAddress(thread.channel, thread.threadTs);
           return kind ? `Posted to ${where}, and recorded state ${kind}.` : `Posted to ${where}.`;
