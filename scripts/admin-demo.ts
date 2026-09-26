@@ -72,9 +72,9 @@ seeds.forEach((seed, i) => {
   const say = (channel: string, threadTs: string, mts: string, text: string, at: number) => {
     const thread = store.openThread({ surface: "slack:T0DEMO", channel, threadTs, createdBy: `slack:${seed.connect}:U09KY0GE28K` });
     store.joinThread(thread.id, key, seed.connect);
-    const { seq } = store.insertMessage({ thread: thread.id, ts: mts, authorKind: "person", author: "U09KY0GE28K", text, createdAt: at });
-    store.deliver(seq, [key]);
-    if (!seed.pending) store.markDelivered(key, [seq]);
+    const { n } = store.insertMessage({ thread: thread.id, ts: mts, authorKind: "person", author: "U09KY0GE28K", text, at });
+    store.deliver(thread.id, n, [key]);
+    if (!seed.pending) store.markDelivered(key, [{ thread: thread.id, n }]);
   };
   say(`C0DEMO${i}`, ts, ts, seed.text, now - seed.ago);
   seed.extra?.forEach((m, j) => {
@@ -116,7 +116,7 @@ const hub = {
   openChat,
   addToThread: (thread: number, key: string) => store.joinThread(thread, key, "ember"),
   say: (thread: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []) =>
-    store.insertMessage({ thread, ts: nextTs(), authorKind: "person", author: user, text, attachments, quotes }).seq,
+    store.insertMessage({ thread, ts: nextTs(), authorKind: "person", author: user, text, attachments, quotes }).n,
   archive: (key: string, archived: boolean) => store.setArchived(key, archived),
   deleteSession: async (key: string) => store.deleteSession(key),
 } as unknown as Hub;

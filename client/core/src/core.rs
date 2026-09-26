@@ -15,7 +15,7 @@
 //! `cloud.request`; never on a timer.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 
 use base64::Engine;
@@ -30,6 +30,7 @@ use crate::accounts::{AccountView, Accounts};
 use crate::cloud::Cloud;
 use crate::error::{CoreError, Result};
 use crate::host::Host;
+use crate::kept::Kept;
 use crate::mesh::{GrantSource, Mesh};
 use crate::protocol::{ClientId, ClientMessage, CoreMessage, RequestId, Topic};
 use crate::station::{self, MeshSource, StationAddr, StationGrants, Stations, TopicSink};
@@ -58,6 +59,8 @@ struct Inner {
     store: Rc<Store>,
     stations: Rc<Stations>,
     views: Rc<Views>,
+    /// Threads' entries and transcripts kept on the device.
+    kept: Rc<Kept>,
     /// The device endpoint, brought up once (it needs the relay url from `/v1/me`); cleared if that fails so the next use retries.
     mesh: RefCell<Option<Shared<LocalBoxFuture<'static, Result<Rc<Mesh>>>>>>,
     relay_url: RefCell<Option<String>>,
@@ -106,11 +109,13 @@ impl Core {
         let inner = Rc::new_cyclic(|me: &Weak<Inner>| {
             let store = Store::new(host.clone());
             let wire = station::wire(host.clone(), mesh_source(me.clone()), grants(me.clone()));
-            let stations = Stations::new(host.clone(), store.clone() as Rc<dyn TopicSink>, wire, tracer.clone());
+            let kept = Kept::new(host.clone());
+            let stations = Stations::new(host.clone(), store.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone());
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
             store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
             Inner {
                 views,
+                kept,
                 me: me.clone(),
                 host: host.clone(),
                 tracer: tracer.clone(),
@@ -505,6 +510,7 @@ impl Inner {
             self.mes.borrow_mut().insert(account.sub.clone(), me);
         }
         self.recompute_owners();
+        self.forget_unreachable();
     }
 
     /// Which account reaches each workspace: the first (in sign-in order) whose last `/v1/me` answer lists it.
@@ -524,6 +530,27 @@ impl Inner {
                 }
             }
         }
+    }
+
+    /// What is kept on the device of stations no signed-in account reaches any more goes (all of it once the last
+    /// one signs out) — decided only when every account's `/v1/me` has answered once, since one not heard from
+    /// yet may reach them. The station's own page (`local`) is no account's.
+    fn forget_unreachable(&self) {
+        if self.reach.borrow().len() < self.accounts.list().len() {
+            return;
+        }
+        let workspaces: HashSet<String> = self.owners.borrow().keys().cloned().collect();
+        self.host.spawn(self.kept.retain(move |station| station == "local" || station.split_once('/').is_some_and(|(w, _)| workspaces.contains(w))));
+    }
+
+    /// A workspace's stations as it lists them now: what is kept of the others in it goes.
+    fn forget_gone_stations(&self, workspace: &str, view: &Value) {
+        let ids: HashSet<String> = view.get("stations").and_then(Value::as_array).into_iter().flatten().filter_map(|s| Some(s.get("id")?.as_str()?.to_string())).collect();
+        let workspace = workspace.to_string();
+        self.host.spawn(self.kept.retain(move |station| match station.split_once('/') {
+            Some((w, id)) if w == workspace => ids.contains(id),
+            _ => true,
+        }));
     }
 
     fn accounts_value(&self) -> Result<Value> {
@@ -600,6 +627,9 @@ impl Inner {
             Topic::Workspace { workspace } => self.workspace_value(workspace).await,
             _ => return,
         };
+        if let (Topic::Workspace { workspace }, Ok(view)) = (topic, &value) {
+            self.forget_gone_stations(workspace, view);
+        }
         if self.live.borrow().get(topic) == Some(&fetch) {
             self.store.set(topic, value);
         }
@@ -612,6 +642,9 @@ impl Inner {
             return;
         }
         *self.shown_accounts.borrow_mut() = list;
+        // Signed out: what only that account reached goes now, whether or not anything is shown.
+        self.recompute_owners();
+        self.forget_unreachable();
         self.store.set(&Topic::Accounts, self.accounts_value());
         self.sync_sockets();
         let core = self.me.clone();
@@ -1230,7 +1263,7 @@ mod tests {
             let path = req.url.trim_start_matches("https://ember.test");
             match path.split('?').next().unwrap() {
                 "/admin/api/threads" => json_response(200, json!([{ "id": 7, "surface": "ember", "sessions": [{ "session": "k1" }], "createdAt": 1 }])),
-                "/admin/api/threads/7/messages" => json_response(200, json!({ "rev": 3, "messages": [], "more": false })),
+                "/admin/api/threads/7/entries" => json_response(200, json!({ "last": 0, "entries": [] })),
                 "/admin/api/sessions" => json_response(200, json!([{ "key": "k1" }])),
                 "/admin/api/sessions/k1" => json_response(200, json!({ "session": { "key": "k1" }, "threads": [], "turns": [] })),
                 "/admin/api/overview" => json_response(200, json!({ "connects": [], "profiles": [] })),

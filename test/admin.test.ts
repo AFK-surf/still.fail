@@ -171,13 +171,13 @@ test("a request in a recorded trace is a span of it, without ids or queries", as
   try {
     const before = Date.now();
     assert.equal((await t.call("GET", "/overview", undefined, { traceparent: `00-${trace}-00f067aa0ba902b7-01` })).status, 200);
-    assert.equal((await t.call("GET", "/threads/123/messages?limit=5", undefined, { traceparent: `00-${trace}-00f067aa0ba902b8-01` })).status, 404);
+    assert.equal((await t.call("GET", "/threads/123/entries?limit=5", undefined, { traceparent: `00-${trace}-00f067aa0ba902b8-01` })).status, 404);
     // Not recorded by the caller, or no trace at all: no span.
     await t.call("GET", "/overview", undefined, { traceparent: `00-${trace}-00f067aa0ba902b7-00` });
     await t.call("GET", "/overview");
     await settle();
     assert.equal(spans.length, 2);
-    const [overview, messages] = spans;
+    const [overview, entries] = spans;
     assert.equal(overview.traceId, trace);
     assert.equal(overview.parentSpanId, "00f067aa0ba902b7");
     assert.match(overview.spanId, /^[0-9a-f]{16}$/);
@@ -189,8 +189,8 @@ test("a request in a recorded trace is a span of it, without ids or queries", as
     assert.equal(attributes["http.response.status_code"], "200");
     assert.equal(attributes["ember.via"], "local");
     assert.ok(Number(attributes["http.response.size"]) > 100);
-    assert.equal(messages.name, "GET /admin/api/threads/:id/messages");
-    assert.deepEqual(messages.status, { code: 1 });
+    assert.equal(entries.name, "GET /admin/api/threads/:id/entries");
+    assert.deepEqual(entries.status, { code: 1 });
 
     // A stream's span ends as it opens, not when it closes.
     const events = await follow(`${t.base}/events`, { traceparent: `00-${trace}-00f067aa0ba902b9-01` });
@@ -375,7 +375,7 @@ test("session detail is the session, its threads and turns; its transcript comes
     const detail = await t.call("GET", `/sessions/${encodeURIComponent(row!.key)}`);
     assert.deepEqual(Object.keys(detail.body).sort(), ["session", "threads", "turns"]);
     assert.equal(detail.body.threads.length, 1);
-    assert.equal(detail.body.threads[0].last.text, "<@UBOT> hi");
+    assert.equal(detail.body.threads[0].lastMessage.text, "<@UBOT> hi");
     assert.equal(detail.body.threads[0].surface, "slack:T1");
     assert.equal(detail.body.turns.length, 1);
     const live = await follow(`${t.base}/sessions/${encodeURIComponent(row!.key)}/live?from=1`);
@@ -543,10 +543,10 @@ test("files sent to a session land in its workspace and reach the agent as paths
     assert.equal((await say({ text: "看看这个", attachments: [file] })).status, 200);
     await settle();
     assert.match(t.claude.last.steers.at(-1) ?? t.claude.last.prompts.at(-1)!, new RegExp(`看看这个\n\nAttached files:\n- ${file.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
-    const page = (await t.call("GET", `/threads/${chat.id}/messages`)).body;
-    assert.deepEqual(page.messages[0].attachments.map((a: any) => a.name), [file.name]);
-    assert.equal(page.messages[0].text, "看看这个", "the words are stored as typed");
-    assert.equal(page.messages[0].authorName, "管理员");
+    const page = (await t.call("GET", `/threads/${chat.id}/entries`)).body;
+    assert.deepEqual(page.entries[0].attachments.map((a: any) => a.name), [file.name]);
+    assert.equal(page.entries[0].text, "看看这个", "the words are stored as typed");
+    assert.equal(page.entries[0].authorName, "管理员");
     const back = await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent(file.path.split("/").at(-1))}`);
     assert.equal(await back.text(), "hello file");
     assert.equal((await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent("../../../config.json")}`)).status, 404);
@@ -554,14 +554,14 @@ test("files sent to a session land in its workspace and reach the agent as paths
     await settle();
     const sent = [...t.claude.last.steers, ...t.claude.last.prompts].join("\n---\n");
     assert.match(sent, /\[Quote\] From your own earlier message 1790383286\.536000 in this conversation:\n> 第一行\n> 第二行\nTheir comment on it: 这里不对\n\n改一下/);
-    const after = (await t.call("GET", `/threads/${chat.id}/messages`)).body;
-    assert.equal(after.messages.at(-1).quotes[0].comment, "这里不对");
+    const after = (await t.call("GET", `/threads/${chat.id}/entries`)).body;
+    assert.equal(after.entries.at(-1).quotes[0].comment, "这里不对");
     // The agent answers with an image; it is copied into the uploads and measured.
     const png = Buffer.alloc(24); png.writeUInt32BE(0x89504e47, 0); png.write("IHDR", 12, "ascii"); png.writeUInt32BE(320, 16); png.writeUInt32BE(200, 20);
     const shot = join(t.dataDir, "chart.png"); writeFileSync(shot, png);
     const post = t.hub.tools().find((x) => x.name === "chat_post")!;
     await post.run(summary.key, { to: `EMBER/${chat.threadTs}`, text: "图在这", files: [shot] });
-    const reply = (await t.call("GET", `/threads/${chat.id}/messages?after=${after.rev}`)).body.messages.at(-1);
+    const reply = (await t.call("GET", `/threads/${chat.id}/entries?after=${after.last}`)).body.entries.at(-1);
     assert.deepEqual([reply.authorKind, reply.author, reply.authorName], ["agent", summary.key, "ember"]);
     assert.deepEqual([reply.attachments[0].name, reply.attachments[0].width, reply.attachments[0].height], ["chart.png", 320, 200]);
     assert.match(reply.attachments[0].path, /\/uploads\/.+-chart\.png$/);
@@ -591,7 +591,7 @@ test("a new chat makes a session of its own with the chosen runtime, model and e
     assert.equal(body.session.profile, "cc");
     assert.deepEqual([body.session.model, body.session.effort], ["deepseek-flash", "high"]);
     assert.equal(body.session.creator.via, "local");
-    assert.equal(body.threads[0].last.text, "开始吧");
+    assert.equal(body.threads[0].lastMessage.text, "开始吧");
     assert.equal(t.claude.last.options.model, "deepseek-flash");
     assert.match(t.claude.last.prompts[0]!, /开始吧/);
   } finally {
@@ -599,33 +599,34 @@ test("a new chat makes a session of its own with the chosen runtime, model and e
   }
 });
 
-test("thread messages: the latest page, pages back by seq, and everything changed after a rev", async () => {
+test("thread entries: the latest page, pages back, what came after n, and a gap from a to b", async () => {
   const t = await setup();
   try {
     const { thread } = t.hub.newSession({ runtime: "claude", createdBy: "local" });
     for (let i = 1; i <= 5; i++) t.hub.say(thread.id, "local", `m${i}`);
-    const latest = (await t.call("GET", `/threads/${thread.id}/messages?limit=2`)).body;
-    assert.deepEqual([latest.messages.map((m: any) => m.text), latest.more], [["m4", "m5"], true]);
-    const back = (await t.call("GET", `/threads/${thread.id}/messages?before=${latest.messages[0].seq}&limit=10`)).body;
-    assert.deepEqual([back.messages.map((m: any) => m.text), back.more], [["m1", "m2", "m3"], false]);
-    const cursor = latest.rev;
-    assert.deepEqual((await t.call("GET", `/threads/${thread.id}/messages?after=${cursor}`)).body.messages, []);
-    // A Slack thread takes edits and deletes; the ember chat here only new messages, which the cursor sees the same way.
+    const latest = (await t.call("GET", `/threads/${thread.id}/entries?limit=2`)).body;
+    assert.deepEqual([latest.entries.map((e: any) => [e.n, e.text, e.authorName]), latest.last], [[[4, "m4", "管理员"], [5, "m5", "管理员"]], 5]);
+    const back = (await t.call("GET", `/threads/${thread.id}/entries?before=4&limit=10`)).body;
+    assert.deepEqual(back.entries.map((e: any) => e.text), ["m1", "m2", "m3"]);
+    assert.deepEqual((await t.call("GET", `/threads/${thread.id}/entries?from=2&to=3`)).body.entries.map((e: any) => e.n), [2, 3]);
+    assert.deepEqual((await t.call("GET", `/threads/${thread.id}/entries?after=5`)).body.entries, []);
+    // A Slack thread takes edits: entries after the ones read, which never change.
     await t.hub.accept("ds", message({ ts: "7.000001", threadTs: "7.000001", text: "<@UBOT> one" }));
     await t.hub.accept("ds", message({ ts: "7.000002", threadTs: "7.000001", addressed: false, text: "two" }));
     const slack = t.store.threadAt("slack:T1", "C1", "7.000001")!;
-    const opened = (await t.call("GET", `/threads/${slack.id}/messages`)).body;
-    await t.hub.receive("ds", { kind: "changed", channel: "C1", ts: "7.000001", text: "<@UBOT> one, edited" });
-    await t.hub.receive("ds", { kind: "deleted", channel: "C1", ts: "7.000002" });
+    const opened = (await t.call("GET", `/threads/${slack.id}/entries`)).body;
+    await t.hub.receive("ds", { kind: "changed", channel: "C1", threadTs: "7.000001", ts: "7.000001", text: "<@UBOT> one, edited" });
     t.hub.say(thread.id, "local", "m6");
-    const changed = (await t.call("GET", `/threads/${slack.id}/messages?after=${opened.rev}`)).body;
-    assert.deepEqual(changed.messages.map((m: any) => [m.ts, m.text, m.editedAt !== null, m.deletedAt !== null]), [
-      ["7.000001", "<@UBOT> one, edited", true, false],
-      ["7.000002", "", false, true],
-    ]);
-    assert.ok(changed.rev > opened.rev);
-    assert.deepEqual((await t.call("GET", `/threads/${thread.id}/messages?after=${cursor}`)).body.messages.map((m: any) => m.text), ["m6"]);
-    assert.equal((await t.call("GET", "/threads/999/messages")).status, 404);
+    const since = (await t.call("GET", `/threads/${slack.id}/entries?after=${opened.last}`)).body;
+    assert.deepEqual(since.entries.map((e: any) => [e.n, e.kind, e.target, e.text]), [[3, "edit", 1, "<@UBOT> one, edited"]]);
+    assert.equal(since.last, 3);
+    assert.deepEqual((await t.call("GET", `/threads/${slack.id}/entries?from=1&to=2`)).body.entries, opened.entries);
+    assert.deepEqual((await t.call("GET", `/threads/${thread.id}/entries?after=5`)).body.entries.map((e: any) => e.text), ["m6"]);
+    // Lists carry the last n and the latest message as merged.
+    const [view] = (await t.call("GET", `/threads?session=${encodeURIComponent(t.store.threadSessions(slack.id)[0]!.session)}`)).body;
+    assert.deepEqual([view.last, view.lastMessage.seq, view.lastMessage.text], [3, 2, "two"]);
+    assert.equal((await t.call("GET", `/threads/${thread.id}/entries?from=2`)).status, 400);
+    assert.equal((await t.call("GET", "/threads/999/entries")).status, 404);
   } finally {
     t.close();
   }
@@ -645,17 +646,17 @@ test("read positions and unread counts are per viewer, and only move forward", a
     assert.equal(await unread(dev), 2);
     const localEvents = await follow(`${t.base}/events`);
     const devEvents = await follow(`${t.base}/events`, dev);
-    const put = await t.call("PUT", `/threads/${thread.id}/read`, { seq: first + 1 });
-    assert.deepEqual(put.body, { viewer: "local", thread: thread.id, seq: first + 1 });
+    const put = await t.call("PUT", `/threads/${thread.id}/read`, { n: first + 1 });
+    assert.deepEqual(put.body, { viewer: "local", thread: thread.id, n: first + 1 });
     assert.equal(await unread(), 1);
     assert.equal(await unread(dev), 2);
-    assert.deepEqual(await localEvents.next("read"), { viewer: "local", thread: thread.id, seq: first + 1 });
-    await t.call("PUT", `/threads/${thread.id}/read`, { seq: first }, dev);
+    assert.deepEqual(await localEvents.next("read"), { viewer: "local", thread: thread.id, n: first + 1 });
+    await t.call("PUT", `/threads/${thread.id}/read`, { n: first }, dev);
     await devEvents.next("read");
     assert.equal(devEvents.events.filter((e) => e.event === "read").length, 1, "a read goes only to its viewer");
-    assert.equal((await t.call("PUT", `/threads/${thread.id}/read`, { seq: 1 })).body.seq, first + 1, "never back");
+    assert.equal((await t.call("PUT", `/threads/${thread.id}/read`, { n: 1 })).body.n, first + 1, "never back");
     const [view] = (await t.call("GET", `/threads?session=${encodeURIComponent(key)}`)).body;
-    assert.deepEqual([view.read, view.unread, view.last.text], [first + 1, 1, "answer"]);
+    assert.deepEqual([view.read, view.unread, view.last, view.lastMessage.text], [first + 1, 1, 3, "answer"]);
     localEvents.close();
     devEvents.close();
   } finally {
@@ -670,8 +671,14 @@ test("sessions can be archived, shown again, and deleted with their workspace", 
     await settle();
     const [summary] = (await t.call("GET", "/sessions")).body;
     const key = encodeURIComponent(summary.key);
+    const [thread] = (await t.call("GET", "/threads")).body;
+    const entries = (await t.call("GET", `/threads/${thread.id}/entries`)).body;
     const archived = await t.call("POST", `/sessions/${key}/archive`);
     assert.ok(archived.body.archivedAt > 0);
+    // Its thread is read from its archive file, the same way.
+    assert.equal(existsSync(join(t.store.archiveDir, "threads", `${thread.id}.jsonl.zst`)), true);
+    assert.deepEqual((await t.call("GET", `/threads/${thread.id}/entries`)).body, entries);
+    assert.deepEqual((await t.call("GET", "/threads")).body, [thread]);
     assert.deepEqual((await t.call("GET", "/sessions")).body, []);
     assert.deepEqual((await t.call("GET", "/sessions?archived=1")).body.map((s: any) => s.key), [summary.key]);
     await t.call("DELETE", `/sessions/${key}/archive`);
@@ -700,8 +707,8 @@ test("/events announces each kind of change", async () => {
     const key = "ds:C1:8.000001";
     const session = await events.next("session", (s) => s.key === key && s.process === "running");
     assert.equal(session.creator.via, "slack");
-    const thread = await events.next("thread", (x) => x.messages.length === 1);
-    assert.deepEqual([thread.messages[0].text, thread.messages[0].authorKind, thread.rev], ["<@UBOT> hi", "person", thread.messages[0].rev]);
+    const thread = await events.next("thread", (x) => x.entries.length === 1);
+    assert.deepEqual([thread.entries[0].text, thread.entries[0].authorKind, thread.entries[0].n], ["<@UBOT> hi", "person", 1]);
     await events.next("overview", (o) => o.counts.running === 1);
     let from = events.events.length;
     await t.call("PUT", "/profiles/cx", { name: "Codex 2" });
@@ -713,6 +720,7 @@ test("/events announces each kind of change", async () => {
     await events.next("overview", (o) => o.counts.running === 0 && o.counts.warm === 1);
     await t.call("DELETE", `/sessions/${encodeURIComponent(key)}`);
     assert.deepEqual(await events.next("session-removed"), { key });
+    assert.deepEqual(await events.next("thread-removed"), { id: thread.id });
     assert.equal(events.events.some((e) => e.event === "host"), false, "host only for those asking");
     const host = await follow(`${t.base}/events?host=1`);
     assert.ok((await host.next("host")).cpus > 0);
@@ -774,12 +782,12 @@ test("the sidebar is one kind of item, an agent merged with its internal chat; a
     row = (await rows()).find((r) => r.id === String(chat.id));
     assert.deepEqual([row.title, row.last.text, row.last.authorKind, row.unread, row.mine], ["看看日志", "看看日志", "person", false, true]);
     // What the agent says is unread until read; the Slack thread's messages never show in the chat.
-    const said = t.store.insertMessage({ thread: chat.id, ts: "9.000001", authorKind: "agent", author: slackKey, text: "x".repeat(300) }).seq;
+    const said = t.store.insertMessage({ thread: chat.id, ts: "9.000001", authorKind: "agent", author: slackKey, text: "x".repeat(300) }).n;
     row = (await rows()).find((r) => r.id === String(chat.id));
     assert.deepEqual([row.unread, row.last.text.length, row.last.seq], [true, 200, said]);
-    await t.call("PUT", `/threads/${chat.id}/read`, { seq: said });
+    await t.call("PUT", `/threads/${chat.id}/read`, { n: said });
     assert.equal((await rows()).find((r) => r.id === String(chat.id)).unread, false);
-    assert.deepEqual((await t.call("GET", `/threads/${chat.id}/messages`)).body.messages.map((m: any) => m.text), ["看看日志", "x".repeat(300)]);
+    assert.deepEqual((await t.call("GET", `/threads/${chat.id}/entries`)).body.entries.map((e: any) => e.text), ["看看日志", "x".repeat(300)]);
 
     // Archived: its item goes.
     await t.call("POST", `/sessions/${encodeURIComponent(slackKey)}/archive`);

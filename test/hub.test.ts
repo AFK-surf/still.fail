@@ -137,20 +137,17 @@ test("the agent's posts are recorded in the thread, and chat_history shows them 
   assert.match(history, /from="U1" ts="[\d.]+">\n<@UBOT> look[\s\S]*from="you" ts="[\d.]+">\nlooking/);
 });
 
-test("Slack edits and deletes change the recorded message and move the cursor", async () => {
+test("Slack edits are appended to the thread as entries of their own", async () => {
   const { hub, accept, store } = setup();
   const m = message({ text: "<@UBOT> typo" });
   await accept(m);
   const thread = store.threadAt("slack:T1", "C1", m.threadTs)!;
-  const before = store.threadRev(thread.id);
-  await hub.receive("cl", { kind: "changed", channel: "C1", ts: m.ts, text: "<@UBOT> fixed" });
-  await hub.receive("cl", { kind: "changed", channel: "C1", ts: m.ts, text: "<@UBOT> fixed" }); // Slack repeats roots when replies come
-  const [edited] = store.messagesAfter(thread.id, before);
-  assert.equal(edited!.text, "<@UBOT> fixed");
-  assert.equal(store.threadRev(thread.id), before + 1);
-  await hub.receive("gpt", { kind: "deleted", channel: "C1", ts: m.ts });
-  const [deleted] = store.messagesAfter(thread.id, before + 1);
-  assert.deepEqual([deleted!.text, deleted!.deletedAt !== null], ["", true]);
+  const before = store.lastEntry(thread.id);
+  await hub.receive("cl", { kind: "changed", channel: "C1", threadTs: m.threadTs, ts: m.ts, text: "<@UBOT> fixed" });
+  await hub.receive("cl", { kind: "changed", channel: "C1", threadTs: m.threadTs, ts: m.ts, text: "<@UBOT> fixed" }); // Slack repeats roots when replies come
+  const [edit] = store.entriesAfter(thread.id, before);
+  assert.deepEqual([edit!.kind, edit!.target, edit!.text], ["edit", before, "<@UBOT> fixed"]);
+  assert.equal(store.lastEntry(thread.id), before + 1);
 });
 
 test("chat_state rejects kinds other than final and block", async () => {
@@ -432,7 +429,7 @@ test("a person's message in a chat with several agents reaches each of them once
   assert.equal(message!.quotes[0]!.comment, "这里");
 });
 
-test("a pending message edited before delivery reaches the agent as edited, and a deleted one not at all", async () => {
+test("a pending message edited before delivery reaches the agent as edited", async () => {
   const { claude, hub, accept, store } = setup();
   const m = message();
   await accept(m);
@@ -440,15 +437,13 @@ test("a pending message edited before delivery reaches the agent as edited, and 
   const session = claude.last;
   session.steer = async () => false;
   const edited = message({ threadTs: m.threadTs, ts: "9999.5", addressed: false, text: "first draft" });
-  const gone = message({ threadTs: m.threadTs, ts: "9999.6", addressed: false, text: "never mind" });
   await accept(edited);
-  await accept(gone);
-  await hub.receive("cl", { kind: "changed", channel: "C1", ts: edited.ts, text: "final words" });
-  await hub.receive("cl", { kind: "deleted", channel: "C1", ts: gone.ts });
+  await settle(); // it waits: the running turn takes no steer
+  await hub.receive("cl", { kind: "changed", channel: "C1", threadTs: m.threadTs, ts: edited.ts, text: "final words" });
   session.end();
   await settle();
   assert.match(session.prompts[1]!, /final words/);
-  assert.doesNotMatch(session.prompts[1]!, /first draft|never mind/);
+  assert.doesNotMatch(session.prompts[1]!, /first draft/);
   assert.equal(store.pendingMessages(sessionKey("cl", "C1", m.threadTs)).length, 0);
 });
 
@@ -472,6 +467,29 @@ test("deleting a session ends its process and removes its workspace and the thre
   assert.equal(existsSync(row.workspace), false);
   assert.equal(existsSync(join(row.workspace, "..")), false);
   assert.equal(existsSync(transcript), true);
+});
+
+test("archiving a session keeps a zstd copy of its transcript; showing it again or deleting it removes the copy", async () => {
+  const { hub, accept, store, config } = setup();
+  const m = message();
+  await accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const row = store.getSession(key)!;
+  const { existsSync, mkdirSync, readFileSync, writeFileSync } = await import("node:fs");
+  const { zstdDecompressSync } = await import("node:zlib");
+  const transcript = join(config.profiles[0]!.home, "projects", "x", `${row.runtimeSessionId}.jsonl`);
+  mkdirSync(join(transcript, ".."), { recursive: true });
+  writeFileSync(transcript, "{\"type\":\"user\"}\n");
+  const copy = join(store.archiveDir, "transcripts", `${key}.jsonl.zst`);
+  hub.archive(key, true);
+  assert.equal(zstdDecompressSync(readFileSync(copy)).toString(), "{\"type\":\"user\"}\n");
+  assert.equal(existsSync(transcript), true, "the runtime's own file stays as it is");
+  hub.archive(key, false);
+  assert.equal(existsSync(copy), false);
+  hub.archive(key, true);
+  await hub.deleteSession(key);
+  assert.equal(existsSync(copy), false);
 });
 
 test("command parsing", () => {

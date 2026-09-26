@@ -4,14 +4,21 @@
 //! While any topic of a station is live, its `/admin/api/events` stream is held
 //! open and is all that keeps the topics current: each topic is read once when
 //! it starts, and again only after the stream was down. Events carry what
-//! changed (a session's summary, a thread's changed messages, a read position,
-//! a row of the viewer's sidebar, the overview, host samples), which goes into
-//! the topics as it is; what an
-//! event does not carry (a thread's unread count) is read for that one thing.
-//! Host samples are asked for (`?host=1`) only while a `host` topic is live. A
+//! changed (a session's summary, a thread's new entries, a read position, a
+//! row of the viewer's sidebar, the overview, host samples), which goes into
+//! the topics as it is; what an event does not carry (a thread's unread count)
+//! is read for that one thing. Host samples are asked for (`?host=1`) only
+//! while a `host` topic is live. A
 //! `live` topic holds `/sessions/:key/live?from=<entries known>` open: the
 //! transcript from its first entry and then as it grows, the steps in flight
 //! and the phase. Nothing here runs on a timer but reconnects.
+//!
+//! A thread's entries and a session's transcript never change once written, so
+//! they are kept on the device ([`Kept`]): a `thread` topic shows what is kept
+//! at once and asks only for the entries after it (`?after=`), filling any gap
+//! an event shows (`?from=&to=`); a `live` topic starts from the kept
+//! transcript. Merging a thread's entries into messages is the `chat` view's
+//! (entries.rs).
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -23,8 +30,10 @@ use futures::stream::LocalBoxStream;
 use futures::{FutureExt, StreamExt};
 use serde_json::{Value, json};
 
+use crate::entries::n_of;
 use crate::error::{CoreError, Result};
 use crate::host::{Host, HttpRequest};
+use crate::kept::{Kept, Log};
 use crate::mesh::{GrantSource, Mesh, RequestHead};
 use crate::protocol::Topic;
 use crate::store::{Source, Store};
@@ -34,8 +43,8 @@ use crate::trace::{Kind, Span, SpanContext, Tracer, route};
 pub const RECONNECT_MS: u64 = 2_000;
 /// A burst of `thread` events becomes one read of each thread's summary.
 pub const EVENTS_COALESCE_MS: u64 = 400;
-/// Messages per page of a thread.
-pub const PAGE: usize = 50;
+/// Entries per page of a thread.
+pub const PAGE: u64 = 50;
 
 const EVENT_STREAM: &str = "text/event-stream";
 
@@ -321,6 +330,8 @@ struct StationState {
     lives: HashMap<String, LiveView>,
     /// Threads whose summaries (last message, unread) are read again once a burst of events is over.
     dirty: HashSet<u64>,
+    /// Threads whose gap is being read, with the entries that came meanwhile.
+    gaps: HashMap<u64, Vec<Value>>,
     flushing: bool,
     link: Value,
 }
@@ -337,6 +348,7 @@ impl StationState {
             tasks: HashMap::new(),
             lives: HashMap::new(),
             dirty: HashSet::new(),
+            gaps: HashMap::new(),
             flushing: false,
             link: json!({ "state": "connecting" }),
         }
@@ -360,20 +372,24 @@ fn live_start() -> Value {
     json!({ "loaded": false, "timeline": [], "usage": null, "steps": [], "phase": null })
 }
 
-fn seq_of(message: &Value) -> Option<u64> {
-    message.get("seq").and_then(Value::as_u64)
+/// A `thread` topic's value: the entries loaded, `first ..= last` (none of an empty thread: `last` is `first - 1`),
+/// and the thread's summary and sidebar title as kept, for the `chat` view to show before the station's `threads`
+/// and rows are read.
+fn thread_value(first: u64, entries: Vec<Value>, summary: Value, title: Value) -> Value {
+    let last = first + entries.len() as u64 - 1;
+    json!({ "first": first, "last": last, "entries": entries, "thread": summary, "title": title })
 }
 
 /// Threads as the station lists them: the latest message first, then the newest thread.
 fn sort_threads(threads: &mut [Value]) {
     let key = |t: &Value| {
-        let last = t.get("last").and_then(seq_of).unwrap_or(0);
+        let said = t.get("lastMessage").and_then(|m| m.get("createdAt")?.as_f64()).unwrap_or(0.0);
         let created = t.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0);
-        (last, created, t.get("id").and_then(Value::as_u64).unwrap_or(0))
+        (said, created, t.get("id").and_then(Value::as_u64).unwrap_or(0))
     };
     threads.sort_by(|a, b| {
         let (a, b) = (key(a), key(b));
-        b.0.cmp(&a.0).then(b.1.total_cmp(&a.1)).then(b.2.cmp(&a.2))
+        b.0.total_cmp(&a.0).then(b.1.total_cmp(&a.1)).then(b.2.cmp(&a.2))
     });
 }
 
@@ -406,6 +422,7 @@ pub struct Stations {
     sink: Rc<dyn TopicSink>,
     wire: Rc<dyn StationWire>,
     tracer: Rc<Tracer>,
+    kept: Rc<Kept>,
     me: Weak<Stations>,
     stations: RefCell<HashMap<String, StationState>>,
 }
@@ -428,8 +445,8 @@ fn answered(span: &mut Span, reply: &WireReply) {
 }
 
 impl Stations {
-    pub fn new(host: Rc<dyn Host>, sink: Rc<dyn TopicSink>, wire: Rc<dyn StationWire>, tracer: Rc<Tracer>) -> Rc<Stations> {
-        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, me: me.clone(), stations: RefCell::default() })
+    pub fn new(host: Rc<dyn Host>, sink: Rc<dyn TopicSink>, wire: Rc<dyn StationWire>, tracer: Rc<Tracer>, kept: Rc<Kept>) -> Rc<Stations> {
+        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, me: me.clone(), stations: RefCell::default() })
     }
 
     /// One JSON call to the admin API (path without the `/admin/api` prefix); a write answers once the live topics
@@ -563,8 +580,8 @@ impl Stations {
                     self.put_thread(&name, answer);
                     // A new chat, or an agent more in one: the sidebar's rows change.
                     touched.push(Topic::ChatRows { station: name.clone() });
-                } else if let (Some(thread), Some(seq)) = (answer.get("thread").and_then(Value::as_u64), answer.get("seq").and_then(Value::as_u64)) {
-                    self.put_read(&name, thread, seq);
+                } else if let (Some(thread), Some(n)) = (answer.get("thread").and_then(Value::as_u64), answer.get("n").and_then(Value::as_u64)) {
+                    self.put_read(&name, thread, n);
                 }
                 if let (Some(id), Some("messages")) = (parts.get(1).and_then(|id| id.parse().ok()), parts.get(2).map(String::as_str)) {
                     touched.push(Topic::Thread { station: name.clone(), thread: id });
@@ -648,10 +665,10 @@ impl Stations {
             Topic::Threads { .. } => "/threads".to_string(),
             Topic::ChatRows { .. } => "/chats".to_string(),
             Topic::Session { key, .. } => format!("/sessions/{}", encode(key)),
-            // A thread already read only asks for what changed since.
-            Topic::Thread { thread, .. } => match self.sink.get(topic).and_then(|v| v.get("rev")?.as_u64()) {
-                Some(rev) => format!("/threads/{thread}/messages?after={rev}"),
-                None => format!("/threads/{thread}/messages?limit={PAGE}"),
+            // A thread already read only asks for what came after it.
+            Topic::Thread { thread, .. } => match self.sink.get(topic).and_then(|v| v.get("last")?.as_u64()) {
+                Some(last) => format!("/threads/{thread}/entries?after={last}"),
+                None => format!("/threads/{thread}/entries?limit={PAGE}"),
             },
             _ => return,
         };
@@ -659,14 +676,24 @@ impl Stations {
         if !self.is_live(topic) {
             return;
         }
-        match result {
-            Ok(changed) if path.contains("after=") => self.merge_messages(topic, &changed),
-            Ok(value) => self.sink.set(topic, Ok(value)),
-            Err(error) => {
+        match (topic, result) {
+            (Topic::Thread { station, thread }, Ok(answer)) => {
+                let entries = answer.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
+                if path.contains("after=") {
+                    self.put_entries(station, *thread, entries);
+                } else {
+                    self.first_page(station, *thread, entries, answer.get("last").and_then(Value::as_u64).unwrap_or(0));
+                }
+            }
+            (_, Ok(value)) => self.sink.set(topic, Ok(value)),
+            (_, Err(error)) => {
                 if self.sink.get(topic).is_none() {
                     self.sink.set(topic, Err(error));
                 }
             }
+        }
+        if matches!(topic, Topic::Threads { .. } | Topic::Session { .. } | Topic::ChatRows { .. }) && let Some(station) = topic.station() {
+            self.keep_summaries(station);
         }
     }
 
@@ -811,13 +838,22 @@ impl Stations {
             }
             "thread" => {
                 let Some(id) = data.get("id").and_then(Value::as_u64) else { return };
-                self.merge_messages(&Topic::Thread { station: station.into(), thread: id }, &data);
+                self.put_entries(station, id, data.get("entries").and_then(Value::as_array).cloned().unwrap_or_default());
                 // The summaries (last message, unread) are not in the event.
                 self.mark_dirty(station, id);
             }
+            "thread-removed" => {
+                let Some(id) = data.get("id").and_then(Value::as_u64) else { return };
+                self.remove_thread(station, id);
+                self.host.spawn(self.kept.forget(&Log::thread(station, id)));
+                let topic = Topic::Thread { station: station.into(), thread: id };
+                if self.is_live(&topic) {
+                    self.sink.set(&topic, Err(CoreError::new("http_404", "没有这个对话").with_status(404)));
+                }
+            }
             "read" => {
-                let (Some(thread), Some(seq)) = (data.get("thread").and_then(Value::as_u64), data.get("seq").and_then(Value::as_u64)) else { return };
-                self.put_read(station, thread, seq);
+                let (Some(thread), Some(n)) = (data.get("thread").and_then(Value::as_u64), data.get("n").and_then(Value::as_u64)) else { return };
+                self.put_read(station, thread, n);
             }
             "chat" => self.put_row(station, &data),
             "chat-removed" => {
@@ -872,6 +908,7 @@ impl Stations {
         if self.is_live(&topic) {
             self.sink.set(&topic, Err(CoreError::new("http_404", "这个会话已经删除了").with_status(404)));
         }
+        self.host.spawn(self.kept.forget(&Log::transcript(station, key)));
         // Its threads lose it; those left with nobody went with it.
         self.sink.update(&Topic::Threads { station: station.into() }, &mut |list| {
             let Some(list) = list.as_array_mut() else { return };
@@ -886,31 +923,116 @@ impl Stations {
 
     // ── threads ──
 
-    /// Changed messages (an event, or `?after=`) into a thread's topic: replaced by seq, new ones in order. A
-    /// change to a message older than the pages loaded waits until that page is.
-    fn merge_messages(&self, topic: &Topic, changed: &Value) {
-        let messages = changed.get("messages").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
-        let rev = changed.get("rev").and_then(Value::as_u64).unwrap_or(0);
-        self.sink.update(topic, &mut |value| {
-            let more = value.get("more").and_then(Value::as_bool).unwrap_or(false);
-            if let Some(list) = value.get_mut("messages").and_then(Value::as_array_mut) {
-                let oldest = list.first().and_then(seq_of);
-                for message in messages {
-                    let Some(seq) = seq_of(message) else { continue };
-                    match list.binary_search_by_key(&seq, |m| seq_of(m).unwrap_or(0)) {
-                        Ok(i) => list[i] = message.clone(),
-                        Err(i) => {
-                            if !(more && oldest.is_some_and(|oldest| seq < oldest)) {
-                                list.insert(i, message.clone());
-                            }
-                        }
-                    }
-                }
+    /// Opens a `thread` topic: what is kept of it at once (its latest page), then the entries after it.
+    async fn open_thread(&self, station: &str, id: u64) {
+        let topic = Topic::Thread { station: station.into(), thread: id };
+        if let Some((held, entries)) = self.kept.open(&Log::thread(station, id), PAGE).await
+            && self.is_live(&topic)
+            && self.sink.get(&topic).is_none()
+        {
+            self.sink.set(&topic, Ok(thread_value(held.first, entries, held.thread, held.title)));
+        }
+        self.reload(&topic).await;
+    }
+
+    /// A thread's latest page, read with nothing kept: its topic's first value, and kept.
+    fn first_page(&self, station: &str, id: u64, entries: Vec<Value>, last: u64) {
+        let topic = Topic::Thread { station: station.into(), thread: id };
+        let first = entries.first().and_then(n_of).unwrap_or(last + 1);
+        if !entries.is_empty() {
+            self.host.spawn(self.kept.write(&Log::thread(station, id), first, entries.clone(), false, self.summary(station, id)));
+        }
+        self.sink.set(&topic, Ok(thread_value(first, entries, Value::Null, Value::Null)));
+    }
+
+    /// New entries (an event, or `?after=`) onto a live thread topic, and kept. Those it has are skipped; entries
+    /// past a gap wait while the gap is read.
+    fn put_entries(&self, station: &str, id: u64, entries: Vec<Value>) {
+        let topic = Topic::Thread { station: station.into(), thread: id };
+        // Until it has a value, what it reads next covers these.
+        let Some(last) = self.sink.get(&topic).and_then(|v| v.get("last")?.as_u64()) else { return };
+        let fresh: Vec<Value> = entries.into_iter().filter(|e| n_of(e).is_some_and(|n| n > last)).collect();
+        let Some(first) = fresh.first().and_then(n_of) else { return };
+        {
+            let mut stations = self.stations.borrow_mut();
+            let Some(state) = stations.get_mut(station) else { return };
+            if let Some(waiting) = state.gaps.get_mut(&id) {
+                waiting.extend(fresh);
+                return;
             }
-            if value.get("rev").and_then(Value::as_u64).is_none_or(|known| rev > known) {
-                value["rev"] = json!(rev);
+            if first > last + 1 {
+                state.gaps.insert(id, fresh);
+                drop(stations);
+                let (this, station) = (self.rc(), station.to_string());
+                self.spawn(async move { this.fill_gap(&station, id, last + 1, first - 1).await });
+                return;
             }
+        }
+        // The run that follows `last`; what lies past a hole in it comes after, as entries past a gap.
+        let mut run: Vec<Value> = Vec::new();
+        let mut past = Vec::new();
+        for entry in fresh {
+            match n_of(&entry) {
+                Some(n) if n == last + 1 + run.len() as u64 => run.push(entry),
+                Some(n) if n > last + run.len() as u64 => past.push(entry),
+                _ => {}
+            }
+        }
+        self.sink.update(&topic, &mut |value| {
+            if value.get("last").and_then(Value::as_u64) != Some(last) {
+                return;
+            }
+            if let Some(list) = value.get_mut("entries").and_then(Value::as_array_mut) {
+                list.extend(run.iter().cloned());
+            }
+            value["last"] = json!(last + run.len() as u64);
         });
+        self.host.spawn(self.kept.write(&Log::thread(station, id), last + 1, run, false, self.summary(station, id)));
+        if !past.is_empty() {
+            self.put_entries(station, id, past);
+        }
+    }
+
+    /// Reads the entries `from ..= to` an event showed missing, then places them with those that came meanwhile.
+    async fn fill_gap(&self, station: &str, id: u64, from: u64, to: u64) {
+        let addr = self.addr(station);
+        let answer = match addr {
+            Some(addr) => self.call(&addr, "GET", &format!("/threads/{id}/entries?from={from}&to={to}"), Vec::new(), Vec::new()).await.ok(),
+            None => None,
+        };
+        let waiting = self.stations.borrow_mut().get_mut(station).and_then(|s| s.gaps.remove(&id)).unwrap_or_default();
+        let mut entries = answer.and_then(|a| a.get("entries").and_then(Value::as_array).cloned()).unwrap_or_default();
+        entries.extend(waiting);
+        entries.sort_by_key(|e| n_of(e).unwrap_or(0));
+        entries.dedup_by_key(|e| n_of(e));
+        self.put_entries(station, id, entries);
+    }
+
+    /// The thread's summary as a live topic lists it.
+    fn summary(&self, station: &str, id: u64) -> Option<Value> {
+        let find = |list: Option<&Value>| list?.as_array()?.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned();
+        let lists = self.live_topics(station, |t| matches!(t, Topic::Threads { .. } | Topic::Session { .. }));
+        lists.iter().find_map(|topic| {
+            let value = self.sink.get(topic)?;
+            match topic {
+                Topic::Session { .. } => find(value.get("threads")),
+                _ => find(Some(&value)),
+            }
+        })
+    }
+
+    /// Keeps the summaries and sidebar titles of the station's open threads as the lists and rows have them now (a
+    /// chat opens with them).
+    fn keep_summaries(&self, station: &str) {
+        let rows = self.sink.get(&Topic::ChatRows { station: station.into() });
+        for topic in self.live_topics(station, |t| matches!(t, Topic::Thread { .. })) {
+            let Topic::Thread { thread, .. } = topic else { continue };
+            let title = rows.as_ref().and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(thread))?.get("title").cloned());
+            let summary = self.summary(station, thread);
+            if summary.is_some() || title.is_some() {
+                self.host.spawn(self.kept.summary(&Log::thread(station, thread), summary, title));
+            }
+        }
     }
 
     /// A row of the viewer's sidebar, new or changed, into the station's rows.
@@ -923,6 +1045,7 @@ impl Stations {
                 None => rows.push(row.clone()),
             }
         });
+        self.keep_summaries(station);
     }
 
     /// A thread's summary into every live topic that lists it: `threads`, and the `session` topics of the
@@ -947,6 +1070,7 @@ impl Stations {
                 }
             });
         }
+        self.keep_summaries(station);
     }
 
     fn remove_thread(&self, station: &str, id: u64) {
@@ -965,17 +1089,17 @@ impl Stations {
         }
     }
 
-    /// The viewer read a thread up to `seq`: its read position moves there, and nothing is unread once it
-    /// covers the last message (otherwise the count is read again).
-    fn put_read(&self, station: &str, thread: u64, seq: u64) {
+    /// The viewer read a thread up to entry `n`: its read position moves there, and nothing is unread once it
+    /// covers the last entry (otherwise the count is read again).
+    fn put_read(&self, station: &str, thread: u64, n: u64) {
         let stale = std::cell::Cell::new(false);
         let apply = |list: &mut Value| {
             for t in list.as_array_mut().into_iter().flatten() {
-                if t.get("id").and_then(Value::as_u64) != Some(thread) || t.get("read").and_then(Value::as_u64).is_some_and(|read| read >= seq) {
+                if t.get("id").and_then(Value::as_u64) != Some(thread) || t.get("read").and_then(Value::as_u64).is_some_and(|read| read >= n) {
                     continue;
                 }
-                t["read"] = json!(seq);
-                if t.get("last").and_then(seq_of).is_none_or(|last| seq >= last) {
+                t["read"] = json!(n);
+                if t.get("last").and_then(Value::as_u64).is_none_or(|last| n >= last) {
                     t["unread"] = json!(0);
                 } else {
                     stale.set(true);
@@ -986,7 +1110,7 @@ impl Stations {
         // Its row is read once the read covers its last message; the station's `chat` event says the same.
         self.sink.update(&Topic::ChatRows { station: station.into() }, &mut |rows| {
             for row in rows.as_array_mut().into_iter().flatten() {
-                if row.get("thread").and_then(Value::as_u64) == Some(thread) && row.get("last").and_then(seq_of).is_none_or(|last| seq >= last) {
+                if row.get("thread").and_then(Value::as_u64) == Some(thread) && row.get("last").and_then(|l| l.get("seq")?.as_u64()).is_none_or(|last| n >= last) {
                     row["unread"] = json!(false);
                 }
             }
@@ -1001,6 +1125,7 @@ impl Stations {
         if stale.get() {
             self.mark_dirty(station, thread);
         }
+        self.keep_summaries(station);
     }
 
     /// How far the viewer has read a thread, as a live topic lists it.
@@ -1062,60 +1187,78 @@ impl Stations {
 
     // ── chats ──
 
-    /// A person's message into a thread. Answers its seq once the thread's topic, where live, holds it.
+    /// A person's message into a thread. Answers its entry number once the thread's topic, where live, holds it.
     pub async fn post(&self, station: &StationAddr, thread: u64, message: Value) -> Result<u64> {
         let answer = self.json(station, "POST", &format!("/threads/{thread}/messages"), Some(message)).await?;
-        let seq = answer.get("seq").and_then(Value::as_u64).ok_or_else(|| CoreError::new("bad_response", "station 的回复里没有消息序号"))?;
+        let n = answer.get("n").and_then(Value::as_u64).ok_or_else(|| CoreError::new("bad_response", "station 的回复里没有消息序号"))?;
         let topic = Topic::Thread { station: station.to_string(), thread };
-        let has = |v: &Value| v.get("messages").and_then(Value::as_array).is_some_and(|m| m.iter().any(|m| seq_of(m) == Some(seq)));
-        if self.sink.get(&topic).is_some_and(|v| !has(&v)) {
+        if self.sink.get(&topic).and_then(|v| v.get("last")?.as_u64()).is_some_and(|last| last < n) {
             self.reload(&topic).await;
         }
-        Ok(seq)
+        Ok(n)
     }
 
-    /// The page of messages before those loaded, into the thread's topic. Answers whether still older ones exist.
+    /// The page of entries before those loaded, into the thread's topic: from what is kept, else from the station
+    /// (and kept). Answers whether still older ones exist.
     pub async fn older(&self, station: &StationAddr, thread: u64) -> Result<bool> {
-        let topic = Topic::Thread { station: station.to_string(), thread };
-        let Some(value) = self.sink.get(&topic) else { return Ok(false) };
-        let first = value.get("messages").and_then(Value::as_array).and_then(|m| m.first()).and_then(seq_of);
-        let (Some(before), true) = (first, value.get("more").and_then(Value::as_bool).unwrap_or(false)) else { return Ok(false) };
-        let page = self.json(station, "GET", &format!("/threads/{thread}/messages?before={before}&limit={PAGE}"), None).await?;
-        let older: Vec<Value> = page.get("messages").and_then(Value::as_array).into_iter().flatten().filter(|m| seq_of(m).is_some_and(|s| s < before)).cloned().collect();
-        let more = page.get("more").and_then(Value::as_bool).unwrap_or(false);
+        let name = station.to_string();
+        let topic = Topic::Thread { station: name.clone(), thread };
+        let log = Log::thread(&name, thread);
+        let Some(before) = self.sink.get(&topic).and_then(|v| v.get("first")?.as_u64()) else { return Ok(false) };
+        if before <= 1 {
+            return Ok(false);
+        }
+        let older = match self.kept.before(&log, before, PAGE).await {
+            Some(older) => older,
+            None => {
+                let page = self.json(station, "GET", &format!("/threads/{thread}/entries?before={before}&limit={PAGE}"), None).await?;
+                let older: Vec<Value> = page.get("entries").and_then(Value::as_array).into_iter().flatten().filter(|e| n_of(e).is_some_and(|n| n < before)).cloned().collect();
+                if let Some(first) = older.first().and_then(n_of) {
+                    self.host.spawn(self.kept.write(&log, first, older.clone(), false, None));
+                }
+                older
+            }
+        };
+        let Some(first) = older.first().and_then(n_of) else { return Ok(false) };
         let mut still = false;
         self.sink.update(&topic, &mut |value| {
-            let Some(list) = value.get_mut("messages").and_then(Value::as_array_mut) else { return };
+            let loaded = value.get("first").and_then(Value::as_u64);
             // Another page came first: this one is not next to what is loaded any more.
-            if list.first().and_then(seq_of) != Some(before) {
-                still = value.get("more").and_then(Value::as_bool).unwrap_or(false);
+            if loaded != Some(before) || older.len() as u64 != before - first {
+                still = loaded.is_some_and(|f| f > 1);
                 return;
             }
+            let Some(list) = value.get_mut("entries").and_then(Value::as_array_mut) else { return };
             list.splice(0..0, older.iter().cloned());
-            value["more"] = json!(more);
-            still = more;
+            value["first"] = json!(first);
+            still = first > 1;
         });
         Ok(still)
     }
 
-    /// Records how far the viewer has read a thread; nothing is sent when it is read that far already.
-    pub async fn read(&self, station: &StationAddr, thread: u64, seq: u64) -> Result<()> {
+    /// Records how far the viewer has read a thread (an entry number); nothing is sent when it is read that far
+    /// already.
+    pub async fn read(&self, station: &StationAddr, thread: u64, n: u64) -> Result<()> {
         let name = station.to_string();
-        if self.read_position(&name, thread).is_some_and(|read| read >= seq) {
+        if self.read_position(&name, thread).is_some_and(|read| read >= n) {
             return Ok(());
         }
-        let answer = self.json(station, "PUT", &format!("/threads/{thread}/read"), Some(json!({ "seq": seq }))).await?;
-        self.put_read(&name, thread, answer.get("seq").and_then(Value::as_u64).unwrap_or(seq));
+        let answer = self.json(station, "PUT", &format!("/threads/{thread}/read"), Some(json!({ "n": n }))).await?;
+        self.put_read(&name, thread, answer.get("n").and_then(Value::as_u64).unwrap_or(n));
         Ok(())
     }
 
     // ── live ──
 
-    /// Holds `/sessions/:key/live` open: the transcript from its first entry, then as it grows, and the steps in
-    /// flight. A reconnect asks from the entries already here.
+    /// Holds `/sessions/:key/live` open: the transcript from its first entry (what is kept of it at once), then
+    /// as it grows, and the steps in flight. A reconnect asks from the entries already here.
     async fn follow_live(self: Rc<Self>, station: String, addr: StationAddr, key: String) {
         let topic = Topic::Live { station: station.clone(), key: key.clone() };
-        self.sink.set(&topic, Ok(live_start()));
+        let mut start = live_start();
+        if let Some((_, entries)) = self.kept.open(&Log::transcript(&station, &key), u64::MAX).await {
+            start["timeline"] = json!(entries);
+        }
+        self.sink.set(&topic, Ok(start));
         loop {
             let from = self.sink.get(&topic).and_then(|v| v.get("timeline")?.as_array().map(Vec::len)).unwrap_or(0);
             let path = format!("/sessions/{}/live?from={from}", encode(&key));
@@ -1138,6 +1281,7 @@ impl Stations {
                 if let Some(s) = self.stations.borrow_mut().get_mut(&station).and_then(|s| s.lives.get_mut(&key)) {
                     *s = LiveView::default();
                 }
+                self.host.spawn(self.kept.forget(&Log::transcript(&station, &key)));
                 self.sink.set(&topic, Ok(live_start()));
             } else {
                 self.host.sleep(RECONNECT_MS).await;
@@ -1168,6 +1312,7 @@ impl Stations {
             if !placed {
                 return false;
             }
+            self.host.spawn(self.kept.write(&Log::transcript(station, key), start as u64, entries.to_vec(), true, None));
             entries_came = !entries.is_empty();
         }
         let view = {
@@ -1278,7 +1423,11 @@ impl Source for Stations {
                     }
                 });
             }
-            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::Thread { .. } => self.refetch(topic),
+            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } => self.refetch(topic),
+            Topic::Thread { thread, .. } => {
+                let (this, station, thread) = (self.rc(), station.clone(), *thread);
+                self.spawn(async move { this.open_thread(&station, thread).await });
+            }
             // Samples come on the events stream, which asks for them now.
             Topic::Host { .. } => {}
             Topic::Live { key, .. } => {
@@ -1428,7 +1577,7 @@ mod tests {
         let host = FakeHost::new();
         let sink = Rc::new(FakeSink::default());
         let wire = FakeWire::new();
-        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0));
+        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()));
         (host, sink, wire, stations)
     }
 
@@ -1473,15 +1622,26 @@ mod tests {
     fn summary(key: &str, turns: u64) -> Value {
         json!({"key": key, "title": null, "archivedAt": null, "turns": turns, "lastTurn": null})
     }
-    fn message(seq: u64, text: &str) -> Value {
-        json!({"seq": seq, "rev": seq, "thread": 7, "ts": format!("{seq}.0"), "authorKind": "person", "author": "a@x.com", "text": text})
+    fn entry(n: u64, text: &str) -> Value {
+        json!({"thread": 7, "n": n, "kind": "message", "target": null, "ts": format!("{n}.0"), "authorKind": "person", "author": "a@x.com", "text": text, "at": n})
+    }
+    fn edit(n: u64, target: u64, text: &str) -> Value {
+        json!({"thread": 7, "n": n, "kind": "edit", "target": target, "ts": null, "authorKind": "person", "author": "a@x.com", "text": text, "at": n})
+    }
+    fn entries(from: u64, to: u64) -> Value {
+        json!((from..=to).map(|n| entry(n, &format!("m{n}"))).collect::<Vec<_>>())
     }
     fn thread_view(id: u64, members: &[&str], last: u64, read: u64, unread: u64) -> Value {
         json!({"id": id, "surface": "ember", "createdAt": id, "sessions": members.iter().map(|s| json!({"thread": id, "session": s})).collect::<Vec<_>>(),
-            "last": if last > 0 { message(last, "…") } else { Value::Null }, "rev": last, "read": read, "unread": unread})
+            "last": last, "lastMessage": if last > 0 { json!({"seq": last, "text": "…", "createdAt": last}) } else { Value::Null }, "read": read, "unread": unread})
     }
+    /// The thread topic's messages, merged.
     fn texts(sink: &FakeSink, id: u64) -> Vec<String> {
-        sink.get(&thread(id)).unwrap()["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap().to_string()).collect()
+        let page = sink.get(&thread(id)).unwrap();
+        crate::entries::merge(page["entries"].as_array().unwrap()).iter().map(|m| m["text"].as_str().unwrap().to_string()).collect()
+    }
+    fn numbers(sink: &FakeSink, id: u64) -> Vec<u64> {
+        sink.get(&thread(id)).unwrap()["entries"].as_array().unwrap().iter().filter_map(n_of).collect()
     }
 
     // ── tests ──
@@ -1698,50 +1858,136 @@ mod tests {
     }
 
     #[test]
-    fn thread_events_merge_messages_and_refresh_summaries() {
+    fn thread_events_append_entries_and_refresh_summaries() {
         run(async {
             let (host, sink, wire, stations) = setup();
-            wire.answer("GET /admin/api/threads/7/messages?limit=50", 200, json!({"rev": 12, "messages": [message(11, "a"), message(12, "b")], "more": true}));
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 12, "entries": [entry(11, "a"), entry(12, "b")]}));
             wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 12, 12, 0)]));
-            wire.answer("GET /admin/api/threads/7", 200, thread_view(7, &["k"], 14, 12, 2));
+            wire.answer("GET /admin/api/threads/7", 200, thread_view(7, &["k"], 15, 12, 2));
             wire.answer("GET /admin/api/threads/8", 200, thread_view(8, &["k"], 20, 0, 1));
             stations.start(&thread(7));
             stations.start(&threads());
             host.settle().await;
             assert_eq!(texts(&sink, 7), vec!["a", "b"]);
-            // New messages and an edit, in one burst: merged at once; the summary is read once after it.
-            wire.event("thread", json!({"id": 7, "rev": 13, "messages": [message(13, "c")]}));
-            wire.event("thread", json!({"id": 7, "rev": 15, "messages": [message(14, "d"), {"seq": 12, "rev": 15, "text": "b 改了"}]}));
-            // Older than the page, while older pages exist: not placed.
-            wire.event("thread", json!({"id": 7, "rev": 16, "messages": [message(3, "old")]}));
+            // New entries (an edit among them), in one burst: appended at once, one known already skipped; the
+            // summary is read once after it.
+            wire.event("thread", json!({"id": 7, "entries": [entry(13, "c")]}));
+            wire.event("thread", json!({"id": 7, "entries": [entry(13, "c"), entry(14, "d"), edit(15, 12, "b 改了")]}));
             host.settle().await;
+            assert_eq!(numbers(&sink, 7), vec![11, 12, 13, 14, 15]);
             assert_eq!(texts(&sink, 7), vec!["a", "b 改了", "c", "d"]);
-            assert_eq!(sink.get(&thread(7)).unwrap()["rev"], 16);
+            assert_eq!(sink.get(&thread(7)).unwrap()["last"], 15);
             assert_eq!(wire.count("GET", "/admin/api/threads/7"), 0, "waits for the burst to end");
             wait(EVENTS_COALESCE_MS).await;
             assert_eq!(wire.count("GET", "/admin/api/threads/7"), 1);
             assert_eq!(sink.get(&threads()).unwrap()[0]["unread"], 2);
             // A thread not listed yet comes in, first (its last message is the newest).
-            wire.event("thread", json!({"id": 8, "rev": 20, "messages": [message(20, "x")]}));
+            wire.event("thread", json!({"id": 8, "entries": [entry(20, "x")]}));
             host.settle().await;
             wait(EVENTS_COALESCE_MS).await;
             let ids: Vec<u64> = sink.get(&threads()).unwrap().as_array().unwrap().iter().map(|t| t["id"].as_u64().unwrap()).collect();
             assert_eq!(ids, vec![8, 7]);
-            // Reading up to the last message: nothing unread, without a request. Short of it: counted again.
-            wire.event("read", json!({"viewer": "a@x.com", "thread": 7, "seq": 14}));
+            // Reading up to the last entry: nothing unread, without a request. Short of it: counted again.
+            wire.event("read", json!({"viewer": "a@x.com", "thread": 7, "n": 15}));
             host.settle().await;
             assert_eq!(sink.get(&threads()).unwrap()[1]["unread"], 0);
-            assert_eq!(sink.get(&threads()).unwrap()[1]["read"], 14);
-            wire.event("read", json!({"viewer": "a@x.com", "thread": 8, "seq": 15}));
+            assert_eq!(sink.get(&threads()).unwrap()[1]["read"], 15);
+            wire.event("read", json!({"viewer": "a@x.com", "thread": 8, "n": 15}));
             host.settle().await;
             wait(EVENTS_COALESCE_MS).await;
             assert_eq!(wire.count("GET", "/admin/api/threads/8"), 2);
             // A thread gone: out of the list.
             wire.answer("GET /admin/api/threads/8", 404, json!({"error": "unknown thread 8"}));
-            wire.event("thread", json!({"id": 8, "rev": 21, "messages": []}));
+            wire.event("thread", json!({"id": 8, "entries": []}));
             host.settle().await;
             wait(EVENTS_COALESCE_MS).await;
             assert_eq!(sink.get(&threads()).unwrap().as_array().unwrap().len(), 1);
+        });
+    }
+
+    #[test]
+    fn a_gap_is_read_once_and_what_came_meanwhile_waits_for_it() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 3, "entries": entries(1, 3)}));
+            wire.answer("GET /admin/api/threads/7/entries?from=4&to=5", 200, json!({"last": 7, "entries": entries(4, 5)}));
+            stations.start(&thread(7));
+            host.settle().await;
+            // Entries 4 and 5 never came: 6 shows the gap, and 7 comes while it is read.
+            wire.event("thread", json!({"id": 7, "entries": [entry(6, "m6")]}));
+            wire.event("thread", json!({"id": 7, "entries": [entry(7, "m7")]}));
+            host.settle().await;
+            assert_eq!(numbers(&sink, 7), vec![1, 2, 3, 4, 5, 6, 7]);
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?from=4&to=5"), 1);
+            assert_eq!(wire.paths().iter().filter(|p| p.contains("/entries")).count(), 2, "{:?}", wire.paths());
+        });
+    }
+
+    /// A second core on the same device (the page reloaded): the same storage, a new `Stations`.
+    fn reopened(host: &Rc<FakeHost>) -> (Rc<FakeSink>, Rc<FakeWire>, Rc<Stations>) {
+        let sink = Rc::new(FakeSink::default());
+        let wire = FakeWire::new();
+        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()));
+        (sink, wire, stations)
+    }
+
+    #[test]
+    fn a_thread_opens_from_what_is_kept_and_asks_only_for_what_came_after() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 300, "entries": entries(251, 300)}));
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 300, 300, 0)]));
+            stations.start(&thread(7));
+            stations.start(&threads());
+            host.settle().await;
+            wire.event("thread", json!({"id": 7, "entries": [entry(301, "m301")]}));
+            host.settle().await;
+            assert_eq!(numbers(&sink, 7).len(), 51);
+            // Reloaded: the kept page at once, with the summary kept beside it, before anything is answered.
+            let (sink, wire, stations) = reopened(&host);
+            *wire.stream_status.borrow_mut() = None;
+            wire.answer("GET /admin/api/threads/7/entries?after=301", 200, json!({"last": 302, "entries": [entry(302, "m302")]}));
+            stations.start(&thread(7));
+            host.settle().await;
+            // Its latest page came from what is kept (the station was asked only for what came after it).
+            let shown = sink.get(&thread(7)).expect("shown from what is kept");
+            assert_eq!((shown["first"].clone(), shown["last"].clone(), shown["thread"]["id"].clone()), (json!(252), json!(302), json!(7)));
+            assert_eq!(wire.paths().iter().filter(|p| p.contains("/entries")).cloned().collect::<Vec<_>>(), vec!["GET /admin/api/threads/7/entries?after=301"]);
+            // Scrolling up reads what is kept first; past it, the station (and what it answers is kept too).
+            assert!(stations.older(&remote(), 7).await.unwrap());
+            assert_eq!(sink.get(&thread(7)).unwrap()["first"], 251);
+            assert_eq!(wire.calls.borrow().len(), 2, "{:?}", wire.paths());
+            wire.answer("GET /admin/api/threads/7/entries?before=251&limit=50", 200, json!({"last": 302, "entries": entries(201, 250)}));
+            assert!(stations.older(&remote(), 7).await.unwrap());
+            assert_eq!(numbers(&sink, 7).first(), Some(&201));
+            host.settle().await;
+            let (sink, wire, stations) = reopened(&host);
+            *wire.stream_status.borrow_mut() = None;
+            stations.start(&thread(7));
+            host.settle().await;
+            assert!(stations.older(&remote(), 7).await.unwrap());
+            assert_eq!(numbers(&sink, 7), (203..=302).collect::<Vec<_>>(), "two pages, both from what is kept");
+            assert_eq!(wire.paths().iter().filter(|p| p.contains("before=")).count(), 0);
+            assert_eq!(texts(&sink, 7).last().unwrap(), "m302");
+        });
+    }
+
+    #[test]
+    fn a_removed_thread_and_a_removed_sessions_transcript_are_forgotten() {
+        run(async {
+            let (host, _sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 2, "entries": entries(1, 2)}));
+            stations.start(&thread(7));
+            stations.start(&live("k"));
+            host.settle().await;
+            wire.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 0, "entries": ["a"], "usage": {}})));
+            host.settle().await;
+            assert!(host.stored("thread/ws/st/7/0").is_some() && host.stored("transcript/ws/st/k/0").is_some());
+            wire.event("thread-removed", json!({"id": 7}));
+            wire.event("session-removed", json!({"key": "k"}));
+            host.settle().await;
+            assert_eq!((host.stored("thread/ws/st/7/0"), host.stored("thread/ws/st/7/meta")), (None, None));
+            assert_eq!(host.stored("transcript/ws/st/k/0"), None);
         });
     }
 
@@ -1750,7 +1996,7 @@ mod tests {
         run(async {
             let (host, sink, wire, stations) = setup();
             let rows = Topic::ChatRows { station: ST.into() };
-            let row = |id: &str, thread: Option<u64>, last: u64, unread: bool| json!({"id": id, "thread": thread, "title": id, "last": if last > 0 { message(last, "…") } else { Value::Null }, "unread": unread});
+            let row = |id: &str, thread: Option<u64>, last: u64, unread: bool| json!({"id": id, "thread": thread, "title": id, "last": if last > 0 { json!({"seq": last, "text": "…"}) } else { Value::Null }, "unread": unread});
             wire.answer("GET /admin/api/chats", 200, json!([row("7", Some(7), 12, true), row("k", None, 0, false)]));
             stations.start(&rows);
             host.settle().await;
@@ -1769,7 +2015,7 @@ mod tests {
             assert_eq!(sink.get(&rows).unwrap()[0]["title"], "排查");
             assert_eq!(wire.calls.borrow().len(), reads);
             // Read short of the last message: still unread; up to it: read, at once.
-            wire.event("read", json!({"viewer": "a@x.com", "thread": 7, "seq": 12}));
+            wire.event("read", json!({"viewer": "a@x.com", "thread": 7, "n": 12}));
             host.settle().await;
             assert_eq!(sink.get(&rows).unwrap()[0]["unread"], true);
             stations.read(&remote(), 7, 13).await.unwrap();
@@ -1795,8 +2041,8 @@ mod tests {
             wire.answer("GET /admin/api/threads/9", 200, thread_view(9, &["k", "j"], 30, 0, 1));
             stations.start(&session("k"));
             host.settle().await;
-            wire.event("thread", json!({"id": 9, "rev": 30, "messages": []}));
-            wire.event("read", json!({"viewer": "a@x.com", "thread": 7, "seq": 12}));
+            wire.event("thread", json!({"id": 9, "entries": []}));
+            wire.event("read", json!({"viewer": "a@x.com", "thread": 7, "n": 12}));
             host.settle().await;
             wait(EVENTS_COALESCE_MS).await;
             let detail = sink.get(&session("k")).unwrap();
@@ -1805,7 +2051,7 @@ mod tests {
             assert_eq!(detail["threads"][1]["unread"], 0);
             // The session left thread 9.
             wire.answer("GET /admin/api/threads/9", 200, thread_view(9, &["j"], 30, 0, 1));
-            wire.event("thread", json!({"id": 9, "rev": 31, "messages": []}));
+            wire.event("thread", json!({"id": 9, "entries": []}));
             host.settle().await;
             wait(EVENTS_COALESCE_MS).await;
             assert_eq!(sink.get(&session("k")).unwrap()["threads"].as_array().unwrap().len(), 1);
@@ -1816,26 +2062,25 @@ mod tests {
     fn a_thread_pages_back_and_catches_up() {
         run(async {
             let (host, sink, wire, stations) = setup();
-            wire.answer("GET /admin/api/threads/7/messages?limit=50", 200, json!({"rev": 12, "messages": [message(11, "c"), message(12, "d")], "more": true}));
-            wire.answer("GET /admin/api/threads/7/messages?before=11&limit=50", 200, json!({"rev": 12, "messages": [message(9, "a"), message(10, "b")], "more": false}));
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 4, "entries": [entry(3, "c"), entry(4, "d")]}));
+            wire.answer("GET /admin/api/threads/7/entries?before=3&limit=50", 200, json!({"last": 4, "entries": [entry(1, "a"), entry(2, "b")]}));
             stations.start(&thread(7));
             stations.start(&link());
             host.settle().await;
-            assert!(stations.older(&remote(), 7).await.unwrap() == false);
+            assert!(!stations.older(&remote(), 7).await.unwrap());
             assert_eq!(texts(&sink, 7), vec!["a", "b", "c", "d"]);
-            assert_eq!(sink.get(&thread(7)).unwrap()["more"], false);
             // Nothing older: no request.
             assert!(!stations.older(&remote(), 7).await.unwrap());
-            assert_eq!(wire.count("GET", "/admin/api/threads/7/messages?before=9&limit=50"), 0);
-            // The stream was down: what changed since the thread's rev is read, and the pages stay.
-            wire.answer("GET /admin/api/threads/7/messages?after=12", 200, json!({"rev": 13, "messages": [message(13, "e")], "more": false}));
+            assert_eq!(wire.paths().iter().filter(|p| p.contains("before=")).count(), 1);
+            // The stream was down: what came after the last entry is read, and the pages stay.
+            wire.answer("GET /admin/api/threads/7/entries?after=4", 200, json!({"last": 5, "entries": [entry(5, "e")]}));
             wire.end("/admin/api/events");
             host.settle().await;
             assert_eq!(sink.get(&link()).unwrap()["state"], "offline");
             wait(RECONNECT_MS + 50).await;
             assert_eq!(sink.get(&link()).unwrap()["state"], "online");
             assert_eq!(texts(&sink, 7), vec!["a", "b", "c", "d", "e"]);
-            assert_eq!(wire.count("GET", "/admin/api/threads/7/messages?limit=50"), 1);
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/entries?limit=50"), 1);
         });
     }
 
@@ -1843,9 +2088,9 @@ mod tests {
     fn posts_into_a_thread_and_answers_once_it_shows() {
         run(async {
             let (host, sink, wire, stations) = setup();
-            wire.answer("GET /admin/api/threads/7/messages?limit=50", 200, json!({"rev": 12, "messages": [message(12, "d")], "more": false}));
-            wire.answer("POST /admin/api/threads/7/messages", 200, json!({"seq": 13}));
-            wire.answer("GET /admin/api/threads/7/messages?after=12", 200, json!({"rev": 13, "messages": [message(13, "你好")], "more": false}));
+            wire.answer("GET /admin/api/threads/7/entries?limit=50", 200, json!({"last": 12, "entries": [entry(12, "d")]}));
+            wire.answer("POST /admin/api/threads/7/messages", 200, json!({"n": 13}));
+            wire.answer("GET /admin/api/threads/7/entries?after=12", 200, json!({"last": 13, "entries": [entry(13, "你好")]}));
             stations.start(&thread(7));
             host.settle().await;
             assert_eq!(stations.post(&remote(), 7, json!({"text": "你好"})).await.unwrap(), 13);
@@ -1854,10 +2099,11 @@ mod tests {
             stations.start(&threads());
             wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 13, 0, 1)]));
             host.settle().await;
-            wire.answer("PUT /admin/api/threads/7/read", 200, json!({"viewer": "a@x.com", "thread": 7, "seq": 13}));
+            wire.answer("PUT /admin/api/threads/7/read", 200, json!({"viewer": "a@x.com", "thread": 7, "n": 13}));
             stations.read(&remote(), 7, 13).await.unwrap();
             stations.read(&remote(), 7, 12).await.unwrap();
             assert_eq!(wire.count("PUT", "/admin/api/threads/7/read"), 1);
+            assert_eq!(wire.calls.borrow().iter().find(|(_, m, _, _)| m == "PUT").unwrap().3, br#"{"n":13}"#.to_vec());
             assert_eq!(sink.get(&threads()).unwrap()[0]["unread"], 0);
         });
     }
@@ -1920,11 +2166,27 @@ mod tests {
             wire.end("/admin/api/sessions/k/live");
             wait(RECONNECT_MS + 50).await;
             assert!(wire.paths().contains(&"GET /admin/api/sessions/k/live?from=4".to_string()), "{:?}", wire.paths());
-            // A gap: from the start again, at once.
+            // Reloaded: the kept transcript at once, and only what came after it is asked for.
+            host.settle().await;
+            let (reloaded, again, other) = reopened(&host);
+            other.start(&live("k"));
+            host.settle().await;
+            assert_eq!(live_of(&reloaded, "k")["timeline"], json!(["a", "B", "c", "d"]));
+            assert!(again.paths().contains(&"GET /admin/api/sessions/k/live?from=4".to_string()), "{:?}", again.paths());
+            // Written anew and shorter: what is kept is cut there too.
+            again.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 1, "entries": [], "usage": {}})));
+            host.settle().await;
+            assert_eq!(live_of(&reloaded, "k")["timeline"], json!(["a"]));
+            let (reloaded, _, other) = reopened(&host);
+            other.start(&live("k"));
+            host.settle().await;
+            assert_eq!(live_of(&reloaded, "k")["timeline"], json!(["a"]));
+            // A gap: from the start again, at once, and nothing kept.
             wire.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 9, "entries": ["z"], "usage": {}})));
             host.settle().await;
             assert_eq!(wire.count("GET", "/admin/api/sessions/k/live?from=0"), 2);
             assert_eq!(live_of(&sink, "k")["loaded"], false);
+            assert_eq!(host.stored("transcript/ws/st/k/meta"), None);
         });
     }
 
@@ -1997,7 +2259,7 @@ mod tests {
         run(async {
             let (host, sink) = (FakeHost::new(), Rc::new(FakeSink::default()));
             let (local, far) = (FakeWire::new(), FakeWire::new());
-            let stations = Stations::new(host.clone(), sink, RoutedWire::new(local.clone(), far.clone()), Tracer::new(host.clone(), 1.0));
+            let stations = Stations::new(host.clone(), sink, RoutedWire::new(local.clone(), far.clone()), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()));
             stations.request(&StationAddr::Local, "GET", "/overview", None).await.unwrap();
             stations.request(&remote(), "GET", "/host", None).await.unwrap();
             assert_eq!(local.paths(), vec!["GET /admin/api/overview"]);

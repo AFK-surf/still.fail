@@ -104,10 +104,10 @@ for grants.
 | `link` | `station` | the station's events stream: `connecting` / `online` / `offline` / `error` + message |
 | `overview` | `station` | the admin API's `/overview` |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
-| `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, last message, the viewer's `read` and `unread`), latest message first |
+| `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, `last` entry, `lastMessage`, the viewer's `read` and `unread`), latest message first |
 | `chatRows` | `station` | `/chats`: the viewer's sidebar rows as the station puts them together (`ChatRow`; docs/station-storage.md, The sidebar) |
 | `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns }` (no messages, no transcript) |
-| `thread` | `station`, `thread` (id) | `{ rev, messages, more }`: the thread's latest page of `MessageView`s by `seq`, older pages in front as `chat.older` loads them; `more`: older ones exist |
+| `thread` | `station`, `thread` (id) | `{ first, last, entries, thread }`: the thread's entries `first ..= last` (`EntryView`s, never changed once read): its latest page, older pages in front as `chat.older` loads them; `thread` is its summary as kept on the device (null when read from the station) |
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
 
@@ -149,19 +149,29 @@ that only notifications change it:
   only when the summary's `turns` or `lastTurn` differ from them);
   `session-removed` takes it out of `sessions`, out of the threads' sessions
   (a thread left with none goes), and makes its `session` topic a 404 error;
-  `thread` merges the changed messages into that `thread` topic (by `seq`; a
-  message older than the pages loaded is left until its page is) and, since
-  it does not carry unread counts, reads `/threads/:id` for the `threads` and
-  `session` topics that list it (bursts coalesced over 400 ms; a 404 removes
-  it); `read` sets the thread's `read` there, and `unread` to 0 when it covers
-  the last message (else the thread is read again), and turns off `unread` of
+  `thread` appends the new entries to that `thread` topic (those it has are
+  skipped; entries past a gap wait while the gap is read, once, with
+  `?from=&to=`) and, since it does not carry unread counts, reads
+  `/threads/:id` for the `threads` and `session` topics that list it (bursts
+  coalesced over 400 ms; a 404 removes it); `thread-removed` takes the thread
+  out of them, makes its `thread` topic a 404 error and forgets what is kept of
+  it; `read` sets the thread's `read` there, and `unread` to 0 when it covers
+  the last entry (else the thread is read again), and turns off `unread` of
   that thread's `chatRows` row when it covers the row's last message; `chat`
   puts a row into `chatRows` (replacing the one with its `id`), `chat-removed`
-  takes one out; `overview` and `host` are the whole values. After the stream was down, every live topic of the station
-  is read once when it reopens (`thread` topics only what changed:
-  `?after=<rev>`); `link` says how the stream is.
-- `live` holds `/sessions/:key/live?from=<entries it has>` open; a timeline
-  message that cannot be placed starts it over from 0.
+  takes one out; `overview` and `host` are the whole values. After the stream
+  was down, every live topic of the station is read once when it reopens
+  (`thread` topics only what came after them: `?after=<last>`); `link` says
+  how the stream is.
+- `thread` shows what is kept on the device of the thread (its latest page)
+  at once, then reads `?after=<last>`; with nothing kept it reads the latest
+  page. What it reads is kept (docs/station-storage.md, In the client core),
+  with the thread's summary and its sidebar title as `threads` and `chatRows`
+  have them.
+- `live` starts from the transcript kept on the device and holds
+  `/sessions/:key/live?from=<entries it has>` open, keeping what comes; a
+  timeline message that cannot be placed starts it over from 0 (and forgets
+  what is kept).
 
 A topic nobody subscribes to is dropped after a minute.
 
@@ -179,16 +189,20 @@ are online — connected to ember cloud right now, as the `workspace` topic says
 and follows the workspace's station list as it changes. It has no value until
 the `workspace` topic has one; a failed `workspace` is the view's error, while
 a failing station only shows in that station's state. `chat` watches the
-station's `threads` and `sessions`, its thread's `thread` (messages),
+station's `threads` and `sessions`, its thread's `thread` (entries),
 `overview` and `link` — all asked for at once when it starts, so a chat opens
-in one round of requests — and, once `threads` names them, the `session` of
-each of its agents. It has a value as soon as its thread is in `threads` and
-its latest page of messages is read; its agents fill in after (an agent whose
+in one round of requests — and, once `threads` (or the thread as kept) names
+them, the `session` of each of its agents. It has a value as soon as its
+latest entries are there and its thread is in `threads` — or, before
+`threads` is read, as soon as its entries are there from what is kept, with
+the thread as kept beside them; its agents fill in after (an agent whose
 `session` is not read yet is its summary from `sessions`, without turns or
 threads; one that fails is left out). A failed `threads` or `thread` is its
-error, and so is its thread missing from `threads` (404). With `session`
-instead of `thread`, `chat` watches that `session`, `sessions`, `chatRows`,
-`overview` and `link`.
+error, and so is its thread missing from `threads` once read (404). Its
+`messages` are its entries merged (entries.rs): each message with its latest
+edit's text, attachments and quotes (`editedAt`). With `session` instead of
+`thread`, `chat` watches that `session`, `sessions`, `chatRows`, `overview`
+and `link`.
 
 While a `chats` view is live, a clock waits for the viewer's next local
 midnight and recomputes it then (`daysAgo` changes); that is the only timer of
@@ -252,8 +266,8 @@ collapsed); else its Slack channel (`#name`), `私信` for a direct message, or
 // chat
 {
   "me": { … },                   // as in chats
-  "thread": { … } | null,        // the ThreadView (with the viewer's `read` position and `unread`, `people`, `last`); null before the agent has a chat
-  "title": "…",                  // see below
+  "thread": { … } | null,        // the ThreadView (with the viewer's `read` position and `unread`, `people`, `last`, `lastMessage`); null before the agent has a chat
+  "title": "…",                  // see below (as kept with the entries until `chatRows` is read)
   "people": [ … ],               // the thread's people
   "agents": [{                   // its sessions, in the order they joined
     "session": { … },            // SessionSummary
@@ -262,11 +276,11 @@ collapsed); else its Slack channel (`#name`), `私信` for a direct message, or
     "turns": [ … ],              // TurnRecord, oldest first ([] until its session is read)
     "threads": [ … ]             // ThreadView: every thread it takes part in ([] until read), to name the places in its history
   }],
-  "messages": [ … ],             // the thread's MessageViews loaded so far, by seq (deleted ones included, with deletedAt)
-  "more": true,                  // older messages exist: `chat.older` loads the page before them
+  "messages": [ … ],             // the thread's messages merged from the entries loaded so far, by seq (a message's entry n)
+  "more": true,                  // older entries exist: `chat.older` loads the page before them
   "outbox": [{ "id": "out-1", "text": "…", "attachments": [], "quotes": [], "createdAt": 1790000000000, "state": "sending", "error": null, "seq": 42 }],
-  //   messages sent from this device that `messages` does not show yet; `seq` once the station has it. An entry leaves
-  //   in the same emission that brings a message with that seq (or a later one) into `messages`.
+  //   messages sent from this device that `messages` does not show yet; `seq` (its entry n) once the station has it. An
+  //   entry leaves in the same emission that brings the entry with that n (or a later one) into the chat.
   "link": { "state": "online", "message": null }
 }
 ```
@@ -278,8 +292,11 @@ in a chat), titled as the station's item is (the view waits for the station's
 `chatRows`); a session that cannot be read is its error. Its chat is made
 (`POST /threads {session}`) when the first message is sent, and the page
 moves to it. Where the viewer had read up to when a chat opened is
-`thread.read` at that moment; a client keeps it for the visit (the web draws
-its "以下是新消息" line from it) while reading moves the position on.
+`thread.read` at that moment (from the thread as kept, when the chat opens
+from what the device kept); a client keeps it for the visit while reading
+moves the position on. The web draws its "以下是新消息" line over the first
+message after it that is not the viewer's own and was said before the chat
+opened, whether it came from what was kept or from the station after opening.
 
 Grouping by day needs the viewer's time zone: `Host::utc_offset_min(at_ms)`
 gives it (web: `-new Date(at).getTimezoneOffset()`).
@@ -295,8 +312,8 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `station.request` | `station`, `method`, `path`, `body?` | the JSON answer; the core then refreshes the topics this write can change |
 | `chat.send` | `station`, `thread`, `text`, `attachments?`, `quotes?` | `{ seq }`, once the station has it and the chat's `thread` topic (when read) holds it. Only chats on ember's page take messages (the station refuses the rest). Meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
 | `chat.retry` / `chat.discard` | `station`, `thread`, `id` | sends a failed outbox message again / drops it |
-| `chat.older` | `station`, `thread` | `{ more }`: loads the page (50) before the chat's oldest loaded message into its `thread` topic, so `messages` grows in front |
-| `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to `seq` (`PUT /threads/:id/read`); nothing is sent when it is read that far already. `unread` in `chats` follows |
+| `chat.older` | `station`, `thread` | `{ more }`: loads the page (50 entries) before the chat's oldest loaded entry into its `thread` topic — from what is kept, else from the station — so `messages` grows in front |
+| `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to entry `seq` (`PUT /threads/:id/read {n}`); nothing is sent when it is read that far already. `unread` in `chats` follows |
 | `station.upload` | `station`, `key`, `name`, `bytes` | the attachment (into that session's workspace; a message may carry uploads of any session in its chat) |
 | `station.file` | `station`, `key`, `name` | `{ type, bytes }` |
 | `migrate` | `accounts`, `device` | — (web only: what localStorage held before the core existed) |
@@ -334,7 +351,9 @@ client/
 - `accounts.rs` — sign-in (PKCE), token refresh (single flight per account), persistence.
 - `cloud.rs` — ember cloud API: errors, `/v1/me`, workspaces, grants. (Its events socket is held in `core.rs`, with the account topics.)
 - `mesh.rs` — the device endpoint and station links: grants, renewal (every 5 min), reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
-- `station.rs` — the admin API over a link (or over HTTP for `local`): the station topics kept current from its events and live streams, threads (paging, posting, read positions), uploads.
+- `station.rs` — the admin API over a link (or over HTTP for `local`): the station topics kept current from its events and live streams, threads (entries by number, gaps, paging, posting, read positions), uploads.
+- `kept.rs` — threads' entries and transcripts kept on the device in 256-entry chunks through `Host` storage, bounded (least recently opened go first), forgotten for stations out of reach.
+- `entries.rs` — a thread's entries merged into messages (edits and deletes applied): the one place that does it.
 - `views.rs` — the view topics, put together from the others.
 - `trace.rs` — traces of user actions: spans, the `traceparent` every station request carries, batched export to ember cloud (docs/telemetry.md).
 

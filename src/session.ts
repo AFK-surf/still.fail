@@ -154,10 +154,6 @@ export class SessionActor {
     const pending = this.#deps.store.pendingMessages(this.key);
     if (pending.length === 0) return;
     const text = await this.#format(pending);
-    if (!text) {
-      this.#delivered(pending); // deleted before the agent saw them
-      return;
-    }
     if (this.#agent?.busy) {
       if (await this.#agent.steer(text)) this.#delivered(pending);
       return; // otherwise delivered when the turn ends
@@ -168,17 +164,16 @@ export class SessionActor {
   }
 
   #delivered(messages: readonly PendingMessage[]): void {
-    this.#deps.store.markDelivered(this.key, messages.map((m) => m.seq));
+    this.#deps.store.markDelivered(this.key, messages.map((m) => ({ thread: m.thread, n: m.n })));
   }
 
   /**
    * The messages as the agent reads them, made now so edits count: each with
    * its source and sender's name, plus a hint when a thread appears in this
    * session for the first time mid-conversation (its earlier messages are
-   * only a chat_history away). Empty when all were deleted meanwhile.
+   * only a chat_history away).
    */
-  async #format(pending: readonly PendingMessage[]): Promise<string> {
-    const said = pending.filter((m) => m.deletedAt === null);
+  async #format(said: readonly PendingMessage[]): Promise<string> {
     const heard = this.#deps.store.heardThreads(this.key);
     const newThreads = new Set(said.map((m) => m.thread).filter((t) => !heard.has(t)));
     const names = new Map<string, string>();

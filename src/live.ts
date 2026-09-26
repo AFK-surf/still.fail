@@ -90,16 +90,19 @@ export class LiveHub {
   }
 
   /**
-   * Follows a session: first the transcript entries from index `from` on and
-   * the steps in flight, then everything new. Returns the way to stop.
+   * Follows a session: first the transcript entries from index `from` on (and
+   * the usage so far, even when a watcher kept every entry already), the steps
+   * in flight, then everything new. Returns the way to stop.
    */
   subscribe(key: string, from: number, listener: Listener): () => void {
     let set = this.#listeners.get(key);
     if (!set) this.#listeners.set(key, (set = new Set()));
     set.add(listener);
     const watched = this.#watch(key);
-    if (watched && from < watched.tail.entries.length) {
-      listener({ type: "timeline", start: from, entries: watched.tail.entries.slice(from), usage: { ...watched.tail.usage } });
+    if (watched) {
+      // A watcher that has more than the transcript (it was written anew) is told where it ends.
+      const start = Math.min(from, watched.tail.entries.length);
+      listener({ type: "timeline", start, entries: watched.tail.entries.slice(start), usage: { ...watched.tail.usage } });
     }
     const phase = this.#phase.get(key);
     listener({ type: "steps", steps: [...(this.#steps.get(key)?.values() ?? [])], phase: phase ? { phase: phase.phase, elapsedMs: Date.now() - phase.at } : null });

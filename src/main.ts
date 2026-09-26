@@ -51,7 +51,7 @@ const mcpUrl = `http://${settings.config.http.host}:${settings.config.http.port}
 const slackNames = new NameBook(join(settings.config.dataDir, "slack-names.json"));
 slackNames.onLearn(() => {
   for (const session of store.listSessions()) store.notify(session.key);
-  for (const thread of store.listThreads("local")) store.changes.emit("thread", { id: thread.id, rev: thread.rev, messages: [] });
+  for (const thread of store.listThreads("local")) store.changes.emit("thread", { id: thread.id, entries: [] });
 });
 const connections: Connections = new Connections(
   (connect) => new SlackSurface(connect.slack, slackNames),

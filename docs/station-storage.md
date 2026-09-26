@@ -3,9 +3,10 @@
 Two rules shape this:
 
 - **One place for every message.** Whatever is said in a conversation — by a
-  person on Slack or on ember's page, or by an agent — is one row in one
-  table, with one cursor that only grows. Clients read "what changed after
-  cursor N", never the whole thing again.
+  person on Slack or on ember's page, or by an agent — is one entry in its
+  thread's log, and entries are only ever appended (an edit is an entry of its
+  own; nothing said is taken back — ember has no delete). Clients read "the
+  entries after n", never the whole thing again, and keep what they read.
 - **No polling inside ember.** A station tells its clients what changed; ember
   cloud tells devices what changed; the client core refetches nothing on a
   timer. The only timers left sample things that cannot notify (host load,
@@ -22,7 +23,7 @@ Two rules shape this:
 - **Message**: something said in a thread, by a person, an agent (a session),
   or ember itself (a notice).
 
-## Tables (ember.db, schema v10)
+## Tables (ember.db, schema v11)
 
 ```sql
 -- One agent. What it runs on and where; people and messages live in threads.
@@ -42,15 +43,16 @@ CREATE TABLE sessions (
   archived_at INTEGER                 -- hidden from lists; deleted sessions are gone entirely
 );
 
--- A place people talk.
+-- A place people talk. Ids are never used again (AUTOINCREMENT), so what a client keeps of a thread stays true.
 CREATE TABLE threads (
-  id INTEGER PRIMARY KEY,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   surface TEXT NOT NULL,              -- "slack:<team id>" ("slack:<connect id>" while unknown) | "ember"
   channel TEXT NOT NULL,              -- Slack channel id; "EMBER" on the page
   thread_ts TEXT NOT NULL,
   title TEXT,
   created_by TEXT,
   created_at INTEGER NOT NULL,
+  archived_at INTEGER,                -- its entries are in its archive file (see Archiving)
   UNIQUE (surface, channel, thread_ts)
 );
 
@@ -63,31 +65,34 @@ CREATE TABLE thread_sessions (
   PRIMARY KEY (thread, session)
 );
 
--- Everything said. seq orders a thread; rev is the change cursor (global, grows on insert, edit and delete).
-CREATE TABLE messages (
-  seq INTEGER PRIMARY KEY AUTOINCREMENT,
-  rev INTEGER NOT NULL UNIQUE,
+-- Everything said: each thread a log, appended to and never changed.
+CREATE TABLE entries (
   thread INTEGER NOT NULL,
-  ts TEXT NOT NULL,                   -- the platform's id (Slack ts; ember makes Slack-like ones)
-  author_kind TEXT NOT NULL,          -- person | agent | ember
-  author TEXT NOT NULL,               -- person: Slack user id / email / "local"; agent: session key
-  text TEXT NOT NULL,                 -- as shown (Markdown)
-  attachments TEXT,                   -- JSON [{name, path, size, width?, height?}]
-  quotes TEXT,                        -- JSON [{author, text, comment, ts?, role?}]
-  declared TEXT,                      -- an agent's final | block with this message
-  created_at INTEGER NOT NULL,
-  edited_at INTEGER,
-  deleted_at INTEGER,                 -- text and files cleared, the row stays so cursors hold
-  UNIQUE (thread, ts)
+  n INTEGER NOT NULL,                 -- 1, 2, 3 … within the thread, no gaps
+  kind TEXT NOT NULL,                 -- message | edit
+  target INTEGER,                     -- edit: the n of the message it changes
+  ts TEXT,                            -- message: the platform's id (Slack ts), unique per thread
+  author_kind TEXT NOT NULL,          -- person | agent | ember (edit: the message's)
+  author TEXT NOT NULL,
+  text TEXT,                          -- message and edit: Markdown
+  attachments TEXT, quotes TEXT,      -- message and edit: JSON (an edit gives the message's whole new version)
+  declared TEXT,                      -- message: an agent's final | block
+  at INTEGER NOT NULL,
+  PRIMARY KEY (thread, n)
 );
-CREATE INDEX messages_thread_rev ON messages (thread, rev);
+CREATE UNIQUE INDEX entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
+CREATE INDEX entries_target ON entries (thread, target) WHERE target IS NOT NULL;
+-- Each message as it reads now (its latest edit's words, files and quotes), for the station's
+-- own reading: delivery, chat_history, lists.
+CREATE VIEW merged AS …;
 
 -- Which messages a session still has to read. Person messages go to every session in the thread.
 CREATE TABLE deliveries (
-  message INTEGER NOT NULL,           -- messages.seq
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,                 -- the message's entry
   session TEXT NOT NULL,
   delivered_at INTEGER,               -- null while pending
-  PRIMARY KEY (message, session)
+  PRIMARY KEY (thread, n, session)
 );
 CREATE INDEX deliveries_pending ON deliveries (session) WHERE delivered_at IS NULL;
 
@@ -95,7 +100,7 @@ CREATE INDEX deliveries_pending ON deliveries (session) WHERE delivered_at IS NU
 CREATE TABLE reads (
   viewer TEXT NOT NULL,               -- email, or "local"
   thread INTEGER NOT NULL,
-  seq INTEGER NOT NULL,
+  n INTEGER NOT NULL,                 -- an entry number
   at INTEGER NOT NULL,
   PRIMARY KEY (viewer, thread)
 );
@@ -118,10 +123,18 @@ CREATE TABLE profile_status (
 -- unchanged: turns, bindings, processes
 ```
 
-`chats`, `chat_messages` and `inbound` are gone: an ember chat is a thread
-with surface `ember`; what a person typed there and what came from Slack are
-both messages; what `inbound.status` recorded is `deliveries`. The v9 → v10
-migration moves existing rows over (data only; no code keeps the old shape):
+The v10 → v11 migration moves each message to an entry in thread order: an
+edited one becomes its message with the edited text (there is no older text
+to keep); one deleted in v10 is left out (its words were cleared already, and
+ember takes nothing back), with its deliveries. Deliveries follow their
+messages to `(thread, n)`; a read position (a seq) becomes the last entry of
+the messages it covered. The thread
+table is made anew with `AUTOINCREMENT`, keeping every id. `messages` goes.
+
+v10 had `messages` (one row per message, changed in place under a global
+`rev` cursor); before it, `chats`, `chat_messages` and `inbound`. The v9 → v10
+migration moved those over (data only; no code keeps the old shape), and a v9
+database goes through both steps:
 
 - threads come from `chats` (surface `ember`), from the threads `inbound`
   rows came from, and from a session's own first thread when it has no
@@ -130,7 +143,7 @@ migration moves existing rows over (data only; no code keeps the old shape):
 - a message typed on the page is in both old tables and becomes one message:
   the `chat_messages` row gives its words, files and quotes (the `inbound`
   copy held the text formatted for the agent); `inbound.status` becomes the
-  delivery's `delivered_at`; seq (and rev) follow the time things were said;
+  delivery's `delivered_at`; the order follows the time things were said;
 - earlier ember notices were stored as the agent's posts and stay agent
   messages (nothing tells them apart);
 - a Slack thread's surface needs the connect's team: before the store opens,
@@ -142,7 +155,7 @@ migration moves existing rows over (data only; no code keeps the old shape):
 
 ### Writing
 
-- **Slack message in**: upsert its thread, insert the message (a duplicate
+- **Slack message in**: upsert its thread, append the message (a duplicate
   `(thread, ts)` is the same message seen twice — ignored), add a delivery
   for each session in the thread (creating the session and its
   `thread_sessions` row first when the message starts one), then ack Slack.
@@ -151,7 +164,7 @@ migration moves existing rows over (data only; no code keeps the old shape):
   and a later connect only brings in its own session.
 - **Joining mid-thread**: when ember starts following a Slack thread at a
   reply, what Slack has before that reply is recorded first (no deliveries),
-  so the thread is complete and seq keeps Slack's order.
+  so the thread is complete and its log keeps Slack's order.
 - **Person on ember's page**: the same, with surface `ember`; quotes and
   attachments are columns, and the text the agent reads (quotes as Zork
   writes them, file paths) is made at delivery, not stored.
@@ -163,43 +176,53 @@ migration moves existing rows over (data only; no code keeps the old shape):
   ember's own notices are recorded as `author_kind = ember`.
 - **`-stop`** is recorded like any message and stops each session it is
   delivered to instead of reaching the agent.
-- **Slack edits and deletes** (`message_changed`, `message_deleted`) update
-  the row and bump `rev` (an "edit" with the same words — Slack sends those
-  for thread roots as replies come — changes nothing). A message still
-  pending reaches the agent as it reads at delivery; a deleted one not at all.
-- Every insert or change takes the next `rev` in the same transaction.
+- **Slack edits** (`message_changed`, found by the thread Slack names —
+  `thread_ts`, or the message's own ts outside a thread) append an `edit`
+  (the message's new words, its files and quotes as they were). An "edit"
+  with the same words — Slack sends those for thread roots as replies come —
+  changes nothing. A message still pending reaches the agent as it reads at
+  delivery (merged).
+- **Slack deletes** (`message_deleted`) are ignored: ember has no
+  retraction, and the message stays as it was said.
+- Every entry takes its thread's next n in the same transaction.
 
 ### Reading
 
 - `GET /threads?session=…` / the thread list of a session (all threads
   without `session`), `GET /threads/:id`: threads with their sessions, their
   people (everyone who wrote in it, earliest first), the first thing a person
-  said (`firstText`, for a chat's title), last message, rev, and the viewer's
-  read position and unread count (messages after it, not deleted, not the
-  viewer's own — in a Slack thread, not of a Slack user the viewer is).
-- `GET /threads/:id/messages?after=<rev>` — every message changed after that
-  cursor; `?before=<seq>&limit=` pages back through history (no cursor: the
-  latest page). The answer is `{ rev, messages, more }`: follow `after=rev`;
-  `more` says older messages exist before a page. A page opens a thread with
-  the last page and follows `after`. Messages carry `authorName`.
-- `PUT /threads/:id/read {seq}` — the viewer's read position; it only moves
+  said (`firstText`, for a chat's title), `last` (the last entry's n) and
+  `lastMessage` (the latest message as merged, for lists), and the viewer's
+  read position and unread count (messages after it that are not the
+  viewer's own — in a Slack thread, not of a Slack user the viewer is); the
+  latest said first. The store's `lastMessage(thread)`,
+  `unreadCount(viewer, thread)` and `readPosition(viewer, thread)` give these
+  for anything else that lists threads (the sidebar's items do).
+- `GET /threads/:id/entries?after=n` — what came since; `?before=n&limit=`
+  — older pages (no cursor: the latest page, 50 unless `limit`, at most
+  500); `?from=a&to=b` — a gap, both ends included. The answer is
+  `{ last, entries }`. Entries carry `authorName` (the author in words as the
+  station knows them when read).
+- `PUT /threads/:id/read {n}` — the viewer's read position; it only moves
   forward, and the answer says where it is.
 - `POST /threads/:id/messages {text, attachments, quotes}` — a person's
-  message in an ember chat (Slack threads are written in Slack);
-  attachments must be uploads of a session in the thread
+  message in an ember chat (Slack threads are written in Slack), answered
+  with its `{ n }`; attachments must be uploads of a session in the thread
   (`POST /sessions/:key/files`). `POST /threads {session, title?}` opens
   another chat on a session; `POST /threads/:id/sessions {session}` brings
   another session into an ember chat. `POST /sessions` (a new chat) makes the
   session and its chat and answers `{ key, thread }`.
 - A session's transcript comes only from `/sessions/:key/live?from=N` (entries
-  from index N, then as they are written); the station keeps each watched
-  transcript parsed incrementally instead of re-reading the file per request.
+  from index N — and the usage so far, even when N is all of them — then as
+  they are written; a watcher asking past the end is told where it ends); the
+  station keeps each watched transcript parsed incrementally instead of
+  re-reading the file per request.
 - `GET /chats` — the viewer's sidebar items (The sidebar, below).
 - `PUT /me/slack/:user` / `DELETE /me/slack/:user` — the viewer says a Slack
   user is them ("这是我"), or no longer ("不是我"); nothing checks it. The
   answer is the overview, whose `slackUsers` lists the viewer's Slack users.
 - `GET /sessions/:key` is the session row, its threads, and its turns — no
-  messages, no transcript. `GET /sessions` lists shown sessions;
+  entries, no transcript. `GET /sessions` lists shown sessions;
   `?archived=1` lists the archived ones.
 
 ### The sidebar
@@ -223,9 +246,10 @@ unread marks and who takes part are the viewer's:
   "thread": 7,                    // its internal chat; null until the first message makes it
   "title": "部署挂了",
   "agents": [{ "key", "runtime", "model", "effort", "process", "pending", "lastTurn" }],  // its shown sessions
-  "last": { "seq", "authorKind", "author", "authorName", "text", "createdAt", "deletedAt" } | null,
-  //   the chat's latest message, its text cut to 200 characters; null without a chat
-  "unread": true,                 // messages after the viewer's read position that are not their own
+  "last": { "seq", "authorKind", "author", "authorName", "text", "createdAt" } | null,
+  //   the chat's latest message as merged (the store's lastMessage; seq is its entry n), its text cut to 200
+  //   characters; null without a chat
+  "unread": true,                 // messages after the viewer's read position that are not their own (the store's unreadCount)
   "mine": true,
   "lastActiveAt": 1790000000000,  // the latest message's time, else the chat's; without a chat: the session's
   "connect": "ds" | null,         // the connect its agent came from; null for one made on ember
@@ -251,7 +275,7 @@ in; a chat's is that of the first of its sessions that has one.
   them (`identities`) — who also count as the viewer for unread.
 
 `GET /events` sends the viewer's items as they change: when anything they are
-made of changes (sessions, messages, memberships, read positions, the
+made of changes (sessions, entries, memberships, read positions, the
 viewer's Slack users, connects), the station reads the items again, once per
 viewer for a burst, and tells each stream what differs from the items it last
 told it: `chat` with the whole item when one is new or changed,
@@ -262,75 +286,63 @@ are those at the moment it opened.
 ### Housekeeping
 
 - `POST /sessions/:key/archive` / `DELETE /sessions/:key/archive`: hide and
-  show; the answer is the session summary.
+  show (and archive its threads, below); the answer is the session summary.
 - `DELETE /sessions/:key`: ends its process, deletes its rows (turns,
-  deliveries, thread_sessions; threads left with no session and their
-  messages) and its workspace directory. The runtime's own transcript file is
-  left alone (it is in the profile's home, which may be a person's own).
+  deliveries, thread_sessions; threads left with no session, with their
+  entries or archive files, and reads), its workspace directory and its
+  transcript copy. The runtime's own transcript file is left alone (it is in
+  the profile's home, which may be a person's own). `thread-removed` tells
+  clients about each thread that went.
 
-## Append-only threads (schema v11 — next)
+## Append-only threads
 
 A thread is a log: entries are appended and never changed, so whatever a
 client has fetched stays true forever and can be kept on the device. Changes
-are new entries the client merges.
+are new entries the client merges. The only way entries disappear is with
+their whole thread (deleting a session removes threads left without one):
+`thread-removed {id}` tells clients to drop what they keep of it.
 
-```sql
-CREATE TABLE entries (
-  thread INTEGER NOT NULL,
-  n INTEGER NOT NULL,                 -- 1, 2, 3 … within the thread, no gaps
-  kind TEXT NOT NULL,                 -- message | edit | delete
-  target INTEGER,                     -- edit/delete: the n of the message it changes
-  ts TEXT,                            -- message: the platform's id (Slack ts), unique per thread
-  author_kind TEXT NOT NULL,          -- person | agent | ember
-  author TEXT NOT NULL,
-  text TEXT,                          -- message and edit: Markdown
-  attachments TEXT, quotes TEXT,      -- message and edit: JSON
-  declared TEXT,                      -- message: an agent's final | block
-  at INTEGER NOT NULL,
-  PRIMARY KEY (thread, n)
-);
-```
+### Archiving
 
-- `messages` goes (v10 → v11 moves each message to an entry in thread order;
-  an edited one becomes its message with the edited text — there is no older
-  text to keep; a deleted one becomes a message followed by a delete).
-  `deliveries` and `reads` point at `(thread, n)`.
-- Slack `message_changed` appends an `edit`, `message_deleted` a `delete`.
-- The only way entries disappear is with their whole thread (deleting a
-  session removes threads left without one): `thread-removed {id}` tells
-  clients to drop what they keep of it.
+When every session of a thread is archived, its entries go to
+`<data>/archive/threads/<id>.jsonl.zst` (one entry per line, zstd — Node's own
+`zlib.zstdCompressSync`, no library) in one step with deleting their rows, and
+the thread row is marked archived (`archived_at`). Since entries never change,
+the file is the thread as it was, and clients' kept copies stay valid.
+Reading an archived thread reads the file (the same API and summaries,
+answered from the decompressed entries; the last 32 threads read are kept
+decompressed in memory). A new entry — someone writing in it (an edit too), or a session of it shown again — loads it back into the
+database first and removes the file. Archiving a session also writes its
+transcript copy, `<data>/archive/transcripts/<session>.jsonl.zst` (the
+runtime's file, compressed); the runtime's own file in the profile's home is
+left as it is. Showing the session again or deleting it removes the copy.
 
-Archiving writes a thread out of the database: when every session of a
-thread is archived, its entries go to `<data>/archive/threads/<id>.jsonl.zst`
-(one entry per line, zstd) in one step with deleting its rows, and the
-thread row is marked archived. Since entries never change, the file is the
-thread as it was, and clients' kept copies stay valid. Reading an archived
-thread reads the file (the same API, answers from the decompressed entries);
-a new entry — someone writing in it, or unarchiving — loads it back into the
-database first and removes the file. The session's transcript copy
-(`<data>/archive/transcripts/<session>.jsonl.zst`) is written the same way;
-the runtime's own file in the profile's home is left as it is.
+### In the client core
 
-Reading: `GET /threads/:id/entries?after=n` (what came since),
-`?before=n&limit=` (older pages), `?from=a&to=b` (a gap). Thread summaries
-carry `last` (the last n) and the latest message as merged, for lists.
-The `thread` event carries the new entries, always contiguous: a client whose
-last n is below the first one it receives asks for the gap.
+Merging happens in one place (`client/core/src/entries.rs`, used by the
+`chat` view): a message shows its latest edit's text, attachments and quotes,
+marked edited (`editedAt`). Unread and read positions are entry numbers.
 
-Merging (in the client core, one place): a message shows its latest edit's
-text, attachments and quotes, marked edited; a deleted message is gone from
-the view. Unread and read positions are entry numbers.
-
-The client core keeps entries on the device, through `Host` storage in
-chunks — `thread/<station>/<thread>/<chunk>` holding entries
-`chunk*256+1 … chunk*256+256`, plus `thread/<station>/<thread>/meta`
-(`{ first, last }` it holds). Opening a chat shows what is kept at once, then
-asks for `after=last`; scrolling up reads kept chunks before asking the
-station. A session's transcript is append-only too (its entries are indexed
-from 0 in `/sessions/:key/live?from=N`) and is kept the same way under
-`transcript/<station>/<session>/<chunk>`. Kept data is bounded (least
-recently opened threads go first past a size limit) and is dropped for a
-station the account can no longer reach and on sign-out.
+The client core keeps entries on the device, through `Host` storage (IndexedDB
+on the web, files natively) in chunks — `thread/<station>/<thread>/<chunk>`
+holding entries `chunk*256+1 … chunk*256+256`, plus
+`thread/<station>/<thread>/meta` (`{ first, last }` it holds, one run, and the
+thread's summary as last seen, so the chat opens before the station's thread
+list is read). Opening a chat shows its latest page of what is kept at once,
+then asks for `after=last`; scrolling up reads kept chunks before asking the
+station (whose answer is kept too). The `thread` event carries the new entries,
+always contiguous: a client whose last n is below the first one it receives
+asks for the gap (`from`/`to`) once, and places what comes meanwhile after it.
+A session's transcript is append-only too (its entries are indexed from 0 in
+`/sessions/:key/live?from=N`) and is kept the same way under
+`transcript/<station>/<session>/<chunk>` (a transcript written anew and
+shorter is cut there too). Storage cannot list its keys, so `kept` indexes
+every kept log with its chunks' sizes and when it was last opened; past 50 MB
+the least recently opened go first. Kept data is dropped for a station the
+account can no longer reach (a workspace no signed-in account lists — decided
+once every account's `/v1/me` has answered — or a station its workspace no
+longer lists), on sign-out (what no remaining account reaches), with
+`thread-removed`, and with `session-removed` (its transcript).
 
 ## Notifications
 
@@ -342,9 +354,10 @@ when it is small:
 | event | data |
 | --- | --- |
 | `session` | the session summary (row, state warm/cold/running, last turn, creator, participants) |
-| `session-removed` | `{ key }` (threads that went with it get no event of their own) |
-| `thread` | `{ id, rev, messages: [changed rows] }`; `messages: []` when its sessions changed |
-| `read` | `{ viewer, thread, seq }` (only to that viewer) |
+| `session-removed` | `{ key }` |
+| `thread` | `{ id, entries: [appended entries, contiguous] }`; `entries: []` when its sessions changed |
+| `thread-removed` | `{ id }`: it went with every entry (a deleted session took it along) |
+| `read` | `{ viewer, thread, n }` (only to that viewer) |
 | `chat` | an item of the viewer's sidebar, new or changed (only to that viewer) |
 | `chat-removed` | `{ id }`: an item gone from the viewer's sidebar |
 | `overview` | the whole overview, with the viewer and their Slack users (`slackUsers`) — sent when config, connect status, logins, profile checks, quotas, ember-mesh's state, recorded runtime processes, the running/warm counts or a viewer's Slack users change |

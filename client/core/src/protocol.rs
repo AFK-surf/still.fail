@@ -48,7 +48,8 @@ pub enum Topic {
     Host { station: String },
     /// Every thread of a station, with the viewer's unread counts.
     Threads { station: String },
-    /// One thread's messages: its latest page, older pages as `chat.older` loads them.
+    /// One thread's entries: `{ first, last, entries, thread }`, its latest page (kept on the device, then what came
+    /// after), older pages as `chat.older` loads them; `thread` is its summary as kept, until `threads` is read.
     Thread { station: String, thread: u64 },
     /// The station's sidebar rows for the viewer, as it puts them together (`/chats`).
     ChatRows { station: String },
