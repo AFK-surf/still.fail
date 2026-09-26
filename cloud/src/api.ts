@@ -1,8 +1,9 @@
 // The account-facing API: workspaces, members, invitations, stations and
-// grants; plus the two calls stations make with their own key (enroll and
-// heartbeat). Returns null for paths it does not own.
+// grants, and each device's event socket; plus the two things stations do
+// with their own key (enroll, and hold their presence socket). Returns null
+// for paths it does not own.
 import { bearerToken, denied, readJson, reply, verifyToken, type Claims } from "./auth";
-import { ROLES, type Role } from "./directory";
+import { EVENTS_PROTOCOL, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
 import { grantKeys, signGrant, validKeyHex, verifyKeySignature } from "./grants";
 
@@ -26,11 +27,25 @@ async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
   }
 }
 
-async function account(request: Request, env: Env): Promise<Claims | null> {
-  const token = bearerToken(request);
+async function account(token: string | null, env: Env): Promise<Claims | null> {
   const claims = token ? await verifyToken(env, token, "access") : null;
   if (!claims) return null;
   return (await env.ACCOUNTS.getByName(claims.sub).live(claims)) ? claims : null;
+}
+
+const isUpgrade = (request: Request) => request.headers.get("upgrade")?.toLowerCase() === "websocket";
+
+/**
+ * The access token of an events socket. Browsers cannot set headers on a
+ * WebSocket, so it comes as a second subprotocol, `ember-token.<token>`, next
+ * to `ember-events` (the one the answer selects). A header, unlike a query
+ * string, stays out of URLs and so out of request logs.
+ */
+function socketToken(request: Request): string | null {
+  const offered = (request.headers.get("sec-websocket-protocol") ?? "").split(",").map((p) => p.trim());
+  if (!offered.includes(EVENTS_PROTOCOL)) return null;
+  const match = offered.map((p) => /^ember-token\.([A-Za-z0-9._-]{1,4096})$/.exec(p)).find(Boolean);
+  return match?.[1] ?? null;
 }
 
 async function body(request: Request): Promise<Record<string, unknown>> {
@@ -58,20 +73,34 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       grant_keys: grantKeys(env),
     }));
   }
-  if (path === "/v1/stations/heartbeat" && method === "POST") {
-    const input = await readJson(request).catch(() => null);
-    const ts = Number(input?.ts);
-    if (!input || !validKeyHex(input.station) || typeof input.signature !== "string" || !Number.isSafeInteger(ts) || Math.abs(ts - Date.now() / 1000) > 300) return reply({ error: "invalid_request" }, 400);
-    if (!(await verifyKeySignature(input.station, input.signature, `ember-station-heartbeat-v1:${env.PUBLIC_ORIGIN}:${input.station}:${ts}`))) return reply({ error: "invalid_signature" }, 401);
-    const version = typeof input.version === "string" ? input.version.slice(0, 40) : null;
-    const found = await env.DIRECTORY.getByName("primary").heartbeat(input.station, version);
-    return found ? reply({ ...found, grant_keys: grantKeys(env) }) : reply({ error: "station_removed" }, 404);
+  // The station's presence: a WebSocket it keeps open. Signed at connect in
+  // headers: x-ember-station (its key), x-ember-ts (unix seconds, within 5
+  // minutes), x-ember-signature over "ember-station-connect-v1:<origin>:<station>:<ts>",
+  // and x-ember-version.
+  if (path === "/v1/stations/connect" && method === "GET") {
+    if (!isUpgrade(request)) return reply({ error: "websocket_required" }, 426);
+    const station = request.headers.get("x-ember-station");
+    const signature = request.headers.get("x-ember-signature") ?? "";
+    const ts = Number(request.headers.get("x-ember-ts"));
+    if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - Date.now() / 1000) > 300) return reply({ error: "invalid_request" }, 400);
+    if (!(await verifyKeySignature(station, signature, `ember-station-connect-v1:${env.PUBLIC_ORIGIN}:${station}:${ts}`))) return reply({ error: "invalid_signature" }, 401);
+    const headers = new Headers({ upgrade: "websocket", "x-ember-station": station });
+    const version = request.headers.get("x-ember-version");
+    if (version) headers.set("x-ember-version", version.slice(0, 40));
+    return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
+  }
+
+  if (path === "/v1/events" && method === "GET") {
+    if (!isUpgrade(request)) return reply({ error: "websocket_required" }, 426);
+    const claims = await account(socketToken(request), env);
+    if (!claims) return denied();
+    return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-ember-sub": claims.sub } }));
   }
 
   // ── accounts ────────────────────────────────────────────────────────────
   const isAccountRoute = path === "/v1/me" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
-  const claims = await account(request, env);
+  const claims = await account(bearerToken(request), env);
   if (!claims) return denied();
   let input: Record<string, unknown>;
   try {

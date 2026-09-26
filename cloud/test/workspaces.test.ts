@@ -62,11 +62,12 @@ test("accounts own workspaces, invite each other, enroll stations and get grants
     assert.equal((await enroll(enrollment.token, forged.id, await forged.sign(message(forged.id)))).status, 404, "one use");
 
     const ts = Math.floor(Date.now() / 1000);
-    const heartbeat = async () => h.fetch("/v1/stations/heartbeat", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ station: station.id, ts, signature: await station.sign(`ember-station-heartbeat-v1:${h.origin}:${station.id}:${ts}`) }),
+    const connect = async () => h.fetch("/v1/stations/connect", {
+      headers: { upgrade: "websocket", "x-ember-station": station.id, "x-ember-ts": String(ts), "x-ember-signature": await station.sign(`ember-station-connect-v1:${h.origin}:${station.id}:${ts}`) },
     });
-    assert.equal((await heartbeat()).status, 200);
+    const presence = await connect();
+    assert.equal(presence.status, 101);
+    presence.webSocket!.accept();
 
     // A grant names who, where, with what role, from which device; stations verify it offline.
     const device = await key();
@@ -81,7 +82,7 @@ test("accounts own workspaces, invite each other, enroll stations and get grants
     assert.equal((await alice("DELETE", `/v1/workspaces/${home.id}/members/${bobSub}`)).status, 200);
     assert.equal((await bob("POST", `/v1/workspaces/${home.id}/stations/${station.id}/grant`, { device: device.id })).status, 404);
     assert.equal((await alice("DELETE", `/v1/workspaces/${home.id}/stations/${station.id}`)).status, 200);
-    assert.equal((await heartbeat()).status, 404);
+    assert.equal((await connect()).status, 404);
   } finally {
     await h.close();
   }

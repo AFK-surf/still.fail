@@ -1,9 +1,16 @@
 // Only the test bundler imports this entry. Production exports no fixture routes.
 import { DurableObject } from "cloudflare:workers";
-import worker, { Account as ProductionAccount, RelayBudget as ProductionRelayBudget, DiscoveryRecord, Directory, LoginAttempt, LoginLimiter } from "../src/index";
+import worker, { Account as ProductionAccount, RelayBudget as ProductionRelayBudget, DiscoveryRecord, Directory as ProductionDirectory, LoginAttempt, LoginLimiter } from "../src/index";
 import { signToken, nowSeconds, reply, readJson } from "../src/auth";
 import type { Env } from "../src/env";
-export { DiscoveryRecord, Directory, LoginAttempt, LoginLimiter };
+export { DiscoveryRecord, LoginAttempt, LoginLimiter };
+
+export class Directory extends ProductionDirectory {
+  /** The presence alarm's check, as if it ran at `ms`. */
+  sweepAt(ms: number) {
+    return this.sweep(ms);
+  }
+}
 
 export class Account extends ProductionAccount {
   expire(id: string, kind: "idle" | "absolute") {
