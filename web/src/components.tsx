@@ -2,7 +2,7 @@
 import { useAppearance } from "./theme.ts";
 import { useIsMine, type Creator, type HostInfo, type ProcessView, type ProfileQuota } from "./api.ts";
 import { useOnlyMine, usePerson } from "./station.tsx";
-import { Segmented } from "./ui.tsx";
+import { Segmented, Tip } from "./ui.tsx";
 
 /** 全部 / 我参与的 (chats) or 我创建的 (connects) */
 export function MineFilter({ label = "筛选", mine = "我创建的" }: { label?: string; mine?: string }) {
@@ -54,6 +54,17 @@ function resetText(ms: number | null): string {
   return `${hours < 24 * 7 ? day : `${d.getMonth() + 1}月${d.getDate()}日`} ${d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} 重置`;
 }
 
+/** How long until a quota window refills, in words: "40 分钟后刷新", "3 小时 20 分钟后刷新", "2 天 5 小时后刷新". */
+function refillsIn(ms: number | null): string {
+  if (ms === null) return "";
+  const minutes = Math.round((ms - Date.now()) / 60_000);
+  if (minutes <= 0) return "马上刷新";
+  if (minutes < 60) return `${minutes} 分钟后刷新`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时${minutes % 60 ? ` ${minutes % 60} 分钟` : ""}后刷新`;
+  return `${Math.floor(hours / 24)} 天${hours % 24 ? ` ${hours % 24} 小时` : ""}后刷新`;
+}
+
 const level = (p: number) => (p >= 90 ? "red" : p >= 70 ? "amber" : "ok");
 
 /** A profile's allowance: one bar per window (compact: a single line of the fullest window). */
@@ -69,7 +80,9 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
       <span className="quota-rings">
         {windows.map((w) => (
           <span key={w.label} className="quota-ring-cell">
-            <QuotaRing percent={w.usedPercent} title={`${w.label}剩余 ${100 - w.usedPercent}%${w.resetsAt ? `，${resetText(w.resetsAt)}` : ""}`} />
+            <Tip label={<>{w.label}剩余 {100 - w.usedPercent}%{w.resetsAt !== null && <><br />{refillsIn(w.resetsAt)}</>}</>}>
+              <span><QuotaRing percent={w.usedPercent} /></span>
+            </Tip>
             <span className="quota-ring-letter">{letter(w.label)}</span>
           </span>
         ))}
@@ -92,13 +105,13 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
 
 /** What is left of the most used window, as a ring: full and green when untouched, shorter and redder as it goes; the
  * number left inside (up to 99; a full ring says 100 by itself). Use eats it clockwise from the top. */
-function QuotaRing({ percent, title }: { percent: number; title: string }) {
+function QuotaRing({ percent }: { percent: number }) {
   const used = Math.max(0, Math.min(100, Math.round(percent)));
   const left = 100 - used;
   const r = 10;
   const around = 2 * Math.PI * r;
   return (
-    <span className="quota-ring" data-level={level(used)} title={title} role="img" aria-label={`剩余 ${left}%`}>
+    <span className="quota-ring" data-level={level(used)} role="img" aria-label={`剩余 ${left}%`}>
       <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
         <circle className="quota-ring-track" cx="13" cy="13" r={r} />
         {left > 0 && <circle className="quota-ring-fill" cx="13" cy="13" r={r} strokeDasharray={`${(around * left) / 100} ${around}`} transform={`rotate(${-90 + used * 3.6} 13 13)`} />}
