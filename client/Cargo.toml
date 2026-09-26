@@ -1,8 +1,16 @@
 [workspace]
 resolver = "3"
-members = ["core"]
+members = ["core", "wasm"]
 
 [workspace.package]
 edition = "2024"
 version = "0.1.0"
 license = "MIT"
+
+# The browser build (client/wasm/build.sh): small over fast. A profile of its
+# own so native release builds keep the defaults.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1

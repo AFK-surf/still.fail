@@ -6,3 +6,7 @@ data/
 
 # built by mesh/build-web.sh
 web/src/mesh/pkg/
+
+# built by client/wasm/build.sh
+web/src/core/pkg/
+client/target/
