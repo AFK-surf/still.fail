@@ -23,7 +23,8 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     const distance = () => el.scrollHeight - el.scrollTop - el.clientHeight;
     const topOf = (node: Element) => el.scrollTop + node.getBoundingClientRect().top - el.getBoundingClientRect().top;
     const isMessage = (n: Node): n is Element => n instanceof Element && n.parentElement === el && n.matches(messages);
-    const lastMessage = () => [...el.children].filter(isMessage).at(-1) ?? null;
+    // Transient rows (an activity that will fold away) are never what a replaced message hands over to.
+    const lastMessage = () => [...el.children].filter((n) => isMessage(n) && !n.hasAttribute("data-transient")).at(-1) ?? null;
     const hold = () => {
       const bottom = Math.max(0, el.scrollHeight - el.clientHeight);
       // A followed message that was replaced (a streamed reply landing) hands over to the newest.

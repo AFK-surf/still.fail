@@ -497,7 +497,7 @@ function Activity({ agent, collapsed, onToggle, onOpen, leaving }: { agent: Agen
   const overflowing = shown.length > count;
   const newest = shown.at(-1)?.key ?? "none";
   return (
-    <div className="msg msg-row agent-activity" data-collapsed={collapsed || undefined} data-leaving={leaving || undefined}>
+    <div className="msg msg-row agent-activity" data-transient="" data-collapsed={collapsed || undefined} data-leaving={leaving || undefined}>
       <div className="msg-main">
         <div className="msg-head">
           <span className="msg-avatar msg-avatar-agent"><ModelLogo model={agent.model} runtime={agent.runtime} size={12} /></span>
