@@ -31,7 +31,7 @@ class FakeConnection extends FakeChat implements Connection {
   onStatus(): void {}
 }
 
-/** Follows an event stream (/events or /sessions/:key/live), gathering what it sends. */
+/** Follows an event stream (/events), gathering what it sends. */
 async function follow(url: string, headers: Record<string, string> = {}) {
   const controller = new AbortController();
   const response = await fetch(url, { headers, signal: controller.signal });
@@ -378,9 +378,11 @@ test("session detail is the session, its threads and turns; its transcript comes
     assert.equal(detail.body.threads[0].lastMessage.text, "<@UBOT> hi");
     assert.equal(detail.body.threads[0].surface, "slack:T1");
     assert.equal(detail.body.turns.length, 1);
-    const live = await follow(`${t.base}/sessions/${encodeURIComponent(row!.key)}/live?from=1`);
-    const timeline = await live.next("timeline");
-    assert.deepEqual([timeline.start, timeline.entries.map((e: any) => e.kind)], [1, ["tool_call"]]);
+    // Its transcript comes on the events stream opened for it, from the entry asked for.
+    const live = await follow(`${t.base}/events?live=${encodeURIComponent(row!.key)}&from=1&live=nobody&from=0`);
+    const timeline = await live.next("live", (m) => m.type === "timeline");
+    assert.deepEqual([timeline.key, timeline.start, timeline.entries.map((e: any) => e.kind)], [row!.key, 1, ["tool_call"]]);
+    assert.ok(!live.events.some((e) => e.event === "live" && e.data.key === "nobody"), "a session that is not there is left out");
     live.close();
     assert.equal((await t.call("POST", `/sessions/${encodeURIComponent(row!.key)}/stop`)).status, 200);
     assert.equal(t.claude.last.aborts, 1);

@@ -322,8 +322,8 @@ fn http_error(status: u16, data: &Value) -> CoreError {
 struct StationState {
     addr: StationAddr,
     topics: HashSet<Topic>,
-    /// The `/events` stream, and whether it asks for host samples.
-    events: Option<(AbortHandle, bool)>,
+    /// The `/events` stream, and what it was opened for.
+    events: Option<(AbortHandle, EventsFor)>,
     /// The stream a new one replaces (to start or stop host samples). It stays open until its successor is, so no
     /// event falls between the two.
     replaced: Option<AbortHandle>,
@@ -367,6 +367,15 @@ impl StationState {
     fn wants_host(&self) -> bool {
         self.topics.iter().any(|t| matches!(t, Topic::Host { .. }))
     }
+}
+
+/// What a station's `/events` stream is opened for, besides what every stream carries: host samples, and the
+/// sessions followed as they run (their transcript, steps and phase come on the same stream, in the one order with
+/// the messages).
+#[derive(Clone, Debug, Default, PartialEq)]
+struct EventsFor {
+    host: bool,
+    live: Vec<String>,
 }
 
 /// The steps in flight and the phase of a `live` topic (`LiveMessage` semantics as useLiveSession applied them).
@@ -803,11 +812,28 @@ impl Stations {
     /// Opens the station's `/events` if it is not open, or opens it anew when a `host` topic starts or stops
     /// (host samples are asked for with `?host=1` when the stream opens).
     fn sync_events(&self, station: &str) {
-        let (addr, host, generation) = {
+        self.open_events(station, false)
+    }
+
+    /// Opens the station's `/events` for what its topics want now (unless its stream already is, or `anew`): the
+    /// new stream opens first, and the old one goes once it has, so nothing falls between.
+    fn open_events(&self, station: &str, anew: bool) {
+        // A session is followed once its live topic has what was kept of it: the stream asks from there.
+        let mut live: Vec<String> = self
+            .live_topics(station, |t| matches!(t, Topic::Live { .. }))
+            .into_iter()
+            .filter(|t| self.sink.get(t).is_some())
+            .filter_map(|t| match t {
+                Topic::Live { key, .. } => Some(key),
+                _ => None,
+            })
+            .collect();
+        live.sort();
+        let (addr, wants, generation) = {
             let mut stations = self.stations.borrow_mut();
             let Some(s) = stations.get_mut(station) else { return };
-            let host = s.wants_host();
-            if s.events.as_ref().is_some_and(|(_, asks)| *asks == host) {
+            let wants = EventsFor { host: s.wants_host(), live };
+            if !anew && s.events.as_ref().is_some_and(|(_, asks)| *asks == wants) {
                 return;
             }
             if let Some((old, _)) = s.events.take()
@@ -816,13 +842,27 @@ impl Stations {
                 older.abort();
             }
             s.generation += 1;
-            (s.addr.clone(), host, s.generation)
+            (s.addr.clone(), wants, s.generation)
         };
         // The first try belongs to whoever asked for the stream (a chat opening); later ones are traces of their own.
-        let task = self.spawn_in(None, self.rc().follow_events(station.to_string(), addr, host, generation, self.tracer.current()));
+        let task = self.spawn_in(None, self.rc().follow_events(station.to_string(), addr, wants.clone(), generation, self.tracer.current()));
         if let Some(s) = self.stations.borrow_mut().get_mut(station) {
-            s.events = Some((task, host));
+            s.events = Some((task, wants));
         }
+    }
+
+    /// The path of an `/events` stream for `wants`, each session asked for from the entries its topic has.
+    fn events_path(&self, station: &str, wants: &EventsFor) -> String {
+        let mut query: Vec<String> = Vec::new();
+        if wants.host {
+            query.push("host=1".into());
+        }
+        for key in &wants.live {
+            let topic = Topic::Live { station: station.into(), key: key.clone() };
+            let from = self.sink.get(&topic).and_then(|v| v.get("timeline")?.as_array().map(Vec::len)).unwrap_or(0);
+            query.push(format!("live={}&from={from}", encode(key)));
+        }
+        if query.is_empty() { "/events".into() } else { format!("/events?{}", query.join("&")) }
     }
 
     /// Whether this stream is the station's newest; if so, the one it replaces goes now.
@@ -847,8 +887,7 @@ impl Stations {
     }
 
     /// Holds the station's `/events` open while any of its topics is live; its events keep the topics current.
-    async fn follow_events(self: Rc<Self>, station: String, addr: StationAddr, host: bool, generation: u64, mut parent: Option<SpanContext>) {
-        let path = if host { "/events?host=1" } else { "/events" };
+    async fn follow_events(self: Rc<Self>, station: String, addr: StationAddr, wants: EventsFor, generation: u64, mut parent: Option<SpanContext>) {
         let mut first = true;
         loop {
             // Replaced before it opened: its successor asks instead.
@@ -858,7 +897,9 @@ impl Stations {
             let name = if std::mem::replace(&mut first, false) { "station.connect" } else { "station.reconnect" };
             let mut span = self.tracer.enter(parent.take(), || self.tracer.span(name, Kind::Internal));
             span.set("ember.station", station.clone());
-            let opened = self.tracer.instrument(Some(span.context()), self.open_stream(&addr, path)).await;
+            // Asked anew each time: a session is followed from what its topic has by then.
+            let path = self.events_path(&station, &wants);
+            let opened = self.tracer.instrument(Some(span.context()), self.open_stream(&addr, &path)).await;
             if !self.took_over(&station, generation) {
                 return;
             }
@@ -932,6 +973,22 @@ impl Stations {
                 self.put_read(station, thread, n);
             }
             "chat" => self.put_row(station, &data),
+            "live" => {
+                let Some(key) = data.get("key").and_then(Value::as_str) else { return };
+                if !self.is_live(&Topic::Live { station: station.into(), key: key.into() }) {
+                    return;
+                }
+                if !self.on_live(station, key, &data) {
+                    // Entries that cannot be placed: that session from its first entry, on a stream opened anew.
+                    let topic = Topic::Live { station: station.into(), key: key.into() };
+                    if let Some(s) = self.stations.borrow_mut().get_mut(station).and_then(|s| s.lives.get_mut(key)) {
+                        *s = LiveView::default();
+                    }
+                    self.host.spawn(self.kept.forget(&Log::transcript(station, key)));
+                    self.sink.set(&topic, Ok(live_start()));
+                    self.open_events(station, true);
+                }
+            }
             "chat-removed" => {
                 let Some(id) = data.get("id").and_then(Value::as_str) else { return };
                 self.sink.update(&Topic::ChatRows { station: station.into() }, &mut |rows| {
@@ -1326,45 +1383,6 @@ impl Stations {
 
     // ── live ──
 
-    /// Holds `/sessions/:key/live` open: the transcript from its first entry (what is kept of it at once), then
-    /// as it grows, and the steps in flight. A reconnect asks from the entries already here.
-    async fn follow_live(self: Rc<Self>, station: String, addr: StationAddr, key: String) {
-        let topic = Topic::Live { station: station.clone(), key: key.clone() };
-        let mut start = live_start();
-        if let Some((_, entries)) = self.kept.open(&Log::transcript(&station, &key), u64::MAX).await {
-            start["timeline"] = json!(entries);
-        }
-        self.sink.set(&topic, Ok(start));
-        loop {
-            let from = self.sink.get(&topic).and_then(|v| v.get("timeline")?.as_array().map(Vec::len)).unwrap_or(0);
-            let path = format!("/sessions/{}/live?from={from}", encode(&key));
-            let mut gap = false;
-            if let Ok(mut body) = self.open_stream(&addr, &path).await {
-                let mut parser = SseParser::default();
-                'read: while let Some(Ok(bytes)) = body.next().await {
-                    for (_, data) in parser.feed(&bytes) {
-                        if let Ok(message) = serde_json::from_str::<Value>(&data)
-                            && !self.on_live(&station, &key, &message)
-                        {
-                            gap = true;
-                            break 'read;
-                        }
-                    }
-                }
-            }
-            if gap {
-                // Entries that cannot be placed: start over from the first.
-                if let Some(s) = self.stations.borrow_mut().get_mut(&station).and_then(|s| s.lives.get_mut(&key)) {
-                    *s = LiveView::default();
-                }
-                self.host.spawn(self.kept.forget(&Log::transcript(&station, &key)));
-                self.sink.set(&topic, Ok(live_start()));
-            } else {
-                self.host.sleep(RECONNECT_MS).await;
-            }
-        }
-    }
-
     /// One message of the live stream into the topic; false when its entries leave a gap.
     fn on_live(&self, station: &str, key: &str, message: &Value) -> bool {
         let topic = Topic::Live { station: station.into(), key: key.into() };
@@ -1506,14 +1524,22 @@ impl Source for Stations {
             }
             // Samples come on the events stream, which asks for them now.
             Topic::Host { .. } => {}
+            // What was kept of its transcript first; then the station's stream asks for it from there (see open_events).
             Topic::Live { key, .. } => {
                 if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
                     s.lives.insert(key.clone(), LiveView::default());
                 }
-                let task = self.spawn_in(None, self.rc().follow_live(station.clone(), addr, key.clone()));
-                if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
-                    s.tasks.insert(topic.clone(), task);
-                }
+                let (this, station, key, topic) = (self.rc(), station.clone(), key.clone(), topic.clone());
+                self.spawn(async move {
+                    let mut start = live_start();
+                    if let Some((_, entries)) = this.kept.open(&Log::transcript(&station, &key), u64::MAX).await {
+                        start["timeline"] = json!(entries);
+                    }
+                    if this.is_live(&topic) && this.sink.get(&topic).is_none() {
+                        this.sink.set(&topic, Ok(start));
+                    }
+                    this.sync_events(&station);
+                });
             }
             _ => {}
         }

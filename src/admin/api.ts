@@ -132,7 +132,7 @@ export class AdminApi {
   readonly #quotaPending = new Set<string>();
   readonly #apps: SlackApps;
   readonly #appIds = new Map<string, string>();
-  /** Open /events streams, and /sessions/:key/live streams (which only need the keepalive). */
+  /** Open /events streams (for the keepalive). */
   readonly #clients = new Set<Client>();
   readonly #streams = new Set<ServerResponse>();
   /** Requests whose span is still open: a stream's ends once it is open (`stream`), anything else's when it is answered. */
@@ -280,7 +280,20 @@ export class AdminApi {
 
     if (method === "GET" && path === "/host") return send(res, 200, await hostInfo(this.#deps.settings.config.dataDir));
     if (method === "GET" && path === "/overview") return send(res, 200, this.#overview(viewer));
-    if (method === "GET" && path === "/events") return this.#events(req, res, viewer, url.searchParams.get("host") === "1");
+    if (method === "GET" && path === "/events") {
+      // `live=<key>&from=<n>`, repeated: those sessions as they run, on this same stream (see #events).
+      const keys = url.searchParams.getAll("live");
+      const froms = url.searchParams.getAll("from");
+      const live = keys.map((key, i) => ({ key, from: Math.max(0, Number(froms[i]) || 0) })).filter(({ key }) => {
+        try {
+          this.#sessionRow(key);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      return this.#events(req, res, viewer, url.searchParams.get("host") === "1", live);
+    }
     if (method === "GET" && path === "/sessions") return send(res, 200, await this.#sessions(url.searchParams.get("connect"), url.searchParams.get("archived") === "1"));
     if (method === "POST" && path === "/sessions") {
       // A new chat: its session and its thread are made first, so files can be uploaded into it before the first message.
@@ -385,10 +398,6 @@ export class AdminApi {
       if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
       void this.#deps.hub.warm(id).catch((error) => log.warn("warming failed", { session: id, error }));
       return send(res, 202, { ok: true });
-    }
-    if (resource === "sessions" && id && action === "live" && method === "GET") {
-      this.#sessionRow(id);
-      return this.#live(req, res, id, Math.max(0, Number(url.searchParams.get("from")) || 0));
     }
     if (resource === "sessions" && id && action === "files" && method === "GET") {
       // A file sent to the session, for previews: only from its upload directory.
@@ -877,25 +886,11 @@ export class AdminApi {
   // ── event streams ───────────────────────────────────────────────────────
 
   /**
-   * One session as it runs: the transcript entries from `from` on, the steps
-   * in flight, then each new step, delta and entry as it happens.
+   * What changed, as it changes: see StationEvents. `host` adds host samples; `live`, those sessions as they run
+   * (their transcript from `from` on, steps and phase), each message a `live` event — in the one order with the
+   * rest, so a client sees an agent's activity and its messages as they happened.
    */
-  #live(req: IncomingMessage, res: ServerResponse, key: string, from: number): void {
-    res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
-    res.write("retry: 2000\n\n");
-    this.#spans.get(res)?.(true);
-    const stop = this.#deps.hub.live.subscribe(key, from, (message) => res.write(`event: ${message.type}\ndata: ${JSON.stringify(message)}\n\n`));
-    this.#streams.add(res);
-    this.#timers();
-    req.on("close", () => {
-      stop();
-      this.#streams.delete(res);
-      this.#timers();
-    });
-  }
-
-  /** What changed, as it changes: see StationEvents. `host` adds host samples. */
-  #events(req: IncomingMessage, res: ServerResponse, viewer: Viewer, host: boolean): void {
+  #events(req: IncomingMessage, res: ServerResponse, viewer: Viewer, host: boolean, live: { key: string; from: number }[] = []): void {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
     res.write("retry: 3000\n\n");
     // A stream's span ends once it is open: it may stay open for hours.
@@ -908,8 +903,15 @@ export class AdminApi {
       client.rows = new Map((await this.#chats(viewer)).map((row) => [row.id, JSON.stringify(row)]));
     }).catch((error) => log.warn("sidebar rows not read", { error }));
     if (host) void this.#sampleHost(client);
+    const stops = live.map(({ key, from }) => this.#deps.hub.live.subscribe(key, from, (message) => {
+      // Behind whatever is on its way already (a thread's entries being read), never ahead of it.
+      this.#outbox = this.#outbox.then(() => {
+        if (this.#clients.has(client)) this.#write(client, "live", { key, ...message });
+      });
+    }));
     this.#timers();
     req.on("close", () => {
+      for (const stop of stops) stop();
       this.#clients.delete(client);
       this.#streams.delete(res);
       this.#timers();

@@ -267,6 +267,8 @@ export interface StationEvents {
   overview: Overview;
   /** Only to streams opened with ?host=1. */
   host: HostInfo;
+  /** A session the stream was opened for (`?live=<key>&from=<n>`), as it runs: LiveMessage with its key. */
+  live: LiveMessage & { key: string };
 }
 
 /** PUT /connects/:id. Blank or missing tokens keep the stored ones. */
