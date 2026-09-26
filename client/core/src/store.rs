@@ -277,9 +277,12 @@ impl Store {
         if let Some(value) = self.held(topic) {
             return Some(Ok(value));
         }
-        match self.inner.borrow().topics.get(topic)?.value.clone()? {
+        let inner = self.inner.borrow();
+        let with_data = inner.held.is_some();
+        match inner.topics.get(topic)?.value.clone()? {
             Err(error) => Some(Err(error)),
-            Ok(value) => (!crate::data::holds(topic)).then_some(Ok(value)),
+            // With a data center, a value of its topics here is only what was last sent.
+            Ok(value) => (!(with_data && crate::data::holds(topic))).then_some(Ok(value)),
         }
     }
 
