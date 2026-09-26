@@ -402,6 +402,28 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
  */
 type NewStep = "team" | "app" | "install" | "manual" | "bind";
 
+type SlackTeam = Overview["slackTeams"][number];
+
+/** A Slack workspace's icon, or Slack's mark before it is known. */
+function SlackTeamIcon({ team }: { team: SlackTeam }) {
+  return team.owner?.teamIcon
+    ? <img className="slack-team-icon" src={team.owner.teamIcon} alt="" width={28} height={28} referrerPolicy="no-referrer" />
+    : <span className="slack-team-icon"><SlackLogo size={18} /></span>;
+}
+
+/** Whose configuration token it is there: the person (picture, name, email) and the workspace's address. */
+function TokenOwner({ team }: { team: SlackTeam }) {
+  const o = team.owner;
+  if (!o) return null;
+  return (
+    <span className="token-owner">
+      {o.image && <img src={o.image} alt="" width={16} height={16} referrerPolicy="no-referrer" />}
+      <span>{o.user}{o.email ? `（${o.email}）` : ""}</span>
+      {o.teamDomain && <span className="muted">{o.teamDomain}.slack.com</span>}
+    </span>
+  );
+}
+
 /**
  * A new Slack connect, in steps: the Slack workspace to make its app in (a configuration token each, or a new one);
  * the app's look and permissions; making it and installing it (Slack's OAuth gives the station the bot token), then
@@ -484,7 +506,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
         <>
           {teams.length > 0 && (
             <Choices label="Slack 工作区" value={chosen?.teamId ?? ""} onChange={setTeam}
-              options={teams.map((t) => ({ value: t.teamId, title: t.name, icon: <SlackLogo size={18} /> }))} />
+              options={teams.map((t) => ({ value: t.teamId, title: t.name, icon: <SlackTeamIcon team={t} />, description: <TokenOwner team={t} /> }))} />
           )}
           {teams.length === 0 || adding ? (
             <div className="card">

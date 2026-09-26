@@ -175,11 +175,12 @@ test("a Slack app made on a station in ember cloud is installed through Slack's 
     return new Response(JSON.stringify({ ok: true, access_token: "xoxb-installed", team: { name: "Acme" } }));
   });
   try {
-    const token = (teamId: string, team: string) => ({ accessToken: `xoxe.xoxp-${teamId}`, refreshToken: "xoxe-1", expiresAt: Date.now() + 3600_000, teamId, team });
+    const owner = (team: string) => ({ team, teamDomain: null, teamIcon: null, user: "Ada", email: "ada@example.com", image: null });
+    const token = (teamId: string, team: string) => ({ accessToken: `xoxe.xoxp-${teamId}`, refreshToken: "xoxe-1", expiresAt: Date.now() + 3600_000, teamId, owner: owner(team) });
     s.settings.update((raw) => ({ ...raw, slackConfigTokens: [token("T1", "Acme"), token("T2", "Other")] }));
     // Several workspaces: the station lists them (never their tokens), and the app goes into the one chosen.
     const overview0 = (await s.call("GET", "/overview")).body;
-    assert.deepEqual(overview0.slackTeams, [{ teamId: "T1", name: "Acme" }, { teamId: "T2", name: "Other" }]);
+    assert.deepEqual(overview0.slackTeams, [{ teamId: "T1", name: "Acme", owner: owner("Acme") }, { teamId: "T2", name: "Other", owner: owner("Other") }]);
     assert.equal(JSON.stringify(overview0).includes("xoxe"), false);
     assert.equal((await s.call("POST", "/slack/apps", { settings: { name: "ember" } })).status, 400, "which workspace, when there are several");
     const made = (await s.call("POST", "/slack/apps", { team: "T2", settings: { name: "Helper", description: "Hi", groups: { dm: false } } })).body;

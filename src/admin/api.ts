@@ -21,7 +21,7 @@ import type { ProfileQuota } from "../quota.ts";
 import type { Profile } from "../config.ts";
 import { INTERNAL_CONNECT } from "../chat/internal.ts";
 import { EMBER_SURFACE } from "../store.ts";
-import { appIdOf, applySettings, exchangeInstallCode, rotateConfigToken, teamOfConfigToken, type ConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
+import { appIdOf, applySettings, exchangeInstallCode, rotateConfigToken, ownerOfConfigToken, type ConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
 import { log } from "../log.ts";
 import { parseTraceparent, route, serverSpan } from "../tracing.ts";
 import type { Settings } from "../settings.ts";
@@ -530,8 +530,8 @@ export class AdminApi {
       const refresh = String(input.refreshToken ?? "").trim();
       if (!refresh.startsWith("xoxe-")) throw new HttpError(400, "Refresh token 应该以 xoxe- 开头（不是 xoxe.xoxp- 开头的那个）");
       const token = await rotateConfigToken(refresh).catch((error) => { throw new HttpError(400, `Slack 没接受这个 token：${error instanceof Error ? error.message : String(error)}`); });
-      const team = await teamOfConfigToken(token.accessToken);
-      this.#deps.settings.update((raw) => ({ ...raw, slackConfigTokens: upsertToken(raw.slackConfigTokens ?? [], { ...token, ...(team ? { team } : {}) }) }));
+      const owner = await ownerOfConfigToken(token.accessToken);
+      this.#deps.settings.update((raw) => ({ ...raw, slackConfigTokens: upsertToken(raw.slackConfigTokens ?? [], { ...token, ...(owner ? { owner } : {}) }) }));
       log.info("slack configuration token added", { team: token.teamId, by: viewerId(viewer) });
       return send(res, 200, { teamId: token.teamId, overview: this.#overview(viewer) });
     }
@@ -554,9 +554,9 @@ export class AdminApi {
 
   // ── Slack apps ──────────────────────────────────────────────────────────
 
-  /** The Slack workspaces ember makes apps in (a configuration token each), by id and name; never the tokens. */
+  /** The Slack workspaces ember makes apps in (a configuration token each), with whose token it is; never the tokens. */
   #slackTeams() {
-    return this.#deps.settings.config.slackConfigTokens.map((t) => ({ teamId: t.teamId, name: t.team ?? t.teamId }));
+    return this.#deps.settings.config.slackConfigTokens.map((t) => ({ teamId: t.teamId, name: t.owner?.team || t.teamId, owner: t.owner ?? null }));
   }
 
   /** The workspace an app is made in: the one asked for, or the only one there is. */

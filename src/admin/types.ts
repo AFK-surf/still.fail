@@ -2,6 +2,7 @@
 import type { RuntimeKind } from "../config.ts";
 import type { ConnectKind, ConnectMode } from "../config.ts";
 import type { ConnectState } from "../connections.ts";
+import type { ConfigTokenOwner } from "../chat/slack-apps.ts";
 import type { LoginJob, LoginState } from "../login.ts";
 import type { Attachment, AuthorKind, EntryKind, Membership, Quote } from "../store.ts";
 import type { MeshStatus } from "../mesh.ts";
@@ -89,7 +90,7 @@ export interface Overview {
   /** The Slack users the viewer said are them (PUT /me/slack/:user): the station takes them for the viewer. */
   slackUsers: string[];
   /** The Slack workspaces ember makes and edits connects' apps in, an app configuration token each (never shown). */
-  slackTeams: { teamId: string; name: string }[];
+  slackTeams: { teamId: string; name: string; owner: ConfigTokenOwner | null }[];
   /** Slack apps made here, waiting for their connect: `installed` once Slack sent the install back (`team`, where to). */
   slackInstalls: { state: string; appId: string; installed: boolean; team: string | null }[];
   /** The data disk's room; null when it cannot be read. */

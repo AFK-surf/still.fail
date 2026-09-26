@@ -140,9 +140,19 @@ export interface ConfigToken {
   refreshToken: string;
   /** Epoch ms when the access token stops working. */
   expiresAt: number;
-  /** The Slack workspace it makes apps in, and its name there. */
+  /** The Slack workspace it makes apps in. */
   teamId: string;
-  team?: string;
+  /** Whose token it is, and where, as Slack shows them (read when it is added): what tells tokens apart. */
+  owner?: ConfigTokenOwner;
+}
+
+export interface ConfigTokenOwner {
+  team: string;
+  teamDomain: string | null;
+  teamIcon: string | null;
+  user: string;
+  email: string | null;
+  image: string | null;
 }
 
 export class SlackApiError extends Error {
@@ -197,10 +207,23 @@ export function slackAppLinks(appId: string) {
   return { settings: base, install: `${base}/install-on-team`, appToken: `${base}/general`, oauth: `${base}/oauth` };
 }
 
-/** The Slack workspace a configuration token is for, by name (auth.test with its access token). */
-export async function teamOfConfigToken(accessToken: string): Promise<string | null> {
-  const data = await call("auth.test", accessToken, {}).catch(() => null);
-  return data?.team ? String(data.team) : null;
+/** Who a configuration token belongs to and in which workspace, as Slack shows them; null if Slack will not say. */
+export async function ownerOfConfigToken(accessToken: string): Promise<ConfigTokenOwner | null> {
+  const auth = await call("auth.test", accessToken, {}).catch(() => null);
+  if (!auth) return null;
+  const [user, team] = await Promise.all([
+    call("users.info", accessToken, { user: String(auth.user_id) }).then((d) => d.user, () => null),
+    call("team.info", accessToken, {}).then((d) => d.team, () => null),
+  ]);
+  const text = (value: unknown) => (typeof value === "string" && value ? value : null);
+  return {
+    team: text(team?.name) ?? String(auth.team ?? ""),
+    teamDomain: text(team?.domain),
+    teamIcon: text(team?.icon?.image_68),
+    user: text(user?.profile?.display_name) ?? text(user?.real_name) ?? String(auth.user ?? ""),
+    email: text(user?.profile?.email),
+    image: text(user?.profile?.image_48),
+  };
 }
 
 /**
@@ -279,7 +302,7 @@ export class SlackApps {
     if (!rotating) {
       rotating = rotateConfigToken(current.refreshToken)
         .then((next) => {
-          this.#save({ ...next, ...(current.team ? { team: current.team } : {}) });
+          this.#save({ ...next, ...(current.owner ? { owner: current.owner } : {}) });
           log.info("slack configuration token rotated", { team: next.teamId });
           return next.accessToken;
         })
