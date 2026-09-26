@@ -36,6 +36,7 @@ use crate::mesh::{GrantSource, Mesh};
 use crate::protocol::{ClientId, ClientMessage, CoreMessage, RequestId, Topic};
 use crate::station::{self, MeshSource, StationAddr, StationGrants, Stations, TopicSink};
 use crate::store::{Source, Store};
+use crate::sync::Sync;
 use crate::trace::{self, Kind, Span, Tracer};
 use crate::views::{EmailOf, Views};
 
@@ -59,6 +60,8 @@ struct Inner {
     cloud: Rc<Cloud>,
     store: Rc<Store>,
     stations: Rc<Stations>,
+    /// What the core keeps in sync by itself, whatever the UI shows (sync.rs).
+    sync: Rc<Sync>,
     views: Rc<Views>,
     /// Threads' entries and transcripts kept on the device.
     kept: Rc<Kept>,
@@ -133,7 +136,9 @@ impl Core {
             let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone());
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
             store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
+            let sync = Sync::new(store.clone(), host.clone());
             Inner {
+                sync,
                 views,
                 kept,
                 data: data.clone(),
@@ -163,6 +168,8 @@ impl Core {
         for (workspace, view) in inner.data.records("workspace") {
             inner.presence(&workspace, &view);
         }
+        // From now on the core keeps its workspaces and stations in sync, whatever the UI shows.
+        inner.sync.start();
         let me = Rc::downgrade(&inner);
         tracer.set_export(Rc::new(move |body: Vec<u8>| {
             let me = me.clone();
