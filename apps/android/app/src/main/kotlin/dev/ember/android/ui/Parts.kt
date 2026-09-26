@@ -46,6 +46,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -127,10 +128,32 @@ fun avatarColor(id: String): Color = AVATAR[Math.floorMod(id.lowercase().hashCod
 fun initial(name: String): String = name.trim().firstOrNull()?.uppercase() ?: "?"
 
 @Composable
-fun Avatar(id: String, name: String, size: Dp, modifier: Modifier = Modifier) {
+fun Avatar(id: String, name: String, size: Dp, modifier: Modifier = Modifier, picture: String? = null) {
+    // Their picture (a Google account's) once it is here; their initial on their colour until then, or without one.
+    val image = rememberPicture(picture)
     Box(modifier.size(size).clip(CircleShape).background(avatarColor(id)), contentAlignment = Alignment.Center) {
-        Text(initial(name), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.5f).sp, lineHeight = (size.value * 0.5f).sp)
+        if (image != null) androidx.compose.foundation.Image(image, name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+        else Text(initial(name), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.5f).sp, lineHeight = (size.value * 0.5f).sp)
     }
+}
+
+/** Pictures by URL, once each for the app's life. */
+private val pictures = java.util.concurrent.ConcurrentHashMap<String, androidx.compose.ui.graphics.ImageBitmap>()
+
+@Composable
+private fun rememberPicture(url: String?): androidx.compose.ui.graphics.ImageBitmap? {
+    val known = url?.let { pictures[it] }
+    val loaded by androidx.compose.runtime.produceState(known, url) {
+        if (url.isNullOrBlank() || value != null) return@produceState
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                java.net.URL(url).openStream().use { android.graphics.BitmapFactory.decodeStream(it) }?.let { androidx.compose.ui.graphics.asImageBitmap(it) }
+            } catch (_: java.io.IOException) {
+                null
+            }
+        }?.also { pictures[url] = it }
+    }
+    return loaded
 }
 
 /** People overlapping a little, each ringed in the page's color. */
@@ -233,8 +256,9 @@ fun NavBack(label: String, onClick: () -> Unit) {
 
 /** A round chip-colored button in a bar. */
 @Composable
-fun NavButton(icon: ImageVector, onClick: () -> Unit, iconSize: Dp = 18.dp) {
-    Box(Modifier.size(34.dp).clip(CircleShape).background(C.chip).clickable(onClick = onClick), contentAlignment = Alignment.Center) { IconIn(icon, iconSize) }
+fun NavButton(icon: ImageVector, onClick: () -> Unit, iconSize: Dp = 18.dp, plain: Boolean = false) {
+    // Plain: the icon alone, no disc behind it.
+    Box(Modifier.size(34.dp).clip(CircleShape).let { if (plain) it else it.background(C.chip) }.clickable(onClick = onClick), contentAlignment = Alignment.Center) { IconIn(icon, iconSize) }
 }
 
 /** A page's compact bar: back, a centered title, and one action. No line under it: the page's paper runs on. */

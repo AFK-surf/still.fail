@@ -237,7 +237,7 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
         }
         byAccount.forEach { (account, items) ->
             Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Avatar(account.email, account.name.ifEmpty { account.email }, 16.dp)
+                Avatar(account.email, account.name.ifEmpty { account.email }, 16.dp, picture = account.picture)
                 Text(account.email, fontSize = 13.sp, color = C.muted)
             }
             if (items.isEmpty()) Text("没有 workspace", fontSize = 14.sp, color = C.subtle, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))

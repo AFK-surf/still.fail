@@ -89,15 +89,13 @@ fun HomeScreen(current: WorkspaceEntry) {
             Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box(Modifier.size(34.dp).clip(CircleShape).background(avatarColor(current.account.email)).clickable { app.push(Screen.Me) }, contentAlignment = Alignment.Center) {
-                Text(initial(current.account.name.ifEmpty { current.account.email }), color = androidx.compose.ui.graphics.Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
+            Avatar(current.account.email, current.account.name.ifEmpty { current.account.email }, 34.dp, Modifier.clip(CircleShape).clickable { app.push(Screen.Me) }, picture = current.account.picture)
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { openWorkspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(current.workspace.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = "有邀请" })
                 IconIn(Icons.ChevronDown, 16.dp, C.muted)
             }
-            NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
+            NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp, plain = true)
         }
         Box(Modifier.weight(1f)) {
             val view = chats.value
@@ -244,8 +242,9 @@ private fun Toolbar(app: AppState, modifier: Modifier) {
         // The switch keeps its own width (a weight would stretch it up to the button); the room left goes between them.
         Spacer(Modifier.weight(1f).widthIn(min = 16.dp))
         Box(
-            Modifier.size(48.dp).shadow(10.dp, CircleShape).clip(CircleShape).background(C.ink).clickable { app.push(Screen.NewChat) },
+            // Ink on the paper in the light; in the dark a raised surface, not a white disc.
+            Modifier.size(48.dp).shadow(10.dp, CircleShape).clip(CircleShape).background(if (C.dark) C.surface2 else C.ink).clickable { app.push(Screen.NewChat) },
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Pen, 20.dp, C.bg) }
+        ) { IconIn(Icons.Pen, 20.dp, if (C.dark) C.ink else C.bg) }
     }
 }

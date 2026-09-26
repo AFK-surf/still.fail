@@ -61,7 +61,7 @@ fun MeScreen(current: WorkspaceEntry) {
         LargeTitle("设置", "我")
         Card {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Avatar(me.email, me.name.ifEmpty { me.email }, 46.dp)
+                Avatar(me.email, me.name.ifEmpty { me.email }, 46.dp, picture = me.picture)
                 Column {
                     Text(me.name.ifEmpty { me.email }, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink)
                     Text("${me.email} · Google", fontSize = 13.sp, color = C.muted)
