@@ -15,9 +15,14 @@ export async function harness(
     relayUrl?: string;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
+    /** The console's host. */
+    adminOrigin?: string;
+    /** The ASSETS binding: a few stand-in files of both web apps unless given. */
+    assets?: (request: Request) => Promise<Response> | Response;
   } = {},
 ) {
   const origin = options.origin ?? "https://relay.example";
+  const adminOrigin = options.adminOrigin ?? "https://admin.relay.example";
   const signingKey = options.signingKey ?? randomSecret(),
     adminToken = randomSecret();
   const { publicKey, privateKey } = await generateKeyPair("RS256");
@@ -55,6 +60,7 @@ export async function harness(
       ...(options.persist ? { resourcePersistencePath: options.persist } : {}),
       bindings: {
         PUBLIC_ORIGIN: origin,
+        ADMIN_ORIGIN: adminOrigin,
         GOOGLE_CLIENT_ID: options.noGoogle ? "" : "test-google-client",
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
@@ -63,7 +69,10 @@ export async function harness(
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
       },
-      serviceBindings: options.relay ? { TEST_RELAY: { external: { address: new URL(options.relay).host, http: {} } } } : {},
+      serviceBindings: {
+        ...(options.relay ? { TEST_RELAY: { external: { address: new URL(options.relay).host, http: {} } } } : {}),
+        ASSETS: (options.assets ?? standInAssets) as any,
+      },
       durableObjects: Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Relay", "DiscoveryRecord", "RelayBudget", "Directory"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "RELAY", "RECORDS", "RELAY_BUDGET", "DIRECTORY"][i], { className, useSQLite: true }])),
       outboundService: async (request) => {
         const url = new URL(request.url);
@@ -107,6 +116,8 @@ export async function harness(
     throw error;
   }
   const fetch = (path: string, init?: RequestInit) => mf.dispatchFetch(origin + path, init as any);
+  /** A request to the console's host. */
+  const fetchAdmin = (path: string, init?: RequestInit) => mf.dispatchFetch(adminOrigin + path, init as any);
   async function begin(sub = "google-test-user", invalid?: string, callback = "http://127.0.0.1:32145/oauth/callback") {
     const verifier = randomSecret(),
       state = randomSecret();
@@ -162,9 +173,9 @@ export async function harness(
     if (response.status !== 200) throw new Error("exchange: " + response.status);
     return (await response.json()) as Tokens;
   }
-  /** Calls the API as a logged-in account. */
-  const as = (tokens: Tokens) => (method: string, path: string, value?: unknown) =>
-    fetch(path, {
+  /** Calls the API as a logged-in account (on the console's host with `on: "admin"`). */
+  const as = (tokens: Tokens, on: "main" | "admin" = "main") => (method: string, path: string, value?: unknown) =>
+    (on === "admin" ? fetchAdmin : fetch)(path, {
       method,
       headers: { authorization: `Bearer ${tokens.access_token}`, ...(value === undefined ? {} : { "content-type": "application/json" }) },
       ...(value === undefined ? {} : { body: JSON.stringify(value) }),
@@ -172,16 +183,32 @@ export async function harness(
   return {
     mf,
     origin,
+    adminOrigin,
     as,
     grantPublicJwk,
     adminToken,
     signingKey,
     codes,
     fetch,
+    fetchAdmin,
     begin,
     complete,
     exchange,
     login,
     close: () => mf.dispose(),
   };
+}
+
+/** Files like Cloudflare's assets binding serves them: a directory's index.html for its path with a slash, 404 for anything else. */
+export const STAND_IN_FILES: Record<string, string> = {
+  "/index.html": "<title>ember</title>",
+  "/assets/app.js": "// the web app",
+  "/admin-app/index.html": "<title>ember 管理后台</title>",
+  "/admin-app/assets/console.js": "// the console",
+};
+
+function standInAssets(request: Request): Response {
+  const path = new URL(request.url).pathname;
+  const body = STAND_IN_FILES[path.endsWith("/") ? `${path}index.html` : path];
+  return body === undefined ? new MFResponse("Not found", { status: 404 }) as unknown as Response : new MFResponse(body) as unknown as Response;
 }

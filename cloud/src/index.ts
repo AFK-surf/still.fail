@@ -4,7 +4,7 @@ import { decodeKey, MAX_AGE_MS, readPayload, verifyPayload } from "./pkarr";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
 import type { Env } from "./env";
-import { api } from "./api";
+import { adminApi, api } from "./api";
 export { RelayBudget } from "./relay";
 export { Account } from "./account";
 export { Directory } from "./directory";
@@ -50,6 +50,34 @@ const cors = {
   "cache-control": "no-store",
 };
 
+// The admin's console has a host of its own, ADMIN_ORIGIN, served by this
+// Worker: its web app, the calls its client core makes to sign in and stay
+// signed in (the core talks to the page's origin), and the console's API;
+// nothing else. A sign-in starts on PUBLIC_ORIGIN all the same: the login's
+// cookie belongs to the host that starts it, and Google calls back to
+// PUBLIC_ORIGIN, which then sends the browser on to the console's /auth/callback.
+const CONSOLE_CALLS = new Set(["/v1/auth/token", "/v1/auth/refresh", "/v1/auth/logout", "/v1/me"]);
+// Both web apps are in one assets directory: ember's at its root, the
+// console's under /admin-app/. Every request reaches the Worker first
+// (run_worker_first), which picks the app by host; /admin-app/ is not a path
+// on either host, and each app's client-side routes fall back to its own
+// index.html here rather than in the assets' not-found handling.
+const CONSOLE_FILES = "/admin-app";
+
+const notFound = () => new Response("Not found", { status: 404 });
+
+/** A file of the web app under `root`, or, for any other path (a client-side route), its index.html. */
+async function app(env: Env, request: Request, root: string): Promise<Response> {
+  if (!env.ASSETS) return notFound();
+  const url = new URL(request.url);
+  url.pathname = root + url.pathname;
+  const file = await env.ASSETS.fetch(new Request(url, request));
+  if (file.status !== 404) return file;
+  url.pathname = root + "/";
+  url.search = "";
+  return env.ASSETS.fetch(new Request(url, request));
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -66,9 +94,18 @@ export default {
       if (request.method !== "GET") return reply({ error: "method_not_allowed" }, 405);
       return env.RELAY_BUDGET.getByName("primary").fetch(request);
     }
+    const onConsole = url.origin === env.ADMIN_ORIGIN;
     if (path.startsWith("/v1/")) {
-      if (url.origin !== env.PUBLIC_ORIGIN) return reply({ error: "invalid_origin" }, 421);
+      if (url.origin !== env.PUBLIC_ORIGIN && !onConsole) return reply({ error: "invalid_origin" }, 421);
       if (path.startsWith("/v1/auth/") && !authConfigured(env)) return reply({ error: "login_not_configured" }, 503);
+    }
+    if (onConsole) {
+      const read = request.method === "GET" || request.method === "HEAD";
+      if (path === "/v1/auth/google/start" && request.method === "GET") {
+        return new Response(null, { status: 302, headers: { location: `${env.PUBLIC_ORIGIN}${path}${url.search}`, "cache-control": "no-store" } });
+      }
+      if (path.startsWith("/v1/admin/")) return adminApi(request, env, path);
+      if (!CONSOLE_CALLS.has(path)) return read && !path.startsWith("/v1/") ? app(env, request, CONSOLE_FILES) : notFound();
     }
     if (path === "/v1/auth/google/start" && request.method === "GET") {
       return googleStart(env, request);
@@ -159,9 +196,10 @@ export default {
     }
     const match = /^\/pkarr\/([a-z0-9]{52})$/.exec(path);
     if (!match) {
-      // Everything else is the web app; its client-side routes fall back to index.html.
-      if (env.ASSETS && (request.method === "GET" || request.method === "HEAD") && !path.startsWith("/v1/")) return env.ASSETS.fetch(request);
-      return new Response("Not found", { status: 404 });
+      // Everything else is the web app (the console's files are not).
+      const consoleFile = path === CONSOLE_FILES || path.startsWith(`${CONSOLE_FILES}/`);
+      if ((request.method === "GET" || request.method === "HEAD") && !path.startsWith("/v1/") && !consoleFile) return app(env, request, "");
+      return notFound();
     }
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (request.method !== "GET" && request.method !== "PUT") {

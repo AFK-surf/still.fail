@@ -1,23 +1,42 @@
 // A local ember cloud for trying the whole path without Cloudflare: the
-// Worker in miniflare (Google mocked) behind a small server on :8787 (PORT)
-// that also serves the web app from dist/cloud-app. WebSockets (/v1/events,
-// station presence) are piped to miniflare itself, listening on PORT + 1.
+// Worker in miniflare (Google mocked) behind a small server on :8787 (PORT),
+// and on :8789 (ADMIN_PORT) as the admin console's host. The Worker serves
+// both web apps from dist/cloud-app (`pnpm run build:cloud`) as it does on
+// Cloudflare. WebSockets (/v1/events, station presence) are piped to
+// miniflare itself, listening on PORT + 1.
 //   RELAY=http://127.0.0.1:3340 pnpm exec tsx test/dev.ts
 // The console's admin is alice (ADMIN_EMAIL=bob@example.test makes it bob).
-// Development-only routes (never in the Worker):
-//   /__dev/login?user=alice  signs that account into the browser and goes to /
+// Development-only routes (never in the Worker), on either port:
+//   /__dev/login?user=alice  signs that account into the browser (on that origin) and goes to /
 //   /__dev/account?user=alice  that account as JSON, for the core's `migrate` (native apps)
 //   /__dev/grant?device=hex  a grant for the first station of alice's first workspace
 import { readFile } from "node:fs/promises";
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect } from "node:net";
 import { extname, join, normalize } from "node:path";
+import { Response as MFResponse } from "miniflare";
 import { harness } from "./harness.ts";
 
 const port = Number(process.env.PORT ?? 8787);
+const adminPort = Number(process.env.ADMIN_PORT ?? port + 2);
 const origin = `http://127.0.0.1:${port}`;
-const h = await harness({ origin, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test" });
+const adminOrigin = `http://127.0.0.1:${adminPort}`;
 const app = join(import.meta.dirname, "..", "..", "dist", "cloud-app");
+const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".wasm": "application/wasm", ".woff2": "font/woff2" };
+
+/** The assets binding over dist/cloud-app: a directory's index.html for its path with a slash, 404 for anything else. */
+async function assets(request: Request): Promise<Response> {
+  const path = normalize(decodeURIComponent(new URL(request.url).pathname));
+  const file = path.endsWith("/") ? `${path}index.html` : path;
+  try {
+    const body = await readFile(join(app, file));
+    return new MFResponse(body, { headers: { "content-type": TYPES[extname(file)] ?? "application/octet-stream" } }) as unknown as Response;
+  } catch {
+    return new MFResponse("Not found", { status: 404 }) as unknown as Response;
+  }
+}
+
+const h = await harness({ origin, adminOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test" });
 const alice = h.as(await h.login("alice"));
 const workspace = await (await alice("POST", "/v1/workspaces", { name: "Dev" })).json() as { id: string };
 for (const name of ["studio", "mac-mini"]) {
@@ -25,10 +44,8 @@ for (const name of ["studio", "mac-mini"]) {
   console.log(`ENROLL ${enrollment.command}`);
 }
 
-const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".wasm": "application/wasm", ".woff2": "font/woff2" };
-
-const server = createServer(async (req, res) => {
-  const url = new URL(req.url ?? "/", origin);
+async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
+  const url = new URL(req.url ?? "/", base);
   if (url.pathname === "/__dev/account") {
     const account = await signIn(url.searchParams.get("user") ?? "alice");
     return void res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(account));
@@ -48,27 +65,18 @@ const server = createServer(async (req, res) => {
     const granted = await alice("POST", `/v1/workspaces/${workspace.id}/stations/${view.stations[0].id}/grant`, { device: url.searchParams.get("device") });
     return void res.writeHead(granted.status, headers).end(await granted.text());
   }
-  if (/^\/(v1|\.well-known|pkarr)\/|^\/healthz$/.test(url.pathname)) {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(chunk as Buffer);
-    const headers = Object.fromEntries(Object.entries(req.headers).filter(([k, v]) => typeof v === "string" && !["host", "connection"].includes(k))) as Record<string, string>;
-    const response = await h.fetch(url.pathname + url.search, {
-      method: req.method, headers, redirect: "manual",
-      ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
-    });
-    res.writeHead(response.status, Object.fromEntries(response.headers)).end(Buffer.from(await response.arrayBuffer()));
-    return;
-  }
-  // The web app, with client routes falling back to index.html.
-  const file = normalize(url.pathname).replace(/^\/+/, "");
-  for (const candidate of extname(file) ? [file, "index.html"] : ["index.html"]) {
-    try {
-      const body = await readFile(join(app, candidate));
-      return void res.writeHead(200, { "content-type": TYPES[extname(candidate)] ?? "application/octet-stream" }).end(body);
-    } catch { /* next */ }
-  }
-  res.writeHead(404).end();
-});
+  // Everything else is the Worker's, on the host it was asked on.
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  const headers = Object.fromEntries(Object.entries(req.headers).filter(([k, v]) => typeof v === "string" && !["host", "connection"].includes(k))) as Record<string, string>;
+  const response = await (base === origin ? h.fetch : h.fetchAdmin)(url.pathname + url.search, {
+    method: req.method, headers, redirect: "manual",
+    ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
+  });
+  res.writeHead(response.status, Object.fromEntries(response.headers)).end(Buffer.from(await response.arrayBuffer()));
+}
+
+const server = createServer((req, res) => void serve(origin, req, res));
 // The upgrade goes to miniflare byte for byte, Host included, so the Worker sees this origin.
 server.on("upgrade", (req, socket, head) => {
   const upstream = connect(port + 1, "127.0.0.1", () => {
@@ -82,6 +90,7 @@ server.on("upgrade", (req, socket, head) => {
   socket.on("error", () => upstream.destroy());
 });
 server.listen(port, "127.0.0.1", () => console.log(`READY ember cloud (dev) on :${port}`));
+createServer((req, res) => void serve(adminOrigin, req, res)).listen(adminPort, "127.0.0.1", () => console.log(`READY admin console (dev) on :${adminPort}`));
 
 /** An account as the web app kept it in localStorage (what `migrate` takes). */
 async function signIn(user: string) {

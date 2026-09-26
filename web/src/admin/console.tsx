@@ -1,19 +1,19 @@
-// The admin's console at /admin: every user and workspace in ember cloud, and
-// the invite codes that let a new person create a workspace. Only the admin's
-// account reaches it (ember cloud answers 404 to everyone else, and so does
-// this page). It is an operator's tool: each page reads when it opens and
-// after each action, nothing more.
-import { ArrowLeft, Copy, Plus, Ticket, Users, Boxes } from "lucide-react";
+// The admin's console, on its own host: every user and workspace in ember
+// cloud, and the invite codes that let a new person create a workspace. Only
+// the admin's account reaches it (ember cloud answers 404 to everyone else).
+// It is an operator's tool: each page reads when it opens and after each
+// action, nothing more.
+import { Boxes, Copy, LogOut, Plus, Ticket, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Navigate, NavLink, Route, Routes } from "react-router";
+import { Navigate, NavLink, Route, Routes, useLocation } from "react-router";
 import { Lockup } from "../brand.tsx";
 import { timeUntil } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, StatusDot, Time, ICON, type Tone } from "../ui.tsx";
-import { useAccounts, type Account } from "./accounts.ts";
-import { admin, useAction, type Admission, type AdminUser, type AdminWorkspace, type InviteCodeView } from "./api.ts";
-import { Avatar } from "./gate.tsx";
-import { ROLE_LABEL } from "./settings.tsx";
+import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, StatusDot, Tip, Time, ICON, type Tone } from "../ui.tsx";
+import { signOut, useAccounts, type Account } from "../cloud/accounts.ts";
+import { admin, useAction, type Admission, type AdminUser, type AdminWorkspace, type InviteCodeView } from "../cloud/api.ts";
+import { Avatar } from "../cloud/gate.tsx";
+import { ROLE_LABEL } from "../cloud/settings.tsx";
 
 // Each account is asked once per page load whether it is the admin.
 const probes = new Map<string, Promise<boolean>>();
@@ -34,30 +34,34 @@ export function useAdminAccount(): Account | null | undefined {
   return list.find((a) => known[a.sub]) ?? (list.every((a) => a.sub in known) ? null : undefined);
 }
 
-export function AdminConsole() {
-  const account = useAdminAccount();
-  if (account === undefined) return <div className="gate"><Loading /></div>;
-  if (!account) return <Navigate to="/" replace />;
+// On a phone the sidebar and a page take turns: "/" is the sidebar there, and the users page elsewhere.
+const narrow = () => matchMedia("(max-width: 700px)").matches;
+
+export function Console({ account }: { account: Account }) {
+  const atIndex = useLocation().pathname === "/";
   return (
-    <div className="shell" data-detail="true">
+    <div className="shell" data-detail={!atIndex}>
       <nav className="sidebar" aria-label="管理后台">
         <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
         <div className="brand brand-compact"><Lockup /></div>
         <div className="nav-scroll">
-          <NavLink className="nav-row" to="/" end><ArrowLeft {...ICON} />返回 ember</NavLink>
-          <div className="nav-heading">管理后台 · {account.email}</div>
-          <NavLink className="nav-row" to="/admin/users"><Users {...ICON} />用户</NavLink>
-          <NavLink className="nav-row" to="/admin/workspaces"><Boxes {...ICON} />Workspace</NavLink>
-          <NavLink className="nav-row" to="/admin/codes"><Ticket {...ICON} />邀请码</NavLink>
+          <div className="nav-heading">管理后台</div>
+          <NavLink className="nav-row" to="/users"><Users {...ICON} />用户</NavLink>
+          <NavLink className="nav-row" to="/workspaces"><Boxes {...ICON} />Workspace</NavLink>
+          <NavLink className="nav-row" to="/codes"><Ticket {...ICON} />邀请码</NavLink>
+        </div>
+        <div className="nav-foot-row admin-foot">
+          <span className="admin-account"><Avatar account={account} size={20} /><span className="account-email">{account.email}</span></span>
+          <Tip label="退出登录" side="top"><IconButton label="退出登录" icon={LogOut} onClick={() => void signOut(account.sub)} /></Tip>
         </div>
       </nav>
       <main className="main">
         <Routes>
-          <Route index element={<Navigate to="users" replace />} />
+          <Route index element={narrow() ? null : <Navigate to="/users" replace />} />
           <Route path="users" element={<UsersPage account={account} />} />
           <Route path="workspaces" element={<WorkspacesPage account={account} />} />
           <Route path="codes" element={<CodesPage account={account} />} />
-          <Route path="*" element={<Navigate to="/admin" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </div>
@@ -77,7 +81,7 @@ function useRead<T>(read: () => Promise<T>): { data: T | undefined; error: Error
 function Page({ title, lead, children }: { title: string; lead?: string | undefined; children: React.ReactNode }) {
   return (
     <div className="page page-narrow">
-      <MobileBack to="/" label="返回" />
+      <MobileBack to="/" label="管理后台" />
       <header className="page-head"><div><h1>{title}</h1>{lead && <p className="page-sub">{lead}</p>}</div></header>
       {children}
     </div>
@@ -197,8 +201,6 @@ function WorkspaceItem({ workspace: w }: { workspace: AdminWorkspace }) {
 
 // ── invite codes ────────────────────────────────────────────────────────
 
-const inviteUrl = (code: string) => `${location.origin}/?invite=${code}`;
-
 function codeState(c: InviteCodeView): { label: string; tone: Tone } {
   if (c.used_by || c.used_at) return { label: "已使用", tone: "neutral" };
   if (c.revoked_at) return { label: "已撤回", tone: "red" };
@@ -214,7 +216,7 @@ function CodesPage({ account }: { account: Account }) {
   const revoke = useAction((c: InviteCodeView) => admin.revokeCode(account.sub, c.code), () => { setRevoking(null); toast("已撤回邀请码"); codes.reload(); });
   const list = codes.data;
   const usable = list?.filter((c) => codeState(c).label === "可用").length ?? 0;
-  const copy = (code: string) => void navigator.clipboard.writeText(inviteUrl(code)).then(() => toast("已复制注册链接"));
+  const copy = (url: string) => void navigator.clipboard.writeText(url).then(() => toast("已复制注册链接"));
   return (
     <Page title="邀请码" lead="ember 只对受邀的人开放。没被邀请进任何 workspace 的人，要有邀请码才能新建 workspace；一个邀请码只能用一次，用过的人之后可以再建。">
       <Section title={list ? `${list.length} 个，${usable} 个可用` : "邀请码"} actions={<Button icon={Plus} variant="primary" onClick={() => setMaking(true)}>生成邀请码</Button>}>
@@ -238,7 +240,7 @@ function CodesPage({ account }: { account: Account }) {
                     </span>
                     <Pill tone={state.tone}>{state.label}</Pill>
                     {state.label === "可用" && <>
-                      <IconButton label="复制注册链接" icon={Copy} onClick={() => copy(c.code)} />
+                      <IconButton label="复制注册链接" icon={Copy} onClick={() => copy(c.url)} />
                       <Button variant="ghost" onClick={() => setRevoking(c)}>撤回</Button>
                     </>}
                   </div>

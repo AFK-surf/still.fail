@@ -1,6 +1,6 @@
 // ember cloud's pages: sign-in (several Google accounts at once), the
 // workspaces those accounts belong to, their members, invitations and
-// stations; and, for the admin, the console. Everything goes through the
+// stations. (The admin's console is an app of its own, src/admin/.) Everything goes through the
 // client core: accounts, ember cloud and the links to stations live there,
 // not on the page.
 import { Tooltip } from "radix-ui";
@@ -8,11 +8,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from "react-router";
 import { ToastProvider } from "../toast.tsx";
 import { Button, Loading, Select } from "../ui.tsx";
-import { completeSignIn, signIn, useAccounts } from "./accounts.ts";
-import { SignInPage } from "./gate.tsx";
+import { signIn, useAccounts } from "./accounts.ts";
+import { Callback, SignInPage } from "./gate.tsx";
 import { WorkspaceShell } from "./workspace.tsx";
 import { ROLE_LABEL } from "./settings.tsx";
-import { AdminConsole } from "./admin.tsx";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspaces } from "./api.ts";
 import { Illustration } from "../brand.tsx";
 
@@ -32,20 +31,6 @@ export function CloudApp() {
   );
 }
 
-function Callback() {
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    completeSignIn().then((next) => location.replace(next), (e: Error) => setError(e.message));
-  }, []);
-  return (
-    <div className="gate">
-      <Illustration name="sign-in" />
-      <h1>{error ? "登录没有完成" : "正在登录…"}</h1>
-      {error && <><p>{error}</p><Button variant="primary" onClick={() => void signIn("/")}>重新登录</Button></>}
-    </div>
-  );
-}
-
 function Home() {
   const list = useAccounts();
   if (!list) return <div className="gate"><Loading /></div>;
@@ -53,7 +38,6 @@ function Home() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      <Route path="/admin/*" element={<AdminConsole />} />
       <Route path="/w/:ws/*" element={<WorkspaceRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

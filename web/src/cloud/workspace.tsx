@@ -2,7 +2,7 @@
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
-import { Check, ChevronsUpDown, LogOut, Plus, Settings, ShieldCheck, UserPlus } from "lucide-react";
+import { Check, ChevronsUpDown, LogOut, Plus, Settings, UserPlus } from "lucide-react";
 import { NewChat } from "../NewChat.tsx";
 import { lastChat, useRememberChat } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
@@ -19,7 +19,6 @@ import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
 import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
-import { useAdminAccount } from "./admin.tsx";
 import { Avatar } from "./gate.tsx";
 import { Illustration, Lockup } from "../brand.tsx";
 
@@ -125,7 +124,6 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
   const navigate = useNavigate();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
-  const admin = useAdminAccount();
   const respond = useAction(
     ({ invite, accept }: { invite: InvitationEntry; accept: boolean }) =>
       accept ? cloud.acceptInvitationById(invite.account.sub, invite.id) : cloud.declineInvitation(invite.account.sub, invite.id).then(() => null),
@@ -182,7 +180,6 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             <DropdownMenu.Separator className="menu-sep" />
             <DropdownMenu.Item className="menu-item" onSelect={() => setCreating(true)}><Plus {...ICON} />新建 workspace</DropdownMenu.Item>
             <DropdownMenu.Item className="menu-item" onSelect={() => void signIn()}><UserPlus {...ICON} />添加另一个账号</DropdownMenu.Item>
-            {admin && <DropdownMenu.Item className="menu-item" onSelect={() => navigate("/admin")}><ShieldCheck {...ICON} />管理后台</DropdownMenu.Item>}
             <DropdownMenu.Sub>
               <DropdownMenu.SubTrigger className="menu-item"><LogOut {...ICON} />退出账号</DropdownMenu.SubTrigger>
               <DropdownMenu.Portal>
