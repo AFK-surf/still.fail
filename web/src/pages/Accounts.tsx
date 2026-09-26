@@ -1,6 +1,5 @@
 import { useStation, useLink } from "../station.tsx";
-import { ChevronDown, ChevronRight, ExternalLink, LogIn, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { Collapsible } from "radix-ui";
+import { ChevronRight, ExternalLink, LogIn, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type ProfileView, type RuntimeKind } from "../api.ts";
@@ -206,7 +205,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
       <AccountSection profile={profile} signedIn={latest?.state !== "login" && !signingIn}
         onSave={(input, done) => saveThen(input, () => { toast("已保存，正在检查"); done(); })} busy={save.busy} />
 
-      <Advanced profile={profile} onSave={(input) => saveThen(input, () => toast("已保存"))} busy={save.busy} />
+      {profile.access.kind === "env" && <EnvSection profile={profile} onSave={(input) => saveThen(input, () => toast("已保存"))} busy={save.busy} />}
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
         title={`删除「${profile.name}」？`} action="删除 Profile" description="只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。" />
     </div>
@@ -252,9 +251,8 @@ function AccountSection({ profile, signedIn, onSave, busy }: { profile: ProfileV
 interface EnvRow { row: number; key: string; value: string; masked: string | null; original: string | null }
 let nextRow = 1;
 
-function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(input: ProfileInput): void; busy: boolean }) {
-  const [home, setHome] = useState(profile.home);
-  const [model, setModel] = useState(profile.model ?? "");
+/** The variables a custom profile runs with: what reaches its runtime's model service, set by hand. */
+function EnvSection({ profile, onSave, busy }: { profile: ProfileView; onSave(input: ProfileInput): void; busy: boolean }) {
   const [rows, setRows] = useState<EnvRow[]>(() => profile.env.map((e) => ({ row: nextRow++, key: e.key, value: e.secret ? "" : e.value, masked: e.secret ? e.value : null, original: e.key })));
   const patch = (): Record<string, string | null> => {
     const out: Record<string, string | null> = {};
@@ -271,38 +269,27 @@ function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(inpu
   };
   const update = (row: number, p: Partial<EnvRow>) => setRows(rows.map((r) => (r.row === row ? { ...r, ...p } : r)));
   return (
-    <Collapsible.Root className="section advanced">
-      <Collapsible.Trigger className="advanced-trigger"><h2>高级</h2><span className="muted">配置目录、默认模型、环境变量</span><ChevronDown {...ICON} size={14} className="advanced-chevron" /></Collapsible.Trigger>
-      <Collapsible.Content>
+    <Section title="环境变量" description="运行时启动时带上这些变量，用来接到你的模型服务。值里的 {route} 会换成会话的路由 ID。">
       <div className="card">
-        <Field label="配置目录" htmlFor="adv-home" hint={`${profile.runtime === "claude" ? "作为 CLAUDE_CONFIG_DIR" : "作为 CODEX_HOME"}。相对路径以 ember 数据目录为基准。${profile.homeExists ? "" : "目录还不存在。"}`}>
-          <input id="adv-home" className="input mono" spellCheck={false} value={home} onChange={(e) => setHome(e.target.value)} />
-        </Field>
-        <Field label="默认模型" htmlFor="adv-model" hint="连接没指定模型时使用。">
-          <input id="adv-model" className="input mono" spellCheck={false} value={model} onChange={(e) => setModel(e.target.value)} placeholder="运行时默认" />
-        </Field>
-        <Field label="自定义环境变量" hint="在接入方式生成的变量之外追加；同名时以这里为准。值里的 {route} 会换成会话的路由 ID。">
-          <div className="env-table">
-            {rows.map((r) => {
-              const secret = r.masked !== null || /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(r.key);
-              return (
-                <div key={r.row} className="env-row">
-                  <input className="input mono" spellCheck={false} aria-label="变量名" value={r.key} onChange={(e) => update(r.row, { key: e.target.value })} placeholder="NAME" />
-                  <input className="input mono" spellCheck={false} aria-label={`${r.key || "变量"} 的值`} type={secret ? "password" : "text"} autoComplete="off" value={r.value}
-                    onChange={(e) => update(r.row, { value: e.target.value })} placeholder={r.masked !== null ? `已保存 ${r.masked}，留空保持不变` : "值"} />
-                  <Button variant="ghost" onClick={() => setRows(rows.filter((x) => x.row !== r.row))}>删除</Button>
-                </div>
-              );
-            })}
-            <div><Button variant="ghost" icon={Plus} onClick={() => setRows([...rows, { row: nextRow++, key: "", value: "", masked: null, original: null }])}>添加变量</Button></div>
-          </div>
-        </Field>
+        <div className="env-table">
+          {rows.map((r) => {
+            const secret = r.masked !== null || /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(r.key);
+            return (
+              <div key={r.row} className="env-row">
+                <input className="input mono" spellCheck={false} aria-label="变量名" value={r.key} onChange={(e) => update(r.row, { key: e.target.value })} placeholder="NAME" />
+                <input className="input mono" spellCheck={false} aria-label={`${r.key || "变量"} 的值`} type={secret ? "password" : "text"} autoComplete="off" value={r.value}
+                  onChange={(e) => update(r.row, { value: e.target.value })} placeholder={r.masked !== null ? `已保存 ${r.masked}，留空保持不变` : "值"} />
+                <Button variant="ghost" onClick={() => setRows(rows.filter((x) => x.row !== r.row))}>删除</Button>
+              </div>
+            );
+          })}
+          <div><Button variant="ghost" icon={Plus} onClick={() => setRows([...rows, { row: nextRow++, key: "", value: "", masked: null, original: null }])}>添加变量</Button></div>
+        </div>
         <div className="card-actions">
-          <Button variant="primary" busy={busy} onClick={() => onSave({ home: home.trim(), model: model.trim(), env: patch() })}>保存高级设置</Button>
+          <Button variant="primary" busy={busy} onClick={() => onSave({ env: patch() })}>保存</Button>
         </div>
       </div>
-      </Collapsible.Content>
-    </Collapsible.Root>
+    </Section>
   );
 }
 
