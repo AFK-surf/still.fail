@@ -22,9 +22,7 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
   const list = useRef<HTMLDivElement>(null);
   const floor = useRef<HTMLDivElement>(null);
   const sending = useChatSend();
-  const { thread, outbox } = chat;
-  // Deleted messages keep their place for the station's cursors; here they are simply gone.
-  const messages = chat.messages.filter((m) => m.deletedAt === null);
+  const { thread, outbox, messages } = chat;
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
@@ -231,7 +229,7 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
  */
 function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: MessageView[], mine: (m: MessageView) => boolean, older: () => Promise<unknown>): number | null {
   // What was unread when the chat opened: after the read position, up to the newest message then.
-  const [open] = useState(() => ({ read: chat.thread.read, newest: chat.thread.last?.seq ?? 0, unread: chat.thread.unread > 0 }));
+  const [open] = useState(() => ({ read: chat.thread.read, newest: chat.thread.lastMessage?.seq ?? 0, unread: chat.thread.unread > 0 }));
   const first = messages[0]?.seq;
   // Those not loaded yet may hold it: the pages before are loaded first.
   const above = open.unread && chat.more && first !== undefined && first > open.read;

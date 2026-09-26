@@ -45,7 +45,7 @@ export interface ChatItem {
   agents: ChatAgent[];
   people: Creator[];
   /** Its text cut to 200 characters. */
-  last: Pick<MessageView, "seq" | "authorKind" | "author" | "authorName" | "text" | "createdAt" | "deletedAt"> | null;
+  last: Pick<MessageView, "seq" | "authorKind" | "author" | "authorName" | "text" | "createdAt"> | null;
   unread: boolean;
   lastActiveAt: number;
   connect: ConnectView | null;

@@ -146,6 +146,6 @@ function LastMessage({ item }: { item: ChatItem }) {
     : last.authorKind === "agent" ? <ModelLogo model={agent?.model ?? null} runtime={agent?.runtime ?? "claude"} size={12} />
     : picture ? <img className="person-pic" src={picture} alt="" width={12} height={12} referrerPolicy="no-referrer" />
     : <Avatar id={last.author} name={name} size={12} />;
-  const text = last.deletedAt !== null ? "（已删除）" : cleanText(last.text) || "（文件）";
+  const text = cleanText(last.text) || "（文件）";
   return <span className="nav-session-last"><span className="nav-session-who" title={name} aria-label={`${name}：`}>{who}</span>{text}</span>;
 }

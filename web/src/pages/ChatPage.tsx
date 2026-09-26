@@ -216,7 +216,7 @@ function ChatInfo({ chat }: { chat: ChatView }) {
             {row("发起", thread.creator ? <CreatorText creator={thread.creator} verb="发起" /> : <span className="muted">未记录</span>)}
             {row("参与", <span className="detail-inline"><PeopleStack people={chat.people} max={8} />{chat.people.length} 人</span>)}
             {row("创建", <Time at={thread.createdAt} />)}
-            {thread.last && row("最近消息", <Time at={thread.last.createdAt} />)}
+            {thread.lastMessage && row("最近消息", <Time at={thread.lastMessage.createdAt} />)}
           </dl>
           {chat.agents.length > 0 && (
             <ul className="details-list">
