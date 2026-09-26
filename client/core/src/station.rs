@@ -9,7 +9,7 @@
 //! the topics as it is; what an event does not carry (a thread's unread count)
 //! is read for that one thing. Host samples are asked for (`?host=1`) only
 //! while a `host` topic is live. A
-//! `live` topic holds `/sessions/:key/live?from=<entries known>` open: the
+//! `live` topic is followed on the station's `/events` (`?live=<key>&from=<entries known>`): the
 //! transcript from its first entry and then as it grows, the steps in flight
 //! and the phase. Nothing here runs on a timer but reconnects.
 //!
@@ -1718,6 +1718,12 @@ mod tests {
     fn live_of(sink: &FakeSink, key: &str) -> Value {
         sink.get(&live(key)).unwrap()
     }
+    /// A live message for session `key`, as the events stream carries it.
+    fn with_key(key: &str, mut value: Value) -> Value {
+        value["key"] = json!(key);
+        value
+    }
+
     fn msg(value: Value) -> String {
         format!("event: {}\ndata: {}\n\n", value["type"].as_str().unwrap(), value)
     }
@@ -1881,7 +1887,7 @@ mod tests {
                 stations.start(&t);
             }
             host.settle().await;
-            assert_eq!(wire.open(), vec!["/admin/api/events?host=1", "/admin/api/sessions/a/live?from=0"]);
+            assert_eq!(wire.open(), vec!["/admin/api/events?host=1&live=a&from=0"]);
             let requests = wire.calls.borrow().len();
             assert_eq!(requests, 7, "{:?}", wire.paths());
             host.sleeps.borrow_mut().clear();
@@ -2082,7 +2088,7 @@ mod tests {
             stations.start(&thread(7));
             stations.start(&live("k"));
             host.settle().await;
-            wire.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 0, "entries": ["a"], "usage": {}})));
+            wire.event("live", with_key("k", json!({"type": "timeline", "start": 0, "entries": ["a"], "usage": {}})));
             host.settle().await;
             assert!(host.stored("thread/ws/st/7/0").is_some() && host.stored("transcript/ws/st/k/0").is_some());
             wire.event("thread-removed", json!({"id": 7}));
@@ -2249,8 +2255,8 @@ mod tests {
             stations.start(&live("k"));
             host.settle().await;
             assert_eq!(live_of(&sink, "k"), live_start());
-            assert!(wire.paths().contains(&"GET /admin/api/sessions/k/live?from=0".to_string()));
-            let push = |v: Value| wire.push("/admin/api/sessions/k/live", &msg(v));
+            assert!(wire.paths().contains(&"GET /admin/api/events?live=k&from=0".to_string()));
+            let push = |v: Value| wire.event("live", with_key("k", v));
             push(json!({"type": "timeline", "start": 0, "entries": ["a", "b"], "usage": {"modelCalls": 1, "model": "claude-opus"}}));
             push(json!({"type": "steps", "steps": [], "phase": null}));
             host.settle().await;
@@ -2265,18 +2271,18 @@ mod tests {
             host.settle().await;
             assert_eq!(live_of(&sink, "k")["timeline"], json!(["a", "B", "c", "d"]));
             // Reconnects ask from what is known.
-            wire.end("/admin/api/sessions/k/live");
+            wire.end("/admin/api/events");
             wait(RECONNECT_MS + 50).await;
-            assert!(wire.paths().contains(&"GET /admin/api/sessions/k/live?from=4".to_string()), "{:?}", wire.paths());
+            assert!(wire.paths().contains(&"GET /admin/api/events?live=k&from=4".to_string()), "{:?}", wire.paths());
             // Reloaded: the kept transcript at once, and only what came after it is asked for.
             host.settle().await;
             let (reloaded, again, other) = reopened(&host);
             other.start(&live("k"));
             host.settle().await;
             assert_eq!(live_of(&reloaded, "k")["timeline"], json!(["a", "B", "c", "d"]));
-            assert!(again.paths().contains(&"GET /admin/api/sessions/k/live?from=4".to_string()), "{:?}", again.paths());
+            assert!(again.paths().contains(&"GET /admin/api/events?live=k&from=4".to_string()), "{:?}", again.paths());
             // Written anew and shorter: what is kept is cut there too.
-            again.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 1, "entries": [], "usage": {}})));
+            again.event("live", with_key("k", json!({"type": "timeline", "start": 1, "entries": [], "usage": {}})));
             host.settle().await;
             assert_eq!(live_of(&reloaded, "k")["timeline"], json!(["a"]));
             let (reloaded, _, other) = reopened(&host);
@@ -2284,9 +2290,9 @@ mod tests {
             host.settle().await;
             assert_eq!(live_of(&reloaded, "k")["timeline"], json!(["a"]));
             // A gap: from the start again, at once, and nothing kept.
-            wire.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 9, "entries": ["z"], "usage": {}})));
+            wire.event("live", with_key("k", json!({"type": "timeline", "start": 9, "entries": ["z"], "usage": {}})));
             host.settle().await;
-            assert_eq!(wire.count("GET", "/admin/api/sessions/k/live?from=0"), 2);
+            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0"), 2);
             assert_eq!(live_of(&sink, "k")["loaded"], false);
             assert_eq!(host.stored("transcript/ws/st/k/meta"), None);
         });
@@ -2301,15 +2307,15 @@ mod tests {
             let wait = |ms: u64| wait(ms / 100);
             stations.start(&live("k"));
             host.settle().await;
-            assert_eq!(wire.count("GET", "/admin/api/sessions/k/live?from=0"), 1);
+            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0"), 1);
             // The keepalive keeps it open.
             wait(STREAM_IDLE_MS / 2).await;
-            wire.push("/admin/api/sessions/k/live", ": ping\n\n");
+            wire.push("/admin/api/events", ": ping\n\n");
             wait(STREAM_IDLE_MS / 2 + 5_000).await;
-            assert_eq!(wire.count("GET", "/admin/api/sessions/k/live?from=0"), 1);
+            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0"), 1);
             // Nothing at all for longer: the link is taken for gone, and it is asked for again.
             wait(STREAM_IDLE_MS + RECONNECT_MS + 5_000).await;
-            assert_eq!(wire.count("GET", "/admin/api/sessions/k/live?from=0"), 2);
+            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0"), 2);
         });
     }
 
@@ -2319,7 +2325,7 @@ mod tests {
             let (host, sink, wire, stations) = setup();
             stations.start(&live("k"));
             host.settle().await;
-            let push = |v: Value| wire.push("/admin/api/sessions/k/live", &msg(v));
+            let push = |v: Value| wire.event("live", with_key("k", v));
             let now = host.now_ms();
             push(json!({"type": "steps", "steps": [{"id": "s0", "step": "text", "text": "hi", "input": "", "output": "", "startedAt": 1}], "phase": {"phase": "thinking", "elapsedMs": 5000}}));
             host.settle().await;
