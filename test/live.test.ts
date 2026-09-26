@@ -114,3 +114,19 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   stop();
   hub.close();
 });
+
+test("how fast the model writes is told at most once a second, and 0 once it stops", () => {
+  const hub = new LiveHub(() => undefined);
+  const got: LiveMessage[] = [];
+  const stop = hub.subscribe("s", 0, (m) => got.push(m));
+  hub.event("s", { kind: "start", id: "x", step: "text" });
+  hub.event("s", { kind: "delta", id: "x", field: "text", text: "x".repeat(400) });
+  hub.event("s", { kind: "delta", id: "x", field: "text", text: "x".repeat(400) });
+  const rates = () => got.filter((m) => m.type === "rate").map((m) => (m as { tokensPerSecond: number }).tokensPerSecond);
+  assert.equal(rates().length, 1, "the first output at once, then not within the second");
+  assert.ok(rates()[0]! > 0);
+  hub.event("s", { kind: "end", id: "x" });
+  assert.deepEqual(rates().at(-1), 0);
+  assert.ok(!got.some((m) => m.type === "step" && (m as any).event.kind === "delta"), "no delta is told");
+  stop();
+});

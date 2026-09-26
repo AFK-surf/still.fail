@@ -34,12 +34,20 @@ export type LiveMessage =
   | { type: "steps"; steps: LiveStep[]; phase: LivePhaseView | null }
   | { type: "step"; event: LiveEvent }
   | { type: "timeline"; start: number; entries: TimelineEntry[]; usage: TranscriptUsage }
+  /** How fast the model is writing now (≈ tokens a second, from bytes), at most once a second; 0 once it stops. */
+  | { type: "rate"; tokensPerSecond: number }
   | { type: "clear" };
 
 type Listener = (message: LiveMessage) => void;
 
 /** How much of a tool's input a step carries: enough to say what it runs. */
 const INPUT_CHARS = 300;
+/** The output rate is told at most this often, over this window (bytes / 4 ≈ tokens, as Zork estimates). */
+const RATE_EVERY_MS = 1_000;
+const RATE_WINDOW_MS = 2_000;
+
+/** A session's recent output, in 250 ms buckets, and when its rate was last told. */
+interface Rate { buckets: [number, number][]; toldAt: number; told: number }
 
 interface Watched {
   tail: TranscriptTail;
@@ -50,6 +58,7 @@ interface Watched {
 export class LiveHub {
   readonly #steps = new Map<string, Map<string, LiveStep>>();
   readonly #phase = new Map<string, { phase: LivePhase; at: number }>();
+  readonly #rates = new Map<string, Rate>();
   readonly #listeners = new Map<string, Set<Listener>>();
   readonly #watched = new Map<string, Watched>();
   /** Where a session's transcript is, once its runtime has started one. */
@@ -68,8 +77,9 @@ export class LiveHub {
     }
     let steps = this.#steps.get(key);
     if (!steps) this.#steps.set(key, (steps = new Map()));
-    // What a step writes as it goes is not told (see the top): its words come with its transcript entry.
-    if (event.kind === "delta") return;
+    // What a step writes as it goes is not told (see the top): its words come with its transcript entry. How fast it
+    // writes is, now and then.
+    if (event.kind === "delta") return this.#counted(key, Buffer.byteLength(event.text));
     if (event.kind === "start") {
       const input = (event.input ?? "").slice(0, INPUT_CHARS);
       steps.set(event.id, {
@@ -82,12 +92,14 @@ export class LiveHub {
     if (!steps.delete(event.id)) return;
     this.#soon(key);
     this.#emit(key, { type: "step", event });
+    this.#stopped(key);
   }
 
   /** The turn is over: whatever was in flight is in the transcript now, or never will be. */
   turnEnded(key: string): void {
     this.#steps.delete(key);
     this.#phase.delete(key);
+    this.#rates.delete(key);
     this.#emit(key, { type: "clear" });
     this.#soon(key);
   }
@@ -122,6 +134,7 @@ export class LiveHub {
   forget(key: string): void {
     this.#steps.delete(key);
     this.#phase.delete(key);
+    this.#rates.delete(key);
     this.#emit(key, { type: "clear" });
     this.#listeners.delete(key);
     this.#unwatch(key);
@@ -129,6 +142,34 @@ export class LiveHub {
 
   close(): void {
     for (const key of [...this.#watched.keys()]) this.#unwatch(key);
+  }
+
+  /** Output written: its rate is told when a second has passed since it last was (the first output at once). */
+  #counted(key: string, bytes: number): void {
+    const now = Date.now();
+    let rate = this.#rates.get(key);
+    if (!rate) this.#rates.set(key, (rate = { buckets: [], toldAt: 0, told: 0 }));
+    const bucket = Math.floor(now / 250) * 250;
+    const last = rate.buckets.at(-1);
+    if (last && last[0] === bucket) last[1] += bytes;
+    else rate.buckets.push([bucket, bytes]);
+    while (rate.buckets.length && rate.buckets[0]![0] < now - RATE_WINDOW_MS) rate.buckets.shift();
+    if (now - rate.toldAt < RATE_EVERY_MS) return;
+    const first = rate.buckets[0]![0];
+    const span = Math.min(RATE_WINDOW_MS, Math.max(250, now - first));
+    const total = rate.buckets.reduce((sum, [, b]) => sum + b, 0);
+    const tokensPerSecond = Math.max(1, Math.round((total * 1000) / (4 * span)));
+    rate.toldAt = now;
+    rate.told = tokensPerSecond;
+    this.#emit(key, { type: "rate", tokensPerSecond });
+  }
+
+  /** A step ended: the model is not writing (until its next output). */
+  #stopped(key: string): void {
+    const rate = this.#rates.get(key);
+    if (!rate) return;
+    this.#rates.delete(key);
+    if (rate.told > 0) this.#emit(key, { type: "rate", tokensPerSecond: 0 });
   }
 
   #emit(key: string, message: LiveMessage): void {
