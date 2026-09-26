@@ -32,7 +32,7 @@ What differs per platform comes in through one trait, `Host`
 - `storage_get` / `storage_set` / `storage_delete` — small persistent values by
   key (accounts and tokens, the device key, UI preferences). Web: IndexedDB
   (a worker has no localStorage); native: a file in the app's data directory.
-- `now_ms`, `sleep`, `spawn`, `random_bytes`.
+- `now_ms`, `utc_offset_min` (the viewer's time zone), `sleep`, `spawn`, `random_bytes`.
 - `emit` — delivers a message to one connected UI (by its client id).
 
 iroh is used directly by the core: the wasm build uses relay-only connections
@@ -56,14 +56,30 @@ core → UI:
 
 ```jsonc
 { "id": 7, "ok": { … } }            // or { "id": 7, "error": { "code": "…", "message": "…", "status": 403 } }
-{ "id": 8, "value": { … } }         // a subscription's current value, sent on subscribe and on every change
+{ "id": 8, "value": { … } }         // a subscription's whole current value: its first message, and the first after an error
+{ "id": 8, "delta": [ … ] }         // what changed since the previous value
 { "id": 8, "error": { … } }         // the topic could not be read (the subscription stays; a later value clears it)
 ```
 
-A subscription's value is always the whole current value of its topic, not a
-patch; the core sends at most one value per topic per animation frame's worth
-of changes (coalesced, ~50 ms). Live steps are the exception that needs speed,
-and they are small.
+A subscription gets its topic's whole value first, then only what changed:
+
+```jsonc
+{ "path": ["detail", "transcript", "timeline"], "append": [ … ] }  // items added at the end of an array
+{ "path": ["items", 3, "title"], "set": "…" }                       // a value replaced (path [] = the whole value)
+{ "path": ["link", "message"], "remove": true }                     // a key gone from an object
+```
+
+Path segments are object keys (strings) and array indexes (numbers). The core
+diffs the value it last sent against the current one: objects key by key, an
+array that only grew as one `append`, an array of the same length item by
+item, anything else as `set`. An equal value sends nothing; ops that would be
+larger than the value send the whole `value` instead. `web/src/core/client.ts`
+applies the ops, copying only along their paths, and hands the page whole
+values. The core sends at most one message per topic per animation frame's
+worth of changes (coalesced, ~50 ms); the window is one for all topics, so
+what one event changes (a live step ending as the timeline grows) goes out
+together, in the order it changed. Live steps are the exception that needs
+speed, and they are small.
 
 ### Stations and accounts
 
@@ -98,8 +114,16 @@ a minute.
 The UI does no joining, filtering or grouping of data: every screen subscribes
 to one **view** topic that the core has already put together from the
 topics above (and keeps current as they change). A view keeps the topics it is
-built from subscribed inside the core; its value is recomputed at most once
-per coalescing window, however many of them changed.
+built from subscribed inside the core (`Store::watch`: it counts as a
+subscriber and hears each change); a change only marks the view stale, and it
+is computed once, when its coalesced emission goes out, however many of them
+changed. A workspace view watches the `sessions` / `overview` / `link` (and
+for `stations`, `host`) of the stations that are online — `last_seen` less than
+150 s ago, as in the web — and follows the workspace's station list as it
+changes. It has no value until the `workspace` topic has one; a failed
+`workspace` is the view's error, while a failing station only shows in that
+station's state. `chat` has no value until the session is read, and the
+session's error is its error.
 
 `scope` is a workspace id, or `"local"` for the page served by a station
 itself (one station, addressed `"local"`).
@@ -108,8 +132,8 @@ itself (one station, addressed `"local"`).
 | --- | --- | --- |
 | `chats` | `scope`, `mine` | the sidebar: `{ me, stations, loading, days }` |
 | `stations` | `scope` | every station of the scope, each with its link, overview, host and usable models |
-| `connects` | `scope` | every connect of every online station: `{ items: [{ station, stationName, connect }], loading }` |
-| `chat` | `station`, `key` | one chat: `{ detail, connect, profile, link }` |
+| `connects` | `scope`, `mine` | every connect of every online station: `{ me, items: [{ station, stationName, connect }], loading }`; with `mine`, those whose `createdBy.id` is me |
+| `chat` | `station`, `key` | one chat: `{ me, detail, connect, profile, link }` |
 
 `live` (above) stays its own topic: its steps change many times a second and
 are small, while `chat` carries the whole transcript.
@@ -117,9 +141,11 @@ are small, while `chat` carries the whole transcript.
 ```jsonc
 // chats
 {
-  "me": { "id": "a@b.c", "email": "a@b.c" },     // "local" on a station's own page
+  "me": { "id": "a@b.c", "email": "a@b.c" },     // { "id": "local", "email": null } on a station's own page
   "stations": [{ "station": "ws/st", "id": "st", "name": "studio", "state": "online", "message": null }],
   //   state: "online" | "connecting" | "offline" (the cloud has not seen it) | "error" (message says why)
+  //   error: its sessions could not be read, or its link failed; connecting: sessions not read yet, or the link
+  //   is reconnecting (sessions already read stay listed). The local station is named "".
   "loading": false,                                // an online station has not answered yet
   "days": [{ "daysAgo": 0, "at": 1790000000000, "items": [{
     "station": "ws/st", "stationName": "studio",
@@ -137,11 +163,12 @@ are small, while `chat` carries the whole transcript.
   "link": { "state": "online", "message": null },
   "overview": { … } | null,                                      // null while offline or not yet read
   "host": { … } | null,
-  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // runtimes with an enabled model, and those models
+  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // claude, codex if a profile has models enabled; those models, distinct and sorted
 }]
 
 // chat
 {
+  "me": { … },                   // as in chats
   "detail": { … },               // the session topic's value (SessionDetail), timeline kept current
   "connect": { … } | null,
   "profile": { … } | null,       // the profile the session runs on, from the overview
@@ -174,7 +201,7 @@ refetches the subscribed topics of that station that the path touches
 
 ```
 client/
-  core/    ember-core      the core: host trait, protocol, store, accounts, cloud, mesh, station
+  core/    ember-core      the core: host trait, protocol, store, accounts, cloud, mesh, station, views
   wasm/    ember-core-wasm web host (IndexedDB, fetch) + SharedWorker entry
 ```
 
@@ -183,11 +210,13 @@ client/
 - `host.rs` — the `Host` trait and its request/response types.
 - `protocol.rs` — the messages above (serde).
 - `core.rs` — `Core`: accepts client messages, routes calls, manages subscriptions.
-- `store.rs` — topics: values, subscribers, refresh, coalesced emission, eviction.
+- `store.rs` — topics: values, subscribers and watches, coalesced emission as deltas, eviction.
+- `delta.rs` — the ops between two values of a topic.
 - `accounts.rs` — sign-in (PKCE), token refresh (single flight per account), persistence.
 - `cloud.rs` — ember cloud API: errors, `/v1/me`, workspaces, grants.
 - `mesh.rs` — the device endpoint and station links: grants, renewal (every 5 min), reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
 - `station.rs` — the admin API over a link (or over HTTP for `local`): typed paths, event and live streams, uploads.
+- `views.rs` — the view topics, put together from the others.
 
 ## Web
 

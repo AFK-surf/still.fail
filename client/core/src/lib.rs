@@ -6,6 +6,7 @@
 pub mod accounts;
 pub mod cloud;
 pub mod core;
+pub mod delta;
 pub mod error;
 pub mod host;
 pub mod mesh;
@@ -14,6 +15,7 @@ pub mod station;
 pub mod store;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
+pub mod views;
 
 pub use crate::core::Core;
 pub use error::CoreError;

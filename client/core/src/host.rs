@@ -59,6 +59,8 @@ pub trait Host {
 
     /// Milliseconds since the Unix epoch.
     fn now_ms(&self) -> f64;
+    /// The viewer's time zone at that moment: minutes to add to UTC to get local time.
+    fn utc_offset_min(&self, at_ms: f64) -> i32;
     fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()>;
     /// Runs a task to completion on the core's thread.
     fn spawn(&self, task: LocalBoxFuture<'static, ()>);

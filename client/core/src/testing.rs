@@ -13,7 +13,7 @@
 //! });
 //! ```
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -35,6 +35,8 @@ pub struct FakeHost {
     pub requests: RefCell<Vec<HttpRequest>>,
     emitted: RefCell<Vec<(ClientId, CoreMessage)>>,
     seed: RefCell<u64>,
+    utc_offset_min: Cell<i32>,
+    speedup: Cell<u64>,
 }
 
 impl FakeHost {
@@ -47,6 +49,8 @@ impl FakeHost {
             requests: RefCell::default(),
             emitted: RefCell::default(),
             seed: RefCell::new(0x5eed),
+            utc_offset_min: Cell::new(0),
+            speedup: Cell::new(1),
         })
     }
 
@@ -64,6 +68,16 @@ impl FakeHost {
 
     pub fn store(&self, key: &str, value: Vec<u8>) {
         self.storage.borrow_mut().insert(key.into(), value);
+    }
+
+    /// The viewer's time zone (default UTC).
+    pub fn set_utc_offset_min(&self, minutes: i32) {
+        self.utc_offset_min.set(minutes);
+    }
+
+    /// Makes the core's timers run `factor` times faster (eviction after 0.6 s at 100).
+    pub fn speed_up(&self, factor: u64) {
+        self.speedup.set(factor);
     }
 
     pub fn take_emitted(&self) -> Vec<(ClientId, CoreMessage)> {
@@ -136,8 +150,12 @@ impl Host for FakeHost {
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as f64
     }
 
+    fn utc_offset_min(&self, _at_ms: f64) -> i32 {
+        self.utc_offset_min.get()
+    }
+
     fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()> {
-        tokio::time::sleep(std::time::Duration::from_millis(ms)).boxed_local()
+        tokio::time::sleep(std::time::Duration::from_micros(ms * 1000 / self.speedup.get())).boxed_local()
     }
 
     fn spawn(&self, task: LocalBoxFuture<'static, ()>) {

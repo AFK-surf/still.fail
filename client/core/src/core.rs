@@ -2,7 +2,7 @@
 //! subscriptions. Construction wires the modules together: accounts → cloud →
 //! mesh links (grants come from cloud as the account that reaches the
 //! workspace) → stations; the store routes topics to accounts (accounts,
-//! workspaces, workspace) or stations (everything with a station).
+//! workspaces, workspace), stations (everything with a station) or the views.
 //!
 //! The account topics live here: `accounts` is the list itself, `workspaces`
 //! every account's `/v1/me`, `workspace` one `GET /v1/workspaces/:id`. They are
@@ -29,6 +29,7 @@ use crate::mesh::{GrantSource, Mesh};
 use crate::protocol::{ClientId, ClientMessage, CoreMessage, RequestId, Topic};
 use crate::station::{self, MeshSource, StationAddr, StationGrants, Stations, TopicSink};
 use crate::store::{Source, Store};
+use crate::views::{EmailOf, Views};
 
 /// How often `workspaces` and `workspace` are refetched while subscribed.
 pub const REFRESH_MS: u64 = 30_000;
@@ -69,7 +70,8 @@ impl Core {
             let store = Store::new(host.clone());
             let wire = station::wire(host.clone(), mesh_source(me.clone()), grants(me.clone()));
             let stations = Stations::new(host.clone(), store.clone() as Rc<dyn TopicSink>, wire);
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone() }));
+            let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views }));
             Inner {
                 me: me.clone(),
                 host: host.clone(),
@@ -127,15 +129,18 @@ impl Core {
     }
 }
 
-/// Station topics go to `Stations`; the account topics are kept here.
+/// Station topics go to `Stations`, views to `Views`; the account topics are kept here.
 struct Router {
     core: Weak<Inner>,
     stations: Rc<Stations>,
+    views: Rc<Views>,
 }
 
 impl Source for Router {
     fn start(&self, topic: &Topic) {
-        if topic.station().is_some() {
+        if topic.is_view() {
+            self.views.start(topic);
+        } else if topic.station().is_some() {
             self.stations.start(topic);
         } else if let Some(core) = self.core.upgrade() {
             core.start_topic(topic);
@@ -143,12 +148,27 @@ impl Source for Router {
     }
 
     fn stop(&self, topic: &Topic) {
-        if topic.station().is_some() {
+        if topic.is_view() {
+            self.views.stop(topic);
+        } else if topic.station().is_some() {
             self.stations.stop(topic);
         } else if let Some(core) = self.core.upgrade() {
             core.live.borrow_mut().remove(topic);
         }
     }
+
+    fn compute(&self, topic: &Topic) -> Option<Result<Value>> {
+        self.views.compute(topic)
+    }
+}
+
+/// Who a workspace's views take as "me": the account that reaches it, as far as `/v1/me` has told.
+fn email_of(core: Weak<Inner>) -> EmailOf {
+    Rc::new(move |workspace: &str| {
+        let core = core.upgrade()?;
+        let sub = core.owners.borrow().get(workspace).cloned()?;
+        core.accounts.list().into_iter().find(|a| a.sub == sub).map(|a| a.email)
+    })
 }
 
 /// The mesh for `Stations`, brought up on first use.
@@ -546,6 +566,12 @@ mod tests {
         let bare: ClientMessage = serde_json::from_value(json!({"id": 1, "call": "auth.signOut"})).unwrap();
         assert_eq!(bare, ClientMessage::Call { id: 1, call: "auth.signOut".into(), params: Value::Null });
         let subscribe: ClientMessage = serde_json::from_value(json!({"id": 8, "subscribe": {"topic": "session", "station": "ws1/st1", "key": "k"}})).unwrap();
+        let chats: ClientMessage = serde_json::from_value(json!({"id": 4, "subscribe": {"topic": "chats", "scope": "w", "mine": true}})).unwrap();
+        assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "w".into(), mine: true } });
+        let chats: ClientMessage = serde_json::from_value(json!({"id": 4, "subscribe": {"topic": "chats", "scope": "local"}})).unwrap();
+        assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "local".into(), mine: false } });
+        let chat: ClientMessage = serde_json::from_value(json!({"id": 5, "subscribe": {"topic": "chat", "station": "w/s", "key": "k"}})).unwrap();
+        assert_eq!(chat, ClientMessage::Subscribe { id: 5, subscribe: Topic::Chat { station: "w/s".into(), key: "k".into() } });
         assert_eq!(subscribe, ClientMessage::Subscribe { id: 8, subscribe: Topic::Session { station: "ws1/st1".into(), key: "k".into() } });
         let accounts: ClientMessage = serde_json::from_value(json!({"id": 2, "subscribe": {"topic": "accounts"}})).unwrap();
         assert_eq!(accounts, ClientMessage::Subscribe { id: 2, subscribe: Topic::Accounts });
@@ -561,6 +587,8 @@ mod tests {
         assert_eq!(serde_json::to_value(answer(7, Ok(Value::Null))).unwrap(), json!({"id": 7, "ok": null}));
         let refused = CoreError::new("forbidden", "没有权限").with_status(403);
         assert_eq!(serde_json::to_value(answer(7, Err(refused))).unwrap(), json!({"id": 7, "error": {"code": "forbidden", "message": "没有权限", "status": 403}}));
+        let delta = CoreMessage::Delta { id: 8, delta: crate::delta::diff(&json!({"t": [1]}), &json!({"t": [1, 2]})) };
+        assert_eq!(serde_json::to_value(delta).unwrap(), json!({"id": 8, "delta": [{"path": ["t"], "append": [2]}]}));
         let local = answer(9, Err(CoreError::new("unknown_call", "没有这个调用：x")));
         assert_eq!(serde_json::to_value(local).unwrap(), json!({"id": 9, "error": {"code": "unknown_call", "message": "没有这个调用：x"}}));
     }

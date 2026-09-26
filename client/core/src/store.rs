@@ -3,8 +3,17 @@
 //! A topic comes alive with its first subscriber (the store calls the
 //! [`Source`] to start it) and is stopped a minute after its last one leaves;
 //! its value stays cached until then, so a UI that re-subscribes gets it at
-//! once. `set` stores a value and schedules one emission per topic, coalesced
-//! over [`COALESCE_MS`].
+//! once. `set` stores a value and schedules its emission; emissions are
+//! coalesced over [`COALESCE_MS`], one window for all topics, so topics changed
+//! together go out together, in the order they changed. A subscriber's first message is the whole value, the
+//! next ones only what changed since the last one sent ([`delta`]), and an
+//! unchanged value sends nothing.
+//!
+//! Code inside the core can [`watch`](Store::watch) a topic: it counts as a
+//! subscriber and hears each change at once. A topic whose value is derived
+//! from others is [`invalidate`](Store::invalidate)d instead of set: its source
+//! computes it when the emission goes out, so a burst of changes costs one
+//! computation.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -13,6 +22,7 @@ use std::rc::{Rc, Weak};
 use futures::FutureExt;
 use serde_json::Value;
 
+use crate::delta::{self, Op};
 use crate::error::CoreError;
 use crate::host::Host;
 use crate::protocol::{ClientId, CoreMessage, RequestId, Topic};
@@ -26,6 +36,25 @@ pub trait Source {
     fn start(&self, topic: &Topic);
     /// Nobody has subscribed for a while: stop streams and timers for it.
     fn stop(&self, topic: &Topic);
+    /// The current value of a topic marked stale with [`Store::invalidate`], as it goes out; `None` while it has none.
+    fn compute(&self, _topic: &Topic) -> Option<Result<Value, CoreError>> {
+        None
+    }
+}
+
+/// Keeps a watched topic subscribed; dropping it lets the topic go like a UI unsubscribing.
+pub struct Watch {
+    store: Weak<Store>,
+    topic: Topic,
+    id: u64,
+}
+
+impl Drop for Watch {
+    fn drop(&mut self) {
+        if let Some(store) = self.store.upgrade() {
+            store.unwatch(&self.topic, self.id);
+        }
+    }
 }
 
 pub struct Store {
@@ -42,12 +71,24 @@ struct Inner {
     source: Option<Rc<dyn Source>>,
     /// Numbers each time a topic loses its last subscriber, so a stale eviction timer can tell.
     idle_count: u64,
+    watch_count: u64,
+    /// Topics changed since the last emission. One window for all of them, so
+    /// what one event changes (a live step ending, the timeline growing) goes out together.
+    pending: Vec<Topic>,
+    window_open: bool,
 }
 
 #[derive(Default)]
 struct Entry {
     value: Option<Result<Value, CoreError>>,
+    /// The value last sent to the subscribers; the next emission is the difference to it.
+    sent: Option<Result<Value, CoreError>>,
     subscribers: Vec<(ClientId, RequestId)>,
+    /// Watches from inside the core, called on every change.
+    watchers: Vec<(u64, Rc<dyn Fn()>)>,
+    /// Invalidated: the source computes the value when it goes out.
+    stale: bool,
+    /// Waiting in `pending`.
     emit_scheduled: bool,
     /// Set while nobody subscribes: the eviction timer that may drop the topic.
     idle: Option<u64>,
@@ -74,11 +115,12 @@ impl Store {
             let entry = inner.topics.entry(topic.clone()).or_default();
             entry.subscribers.push((client, id));
             entry.idle = None;
-            let cached = entry.value.clone();
+            // What the other subscribers have: a change still on its way comes as a delta to that.
+            let cached = entry.sent.clone();
             (cached, started, inner.source.clone())
         };
         if let Some(value) = cached {
-            self.host.emit(client, message(id, value));
+            self.host.emit(client, Out::whole(value).to(id));
         }
         if started && let Some(source) = source {
             source.start(&topic);
@@ -88,11 +130,46 @@ impl Store {
     pub fn unsubscribe(&self, client: ClientId, id: RequestId) {
         let mut inner = self.inner.borrow_mut();
         let Some(topic) = inner.subscriptions.remove(&(client, id)) else { return };
+        let Some(entry) = inner.topics.get_mut(&topic) else { return };
+        entry.subscribers.retain(|s| *s != (client, id));
+        drop(inner);
+        self.release(topic);
+    }
+
+    /// Subscribes from inside the core: starts the topic if it was not live and
+    /// calls `on_change` after each `set` or `update` of it, until the watch is dropped.
+    pub fn watch(&self, topic: &Topic, on_change: Rc<dyn Fn()>) -> Watch {
+        let (id, started, source) = {
+            let mut inner = self.inner.borrow_mut();
+            inner.watch_count += 1;
+            let id = inner.watch_count;
+            let started = !inner.topics.contains_key(topic);
+            let entry = inner.topics.entry(topic.clone()).or_default();
+            entry.watchers.push((id, on_change));
+            entry.idle = None;
+            (id, started, inner.source.clone())
+        };
+        if started && let Some(source) = source {
+            source.start(topic);
+        }
+        Watch { store: self.me.clone(), topic: topic.clone(), id }
+    }
+
+    fn unwatch(&self, topic: &Topic, id: u64) {
+        let mut inner = self.inner.borrow_mut();
+        let Some(entry) = inner.topics.get_mut(topic) else { return };
+        entry.watchers.retain(|(w, _)| *w != id);
+        drop(inner);
+        self.release(topic.clone());
+    }
+
+    /// Starts the eviction grace if nobody subscribes to or watches the topic any more.
+    fn release(&self, topic: Topic) {
+        let mut inner = self.inner.borrow_mut();
         inner.idle_count += 1;
         let idle = inner.idle_count;
         let Some(entry) = inner.topics.get_mut(&topic) else { return };
-        entry.subscribers.retain(|s| *s != (client, id));
-        if !entry.subscribers.is_empty() {
+        if !entry.subscribers.is_empty() || !entry.watchers.is_empty() {
             return;
         }
         entry.idle = Some(idle);
@@ -125,10 +202,12 @@ impl Store {
         let Some(entry) = inner.topics.get_mut(topic) else { return };
         entry.value = Some(value);
         let schedule = !std::mem::replace(&mut entry.emit_scheduled, true);
+        let watchers = watchers(entry);
         drop(inner);
         if schedule {
             self.schedule_emit(topic);
         }
+        watchers.iter().for_each(|w| w());
     }
 
     /// Changes a topic's value in place (e.g. appending live timeline entries), then schedules sending it.
@@ -139,10 +218,30 @@ impl Store {
         let Some(Ok(value)) = entry.value.as_mut() else { return };
         change(value);
         let schedule = !std::mem::replace(&mut entry.emit_scheduled, true);
+        let watchers = watchers(entry);
         drop(inner);
         if schedule {
             self.schedule_emit(topic);
         }
+        watchers.iter().for_each(|w| w());
+    }
+
+    /// Marks a live topic's value out of date and schedules its emission; the
+    /// source's [`Source::compute`] gives the value then.
+    pub fn invalidate(&self, topic: &Topic) {
+        let mut inner = self.inner.borrow_mut();
+        let Some(entry) = inner.topics.get_mut(topic) else { return };
+        entry.stale = true;
+        let schedule = !std::mem::replace(&mut entry.emit_scheduled, true);
+        drop(inner);
+        if schedule {
+            self.schedule_emit(topic);
+        }
+    }
+
+    /// The topic's value or error; `None` while it has neither.
+    pub fn value(&self, topic: &Topic) -> Option<Result<Value, CoreError>> {
+        self.inner.borrow().topics.get(topic)?.value.clone()
     }
 
     pub fn get(&self, topic: &Topic) -> Option<Value> {
@@ -157,32 +256,82 @@ impl Store {
         self.inner.borrow().topics.keys().cloned().collect()
     }
 
+    /// Adds the topic to the next emission, starting its window if none is open.
     fn schedule_emit(&self, topic: &Topic) {
+        let mut inner = self.inner.borrow_mut();
+        inner.pending.push(topic.clone());
+        if std::mem::replace(&mut inner.window_open, true) {
+            return;
+        }
+        drop(inner);
         let store = self.me.clone();
-        let topic = topic.clone();
         let sleep = self.host.sleep(COALESCE_MS);
         self.host.spawn(
             async move {
                 sleep.await;
                 if let Some(store) = store.upgrade() {
-                    store.flush(&topic);
+                    store.flush_pending();
                 }
             }
             .boxed_local(),
         );
     }
 
-    /// Sends a topic's value to all its subscribers.
-    fn flush(&self, topic: &Topic) {
-        let (subscribers, value) = {
+    /// Sends every topic changed in the window, in the order they first changed.
+    fn flush_pending(&self) {
+        let pending = {
             let mut inner = self.inner.borrow_mut();
+            inner.window_open = false;
+            std::mem::take(&mut inner.pending)
+        };
+        for topic in pending {
+            self.flush(&topic);
+        }
+    }
+
+    /// Sends what changed in a topic's value to all its subscribers, computing it first if it is stale.
+    fn flush(&self, topic: &Topic) {
+        let (stale, source) = {
+            let mut inner = self.inner.borrow_mut();
+            let source = inner.source.clone();
             let Some(entry) = inner.topics.get_mut(topic) else { return };
             entry.emit_scheduled = false;
-            let Some(value) = entry.value.clone() else { return };
-            (entry.subscribers.clone(), value)
+            (std::mem::take(&mut entry.stale), source)
         };
+        // Computed with nothing borrowed: the source reads and watches other topics.
+        let computed = if stale { source.and_then(|s| s.compute(topic)) } else { None };
+        let (subscribers, out, watchers) = {
+            let mut inner = self.inner.borrow_mut();
+            let Some(entry) = inner.topics.get_mut(topic) else { return };
+            let mut changed = Vec::new();
+            if let Some(value) = computed
+                && entry.value.as_ref() != Some(&value)
+            {
+                entry.value = Some(value);
+                changed = watchers(entry);
+            }
+            let Some(value) = entry.value.clone() else { return };
+            let out = match (&entry.sent, &value) {
+                (Some(Ok(old)), Ok(new)) => {
+                    let ops = delta::diff(old, new);
+                    if ops.is_empty() {
+                        None
+                    } else if delta::larger_than(&ops, new) {
+                        Some(Out::Value(new.clone()))
+                    } else {
+                        Some(Out::Delta(ops))
+                    }
+                }
+                (Some(old), new) if old == new => None,
+                (_, new) => Some(Out::whole(new.clone())),
+            };
+            entry.sent = Some(value);
+            (entry.subscribers.clone(), out, changed)
+        };
+        watchers.iter().for_each(|w| w());
+        let Some(out) = out else { return };
         for (client, id) in subscribers {
-            self.host.emit(client, message(id, value.clone()));
+            self.host.emit(client, out.to(id));
         }
     }
 
@@ -204,60 +353,42 @@ impl Store {
     }
 }
 
-fn message(id: RequestId, value: Result<Value, CoreError>) -> CoreMessage {
-    match value {
-        Ok(value) => CoreMessage::Value { id, value },
-        Err(error) => CoreMessage::Error { id, error },
+fn watchers(entry: &Entry) -> Vec<Rc<dyn Fn()>> {
+    entry.watchers.iter().map(|(_, w)| w.clone()).collect()
+}
+
+/// One emission of a topic, the same for each of its subscribers.
+enum Out {
+    Value(Value),
+    Delta(Vec<Op>),
+    Error(CoreError),
+}
+
+impl Out {
+    fn whole(value: Result<Value, CoreError>) -> Out {
+        match value {
+            Ok(value) => Out::Value(value),
+            Err(error) => Out::Error(error),
+        }
+    }
+
+    fn to(&self, id: RequestId) -> CoreMessage {
+        match self {
+            Out::Value(value) => CoreMessage::Value { id, value: value.clone() },
+            Out::Delta(delta) => CoreMessage::Delta { id, delta: delta.clone() },
+            Out::Error(error) => CoreMessage::Error { id, error: error.clone() },
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::host::{HostError, HttpRequest, HttpResponse, StreamResponse};
     use crate::testing::{FakeHost, run};
-    use futures::future::LocalBoxFuture;
     use serde_json::json;
 
-    /// FakeHost with time sped up [`SPEEDUP`] times, so eviction takes 0.6 s of test time.
-    struct Fast(Rc<FakeHost>);
+    /// Time sped up this many times, so eviction takes 0.6 s of test time.
     const SPEEDUP: u64 = 100;
-
-    impl Host for Fast {
-        fn cloud_origin(&self) -> String {
-            self.0.cloud_origin()
-        }
-        fn fetch(&self, r: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>> {
-            self.0.fetch(r)
-        }
-        fn fetch_stream(&self, r: HttpRequest) -> LocalBoxFuture<'static, Result<StreamResponse, HostError>> {
-            self.0.fetch_stream(r)
-        }
-        fn storage_get(&self, k: &str) -> LocalBoxFuture<'static, Result<Option<Vec<u8>>, HostError>> {
-            self.0.storage_get(k)
-        }
-        fn storage_set(&self, k: &str, v: Vec<u8>) -> LocalBoxFuture<'static, Result<(), HostError>> {
-            self.0.storage_set(k, v)
-        }
-        fn storage_delete(&self, k: &str) -> LocalBoxFuture<'static, Result<(), HostError>> {
-            self.0.storage_delete(k)
-        }
-        fn now_ms(&self) -> f64 {
-            self.0.now_ms()
-        }
-        fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()> {
-            tokio::time::sleep(std::time::Duration::from_micros(ms * 1000 / SPEEDUP)).boxed_local()
-        }
-        fn spawn(&self, task: LocalBoxFuture<'static, ()>) {
-            self.0.spawn(task)
-        }
-        fn random_bytes(&self, buf: &mut [u8]) {
-            self.0.random_bytes(buf)
-        }
-        fn emit(&self, c: ClientId, m: CoreMessage) {
-            self.0.emit(c, m)
-        }
-    }
 
     /// Lets `ms` of (sped up) core time pass.
     async fn pass(ms: u64) {
@@ -270,6 +401,8 @@ mod tests {
     #[derive(Default)]
     struct Recorder {
         calls: RefCell<Vec<String>>,
+        /// What `compute` answers.
+        computed: RefCell<Option<Result<Value, CoreError>>>,
     }
 
     impl Source for Recorder {
@@ -278,6 +411,10 @@ mod tests {
         }
         fn stop(&self, topic: &Topic) {
             self.calls.borrow_mut().push(format!("stop {topic:?}"));
+        }
+        fn compute(&self, topic: &Topic) -> Option<Result<Value, CoreError>> {
+            self.calls.borrow_mut().push(format!("compute {topic:?}"));
+            self.computed.borrow().clone()
         }
     }
 
@@ -289,7 +426,8 @@ mod tests {
 
     fn setup() -> (Rc<FakeHost>, Rc<Store>, Rc<Recorder>) {
         let fake = FakeHost::new();
-        let store = Store::new(Rc::new(Fast(fake.clone())));
+        fake.speed_up(SPEEDUP);
+        let store = Store::new(fake.clone());
         let source = Rc::new(Recorder::default());
         store.set_source(source.clone());
         (fake, store, source)
@@ -453,6 +591,144 @@ mod tests {
             let mut stopped = source.take();
             stopped.sort();
             assert_eq!(stopped, vec![format!("stop {:?}", overview()), format!("stop {sessions:?}")]);
+        });
+    }
+
+    fn delta(id: RequestId, ops: Value) -> CoreMessage {
+        CoreMessage::Delta { id, delta: serde_json::from_value(ops).unwrap() }
+    }
+
+    fn long(n: usize) -> Value {
+        json!({"timeline": (0..n).map(|i| format!("message {i}")).collect::<Vec<_>>(), "usage": {"n": n}})
+    }
+
+    #[test]
+    fn sends_what_changed_after_the_first_value() {
+        run(async {
+            let (host, store, _) = setup();
+            let session = Topic::Session { station: "local".into(), key: "k".into() };
+            store.subscribe(1, 1, session.clone());
+            store.set(&session, Ok(long(50)));
+            pass(COALESCE_MS * 2).await;
+            assert_eq!(host.take_emitted(), vec![(1, value(1, long(50)))]);
+
+            store.update(&session, &mut |v| {
+                v["timeline"].as_array_mut().unwrap().push(json!("message 50"));
+                v["usage"]["n"] = json!(51);
+            });
+            // A second subscriber gets the value the first one has, then the same change.
+            store.subscribe(2, 7, session.clone());
+            assert_eq!(host.take_emitted(), vec![(2, value(7, long(50)))]);
+            pass(COALESCE_MS * 2).await;
+            let ops = json!([{"path": ["timeline"], "append": ["message 50"]}, {"path": ["usage", "n"], "set": 51}]);
+            assert_eq!(host.take_emitted(), vec![(1, delta(1, ops.clone())), (2, delta(7, ops))]);
+            // Joining now: the whole current value.
+            store.subscribe(3, 1, session.clone());
+            assert_eq!(host.take_emitted(), vec![(3, value(1, long(51)))]);
+
+            // The same value again: nothing goes out.
+            store.set(&session, Ok(long(51)));
+            pass(COALESCE_MS * 2).await;
+            assert!(host.take_emitted().is_empty());
+
+            // After an error, the whole value.
+            let error = CoreError::new("offline", "连不上");
+            store.set(&session, Err(error.clone()));
+            pass(COALESCE_MS * 2).await;
+            assert_eq!(host.take_emitted().len(), 3);
+            store.set(&session, Ok(long(52)));
+            pass(COALESCE_MS * 2).await;
+            assert_eq!(host.take_emitted(), vec![(1, value(1, long(52))), (2, value(7, long(52))), (3, value(1, long(52)))]);
+
+            // Changes that outweigh the value: the value.
+            store.set(&session, Ok(json!({"timeline": []})));
+            pass(COALESCE_MS * 2).await;
+            assert_eq!(host.take_emitted()[0], (1, value(1, json!({"timeline": []}))));
+        });
+    }
+
+    #[test]
+    fn a_watch_keeps_a_topic_live_and_hears_its_changes() {
+        run(async {
+            let (host, store, source) = setup();
+            let heard = Rc::new(RefCell::new(Vec::new()));
+            let h = heard.clone();
+            let s = Rc::downgrade(&store);
+            let watch = store.watch(&overview(), Rc::new(move || h.borrow_mut().push(s.upgrade().unwrap().get(&overview()))));
+            assert_eq!(source.take(), vec![format!("start {:?}", overview())]);
+            store.set(&overview(), Ok(json!(1)));
+            assert_eq!(*heard.borrow(), vec![Some(json!(1))], "at once, not after the coalescing window");
+            store.update(&overview(), &mut |v| *v = json!(2));
+            assert_eq!(heard.borrow().len(), 2);
+            pass(COALESCE_MS * 2).await;
+            assert!(host.take_emitted().is_empty(), "a watch is not a UI");
+
+            // A UI leaving does not stop a watched topic; the watch leaving does, after the grace.
+            store.subscribe(1, 1, overview());
+            store.unsubscribe(1, 1);
+            pass(EVICT_AFTER_MS + EVICT_AFTER_MS / 4).await;
+            assert!(source.take().is_empty());
+            assert_eq!(store.live_topics(), vec![overview()]);
+            drop(watch);
+            pass(EVICT_AFTER_MS / 2).await;
+            assert_eq!(store.get(&overview()), Some(json!(2)), "cached through the grace period");
+            pass(EVICT_AFTER_MS * 3 / 4).await;
+            assert_eq!(source.take(), vec![format!("stop {:?}", overview())]);
+            assert!(store.live_topics().is_empty());
+            assert_eq!(heard.borrow().len(), 2);
+        });
+    }
+
+    #[test]
+    fn an_invalidated_topic_is_computed_once_as_it_goes_out() {
+        run(async {
+            let (host, store, source) = setup();
+            let chats = Topic::Chats { scope: "ws".into(), mine: false };
+            store.subscribe(1, 1, chats.clone());
+            source.take();
+            // Nothing to show yet: nothing goes out.
+            store.invalidate(&chats);
+            pass(COALESCE_MS * 2).await;
+            assert_eq!(source.take(), vec![format!("compute {chats:?}")]);
+            assert!(host.take_emitted().is_empty());
+
+            *source.computed.borrow_mut() = Some(Ok(json!({"n": 1})));
+            for _ in 0..5 {
+                store.invalidate(&chats);
+            }
+            assert!(source.take().is_empty(), "computed when it goes out");
+            pass(COALESCE_MS * 2).await;
+            assert_eq!(source.take(), vec![format!("compute {chats:?}")]);
+            assert_eq!(host.take_emitted(), vec![(1, value(1, json!({"n": 1})))]);
+            assert_eq!(store.get(&chats), Some(json!({"n": 1})));
+
+            // The same result: not sent again.
+            store.invalidate(&chats);
+            pass(COALESCE_MS * 2).await;
+            assert_eq!(source.take().len(), 1);
+            assert!(host.take_emitted().is_empty());
+        });
+    }
+
+    #[test]
+    fn topics_changed_together_go_out_together_in_order() {
+        run(async {
+            let (host, store, _) = setup();
+            let session = Topic::Session { station: "local".into(), key: "k".into() };
+            let live = Topic::Live { station: "local".into(), key: "k".into() };
+            store.subscribe(1, 1, overview());
+            store.subscribe(1, 2, session.clone());
+            store.subscribe(1, 3, live.clone());
+            // Real time, for a margin the timer resolution cannot eat.
+            host.speed_up(1);
+            let wait = |ms: u64| tokio::time::sleep(std::time::Duration::from_millis(ms));
+            // `overview` opens the window; the other two change within it, later, and still go with it.
+            store.set(&overview(), Ok(json!("o")));
+            wait(COALESCE_MS / 2).await;
+            store.set(&session, Ok(json!("s")));
+            store.set(&live, Ok(json!("l")));
+            wait(COALESCE_MS * 3 / 4).await;
+            assert_eq!(host.take_emitted(), vec![(1, value(1, json!("o"))), (1, value(2, json!("s"))), (1, value(3, json!("l")))]);
         });
     }
 }

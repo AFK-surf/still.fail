@@ -131,3 +131,36 @@ test("localStorage is handed to the core once", async () => {
   assert.deepEqual(calls[1], ["migrate", { accounts: [{ sub: "s" }], device: "AAEC" }]);
   assert.ok(store.get("ember.core.migrated"));
 });
+
+test("deltas apply to the subscription's value, copying only along their paths", () => {
+  const workers = new FakeWorkers();
+  const client = workers.client();
+  const seen: unknown[] = [];
+  client.subscribe({ topic: "session", station: "w/s", key: "k" }, (v) => seen.push(v), (e) => seen.push(e.code));
+  const first = { detail: { timeline: [{ text: "a" }], usage: { n: 1 } }, link: { state: "offline", message: "断了" }, other: { x: 1 } };
+  // Before any value there is nothing to apply a delta to.
+  workers.last.reply({ id: 1, delta: [{ path: ["other"], set: 2 }] });
+  workers.last.reply({ id: 1, value: first });
+  workers.last.reply({ id: 1, delta: [
+    { path: ["detail", "timeline"], append: [{ text: "b" }] },
+    { path: ["detail", "usage", "n"], set: 2 },
+    { path: ["link", "state"], set: "online" },
+    { path: ["link", "message"], remove: true },
+  ] });
+  workers.last.reply({ id: 1, delta: [{ path: ["detail", "timeline", 1, "text"], set: "bc" }] });
+  assert.equal(seen.length, 3);
+  const second = seen[1] as typeof first;
+  const third = seen[2] as typeof first;
+  assert.deepEqual(second, { detail: { timeline: [{ text: "a" }, { text: "b" }], usage: { n: 2 } }, link: { state: "online" }, other: { x: 1 } });
+  assert.deepEqual(first.detail.timeline, [{ text: "a" }], "the old value is left as it was");
+  assert.equal(second.other, first.other);
+  assert.equal(second.detail.timeline[0], first.detail.timeline[0]);
+  assert.deepEqual(third.detail.timeline[1], { text: "bc" });
+  assert.equal(third.detail.timeline[0], first.detail.timeline[0]);
+  assert.equal(third.link, second.link);
+  // After an error, deltas wait for a whole value again.
+  workers.last.reply({ id: 1, error: { code: "offline", message: "离线" } });
+  workers.last.reply({ id: 1, delta: [{ path: ["other"], set: 3 }] });
+  workers.last.reply({ id: 1, value: { fresh: true } });
+  assert.deepEqual(seen.slice(3), ["offline", { fresh: true }]);
+});

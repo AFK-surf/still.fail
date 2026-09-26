@@ -61,6 +61,43 @@ interface Subscription {
   topic: Topic;
   onValue: (value: unknown) => void;
   onError: (error: CoreError) => void;
+  /** The whole current value, which deltas apply to; unset until the first value and after an error. */
+  value?: unknown;
+}
+
+/** One change in a delta (`Op` in client/core/src/delta.rs): the place, and what happens there. */
+export type DeltaOp = { path: (string | number)[] } & ({ set: unknown } | { append: unknown[] } | { remove: true });
+
+/**
+ * A delta applied to a value without changing it: only the objects and arrays
+ * along each op's path are copied, so unchanged parts keep their identity and
+ * React skips them.
+ */
+export function applyDelta(value: unknown, ops: DeltaOp[]): unknown {
+  return ops.reduce((current, op) => applyOp(current, op, 0), value);
+}
+
+function applyOp(node: unknown, op: DeltaOp, depth: number): unknown {
+  if (depth === op.path.length) {
+    if ("set" in op) return op.set;
+    if ("append" in op) return Array.isArray(node) ? [...node, ...op.append] : node;
+    return node;
+  }
+  const key = op.path[depth]!;
+  if (Array.isArray(node)) {
+    if (typeof key !== "number" || key >= node.length) return node;
+    const copy = node.slice();
+    copy[key] = applyOp(node[key], op, depth + 1);
+    return copy;
+  }
+  if (typeof node !== "object" || node === null || typeof key !== "string") return node;
+  const object = node as Record<string, unknown>;
+  if ("remove" in op && depth === op.path.length - 1) {
+    const rest = { ...object };
+    delete rest[key];
+    return rest;
+  }
+  return { ...object, [key]: applyOp(object[key], op, depth + 1) };
 }
 
 export interface ClientOptions {
@@ -99,7 +136,7 @@ export class CoreClient {
     });
   }
 
-  /** Values arrive on `onValue` (the whole current value each time); returns the unsubscribe. */
+  /** Values arrive on `onValue` (the whole current value each time, deltas already applied); returns the unsubscribe. */
   subscribe(topic: Topic, onValue: (value: unknown) => void, onError: (error: CoreError) => void): () => void {
     const id = this.#nextId++;
     this.#subs.set(id, { topic, onValue, onError });
@@ -200,7 +237,7 @@ export class CoreClient {
 
   #receive(data: unknown): void {
     if (typeof data !== "object" || data === null) return;
-    const message = data as { id?: number; ok?: unknown; value?: unknown; error?: ErrorBody; fatal?: string };
+    const message = data as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string };
     if (message.fatal !== undefined) {
       this.#restart(message.fatal);
       return;
@@ -217,8 +254,16 @@ export class CoreClient {
     }
     const sub = this.#subs.get(message.id);
     if (!sub) return; // unsubscribed while a value was on its way
-    if (message.error) sub.onError(new CoreError(message.error));
-    else if ("value" in message) sub.onValue(message.value);
+    if (message.error) {
+      delete sub.value;
+      sub.onError(new CoreError(message.error));
+    } else if ("value" in message) {
+      sub.value = message.value;
+      sub.onValue(sub.value);
+    } else if (message.delta && "value" in sub) {
+      sub.value = applyDelta(sub.value, message.delta);
+      sub.onValue(sub.value);
+    }
   }
 }
 

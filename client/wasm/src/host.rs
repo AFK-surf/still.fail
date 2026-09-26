@@ -156,6 +156,10 @@ impl Host for WebHost {
         js_sys::Date::now()
     }
 
+    fn utc_offset_min(&self, at_ms: f64) -> i32 {
+        -js_sys::Date::new(&JsValue::from_f64(at_ms)).get_timezone_offset() as i32
+    }
+
     fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()> {
         // setTimeout takes a signed 32-bit delay; anything longer fires at once.
         let ms = ms.min(i32::MAX as u64) as i32;
@@ -186,7 +190,7 @@ impl Host for WebHost {
             Err(error) => {
                 // Someone is waiting on this id: tell them instead of dropping it.
                 let id = match &message {
-                    CoreMessage::Ok { id, .. } | CoreMessage::Error { id, .. } | CoreMessage::Value { id, .. } => *id,
+                    CoreMessage::Ok { id, .. } | CoreMessage::Error { id, .. } | CoreMessage::Value { id, .. } | CoreMessage::Delta { id, .. } => *id,
                 };
                 let error = CoreMessage::Error { id, error: CoreError::new("host", format!("无法传给页面：{error}")) };
                 match error.serialize(&serializer) {
