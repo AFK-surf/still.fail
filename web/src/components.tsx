@@ -72,10 +72,16 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
   if (!quota) return compact ? null : <p className="muted quota-note">还没查过额度。</p>;
   if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className="muted quota-note">{quota.detail ?? "查不到额度。"}</p>;
   if (compact) {
-    // Every window, shortest first, each a ring marked D (a day or less), W (a week), M (a month).
-    const letter = (label: string) => (label.startsWith("每月") ? "M" : label.startsWith("每周") ? "W" : "D");
-    const order = { D: 0, W: 1, M: 2 } as const;
-    const windows = [...quota.windows].sort((a, b) => order[letter(a.label)] - order[letter(b.label)]);
+    // Every window, shortest first, each a ring marked by its length: 5H (five hours), W (a week), M (a month), 3D.
+    const mark = (label: string) => {
+      if (label.startsWith("每月")) return { text: "M", order: 3 };
+      if (label.startsWith("每周")) return { text: "W", order: 2 };
+      const hours = /^(\d+) 小时/.exec(label);
+      if (hours) return { text: `${hours[1]}H`, order: 0 };
+      const days = /^(\d+) 天/.exec(label);
+      return { text: days ? `${days[1]}D` : label, order: 1 };
+    };
+    const windows = [...quota.windows].sort((a, b) => mark(a.label).order - mark(b.label).order);
     return (
       <span className="quota-rings">
         {windows.map((w) => (
@@ -83,7 +89,7 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
             <Tip label={<>{w.label}剩余 {100 - w.usedPercent}%{w.resetsAt !== null && <><br />{refillsIn(w.resetsAt)}</>}</>}>
               <span><QuotaRing percent={w.usedPercent} /></span>
             </Tip>
-            <span className="quota-ring-letter">{letter(w.label)}</span>
+            <span className="quota-ring-letter">{mark(w.label).text}</span>
           </span>
         ))}
       </span>
