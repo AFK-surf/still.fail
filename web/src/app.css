@@ -561,6 +561,8 @@
 .invite-card { width: min(460px, 90vw); text-align: left; }
 .session-kind { display: inline-grid; flex: none; }
 .session-kind .kind-icon { width: 14px; height: 14px; }
+/* The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks. */
+.session-kind .kind-mark { margin: -1px; }
 .nav-session-meta .nav-time { margin-left: auto; }
 
 /* ── waiting ─────────────────────────────────────────────────────────── */
