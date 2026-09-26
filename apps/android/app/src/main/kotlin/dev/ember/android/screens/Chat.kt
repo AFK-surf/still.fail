@@ -207,7 +207,7 @@ fun ChatScreen(station: String, of: ChatOf) {
     if (view == null) {
         // Until the station answers, the page is already this chat's, as its row in the list has it (title, agents):
         // what arrives fills it in place instead of replacing another page.
-        val row = rows.firstOrNull { it.station == station && if (of is ChatOf.Thread) it.thread == of.id else it.thread == null && it.session == of.key }
+        val row = rows.firstOrNull { it.station == station && when (of) { is ChatOf.Thread -> it.thread == of.id; is ChatOf.Session -> it.thread == null && it.session == of.key } }
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
             BarFrame(row?.title ?: "", more = of is ChatOf.Thread) {
                 row?.agents?.forEach { ModelMark(it.model, it.runtime, 22.dp, it.state()) }
