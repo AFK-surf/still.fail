@@ -485,7 +485,17 @@ impl Views {
             None => page.get("thread").filter(|t| t.is_object())?.clone(),
         };
         let agents: Vec<Value> = members(&thread).iter().filter_map(|key| self.agent(station, key)).collect();
-        let messages = merge(page.get("entries").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default());
+        let mut messages = merge(page.get("entries").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default());
+        // Which are the viewer's (their bubbles), decided here: by account, or as a Slack user they said is them.
+        let viewer = self.me(station.split_once('/').map_or(station, |(workspace, _)| workspace));
+        let slack_users: Vec<String> = self.ok(Topic::Overview { station: station.to_string() })
+            .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
+            .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
+        for m in messages.iter_mut() {
+            let person = m.get("authorKind").and_then(Value::as_str) == Some("person");
+            let author = m.get("author").and_then(Value::as_str).unwrap_or("").to_string();
+            m["mine"] = json!(person && crate::present::is_viewer(&viewer, &author, &slack_users));
+        }
         // A sent message leaves the outbox as its own entry (or anything later) arrives.
         let newest = page.get("last").and_then(Value::as_u64);
         let at = (station.to_string(), id);
@@ -539,6 +549,9 @@ impl Views {
         let of = |list: &str, id: Option<&Value>| find(overview.as_ref().and_then(|o| o.get(list)), id);
         let session = detail.get("session").cloned().unwrap_or(Value::Null);
         Some(json!({
+            // Where it stands, and its mark: decided here for every client (present.rs).
+            "status": crate::present::session_status(&session),
+            "badge": crate::present::badge(crate::present::session_status(&session)),
             "session": session,
             "connect": of("connects", session.get("connect")),
             "profile": of("profiles", session.get("profile")),
