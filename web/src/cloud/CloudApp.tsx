@@ -44,7 +44,8 @@ function SlackInstalled() {
   const state = query.get("state") ?? "";
   const code = query.get("code") ?? "";
   const list = useAccounts();
-  const api = stationApi(useStationCall(state.split("~")[0] ?? ""));
+  const call = useStationCall(state.split("~")[0] ?? "");
+  const api = useMemo(() => stationApi(call), [call]);
   const [result, setResult] = useState<{ team: string | null } | { error: string } | null>(null);
   const sent = useRef(false);
   useEffect(() => {

@@ -175,7 +175,7 @@ test("a Slack app made on a station in ember cloud is installed through Slack's 
     return new Response(JSON.stringify({ ok: true, access_token: "xoxb-installed", team: { name: "Acme" } }));
   });
   try {
-    s.settings.update((raw) => ({ ...raw, slackConfigToken: { accessToken: "xoxe.xoxp-1", refreshToken: "xoxe-1", expiresAt: Date.now() + 3600_000 } }));
+    s.settings.update((raw) => ({ ...raw, slackConfigToken: { accessToken: "xoxe.xoxp-1", refreshToken: "xoxe-1", expiresAt: Date.now() + 3600_000, teamId: "T1" } }));
     const made = (await s.call("POST", "/slack/apps", { name: "ember" })).body;
     // Slack sends the person back to ember cloud's page, which hands the code to the station the state names.
     assert.deepEqual(s.slackApps.made[0].oauth_config.redirect_urls, ["https://cloud.test/slack/installed"]);
