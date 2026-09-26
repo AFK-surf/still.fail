@@ -101,12 +101,15 @@ function ChatRow({ item }: { item: ChatItem }) {
   return (
     <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${thread.id}`} data-unread={item.unread || undefined}>
       <span className="nav-session-text">
-        <span className="nav-session-title">{item.title}</span>
-        {item.last && <LastMessage item={item} />}
-        <span className="nav-session-meta">
+        {/* Where the chat happens sits at the title's end, top right. */}
+        <span className="nav-session-head">
+          <span className="nav-session-title">{item.title}</span>
           {thread.surface === "ember"
             ? <Tip label="ember 对话" side="right"><span className="session-kind"><Mark size={16} className="kind-mark" /></span></Tip>
             : <Tip label={connect ? `来自 ${connect.name}` : "来自 Slack"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
+        </span>
+        {item.last && <LastMessage item={item} />}
+        <span className="nav-session-meta">
           <PeopleStack people={item.people} />
           <Time className="nav-time" at={item.lastActiveAt} />
         </span>
