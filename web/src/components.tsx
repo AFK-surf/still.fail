@@ -75,7 +75,8 @@ export function refillsIn(ms: number | null): string {
 const level = (p: number) => (p >= 90 ? "red" : p >= 70 ? "amber" : "ok");
 
 /** A profile's allowance: one bar per window (compact: a single line of the fullest window). */
-export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | undefined; compact?: boolean }) {
+/** `ring`: the size of a compact ring, where a line is lower than a row (the model control). */
+export function QuotaBars({ quota, compact, ring }: { quota: ProfileQuota | null | undefined; compact?: boolean; ring?: number }) {
   if (!quota) return compact ? null : <p className="muted quota-note">还没查过额度。</p>;
   if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className="muted quota-note">{quota.detail ?? "查不到额度。"}</p>;
   if (compact) {
@@ -86,7 +87,7 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
         {windows.map((w) => (
           <span key={w.label} className="quota-ring-cell">
             <Tip label={<>{w.label}剩余 {100 - w.usedPercent}%{w.resetsAt !== null && <><br />{refillsIn(w.resetsAt)}</>}</>}>
-              <span className="quota-ring-hit"><QuotaRing percent={w.usedPercent} /></span>
+              <span className="quota-ring-hit"><QuotaRing percent={w.usedPercent} {...(ring ? { size: ring } : {})} /></span>
             </Tip>
             <span className="quota-ring-letter">{mark(w.label).text}</span>
           </span>
