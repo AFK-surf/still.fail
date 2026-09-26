@@ -246,7 +246,8 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
   const file = useRef<HTMLInputElement>(null);
   const buddyList = useBuddies();
   const [picked, setPicked] = useState<{ avatar: Avatar; maker: boolean } | { upload: true; bg: string } | null>(null);
-  const [colourSet, setColourSet] = useState(!fresh);
+  // The colour follows the avatar picked, until it is set by hand here (an app's colour so far is no such choice).
+  const [colourSet, setColourSet] = useState(false);
   const set = <K extends keyof SlackAppSettings>(key: K, value: SlackAppSettings[K]) => onChange({ ...settings, [key]: value });
   // The name in messages is the app's name (setting it apart is for Slack's own settings).
   const setName = (name: string) => onChange({ ...settings, name, displayName: name });
