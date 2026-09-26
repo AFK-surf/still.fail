@@ -1199,7 +1199,9 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .new-chat .illus { margin-bottom: 4px; }
 @media (max-height: 640px) { .new-chat .illus { display: none; } }
 .new-chat-making { font-size: var(--text-xs); }
-.composer-choices { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-right: auto; }
+.composer-choices { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; margin-right: auto; }
+/* The model control takes the room left beside the other choices, and fits itself in it (.model-triple-fit). */
+.composer-choices > :not(.model-triple-fit) { flex: none; }
 .composer-box:not([data-multiline]) .composer-choices { order: 1; }
 .chooser { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; border: 0; border-radius: calc(8px * var(--corner-scale)); background: none; color: var(--muted); font: inherit; font-size: var(--text-xs); cursor: pointer; white-space: nowrap; corner-shape: var(--corner-shape); }
 .chooser:hover, .chooser[data-state="open"] { background: var(--hover); color: var(--text); }
