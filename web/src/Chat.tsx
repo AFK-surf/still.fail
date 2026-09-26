@@ -91,12 +91,8 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
           if (mine) {
             return (
               <div key={m.ts} className="msg msg-mine" data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
-                {(m.text || m.quotes?.length) ? (
-                  <div className="msg-bubble">
-                    <Quotes quotes={m.quotes} />
-                    {m.text && <div className="msg-plain">{m.text}</div>}
-                  </div>
-                ) : null}
+                <Quotes quotes={m.quotes} />
+                {m.text && <div className="msg-bubble"><div className="msg-plain">{m.text}</div></div>}
                 <Files sessionKey={detail.session.key} files={m.attachments} />
                 {pendingTs.has(m.ts) && Date.now() - m.createdAt > 1000
                   ? <span className="msg-time msg-waiting"><span className="spinner" aria-hidden="true" />等待 agent 接收</span>
@@ -177,9 +173,9 @@ function MessageAvatar({ message, name, runtime, model }: { message: ChatMessage
 }
 
 /**
- * Quoted passages as sent, like a reply in a messaging app: a card naming
- * whose message it quotes with the passage (two lines), the comment under it.
- * The card leads back to the quoted message.
+ * Quotes as sent, each a card of its own ahead of the message: the quoted
+ * part on a warm ground (whose message, the passage) leading back to it, then
+ * what was said about it.
  */
 function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
   if (!quotes?.length) return null;
@@ -194,16 +190,26 @@ function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
     target.classList.add("msg-flash");
   };
   return (
-    <div className="msg-quotes">
-      {quotes.map((q, i) => (
-        <div key={i} className="msg-quote">
-          <button type="button" className="msg-quote-card" onClick={() => jump(q.ts)} disabled={!q.ts} title={q.ts ? "跳到原消息" : undefined}>
-            <span className="msg-quote-head"><QuoteIcon size={11} strokeWidth={2.2} />引用 {q.author}</span>
-            <span className="msg-quote-text">{q.text}</span>
-          </button>
-          {q.comment && <div className="msg-plain msg-quote-comment">{q.comment}</div>}
-        </div>
-      ))}
+    <div className="quote-cards">
+      {quotes.map((q, i) => <QuoteCard key={i} quote={q} onJump={q.ts ? () => jump(q.ts) : undefined} />)}
+    </div>
+  );
+}
+
+/** One quote: the passage with whose it is, and the comment. Also the composer's pending quote, with an editable comment. */
+function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?: (() => void) | undefined; comment?: ReactNode; onRemove?: () => void }) {
+  return (
+    <div className="quote-card">
+      <button type="button" className="quote-card-source" onClick={onJump} disabled={!onJump} title={onJump ? "跳到原消息" : undefined}>
+        <span className="quote-card-head">
+          <QuoteIcon size={12} strokeWidth={2.2} aria-hidden="true" />
+          <span className="quote-card-who">{quote.role === "agent" ? quote.author : quote.author}</span>
+          <span className="quote-card-kind">的消息</span>
+        </span>
+        <span className="quote-card-text">{quote.text}</span>
+      </button>
+      {comment ?? (quote.comment ? <div className="quote-card-comment">{quote.comment}</div> : null)}
+      {onRemove && <button type="button" className="quote-card-remove" aria-label="移除引用" onClick={onRemove}><X size={12} /></button>}
     </div>
   );
 }
@@ -414,12 +420,12 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
           <div className="composer-quotes">
             {quotes.map((q) => (
               <div key={q.id} className="composer-quote" onClick={(e) => e.stopPropagation()}>
-                <div className="composer-quote-source"><span className="composer-quote-author">{q.author}</span>{q.text}</div>
-                <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
-                  className="composer-quote-comment" value={q.comment} placeholder="对这段说点什么（可以不写）" aria-label={`对 ${q.author} 这段的批注`}
-                  onChange={(e) => { const v = e.target.value; setQuotes((all) => all.map((x) => (x.id === q.id ? { ...x, comment: v } : x))); }}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); input.current?.focus(); } }} />
-                <button type="button" className="composer-quote-remove" aria-label="移除引用" onClick={() => setQuotes((all) => all.filter((x) => x.id !== q.id))}><X size={12} /></button>
+                <QuoteCard quote={q} onRemove={() => setQuotes((all) => all.filter((x) => x.id !== q.id))} comment={
+                  <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
+                    className="quote-card-comment quote-card-input" value={q.comment} placeholder="对这段说点什么（可以不写）" aria-label={`对 ${q.author} 这段的批注`}
+                    onChange={(e) => { const v = e.target.value; setQuotes((all) => all.map((x) => (x.id === q.id ? { ...x, comment: v } : x))); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); input.current?.focus(); } }} />
+                } />
               </div>
             ))}
           </div>

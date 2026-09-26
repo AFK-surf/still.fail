@@ -1044,3 +1044,28 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .input-link { display: flex; align-items: center; color: var(--accent-text); text-decoration: none; cursor: pointer; }
 .input-link:hover { border-color: var(--field-hover); }
 a.chooser { text-decoration: none; color: var(--accent-text); }
+
+/* Quote cards: each quote stands as a card of its own, the quoted part on warm paper, the comment below on white. */
+.quote-cards { display: grid; gap: 6px; width: min(440px, 88%); }
+.msg-mine .quote-cards { justify-self: end; }
+.quote-card { position: relative; display: grid; overflow: hidden; border: 1px solid var(--line); border-radius: calc(14px * var(--corner-scale)); corner-shape: var(--corner-shape); background: var(--canvas); }
+.quote-card-source {
+  display: grid; gap: 3px; padding: 9px 12px 10px; border: 0; background: var(--paper); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  transition: background var(--dur) var(--ease-out);
+}
+.quote-card-source:disabled { cursor: default; }
+.quote-card-source:not(:disabled):hover { background: color-mix(in oklch, var(--accent) 7%, var(--paper)); }
+.quote-card-head { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.quote-card-head svg { color: var(--accent); flex: none; }
+.quote-card-who { font-weight: 600; color: var(--text); }
+.quote-card-text { font-size: var(--text-sm); line-height: 1.55; color: var(--muted); white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.quote-card-comment { padding: 9px 12px 10px; font-size: var(--text-sm); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.quote-card-input { width: 100%; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: var(--text-sm); }
+.quote-card-input::placeholder { color: var(--subtle); }
+.quote-card-remove { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--subtle); cursor: pointer; }
+.quote-card-remove:hover { background: var(--hover); color: var(--text); }
+/* In the composer: the same card, full width, without the old rule down the side. */
+.composer-quote { padding: 0; border: 0; }
+.composer-quotes { padding: 0; }
+.composer-quote .quote-card-source { padding-right: 34px; cursor: default; }
+.composer-quote .quote-card-text { -webkit-line-clamp: 2; }
