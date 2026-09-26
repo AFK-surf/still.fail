@@ -3,6 +3,10 @@
 // long-press menu, and a short note.
 package dev.ember.android.ui
 
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.ime
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.HazeTint
 import androidx.activity.compose.BackHandler
@@ -86,6 +90,10 @@ fun SheetHost(app: AppState) {
     var shown by remember { mutableStateOf<SheetSpec?>(null) }
     if (spec != null && shown !== spec) shown = spec
     BackHandler(enabled = spec != null) { app.sheet = null }
+    // A sheet comes up in the keyboard's place: what was being typed into lets go of it first.
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    LaunchedEffect(spec) { if (spec != null) { focus.clearFocus(); keyboard?.hide() } }
     val current = shown ?: return
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val total = constraints.maxHeight.toFloat()
@@ -134,7 +142,8 @@ fun SheetHost(app: AppState) {
                 // Frosted glass over the page, as the bars and capsules are.
                 .hazeEffect(app.haze) { backgroundColor = paper; tints = listOf(HazeTint(glass)); blurRadius = 28.dp; noiseFactor = 0f }
                 .pointerInput(Unit) { detectTapGestures { } }
-                .windowInsetsPadding(WindowInsets.navigationBars),
+                // A field of the sheet's own brings the keyboard up under the sheet, not over it.
+                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
         ) {
             CompositionLocalProvider(LocalSheetDrag provides drag) { current.content(this) }
         }
