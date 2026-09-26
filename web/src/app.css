@@ -820,3 +820,8 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .time-toggle:hover { text-decoration: underline dotted; text-underline-offset: 2px; }
 .msg-files { align-items: flex-start; }
 .history-details .details { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+/* The avatar rides in the name line, small, not in a column of its own. */
+.msg-row { display: block; }
+.msg-head { gap: 6px; }
+.msg-avatar { width: 18px; height: 18px; flex: none; }
+.msg-avatar-agent img { width: 12px; height: 12px; }

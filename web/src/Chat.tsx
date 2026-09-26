@@ -68,9 +68,9 @@ export function ChatPanel({ detail, chat, onOpenHistory }: { detail: SessionDeta
           const who = m.role === "agent" ? agent : name(m.user);
           return (
             <div key={m.ts} className="msg msg-row" data-author={who}>
-              <MessageAvatar message={m} name={who} runtime={detail.session.runtime} model={detail.transcript?.usage?.model ?? detail.session.model} />
               <div className="msg-main">
                 <div className="msg-head">
+                  <MessageAvatar message={m} name={who} runtime={detail.session.runtime} model={detail.transcript?.usage?.model ?? detail.session.model} />
                   {m.role === "agent"
                     ? <button type="button" className="msg-name msg-agent" onClick={onOpenHistory} title="打开或关闭执行历史">{who}</button>
                     : <span className="msg-name">{who}</span>}
@@ -108,11 +108,11 @@ export function ChatPanel({ detail, chat, onOpenHistory }: { detail: SessionDeta
 
 function MessageAvatar({ message, name, runtime, model }: { message: ChatMessageRow; name: string; runtime: SessionDetail["session"]["runtime"]; model: string | null }) {
   const member = usePerson();
-  if (message.role === "agent") return <span className="msg-avatar msg-avatar-agent"><ModelLogo model={model} runtime={runtime} size={14} /></span>;
+  if (message.role === "agent") return <span className="msg-avatar msg-avatar-agent"><ModelLogo model={model} runtime={runtime} size={12} /></span>;
   const picture = member(message.user)?.picture;
   return picture
-    ? <img className="msg-avatar" src={picture} alt="" width={24} height={24} referrerPolicy="no-referrer" />
-    : <span className="msg-avatar"><Avatar id={message.user} name={name} size={24} /></span>;
+    ? <img className="msg-avatar" src={picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />
+    : <span className="msg-avatar"><Avatar id={message.user} name={name} size={18} /></span>;
 }
 
 /** Quoted passages as sent: who said it, the passage, then the comment. */
