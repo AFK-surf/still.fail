@@ -87,6 +87,13 @@ const demoChat = new InternalChat(store);
 const hub = {
   processState: (key: string) => states.get(key) ?? "cold", stop: async () => {}, evict: async () => {},
   live: new LiveHub(() => undefined),
+  newSession: (o: { runtime: "claude" | "codex"; profile?: string; model?: string; effort?: string; createdBy: string }) => {
+    const key = `ember:c-${Math.random().toString(16).slice(2, 12)}`;
+    const now = Date.now();
+    store.insertSession({ key, connect: "ember", scope: "all", title: null, createdBy: o.createdBy, channel: "", threadTs: "", runtime: o.runtime,
+      profile: o.profile ?? "cc", model: o.model ?? null, effort: o.effort ?? null, workspace: join(dataDir, "sessions", key.replace(":", "-")), token: key, createdAt: now, lastActiveAt: now });
+    return key;
+  },
   openChat: (key: string, user: string) => demoChat.open(key, user, null).threadTs,
   sayInChat: async (threadTs: string, user: string, text: string, attachments: Attachment[] = []) => { demoChat.say(threadTs, user, text, attachments); },
   sayToSession: async (key: string, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []) => {
