@@ -5,9 +5,9 @@ import { useCallback, useRef, useState } from "react";
 import type { ErrorBody } from "../core/client.ts";
 import { core, useTopic, type TopicState } from "../core/react.ts";
 import type { Account } from "./accounts.ts";
-import type { InvitationView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
+import type { Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
 
-export type { InvitationView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView };
+export type { Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView };
 
 /** One account's `/v1/me`, as the `workspaces` topic lists it (`error` when that account could not be read). */
 export interface AccountWorkspaces {
@@ -37,7 +37,9 @@ export interface LoginSession { id: string; name: string; created_at: number; ex
 const ws = (id: string) => `/v1/workspaces/${encodeURIComponent(id)}`;
 
 export const cloud = {
-  createWorkspace: (sub: string, name: string) => call<WorkspaceView>(sub, "POST", "/v1/workspaces", { name }),
+  /** `code`: an invite code, for an account not let in yet (ember is invite-only). */
+  createWorkspace: (sub: string, name: string, code?: string) =>
+    call<WorkspaceView>(sub, "POST", "/v1/workspaces", code ? { name, invite_code: code } : { name }),
   renameWorkspace: (sub: string, id: string, name: string) => call<WorkspaceView>(sub, "PATCH", ws(id), { name }),
   deleteWorkspace: (sub: string, id: string) => call<{ ok: true }>(sub, "DELETE", ws(id)),
   invite: (sub: string, id: string, role: Role, email: string) =>
@@ -56,6 +58,48 @@ export const cloud = {
   loginSessions: (sub: string) => call<{ sessions: LoginSession[] }>(sub, "GET", "/v1/auth/sessions").then((r) => r.sessions),
   revokeLoginSession: (sub: string, id: string) => call<{ ok: true }>(sub, "DELETE", `/v1/auth/sessions/${id}`),
 };
+
+/** The admin's console; every call is a 404 for other accounts. */
+export const admin = {
+  me: (sub: string) => call<{ email: string }>(sub, "GET", "/v1/admin/me"),
+  users: (sub: string) => call<{ users: AdminUser[] }>(sub, "GET", "/v1/admin/users").then((r) => r.users),
+  workspaces: (sub: string) => call<{ workspaces: AdminWorkspace[] }>(sub, "GET", "/v1/admin/workspaces").then((r) => r.workspaces),
+  codes: (sub: string) => call<{ codes: InviteCodeView[] }>(sub, "GET", "/v1/admin/invite-codes").then((r) => r.codes),
+  createCode: (sub: string, note: string, days: number) => call<InviteCodeView & { url: string }>(sub, "POST", "/v1/admin/invite-codes", { note, days }),
+  revokeCode: (sub: string, code: string) => call<{ ok: true }>(sub, "POST", `/v1/admin/invite-codes/${encodeURIComponent(code)}/revoke`),
+};
+
+// ember cloud's invite-code errors in Chinese; the core passes their codes through (see CoreError).
+const INVITE_ERRORS: Record<string, string> = {
+  invite_code_required: "ember 目前只对受邀的人开放，需要邀请码才能新建 workspace",
+  invite_code_invalid: "这个邀请码不对，检查一下有没有输错",
+  invite_code_used: "这个邀请码已经被用过了",
+  invite_code_expired: "这个邀请码已经过期了",
+};
+
+const codeOf = (error: Error | null) => (error as { code?: string } | null)?.code ?? "";
+
+/** Whether creating a workspace failed for want of a (good) invite code. */
+export const needsInviteCode = (error: Error | null): boolean => codeOf(error) in INVITE_ERRORS;
+
+export const errorText = (error: Error): string => INVITE_ERRORS[codeOf(error)] ?? error.message;
+
+const INVITE_KEY = "ember.invite";
+
+/**
+ * The invite code this tab arrived with (`/?invite=CODE`), kept for the tab's
+ * life: the page it came to may first send it to Google to sign in, or on to a
+ * workspace before the code is asked for.
+ */
+export function inviteCode(): string {
+  const given = new URLSearchParams(location.search).get("invite");
+  if (given) sessionStorage.setItem(INVITE_KEY, given);
+  return sessionStorage.getItem(INVITE_KEY) ?? "";
+}
+
+export function forgetInviteCode(): void {
+  sessionStorage.removeItem(INVITE_KEY);
+}
 
 export interface Action<A, T> {
   run(arg: A): void;

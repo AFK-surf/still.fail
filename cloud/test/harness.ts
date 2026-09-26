@@ -13,6 +13,8 @@ export async function harness(
     signingKey?: string;
     noGoogle?: boolean;
     relayUrl?: string;
+    /** The console's admin (alice unless said otherwise). */
+    adminEmail?: string;
   } = {},
 ) {
   const origin = options.origin ?? "https://relay.example";
@@ -57,6 +59,7 @@ export async function harness(
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
+        ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
       },

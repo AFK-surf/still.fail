@@ -1159,3 +1159,22 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .h-post[data-failed="true"] { border: 0; border-left: 0; }
 .h-post[data-failed="true"] .h-post-head { color: var(--red); }
 .msg-quote-card { box-shadow: none; }
+
+/* The admin console: each thing a block on the sidebar's ground, apart by spacing, with no rules between. */
+.admin-list { list-style: none; margin-top: 0; margin-bottom: 0; padding: 0; display: grid; gap: 8px; }
+.admin-item { display: grid; gap: 12px; padding: 14px 16px; border-radius: var(--r-card); background: var(--sidebar); font-size: var(--text-sm); corner-shape: var(--corner-shape); }
+.admin-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.admin-head .list-row-title { display: flex; align-items: baseline; gap: 10px; }
+.admin-meta { margin: 0; font-size: var(--text-xs); }
+.admin-group { display: grid; gap: 2px; }
+.admin-group-label { margin-bottom: 2px; font-size: var(--text-xs); color: var(--muted); }
+.admin-line { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 10px; border-radius: var(--r-option); background: var(--canvas); corner-shape: var(--corner-shape); }
+.admin-line + .admin-line { margin-top: 2px; }
+.admin-line-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-line > .muted { flex: none; font-size: var(--text-xs); }
+.admin-line-text .muted { font-size: var(--text-xs); }
+.admin-code { font-size: var(--text-body); letter-spacing: .04em; }
+.admin-note { font-weight: 400; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.invite-code { display: grid; gap: 6px; width: min(420px, 90vw); margin-top: 8px; }
+.invite-code .btn { margin-top: 0; }
+.gate .invite-code .field-error { color: var(--red); }

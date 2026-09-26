@@ -21,6 +21,8 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SIGNING_KEY: string;
   ADMIN_TOKEN?: string;
+  /** Who the console's admin is instead of ADMIN_EMAIL; set only by the tests and the dev cloud. */
+  ADMIN_EMAIL?: string;
   /** Ed25519 private JWK (JSON) that signs station grants. */
   GRANT_SIGNING_JWK: string;
 }

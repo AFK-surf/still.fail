@@ -16,3 +16,36 @@ export type AccountEvent =
   | { type: "workspaces" }
   | { type: "workspace"; id: string }
   | { type: "station"; workspace: string; id: string; online: boolean };
+
+// ── the operator's console (/v1/admin/*, the admin account only) ──────────
+
+/** How someone got in: the admin, a code, an invitation, or a member from before codes existed. */
+export type Admission = "admin" | "code" | "invitation" | "early";
+export interface AdminUser extends UserView {
+  created_at: number;
+  /** When they last signed in or opened ember (its events socket); null before this was recorded. */
+  last_seen: number | null;
+  /** null: signed in but not let in yet (no workspace, no code, no invitation). */
+  admission: Admission | null;
+  workspaces: { id: string; name: string; role: Role }[];
+}
+export interface AdminWorkspace {
+  id: string;
+  name: string;
+  created_at: number;
+  created_by: UserView | null;
+  members: MemberView[];
+  stations: StationView[];
+  invitations: (InvitationView & { inviter: string })[];
+}
+export interface InviteCodeView {
+  code: string;
+  note: string;
+  created_at: number;
+  expires_at: number;
+  revoked_at: number | null;
+  used_at: number | null;
+  used_by: UserView | null;
+  /** The workspace it created (null once that was deleted). */
+  workspace: { id: string; name: string } | null;
+}

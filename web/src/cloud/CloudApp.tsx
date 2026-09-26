@@ -1,9 +1,10 @@
 // ember cloud's pages: sign-in (several Google accounts at once), the
 // workspaces those accounts belong to, their members, invitations and
-// stations. Everything goes through the client core: accounts, ember cloud
-// and the links to stations live there, not on the page.
+// stations; and, for the admin, the console. Everything goes through the
+// client core: accounts, ember cloud and the links to stations live there,
+// not on the page.
 import { Tooltip } from "radix-ui";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from "react-router";
 import { ToastProvider } from "../toast.tsx";
 import { Button, Loading, Select } from "../ui.tsx";
@@ -11,7 +12,8 @@ import { completeSignIn, signIn, useAccounts } from "./accounts.ts";
 import { SignInPage } from "./gate.tsx";
 import { WorkspaceShell } from "./workspace.tsx";
 import { ROLE_LABEL } from "./settings.tsx";
-import { cloud, useAction, useWorkspaces } from "./api.ts";
+import { AdminConsole } from "./admin.tsx";
+import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspaces } from "./api.ts";
 import { Illustration } from "../brand.tsx";
 
 export function CloudApp() {
@@ -47,34 +49,43 @@ function Callback() {
 function Home() {
   const list = useAccounts();
   if (!list) return <div className="gate"><Loading /></div>;
-  if (list.length === 0) return <SignInPage />;
+  if (list.length === 0) return <SignInPage lead={inviteCode() ? "你拿到了 ember 的邀请码。用 Google 账号登录，就能建一个自己的 workspace。" : undefined} />;
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/admin/*" element={<AdminConsole />} />
       <Route path="/w/:ws/*" element={<WorkspaceRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
 
-/** Straight into a workspace: the first one, or, for an account with none and no invitations, a new one of its own. */
+/**
+ * Straight into a workspace: the first one, or, for an account with none and
+ * no invitations, a new one of its own — with the invite code it came with,
+ * or, lacking one, after asking for it.
+ */
 function Landing() {
   const workspaces = useWorkspaces().value;
   const list = useAccounts() ?? [];
   const navigate = useNavigate();
   const create = useAction(
-    () => cloud.createWorkspace(list[0]!.sub, `${list[0]!.name || list[0]!.email.split("@")[0]} 的 workspace`),
-    (w) => navigate(`/w/${w.id}`, { replace: true }),
+    (code: string) => cloud.createWorkspace(list[0]!.sub, `${list[0]!.name || list[0]!.email.split("@")[0]} 的 workspace`, code),
+    (w) => { forgetInviteCode(); navigate(`/w/${w.id}`, { replace: true }); },
   );
   const accept = useAction(
     (i: { sub: string; id: string }) => cloud.acceptInvitationById(i.sub, i.id),
     (w) => navigate(`/w/${w.id}`, { replace: true }),
   );
+  // Once asked for a code, the form stays while a code is tried, rather than flicking to "creating…".
+  const asked = useRef(false);
+  if (needsInviteCode(create.error)) asked.current = true;
+  const asking = asked.current && !create.result;
   const first = workspaces?.flatMap((a) => a.workspaces)[0];
   const pending = workspaces?.flatMap((a) => a.invitations.map((i) => ({ ...i, account: a.account }))) ?? [];
   const ready = workspaces !== undefined;
   useEffect(() => {
-    if (ready && !first && pending.length === 0 && !create.busy && !create.result && !create.error) create.run();
+    if (ready && !first && pending.length === 0 && !create.busy && !create.result && !create.error) create.run(inviteCode());
   }, [ready, first, pending.length]); // eslint-disable-line react-hooks/exhaustive-deps
   if (first) return <Navigate to={`/w/${first.id}`} replace />;
   if (ready && pending.length > 0) {
@@ -88,12 +99,42 @@ function Landing() {
             <Button variant="primary" busy={accept.busy && accept.arg?.id === i.id} onClick={() => accept.run({ sub: i.account.sub, id: i.id })}>加入</Button>
           </div>
         ))}
-        <Button variant="ghost" busy={create.busy} onClick={() => create.run()}>不加入，建一个自己的 workspace</Button>
+        {asking
+          ? <InviteCodeForm create={create} />
+          : <Button variant="ghost" busy={create.busy} onClick={() => create.run(inviteCode())}>不加入，建一个自己的 workspace</Button>}
       </div>
     );
   }
-  if (create.error) return <div className="gate"><h1>没能建好 workspace</h1><p>{create.error.message}</p><Button onClick={() => create.run()}>重试</Button></div>;
+  if (asking) {
+    return (
+      <div className="gate invite-page">
+        <Illustration name="sign-in" />
+        <h1>ember 目前只对受邀的人开放</h1>
+        <p>有邀请码的话填在下面，就能建一个自己的 workspace。也可以请已经在用 ember 的人把 {list[0]!.email} 邀请进他们的 workspace。</p>
+        <InviteCodeForm create={create} />
+        <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
+      </div>
+    );
+  }
+  if (create.error) return <div className="gate"><h1>没能建好 workspace</h1><p>{create.error.message}</p><Button onClick={() => create.run(inviteCode())}>重试</Button></div>;
   return <div className="gate"><Loading label={ready ? "正在为你建一个 workspace…" : "正在读取你的 workspace…"} /></div>;
+}
+
+/** Asks for the invite code a new workspace needs; what the last try said stands under it. */
+function InviteCodeForm({ create }: { create: { run(code: string): void; busy: boolean; error: Error | null; arg: string | undefined } }) {
+  const [code, setCode] = useState(() => create.arg ?? inviteCode());
+  // Nothing was wrong with a code nobody had typed yet.
+  const said = create.error && create.arg ? errorText(create.error) : null;
+  return (
+    <form className="invite-code" onSubmit={(e) => { e.preventDefault(); if (code.trim()) create.run(code.trim()); }}>
+      <div className="input-row">
+        <input className="input mono" aria-label="邀请码" value={code} autoFocus placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
+          onChange={(e) => setCode(e.target.value)} />
+        <Button variant="primary" type="submit" disabled={!code.trim()} busy={create.busy}>建 workspace</Button>
+      </div>
+      {said && <p className="field-error" role="alert">{said}</p>}
+    </form>
+  );
 }
 
 /** A workspace by id, through whichever signed-in account belongs to it. */
