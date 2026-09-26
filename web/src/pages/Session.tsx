@@ -86,13 +86,15 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
       <div className="session-main">
       <header className="page-bar">
         <MobileBack to={link("/sessions")} label="会话" />
+        {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
         <div className="page-bar-title">
+          <h1>{sessionTitle(session, name)}</h1>
+          {(session.participants?.length ?? 0) > 0 && <PeopleStack people={session.participants} max={5} />}
           <Tip label={`${agentLabel(model, session.effort)}${badge ? ` · ${BADGE_LABEL[badge]}` : ""} · 执行历史`}>
             <button type="button" className="agent-mark-btn" onClick={toggleHistory} aria-label="执行历史">
-              <AgentMark model={model} runtime={session.runtime} badge={badge} size={22} />
+              <AgentMark model={model} runtime={session.runtime} badge={badge} size={20} />
             </button>
           </Tip>
-          <h1>{sessionTitle(session, name)}</h1>
         </div>
         <div className="page-bar-actions">
           <ChatInfo detail={detail} connect={connect} base={base} />
