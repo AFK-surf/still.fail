@@ -686,6 +686,7 @@
 .run-picker-option { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 8px; border: 0; border-radius: calc(6px * var(--corner-scale)); background: none; color: var(--text); font: inherit; font-size: var(--text-sm); text-align: left; cursor: pointer; corner-shape: var(--corner-shape); }
 .run-picker-option:hover { background: var(--hover); }
 .run-picker-option[aria-pressed="true"] { background: var(--hover); font-weight: 600; }
+.run-picker-note { margin: 0 8px 6px; max-width: 240px; font-size: var(--text-xs); color: var(--amber); }
 .run-picker-option .quota-rings { margin-left: auto; padding-left: 12px; }
 .run-chip .quota-rings { margin-left: 4px; }
 .run-chip .quota-ring-letter { display: none; }

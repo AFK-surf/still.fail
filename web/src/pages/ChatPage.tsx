@@ -378,8 +378,9 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
 }
 
 /**
- * How a session runs, picked in one panel: a model, how hard it thinks, and who runs it, in that order. The first two
- * only mark a pick; picking who runs it makes it, all three at once, so a panel left halfway leaves it as it was.
+ * How a session runs, picked in one panel: a model, how hard it thinks, and who runs it, in that order. A model only
+ * marks a pick. How hard it thinks makes it when the account it is on runs that model too (it stays on it); when not,
+ * who runs it is to be picked, which makes it. A panel left halfway leaves it as it was.
  */
 function RunPicker({ agent, onPick }: { agent: ChatAgentView; onPick(input: { model: string; effort: string | null; profile: string | null }): void }) {
   const { session, profile } = agent;
@@ -391,6 +392,8 @@ function RunPicker({ agent, onPick }: { agent: ChatAgentView; onPick(input: { mo
   const choice = agent.choices.find((c) => c.model === model);
   // Where it is now: a pick of it marks what it has.
   const same = model === session.model && effort === session.effort;
+  // The account it is on runs the model marked: it stays there, as it was kept (by hand, or by the station).
+  const stays = choice?.profiles.some((p) => p.current) ?? false;
   return (
     <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (next) { setModel(session.model); setEffort(session.effort); } }}>
       <Popover.Trigger className="run-model" title="换模型、思考深度和账号">
@@ -416,13 +419,17 @@ function RunPicker({ agent, onPick }: { agent: ChatAgentView; onPick(input: { mo
           <div className="run-picker-column">
             <h4>思考深度</h4>
             {[null, ...EFFORTS[session.runtime]].map((e) => (
-              <button key={e ?? ""} type="button" className="run-picker-option" aria-pressed={effort === e} onClick={() => setEffort(e)}>{e ?? "默认"}</button>
+              <button key={e ?? ""} type="button" className="run-picker-option" aria-pressed={effort === e} onClick={() => {
+                setEffort(e);
+                if (choice && stays) { setOpen(false); onPick({ model: choice.model, effort: e, profile: session.profilePinned ? session.profile : null }); }
+              }}>{e ?? "默认"}</button>
             ))}
           </div>
           <div className="run-picker-column run-picker-accounts">
             <h4>账号</h4>
             {!choice ? <p className="muted">先选一个模型</p> : (
               <>
+                {!stays && <p className="run-picker-note">现在的账号没有启用 {choice.model}，选一个</p>}
                 <button type="button" className="run-picker-option" aria-pressed={same && !session.profilePinned} onClick={() => { setOpen(false); onPick({ model: choice.model, effort, profile: null }); }}>
                   <span className="run-option-text"><strong>自动分配</strong><span className="muted">额度用完或登录失效时换一个</span></span>
                 </button>
