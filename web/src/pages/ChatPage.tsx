@@ -3,17 +3,17 @@
 // be opened beside them, one tab per agent.
 import { StationPreview } from "../Preview.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
-import { CreatorText, PeopleStack, Ring } from "../components.tsx";
+import { CreatorText, PeopleStack, QuotaBars, QuotaRing, Ring, mark, refillsIn } from "../components.tsx";
 import { Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
-import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type SessionSummary, type ThreadView } from "../api.ts";
+import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall, useStations, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type SessionSummary, type ThreadView } from "../api.ts";
 import { History } from "../History.tsx";
 import { ChatPanel } from "../Chat.tsx";
 import {
-  BADGE_LABEL, PROCESS_LABEL, RUNTIME_LABEL, absoluteTime, agentLabel, compactNumber, slackThreadUrl, slackWorkspaceUrl, type Status,
+  BADGE_LABEL, EFFORTS, EFFORT_LABEL, PROCESS_LABEL, RUNTIME_LABEL, agentLabel, compactNumber, slackThreadUrl, slackWorkspaceUrl, type Status,
 } from "../format.ts";
 import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
@@ -212,8 +212,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                 <Tabs.Content key={key} className="side-content" value={key}>
                   <History session={a.session} threads={a.threads} connect={a.connect ?? undefined} live={live} actions={<SessionActions session={a.session} status={a.status} />}
                     focus={focus?.key === key ? focus : null}
-                    summary={<HistorySummary live={live} profile={a.profile} />}
-                    details={<SessionDetails session={a.session} live={live} profile={a.profile} />} />
+                    summary={<HistorySummary agent={a} />}
+                    details={<SessionDetails agent={a} live={live} />} />
                 </Tabs.Content>
               );
             })}
@@ -312,48 +312,85 @@ function AgentLine({ agent, model }: { agent: ChatAgentView; model: string | nul
   );
 }
 
-/** The history's head, folded: what is worth a glance — the allowance left, the cache hit rate, the station's free disk. */
-function HistorySummary({ live, profile }: { live: LiveView | undefined; profile: ProfileView | null }) {
-  const host = useHost(useStation().address).value;
-  const usage = live?.usage;
-  const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
-  const windows = profile?.quota?.state === "ok" ? profile.quota.windows : [];
-  const free = host && host.disk.totalBytes > 0 ? host.disk.freeBytes : null;
-  const parts: ReactNode[] = [
-    ...windows.map((w) => <span key={w.label} title={w.resetsAt ? `${absoluteTime(w.resetsAt)} 重置` : undefined}>{w.label} 已用 {Math.round(w.usedPercent)}%</span>),
-    hitRate !== null && <span key="cache">缓存命中 {hitRate}%</span>,
-    free !== null && <span key="disk">磁盘剩 {Math.round(free / 1024 ** 3)} GB</span>,
-  ].filter(Boolean);
-  return <span className="history-summary">{parts.flatMap((p, i) => (i ? [<span key={`s${i}`} className="history-sep">·</span>, p] : [p]))}</span>;
+/**
+ * The history's line under its head: only what is worth a look now, as the core says (a quota running out, the disk
+ * filling up, an account that cannot run); nothing when all is well.
+ */
+function HistorySummary({ agent }: { agent: ChatAgentView }) {
+  if (agent.attention.length === 0) return null;
+  return (
+    <span className="history-summary">
+      {agent.attention.map((a, i) => (
+        a.kind === "quota" ? (
+          <Tip key={i} label={<>{a.label}剩余 {a.left}%{a.until !== null && <><br />{refillsIn(a.until)}</>}</>}>
+            <span className="attention attention-quota"><QuotaRing percent={100 - a.left} size={20} /><span>{mark(a.label).text} 剩 {a.left}%</span></span>
+          </Tip>
+        ) : a.kind === "disk" ? (
+          <span key={i} className="attention" data-tone="amber">磁盘剩 {Math.round(a.freeBytes / 1024 ** 3)} GB</span>
+        ) : (
+          <span key={i} className="attention" data-tone="red">{a.state === "login" ? `「${a.name}」要重新登录` : `「${a.name}」的 key 被拒绝`}</span>
+        )
+      ))}
+    </span>
+  );
 }
 
-/** Unfolded under the history's head: the model and its use, the allowance, the station. */
-function SessionDetails({ session, live, profile }: { session: SessionSummary; live: LiveView | undefined; profile: ProfileView | null }) {
+/**
+ * Unfolded under the history's head: how the session runs (its profile, model and effort, changed here from its next
+ * turn on), its account's quota, and the station.
+ */
+function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView | undefined }) {
+  const { session, profile } = agent;
   const station = useStation();
   const link = useLink();
+  const api = useApi();
+  const toast = useToast();
   const host = useHost(station.address).value;
+  const view = useStations(scopeOf(station.address)).value?.find((s) => s.station === station.address);
+  const models = view?.runtimes.find((r) => r.runtime === session.runtime)?.models ?? [];
+  const change = useAction((input: { profile?: string; model?: string | null; effort?: string | null }) => api.sessionSettings(session.key, input), () => toast("已改，下一轮起生效"));
   const usage = live?.usage;
-  const quota = profile?.quota;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
   const gb = (bytes: number) => `${Math.round(bytes / 1024 ** 3)} GB`;
   const row = (label: string, value: ReactNode) => <div className="detail-row"><dt>{label}</dt><dd>{value}</dd></div>;
   return (
     <div className="session-details">
       <section className="details-group">
-        <h3>模型</h3>
+        <h3>运行</h3>
         <dl className="details">
           {row("运行时", <span className="detail-inline"><RuntimeLogo runtime={session.runtime} size={13} />{RUNTIME_LABEL[session.runtime]}</span>)}
-          {row("Profile", <Link className="detail-link" to={link(`/settings/accounts/${session.profile}`)}>{profile?.name ?? session.profile}</Link>)}
+          {row("Profile", (
+            <span className="detail-inline">
+              <select className="detail-select" value={session.profile} disabled={change.busy} aria-label="Profile"
+                onChange={(e) => void change.run({ profile: e.target.value })}>
+                {agent.profiles.map((p) => <option key={p.id} value={p.id}>{p.name}{p.spent ? "（额度用完）" : ""}</option>)}
+                {!agent.profiles.some((p) => p.id === session.profile) && <option value={session.profile}>{profile?.name ?? session.profile}</option>}
+              </select>
+              <Link className="detail-link" to={link(`/settings/accounts/${session.profile}`)}>查看</Link>
+            </span>
+          ))}
+          {row("模型", (
+            <select className="detail-select" value={session.model ?? ""} disabled={change.busy} aria-label="模型"
+              onChange={(e) => void change.run({ model: e.target.value || null })}>
+              <option value="">运行时默认</option>
+              {[...new Set([...(session.model ? [session.model] : []), ...models])].map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          ))}
+          {row("思考深度", (
+            <select className="detail-select" value={session.effort ?? ""} disabled={change.busy} aria-label="思考深度"
+              onChange={(e) => void change.run({ effort: e.target.value || null })}>
+              <option value="">运行时默认</option>
+              {EFFORTS[session.runtime].map((e) => <option key={e} value={e}>{EFFORT_LABEL[e] ?? e}（{e}）</option>)}
+            </select>
+          ))}
           {row("进程", PROCESS_LABEL[session.process])}
           {usage && row("调用", `${usage.modelCalls} 次`)}
           {usage && row("输入", `${compactNumber(usage.inputTokens)}${hitRate === null ? "" : ` · 缓存 ${hitRate}%`}`)}
           {usage && row("输出", compactNumber(usage.outputTokens))}
         </dl>
-        <div className="resource-rings">
-          {quota?.state === "ok" && quota.windows.length > 0
-            ? quota.windows.map((w) => <Ring key={w.label} percent={w.usedPercent} label={w.label} title={`${w.label}已用 ${w.usedPercent}%${w.resetsAt ? `，${absoluteTime(w.resetsAt)} 重置` : ""}`} />)
-            : <span className="muted resource-note">额度：{quota?.detail ?? (quota ? "查不到" : "还没查过")}</span>}
-        </div>
+        {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
+        {/* Its account's quota, drawn as everywhere else: what is left of each window. */}
+        <div className="details-quota"><QuotaBars quota={profile?.quota} compact /></div>
       </section>
       <section className="details-group">
         <h3>Station</h3>

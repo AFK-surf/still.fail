@@ -73,7 +73,17 @@ export interface OutboxMessage {
 
 /** An agent taking part in a chat: its session, the connect that started it, its profile, its turns and every thread it is in. */
 /** An agent of a chat; where it stands (status, badge) is the core's (present.rs). */
-export interface ChatAgentView { session: SessionSummary; status: Status; badge: Badge | null; connect: ConnectView | null; profile: ProfileView | null; turns: TurnRecord[]; threads: ThreadView[] }
+/** What is worth a look about a session now (the core's): its account, a quota running out, the disk filling up. */
+export type Attention =
+  | { kind: "account"; state: "login" | "failed"; name: string; detail: string | null }
+  | { kind: "quota"; label: string; left: number; until: number | null }
+  | { kind: "disk"; freeBytes: number; totalBytes: number };
+/** A profile a session can be moved to (those of its runtime), as the core lists them. */
+export interface RunnableProfile { id: string; name: string; current: boolean; spent: { until: number | null } | null }
+export interface ChatAgentView {
+  session: SessionSummary; status: Status; badge: Badge | null; connect: ConnectView | null; profile: ProfileView | null; turns: TurnRecord[]; threads: ThreadView[];
+  profiles: RunnableProfile[]; attention: Attention[];
+}
 
 /**
  * An item's page: its chat's thread (with the viewer's read position), what it
@@ -256,6 +266,8 @@ export function stationApi(t: StationCall) {
     makeSlackApp: () => request<{ appId: string; links: SlackAppLinks }>("POST", "/slack/apps", {}),
     /** A new Slack connect from its tokens: the station names it as its bot is named in Slack. */
     createConnect: (input: ConnectInput) => request<{ id: string; overview: Overview }>("POST", "/connects", input),
+    /** How a session runs from its next turn on: its profile, model, effort (null: the runtime's default). */
+    sessionSettings: (key: string, input: { profile?: string; model?: string | null; effort?: string | null }) => request<{ ok: true }>("POST", `/sessions/${at(key)}/settings`, input),
     putConfigToken: (refreshToken: string) => request<{ configured: boolean; teamId: string | null }>("PUT", "/slack/config-token", { refreshToken }),
     deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${at(id)}`),
     /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */

@@ -655,6 +655,17 @@
 .device-code { display: grid; justify-items: start; gap: 10px; }
 .device-code-value { font-size: 22px; font-weight: 600; letter-spacing: 0.08em; padding: 6px 12px; border-radius: 10px; background: var(--hover); user-select: all; }
 .device-code p { margin: 0; font-size: var(--text-sm); }
+/* The history's line of what is worth a look now (a quota running out, the disk filling up, an account). */
+.attention { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--muted); }
+.attention[data-tone="amber"] { color: var(--amber); }
+.attention[data-tone="red"] { color: var(--red); }
+.attention-quota .quota-ring { flex: none; }
+.attention-quota .quota-ring-number { font-size: 8px; }
+.history-summary { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* How a session runs, changed in its details. */
+.detail-select { max-width: 100%; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--canvas); color: var(--text); font: inherit; font-size: var(--text-sm); }
+.details-quota { margin-top: 8px; }
+
 /* A chat whose station is offline: read from what was kept, not written to. */
 .offline-notice { margin: 0 auto 8px; max-width: 760px; width: calc(100% - 64px); padding: 8px 12px; border-radius: 10px; background: var(--hover); color: var(--muted); font-size: var(--text-sm); }
 

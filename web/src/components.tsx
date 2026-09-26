@@ -45,7 +45,7 @@ export function OwnerLabel({ owner }: { owner: { id: string; name: string } | nu
 
 
 /** How long until a quota window refills, in words: "40 分钟后刷新", "3 小时 20 分钟后刷新", "2 天 5 小时后刷新". */
-function refillsIn(ms: number | null): string {
+export function refillsIn(ms: number | null): string {
   if (ms === null) return "";
   const minutes = Math.round((ms - Date.now()) / 60_000);
   if (minutes <= 0) return "马上刷新";
@@ -92,7 +92,7 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
 }
 
 /** A window marked by its length (5H five hours, W a week, M a month, 3D) and where it goes among the others. */
-function mark(label: string): { text: string; order: number } {
+export function mark(label: string): { text: string; order: number } {
   if (label.startsWith("每月")) return { text: "M", order: 3 };
   if (label.startsWith("每周")) return { text: "W", order: 2 };
   const hours = /^(\d+) 小时/.exec(label);
@@ -107,7 +107,7 @@ function byLength<T extends { label: string }>(windows: T[]): T[] {
 
 /** What is left of the most used window, as a ring: full and green when untouched, shorter and redder as it goes; the
  * number left inside (up to 99; a full ring says 100 by itself). Use eats it clockwise from the top. */
-function QuotaRing({ percent, size = 26 }: { percent: number; size?: number }) {
+export function QuotaRing({ percent, size = 26 }: { percent: number; size?: number }) {
   const used = Math.max(0, Math.min(100, Math.round(percent)));
   const left = 100 - used;
   const stroke = size > 40 ? 5 : 3;
