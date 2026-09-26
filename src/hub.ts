@@ -12,7 +12,8 @@ import { randomBytes } from "node:crypto";
 import { copyFileSync, mkdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
-import { EFFORTS, profileFor, RUNTIMES, type Config, type Connect, type RuntimeKind } from "./config.ts";
+import { EFFORTS, profileFor, RUNTIMES, type Config, type Connect, type Profile, type RuntimeKind } from "./config.ts";
+import { pickProfile, type ProfileHealth } from "./pool.ts";
 import { INTERNAL_CONNECT, type InternalChat } from "./chat/internal.ts";
 import type { ChatSurface, InboundMessage, ThreadRef } from "./chat/types.ts";
 import { parseThreadAddress, threadAddress } from "./instructions.ts";
@@ -47,6 +48,9 @@ export class Hub {
   readonly #drivers: Record<RuntimeKind, AgentDriver>;
   readonly #mcpUrl: string;
   readonly #actors = new Map<string, SessionActor>();
+  /** How profiles are doing, for the pool; the admin API knows their checks and allowances. */
+  #health: (id: string) => ProfileHealth = () => ({ check: null, quota: null });
+  readonly #picked = new Map<string, number>();
   /** What running turns are doing, for the admin page's live view. */
   readonly live: LiveHub;
 
@@ -269,8 +273,9 @@ export class Hub {
    */
   newSession(options: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string; title?: string; createdBy: string }): string {
     const profiles = this.#config.profiles.filter((p) => p.runtime === options.runtime);
-    const profile = options.profile ? profiles.find((p) => p.id === options.profile) : profiles[0];
-    if (!profile) throw new Error(options.profile ? `no ${options.runtime} profile ${options.profile}` : `no ${options.runtime} profile configured`);
+    if (!profiles.length) throw new Error(`no ${options.runtime} profile configured`);
+    const profile = options.profile ? profiles.find((p) => p.id === options.profile) : this.#pick(profiles, options.model?.trim() || null);
+    if (!profile) throw new Error(`no ${options.runtime} profile ${options.profile}`);
     if (options.effort && !EFFORTS[options.runtime].includes(options.effort)) throw new Error(`effort must be one of ${EFFORTS[options.runtime].join(", ")}`);
     const key = `${INTERNAL_CONNECT}:c-${randomBytes(5).toString("hex")}`;
     const workspace = join(this.#config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");
@@ -284,6 +289,22 @@ export class Hub {
     });
     log.info("session created", { session: key, connect: INTERNAL_CONNECT, runtime: options.runtime, profile: profile.id, model: options.model ?? null });
     return key;
+  }
+
+  /** Lets the pool see profiles' checks and allowances. */
+  setProfileHealth(health: (id: string) => ProfileHealth): void {
+    this.#health = health;
+  }
+
+  /** Chooses the profile a new session runs on; see pool.ts. */
+  #pick(candidates: Profile[], model: string | null): Profile {
+    const profile = pickProfile(candidates, model, {
+      health: (id) => this.#health(id),
+      load: (id) => [...this.#actors.entries()].filter(([key, a]) => a.processState !== "cold" && this.#store.getSession(key)?.profile === id).length,
+      lastPicked: (id) => this.#picked.get(id) ?? 0,
+    });
+    this.#picked.set(profile.id, Date.now());
+    return profile;
   }
 
   /** Starts a session's runtime ahead of a message; see SessionActor.warm. */
@@ -411,7 +432,8 @@ export class Hub {
   }
 
   #createSession(key: string, connect: Connect, scope: SessionScope, message: InboundMessage | null, title: string | null = null, createdBy: string | null = null): void {
-    const profile = profileFor(this.#config, connect);
+    const bound = connect.bind.profiles.map((id) => this.#config.profiles.find((p) => p.id === id)).filter((p): p is Profile => Boolean(p));
+    const profile = bound.length ? this.#pick(bound, connect.bind.model ?? null) : profileFor(this.#config, connect);
     const dir = scope === "all" ? key.slice(connect.id.length + 1) : `${message!.channel}-${message!.threadTs.replace(".", "-")}`;
     const workspace = join(this.#config.dataDir, "sessions", connect.id, dir, "workspace");
     mkdirSync(workspace, { recursive: true });

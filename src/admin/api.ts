@@ -46,6 +46,8 @@ export interface AdminDeps {
   slackApps?: SlackApps;
   /** Decides who may use the API; defaults to Cloudflare Access per the config. */
   gate?: AccessGate;
+  /** Check every profile shortly after start (the real station; tests leave it off). */
+  checkOnStart?: boolean;
 }
 
 class HttpError extends Error {
@@ -107,6 +109,17 @@ export class AdminApi {
 
   constructor(deps: AdminDeps) {
     this.#deps = deps;
+    // The account pool picks profiles by what their checks and allowances say.
+    deps.hub.setProfileHealth?.((id) => {
+      const profile = deps.settings.config.profiles.find((p) => p.id === id);
+      return { check: this.#checks.get(id) ?? null, quota: profile ? this.#quotaFor(profile) : null };
+    });
+    // Checks live in memory; after a start, check every profile once so the pool and the model menus know them.
+    if (deps.checkOnStart) {
+      setTimeout(() => {
+        for (const p of deps.settings.config.profiles) void this.#check(p.id).catch((error) => log.warn("profile check failed", { profile: p.id, error }));
+      }, 3000).unref();
+    }
     this.#gate = deps.gate ?? new AccessGate(() => deps.settings.config.adminAccess, undefined, () => deps.mesh?.secret() ?? null);
     this.#apps = deps.slackApps ?? new SlackApps(
       () => deps.settings.config.slackConfigToken,

@@ -47,7 +47,7 @@ const hub: Hub = new Hub({
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
 const logins = new LoginManager(settings.config.dataDir);
 const mesh = new MeshSupervisor({ dataDir: settings.config.dataDir, admin: `http://127.0.0.1:${settings.config.adminHttp.port}` });
-const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)) });
+const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, checkOnStart: true, quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)) });
 
 settings.onChange((config) => {
   linkAgentHome(config.agentHome, config.profiles);
