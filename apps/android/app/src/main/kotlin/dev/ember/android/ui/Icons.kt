@@ -37,6 +37,11 @@ object Icons {
     val Photo = stroked("photo", 2f, roundRect(3f, 4f, 18f, 16f, 3f), "M3 16l5-5 5 5 3-3 5 5", circle(15f, 9f, 1.6f))
     val File = stroked("file", 2f, "M6 3h8l4 4v14H6z", "M14 3v4h4")
     val Check = stroked("check", 3f, "M5 12l5 5 9-10")
+    // What an agent does, in its activity's rows.
+    val Terminal = stroked("terminal", 2f, "M4 17l6-5-6-5", "M12 19h8")
+    val Globe = stroked("globe", 2f, circle(12f, 12f, 9f), "M3 12h18", "M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18")
+    val Spark = stroked("spark", 2f, "M12 3l1.8 5.4L19 10l-5.2 1.6L12 17l-1.8-5.4L5 10l5.2-1.6z")
+    val Wrench = stroked("wrench", 2f, "M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-.6-.6-2.1z")
     val Chevron = stroked("chevron", 2.4f, "M9 6l6 6-6 6")
     val ChevronDown = stroked("chevron-down", 2.5f, "M6 9l6 6 6-6")
     val ChevronUp = stroked("chevron-up", 2.5f, "M6 15l6-6 6 6")

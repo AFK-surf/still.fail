@@ -175,7 +175,8 @@
 .segmented { --pad: 3px; --gap: 2px; position: relative; isolation: isolate; display: flex; align-items: center; align-self: center; height: max-content; padding: var(--pad); gap: var(--gap); border-radius: 999px; background: color-mix(in oklch, var(--text) 6%, transparent); }
 .segmented-thumb { position: absolute; z-index: -1; top: var(--pad); bottom: var(--pad); left: var(--pad);
   width: calc((100% - 2 * var(--pad) - (var(--n) - 1) * var(--gap)) / var(--n)); border-radius: 999px;
-  background: var(--canvas); box-shadow: 0 1px 2px var(--shadow), 0 0 0 .5px var(--line);
+  /* A shadow all round, not below: one cast downwards made the thumb look lower than its options (plain in the dark). */
+  background: var(--canvas); box-shadow: 0 0 2px var(--shadow), 0 0 0 .5px var(--line);
   transform: translateX(calc(var(--i) * (100% + var(--gap)))); transition: transform 240ms var(--ease-out); }
 @media (prefers-reduced-motion: reduce) { .segmented-thumb { transition: none; } }
 .segmented-option { flex: 1; height: 30px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: var(--text-sm); cursor: pointer; transition: color var(--dur) var(--ease-out); }

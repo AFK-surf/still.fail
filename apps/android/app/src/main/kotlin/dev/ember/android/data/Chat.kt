@@ -131,4 +131,11 @@ import kotlinx.serialization.Serializable
     val steps: List<LiveStep> = emptyList(),
     val phase: ShownPhase? = null,
     val usage: TranscriptUsage? = null,
+    /** What the agent is doing, as the core puts it (client/core/src/activity.rs). */
+    val activity: ActivityView? = null,
 )
+
+@Serializable data class ActivityView(val status: String = "", val rows: List<ActivityRowView> = emptyList())
+
+/** One row: what kind of thing (its icon), in words, whether it runs now, and its transcript entry (for its history). */
+@Serializable data class ActivityRowView(val key: String, val kind: String = "other", val text: String = "", val live: Boolean = false, val entry: Int? = null)

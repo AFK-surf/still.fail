@@ -135,7 +135,7 @@ import dev.ember.android.data.Quote
 import dev.ember.android.data.ThreadView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceView
-import dev.ember.android.data.activityRows
+import dev.ember.android.data.ActivityRowView
 import dev.ember.android.data.agentLabel
 import dev.ember.android.data.elapsed
 import dev.ember.android.data.isMe
@@ -675,14 +675,15 @@ private fun quoteText(who: String, text: String) = androidx.compose.ui.text.buil
 private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
     val app = LocalApp.current
     var collapsed by remember { mutableStateOf(app.flag("activityCollapsed", false)) }
-    val rows = activityRows(agent.live?.timeline ?: emptyList(), agent.live?.steps ?: emptyList(), agent.live?.phase)
-        .ifEmpty { listOf(ActivityRow("idle", "正在处理", true)) }
+    // As the core puts it together (after Zork's): a status line and this turn's rows.
+    val activity = agent.live?.activity
+    val rows = activity?.rows.orEmpty().ifEmpty { listOf(ActivityRowView("idle", "other", "处理中", true)) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
     val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(520), label = "leaving")
     val count = if (collapsed) 1 else 3
     Column(Modifier.fillMaxWidth().alpha(fade), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        AgentHead(agent.key, agent.who, agent.model, agent.runtime, "工作中" + (agent.since?.let { " · ${elapsed(now - it)}" } ?: ""), ctx) {
+        AgentHead(agent.key, agent.who, agent.model, agent.runtime, (activity?.status ?: "处理中") + (agent.since?.let { " · ${elapsed(now - it)}" } ?: ""), ctx) {
             Box(Modifier.size(22.dp).clip(CircleShape).clickable { collapsed = !collapsed; app.setFlag("activityCollapsed", collapsed) }, contentAlignment = Alignment.Center) {
                 IconIn(if (collapsed) Icons.ChevronDown else Icons.ChevronUp, 13.dp, C.subtle)
             }
@@ -701,16 +702,25 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
         Box(Modifier.fillMaxWidth().height(22.dp * count).clipToBounds(), contentAlignment = if (overflowing) Alignment.BottomStart else Alignment.TopStart) {
             Column(Modifier.wrapContentHeight(if (overflowing) Alignment.Bottom else Alignment.Top, unbounded = true).graphicsLayer { translationY = shift.value * 22.dp.toPx() }) {
                 shown.forEach { r ->
-                    Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(Modifier.width(9.dp), contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(if (r.live) 7.dp else 5.dp).clip(CircleShape).background(if (r.live) C.accent else C.line))
+                    Row(
+                        Modifier.height(22.dp).fillMaxWidth().clickable { openHistory(app, ctx.station, ctx.of, agent.key) },
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
+                            if (r.live) Spinner(11.dp) else IconIn(activityIcon(r.kind), 13.dp, C.subtle)
                         }
-                        Text(if (r.live) r.text + "…" else r.text, fontSize = 13.sp, color = if (r.live) C.ink else C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(r.text, fontSize = 13.sp, color = if (r.live) C.ink else C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
         }
     }
+}
+
+/** A row's icon, by what kind of thing it does. */
+private fun activityIcon(kind: String) = when (kind) {
+    "read" -> Icons.File; "search" -> Icons.Search; "edit" -> Icons.Pen; "command" -> Icons.Terminal; "web" -> Icons.Globe
+    "agent" -> Icons.Spark; "thread" -> Icons.Quote; "think" -> Icons.Spark; else -> Icons.Wrench
 }
 
 // ── files ──────────────────────────────────────────────────────────────

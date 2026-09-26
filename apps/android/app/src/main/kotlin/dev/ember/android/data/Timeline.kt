@@ -85,46 +85,6 @@ private fun hint(entry: TimelineEntry): String {
 private fun describe(entry: TimelineEntry): String? = args(entry.text)?.string("description")?.trim()?.takeIf { it.isNotEmpty() }?.lineSequence()?.first()?.take(160)
 
 
-// ── the running turn's rows ────────────────────────────────────────────
-
-data class ActivityRow(val key: String, val text: String, val live: Boolean)
-
-/**
- * Execution history since the last message the agent received, then what is
- * still streaming. A reply being written shows as the message itself, not a
- * row; recording state is left out.
- */
-fun activityRows(timeline: List<TimelineEntry>, live: List<LiveStep>, phase: ShownPhase?): List<ActivityRow> {
-    var start = timeline.size
-    while (start > 0 && !(timeline[start - 1].kind == "user" && !timeline[start - 1].subagent)) start--
-    val rows = mutableListOf<ActivityRow>()
-    timeline.drop(start).forEachIndexed { i, e ->
-        if (e.subagent) return@forEachIndexed
-        val text = when (e.kind) {
-            "tool_call" -> when (toolName(e.tool)) {
-                "chat_state" -> null
-                "chat_post" -> "发出回复"
-                "chat_history" -> "查看对话"
-                else -> activityText(e.tool, e.text).removePrefix("正在")
-            }
-            "thinking" -> "思考"
-            else -> null
-        }
-        if (text != null) rows += ActivityRow("t${start + i}", text, false)
-    }
-    for (s in live) {
-        if (s.ended || s.subagent || s.step == "text") continue
-        val name = toolName(s.tool)
-        if (s.step == "tool" && (name == "chat_post" || name == "chat_state")) continue
-        rows += ActivityRow(s.id, if (s.step == "thinking") "正在思考" else activityText(s.tool, s.input), true)
-    }
-    if (rows.none { it.live } && phase != null) {
-        val waiting = when (phase.phase) { "starting" -> "正在启动"; "requesting" -> "等待模型响应"; "responding" -> "正在思考"; else -> null }
-        if (waiting != null) rows += ActivityRow("phase-${phase.phase}-${phase.since}", waiting, true)
-    }
-    return rows
-}
-
 // ── the execution history ──────────────────────────────────────────────
 
 data class Step(val call: TimelineEntry, var result: TimelineEntry?)

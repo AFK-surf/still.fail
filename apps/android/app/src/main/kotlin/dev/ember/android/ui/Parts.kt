@@ -225,7 +225,8 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
     Box(modifier.height(height).clip(RoundedCornerShape(10.dp)).background(C.ink.copy(alpha = 0.06f)).padding(2.dp)) {
         if (w.value > 0f) Box(
             Modifier.offset { IntOffset(x.value.roundToInt(), 0) }.width(with(density) { w.value.toDp() }).fillMaxHeight()
-                .shadow(1.dp, RoundedCornerShape(8.dp)).background(thumb, RoundedCornerShape(8.dp)),
+                // A hairline all round, not an elevation shadow (which falls below and makes the thumb look low).
+                .background(thumb, RoundedCornerShape(8.dp)).border(0.5.dp, C.line, RoundedCornerShape(8.dp)),
         )
         Row(Modifier.fillMaxHeight().let { if (fill) it.fillMaxWidth() else it }) {
             options.forEachIndexed { i, label ->
