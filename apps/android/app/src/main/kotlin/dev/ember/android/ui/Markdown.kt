@@ -34,16 +34,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.alpha
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -203,18 +199,14 @@ private fun Table(table: TableBlock) {
 
 @Composable
 private fun inline(node: Node): AnnotatedString {
-    val code = SpanStyle(fontFamily = FontFamily.Monospace, fontSize = CODE_EM.em())
+    // Inline code as Zork has it: no box, the code face in its own colour.
+    val code = SpanStyle(fontFamily = FontFamily.Monospace, fontSize = CODE_EM.em(), color = if (C.dark) Color(0xFFC9A2E6) else Color(0xFF7C3FA0))
     val link = TextLinkStyles(SpanStyle(color = C.blue))
     return buildAnnotatedString {
         fun walk(n: Node) {
             when (n) {
                 is TextNode -> append(n.literal)
-                // Thin spaces inside the span are its padding; MdText draws the rounded box behind it.
-                is Code -> {
-                    pushStringAnnotation(CODE, "")
-                    withStyle(code) { append("\u2009${n.literal}\u2009") }
-                    pop()
-                }
+                is Code -> withStyle(code) { append(n.literal) }
                 is Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { n.children().forEach(::walk) }
                 is StrongEmphasis -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { n.children().forEach(::walk) }
                 is Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { n.children().forEach(::walk) }
@@ -231,39 +223,11 @@ private fun inline(node: Node): AnnotatedString {
     }
 }
 
-private const val CODE = "code"
-private const val CODE_EM = 0.88
+private const val CODE_EM = 0.9
 
-/**
- * Text whose inline code sits on a small rounded box, as on the web (`.markdown :not(pre) > code`): the box
- * follows the code's own glyphs, not the line's height, and a span that wraps gets a box on each line.
- */
 @Composable
 private fun MdText(text: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, softWrap: Boolean = true, modifier: Modifier = Modifier) {
-    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    val codes = remember(text) { text.getStringAnnotations(CODE, 0, text.length) }
-    val fill = C.ink.copy(alpha = 0.07f)
-    Text(
-        text, color = C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, softWrap = softWrap, onTextLayout = { layout = it },
-        modifier = modifier.drawBehind {
-            val l = layout ?: return@drawBehind
-            val em = fontSize.toPx() * CODE_EM.toFloat()
-            val corner = CornerRadius(5.dp.toPx())
-            for (a in codes) {
-                var start = a.start
-                while (start < a.end) {
-                    val line = l.getLineForOffset(start)
-                    val end = minOf(a.end, l.getLineEnd(line))
-                    val left = l.getHorizontalPosition(start, true)
-                    val right = if (end < a.end) l.getLineRight(line) else l.getHorizontalPosition(end, true).let { if (it <= left) l.getLineRight(line) else it }
-                    val base = l.getLineBaseline(line)
-                    drawRoundRect(fill, Offset(left, base - em * 1.02f), Size(right - left, em * 1.36f), corner)
-                    if (end <= start) break
-                    start = end
-                }
-            }
-        },
-    )
+    Text(text, color = C.ink, fontSize = fontSize, lineHeight = lineHeight, fontWeight = fontWeight, softWrap = softWrap, modifier = modifier)
 }
 
 private fun Double.em() = androidx.compose.ui.unit.TextUnit(this.toFloat(), androidx.compose.ui.unit.TextUnitType.Em)
