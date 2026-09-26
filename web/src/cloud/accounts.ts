@@ -17,17 +17,22 @@ export function useAccounts(): Account[] | undefined {
   return useTopic<Account[]>({ topic: "accounts" }).value;
 }
 
-function browserName(): string {
+function deviceName(): string {
   const ua = navigator.userAgent;
-  const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "浏览器";
   const os = /Mac OS X/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Linux/.test(ua) ? "Linux" : "";
+  if (window.emberDesktop) return `ember 桌面版${os ? ` · ${os}` : ""}`;
+  const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "浏览器";
   return `ember 网页版 · ${browser}${os ? ` · ${os}` : ""}`;
 }
 
-/** Sends the browser to Google (via ember cloud); it comes back to /auth/callback. */
+/**
+ * Sends the browser to Google (via ember cloud); it comes back to /auth/callback.
+ * The desktop app opens it in the system browser, which comes back to the app
+ * through ember://auth/callback and on to the page's /auth/callback.
+ */
 export async function signIn(returnTo = location.pathname + location.search + location.hash): Promise<void> {
   const { url } = await core().call("auth.begin", {
-    redirect_uri: `${location.origin}/auth/callback`, return_to: returnTo, device_name: browserName(),
+    redirect_uri: window.emberDesktop ? "ember://auth/callback" : `${location.origin}/auth/callback`, return_to: returnTo, device_name: deviceName(),
   }) as { url: string };
   location.assign(url);
 }

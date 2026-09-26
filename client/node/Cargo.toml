@@ -1,0 +1,17 @@
+[package]
+name = "ember-core-node"
+description = "ember-core in Node (the desktop app's utility process): client/ffi's core thread and host, exported with napi-rs."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ember-core-ffi = { path = "../ffi" }
+napi = "3"
+napi-derive = "3"
+
+[build-dependencies]
+napi-build = "2"

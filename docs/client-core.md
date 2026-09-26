@@ -7,7 +7,7 @@ one Rust crate, `ember-core`, shared by every client:
 | Client | Where the core runs | Binding |
 | --- | --- | --- |
 | Web (ember.3720.org) | a SharedWorker (a dedicated Worker where SharedWorker is missing, e.g. Chrome on Android) | `client/wasm` (wasm-bindgen) |
-| Desktop (Electron) | a `utilityProcess` | `client/node` (napi-rs), later |
+| Desktop (Electron) | a `utilityProcess` | `client/node` (napi-rs) over `client/ffi` |
 | Android (iOS later) | a core thread in the app | `client/ffi` (uniffi) |
 
 The UI never talks to ember cloud or a station itself. It sends **calls** and
@@ -321,6 +321,7 @@ client/
   core/    ember-core      the core: host trait, protocol, store, accounts, cloud, mesh, station, views
   wasm/    ember-core-wasm web host (IndexedDB, fetch) + SharedWorker entry
   ffi/     ember-core-ffi  native host (reqwest, files) on a core thread, exported with uniffi
+  node/    ember-core-node client/ffi's core thread for Node, exported with napi-rs (the desktop app)
 ```
 
 `ember-core` modules:
@@ -356,6 +357,38 @@ Gradle). Its `:core` module is `dev.ember.core.EmberCore`: `call(name, params)`
 and `topic(topic)` as a `Flow<TopicState>` — shared by everyone who collects
 the same topic, deltas applied as on the web, unsubscribed 2 s after the last
 collector leaves.
+
+## Desktop
+
+`apps/desktop` is the web app running natively: the window loads the cloud
+build (`pnpm run build:cloud`'s `dist/cloud-app`, bundled into the app) from
+`app://ember`, served as ember cloud serves it (a file, else `index.html`).
+Nothing in the pages differs but the host underneath:
+
+- The core runs in a `utilityProcess` (`src/core.ts`) through `client/node`,
+  a thin napi-rs layer over `client/ffi` (the same core thread and host; the
+  listener is a JS function on Node's thread), with its data in the app's
+  `userData/core`. Its iroh endpoint is the full native one, so links go
+  direct once the relay has introduced both sides.
+- A page asks the main process for a channel (`emberDesktop.openCore`, from
+  the preload): a `MessageChannelMain` whose one end goes to the core and the
+  other to the page, as a window message (a port cannot cross the context
+  bridge). `web/src/core/client.ts` uses that port instead of the
+  SharedWorker (`desktopOpener`); the protocol is the same, posted as objects
+  and answered as the core's JSON. A port that closes disconnects its client;
+  a core process that exits is announced to every page, which opens a new
+  channel (the main process starts a new core); a panic's `{"fatal"}` makes
+  the core process start a new core for the channels that follow.
+- Sign-in: `auth.begin` with `redirect_uri` `ember://auth/callback` (a scheme
+  the app registers). Leaving `app://ember` opens the system browser instead
+  (so does `window.open`); ember cloud sends the browser back to
+  `ember://auth/callback?…`, which the OS hands to the app (`open-url` on
+  macOS, `second-instance` elsewhere), and the app loads the page's own
+  `/auth/callback` with that query, which calls `auth.complete` as on the web.
+
+ember cloud defaults to https://ember.3720.org; `EMBER_CLOUD_ORIGIN`
+overrides it. `apps/desktop/build.sh` builds the core for macOS arm64 and
+packages an unsigned `.app` with electron-builder.
 
 ## Web
 

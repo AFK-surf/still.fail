@@ -1,0 +1,4 @@
+# Only these may run install scripts: electron fetches its binary, esbuild its own.
+onlyBuiltDependencies:
+  - electron
+  - esbuild
