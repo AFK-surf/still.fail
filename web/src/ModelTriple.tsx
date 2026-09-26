@@ -1,8 +1,6 @@
 // The one way a model is chosen, wherever it is: the model, the runtime (where it can still change, and the model runs
 // on more than one), how hard it thinks, and who runs it (the station's pick, or one profile kept to). One panel, from
-// one control that shows them together. Only the last pick makes the choice, so a panel left halfway changes nothing:
-// how hard it thinks is the last when the account stays as it is (the station's pick, or one kept to that runs the
-// model); else who runs it is.
+// one control that shows them together. Picks there are a draft until 确定; a panel closed otherwise changes nothing.
 import { ChevronDown } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useState } from "react";
@@ -40,26 +38,24 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
   title?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [model, setModel] = useState(value.model);
-  const [runtime, setRuntime] = useState<RuntimeKind>(value.runtime);
-  const [effort, setEffort] = useState(value.effort);
-  const option = options.find((o) => o.model === model);
-  const on: RuntimeKind = runtimeFixed ? value.runtime : option?.runtimes.includes(runtime) ? runtime : option?.runtimes[0] ?? value.runtime;
+  const [draft, setDraft] = useState<Pick>(value);
+  const option = options.find((o) => o.model === draft.model);
+  const on: RuntimeKind = runtimeFixed ? value.runtime : option?.runtimes.includes(draft.runtime) ? draft.runtime : option?.runtimes[0] ?? value.runtime;
   const askRuntime = !runtimeFixed && (option?.runtimes.length ?? 0) > 1;
   const accounts = option ? profilesFor(option.model, on) : [];
-  // The account stays as it is: the one kept to runs the model; the station's pick, which for a session is the account
-  // it is on (a model that one does not run moves it, so it is picked again).
-  const stays = value.profile ? accounts.some((a) => a.id === value.profile) : !current || accounts.some((a) => a.id === current.id);
-  const done = (pick: Pick) => { setOpen(false); onPick(pick); };
+  // An account kept to that does not run the model drafted gives way to the station's pick, said so.
+  const profile = draft.profile && accounts.some((a) => a.id === draft.profile) ? draft.profile : null;
+  const dropped = draft.profile !== null && profile === null;
+  const effort = draft.effort && EFFORTS[on].includes(draft.effort) ? draft.effort : null;
+  const next: Pick = { model: option?.model ?? value.model, runtime: on, effort, profile };
+  const changed = next.model !== value.model || next.runtime !== value.runtime || next.effort !== value.effort || next.profile !== value.profile;
   const kept = value.profile ? profilesFor(value.model, value.runtime).find((a) => a.id === value.profile) ?? current : undefined;
   const shown = kept ?? current;
   const valueOption = options.find((o) => o.model === value.model);
+  const set = (patch: Partial<Pick>) => setDraft((d) => ({ ...d, ...patch }));
 
   return (
-    <Popover.Root open={open} onOpenChange={(next) => {
-      setOpen(next);
-      if (next) { setModel(value.model); setRuntime(value.runtime); setEffort(value.effort); }
-    }}>
+    <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) setDraft(value); }}>
       <Popover.Trigger className="model-triple" title={title} disabled={options.length === 0}>
         {options.length === 0 ? <span>没有可用模型</span> : (
           <>
@@ -76,55 +72,51 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
         <ChevronDown size={12} className="chooser-chevron" />
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className="popover run-picker" side={side} align="start" sideOffset={6} collisionPadding={8}>
-          <div className="run-picker-column">
-            <h4>模型</h4>
-            {options.map((o) => (
-              <button key={o.model} type="button" className="run-picker-option" aria-pressed={model === o.model} onClick={() => setModel(o.model)}>
-                <ModelLogo model={o.model} runtime={o.runtimes[0] ?? value.runtime} size={13} />
-                <span className="run-option-text"><span>{o.model}</span>{o.spent && <span className="run-picker-spent">额度用完{o.spent.until ? ` · ${timeUntil(o.spent.until)}恢复` : ""}</span>}</span>
-              </button>
-            ))}
-          </div>
-          {askRuntime && (
+        <Popover.Content className="popover run-picker-panel" side={side} align="start" sideOffset={6} collisionPadding={8}>
+          <div className="run-picker">
             <div className="run-picker-column">
-              <h4>运行时</h4>
-              {option!.runtimes.map((r) => (
-                <button key={r} type="button" className="run-picker-option" aria-pressed={on === r} onClick={() => setRuntime(r)}>
-                  <RuntimeLogo runtime={r} size={13} />{RUNTIME_LABEL[r]}
+              <h4>模型</h4>
+              {options.map((o) => (
+                <button key={o.model} type="button" className="run-picker-option" aria-pressed={next.model === o.model} onClick={() => set({ model: o.model })}>
+                  <ModelLogo model={o.model} runtime={o.runtimes[0] ?? value.runtime} size={13} />
+                  <span className="run-option-text"><span>{o.model}</span>{o.spent && <span className="run-picker-spent">额度用完{o.spent.until ? ` · ${timeUntil(o.spent.until)}恢复` : ""}</span>}</span>
                 </button>
               ))}
             </div>
-          )}
-          <div className="run-picker-column">
-            <h4>思考深度</h4>
-            {[null, ...EFFORTS[on]].map((e) => (
-              <button key={e ?? ""} type="button" className="run-picker-option" aria-pressed={effort === e} onClick={() => {
-                setEffort(e);
-                if (option && stays) done({ model: option.model, runtime: on, effort: e, profile: value.profile });
-              }}>{e ?? "默认"}</button>
-            ))}
-          </div>
-          <div className="run-picker-column run-picker-accounts">
-            <h4>账号</h4>
-            {!option ? <p className="muted">先选一个模型</p> : (
-              <>
-                {!stays && <p className="run-picker-note">{value.profile ? "指定的" : "现在的"}账号没有启用 {option.model}，选一个</p>}
-                {/* Nothing here is marked as picked: picking one is what makes the choice. What it has now says 当前. */}
-                <button type="button" className="run-picker-option" onClick={() => done({ model: option.model, runtime: on, effort, profile: null })}>
-                  <span className="run-option-text"><strong>自动分配</strong><span className="muted">额度用完或登录失效时换一个</span></span>
-                  {!value.profile && <span className="run-picker-current">当前</span>}
-                </button>
-                {accounts.map((a) => (
-                  <button key={a.id} type="button" className="run-picker-option" onClick={() => done({ model: option.model, runtime: on, effort, profile: a.id })}>
-                    <ProviderLogo runtime={on} kind={a.kind ?? "env"} size={15} />
-                    <span className="run-option-text"><span>{a.name}</span>{!value.profile && current?.id === a.id && <span className="muted">自动分配到这里</span>}</span>
-                    {value.profile === a.id && <span className="run-picker-current">当前</span>}
-                    <QuotaBars quota={a.quota} compact />
+            {askRuntime && (
+              <div className="run-picker-column">
+                <h4>运行时</h4>
+                {option!.runtimes.map((r) => (
+                  <button key={r} type="button" className="run-picker-option" aria-pressed={on === r} onClick={() => set({ runtime: r })}>
+                    <RuntimeLogo runtime={r} size={13} />{RUNTIME_LABEL[r]}
                   </button>
                 ))}
-              </>
+              </div>
             )}
+            <div className="run-picker-column">
+              <h4>思考深度</h4>
+              {[null, ...EFFORTS[on]].map((e) => (
+                <button key={e ?? ""} type="button" className="run-picker-option" aria-pressed={effort === e} onClick={() => set({ effort: e })}>{e ?? "默认"}</button>
+              ))}
+            </div>
+            <div className="run-picker-column run-picker-accounts">
+              <h4>账号</h4>
+              {dropped && <p className="run-picker-note">指定的账号没有启用 {next.model}，改成了自动分配</p>}
+              <button type="button" className="run-picker-option" aria-pressed={profile === null} onClick={() => set({ profile: null })}>
+                <span className="run-option-text"><strong>自动分配</strong><span className="muted">{current && !value.profile ? `现在在「${current.name}」；额度用完或登录失效时换一个` : "额度用完或登录失效时换一个"}</span></span>
+              </button>
+              {accounts.map((a) => (
+                <button key={a.id} type="button" className="run-picker-option" aria-pressed={profile === a.id} onClick={() => set({ profile: a.id })}>
+                  <ProviderLogo runtime={on} kind={a.kind ?? "env"} size={15} />
+                  <span className="run-option-text"><span>{a.name}</span></span>
+                  <QuotaBars quota={a.quota} compact />
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="run-picker-foot">
+            <Popover.Close className="btn btn-ghost btn-sm">取消</Popover.Close>
+            <button type="button" className="btn btn-primary btn-sm" disabled={!option || !changed} onClick={() => { setOpen(false); onPick(next); }}>确定</button>
           </div>
         </Popover.Content>
       </Popover.Portal>
