@@ -730,7 +730,7 @@ const LOW_DISK_BYTES: f64 = 10.0 * 1024.0 * 1024.0 * 1024.0;
 fn attention(overview: Option<&Value>, session: &Value) -> Value {
     let mut out = Vec::new();
     let profile = find(overview.and_then(|o| o.get("profiles")), session.get("profile"));
-    if let Some(p) = profile.as_ref().filter(|p| p.is_object()) {
+    if let Some(p) = Some(&profile).filter(|p| p.is_object()) {
         let check = p.get("check");
         if let Some(state @ ("login" | "failed")) = check.and_then(|c| c.get("state")).and_then(Value::as_str) {
             out.push(json!({ "kind": "account", "state": state, "name": p.get("name"), "detail": check.and_then(|c| c.get("detail")) }));
