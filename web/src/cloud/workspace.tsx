@@ -2,11 +2,11 @@
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
-import { Check, ChevronsUpDown, LogOut, Plus, Settings, UserPlus } from "lucide-react";
+import { Check, ChevronsUpDown, LogOut, Plus, Settings, ShieldCheck, UserPlus } from "lucide-react";
 import { NewChat } from "../NewChat.tsx";
 import { lastChat, useRememberChat } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { useStations } from "../api.ts";
 import { AccountPage, AccountsPage } from "../pages/Accounts.tsx";
@@ -18,7 +18,8 @@ import { PeopleContext, StationContext, stationBase, type Station } from "../sta
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
 import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
-import { cloud, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
+import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
+import { useAdminAccount } from "./admin.tsx";
 import { Avatar } from "./gate.tsx";
 import { Illustration, Lockup } from "../brand.tsx";
 
@@ -124,6 +125,7 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
   const navigate = useNavigate();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
+  const admin = useAdminAccount();
   const respond = useAction(
     ({ invite, accept }: { invite: InvitationEntry; accept: boolean }) =>
       accept ? cloud.acceptInvitationById(invite.account.sub, invite.id) : cloud.declineInvitation(invite.account.sub, invite.id).then(() => null),
@@ -180,6 +182,7 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             <DropdownMenu.Separator className="menu-sep" />
             <DropdownMenu.Item className="menu-item" onSelect={() => setCreating(true)}><Plus {...ICON} />新建 workspace</DropdownMenu.Item>
             <DropdownMenu.Item className="menu-item" onSelect={() => void signIn()}><UserPlus {...ICON} />添加另一个账号</DropdownMenu.Item>
+            {admin && <DropdownMenu.Item className="menu-item" onSelect={() => navigate("/admin")}><ShieldCheck {...ICON} />管理后台</DropdownMenu.Item>}
             <DropdownMenu.Sub>
               <DropdownMenu.SubTrigger className="menu-item"><LogOut {...ICON} />退出账号</DropdownMenu.SubTrigger>
               <DropdownMenu.Portal>
@@ -205,7 +208,12 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [owner, setOwner] = useState(list[0]?.sub ?? "");
-  const create = useAction(() => cloud.createWorkspace(owner || list[0]!.sub, name), (w) => { setName(""); onClose(); navigate(`/w/${w.id}`); });
+  // Sent every time: the server looks at it only for an account not let in yet, and then asks for it when it is missing or wrong.
+  const [code, setCode] = useState(inviteCode);
+  const create = useAction(() => cloud.createWorkspace(owner || list[0]!.sub, name, code.trim()), (w) => { setName(""); forgetInviteCode(); onClose(); navigate(`/w/${w.id}`); });
+  const [asked, setAsked] = useState(false);
+  useEffect(() => { if (needsInviteCode(create.error)) setAsked(true); }, [create.error]);
+  const asking = asked || needsInviteCode(create.error);
   return (
     <Dialog open={open} onClose={onClose} title="新建 workspace" description="workspace 是一组人和他们共用的 station。你会成为它的 owner。"
       footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="primary" disabled={!name.trim()} busy={create.busy} onClick={() => create.run()}>新建</Button></>}>
@@ -218,7 +226,14 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
           <Select id="ws-owner" value={owner} onChange={setOwner} options={list.map((a) => ({ value: a.sub, label: a.email }))} />
         </Field>
       )}
-      {create.error && <p className="field-error" role="alert">{create.error.message}</p>}
+      {asking && (
+        <Field label="邀请码" htmlFor="ws-code" error={create.error && needsInviteCode(create.error) && code.trim() ? errorText(create.error) : undefined}
+          hint="ember 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。">
+          <input id="ws-code" className="input mono" value={code} autoFocus onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
+            onKeyDown={(e) => { if (e.key === "Enter" && name.trim() && code.trim()) create.run(); }} />
+        </Field>
+      )}
+      {create.error && !needsInviteCode(create.error) && <p className="field-error" role="alert">{create.error.message}</p>}
     </Dialog>
   );
 }

@@ -24,7 +24,7 @@ function browserName(): string {
 }
 
 /** Sends the browser to Google (via ember cloud); it comes back to /auth/callback. */
-export async function signIn(returnTo = location.pathname + location.hash): Promise<void> {
+export async function signIn(returnTo = location.pathname + location.search + location.hash): Promise<void> {
   const { url } = await core().call("auth.begin", {
     redirect_uri: `${location.origin}/auth/callback`, return_to: returnTo, device_name: browserName(),
   }) as { url: string };
