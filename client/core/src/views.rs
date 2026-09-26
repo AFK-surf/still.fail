@@ -228,7 +228,8 @@ impl Views {
     fn sources(&self, view: &Topic) -> HashSet<Topic> {
         let mut topics = HashSet::new();
         let (scope, per_station): (&str, fn(String) -> Vec<Topic>) = match view {
-            Topic::Chats { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Link { station }]),
+            // Its overview says which Slack users are the viewer (a row's last thing said by one is "你").
+            Topic::Chats { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Link { station }]),
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
             Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station }]),
             Topic::Chat { station, thread: None, session: Some(key) } if self.bound_thread(station, key).is_some() => {
@@ -350,6 +351,10 @@ impl Views {
             Err(error) => return Some(Err(error)),
         };
         let me = self.me(scope);
+        // The workspace's people, by email: a row's last speaker is named and pictured as they are here.
+        let members: Vec<Value> = if scope == "local" { Vec::new() } else {
+            self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default()
+        };
         let mut states = Vec::new();
         let mut rows = Vec::new();
         let mut loading = false;
@@ -363,6 +368,9 @@ impl Views {
                 match self.store.value(&Topic::ChatRows { station: s.address.clone() }) {
                     Some(Err(error)) => ("error", json!(error.message)),
                     Some(Ok(list)) => {
+                        let slack_users: Vec<String> = self.ok(Topic::Overview { station: s.address.clone() })
+                            .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
+                            .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
                         for row in list.as_array().into_iter().flatten() {
                             if mine && row.get("mine").and_then(Value::as_bool) != Some(true) {
                                 continue;
@@ -370,6 +378,12 @@ impl Views {
                             let mut row = row.clone();
                             row["station"] = json!(s.address);
                             row["stationName"] = json!(s.name);
+                            // What the clients draw of it, decided here (present.rs).
+                            let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+                            row["state"] = json!(crate::present::row_state(&agents));
+                            if let Some(by) = crate::present::last_by(&row, &me, &slack_users, &members) {
+                                row["last"]["by"] = by;
+                            }
                             rows.push(row);
                         }
                         // Rows already read stay in view while the link comes back.

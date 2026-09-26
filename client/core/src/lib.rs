@@ -14,6 +14,7 @@ pub mod error;
 pub mod host;
 pub mod kept;
 pub mod mesh;
+pub mod present;
 pub mod protocol;
 pub mod station;
 pub mod store;
