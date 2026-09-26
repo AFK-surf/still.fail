@@ -78,6 +78,7 @@ import dev.ember.android.data.historyItems
 import dev.ember.android.data.placeName
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.data.splitThread
+import dev.ember.android.data.state
 import dev.ember.android.data.status
 import dev.ember.android.data.stepLabel
 import dev.ember.android.ui.C
@@ -121,7 +122,7 @@ private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String) {
     val s = agent.session
     val model = live.value?.usage?.model ?: s.model
     Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ModelMark(model, s.runtime, 20.dp)
+        ModelMark(model, s.runtime, 20.dp, s.state())
         // The sheet is the agent's history; its head is the agent, with the room its name needs.
         Text(agentLabel(model, s.effort), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Actions(station, agent)

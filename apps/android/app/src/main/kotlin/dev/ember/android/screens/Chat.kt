@@ -357,9 +357,9 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     val heights = remember { HashMap<String, Int>() }
     var floor by remember { mutableIntStateOf(0) }
     val gapPx = with(LocalDensity.current) { 14.dp.roundToPx() }
-    val working = atWork.isNotEmpty()
-    LaunchedEffect(working) {
-        if (!working) floor += heights.filterKeys { it.startsWith("act:") }.values.sum().let { if (it > 0) it + gapPx else 0 }
+    val shownAtWork = atWork.isNotEmpty()
+    LaunchedEffect(shownAtWork) {
+        if (!shownAtWork) floor += heights.filterKeys { it.startsWith("act:") }.values.sum().let { if (it > 0) it + gapPx else 0 }
         heights.keys.removeAll { it.startsWith("act:") }
     }
 
