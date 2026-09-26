@@ -5,19 +5,16 @@
 import { EMBER_SURFACE, type MessageRow, type PendingMessage } from "./store.ts";
 
 export function sessionInstructions(options: {
-  name: string;
-  /** How the connect's bot user is mentioned, e.g. <@U123>, when known. */
-  mention: string | null;
   workspace: string;
   reposDir: string;
   memoryPath: string;
 }): string {
-  return `You are ${options.name}, a coding agent run by ember. People reach you through chat conversations (Slack threads today); you work locally and answer in those conversations.
+  return `Messages reach you from chat conversations (Slack threads, and chats on ember's web page); you work on this machine and answer in those conversations.
 
 Messages and where they come from:
-- Each message reaches you as <message via="slack" connect="…" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message>. The thread attribute says which conversation it belongs to. Messages from different threads can arrive in the same session; keep them apart and answer each where it was asked.
+- Each message reaches you as <message via="slack" connect="…" you="…" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message>. \`you\` is what you are called where that message was said — your name there and how you are mentioned (e.g. "ember (<@U123>)"); it belongs to that connect only, so answer to it there and do not take it as your name elsewhere. Web chats give none. The thread attribute says which conversation it belongs to. Messages from different threads can arrive in the same session; keep them apart and answer each where it was asked.
 - via="web" messages come from a chat on ember's own admin page (thread EMBER/…), usually an operator looking at this session. Treat them like any other conversation and answer there with chat_post.
-- Not every message is addressed to you; read it in context before acting.${options.mention ? ` You are mentioned as ${options.mention}.` : ""} Other bots may be in a conversation too, each with its own session.
+- Not every message is addressed to you; read it in context before acting. Other bots may be in a conversation too, each with its own session.
 
 How you answer:
 - Nothing you write as ordinary assistant output reaches anyone. Use the ember MCP tools:
@@ -68,7 +65,7 @@ export function messageForAgent(m: Pick<MessageRow, "text" | "attachments" | "qu
 const via = (surface: string) => (surface === EMBER_SURFACE ? "web" : "slack");
 
 /** Messages handed to a session, each with its source and sender, and a hint where a thread is new to it. */
-export function formatInbound(messages: readonly PendingMessage[], options: { newThreads?: ReadonlySet<number>; names?: ReadonlyMap<string, string> } = {}): string {
+export function formatInbound(messages: readonly PendingMessage[], options: { newThreads?: ReadonlySet<number>; names?: ReadonlyMap<string, string>; selves?: ReadonlyMap<string, string> } = {}): string {
   const lines: string[] = [];
   const hinted = new Set<number>();
   for (const m of messages) {
@@ -78,7 +75,10 @@ export function formatInbound(messages: readonly PendingMessage[], options: { ne
       hinted.add(m.thread);
       lines.push(`(Thread ${address} had messages before you were brought in; read them with chat_history to="${address}" if they matter.)`);
     }
-    lines.push(`<message via="${via(m.surface)}" connect="${escapeAttr(m.connect)}" thread="${address}" from="${escapeAttr(from ? `${from} (${m.author})` : m.author)}" ts="${m.ts}">\n${messageForAgent(m)}\n</message>`);
+    // What the agent is called where this was said: it has no name of its own, only each connect's.
+    const self = options.selves?.get(m.connect);
+    const you = self ? ` you="${escapeAttr(self)}"` : "";
+    lines.push(`<message via="${via(m.surface)}" connect="${escapeAttr(m.connect)}"${you} thread="${address}" from="${escapeAttr(from ? `${from} (${m.author})` : m.author)}" ts="${m.ts}">\n${messageForAgent(m)}\n</message>`);
   }
   return lines.join("\n");
 }

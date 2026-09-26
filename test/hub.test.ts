@@ -46,7 +46,8 @@ test("a mention starts a session and prompts the runtime with the message", asyn
   await settle();
   const session = claude.last;
   assert.equal(session.prompts.length, 1);
-  assert.match(session.prompts[0]!, /<message via="slack" connect="cl" thread="C1\/[\d.]+" from="U1" ts="[\d.]+">\n<@UBOT> fix the build\n<\/message>/);
+  // What the agent is called there comes with the message (the connect's bot and its mention).
+  assert.match(session.prompts[0]!, /<message via="slack" connect="cl" you="ember \(<@UBOT>\)" thread="C1\/[\d.]+" from="U1" ts="[\d.]+">\n<@UBOT> fix the build\n<\/message>/);
   assert.equal(store.getSession(sessionKey("cl", "C1", m.threadTs))?.runtimeSessionId, session.id);
   assert.equal(session.options.cwd.endsWith("workspace"), true);
 });
@@ -212,7 +213,8 @@ test("a connect's runtime, profile and model decide the session", async () => {
   await settle();
   assert.equal(store.getSession(sessionKey("cl", "C1", n.threadTs))?.model, "opus");
   assert.equal(claude.last.options.effort, "high", "the connect's effort reaches the runtime");
-  assert.match(claude.last.options.instructions, /You are Claude bot/);
+  // Guidance only: no identity, no name (what it is called comes with each message, per connect).
+  assert.doesNotMatch(claude.last.options.instructions, /You are |Claude bot/);
 });
 
 test("two connects in one thread keep separate sessions, share its messages, and reply through their own connection", async () => {

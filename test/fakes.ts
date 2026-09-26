@@ -7,6 +7,7 @@ let postCounter = 1;
 
 export class FakeChat implements ChatSurface {
   readonly botUserId: string;
+  readonly botName = "ember";
   readonly workspace: string | null;
   readonly posts: { thread: ThreadRef; text: string }[] = [];
   /** What the platform says was in a thread before ember saw it, by thread ts. */

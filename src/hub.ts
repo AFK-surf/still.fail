@@ -565,7 +565,6 @@ export class Hub {
         store: this.#store,
         chat: (id) => this.#chatOf(id),
         // In ember's own chat the agent keeps the name of the connect that started it.
-        name: (id) => this.#config.connects.find((c) => c.id === (id === INTERNAL_CONNECT ? row.connect : id))?.name ?? id,
         drivers: this.#drivers,
         profile: (id) => this.#config.profiles.find((p) => p.id === id),
         mcpUrl: this.#mcpUrl,

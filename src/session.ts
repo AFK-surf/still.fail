@@ -14,9 +14,7 @@ export type DeclaredState = "final" | "block";
 export interface SessionDeps {
   store: Store;
   /** A connect's chat connection, when it is connected. A session hears from and answers through several. */
-  chat(connect: string): Pick<ChatSurface, "post" | "botUserId" | "userName"> | undefined;
-  /** A connect's name, which the agent goes by. */
-  name(connect: string): string;
+  chat(connect: string): Pick<ChatSurface, "post" | "botUserId" | "botName" | "userName"> | undefined;
   drivers: Record<RuntimeKind, AgentDriver>;
   profile(id: string): Profile | undefined;
   mcpUrl: string;
@@ -182,7 +180,15 @@ export class SessionActor {
       const name = await this.#deps.chat(m.connect)?.userName?.(m.author);
       if (name) names.set(m.author, name);
     }
-    return formatInbound(said, { newThreads, names });
+    // What the agent is called in each connect these came through: the bot's name there and its mention.
+    const selves = new Map<string, string>();
+    for (const connect of new Set(said.map((m) => m.connect))) {
+      const chat = this.#deps.chat(connect);
+      const name = chat?.botName ?? "";
+      const mention = chat?.botUserId && chat.botName ? `<@${chat.botUserId}>` : "";
+      if (name) selves.set(connect, mention ? `${name} (${mention})` : name);
+    }
+    return formatInbound(said, { newThreads, names, selves });
   }
 
   /**
@@ -229,9 +235,6 @@ export class SessionActor {
     if (this.#agent) return this.#agent;
     const row = this.#row;
     const driver = this.#deps.drivers[row.runtime];
-    // The agent goes by the name of the connect it currently hears through.
-    const connect = this.#deps.store.latestThread(this.key)?.connect ?? row.connect;
-    const botUserId = this.#deps.chat(connect)?.botUserId;
     const profile = this.#deps.profile(row.profile);
     if (!profile) throw new Error(`session ${this.key}: profile ${row.profile} is not configured`);
     const base = {
@@ -240,8 +243,6 @@ export class SessionActor {
       ...(row.model ? { model: row.model } : {}),
       ...(row.effort ? { effort: row.effort } : {}),
       instructions: sessionInstructions({
-        name: this.#deps.name(connect),
-        mention: botUserId ? `<@${botUserId}>` : null,
         workspace: row.workspace, reposDir: this.#deps.reposDir, memoryPath: this.#deps.memoryPath,
       }),
       mcpToken: row.token,

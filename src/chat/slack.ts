@@ -101,6 +101,10 @@ export class SlackSurface implements ChatSurface {
     return this.#identity?.botUserId ?? "";
   }
 
+  get botName(): string {
+    return this.#identity?.botName ?? "";
+  }
+
   get identity(): SlackIdentity | null {
     return this.#identity;
   }

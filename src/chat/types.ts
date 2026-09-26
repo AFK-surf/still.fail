@@ -29,6 +29,8 @@ export interface ChatMessage {
 export interface ChatSurface {
   /** The bot's own user id, once started. */
   readonly botUserId: string;
+  /** The bot's name on the platform (what people there call the agent), once started; none where it has none. */
+  readonly botName?: string;
   /** The platform workspace (Slack team id) once started; threads are named by it. */
   readonly workspace: string | null;
   /**
