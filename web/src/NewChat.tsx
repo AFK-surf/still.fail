@@ -4,7 +4,8 @@
 import { Check, ChevronDown, Server } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { makeApi, useOverview, type ProfileView } from "./api.ts";
+import { useQueryClient } from "@tanstack/react-query";
+import { keys, makeApi, useOverview, type ProfileView } from "./api.ts";
 import { Composer } from "./Chat.tsx";
 import { EFFORTS, EFFORT_LABEL } from "./format.ts";
 import { StationContext, type Station } from "./station.tsx";
@@ -60,6 +61,16 @@ function NewChatOn({ station, stations, onStation, onCreated }: { station: Stati
   useEffect(() => {
     if (profile && profile.id !== choice.profile) setChoice((c) => ({ ...c, profile: profile.id, model: "", effort: "" }));
   }, [profile?.id]);
+  // The model menu lists what a profile's check found; profiles not checked since the station started are checked now, once.
+  const client = useQueryClient();
+  const checked = useRef(new Set<string>());
+  useEffect(() => {
+    for (const p of profiles) {
+      if (p.check || checked.current.has(p.id)) continue;
+      checked.current.add(p.id);
+      void makeApi(station.transport).checkProfile(p.id).then(() => client.invalidateQueries({ queryKey: keys.overview(station.id) }), () => {});
+    }
+  }, [profiles, station, client]);
   const made = useRef<Promise<string> | null>(null);
   const [making, setMaking] = useState(false);
   const pick = (next: Partial<Choice>) => {
