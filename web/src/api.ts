@@ -49,7 +49,13 @@ export interface StationView {
 
 export interface ConnectsView { items: { station: string; stationName: string; connect: ConnectView }[]; loading: boolean }
 
-export interface ChatView { detail: SessionDetail; connect: ConnectView | null; profile: ProfileView | null; link: LinkView }
+/** A message sent from here that the session does not show yet. */
+export interface OutboxMessage {
+  id: string; text: string; attachments: Attachment[]; quotes: Quote[]; createdAt: number;
+  state: "sending" | "failed"; error: string | null;
+}
+
+export interface ChatView { detail: SessionDetail; connect: ConnectView | null; profile: ProfileView | null; link: LinkView; outbox: OutboxMessage[] }
 
 /** A step in flight; an ended one stays until the transcript entry that records it arrives. */
 export type ShownStep = LiveStep & { ended?: boolean };
@@ -169,8 +175,6 @@ export function stationApi(t: StationCall) {
       request<{ identity: SlackIdentity | null; errors: string[] }>("POST", "/slack/verify", input),
     bindSession: (connect: string, session: string | null, title?: string) =>
       request<{ session: string }>("POST", `/connects/${at(connect)}/session`, { session, ...(title ? { title } : {}) }),
-    sayToSession: (key: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []) =>
-      request<{ threadTs: string }>("POST", `/sessions/${at(key)}/messages`, { text, attachments, quotes }),
     /** Starts the session's runtime ahead of a message. */
     warm: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/warm`),
     /** A new chat's session, made before its first message so files can go into it. */
@@ -192,6 +196,17 @@ export function stationApi(t: StationCall) {
 export type Api = ReturnType<typeof stationApi>;
 
 /** The admin API of the station in context. */
+/** Sending in a chat: the message shows at once from the core's outbox; a failed one can be sent again or dropped. */
+export function useChatSend() {
+  const call = useCall();
+  const station = useStation().address;
+  return useMemo(() => ({
+    send: (key: string, text: string, attachments: Attachment[], quotes: Quote[]) => call("chat.send", { station, key, text, attachments, quotes }),
+    retry: (key: string, id: string) => call("chat.retry", { station, key, id }),
+    discard: (key: string, id: string) => call("chat.discard", { station, key, id }),
+  }), [call, station]);
+}
+
 export function useApi(): Api {
   const call = useStationCall(useStation().address);
   return useMemo(() => stationApi(call), [call]);

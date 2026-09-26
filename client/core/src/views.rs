@@ -8,7 +8,7 @@
 //! brings the watches in line with the workspace's station list: a station
 //! that comes online is watched, one that goes offline is let go.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::rc::{Rc, Weak};
 
@@ -34,6 +34,9 @@ pub struct Views {
     email_of: EmailOf,
     /// Per live view, the topics it watches.
     views: RefCell<HashMap<Topic, HashMap<Topic, Watch>>>,
+    /// Messages sent from here that the session does not show yet, per (station, session key), oldest first.
+    outbox: RefCell<HashMap<(String, String), Vec<Value>>>,
+    sent: Cell<u64>,
 }
 
 /// A station of a scope, as the workspace lists it.
@@ -48,7 +51,51 @@ struct StationInfo {
 
 impl Views {
     pub fn new(host: Rc<dyn Host>, store: Rc<Store>, email_of: EmailOf) -> Rc<Views> {
-        Rc::new(Views { host, store, email_of, views: RefCell::default() })
+        Rc::new(Views { host, store, email_of, views: RefCell::default(), outbox: RefCell::default(), sent: Cell::new(0) })
+    }
+
+    /// A message on its way to a session: shown in its chat at once, as `sending`. Answers its id.
+    pub fn outbox_add(&self, station: &str, key: &str, message: Value) -> String {
+        self.sent.set(self.sent.get() + 1);
+        let id = format!("out-{}", self.sent.get());
+        let mut entry = message;
+        entry["id"] = json!(id);
+        entry["createdAt"] = json!(self.host.now_ms());
+        entry["state"] = json!("sending");
+        self.outbox.borrow_mut().entry((station.to_string(), key.to_string())).or_default().push(entry);
+        self.outbox_changed(station, key);
+        id
+    }
+
+    pub fn outbox_get(&self, station: &str, key: &str, id: &str) -> Option<Value> {
+        self.outbox.borrow().get(&(station.to_string(), key.to_string()))?.iter().find(|m| m["id"] == id).cloned()
+    }
+
+    /// Marks an outgoing message `sending` again, or `failed` with the error's message.
+    pub fn outbox_state(&self, station: &str, key: &str, id: &str, failed: Option<&str>) {
+        if let Some(entry) = self.outbox.borrow_mut().get_mut(&(station.to_string(), key.to_string())).and_then(|list| list.iter_mut().find(|m| m["id"] == id)) {
+            entry["state"] = json!(if failed.is_some() { "failed" } else { "sending" });
+            entry["error"] = json!(failed);
+        }
+        self.outbox_changed(station, key);
+    }
+
+    /// The session shows the message now (or it was given up).
+    pub fn outbox_remove(&self, station: &str, key: &str, id: &str) {
+        let mut outbox = self.outbox.borrow_mut();
+        let at = (station.to_string(), key.to_string());
+        if let Some(list) = outbox.get_mut(&at) {
+            list.retain(|m| m["id"] != id);
+            if list.is_empty() {
+                outbox.remove(&at);
+            }
+        }
+        drop(outbox);
+        self.outbox_changed(station, key);
+    }
+
+    fn outbox_changed(&self, station: &str, key: &str) {
+        self.store.invalidate(&Topic::Chat { station: station.to_string(), key: key.to_string() });
     }
 
     pub fn start(&self, view: &Topic) {
@@ -296,7 +343,9 @@ impl Views {
         let of = |list: &str, id: &str| find(overview.as_ref().and_then(|o| o.get(list)), detail["session"].get(id));
         // The scope the station belongs to: "local", or its workspace.
         let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
+        let outbox = self.outbox.borrow().get(&(station.to_string(), key.to_string())).cloned().unwrap_or_default();
         Some(Ok(json!({
+            "outbox": outbox,
             "me": self.me(scope),
             "connect": of("connects", "connect"),
             "profile": of("profiles", "profile"),
@@ -764,6 +813,36 @@ mod tests {
             t.store.set(&session_topic, Err(CoreError::new("http_404", "没有这个会话")));
             t.read(&mut ui, 1).await;
             assert_eq!(ui.error.as_ref().unwrap().message, "没有这个会话");
+        });
+    }
+
+    #[test]
+    fn a_sent_message_shows_until_the_session_has_it() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            let session_topic = Topic::Session { station: "ws/a".into(), key: "k".into() };
+            t.subscribe(1, Topic::Chat { station: "ws/a".into(), key: "k".into() });
+            t.set(session_topic.clone(), json!({"session": {"key": "k"}, "chats": []}));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.clone().unwrap()["outbox"], json!([]));
+
+            let views = t.router.views();
+            let id = views.outbox_add("ws/a", "k", json!({"text": "你好", "attachments": [], "quotes": []}));
+            t.read(&mut ui, 1).await;
+            let out = ui.value.clone().unwrap()["outbox"].clone();
+            assert_eq!((out[0]["id"].as_str(), out[0]["text"].as_str(), out[0]["state"].as_str()), (Some(id.as_str()), Some("你好"), Some("sending")));
+
+            views.outbox_state("ws/a", "k", &id, Some("连不上 station"));
+            t.read(&mut ui, 1).await;
+            let out = ui.value.clone().unwrap()["outbox"].clone();
+            assert_eq!((out[0]["state"].as_str(), out[0]["error"].as_str()), (Some("failed"), Some("连不上 station")));
+
+            // The session's own copy and the outbox entry leaving go out together.
+            t.store.set(&session_topic, Ok(json!({"session": {"key": "k"}, "chats": [{"messages": [{"text": "你好"}]}]})));
+            views.outbox_remove("ws/a", "k", &id);
+            t.host.settle().await;
+            assert_eq!(t.host.take_emitted().len(), 1);
         });
     }
 }

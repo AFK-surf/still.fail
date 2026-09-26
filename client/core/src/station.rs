@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::rc::{Rc, Weak};
 
-use futures::future::{AbortHandle, Abortable, LocalBoxFuture};
+use futures::future::{AbortHandle, Abortable, LocalBoxFuture, join_all};
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, StreamExt};
 use serde_json::{Value, json};
@@ -369,7 +369,7 @@ impl Stations {
         };
         let value = self.call(station, method, path, headers, bytes).await?;
         if !method.eq_ignore_ascii_case("GET") {
-            self.after_write(station, path);
+            self.after_write(station, path).await;
         }
         Ok(value)
     }
@@ -422,8 +422,9 @@ impl Stations {
         Ok(reply.body)
     }
 
-    /// The topics a successful write can have changed.
-    fn after_write(&self, station: &StationAddr, path: &str) {
+    /// Reloads the topics a successful write can have changed; the write answers only after, so a page
+    /// that moves on right away finds what it wrote.
+    async fn after_write(&self, station: &StationAddr, path: &str) {
         let station = station.to_string();
         let path = path.split('?').next().unwrap_or("");
         let parts: Vec<String> = path.split('/').filter(|p| !p.is_empty()).map(decode).collect();
@@ -442,9 +443,7 @@ impl Stations {
             Some("profiles") | Some("slack") => touched.push(Topic::Overview { station }),
             _ => {}
         }
-        for topic in touched {
-            self.refetch(&topic);
-        }
+        join_all(touched.iter().map(|topic| self.reload(topic))).await;
     }
 
     fn rc(&self) -> Rc<Stations> {
@@ -468,26 +467,28 @@ impl Stations {
 
     /// Fetches a live topic again; a failure only shows when there is nothing better to show.
     fn refetch(&self, topic: &Topic) {
+        let this = self.rc();
+        let topic = topic.clone();
+        self.spawn(async move { this.reload(&topic).await });
+    }
+
+    async fn reload(&self, topic: &Topic) {
         if !self.is_live(topic) {
             return;
         }
         let (Some(path), Some(addr)) = (topic_path(topic), topic.station().and_then(|s| self.addr(s))) else { return };
-        let this = self.rc();
-        let topic = topic.clone();
-        self.spawn(async move {
-            let result = this.call(&addr, "GET", &path, Vec::new(), Vec::new()).await;
-            if !this.is_live(&topic) {
-                return;
-            }
-            match result {
-                Ok(value) => this.sink.set(&topic, Ok(value)),
-                Err(error) => {
-                    if this.sink.get(&topic).is_none() {
-                        this.sink.set(&topic, Err(error));
-                    }
+        let result = self.call(&addr, "GET", &path, Vec::new(), Vec::new()).await;
+        if !self.is_live(topic) {
+            return;
+        }
+        match result {
+            Ok(value) => self.sink.set(topic, Ok(value)),
+            Err(error) => {
+                if self.sink.get(topic).is_none() {
+                    self.sink.set(topic, Err(error));
                 }
             }
-        });
+        }
     }
 
     fn refetch_all(&self, station: &str) {

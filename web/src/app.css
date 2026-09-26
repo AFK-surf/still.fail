@@ -736,6 +736,12 @@ a.h-place:hover, button.h-place:hover { background: var(--hover); text-decoratio
 /* The page itself never scrolls or bounces; only the panes inside do. */
 html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .chat-list { gap: 14px; }
+/* Holds the space of whatever left the bottom (see scroll.ts); the negative margin takes back its gap. */
+.chat-floor { flex: none; margin-top: -14px; padding: 0; }
+/* A message on its way says so only if it takes a moment. */
+.msg-sending { animation: msg-sending-show 0s 0.8s both; }
+@keyframes msg-sending-show { from { visibility: hidden; } to { visibility: visible; } }
+.msg-failed { color: var(--red); display: inline-flex; gap: 8px; align-items: baseline; }
 .msg-mine { display: grid; justify-items: end; gap: 4px; }
 .msg-mine .msg-bubble { max-width: min(78%, 560px); padding: 8px 14px; border-radius: calc(18px * var(--corner-scale)); background: var(--neutral-bg); corner-shape: var(--corner-shape); }
 .msg-row { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; }

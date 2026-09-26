@@ -6,14 +6,27 @@
 // - any other change (images loading, text settling, blocks folding) keeps
 //   the distance from the bottom: at the bottom stays at the bottom.
 // Scrolling by the reader sets the new position.
+// With a `floor` (an empty last child), the content never gets shorter: what
+// leaves the bottom (an activity folding away) leaves its space behind, filled
+// by the floor, so nothing above it drops down.
 import { useEffect, type RefObject } from "react";
 
 /** `messages` selects which of the pane's children count as messages. */
-export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = "*"): void {
+export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = "*", floor?: RefObject<HTMLElement | null>): void {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     let gap = 0;
+    /** The furthest the content has reached; the floor makes up what it has lost since. */
+    let reached = 0;
+    const keepHeight = () => {
+      const f = floor?.current;
+      if (!f) return;
+      const end = el.scrollTop + f.getBoundingClientRect().top - el.getBoundingClientRect().top;
+      reached = Math.max(reached, end);
+      const height = `${Math.round(reached - end)}px`;
+      if (f.style.height !== height) f.style.height = height;
+    };
     /** The message being followed: kept in view from its top. */
     let anchor: Element | null = null;
     let atBottom = true;
@@ -26,6 +39,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     // Transient rows (an activity that will fold away) are never what a replaced message hands over to.
     const lastMessage = () => [...el.children].filter((n) => isMessage(n) && !n.hasAttribute("data-transient")).at(-1) ?? null;
     const hold = () => {
+      keepHeight();
       const bottom = Math.max(0, el.scrollHeight - el.clientHeight);
       // A followed message that was replaced (a streamed reply landing) hands over to the newest.
       if (anchor && !anchor.isConnected) anchor = lastMessage();
@@ -76,5 +90,5 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       resize.disconnect();
       mutations.disconnect();
     };
-  }, [ref, messages]);
+  }, [ref, messages, floor]);
 }

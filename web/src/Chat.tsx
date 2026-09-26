@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useAction, useApi, useIsMine, type Api, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
+import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatMessageRow, type OutboxMessage, type Quote, type SessionDetail, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
 import { absoluteTime, agentLabel, relativeTime, sessionStatus } from "./format.ts";
 import { usePerson, useStation } from "./station.tsx";
@@ -13,15 +13,20 @@ import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
 import { useStickToBottom } from "./scroll.ts";
 
-export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory }: {
-  detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; live?: ShownStep[]; phase?: ShownPhase | null; onOpenHistory(): void;
+export function ChatPanel({ detail, chat, outbox = [], live = [], phase = null, onOpenHistory }: {
+  detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; outbox?: OutboxMessage[]; live?: ShownStep[]; phase?: ShownPhase | null; onOpenHistory(): void;
 }) {
   const list = useRef<HTMLDivElement>(null);
+  const floor = useRef<HTMLDivElement>(null);
+  const sending = useChatSend();
   const messages = chat?.messages ?? [];
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
-  useStickToBottom(list, ".msg");
+  useStickToBottom(list, ".msg", floor);
+  // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
+  const sentHere = useRef(new Set<string>());
+  for (const o of outbox) sentHere.current.add(o.text);
   // Messages there when the chat opened show at once; later ones ease in, except a reply that already streamed in place.
   const firstCount = useRef<number | null>(null);
   if (firstCount.current === null) firstCount.current = messages.length;
@@ -33,7 +38,8 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
   const lastAgents = useRef<AgentAtWork[] | null>(null);
   const [, rerender] = useState(0);
   const wasBusy = useRef(false);
-  const busy = status === "running" || status === "queued";
+  // A message on its way already counts: the activity shows at once instead of after the station answers.
+  const busy = status === "running" || status === "queued" || outbox.some((o) => o.state === "sending");
   // A turn ending and the next starting leave a moment of "not running"; only a pause over a second ends the activity.
   const [leaving, setLeaving] = useState(false);
   useEffect(() => {
@@ -85,8 +91,8 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
             streamedTs.current.add(m.ts);
             wasWriting.current = false;
           }
-          const enter = index >= firstCount.current! && !streamedTs.current.has(m.ts) ? true : undefined;
           const mine = m.role === "person" && isMine({ id: m.user, email: m.user });
+          const enter = index >= firstCount.current! && !streamedTs.current.has(m.ts) && !(mine && sentHere.current.has(m.text)) ? true : undefined;
           if (mine) {
             return (
               <div key={m.ts} className="msg msg-mine" data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
@@ -119,6 +125,19 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
             </div>
           );
         })}
+        {outbox.map((o) => (
+          <div key={o.id} className="msg msg-mine" data-author="你" data-role="person" data-enter>
+            <Quotes quotes={o.quotes} />
+            {o.text && <div className="msg-bubble"><div className="msg-plain">{o.text}</div></div>}
+            <Files sessionKey={detail.session.key} files={o.attachments} />
+            {o.state === "failed"
+              ? <span className="msg-time msg-failed">发送失败{o.error ? `：${o.error}` : ""}
+                  <button type="button" className="inline-link" onClick={() => void sending.retry(detail.session.key, o.id).catch(() => {})}>重试</button>
+                  <button type="button" className="inline-link" onClick={() => void sending.discard(detail.session.key, o.id)}>删除</button>
+                </span>
+              : <span className="msg-time msg-waiting msg-sending"><span className="spinner" aria-hidden="true" />正在发送</span>}
+          </div>
+        ))}
         {(() => {
           // The agent writing to this chat right now: its chat_post, as far as it has streamed.
           const writing = live.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && (partialString(s.input, "to") ?? "").startsWith("EMBER/"));
@@ -150,6 +169,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
           // The activity is always the last thing in the chat; the reply being written comes before it.
           return <>{writingNow}<Activities onOpenHistory={onOpenHistory} agents={agents} leaving={leaving} /></>;
         })()}
+        <div ref={floor} className="chat-floor" aria-hidden="true" />
       </div>
       {picked && (
         <button type="button" className="quote-pop" style={{ left: picked.at.x, top: picked.at.y }}
@@ -389,16 +409,31 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
     onFocused();
   }, [focusQuote]);
   const keyFor = async () => sessionKey ?? (await ensureSession!());
-  // The message shows once the chat view has it: the core refetches the session after the write.
-  const send = useAction(async (value: string) => {
-    const key = await keyFor();
-    await api.sayToSession(key, value, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ author, text: t, comment, ts, role }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}) })));
-    return key;
-  }, (key) => {
-    for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
-    setText(""); setFiles([]); setQuotes(() => []);
+  const chat = useChatSend();
+  const [starting, setStarting] = useState(false);
+  const [sendError, setSendError] = useState<Error | null>(null);
+  // The composer empties at once: the message lives in the chat's outbox until the session has it (a failure shows there too).
+  const send = async (value: string) => {
+    const kept = { text, files, quotes };
+    const attachments = files.flatMap((f) => (f.done ? [f.done] : []));
+    const sent = quotes.map(({ author, text: t, comment, ts, role }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}) }));
+    setText(""); setFiles([]); setQuotes(() => []); setSendError(null);
+    let key: string;
+    try {
+      setStarting(!sessionKey);
+      key = await keyFor();
+    } catch (error) {
+      // No chat to send into (a new one could not be made): the draft comes back.
+      setText(kept.text); setFiles(kept.files); setQuotes(() => kept.quotes);
+      setSendError(error instanceof Error ? error : new Error(String(error)));
+      return;
+    } finally {
+      setStarting(false);
+    }
+    for (const f of kept.files) if (f.preview) URL.revokeObjectURL(f.preview);
+    void chat.send(key, value, attachments, sent).catch(() => {});
     onSent?.(key);
-  });
+  };
   const add = (list: FileList | File[]) => {
     for (const file of Array.from(list)) {
       const id = nextId.current++;
@@ -425,9 +460,9 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [text]);
   const uploading = files.some((f) => !f.done && !f.error);
-  const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !send.busy && !locked;
+  const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !starting && !locked;
   const submit = () => {
-    if (ready) void send.run(text.trim());
+    if (ready) void send(text.trim());
   };
   return (
     <div className="composer-wrap">
@@ -477,13 +512,13 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
           </Tip>
           {toolbar && <div className="composer-choices" onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
           <Tip label={uploading ? "文件还在上传" : "发送"}>
-            <button type="submit" className="send-btn" disabled={!ready} aria-label="发送" aria-busy={send.busy || undefined}>
-              {send.busy ? <span className="spinner" aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
+            <button type="submit" className="send-btn" disabled={!ready} aria-label="发送" aria-busy={starting || undefined}>
+              {starting ? <span className="spinner" aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
             </button>
           </Tip>
         </div>
       </form>
-      {send.error && <p className="field-error chat-error" role="alert">{send.error.message}</p>}
+      {sendError && <p className="field-error chat-error" role="alert">{sendError.message}</p>}
     </div>
   );
 }

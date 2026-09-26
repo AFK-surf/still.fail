@@ -172,7 +172,9 @@ are small, while `chat` carries the whole transcript.
   "detail": { … },               // the session topic's value (SessionDetail), timeline kept current
   "connect": { … } | null,
   "profile": { … } | null,       // the profile the session runs on, from the overview
-  "link": { "state": "online", "message": null }
+  "link": { "state": "online", "message": null },
+  "outbox": [{ "id": "out-1", "text": "…", "attachments": [], "quotes": [], "createdAt": 1790000000000, "state": "sending", "error": null }]
+  // messages sent from this device that the session does not show yet; each leaves in the same emission that brings the session's own copy
 }
 ```
 
@@ -188,6 +190,8 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `auth.signOut` | `account` | — |
 | `cloud.request` | `account`, `method`, `path`, `body?` | the JSON answer (the core adds the token and refreshes it) |
 | `station.request` | `station`, `method`, `path`, `body?` | the JSON answer; the core then refreshes the topics this write can change |
+| `chat.send` | `station`, `key`, `text`, `attachments?`, `quotes?` | answers once the station has it and the `chat` view shows it; meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
+| `chat.retry` / `chat.discard` | `station`, `key`, `id` | sends a failed outbox message again / drops it |
 | `station.upload` | `station`, `key`, `name`, `bytes` | the attachment |
 | `station.file` | `station`, `key`, `name` | `{ type, bytes }` |
 | `migrate` | `accounts`, `device` | — (web only: what localStorage held before the core existed) |

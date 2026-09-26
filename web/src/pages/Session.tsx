@@ -101,7 +101,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
         </div>
       </header>
       {/* The chat is the page; the session's history sits in a tab set that takes the whole right side. */}
-      <ChatPanel detail={detail} chat={chat} live={live} phase={phase} onOpenHistory={() => (tabs.includes("history") && active === "history" ? closeTab("history") : openTab("history"))} />
+      <ChatPanel detail={detail} chat={chat} outbox={chatView.value.outbox} live={live} phase={phase} onOpenHistory={() => (tabs.includes("history") && active === "history" ? closeTab("history") : openTab("history"))} />
       </div>
         {panel && (
           <Tabs.Root className="side-panel" value={tabs.includes(active) ? active : tabs[0]!} onValueChange={setActive}>

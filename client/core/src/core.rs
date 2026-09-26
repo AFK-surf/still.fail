@@ -46,6 +46,7 @@ struct Inner {
     cloud: Rc<Cloud>,
     store: Rc<Store>,
     stations: Rc<Stations>,
+    views: Rc<Views>,
     /// The device endpoint, brought up once (it needs the relay url from `/v1/me`); cleared if that fails so the next use retries.
     mesh: RefCell<Option<Shared<LocalBoxFuture<'static, Result<Rc<Mesh>>>>>>,
     relay_url: RefCell<Option<String>>,
@@ -71,8 +72,9 @@ impl Core {
             let wire = station::wire(host.clone(), mesh_source(me.clone()), grants(me.clone()));
             let stations = Stations::new(host.clone(), store.clone() as Rc<dyn TopicSink>, wire);
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views }));
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone() }));
             Inner {
+                views,
                 me: me.clone(),
                 host: host.clone(),
                 accounts: accounts.clone(),
@@ -226,6 +228,21 @@ impl Inner {
             Call::StationRequest { station, method, path, body } => {
                 self.stations.request(&StationAddr::parse(&station)?, &method, &path, body).await
             }
+            Call::ChatSend { station, key, text, attachments, quotes } => {
+                let message = json!({ "text": text, "attachments": attachments, "quotes": quotes });
+                let id = self.views.outbox_add(&station, &key, message.clone());
+                self.deliver(&station, &key, &id, message).await
+            }
+            Call::ChatRetry { station, key, id } => {
+                let entry = self.views.outbox_get(&station, &key, &id).ok_or_else(|| CoreError::invalid("没有这条待发的消息"))?;
+                self.views.outbox_state(&station, &key, &id, None);
+                let message = json!({ "text": entry["text"], "attachments": entry["attachments"], "quotes": entry["quotes"] });
+                self.deliver(&station, &key, &id, message).await
+            }
+            Call::ChatDiscard { station, key, id } => {
+                self.views.outbox_remove(&station, &key, &id);
+                Ok(Value::Null)
+            }
             Call::StationUpload { station, key, name, bytes } => {
                 self.stations.upload(&StationAddr::parse(&station)?, &key, &name, bytes).await
             }
@@ -246,6 +263,18 @@ impl Inner {
     }
 
     /// The device endpoint, bringing it up the first time.
+    /// Posts an outgoing message. Once the station has it and the session shows it, it leaves the outbox
+    /// (in the same emission as the session's new value); a failure leaves it there as `failed`.
+    async fn deliver(&self, station: &str, key: &str, id: &str, message: Value) -> Result<Value> {
+        let path = format!("/sessions/{}/messages", encode(key));
+        let result = async { self.stations.request(&StationAddr::parse(station)?, "POST", &path, Some(message)).await }.await;
+        match &result {
+            Ok(_) => self.views.outbox_remove(station, key, id),
+            Err(error) => self.views.outbox_state(station, key, id, Some(&error.message)),
+        }
+        result
+    }
+
     async fn mesh(&self) -> Result<Rc<Mesh>> {
         let pending = self.mesh.borrow().clone();
         let pending = match pending {
@@ -445,6 +474,9 @@ enum Call {
     SignOut { account: String },
     CloudRequest { account: String, method: String, path: String, body: Option<Value> },
     StationRequest { station: String, method: String, path: String, body: Option<Value> },
+    ChatSend { station: String, key: String, text: String, attachments: Value, quotes: Value },
+    ChatRetry { station: String, key: String, id: String },
+    ChatDiscard { station: String, key: String, id: String },
     StationUpload { station: String, key: String, name: String, bytes: Vec<u8> },
     StationFile { station: String, key: String, name: String },
     Migrate { accounts: Option<Value>, device: Option<Vec<u8>> },
@@ -478,6 +510,26 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         method: String,
         path: String,
         body: Option<Value>,
+    }
+    #[derive(Deserialize)]
+    struct Send {
+        station: String,
+        key: String,
+        #[serde(default)]
+        text: String,
+        #[serde(default = "empty_list")]
+        attachments: Value,
+        #[serde(default = "empty_list")]
+        quotes: Value,
+    }
+    fn empty_list() -> Value {
+        json!([])
+    }
+    #[derive(Deserialize)]
+    struct Outgoing {
+        station: String,
+        key: String,
+        id: String,
     }
     #[derive(Deserialize)]
     struct Upload {
@@ -519,6 +571,18 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         "station.request" => {
             let p: StationRequest = read(params)?;
             Call::StationRequest { station: p.station, method: p.method, path: p.path, body: p.body }
+        }
+        "chat.send" => {
+            let p: Send = read(params)?;
+            Call::ChatSend { station: p.station, key: p.key, text: p.text, attachments: p.attachments, quotes: p.quotes }
+        }
+        "chat.retry" => {
+            let p: Outgoing = read(params)?;
+            Call::ChatRetry { station: p.station, key: p.key, id: p.id }
+        }
+        "chat.discard" => {
+            let p: Outgoing = read(params)?;
+            Call::ChatDiscard { station: p.station, key: p.key, id: p.id }
         }
         "station.upload" => {
             let p: Upload = read(params)?;
@@ -622,6 +686,18 @@ mod tests {
         assert_eq!(
             parse_call("station.file", json!({"station": "w/s", "key": "k", "name": "a.png"})).unwrap(),
             Call::StationFile { station: "w/s".into(), key: "k".into(), name: "a.png".into() }
+        );
+        assert_eq!(
+            parse_call("chat.send", json!({"station": "w/s", "key": "k", "text": "hi"})).unwrap(),
+            Call::ChatSend { station: "w/s".into(), key: "k".into(), text: "hi".into(), attachments: json!([]), quotes: json!([]) }
+        );
+        assert_eq!(
+            parse_call("chat.retry", json!({"station": "w/s", "key": "k", "id": "out-1"})).unwrap(),
+            Call::ChatRetry { station: "w/s".into(), key: "k".into(), id: "out-1".into() }
+        );
+        assert_eq!(
+            parse_call("chat.discard", json!({"station": "w/s", "key": "k", "id": "out-1"})).unwrap(),
+            Call::ChatDiscard { station: "w/s".into(), key: "k".into(), id: "out-1".into() }
         );
     }
 
