@@ -662,6 +662,25 @@
 .attention-quota .quota-ring { flex: none; }
 .attention-quota .quota-ring-number { font-size: 8px; }
 .history-summary { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* A session's details, by how much each matters: the account (largest), the model, what it used, the station. */
+.session-details { display: grid; gap: 10px; }
+.run-account { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.run-account:hover, .run-account[data-state="open"] { border-color: var(--line-strong); }
+.run-account-mark { width: 32px; height: 32px; flex: none; }
+.run-account-text { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.run-account-text strong { font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-account-text .muted { font-size: var(--text-xs); }
+.run-account .chooser-chevron { flex: none; color: var(--muted); }
+.run-option-text { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.run-option-text .muted { font-size: var(--text-xs); white-space: normal; max-width: 260px; }
+.chooser-item .quota-rings { margin-left: 12px; }
+.run-model { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.run-chip { color: var(--text); font-size: var(--text-sm); }
+.run-runtime { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: var(--text-xs); }
+.run-usage { margin: 0; font-size: var(--text-xs); }
+.run-station summary { cursor: pointer; font-size: var(--text-xs); }
+.run-station .resource-rings { margin-top: 8px; }
+.menu-separator { height: 1px; margin: 4px 0; background: var(--line); }
 /* How a session runs, changed in its details. */
 .detail-select { max-width: 100%; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--canvas); color: var(--text); font: inherit; font-size: var(--text-sm); }
 .details-quota { margin-top: 8px; }

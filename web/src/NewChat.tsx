@@ -9,7 +9,7 @@ import { useApi, useStations, type RuntimeKind, type StationView } from "./api.t
 import { Composer } from "./Chat.tsx";
 import { EFFORTS, EFFORT_LABEL, RUNTIME_LABEL, timeUntil } from "./format.ts";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
-import { ModelLogo, RuntimeLogo } from "./ui.tsx";
+import { ModelLogo, RuntimeLogo, Chooser, ChooserItem as Item } from "./ui.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
 
@@ -108,7 +108,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   const toolbar = useMemo(() => (
     <>
       {station.name && (
-        <Chooser label={<><Server size={13} />{station.name}</>} title="在哪台 station 上运行">
+        <Chooser side="top" label={<><Server size={13} />{station.name}</>} title="在哪台 station 上运行">
           {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}>{s.name}</Item>)}
         </Chooser>
       )}
@@ -116,7 +116,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         // Nothing to choose from: the chooser leads to where models are enabled.
         <Link className="chooser" to={profilesPage(station)} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
       ) : (
-      <Chooser label={<><ModelLogo model={model} runtime={runtime} size={13} />{modelLabel}</>} title="用哪个模型">
+      <Chooser side="top" label={<><ModelLogo model={model} runtime={runtime} size={13} />{modelLabel}</>} title="用哪个模型">
         {view.models.map((m) => (
           <Item key={m.model} checked={model === m.model} onSelect={() => pick({ model: m.model, ...(m.runtimes.includes(runtime!) ? {} : { runtime: m.runtimes[0], effort: "" }) })}>
             <ModelLogo model={m.model} runtime={m.runtimes[0]!} size={12} />{m.model}
@@ -127,12 +127,12 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       )}
       {/* The runtime only when the model runs on more than one. */}
       {runtime && runtimes.length > 1 && (
-        <Chooser label={<><RuntimeLogo runtime={runtime} size={12} />{RUNTIME_LABEL[runtime]}</>} title="用哪个运行时">
+        <Chooser side="top" label={<><RuntimeLogo runtime={runtime} size={12} />{RUNTIME_LABEL[runtime]}</>} title="用哪个运行时">
           {runtimes.map((rt) => <Item key={rt} checked={rt === runtime} onSelect={() => pick({ runtime: rt, effort: "" })}><RuntimeLogo runtime={rt} size={12} />{RUNTIME_LABEL[rt]}</Item>)}
         </Chooser>
       )}
       {runtime && (
-        <Chooser label={<>思考 {choice.effort ? EFFORT_LABEL[choice.effort] ?? choice.effort : "默认"}</>} title="思考深度">
+        <Chooser side="top" label={<>思考 {choice.effort ? EFFORT_LABEL[choice.effort] ?? choice.effort : "默认"}</>} title="思考深度">
           <Item checked={!choice.effort} onSelect={() => pick({ effort: "" })}>运行时默认</Item>
           {efforts.map((e) => <Item key={e} checked={choice.effort === e} onSelect={() => pick({ effort: e })}>{EFFORT_LABEL[e] ?? e}（{e}）</Item>)}
         </Chooser>
@@ -163,21 +163,3 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   );
 }
 
-function Chooser({ label, title, children }: { label: React.ReactNode; title: string; children: React.ReactNode }) {
-  return (
-    <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger className="chooser" title={title}>{label}<ChevronDown size={12} /></DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content className="popover menu-list chooser-menu" side="top" align="start" sideOffset={6}>{children}</DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
-function Item({ checked, onSelect, children }: { checked: boolean; onSelect(): void; children: React.ReactNode }) {
-  return (
-    <DropdownMenu.Item className="menu-item chooser-item" onSelect={onSelect}>
-      <span className="chooser-check">{checked && <Check size={13} />}</span>{children}
-    </DropdownMenu.Item>
-  );
-}

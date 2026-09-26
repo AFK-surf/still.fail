@@ -5,7 +5,7 @@ import { StationPreview } from "../Preview.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaBars, QuotaRing, Ring, mark, refillsIn } from "../components.tsx";
 import { Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
-import { Popover, Tabs } from "radix-ui";
+import { DropdownMenu, Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
@@ -17,7 +17,7 @@ import {
 } from "../format.ts";
 import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
-import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, RuntimeLogo, SlackLogo, Time, Tip } from "../ui.tsx";
+import { AgentMark, Chooser, ChooserItem, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ProviderLogo, ResizeHandle, RuntimeLogo, SlackLogo, Time, Tip } from "../ui.tsx";
 
 /**
  * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
@@ -336,8 +336,9 @@ function HistorySummary({ agent }: { agent: ChatAgentView }) {
 }
 
 /**
- * Unfolded under the history's head: how the session runs (its profile, model and effort, changed here from its next
- * turn on), its account's quota, and the station.
+ * Unfolded under the history's head, by how much each thing matters: the account it runs on (with its quota) first,
+ * which can be changed here, or left to the station; then the model and effort; then what it has used; the station
+ * last, folded. Changes take from its next turn on.
  */
 function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView | undefined }) {
   const { session, profile } = agent;
@@ -348,66 +349,70 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
   const host = useHost(station.address).value;
   const view = useStations(scopeOf(station.address)).value?.find((s) => s.station === station.address);
   const models = view?.runtimes.find((r) => r.runtime === session.runtime)?.models ?? [];
-  const change = useAction((input: { profile?: string; model?: string | null; effort?: string | null }) => api.sessionSettings(session.key, input), () => toast("已改，下一轮起生效"));
+  const change = useAction((input: { profile?: string | null; model?: string | null; effort?: string | null }) => api.sessionSettings(session.key, input), () => toast("已改，下一轮起生效"));
   const usage = live?.usage;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
   const gb = (bytes: number) => `${Math.round(bytes / 1024 ** 3)} GB`;
-  const row = (label: string, value: ReactNode) => <div className="detail-row"><dt>{label}</dt><dd>{value}</dd></div>;
+  const current = agent.profiles.find((p) => p.current);
+  const name = current?.name ?? profile?.name ?? session.profile;
   return (
     <div className="session-details">
-      <section className="details-group">
-        <h3>运行</h3>
-        <dl className="details">
-          {row("运行时", <span className="detail-inline"><RuntimeLogo runtime={session.runtime} size={13} />{RUNTIME_LABEL[session.runtime]}</span>)}
-          {row("Profile", (
-            <span className="detail-inline">
-              <select className="detail-select" value={session.profile} disabled={change.busy} aria-label="Profile"
-                onChange={(e) => void change.run({ profile: e.target.value })}>
-                {agent.profiles.map((p) => <option key={p.id} value={p.id}>{p.name}{p.spent ? "（额度用完）" : ""}</option>)}
-                {!agent.profiles.some((p) => p.id === session.profile) && <option value={session.profile}>{profile?.name ?? session.profile}</option>}
-              </select>
-              <Link className="detail-link" to={link(`/settings/accounts/${session.profile}`)}>查看</Link>
+      {/* The account: what it runs on, whether the station picks it, and how much of it is left. */}
+      <Chooser className="run-account" title="换一个 Profile，或交给 station 自动分配"
+        label={(
+          <>
+            <span className="mark run-account-mark"><ProviderLogo runtime={session.runtime} kind={current?.kind ?? profile?.access.kind ?? "env"} size={18} /></span>
+            <span className="run-account-text">
+              <strong>{name}</strong>
+              <span className="muted">{session.profilePinned ? "手动指定" : "自动分配 · station 按额度和负载挑"}</span>
             </span>
+            <QuotaBars quota={current?.quota ?? profile?.quota} compact />
+          </>
+        )}>
+        <ChooserItem checked={!session.profilePinned} onSelect={() => void change.run({ profile: null })}>
+          <span className="run-option-text"><strong>自动分配</strong><span className="muted">能用就留在当前账号；额度用完或登录失效时，换一个还有额度的</span></span>
+        </ChooserItem>
+        <DropdownMenu.Separator className="menu-separator" />
+        {agent.profiles.map((p) => (
+          <ChooserItem key={p.id} checked={session.profilePinned && p.current} onSelect={() => void change.run({ profile: p.id })}>
+            <ProviderLogo runtime={p.runtime ?? session.runtime} kind={p.kind ?? "env"} size={15} />
+            <span className="run-option-text"><span>{p.name}</span>{p.current && !session.profilePinned && <span className="muted">当前</span>}</span>
+            <QuotaBars quota={p.quota} compact />
+          </ChooserItem>
+        ))}
+      </Chooser>
+      {/* The model and how hard it thinks: second. */}
+      <div className="run-model">
+        <Chooser className="chooser run-chip" title="换模型" label={<><ModelLogo model={session.model} runtime={session.runtime} size={13} />{session.model ?? "运行时默认"}</>}>
+          <ChooserItem checked={!session.model} onSelect={() => void change.run({ model: null })}>运行时默认</ChooserItem>
+          {[...new Set([...(session.model ? [session.model] : []), ...models])].map((m) => (
+            <ChooserItem key={m} checked={session.model === m} onSelect={() => void change.run({ model: m })}><ModelLogo model={m} runtime={session.runtime} size={12} />{m}</ChooserItem>
           ))}
-          {row("模型", (
-            <select className="detail-select" value={session.model ?? ""} disabled={change.busy} aria-label="模型"
-              onChange={(e) => void change.run({ model: e.target.value || null })}>
-              <option value="">运行时默认</option>
-              {[...new Set([...(session.model ? [session.model] : []), ...models])].map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          ))}
-          {row("思考深度", (
-            <select className="detail-select" value={session.effort ?? ""} disabled={change.busy} aria-label="思考深度"
-              onChange={(e) => void change.run({ effort: e.target.value || null })}>
-              <option value="">运行时默认</option>
-              {EFFORTS[session.runtime].map((e) => <option key={e} value={e}>{EFFORT_LABEL[e] ?? e}（{e}）</option>)}
-            </select>
-          ))}
-          {row("进程", PROCESS_LABEL[session.process])}
-          {usage && row("调用", `${usage.modelCalls} 次`)}
-          {usage && row("输入", `${compactNumber(usage.inputTokens)}${hitRate === null ? "" : ` · 缓存 ${hitRate}%`}`)}
-          {usage && row("输出", compactNumber(usage.outputTokens))}
-        </dl>
-        {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
-        {/* Its account's quota, drawn as everywhere else: what is left of each window. */}
-        <div className="details-quota"><QuotaBars quota={profile?.quota} compact /></div>
-      </section>
-      <section className="details-group">
-        <h3>Station</h3>
-        <dl className="details">
-          {row("名字", station.name || host?.hostname || "本机")}
-          {host && row("机器", `${host.hostname} · ${host.cpus} 核 · ${gb(host.memory.totalBytes)}`)}
-        </dl>
+        </Chooser>
+        <Chooser className="chooser run-chip" title="换思考深度" label={<>思考 {session.effort ? EFFORT_LABEL[session.effort] ?? session.effort : "默认"}</>}>
+          <ChooserItem checked={!session.effort} onSelect={() => void change.run({ effort: null })}>运行时默认</ChooserItem>
+          {EFFORTS[session.runtime].map((e) => <ChooserItem key={e} checked={session.effort === e} onSelect={() => void change.run({ effort: e })}>{EFFORT_LABEL[e] ?? e}（{e}）</ChooserItem>)}
+        </Chooser>
+        <span className="muted run-runtime"><RuntimeLogo runtime={session.runtime} size={12} />{RUNTIME_LABEL[session.runtime]}</span>
+      </div>
+      {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
+      {/* What it used: a line, quiet. */}
+      <p className="run-usage muted">
+        {PROCESS_LABEL[session.process]}
+        {usage && <> · 调用 {usage.modelCalls} 次 · 输入 {compactNumber(usage.inputTokens)}{hitRate === null ? "" : `（缓存 ${hitRate}%）`} · 输出 {compactNumber(usage.outputTokens)}</>}
+        {" · "}<Link className="detail-link" to={link(`/settings/accounts/${session.profile}`)}>Profile 详情</Link>
+      </p>
+      {/* The station: folded. */}
+      <details className="run-station">
+        <summary className="muted">{station.name || host?.hostname || "本机"}{host ? ` · ${host.cpus} 核 · ${gb(host.memory.totalBytes)}` : ""}</summary>
         {host && (
           <div className="resource-rings">
             <Ring percent={host.load * 100} label="CPU" title={`负载 ${host.load}（${host.cpus} 核）`} />
             <Ring percent={(host.memory.usedBytes / host.memory.totalBytes) * 100} label="内存" title={`内存 ${gb(host.memory.usedBytes)} / ${gb(host.memory.totalBytes)}`} />
-            {host.disk.totalBytes > 0 && (
-              <Ring percent={(1 - host.disk.freeBytes / host.disk.totalBytes) * 100} label="磁盘" title={`磁盘剩 ${gb(host.disk.freeBytes)} / ${gb(host.disk.totalBytes)}`} />
-            )}
+            {host.disk.totalBytes > 0 && <Ring percent={(1 - host.disk.freeBytes / host.disk.totalBytes) * 100} label="磁盘" title={`磁盘剩 ${gb(host.disk.freeBytes)} / ${gb(host.disk.totalBytes)}`} />}
           </div>
         )}
-      </section>
+      </details>
     </div>
   );
 }

@@ -79,7 +79,7 @@ export type Attention =
   | { kind: "quota"; label: string; left: number; until: number | null }
   | { kind: "disk"; freeBytes: number; totalBytes: number };
 /** A profile a session can be moved to (those of its runtime), as the core lists them. */
-export interface RunnableProfile { id: string; name: string; current: boolean; spent: { until: number | null } | null }
+export interface RunnableProfile { id: string; name: string; current: boolean; spent: { until: number | null } | null; kind: AccessKind | null; runtime: RuntimeKind | null; quota: ProfileQuota | null }
 export interface ChatAgentView {
   session: SessionSummary; status: Status; badge: Badge | null; connect: ConnectView | null; profile: ProfileView | null; turns: TurnRecord[]; threads: ThreadView[];
   profiles: RunnableProfile[]; attention: Attention[];

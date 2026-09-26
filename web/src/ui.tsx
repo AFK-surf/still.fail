@@ -265,6 +265,29 @@ export function CopyCommand({ text }: { text: string }) {
   );
 }
 
+/**
+ * A choice that opens a menu of what it can be (a model, an account): not the browser's own select, so each option can
+ * show what matters about it. `trigger` draws the chosen one; the class is the look of the button.
+ */
+export function Chooser({ label, title, children, side = "bottom", className = "chooser" }: { label: ReactNode; title: string; children: ReactNode; side?: "top" | "bottom"; className?: string }) {
+  return (
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger className={className} title={title}>{label}<ChevronDown size={12} className="chooser-chevron" /></DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className="popover menu-list chooser-menu" side={side} align="start" sideOffset={6} collisionPadding={8}>{children}</DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+export function ChooserItem({ checked, onSelect, children }: { checked: boolean; onSelect(): void; children: ReactNode }) {
+  return (
+    <DropdownMenu.Item className="menu-item chooser-item" onSelect={onSelect}>
+      <span className="chooser-check">{checked && <Check size={13} />}</span>{children}
+    </DropdownMenu.Item>
+  );
+}
+
 /** A back link that only phones show, where an opened page hides the sidebar. */
 export function MobileBack({ to, label }: { to: string; label: string }) {
   return <Link className="mobile-back" to={to}><ChevronLeft {...ICON} />{label}</Link>;
