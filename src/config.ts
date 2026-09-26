@@ -18,17 +18,20 @@ export interface Profile {
   id: string;
   /** Shown instead of the id. */
   name: string;
+  /** The runtime a subscription signs in with (or custom variables are for); for a keyed profile, its first runtime. */
   runtime: RuntimeKind;
+  /** The runtimes it can run: the station sets each one up for the account (runtimesOf). */
+  runtimes: RuntimeKind[];
   /** How the runtime reaches its models; `key` is set for keyed kinds. */
   access: { kind: AccessKind; key: string };
-  /** The runtime's config home: CLAUDE_CONFIG_DIR or CODEX_HOME. */
+  /** The runtimes' config home: CLAUDE_CONFIG_DIR and CODEX_HOME (their files do not overlap). */
   home: string;
   /**
-   * The environment for this profile's processes: what the access kind needs
-   * plus `customEnv`. In values, `{route}` is replaced with a per-session
-   * routing id (claude) or the profile id (codex, whose app-server is shared).
+   * The environment for this profile's processes, by runtime: what the access kind needs there plus `customEnv`. In
+   * values, `{route}` is replaced with a per-session routing id (claude) or the profile id (codex, whose app-server is
+   * shared).
    */
-  env: Record<string, string>;
+  envs: Partial<Record<RuntimeKind, Record<string, string>>>;
   /** Variables set by hand; they win over derived ones. */
   customEnv: Record<string, string>;
   model?: string;
@@ -131,7 +134,8 @@ interface LegacyBot {
 export interface RawProfile {
   id: string;
   name?: string;
-  runtime: RuntimeKind;
+  /** Needed for a subscription (which one) and custom variables; keyed kinds run every runtime they can. */
+  runtime?: RuntimeKind;
   access?: { kind: AccessKind; key?: string };
   home: string;
   env?: Record<string, string>;
@@ -182,16 +186,17 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
   const profiles = (raw.profiles ?? []).map((p): Profile => {
     if (typeof p.id !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(p.id)) throw new Error(`profile id ${JSON.stringify(p.id)}: use lowercase letters, digits and dashes`);
     if (typeof p.home !== "string" || !p.home) throw new Error(`profile ${p.id}: home is required`);
-    if (!RUNTIMES.includes(p.runtime)) throw new Error(`profile ${p.id}: unknown runtime ${String(p.runtime)}`);
     const home = isAbsolute(p.home) ? p.home : join(dataDir, p.home);
     const kind = p.access?.kind ?? "env";
-    if (!ACCESS_KINDS[p.runtime].includes(kind)) throw new Error(`profile ${p.id}: ${p.runtime} cannot use access ${String(kind)}`);
+    const runtimes = runtimesOf(kind, p.runtime);
+    if (runtimes.length === 0) throw new Error(`profile ${p.id}: ${String(kind)} needs a runtime (${RUNTIMES.join(" or ")})`);
+    if (!runtimes.every((r) => ACCESS_KINDS[r].includes(kind))) throw new Error(`profile ${p.id}: ${runtimes.join("/")} cannot use access ${String(kind)}`);
     const key = p.access?.key?.trim() ?? "";
     if (KEYED.has(kind) && !key) throw new Error(`profile ${p.id}: access ${kind} needs a key`);
     const customEnv = p.env ?? {};
     return {
-      id: p.id, name: p.name?.trim() || p.id, runtime: p.runtime, access: { kind, key }, home,
-      env: { ...accessEnv(p.runtime, kind, key, p.model), ...customEnv }, customEnv,
+      id: p.id, name: p.name?.trim() || p.id, runtime: runtimes[0]!, runtimes, access: { kind, key }, home,
+      envs: Object.fromEntries(runtimes.map((r) => [r, { ...accessEnv(r, kind, key, p.model), ...customEnv }])), customEnv,
       ...(p.model ? { model: p.model } : {}),
       models: [...new Set((p.models ?? []).filter((m) => typeof m === "string" && m.trim()).map((m) => m.trim()))],
     };
@@ -250,7 +255,17 @@ function unique(kind: string, ids: string[]): void {
 
 /** The profiles a connect's sessions can run on: every profile of its runtime (pool.ts picks one per session). */
 export function profilesFor(config: Config, connect: Connect): Profile[] {
-  return config.profiles.filter((p) => p.runtime === connect.bind.runtime);
+  return config.profiles.filter((p) => p.runtimes.includes(connect.bind.runtime));
+}
+
+/**
+ * The runtimes an account runs, set up by the station for each: an OpenCode Go key both, an Anthropic key Claude Code;
+ * a subscription (and custom variables) the runtime it was made for.
+ */
+export function runtimesOf(kind: AccessKind, runtime: RuntimeKind | undefined): RuntimeKind[] {
+  if (kind === "opencode-go") return ["claude", "codex"];
+  if (kind === "anthropic-api") return ["claude"];
+  return runtime && RUNTIMES.includes(runtime) ? [runtime] : [];
 }
 
 export function expandRoute(env: Record<string, string>, route: string): Record<string, string> {

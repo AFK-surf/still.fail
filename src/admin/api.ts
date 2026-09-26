@@ -11,7 +11,7 @@ import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, extname, join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Connections } from "../connections.ts";
-import { RUNTIMES, type ConnectMode, type RawConfig, type RawConnect, type RawProfile, type RuntimeKind } from "../config.ts";
+import { RUNTIMES, runtimesOf, type ConnectMode, type RawConfig, type RawConnect, type RawProfile, type RuntimeKind } from "../config.ts";
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
 import type { MeshStatus } from "../mesh.ts";
@@ -651,10 +651,12 @@ export class AdminApi {
   }
 
   async #newKeyedProfile(input: Record<string, any>, viewer: Viewer) {
-    const runtime = input.runtime as RuntimeKind;
-    if (!RUNTIMES.includes(runtime)) throw new HttpError(400, `unknown runtime ${String(input.runtime)}`);
     const kind = String(input.access?.kind ?? "") as AccessKind;
-    if (!ACCESS_KINDS[runtime].includes(kind) || kind === "subscription") throw new HttpError(400, kind === "subscription" ? "订阅账号用登录来添加" : `unknown access ${kind}`);
+    if (kind === "subscription") throw new HttpError(400, "订阅账号用登录来添加");
+    // A key runs every runtime it can (runtimesOf); custom variables are for the runtime given.
+    const runtimes = runtimesOf(kind, input.runtime as RuntimeKind | undefined);
+    if (runtimes.length === 0 || !runtimes.every((r) => ACCESS_KINDS[r].includes(kind))) throw new HttpError(400, `unknown access ${kind}`);
+    const runtime = runtimes[0]!;
     const key = String(input.access?.key ?? "").trim();
     if (KEYED.has(kind) && !key) throw new HttpError(400, "要填 key");
     const trial = join(this.#deps.settings.config.dataDir, "homes", `new-${randomBytes(4).toString("hex")}`);
@@ -664,16 +666,16 @@ export class AdminApi {
       await rm(trial, { recursive: true, force: true });
       throw new HttpError(400, `验证没通过：${check.detail}`);
     }
-    const label = { "opencode-go": "OpenCode Go", "anthropic-api": "Anthropic API", env: "环境变量" }[kind as string] ?? kind;
+    const label = { "opencode-go": "OpenCode Go", "anthropic-api": "Anthropic API", env: `环境变量（${runtime === "claude" ? "Claude Code" : "Codex"}）` }[kind as string] ?? kind;
     const taken = new Set(this.#deps.settings.config.profiles.map((p) => p.id));
-    const base = `${runtime}-${kind}`;
+    const base = kind === "env" ? `${runtime}-env` : kind;
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
     const home = join(this.#deps.settings.config.dataDir, "homes", id);
     renameSync(trial, home);
     const overview = this.#save(viewer, `profile ${id}`, (raw) => ({
       ...raw,
-      profiles: [...(raw.profiles ?? []), { id, name: `${runtime === "claude" ? "Claude" : "Codex"} · ${label}`, runtime, access: { kind, ...(key ? { key } : {}) }, home: `homes/${id}`, env: {} }],
+      profiles: [...(raw.profiles ?? []), { id, name: label, ...(kind === "env" ? { runtime } : {}), access: { kind, ...(key ? { key } : {}) }, home: `homes/${id}`, env: {} }],
     }));
     this.#checks.set(id, check);
     this.#deps.store.setProfileCheck(id, check);
@@ -761,11 +763,11 @@ export class AdminApi {
         session: c.mode === "single-session" ? this.#deps.store.binding(c.id) ?? null : null,
       })),
       profiles: config.profiles.map((p) => ({
-        id: p.id, name: p.name, runtime: p.runtime, access: { kind: p.access.kind, key: mask(p.access.key) },
+        id: p.id, name: p.name, runtime: p.runtime, runtimes: p.runtimes, access: { kind: p.access.kind, key: mask(p.access.key) },
         home: p.home, homeExists: existsSync(p.home), model: p.model ?? null, models: p.models,
         env: Object.entries(p.customEnv).map(([key, value]) => ({ key, secret: SECRET_KEY.test(key), value: SECRET_KEY.test(key) ? mask(value) : value })),
         // Connects whose sessions can run on it: of its runtime, and its models have theirs.
-        usedBy: config.connects.filter((c) => c.bind.runtime === p.runtime && serves(p, c.bind.model ?? null)).map((c) => c.id),
+        usedBy: config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model ?? null)).map((c) => c.id),
         loginCommand: loginCommand(p.runtime, p.home),
         check: this.#checks.get(p.id) ?? null,
         login: this.#deps.logins.get(p.id),
@@ -1334,7 +1336,10 @@ export class AdminApi {
       if (typeof model === "string" && model.trim()) next.model = model.trim();
       const models = input.models === undefined ? existing?.models : input.models;
       if (Array.isArray(models) && models.length) next.models = [...new Set(models.map(String).map((m) => m.trim()).filter(Boolean))].slice(0, 200);
-      if (existing && existing.runtime !== next.runtime) lastOfRuntime(raw, existing.runtime, id);
+      if (existing) {
+        const kept = runtimesOf(next.access?.kind ?? "env", next.runtime);
+        for (const r of runtimesOf(existing.access?.kind ?? "env", existing.runtime)) if (!kept.includes(r)) lastOfRuntime(raw, r, id);
+      }
       return { ...raw, profiles: existing ? profiles.map((p) => (p.id === id ? next : p)) : [...profiles, next] };
     });
   }
@@ -1369,7 +1374,7 @@ export class AdminApi {
     return this.#save(viewer, `delete profile ${id}`, (raw) => {
       const profile = raw.profiles?.find((p) => p.id === id);
       if (!profile) throw new Error(`unknown profile ${id}`);
-      lastOfRuntime(raw, profile.runtime, id);
+      for (const r of runtimesOf(profile.access?.kind ?? "env", profile.runtime)) lastOfRuntime(raw, r, id);
       return { ...raw, profiles: (raw.profiles ?? []).filter((p) => p.id !== id) };
     });
   }
@@ -1398,7 +1403,7 @@ function accountEmail(runtime: RuntimeKind, home: string): string | null {
 
 /** A profile leaving its runtime (deleted, or moved to another): refused when it is the last one of a runtime that connects run. */
 function lastOfRuntime(raw: RawConfig, runtime: RuntimeKind, id: string): void {
-  if ((raw.profiles ?? []).some((p) => p.id !== id && p.runtime === runtime)) return;
+  if ((raw.profiles ?? []).some((p) => p.id !== id && runtimesOf(p.access?.kind ?? "env", p.runtime).includes(runtime))) return;
   const users = (raw.connects ?? []).filter((c) => c.bind.runtime === runtime).map((c) => c.name ?? c.id);
   if (users.length) throw new Error(`它是最后一个 ${runtime} 的 Profile，${users.join("、")} 还要用它运行`);
 }

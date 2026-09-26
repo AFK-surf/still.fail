@@ -73,8 +73,11 @@ export async function checkProfile(options: {
   const checkedAt = Date.now();
   try {
     if (options.kind === "opencode-go") {
+      // The model list answers any key; the usage is the key's own, so it is what tells a key that works.
+      const usage = await fetch(`${OPENCODE}/v1/usage`, { headers: { authorization: `Bearer ${options.key}` }, signal: AbortSignal.timeout(15_000) });
+      if (!usage.ok) return { state: "failed", detail: `OpenCode Go 拒绝了这个 key（${usage.status}）`, models: null, checkedAt };
       const response = await fetch(`${OPENCODE}/v1/models`, { headers: { authorization: `Bearer ${options.key}` }, signal: AbortSignal.timeout(15_000) });
-      if (!response.ok) return { state: "failed", detail: `OpenCode Go 拒绝了这个 key（${response.status}）`, models: null, checkedAt };
+      if (!response.ok) return { state: "failed", detail: `读不到 OpenCode Go 的模型（${response.status}）`, models: null, checkedAt };
       const body = await response.json() as { data?: { id: string }[] };
       const models = (body.data ?? []).map((m) => m.id).sort();
       return { state: "ok", detail: `可用，${models.length} 个模型`, models, checkedAt };

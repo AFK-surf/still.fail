@@ -12,14 +12,14 @@ export function agentHomePaths(agentHome: string): { memory: string; skills: str
 }
 
 /** Creates the agent home if missing and links it into every profile home. */
-export function linkAgentHome(agentHome: string, profiles: readonly Pick<Profile, "runtime" | "home">[]): void {
+export function linkAgentHome(agentHome: string, profiles: readonly Pick<Profile, "runtimes" | "home">[]): void {
   const { memory, skills } = agentHomePaths(agentHome);
   mkdirSync(skills, { recursive: true });
   if (!existsSync(memory)) writeFileSync(memory, "# ember memory\n");
   for (const profile of profiles) {
     mkdirSync(profile.home, { recursive: true });
-    const memoryName = profile.runtime === "claude" ? "CLAUDE.md" : "AGENTS.md";
-    link(memory, join(profile.home, memoryName));
+    // Each runtime it runs reads the memory under its own name.
+    for (const runtime of profile.runtimes) link(memory, join(profile.home, runtime === "claude" ? "CLAUDE.md" : "AGENTS.md"));
     link(skills, join(profile.home, "skills"));
   }
 }

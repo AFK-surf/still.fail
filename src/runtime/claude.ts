@@ -71,7 +71,7 @@ export class ClaudeDriver implements AgentDriver {
     ];
     const env: NodeJS.ProcessEnv = { ...process.env };
     for (const name of SCRUBBED) delete env[name];
-    Object.assign(env, expandRoute(options.profile.env, options.route), {
+    Object.assign(env, expandRoute(options.profile.envs.claude ?? {}, options.route), {
       CLAUDE_CONFIG_DIR: options.profile.home,
       [MCP_TOKEN_VAR]: options.mcpToken,
       // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).

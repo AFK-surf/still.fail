@@ -42,7 +42,7 @@ class Host {
     mkdirSync(profile.home, { recursive: true });
     const env: NodeJS.ProcessEnv = { ...process.env };
     for (const name of SCRUBBED) delete env[name];
-    Object.assign(env, expandRoute(profile.env, profile.id), { CODEX_HOME: profile.home });
+    Object.assign(env, expandRoute(profile.envs.codex ?? {}, profile.id), { CODEX_HOME: profile.home });
     const overrides = Object.entries(codexOverrides(profile.access.kind, profile.model)).flatMap(([k, v]) => ["-c", `${k}=${v}`]);
     this.signature = hostSignature(profile);
     this.#proc = spawnGroup({
@@ -104,7 +104,7 @@ class Host {
 }
 
 function hostSignature(profile: Profile): string {
-  return JSON.stringify([profile.home, profile.env, codexOverrides(profile.access.kind, profile.model)]);
+  return JSON.stringify([profile.home, profile.envs.codex, codexOverrides(profile.access.kind, profile.model)]);
 }
 
 export class CodexDriver implements AgentDriver {

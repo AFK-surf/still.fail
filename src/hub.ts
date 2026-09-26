@@ -376,7 +376,7 @@ export class Hub {
    * The profile defaults to the first one of that runtime.
    */
   newSession(options: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string; title?: string; createdBy: string }): { key: string; thread: ThreadRow } {
-    const profiles = this.#config.profiles.filter((p) => p.runtime === options.runtime);
+    const profiles = this.#config.profiles.filter((p) => p.runtimes.includes(options.runtime));
     if (!profiles.length) throw new Error(`no ${options.runtime} profile configured`);
     const profile = options.profile ? profiles.find((p) => p.id === options.profile) : this.#pick(profiles, options.model?.trim() || null);
     if (!profile) throw new Error(`no ${options.runtime} profile ${options.profile}`);

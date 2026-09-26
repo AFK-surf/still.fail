@@ -48,6 +48,8 @@ export interface ProfileView {
   id: string;
   name: string;
   runtime: RuntimeKind;
+  /** The runtimes it runs; the station sets each up for the account. */
+  runtimes: RuntimeKind[];
   access: { kind: AccessKind; key: string };
   home: string;
   homeExists: boolean;
