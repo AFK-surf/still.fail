@@ -115,7 +115,7 @@ export interface ThreadSummary extends ThreadRow {
   rev: number;
   /** The viewer's read position (a seq), 0 if never read. */
   read: number;
-  /** Messages after the read position, not deleted and not the viewer's own. */
+  /** Messages after the read position, not deleted and not the viewer's own (nor of a Slack user they are). */
   unread: number;
   /** Everyone who wrote in it, as creator references, earliest first. */
   people: string[];
@@ -322,6 +322,12 @@ CREATE TABLE IF NOT EXISTS processes (
   runtime TEXT NOT NULL,
   label TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS identities (
+  viewer TEXT NOT NULL,
+  slack_user TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (viewer, slack_user)
+);
 `;
 
 type Row = Record<string, unknown>;
@@ -377,6 +383,7 @@ const json = (value: unknown[] | undefined): string | null => (value?.length ? J
  * - "session-removed" (key): it was deleted;
  * - "thread" ({ id, rev, messages }): messages were said, edited or deleted there, or its sessions changed (no messages);
  * - "read" ({ viewer, thread, seq }): a viewer's read position moved;
+ * - "identities" (viewer): the Slack users a viewer said are them changed;
  * - "processes": the recorded runtime processes changed.
  */
 export class Store {
@@ -622,13 +629,14 @@ export class Store {
         (SELECT MAX(rev) FROM messages m WHERE m.thread = t.id) AS rev,
         (SELECT MAX(seq) FROM messages m WHERE m.thread = t.id) AS last_seq,
         (SELECT COUNT(*) FROM messages m WHERE m.thread = t.id AND m.seq > COALESCE(r.seq, 0) AND m.deleted_at IS NULL
-          AND NOT (m.author_kind = 'person' AND m.author = ?)) AS unread,
+          AND NOT (m.author_kind = 'person' AND (m.author = ? OR (t.surface != '${EMBER_SURFACE}'
+            AND m.author IN (SELECT slack_user FROM identities WHERE viewer = ?))))) AS unread,
         (SELECT substr(m.text, 1, 300) FROM messages m WHERE m.thread = t.id AND m.author_kind = 'person' AND m.deleted_at IS NULL
           ORDER BY m.seq LIMIT 1) AS first_text
       FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?
       ${where}
       ORDER BY COALESCE(last_seq, 0) DESC, t.created_at DESC, t.id DESC
-    `).all(...(params === undefined ? [viewer, viewer] : [viewer, viewer, params])) as Row[];
+    `).all(...(params === undefined ? [viewer, viewer, viewer] : [viewer, viewer, viewer, params])) as Row[];
     return rows.map((r) => {
       const last = r.last_seq == null ? undefined : this.#db.prepare("SELECT * FROM messages WHERE seq = ?").get(r.last_seq as number) as Row | undefined;
       return {
@@ -786,6 +794,20 @@ export class Store {
     const now = (this.#db.prepare("SELECT seq FROM reads WHERE viewer = ? AND thread = ?").get(viewer, thread) as Row).seq as number;
     this.changes.emit("read", { viewer, thread, seq: now });
     return now;
+  }
+
+  // ── identities ──────────────────────────────────────────────────────────
+
+  /** The Slack users a viewer said are them: their messages are the viewer's own. */
+  slackIdentities(viewer: string): string[] {
+    return (this.#db.prepare("SELECT slack_user FROM identities WHERE viewer = ? ORDER BY at").all(viewer) as Row[]).map((r) => r.slack_user as string);
+  }
+
+  /** Binds a Slack user to a viewer ("这是我"), or unbinds it. Nobody checks: it is the viewer's word. */
+  setSlackIdentity(viewer: string, user: string, bound: boolean): void {
+    if (bound) this.#db.prepare("INSERT OR IGNORE INTO identities (viewer, slack_user, at) VALUES (?, ?, ?)").run(viewer, user, Date.now());
+    else this.#db.prepare("DELETE FROM identities WHERE viewer = ? AND slack_user = ?").run(viewer, user);
+    this.changes.emit("identities", viewer);
   }
 
   // ── turns ───────────────────────────────────────────────────────────────

@@ -8,9 +8,9 @@ import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
-import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type SessionSummary } from "../api.ts";
+import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type SessionSummary, type ThreadView } from "../api.ts";
 import { History } from "../History.tsx";
-import { ChatPanel, Composer } from "../Chat.tsx";
+import { ChatPanel } from "../Chat.tsx";
 import {
   BADGE_LABEL, PROCESS_LABEL, RUNTIME_LABEL, absoluteTime, agentLabel, compactNumber, sessionStatus, slackThreadUrl, slackWorkspaceUrl, statusBadge,
 } from "../format.ts";
@@ -18,50 +18,27 @@ import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
 import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, RuntimeLogo, SlackLogo, Time, Tip } from "../ui.tsx";
 
+/**
+ * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
+ * agents' execution histories beside them. The address is the item's: its chat's thread, or its agent's session key
+ * until the first message makes the chat, and the page moves there.
+ */
 export function ChatPage() {
-  const { thread } = useParams();
+  const { chat } = useParams();
   const station = useStation();
-  const id = Number(thread);
   // There is always a chat in view: the one last open, or a new one. In ember cloud the workspace decides which.
-  if (!thread || !Number.isInteger(id)) return <Navigate to={station.base ? station.base.replace(/\/s\/[^/]+$/, "") : lastChat("local", "/new")} replace />;
-  return <ChatScreen key={id} thread={id} />;
+  if (!chat) return <Navigate to={station.base ? station.base.replace(/\/s\/[^/]+$/, "") : lastChat("local", "/new")} replace />;
+  const thread = Number(chat);
+  return Number.isInteger(thread) ? <ChatScreen key={chat} of={{ thread }} /> : <Unchatted key={chat} session={chat} />;
 }
 
-/**
- * An agent with no internal chat yet: an empty chat and its composer. The
- * chat is made, bound to the agent's session, when the first message is sent,
- * and the page moves to it.
- */
-export function AgentChatPage() {
-  const { key = "" } = useParams();
+/** An agent's item before it has a chat; once one is made for it (elsewhere too), the page moves to it. */
+function Unchatted({ session }: { session: string }) {
   const station = useStation();
-  const navigate = useNavigate();
-  const call = useStationCall(station.address);
   const chats = useChats(scopeOf(station.address), false);
-  const item = chats.value?.days.flatMap((d) => d.items).find((i) => i.station === station.address && i.agents.some((a) => a.key === key));
-  if (item?.thread) return <Navigate to={`${station.base}/chats/${item.thread.id}`} replace />;
-  if (!chats.value) return <Loading label="正在读取…" />;
-  if (!item) return <Empty><p>找不到这个 agent。</p></Empty>;
-  const agent = item.agents[0]!;
-  return (
-    <div className="session-page" data-panel={false}>
-      <div className="session-main">
-        <header className="page-bar">
-          <MobileBack to={`${station.base}/chats`} label="会话" />
-          <div className="page-bar-title">
-            <h1>{item.title}</h1>
-            <AgentMark model={agent.model} runtime={agent.runtime} badge={null} size={20} />
-          </div>
-        </header>
-        <section className="chat" aria-label="对话">
-          <div className="chat-list"><div className="chat-empty"><p>在这里发消息，agent 会在这里回复。</p></div></div>
-          <Composer thread={null} sessionKey={key}
-            ensureChat={async () => ({ key, thread: (await call.request<{ id: number }>("POST", "/threads", { session: key })).id })}
-            onSent={(thread) => navigate(`${station.base}/chats/${thread}`, { replace: true })} />
-        </section>
-      </div>
-    </div>
-  );
+  const made = chats.value?.days.flatMap((d) => d.items).find((i) => i.station === station.address && i.thread !== null && i.agents.some((a) => a.key === session));
+  if (made) return <Navigate to={`${station.base}/chats/${made.thread}`} replace />;
+  return <ChatScreen of={{ session }} />;
 }
 
 /** Reports how long the chat took to show its messages, once, when they first do. */
@@ -71,7 +48,7 @@ function useChatOpened(chat: ChatView | undefined): void {
   useEffect(() => {
     if (!chat || reported.current) return;
     reported.current = true;
-    const surface = chat.thread.surface === "ember" ? "ember" : "slack";
+    const surface = chat.thread === null || chat.thread.surface === "ember" ? "ember" : "slack";
     // The frame after the commit: when the messages are on screen.
     requestAnimationFrame(() => track("chat_opened", { surface, open: opening.cold ? "cold" : "warm", ms: Math.round(performance.now() - opening.at) }));
   }, [chat, opening]);
@@ -80,10 +57,12 @@ function useChatOpened(chat: ChatView | undefined): void {
 /** Whether the side panel was open, remembered across chats. */
 const PANEL = "ember.sidePanel";
 
-function ChatScreen({ thread }: { thread: number }) {
+function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const station = useStation();
   const link = useLink();
-  const chatView = useChat(station.address, thread);
+  const navigate = useNavigate();
+  const call = useStationCall(station.address);
+  const chatView = useChat(station.address, of);
   useChatOpened(chatView.value);
   const agents = chatView.value?.agents ?? [];
   const lives = useLives(station.address, agents.map((a) => a.session.key));
@@ -114,7 +93,13 @@ function ChatScreen({ thread }: { thread: number }) {
   }
   const chat = chatView.value;
   const panel = open.length > 0;
-  const slackUrl = chat.thread.surface === "ember" ? null : slackThreadUrl(slackWorkspaceUrl(slackConnect(chat)), chat.thread.channel, chat.thread.threadTs);
+  const slackUrl = !chat.thread || chat.thread.surface === "ember" ? null : slackThreadUrl(slackWorkspaceUrl(slackConnect(chat)), chat.thread.channel, chat.thread.threadTs);
+  // Before its agent has a chat, the first message makes one, bound to the agent, and the page moves to it.
+  const session = "session" in of ? of.session : null;
+  const firstMessage = session === null ? {} : {
+    ensureChat: async () => ({ key: session, thread: (await call.request<{ id: number }>("POST", "/threads", { session })).id }),
+    onSent: (thread: number) => navigate(`${station.base}/chats/${thread}`, { replace: true }),
+  };
   return (
     <div className="session-page" data-panel={panel}>
       <div className="session-main">
@@ -137,7 +122,7 @@ function ChatScreen({ thread }: { thread: number }) {
           })}
         </div>
         <div className="page-bar-actions">
-          <ChatInfo chat={chat} />
+          {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
           {slackUrl && (
             <Tip label="在 Slack 中打开">
               <a className="icon-btn" href={slackUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
@@ -147,7 +132,7 @@ function ChatScreen({ thread }: { thread: number }) {
         </div>
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
-      <ChatPanel chat={chat} lives={lives} onOpenHistory={toggleHistory} />
+      <ChatPanel chat={chat} lives={lives} onOpenHistory={toggleHistory} {...firstMessage} />
       </div>
         {panel && shown && (
           <Tabs.Root className="side-panel" value={shown} onValueChange={setActive}>
@@ -194,9 +179,8 @@ function slackConnect(chat: ChatView) {
 }
 
 /** The chat itself: where it came from, who started it and takes part, its agents. Opens from the title bar. */
-function ChatInfo({ chat }: { chat: ChatView }) {
+function ChatInfo({ chat, thread }: { chat: ChatView; thread: ThreadView }) {
   const link = useLink();
-  const { thread } = chat;
   const connect = slackConnect(chat);
   const row = (label: string, value: ReactNode) => <div className="detail-row"><dt>{label}</dt><dd>{value}</dd></div>;
   const where = thread.surface === "ember" ? null : thread.channel.startsWith("D") ? "私信" : `#${thread.channelName ?? thread.channel}`;

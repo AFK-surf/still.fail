@@ -969,7 +969,9 @@ mod tests {
         let chats: ClientMessage = serde_json::from_value(json!({"id": 4, "subscribe": {"topic": "chats", "scope": "local"}})).unwrap();
         assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "local".into(), mine: false } });
         let chat: ClientMessage = serde_json::from_value(json!({"id": 5, "subscribe": {"topic": "chat", "station": "w/s", "thread": 7}})).unwrap();
-        assert_eq!(chat, ClientMessage::Subscribe { id: 5, subscribe: Topic::Chat { station: "w/s".into(), thread: 7 } });
+        assert_eq!(chat, ClientMessage::Subscribe { id: 5, subscribe: Topic::Chat { station: "w/s".into(), thread: Some(7), session: None } });
+        let agent: ClientMessage = serde_json::from_value(json!({"id": 6, "subscribe": {"topic": "chat", "station": "w/s", "session": "ds:C1:1.0"}})).unwrap();
+        assert_eq!(agent, ClientMessage::Subscribe { id: 6, subscribe: Topic::Chat { station: "w/s".into(), thread: None, session: Some("ds:C1:1.0".into()) } });
         assert_eq!(subscribe, ClientMessage::Subscribe { id: 8, subscribe: Topic::Session { station: "ws1/st1".into(), key: "k".into() } });
         let accounts: ClientMessage = serde_json::from_value(json!({"id": 2, "subscribe": {"topic": "accounts"}})).unwrap();
         assert_eq!(accounts, ClientMessage::Subscribe { id: 2, subscribe: Topic::Accounts });

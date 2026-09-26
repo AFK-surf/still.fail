@@ -1,11 +1,12 @@
 //! Stations' admin API, over a mesh link (or plain HTTP for `local`), and the
-//! station topics: overview, sessions, threads, session, thread, live, host, link.
+//! station topics: overview, sessions, threads, chat rows, session, thread, live, host, link.
 //!
 //! While any topic of a station is live, its `/admin/api/events` stream is held
 //! open and is all that keeps the topics current: each topic is read once when
 //! it starts, and again only after the stream was down. Events carry what
 //! changed (a session's summary, a thread's changed messages, a read position,
-//! the overview, host samples), which goes into the topics as it is; what an
+//! a row of the viewer's sidebar, the overview, host samples), which goes into
+//! the topics as it is; what an
 //! event does not carry (a thread's unread count) is read for that one thing.
 //! Host samples are asked for (`?host=1`) only while a `host` topic is live. A
 //! `live` topic holds `/sessions/:key/live?from=<entries known>` open: the
@@ -551,6 +552,7 @@ impl Stations {
                     touched.push(Topic::Session { station: name.clone(), key: key.clone() });
                 }
                 touched.push(Topic::Sessions { station: name.clone() });
+                touched.push(Topic::ChatRows { station: name.clone() });
                 // A new chat answers its thread.
                 if let Some(thread) = answer.get("thread").filter(|t| t.is_object()) {
                     self.put_thread(&name, thread);
@@ -559,6 +561,8 @@ impl Stations {
             Some("threads") => {
                 if answer.get("surface").is_some() {
                     self.put_thread(&name, answer);
+                    // A new chat, or an agent more in one: the sidebar's rows change.
+                    touched.push(Topic::ChatRows { station: name.clone() });
                 } else if let (Some(thread), Some(seq)) = (answer.get("thread").and_then(Value::as_u64), answer.get("seq").and_then(Value::as_u64)) {
                     self.put_read(&name, thread, seq);
                 }
@@ -571,6 +575,11 @@ impl Stations {
                 touched.push(Topic::Sessions { station: name.clone() });
             }
             Some("profiles") | Some("slack") => touched.push(Topic::Overview { station: name.clone() }),
+            // Who the viewer is on Slack: it answers the overview, and changes which rows are theirs.
+            Some("me") => {
+                touched.push(Topic::Overview { station: name.clone() });
+                touched.push(Topic::ChatRows { station: name.clone() });
+            }
             _ => {}
         }
         // Profile and connect edits answer the overview as it is now.
@@ -637,6 +646,7 @@ impl Stations {
             Topic::Overview { .. } => "/overview".to_string(),
             Topic::Sessions { .. } => "/sessions".to_string(),
             Topic::Threads { .. } => "/threads".to_string(),
+            Topic::ChatRows { .. } => "/chats".to_string(),
             Topic::Session { key, .. } => format!("/sessions/{}", encode(key)),
             // A thread already read only asks for what changed since.
             Topic::Thread { thread, .. } => match self.sink.get(topic).and_then(|v| v.get("rev")?.as_u64()) {
@@ -664,7 +674,7 @@ impl Stations {
     /// reconnect), which ends when they are all read.
     fn refetch_all(&self, station: &str, span: Span) {
         let topics = self.live_topics(station, |t| {
-            matches!(t, Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::Session { .. } | Topic::Thread { .. })
+            matches!(t, Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::Thread { .. })
         });
         let this = self.rc();
         self.spawn_in(Some(span.context()), async move {
@@ -809,6 +819,15 @@ impl Stations {
                 let (Some(thread), Some(seq)) = (data.get("thread").and_then(Value::as_u64), data.get("seq").and_then(Value::as_u64)) else { return };
                 self.put_read(station, thread, seq);
             }
+            "chat" => self.put_row(station, &data),
+            "chat-removed" => {
+                let Some(id) = data.get("id").and_then(Value::as_str) else { return };
+                self.sink.update(&Topic::ChatRows { station: station.into() }, &mut |rows| {
+                    if let Some(rows) = rows.as_array_mut() {
+                        rows.retain(|r| r.get("id").and_then(Value::as_str) != Some(id));
+                    }
+                });
+            }
             "overview" => self.set_live(Topic::Overview { station: station.into() }, data),
             "host" => self.set_live(Topic::Host { station: station.into() }, data),
             _ => {}
@@ -894,6 +913,18 @@ impl Stations {
         });
     }
 
+    /// A row of the viewer's sidebar, new or changed, into the station's rows.
+    fn put_row(&self, station: &str, row: &Value) {
+        let Some(id) = row.get("id").and_then(Value::as_str) else { return };
+        self.sink.update(&Topic::ChatRows { station: station.into() }, &mut |rows| {
+            let Some(rows) = rows.as_array_mut() else { return };
+            match rows.iter().position(|r| r.get("id").and_then(Value::as_str) == Some(id)) {
+                Some(i) => rows[i] = row.clone(),
+                None => rows.push(row.clone()),
+            }
+        });
+    }
+
     /// A thread's summary into every live topic that lists it: `threads`, and the `session` topics of the
     /// sessions taking part (a session that left it loses it).
     fn put_thread(&self, station: &str, view: &Value) {
@@ -952,6 +983,14 @@ impl Stations {
             }
         };
         self.sink.update(&Topic::Threads { station: station.into() }, &mut |list| apply(list));
+        // Its row is read once the read covers its last message; the station's `chat` event says the same.
+        self.sink.update(&Topic::ChatRows { station: station.into() }, &mut |rows| {
+            for row in rows.as_array_mut().into_iter().flatten() {
+                if row.get("thread").and_then(Value::as_u64) == Some(thread) && row.get("last").and_then(seq_of).is_none_or(|last| seq >= last) {
+                    row["unread"] = json!(false);
+                }
+            }
+        });
         for topic in self.live_topics(station, |t| matches!(t, Topic::Session { .. })) {
             self.sink.update(&topic, &mut |detail| {
                 if let Some(threads) = detail.get_mut("threads") {
@@ -1239,7 +1278,7 @@ impl Source for Stations {
                     }
                 });
             }
-            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::Session { .. } | Topic::Thread { .. } => self.refetch(topic),
+            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::Thread { .. } => self.refetch(topic),
             // Samples come on the events stream, which asks for them now.
             Topic::Host { .. } => {}
             Topic::Live { key, .. } => {
@@ -1703,6 +1742,48 @@ mod tests {
             host.settle().await;
             wait(EVENTS_COALESCE_MS).await;
             assert_eq!(sink.get(&threads()).unwrap().as_array().unwrap().len(), 1);
+        });
+    }
+
+    #[test]
+    fn chat_rows_come_from_the_station_and_follow_its_events() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            let rows = Topic::ChatRows { station: ST.into() };
+            let row = |id: &str, thread: Option<u64>, last: u64, unread: bool| json!({"id": id, "thread": thread, "title": id, "last": if last > 0 { message(last, "…") } else { Value::Null }, "unread": unread});
+            wire.answer("GET /admin/api/chats", 200, json!([row("7", Some(7), 12, true), row("k", None, 0, false)]));
+            stations.start(&rows);
+            host.settle().await;
+            assert_eq!(wire.open(), vec!["/admin/api/events"]);
+            let ids = |sink: &FakeSink| sink.get(&rows).unwrap().as_array().unwrap().iter().map(|r| r["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+            assert_eq!(ids(&sink), vec!["7", "k"]);
+            let reads = wire.calls.borrow().len();
+            // Rows change, come and go as the station says, without a request.
+            let mut renamed = row("7", Some(7), 13, true);
+            renamed["title"] = json!("排查");
+            wire.event("chat", renamed);
+            wire.event("chat", row("8", Some(8), 1, false));
+            wire.event("chat-removed", json!({"id": "k"}));
+            host.settle().await;
+            assert_eq!(ids(&sink), vec!["7", "8"]);
+            assert_eq!(sink.get(&rows).unwrap()[0]["title"], "排查");
+            assert_eq!(wire.calls.borrow().len(), reads);
+            // Read short of the last message: still unread; up to it: read, at once.
+            wire.event("read", json!({"viewer": "a@x.com", "thread": 7, "seq": 12}));
+            host.settle().await;
+            assert_eq!(sink.get(&rows).unwrap()[0]["unread"], true);
+            stations.read(&remote(), 7, 13).await.unwrap();
+            assert_eq!(sink.get(&rows).unwrap()[0]["unread"], false);
+            // A new chat is written: the rows are current when the write answers.
+            wire.answer("GET /admin/api/chats", 200, json!([row("9", Some(9), 0, false)]));
+            wire.answer("POST /admin/api/threads", 200, thread_view(9, &["k"], 0, 0, 0));
+            stations.request(&remote(), "POST", "/threads", Some(json!({"session": "k"}))).await.unwrap();
+            assert_eq!(ids(&sink), vec!["9"]);
+            // So is saying who one is on Slack.
+            wire.answer("PUT /admin/api/me/slack/U7", 200, json!({"viewer": {}, "connects": [], "profiles": [], "slackUsers": ["U7"]}));
+            let before = wire.count("GET", "/admin/api/chats");
+            stations.request(&remote(), "PUT", "/me/slack/U7", None).await.unwrap();
+            assert_eq!(wire.count("GET", "/admin/api/chats"), before + 1);
         });
     }
 

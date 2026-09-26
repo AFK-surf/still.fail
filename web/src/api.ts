@@ -8,7 +8,7 @@ import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
 import type {
-  Attachment, ConnectInput, ConnectView, Creator, HostInfo, LivePhase, LiveStep, LoginJob, MessageView, Overview, ProfileCheck, ProfileInput, ProfileQuota, ProfileView, Quote, RuntimeKind,
+  Attachment, ChatRow, ConnectInput, ConnectView, Creator, HostInfo, LivePhase, LiveStep, LoginJob, MessageView, Overview, ProfileCheck, ProfileInput, ProfileQuota, ProfileView, Quote, RuntimeKind,
   SessionSummary, ThreadView, TimelineEntry, TranscriptUsage, TurnRecord,
 } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
@@ -29,27 +29,8 @@ export type SlackAppView =
 /** A station's mesh link as the core holds it. */
 export interface LinkView { state: "connecting" | "online" | "offline" | "error"; message?: string | null }
 
-/** An agent of a chat as the sidebar has it: what it runs on and where its work stands (what `sessionStatus` reads). */
-export type ChatAgent = Pick<SessionSummary, "key" | "runtime" | "model" | "effort" | "process" | "pending" | "lastTurn">;
-/**
- * A row in the sidebar: an internal chat (ember's own, with its agents and people), or — `thread` null — an agent
- * that has none yet (`session`), whose chat is made with the first message. `connect` is where its agent came from.
- */
-export interface ChatItem {
-  station: string; stationName: string;
-  thread: Pick<ThreadView, "id" | "surface" | "channel" | "channelName" | "threadTs" | "title" | "createdAt" | "creator"> | null;
-  session: string | null;
-  /** The Slack thread its agent came from, if it did. */
-  origin: { channel: string; channelName: string | null; threadTs: string } | null;
-  title: string;
-  agents: ChatAgent[];
-  people: Creator[];
-  /** Its text cut to 200 characters. */
-  last: Pick<MessageView, "seq" | "authorKind" | "author" | "authorName" | "text" | "createdAt" | "deletedAt"> | null;
-  unread: boolean;
-  lastActiveAt: number;
-  connect: ConnectView | null;
-}
+/** A row of the sidebar as its station puts it together for the viewer (`ChatRow`), and the station it is on. */
+export type ChatItem = ChatRow & { station: string; stationName: string };
 export interface ChatDay { daysAgo: number; at: number; items: ChatItem[] }
 export interface ChatsView {
   me: Me;
@@ -81,13 +62,14 @@ export interface OutboxMessage {
 export interface ChatAgentView { session: SessionSummary; connect: ConnectView | null; profile: ProfileView | null; turns: TurnRecord[]; threads: ThreadView[] }
 
 /**
- * One chat: its thread (with the viewer's read position), what it is called,
- * its people and agents, the messages loaded so far (`more`: older ones
- * exist), and what was sent from here that it does not show yet.
+ * An item's page: its chat's thread (with the viewer's read position), what it
+ * is called, its people and agents, the messages loaded so far (`more`: older
+ * ones exist), and what was sent from here that it does not show yet. Before
+ * its agent has a chat, `thread` is null and there is only the agent.
  */
 export interface ChatView {
   me: Me;
-  thread: ThreadView;
+  thread: ThreadView | null;
   title: string;
   people: Creator[];
   agents: ChatAgentView[];
@@ -116,8 +98,9 @@ export function useConnects(scope: string, mine = false): TopicState<ConnectsVie
   return useTopic<ConnectsView>({ topic: "connects", scope, mine });
 }
 
-export function useChat(station: string, thread: number): TopicState<ChatView> {
-  return useTopic<ChatView>({ topic: "chat", station, thread });
+/** An item's page: its chat (`thread`), or its agent before it has one (`session`). */
+export function useChat(station: string, of: { thread: number } | { session: string }): TopicState<ChatView> {
+  return useTopic<ChatView>({ topic: "chat", station, ...of });
 }
 
 export function useLive(station: string, key: string): TopicState<LiveView> {
@@ -241,6 +224,8 @@ export function stationApi(t: StationCall) {
       request<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>("PUT", `/connects/${at(connect)}/slack-app`, input),
     putConfigToken: (refreshToken: string) => request<{ configured: boolean; teamId: string | null }>("PUT", "/slack/config-token", { refreshToken }),
     deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${at(id)}`),
+    /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */
+    slackIdentity: (user: string, bound: boolean) => request<Overview>(bound ? "PUT" : "DELETE", `/me/slack/${at(user)}`),
     createAppUrl: (name: string) => request<{ url: string }>("GET", `/slack/create-app-url?name=${encodeURIComponent(name)}`),
   };
 }
