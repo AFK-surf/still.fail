@@ -54,8 +54,29 @@ function useChatOpened(chat: ChatView | undefined): void {
   }, [chat, opening]);
 }
 
-/** Whether the side panel was open, remembered across chats. */
-const PANEL = "ember.sidePanel";
+/** Which history tabs each chat has open, and which one is in front: each chat keeps its own (the latest 200 chats). */
+const TABS = "ember.chatTabs";
+type Kept = { tabs: string[]; active: string | null };
+function keptTabs(chat: string): Kept | undefined {
+  try {
+    return (JSON.parse(localStorage.getItem(TABS) ?? "{}") as Record<string, Kept>)[chat];
+  } catch {
+    return undefined;
+  }
+}
+function keepTabs(chat: string, kept: Kept): void {
+  let all: Record<string, Kept> = {};
+  try {
+    all = JSON.parse(localStorage.getItem(TABS) ?? "{}") as Record<string, Kept>;
+  } catch {
+    // start over
+  }
+  delete all[chat];
+  all[chat] = kept;
+  const keys = Object.keys(all);
+  for (const key of keys.slice(0, Math.max(0, keys.length - 200))) delete all[key];
+  localStorage.setItem(TABS, JSON.stringify(all));
+}
 
 function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const station = useStation();
@@ -67,24 +88,27 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const agents = chatView.value?.agents ?? [];
   const lives = useLives(station.address, agents.map((a) => a.session.key));
   // One history tab per agent, by session key; each can be closed, and with none open the panel goes away.
-  // On narrow screens nothing opens by itself, since the panel would cover the chat.
-  const [tabs, setTabs] = useState<string[] | null>(() => (window.matchMedia("(min-width: 1101px)").matches && localStorage.getItem(PANEL) !== "0" ? null : []));
-  const [active, setActive] = useState<string | null>(null);
+  // Each chat keeps its own tabs. A chat not opened before shows its first agent's history, except on narrow
+  // screens, where the panel would cover the chat.
+  const chatKey = `${station.address}:${"thread" in of ? of.thread : of.session}`;
+  const [kept] = useState(() => keptTabs(chatKey));
+  const [tabs, setTabs] = useState<string[] | null>(() => kept?.tabs ?? (window.matchMedia("(min-width: 1101px)").matches ? null : []));
+  const [active, setActiveState] = useState<string | null>(kept?.active ?? null);
   // Until chosen, the panel holds the first agent's history.
   const open = (tabs ?? agents.slice(0, 1).map((a) => a.session.key)).filter((key) => agents.some((a) => a.session.key === key));
   const shown = active && open.includes(active) ? active : open[0] ?? null;
-  const saveTabs = (next: string[]) => {
+  // Tabs and the one in front change together, and are kept for this chat in one write.
+  const commit = (next: string[], front: string | null) => {
     setTabs(next);
-    localStorage.setItem(PANEL, next.length ? "1" : "0");
+    setActiveState(front);
+    keepTabs(chatKey, { tabs: next, active: front });
   };
-  const openTab = (key: string) => {
-    if (!open.includes(key)) saveTabs([...open, key]);
-    setActive(key);
-  };
+  const saveTabs = (next: string[]) => commit(next, active);
+  const setActive = (key: string | null) => commit(open, key);
+  const openTab = (key: string) => commit(open.includes(key) ? open : [...open, key], key);
   const closeTab = (key: string) => {
     const next = open.filter((t) => t !== key);
-    saveTabs(next);
-    if (shown === key && next.length) setActive(next.at(-1)!);
+    commit(next, shown === key ? next.at(-1) ?? null : active);
   };
   const toggleHistory = (key: string) => (open.includes(key) && shown === key ? closeTab(key) : openTab(key));
   if (!chatView.value) {
