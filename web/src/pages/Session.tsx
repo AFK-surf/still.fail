@@ -188,7 +188,7 @@ function SessionDetails({ detail, connect, base }: { detail: SessionDetail; conn
           {row("运行时", <span className="detail-inline"><RuntimeLogo runtime={session.runtime} size={13} />{RUNTIME_LABEL[session.runtime]}</span>)}
           {row("Profile", <Link className="detail-link" to={link(`/settings/accounts/${session.profile}`)}>{profile?.name ?? session.profile}</Link>)}
           {usage && row("调用", `${usage.modelCalls} 次`)}
-          {usage && row("输入", `${compactNumber(usage.inputTokens)}（缓存 ${compactNumber(usage.cachedTokens)}${hitRate === null ? "" : ` · ${hitRate}%`}）`)}
+          {usage && row("输入", `${compactNumber(usage.inputTokens)}${hitRate === null ? "" : ` · 缓存 ${hitRate}%`}`)}
           {usage && row("输出", compactNumber(usage.outputTokens))}
         </dl>
         <div className="resource-rings">

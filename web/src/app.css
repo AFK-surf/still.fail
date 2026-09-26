@@ -818,3 +818,5 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .msg-avatar-agent img { width: 14px; height: 14px; }
 .time-toggle { cursor: pointer; }
 .time-toggle:hover { text-decoration: underline dotted; text-underline-offset: 2px; }
+.msg-files { align-items: flex-start; }
+.history-details .details { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
