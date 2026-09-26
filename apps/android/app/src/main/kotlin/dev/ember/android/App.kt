@@ -3,6 +3,10 @@
 // bar), or a sheet from the bottom.
 package dev.ember.android
 
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.core.FastOutSlowInEasing
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.HazeState
 import android.content.SharedPreferences
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -119,6 +123,8 @@ class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cl
 
     /** Where each chat was left: the message at the top of the list and how far below the top it sat. */
     val places = HashMap<String, Pair<String, Int>>()
+    /** The pages, as what a sheet over them frosts. */
+    val haze = HazeState()
 }
 
 val LocalApp = staticCompositionLocalOf<AppState> { error("no app") }
@@ -131,7 +137,7 @@ fun EmberApp(app: AppState) {
     val workspaces by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     Box(Modifier.fillMaxSize().background(C.bg)) {
         val signedIn = accounts.value
-        when {
+        Box(Modifier.fillMaxSize().hazeSource(app.haze).background(C.bg)) { when {
             signedIn == null -> Loading(accounts.error?.message ?: "正在启动…")
             signedIn.isEmpty() -> SignInScreen()
             else -> {
@@ -147,7 +153,7 @@ fun EmberApp(app: AppState) {
                     Pages(app, current)
                 }
             }
-        }
+        } }
         // Pages scroll under the status bar; it keeps the paper behind its icons (the list and a chat have frosted bars
         // there instead, which show what runs under them).
         val top = app.stack.lastOrNull()
@@ -184,15 +190,17 @@ private fun Pages(app: AppState, current: dev.ember.android.data.WorkspaceEntry)
     }
 }
 
-/** Pages come in from the right and push the one under a little aside; a new chat rises from the bottom. */
+/**
+ * Pages move side by side, as the list's two panes do when switched: the new one pushes in whole from the right and
+ * the old goes out whole to the left (and back the other way), nothing fading. A new chat rises from the bottom.
+ */
 private fun transition(from: Screen, to: Screen, forward: Boolean): ContentTransform {
     val time = 380
+    val slide = tween<IntOffset>(300, easing = FastOutSlowInEasing)
     return when {
         forward && to == Screen.NewChat -> slideInVertically(tween(time, easing = Ease)) { it } togetherWith fadeOut(tween(time), 0.99f)
         !forward && from == Screen.NewChat -> fadeIn(tween(1), 0.99f) togetherWith slideOutVertically(tween(time, easing = Ease)) { it }
-        forward -> slideInHorizontally(tween(time, easing = Ease)) { it } togetherWith
-            (slideOutHorizontally(tween(time, easing = Ease)) { -(it * 0.28f).toInt() } + fadeOut(tween(time), 0.6f))
-        else -> (slideInHorizontally(tween(time, easing = Ease)) { -(it * 0.28f).toInt() } + fadeIn(tween(time), 0.6f)) togetherWith
-            slideOutHorizontally(tween(time, easing = Ease)) { it }
+        forward -> slideInHorizontally(slide) { it } togetherWith slideOutHorizontally(slide) { -it }
+        else -> slideInHorizontally(slide) { -it } togetherWith slideOutHorizontally(slide) { it }
     }.apply { targetContentZIndex = if (forward) 1f else -1f }
 }

@@ -3,6 +3,8 @@
 // long-press menu, and a short note.
 package dev.ember.android.ui
 
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeTint
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -107,6 +109,8 @@ fun SheetHost(app: AppState) {
             }
         }
         val min = with(density) { 120.dp.toPx() }
+        val paper = C.bg
+        val glass = C.surface.copy(alpha = 0.8f)
         // One per sheet: a new one would restart the grabber's gesture halfway through a drag.
         val drag = remember(current, total) { SheetDrag(
             draggable = current.draggable,
@@ -126,7 +130,9 @@ fun SheetHost(app: AppState) {
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(with(density) { height.value.toDp() })
                 .offset { IntOffset(0, offset.value.toInt()) }
                 .shadow(24.dp, RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
-                .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)).background(C.surface)
+                .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
+                // Frosted glass over the page, as the bars and capsules are.
+                .hazeEffect(app.haze) { backgroundColor = paper; tints = listOf(HazeTint(glass)); blurRadius = 28.dp; noiseFactor = 0f }
                 .pointerInput(Unit) { detectTapGestures { } }
                 .windowInsetsPadding(WindowInsets.navigationBars),
         ) {
