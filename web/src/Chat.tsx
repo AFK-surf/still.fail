@@ -125,7 +125,8 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
             if (!pane) return;
             // A reader's move: once at the bottom the pane follows new messages again.
             pane.dispatchEvent(new WheelEvent("wheel"));
-            pane.scrollTo({ top: pane.scrollHeight, behavior: "smooth" });
+            // At once: a smooth scroll outlasts what scroll.ts takes for the reader's move, and would be pulled back.
+            pane.scrollTop = pane.scrollHeight;
           }}>
           <ArrowDown size={16} strokeWidth={2} />
         </button>
