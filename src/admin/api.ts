@@ -390,6 +390,10 @@ export class AdminApi {
         return send(res, 200, await this.#thread(threadId, viewer));
       }
     }
+    // A new Slack connect from its tokens: named as its bot is in Slack, with an id made from that name.
+    if (method === "POST" && path === "/connects") return send(res, 200, await this.#newSlackConnect(await body(req), viewer));
+    // A Slack app made with the configuration token before there is a connect for it (the connect comes with its tokens).
+    if (method === "POST" && path === "/slack/apps") return send(res, 200, await this.#makeSlackApp(await body(req)));
     if (resource === "connects" && id && !action && method === "PUT") return send(res, 200, this.#putConnect(id, await body(req), viewer));
     if (resource === "connects" && id && !action && method === "DELETE") return send(res, 200, this.#deleteConnect(id, viewer));
     if (resource === "connects" && id && action === "session" && method === "POST") {
@@ -579,6 +583,38 @@ export class AdminApi {
     }
     log.info("slack app updated from the admin page", { connect: connectId, appId, permissionsUpdated, by: viewerId(viewer) });
     return { permissionsUpdated, iconError, links: slackAppLinks(appId) };
+  }
+
+  async #makeSlackApp(input: Record<string, any>) {
+    if (!this.#deps.settings.config.slackConfigToken) throw new HttpError(400, "还没有设置 Slack 的 App 配置 token");
+    const name = typeof input.name === "string" && input.name.trim() ? input.name.trim() : "ember";
+    try {
+      const { appId } = await this.#apps.createApp(slackManifest(name));
+      return { appId, links: slackAppLinks(appId) };
+    } catch (error) {
+      throw new HttpError(400, `Slack 没能创建 app：${slackError(error)}`);
+    }
+  }
+
+  async #newSlackConnect(input: Record<string, any>, viewer: Viewer) {
+    const appToken = String(input.slack?.appToken ?? "").trim();
+    const botToken = String(input.slack?.botToken ?? "").trim();
+    const { identity, errors } = await verifySlackTokens({ appToken, botToken });
+    if (!identity || errors.length) throw new HttpError(400, errors.join("；") || "token 不对");
+    const name = identity.botName || "ember";
+    const taken = new Set(this.#deps.settings.config.connects.map((c) => c.id));
+    const base = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "slack";
+    let id = base;
+    for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+    const appId = typeof input.slack?.appId === "string" && input.slack.appId ? input.slack.appId : null;
+    const overview = this.#putConnect(id, { ...input, name, kind: "slack", slack: { appToken, botToken } }, viewer);
+    if (appId) {
+      this.#save(viewer, `slack app of ${id}`, (raw) => ({
+        ...raw,
+        connects: (raw.connects ?? []).map((c) => (c.id === id ? { ...c, slack: { ...c.slack, appId } } : c)),
+      }));
+    }
+    return { id, overview: appId ? this.#overview(viewer) : overview };
   }
 
   /** Creates the connect's Slack app with the configuration token, so only installing it is left to do in Slack. */

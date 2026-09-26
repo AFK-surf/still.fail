@@ -241,8 +241,10 @@ export function stationApi(t: StationCall) {
     slackApp: (connect: string) => request<SlackAppView>("GET", `/connects/${at(connect)}/slack-app`),
     putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }) =>
       request<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>("PUT", `/connects/${at(connect)}/slack-app`, input),
-    /** Makes the connect's Slack app with the workspace's configuration token (ember's manifest, Socket Mode on). */
-    createSlackApp: (connect: string, name: string) => request<{ appId: string; links: SlackAppLinks }>("POST", `/connects/${at(connect)}/slack-app`, { name }),
+    /** Makes a Slack app with the workspace's configuration token (ember's manifest, Socket Mode on), for a connect to come. */
+    makeSlackApp: () => request<{ appId: string; links: SlackAppLinks }>("POST", "/slack/apps", {}),
+    /** A new Slack connect from its tokens: the station names it as its bot is named in Slack. */
+    createConnect: (input: ConnectInput) => request<{ id: string; overview: Overview }>("POST", "/connects", input),
     putConfigToken: (refreshToken: string) => request<{ configured: boolean; teamId: string | null }>("PUT", "/slack/config-token", { refreshToken }),
     deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${at(id)}`),
     /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */

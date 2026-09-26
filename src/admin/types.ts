@@ -281,7 +281,7 @@ export interface ConnectInput {
   mode?: ConnectMode;
   requireMention?: boolean;
   bind?: { runtime?: RuntimeKind; model?: string; effort?: string };
-  slack?: { appToken?: string; botToken?: string };
+  slack?: { appToken?: string; botToken?: string; appId?: string };
   /** Hands the connect to someone else (an email). Owners, admins, the station itself, or the current owner. */
   owner?: { id: string; name?: string };
 }
