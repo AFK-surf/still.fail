@@ -12,10 +12,15 @@ import kotlinx.serialization.json.JsonElement
 @Serializable data class AccountWorkspaces(
     val account: Account,
     val workspaces: List<WorkspaceSummary> = emptyList(),
-    val invitations: List<JsonElement> = emptyList(),
+    /** Invitations waiting for this account's email. */
+    val invitations: List<PendingInvitation> = emptyList(),
     /** Set when this account could not be read. */
     val error: JsonElement? = null,
 )
+
+@Serializable data class PendingInvitation(val id: String, val workspace: String = "", val name: String = "", val role: String = "member", val inviter: String = "")
+
+val ROLE_LABEL = mapOf("owner" to "Owner", "admin" to "管理员", "member" to "成员")
 
 /** A workspace with the account it is reached through. */
 data class WorkspaceEntry(val workspace: WorkspaceSummary, val account: Account)

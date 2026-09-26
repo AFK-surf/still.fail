@@ -169,16 +169,6 @@ fun Ring(percent: Int, label: String, size: Dp = 46.dp) {
 
 // ── controls ───────────────────────────────────────────────────────────
 
-@Composable
-fun Toggle(on: Boolean, onChange: (Boolean) -> Unit) {
-    Box(
-        Modifier.size(46.dp, 28.dp).clip(CircleShape).background(if (on) C.green else C.line).clickable { onChange(!on) }.padding(2.dp),
-        contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
-    ) {
-        Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White))
-    }
-}
-
 /** Whether the person asked for less motion (animations off in the system settings). */
 @Composable
 fun reducedMotion(): Boolean {

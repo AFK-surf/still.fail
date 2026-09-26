@@ -1,13 +1,14 @@
 // You: who is signed in, which accounts and workspaces, how it looks.
 package dev.ember.android.screens
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -39,7 +40,7 @@ import dev.ember.android.ui.LargeTitle
 import dev.ember.android.ui.ListCard
 import dev.ember.android.ui.ListRow
 import dev.ember.android.ui.SectionHeader
-import dev.ember.android.ui.Toggle
+import dev.ember.android.ui.Seg
 import dev.ember.core.CoreException
 import kotlinx.coroutines.launch
 
@@ -77,13 +78,9 @@ fun MeScreen(current: WorkspaceEntry) {
             }
         }
         SectionHeader("外观", start = 24.dp)
-        ListCard {
-            ListRow {
-                Text("深色模式", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                val system = isSystemInDarkTheme()
-                Toggle(app.dark ?: system) { app.useDark(it) }
-            }
-        }
+        val themes = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
+        Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },
+            Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth(), height = 36.dp, fill = true)
         // Signing out is per account, as on the web; with one account it is just 退出登录.
         ListCard {
             val list = accounts.value.orEmpty()

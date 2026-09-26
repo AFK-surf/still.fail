@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val current = app
-            val dark = current?.dark ?: isSystemInDarkTheme()
+            val dark = when (current?.theme) { "light" -> false; "dark" -> true; else -> isSystemInDarkTheme() }
             LaunchedEffect(dark) {
                 val bars = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
                 else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)

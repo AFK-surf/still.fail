@@ -4,6 +4,7 @@
 package dev.ember.android.data
 
 import android.util.Base64
+import dev.ember.core.CoreException
 import dev.ember.core.EmberCore
 import java.net.URLEncoder
 import kotlinx.serialization.builtins.ListSerializer
@@ -112,3 +113,34 @@ object Auth {
         core.call("auth.signOut", buildJsonObject { put("account", account) })
     }
 }
+
+/** ember cloud's account API, called as one of the signed-in accounts (web/src/cloud/api.ts). */
+class Cloud(private val core: EmberCore, private val account: String) {
+    private suspend fun call(method: String, path: String, body: JsonObject? = null): JsonElement =
+        core.call("cloud.request", buildJsonObject {
+            put("account", account); put("method", method); put("path", path)
+            if (body != null) put("body", body)
+        })
+
+    /** `code`: an invite code, for an account not let in yet (ember is invite-only). Answers the new workspace's id. */
+    suspend fun createWorkspace(name: String, code: String): String =
+        call("POST", "/v1/workspaces", buildJsonObject { put("name", name); if (code.isNotEmpty()) put("invite_code", code) }).jsonObject["id"]!!.jsonPrimitive.content
+
+    /** Answers the workspace joined. */
+    suspend fun acceptInvitation(id: String): String = call("POST", "/v1/invitations/${at(id)}/accept").jsonObject["id"]!!.jsonPrimitive.content
+
+    suspend fun declineInvitation(id: String) { call("POST", "/v1/invitations/${at(id)}/decline") }
+}
+
+// ember cloud's invite-code errors in Chinese; the core passes their codes through.
+private val INVITE_ERRORS = mapOf(
+    "invite_code_required" to "ember 目前只对受邀的人开放，需要邀请码才能新建 workspace",
+    "invite_code_invalid" to "这个邀请码不对，检查一下有没有输错",
+    "invite_code_used" to "这个邀请码已经被用过了",
+    "invite_code_expired" to "这个邀请码已经过期了",
+)
+
+/** Whether creating a workspace failed for want of a (good) invite code. */
+fun needsInviteCode(e: CoreException?): Boolean = e != null && e.code in INVITE_ERRORS
+
+fun errorText(e: CoreException): String = INVITE_ERRORS[e.code] ?: e.message

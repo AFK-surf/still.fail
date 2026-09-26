@@ -275,16 +275,18 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     val ctx = Here(station, of, view, agents, rememberPeople(station))
     val thread = view.thread
     val api = app.api(station)
-    // Deleted messages keep their place for the station's cursors; here they are simply gone.
-    val messages = view.messages.filter { it.deletedAt == null }
+    val messages = view.messages
 
-    // What was unread when the chat opened: after the read position, up to the newest message then. It stays put for the visit.
-    val open = remember { Triple(thread?.read ?: 0L, thread?.last?.seq ?: 0L, (thread?.unread ?: 0) > 0) }
-    val (readAt, newestAt, unread) = open
+    // Where the viewer had read up to when the chat opened, and when that was; it stays put for the visit. The line
+    // goes over the first message after it that is not theirs and was said before the chat opened, whether it came
+    // from what the device kept or from the station a moment later.
+    val open = remember { (thread?.read ?: 0L) to System.currentTimeMillis() }
+    val (readAt, openedAt) = open
+    val unread = { m: MessageView -> m.seq > readAt && m.createdAt <= openedAt && !ctx.mine(m) }
     val first = view.messages.firstOrNull()?.seq
     // Those not loaded yet may hold it: the pages before are loaded first.
-    val above = unread && view.more && first != null && first > readAt
-    val lineAt = if (unread && !above) messages.firstOrNull { it.seq > readAt && it.seq <= newestAt && !ctx.mine(it) }?.seq else null
+    val above = view.more && first != null && first > readAt + 1 && messages.any(unread)
+    val lineAt = if (above) null else messages.firstOrNull(unread)?.seq
     LaunchedEffect(above, first) { if (above && thread != null) try { api.older(thread.id) } catch (_: CoreException) {} }
 
     // Messages the agents have not taken yet are the last people wrote; after a second, yours say they wait.
@@ -345,6 +347,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     val density = LocalDensity.current
     val placeKey = "$station:${thread?.id ?: agents.firstOrNull()?.key ?: ""}"
     // Put in place once: back where the chat was left, else at the unread line, else at the newest.
+    val lineShown = remember { mutableStateOf(false) }
     LaunchedEffect(above, messages.isNotEmpty()) {
         if (follow.placed || above) return@LaunchedEffect
         val saved = app.places[placeKey]
@@ -355,7 +358,18 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
             line != null -> list.scrollToItem(line, -with(density) { 12.dp.roundToPx() })
             else -> follow.toEnd()
         }
+        // Coming back goes to where the chat was left, not to the line.
+        lineShown.value = back != null || line != null
         follow.placed = true
+        follow.on = !list.canScrollForward
+    }
+    // Something unread that shows only after opening (from the station, after what was kept): the chat jumps to it once.
+    val lineIndex = rows.indexOfFirst { it is Entry.Line }
+    LaunchedEffect(lineIndex, follow.placed) {
+        if (!follow.placed || lineShown.value || lineIndex < 0) return@LaunchedEffect
+        lineShown.value = true
+        follow.anchor = null
+        list.scrollToItem(lineIndex, -with(density) { 12.dp.roundToPx() })
         follow.on = !list.canScrollForward
     }
     // A message arriving at the end while it is followed is kept in view from its top (the activity never is: it folds away).
@@ -983,17 +997,19 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ThreadView)
                 Detail("发起", thread.creator?.let { c -> if (view?.me?.isMe(c) == true) "你" else c.name } ?: "未记录")
                 Detail("参与", "${view?.people?.size ?: 0} 人") { view?.people?.let { if (it.isNotEmpty()) PeopleStack(it.take(8), 16.dp, C.surface2) } }
                 Detail("创建", relativeTime(thread.createdAt))
-                (view?.thread ?: thread).last?.let { Detail("最近消息", relativeTime(it.createdAt)) }
+                (view?.thread ?: thread).lastMessage?.let { Detail("最近消息", relativeTime(it.createdAt)) }
             }
             if (view != null && view.agents.isNotEmpty()) {
                 GroupLabel("参与的 agent · 点开看它的执行历史")
                 InfoList {
                     view.agents.forEach { a ->
                         val s = a.session
+                        // The model is the one actually running, as everywhere.
+                        val model = key(s.key) { rememberTopic<LiveView>(app.core, Topics.live(station, s.key)).value.value?.usage?.model } ?: s.model
                         InfoRow(onClick = { openHistory(app, station, of, s.key) }) {
-                            ModelMark(s.model, s.runtime, 36.dp, s.state(), around = C.surface2)
+                            ModelMark(model, s.runtime, 36.dp, s.state(), around = C.surface2)
                             Column(Modifier.weight(1f)) {
-                                Text(agentLabel(s.model, s.effort), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                                Text(agentLabel(model, s.effort), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     if (a.connect != null) SlackMark(11.dp)
                                     Text(

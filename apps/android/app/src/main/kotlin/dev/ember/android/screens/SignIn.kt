@@ -62,12 +62,12 @@ suspend fun signIn(app: AppState, context: Context) {
     }
 }
 
-/** A dev cloud (cloud/test/dev.ts) signs alice in without Google: its account goes to the core as the web's old storage would. */
+/** A dev cloud (cloud/test/dev.ts) signs its users in without Google: alice (its admin, with a workspace) or bob (let in by nothing yet). The account goes to the core as the web's old storage would. */
 private val DEV_CLOUD = Regex("^http://(127\\.0\\.0\\.1|localhost|10\\.0\\.2\\.2):\\d+$")
 
-private suspend fun devSignIn(app: AppState) {
+private suspend fun devSignIn(app: AppState, user: String) {
     try {
-        val account = withContext(Dispatchers.IO) { URL("${app.cloudOrigin}/__dev/account?user=alice").readText() }
+        val account = withContext(Dispatchers.IO) { URL("${app.cloudOrigin}/__dev/account?user=$user").readText() }
         app.core.call("migrate", buildJsonObject { put("accounts", "[$account]") })
     } catch (e: IOException) {
         app.toast = "开发云没有回应：${e.message}"
@@ -100,7 +100,9 @@ fun SignInScreen() {
         }
         Text("多个账号可以都登录，随时切换 workspace。", color = C.muted, fontSize = 12.sp)
         if (BuildConfig.DEBUG && DEV_CLOUD.matches(app.cloudOrigin)) {
-            Text("用开发账号登录（alice）", color = C.accent, fontSize = 14.sp, modifier = Modifier.clickable { scope.launch { devSignIn(app) } }.padding(8.dp))
+            Row {
+                for (user in listOf("alice", "bob")) Text("用开发账号登录（$user）", color = C.accent, fontSize = 14.sp, modifier = Modifier.clickable { scope.launch { devSignIn(app, user) } }.padding(8.dp))
+            }
         }
     }
 }
