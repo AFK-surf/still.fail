@@ -13,7 +13,7 @@
     "build:cloud": "sh client/wasm/build.sh && vite build --config web/vite.config.ts --mode cloud && vite build --config web/vite.config.ts --mode cloud-admin",
     "dev:web": "vite --config web/vite.config.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
-    "test": "node --test \"test/**/*.test.ts\""
+    "test": "node --test --test-timeout=60000 \"test/**/*.test.ts\""
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.2.0",
