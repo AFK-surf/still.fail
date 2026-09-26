@@ -86,18 +86,23 @@ test("a transcript read as it grows gives what a full read gives, a half-written
   assert.equal(tail.usage.modelCalls, 2);
 });
 
-test("a watcher gets what it lacks, the steps in flight, then new entries as the file grows", async () => {
+test("a watcher gets what it lacks, the steps in flight, then new entries as the file grows", async (t) => {
   const path = join(mkdtempSync(join(tmpdir(), "ember-live-")), "t.jsonl");
   writeFileSync(path, line("one", "m1") + line("two", "m2"));
   const hub = new LiveHub(() => ({ runtime: "claude", path }));
+  // A failed assertion must not leave the file watched (the run would never end).
+  t.after(() => hub.close());
   hub.event("s", { kind: "start", id: "x", step: "text" });
   hub.event("s", { kind: "delta", id: "x", field: "text", text: "wri" });
   const got: LiveMessage[] = [];
   const stop = hub.subscribe("s", 1, (m) => got.push(m));
   assert.deepEqual(got.map((m) => m.type), ["timeline", "steps"]);
   assert.deepEqual((got[0] as any).entries.map((e: any) => e.text), ["two"]);
-  assert.equal((got[1] as any).steps[0].text, "wri");
+  // What a step is, not what it wrote: deltas are not told (a step's words come with its entry).
+  assert.deepEqual([(got[1] as any).steps[0].step, (got[1] as any).steps[0].text], ["text", undefined]);
+  const before = got.length;
   hub.event("s", { kind: "delta", id: "x", field: "text", text: "ting" });
+  assert.equal(got.length, before, "a delta sends nothing");
   hub.event("s", { kind: "end", id: "x" });
   appendFileSync(path, line("writing", "m3"));
   await wait(300);
