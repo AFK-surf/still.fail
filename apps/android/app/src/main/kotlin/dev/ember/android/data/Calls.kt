@@ -55,6 +55,14 @@ class StationApi(private val core: EmberCore, val station: String) {
 
     suspend fun stop(key: String) { request("POST", "/sessions/${at(key)}/stop") }
 
+    /**
+     * How it runs from its next turn on: a model, how hard it thinks, and who runs it (a profile kept to by hand, or
+     * null: the station's pick).
+     */
+    suspend fun sessionSettings(key: String, model: String, effort: String?, profile: String?) {
+        request("POST", "/sessions/${at(key)}/settings", buildJsonObject { put("model", model); put("effort", effort); put("profile", profile) })
+    }
+
     /** Releases an idle agent's process. */
     suspend fun evict(key: String) { request("POST", "/sessions/${at(key)}/evict") }
 

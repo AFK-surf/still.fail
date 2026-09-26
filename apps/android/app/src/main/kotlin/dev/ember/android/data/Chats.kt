@@ -23,6 +23,8 @@ import kotlinx.serialization.Serializable
     val participants: List<Creator> = emptyList(),
     val runtime: String = "claude",
     val profile: String = "",
+    /** Kept to its profile by hand; else the station picks it. */
+    val profilePinned: Boolean = false,
     val model: String? = null,
     val effort: String? = null,
     val runtimeSessionId: String? = null,

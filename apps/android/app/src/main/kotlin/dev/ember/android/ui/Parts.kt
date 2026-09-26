@@ -201,6 +201,66 @@ fun Ring(percent: Int, label: String, size: Dp = 46.dp) {
     }
 }
 
+/**
+ * An allowance as a ring, as the web draws it: what is left, eaten clockwise from the top as it is used; green, amber
+ * from 70% used, red from 90%. The number is what is left, and a full one shows none.
+ */
+@Composable
+fun QuotaRing(usedPercent: Double, size: Dp = 20.dp) {
+    val c = C
+    val used = usedPercent.roundToInt().coerceIn(0, 100)
+    val left = 100 - used
+    val tone = if (used >= 90) c.red else if (used >= 70) c.warn else c.green
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = 2.dp.toPx()
+            val inset = w / 2 + 0.5.dp.toPx()
+            val box = Size(this.size.width - inset * 2, this.size.height - inset * 2)
+            drawArc(c.line, 0f, 360f, false, Offset(inset, inset), box, style = Stroke(w))
+            if (left > 0) drawArc(tone, -90f + used * 3.6f, 360f * left / 100, false, Offset(inset, inset), box, style = Stroke(w, cap = StrokeCap.Round))
+        }
+        if (left < 100) Text("$left", fontSize = (size.value * 0.42f).sp, lineHeight = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+    }
+}
+
+/** A window's short mark: 5H, 7D, W (weekly), M (monthly). */
+fun quotaMark(label: String): Pair<String, Int> {
+    if (label.startsWith("每月")) return "M" to 3
+    if (label.startsWith("每周")) return "W" to 2
+    Regex("^(\\d+) 小时").find(label)?.let { return "${it.groupValues[1]}H" to 0 }
+    Regex("^(\\d+) 天").find(label)?.let { return "${it.groupValues[1]}D" to 1 }
+    return label to 1
+}
+
+/** A profile's allowance in a line: every window, shortest first, a ring with its mark beside it. */
+@Composable
+fun QuotaRings(quota: dev.ember.android.data.ProfileQuota?) {
+    val windows = quota?.takeIf { it.state == "ok" }?.windows.orEmpty().sortedBy { quotaMark(it.label).second }
+    if (windows.isEmpty()) return
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        windows.forEach { w ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                QuotaRing(w.usedPercent)
+                Text(quotaMark(w.label).first, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = C.subtle)
+            }
+        }
+    }
+}
+
+/** Whose service a profile runs on: Anthropic or OpenAI for a subscription or a key, OpenCode for OpenCode Go. */
+@Composable
+fun ProviderMark(runtime: String, kind: String?, size: Dp = 16.dp) {
+    if (kind == "opencode-go") {
+        val ink = C.ink
+        Canvas(Modifier.size(size)) {
+            val u = this.size.width / 24f
+            drawRect(ink, Offset(6 * u, 4 * u), Size(12 * u, 16 * u), style = Stroke(2.4f * u))
+        }
+        return
+    }
+    MakerIcon(if (runtime == "claude" || kind == "anthropic-api") "claude" else "openai", runtime, size)
+}
+
 // ── controls ───────────────────────────────────────────────────────────
 
 /** Whether the person asked for less motion (animations off in the system settings). */

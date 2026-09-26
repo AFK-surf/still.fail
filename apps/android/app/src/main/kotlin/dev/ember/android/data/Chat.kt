@@ -87,6 +87,36 @@ import kotlinx.serialization.Serializable
     val profile: ProfileView? = null,
     val turns: List<TurnRecord> = emptyList(),
     val threads: List<ThreadView> = emptyList(),
+    /** Who can run it now: the profiles of its runtime with its model enabled. */
+    val profiles: List<RunnableProfile> = emptyList(),
+    /** What it can move to, a model at a time, each with who runs it. */
+    val choices: List<ModelChoice> = emptyList(),
+    /** What is worth a look about it now (an account signed out, a quota running out, the disk filling up). */
+    val attention: List<Attention> = emptyList(),
+)
+
+/** A profile a session can run on: `current` it runs on it now; `kind` whose account it is (subscription, opencode-go, …). */
+@Serializable data class RunnableProfile(
+    val id: String,
+    val name: String,
+    val current: Boolean = false,
+    val kind: String? = null,
+    val runtime: String? = null,
+    val quota: ProfileQuota? = null,
+)
+
+@Serializable data class ModelChoice(val model: String, val profiles: List<RunnableProfile> = emptyList())
+
+/** account (`state` login | failed, `name`), quota (`label`, `left` percent, `until`), or disk (`freeBytes`, `totalBytes`). */
+@Serializable data class Attention(
+    val kind: String,
+    val state: String? = null,
+    val name: String? = null,
+    val label: String = "",
+    val left: Double = 100.0,
+    val until: Double? = null,
+    val freeBytes: Double = 0.0,
+    val totalBytes: Double = 0.0,
 )
 
 /** An item's page. Before its agent has a chat, `thread` is null and there is only the agent. */

@@ -58,6 +58,7 @@ import dev.ember.android.Screen
 import dev.ember.android.data.ChatAgentView
 import dev.ember.android.data.ChatOf
 import dev.ember.android.data.ChatView
+import dev.ember.android.data.EFFORTS
 import dev.ember.android.data.HistoryItem
 import dev.ember.android.data.HostInfo
 import dev.ember.android.data.LiveStep
@@ -83,6 +84,11 @@ import dev.ember.android.data.status
 import dev.ember.android.data.stepLabel
 import dev.ember.android.ui.C
 import dev.ember.android.ui.IconIn
+import dev.ember.android.ui.MakerIcon
+import dev.ember.android.ui.ProviderMark
+import dev.ember.android.ui.QuotaRing
+import dev.ember.android.ui.QuotaRings
+import dev.ember.android.ui.quotaMark
 import dev.ember.android.ui.Icons
 import dev.ember.android.ui.Mark
 import dev.ember.android.ui.Markdown
@@ -131,7 +137,7 @@ private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String, e
         Actions(station, agent)
         Seg(listOf("步骤", "详情"), tab, { tab = it })
     }
-    Summary(agent, live.value, host.value)
+    Summary(agent)
     Box(Modifier.weight(1f).fillMaxWidth()) {
         if (tab == 0) Steps(station, of, agent, live.value, entry) else Details(station, agent, live.value, host.value)
     }
@@ -161,16 +167,25 @@ private fun Actions(station: String, agent: ChatAgentView) {
     if (s.process == "warm") act(Icons.Unplug, "已释放进程") { app.api(station).evict(s.key) }
 }
 
-/** The head's short line: the allowance left, the cache hit rate, the station's free disk. */
+/** The head's short line: only what is worth a look now (an account signed out, a quota running out, the disk filling up). */
 @Composable
-private fun Summary(agent: ChatAgentView, live: LiveView?, host: HostInfo?) {
-    val usage = live?.usage
-    val hit = usage?.takeIf { it.inputTokens > 0 }?.let { Math.round(it.cachedTokens * 100.0 / it.inputTokens) }
-    val windows = agent.profile?.quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
-    val parts = windows.map { "${it.label} 已用 ${Math.round(it.usedPercent)}%" } +
-        listOfNotNull(hit?.let { "缓存命中 $it%" }, host?.takeIf { it.disk.totalBytes > 0 }?.let { "磁盘剩 ${gb(it.disk.freeBytes)}" })
-    if (parts.isNotEmpty()) Text(parts.joinToString(" · "), fontSize = 12.sp, lineHeight = 17.sp, color = C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 4.dp))
-    Box(Modifier.height(8.dp))
+private fun Summary(agent: ChatAgentView) {
+    if (agent.attention.isEmpty()) return Box(Modifier.height(8.dp))
+    Row(
+        Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
+        agent.attention.forEach { a ->
+            when (a.kind) {
+                "quota" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    QuotaRing(100.0 - a.left)
+                    Text(quotaMark(a.label).first, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = C.subtle)
+                }
+                "disk" -> Text("磁盘剩 ${gb(a.freeBytes.toLong())}", fontSize = 12.sp, color = C.warn)
+                else -> Text(if (a.state == "login") "「${a.name}」要重新登录" else "「${a.name}」的 key 被拒绝", fontSize = 12.sp, color = C.red)
+            }
+        }
+    }
 }
 
 private sealed interface Line {
@@ -437,29 +452,22 @@ private fun PhaseLine(phase: ShownPhase, runtime: String) {
     }
 }
 
-/** The model and its use, the allowance, the station. */
+/** How it runs (which can be changed here), what it has used, the station. */
 @Composable
 private fun Details(station: String, agent: ChatAgentView, live: LiveView?, host: HostInfo?) {
     val s = agent.session
     val usage = live?.usage
     val hit = usage?.takeIf { it.inputTokens > 0 }?.let { Math.round(it.cachedTokens * 100.0 / it.inputTokens) }
-    val quota = agent.profile?.quota
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
-        GroupLabel("模型")
-        Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        RunPicker(station, agent)
+        Column(Modifier.padding(top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Detail("运行时", RUNTIME_LABEL[s.runtime] ?: s.runtime)
-            Detail("Profile", agent.profile?.name ?: s.profile)
             Detail("进程", PROCESS_LABEL[s.process] ?: s.process)
             if (usage != null) {
                 Detail("调用", "${usage.modelCalls} 次")
                 Detail("输入", compactNumber(usage.inputTokens) + (hit?.let { " · 缓存 $it%" } ?: ""))
                 Detail("输出", compactNumber(usage.outputTokens))
             }
-        }
-        if (quota?.state == "ok" && quota.windows.isNotEmpty()) {
-            Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) { quota.windows.forEach { Ring(Math.round(it.usedPercent).toInt(), it.label) } }
-        } else {
-            Text("额度：${quota?.detail ?: if (quota != null) "查不到" else "还没查过"}", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(vertical = 6.dp))
         }
         GroupLabel("Station")
         Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -471,6 +479,107 @@ private fun Details(station: String, agent: ChatAgentView, live: LiveView?, host
             if (host.disk.totalBytes > 0) Ring(host.diskPercent, "磁盘")
         }
     }
+}
+
+/**
+ * How it runs, in one line: the model, how hard it thinks, the account it runs on (with its quota). Tapped, it opens
+ * in place to pick them in that order, as the web does: a model only marks a pick; how hard it thinks makes it when the
+ * account it is on runs that model too (it stays there); when not, who runs it is to be picked, which makes it. Closed
+ * halfway, nothing changes.
+ */
+@Composable
+private fun RunPicker(station: String, agent: ChatAgentView) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val s = agent.session
+    var open by remember { mutableStateOf(false) }
+    var model by remember(open) { mutableStateOf(s.model) }
+    var effort by remember(open) { mutableStateOf(s.effort) }
+    var busy by remember { mutableStateOf(false) }
+    val current = agent.profiles.firstOrNull { it.current }
+    val name = current?.name ?: agent.profile?.name ?: s.profile
+    val choice = agent.choices.firstOrNull { it.model == model }
+    val same = model == s.model && effort == s.effort
+    val stays = choice?.profiles?.any { it.current } == true
+    fun pick(m: String, e: String?, profile: String?) {
+        busy = true
+        scope.launch {
+            try { app.api(station).sessionSettings(s.key, m, e, profile); app.toast = "已改，下一轮起生效"; open = false }
+            catch (err: CoreException) { app.toast = err.message }
+            finally { busy = false }
+        }
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).background(if (open) C.chip else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable { open = !open }.padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        MakerIcon(s.model, s.runtime, 14.dp)
+        Text(s.model ?: "运行时默认", fontSize = 14.sp, color = C.ink, maxLines = 1)
+        Text(s.effort ?: "默认深度", fontSize = 14.sp, color = C.ink, maxLines = 1)
+        ProviderMark(s.runtime, current?.kind, 14.dp)
+        Text(if (s.profilePinned) name else "自动 · $name", fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        QuotaRings(current?.quota ?: agent.profile?.quota)
+        Box(Modifier.weight(0.001f))
+        IconIn(if (open) Icons.ChevronUp else Icons.ChevronDown, 14.dp, C.muted)
+    }
+    androidx.compose.animation.AnimatedVisibility(open) {
+        Column(Modifier.padding(top = 4.dp)) {
+            GroupLabel("模型")
+            Options(agent.choices.map { it.model }, model) { model = it }
+            GroupLabel("思考深度")
+            Options(listOf<String?>(null) + EFFORTS[s.runtime].orEmpty(), effort, { it ?: "默认" }) { e ->
+                effort = e
+                if (choice != null && stays && !busy) pick(choice.model, e, if (s.profilePinned) s.profile else null)
+            }
+            GroupLabel("账号")
+            if (choice == null) Text("先选一个模型", fontSize = 13.sp, color = C.muted)
+            else {
+                if (!stays) Text("现在的账号没有启用 ${choice.model}，选一个", fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(bottom = 4.dp))
+                Account(checked = same && !s.profilePinned, enabled = !busy, onClick = { pick(choice.model, effort, null) }) {
+                    Column(Modifier.weight(1f)) {
+                        Text("自动分配", fontSize = 14.sp, color = C.ink, fontWeight = FontWeight.SemiBold)
+                        Text("额度用完或登录失效时换一个", fontSize = 12.sp, color = C.muted)
+                    }
+                }
+                choice.profiles.forEach { p ->
+                    Account(checked = same && s.profilePinned && p.current, enabled = !busy, onClick = { pick(choice.model, effort, p.id) }) {
+                        ProviderMark(p.runtime ?: s.runtime, p.kind, 16.dp)
+                        Column(Modifier.weight(1f)) {
+                            Text(p.name, fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (same && p.current && !s.profilePinned) Text("当前", fontSize = 12.sp, color = C.muted)
+                        }
+                        QuotaRings(p.quota)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Choices side by side, wrapping: the one marked is filled. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun <T> Options(values: List<T>, marked: T, label: (T) -> String = { it.toString() }, onPick: (T) -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        values.forEach { v ->
+            val on = v == marked
+            Text(
+                label(v), fontSize = 14.sp, color = C.ink, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) C.chip else androidx.compose.ui.graphics.Color.Transparent)
+                    .clickable { onPick(v) }.padding(horizontal = 10.dp, vertical = 7.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun Account(checked: Boolean, enabled: Boolean, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (checked) C.chip else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = content,
+    )
 }
 
 @Composable
