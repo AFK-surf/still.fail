@@ -7,7 +7,18 @@ import kotlinx.serialization.Serializable
 
 @Serializable data class Me(val id: String, val email: String? = null)
 
-@Serializable data class Creator(val id: String, val name: String, val email: String? = null, val via: String = "cloud")
+// ── what the core puts in for the clients to show (client/core/src/present.rs, format.rs) ──
+
+/** A moment in words, fresh each minute: 3 分钟前 (`ago`), 9/20 14:05:09 (`full`), 3 小时后 (`until`), whether it has come. */
+@Serializable data class Stamp(val at: Double = 0.0, val ago: String = "", val full: String = "", val until: String = "", val past: Boolean = false)
+
+/** Who made a model, for its mark; null when the marks do not know it (the runtime's stands in). */
+@Serializable data class Maker(val id: String, val name: String)
+
+/** A person as the core names them: `display` is 你 for the viewer. */
+@Serializable data class PersonShown(val name: String = "", val display: String = "", val picture: String? = null, val mine: Boolean = false)
+
+@Serializable data class Creator(val id: String, val name: String, val email: String? = null, val via: String = "cloud", val shown: PersonShown? = null)
 
 @Serializable data class TurnSummary(
     val kind: String = "", val outcome: String? = null, val declared: String? = null, val detail: String? = null,
@@ -37,6 +48,21 @@ import kotlinx.serialization.Serializable
     val pending: Int = 0,
     val firstText: String? = null,
     val lastTurn: TurnSummary? = null,
+    // What the core says of it.
+    val statusText: String = "",
+    /** accent | green | blue | red | neutral */
+    val tone: String = "neutral",
+    /** Its mark (run | block | failed), and in words. */
+    val mark: String? = null,
+    val badgeText: String? = null,
+    val titleText: String = "",
+    val agentText: String = "",
+    val maker: Maker? = null,
+    val runtimeText: String = "",
+    val processText: String? = null,
+    /** How hard its runtime can think, lowest first. */
+    val efforts: List<String> = emptyList(),
+    val time: Map<String, Stamp> = emptyMap(),
 )
 
 /** An agent of a row: what it runs on and where its work stands. */
@@ -48,6 +74,9 @@ import kotlinx.serialization.Serializable
     val process: String = "cold",
     val pending: Int = 0,
     val lastTurn: TurnSummary? = null,
+    val agentText: String = "",
+    val maker: Maker? = null,
+    val mark: String? = null,
 )
 
 /** A row's last message, its text cut to 200 characters. */
@@ -61,6 +90,8 @@ import kotlinx.serialization.Serializable
     val createdAt: Long = 0,
     /** Who said it, as the core puts it (client/core/src/present.rs). */
     val by: LastBy? = null,
+    /** Its line: without mentions, （文件） for a file alone. */
+    val preview: String = "",
 )
 
 /** A row's last speaker: kind (agent | person | ember), name, picture; an agent's state (block | run | failed) rides on it. */
@@ -73,6 +104,9 @@ import kotlinx.serialization.Serializable
     val state: String? = null,
     val id: String? = null,
     val picture: String? = null,
+    /** What its picture says when pointed at: who, and an agent's state. */
+    val label: String = "",
+    val maker: Maker? = null,
 )
 
 /** A badge the core names (block | run | failed) as the app's state. */
@@ -107,9 +141,13 @@ fun badgeState(badge: String?): ChatState? = when (badge) {
     val origin: Origin? = null,
     /** Its state, as the core puts it from its agents: block | run | failed, or none. */
     val state: String? = null,
+    /** Where it came from (Slack · workspace · #channel), for a Slack chat. */
+    val originText: String? = null,
+    val time: Map<String, Stamp> = emptyMap(),
 )
 
-@Serializable data class ChatDay(val daysAgo: Int, val at: Long, val items: List<ChatItem> = emptyList())
+/** A day of the list, with its heading (今天, 昨天, 星期三, 9月20日). */
+@Serializable data class ChatDay(val daysAgo: Int, val at: Long, val label: String = "", val items: List<ChatItem> = emptyList())
 
 @Serializable data class StationState(val station: String, val id: String, val name: String, val state: String, val message: String? = null)
 
@@ -124,24 +162,5 @@ fun badgeState(badge: String?): ChatState? = when (badge) {
 /** Where an agent stands, as its badge shows it: solid orange block, hollow ring at work, red failed; done has none. */
 enum class ChatState { Block, Running, Done, Failed }
 
-fun agentState(process: String, pending: Int, lastTurn: TurnSummary?): ChatState = when (status(process, pending, lastTurn)) {
-    Status.Running, Status.Queued -> ChatState.Running
-    Status.Block -> ChatState.Block
-    Status.Failed, Status.Unexpected -> ChatState.Failed
-    else -> ChatState.Done
-}
-
-fun SessionSummary.state(): ChatState = agentState(process, pending, lastTurn)
-fun RowAgent.state(): ChatState = agentState(process, pending, lastTurn)
-
-
-fun Me.isMe(c: Creator?): Boolean = c != null && (c.id == id || (email != null && c.email.equals(email, ignoreCase = true)))
-
-/** Whether a person's id (an email, "local", a Slack user) is the viewer. */
-fun Me.isMe(person: String): Boolean = person == id || (email != null && person.equals(email, ignoreCase = true))
-
-/** Where a row's agent came from, for its connect icon: the Slack workspace, then the thread's channel. */
-fun ChatItem.originLabel(): String {
-    val where = origin?.let { o -> o.channelName?.let { "#$it" } ?: if (o.channel.startsWith("D")) "私信" else null }
-    return listOfNotNull("Slack", origin?.teamName, where).joinToString(" · ")
-}
+fun SessionSummary.state(): ChatState = badgeState(mark) ?: ChatState.Done
+fun RowAgent.state(): ChatState = badgeState(mark) ?: ChatState.Done

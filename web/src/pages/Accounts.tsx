@@ -2,8 +2,8 @@ import { profilesPage, useStation, useLink } from "../station.tsx";
 import { ChevronRight, ExternalLink, LogIn, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type ProfileView, type RuntimeKind } from "../api.ts";
-import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime } from "../format.ts";
+import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type OverviewShown, type ProfileInput, type ProfileShown, type ProfileView, type RuntimeKind } from "../api.ts";
+import { ACCESS, ACCESS_KINDS, KEYED } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time } from "../ui.tsx";
@@ -29,7 +29,6 @@ export function AccountsPage() {
         <section className="section" aria-label="Profile">
         <ul className="list">
           {profiles.map((p) => {
-            const tone = checkTone(p.check);
             return (
               <li key={p.id}>
                 <Link className="list-row account-row" to={link(`/settings/accounts/${p.id}`)}>
@@ -39,7 +38,7 @@ export function AccountsPage() {
                     <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.value!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
                   </span>
                   <QuotaBars quota={p.quota} compact />
-                  <Pill tone={tone.tone}>{tone.label}</Pill>
+                  <Pill tone={p.checkTone}>{p.checkText}</Pill>
                   <ChevronRight {...ICON} className="list-row-chevron" />
                 </Link>
               </li>
@@ -138,7 +137,7 @@ export function AccountPage() {
   return <AccountView key={profile.id} profile={profile} overview={overview.value} />;
 }
 
-function AccountView({ profile, overview }: { profile: ProfileView; overview: Overview }) {
+function AccountView({ profile, overview }: { profile: ProfileShown; overview: OverviewShown }) {
   const api = useApi();
   const station = useStation();
   const link = useLink();
@@ -154,9 +153,8 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
     setEditingName(false);
     if (name.trim() && name.trim() !== profile.name) saveThen({ name: name.trim() }, () => toast("已改名"));
   };
-  // The server checks again after a sign-in; take whichever check is newer.
-  const latest = check.data && (!profile.check || check.data.checkedAt >= profile.check.checkedAt) ? check.data : profile.check;
-  const tone = checkTone(latest);
+  // Its last check, as the station has it (a check done here, or after a sign-in, comes back with the overview).
+  const latest = profile.check;
   const users = profile.usedBy.map((id) => overview.connects.find((c) => c.id === id)).filter((c) => c !== undefined);
   const [deleting, setDeleting] = useState(false);
 
@@ -176,10 +174,10 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
             <h1 className="identity-name">{profile.name}<RuntimeTags runtimes={profile.runtimes} /><IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
           )}
           <p className="identity-sub profile-state">
-            <Pill tone={tone.tone}>{tone.label}</Pill>
+            <Pill tone={profile.checkTone}>{profile.checkText}</Pill>
             {/* The pill already says it works; the detail says what else it found. */}
             <span>{latest ? latest.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}</span>
-            {latest && <span className="muted"><Time at={latest.checkedAt} />检查</span>}
+            {latest && <span className="muted"><Time stamp={latest.time?.checkedAt} />检查</span>}
             <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={RefreshCw} disabled={check.busy} data-busy={check.busy || undefined} onClick={() => void check.run()} />
           </p>
         </div>
@@ -398,12 +396,13 @@ function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: 
   );
 }
 
-function QuotaSection({ profile }: { profile: ProfileView }) {
+function QuotaSection({ profile }: { profile: ProfileShown }) {
   const api = useApi();
+  // A refresh comes back with the overview.
   const refresh = useAction(() => api.refreshQuota(profile.id));
-  const quota = refresh.data ?? profile.quota;
+  const quota = profile.quota;
   return (
-    <Section title="额度" description={quota?.checkedAt ? <><Time at={quota.checkedAt} />查询，每几分钟自动更新</> : undefined}
+    <Section title="额度" description={quota?.time?.checkedAt ? <><Time stamp={quota.time.checkedAt} />查询，每几分钟自动更新</> : undefined}
       actions={<Button variant="ghost" icon={RefreshCw} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
       <div className="card"><QuotaBars quota={quota} /></div>
     </Section>
@@ -415,7 +414,7 @@ function QuotaSection({ profile }: { profile: ProfileView }) {
  * and connects offer only enabled models, and the account pool sends a chat
  * only to a profile that has its model enabled.
  */
-function ModelPool({ profile, found, onSave }: { profile: ProfileView; found: string[] | null; onSave(models: string[]): void }) {
+function ModelPool({ profile, found, onSave }: { profile: ProfileShown; found: string[] | null; onSave(models: string[]): void }) {
   const [enabled, setEnabled] = useState(() => new Set(profile.models));
   const [filter, setFilter] = useState("");
   useEffect(() => setEnabled(new Set(profile.models)), [profile.models.join("\n")]);
@@ -443,7 +442,7 @@ function ModelPool({ profile, found, onSave }: { profile: ProfileView; found: st
       {all.length > 0 && !choosing && (
         on.length === 0 ? <p className="muted">还没有启用模型。</p> : (
           <ul className="model-chips">
-            {on.map((m) => <li key={m} className="model-chip"><ModelLogo model={m} runtime={profile.runtime} size={13} /><span className="mono">{m}</span></li>)}
+            {on.map((m) => <li key={m} className="model-chip"><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} /><span className="mono">{m}</span></li>)}
           </ul>
         )
       )}
@@ -459,7 +458,7 @@ function ModelPool({ profile, found, onSave }: { profile: ProfileView; found: st
               <li key={m}>
                 <label className="model-pool-item" data-on={enabled.has(m) || undefined}>
                   <input type="checkbox" checked={enabled.has(m)} onChange={() => toggle(m)} />
-                  <ModelLogo model={m} runtime={profile.runtime} size={13} />
+                  <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} />
                   <span className="mono">{m}</span>
                   {found && !found.includes(m) && <span className="muted model-pool-gone">检查里没有了</span>}
                 </label>

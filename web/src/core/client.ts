@@ -27,7 +27,9 @@ export type Topic =
   | { topic: "connects"; scope: string; mine: boolean }
   // An item's page: its chat, or its agent before it has one.
   | { topic: "chat"; station: string; thread: number }
-  | { topic: "chat"; station: string; session: string };
+  | { topic: "chat"; station: string; session: string }
+  // An agent's execution history, read for people.
+  | { topic: "history"; station: string; key: string };
 
 export interface ErrorBody {
   code: string;

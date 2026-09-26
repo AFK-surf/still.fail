@@ -27,6 +27,7 @@ pub async fn start(emit: Function) -> Result<EmberCore, JsValue> {
     console_error_panic_hook::set_once();
     let host = Rc::new(WebHost::new(emit));
     let core = Core::new(host.clone() as Rc<dyn Host>).await;
+    core.keep_time();
     Ok(EmberCore { core: Rc::new(core), host })
 }
 

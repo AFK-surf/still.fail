@@ -5,7 +5,7 @@
 //! into `activity`:
 //!
 //! `{ "status": "运行 cargo test" | "≈ 42 token/s" | "请求中" | …,
-//!    "rows": [{ "key", "kind", "text", "live", "entry" }] }`
+//!    "rows": [{ "key", "kind", "icon", "text", "live", "entry" }] }` (`icon`: an icon of ember's own set)
 //!
 //! The rows are this period's: since the agent last ended a turn (a post that
 //! says final or block, or chat_state), so a message sent while it works does
@@ -51,7 +51,7 @@ fn verb(kind: &str) -> &'static str {
 
 /// A string field of a tool's input, read even when the input is cut short (a live step carries its first 300
 /// characters).
-fn field(input: &str, name: &str) -> Option<String> {
+pub(crate) fn field(input: &str, name: &str) -> Option<String> {
     if let Ok(Value::Object(args)) = serde_json::from_str::<Value>(input) {
         return match args.get(name)? {
             Value::String(s) => Some(s.clone()),
@@ -111,7 +111,7 @@ fn ends_turn(tool: &str, input: &str) -> bool {
 }
 
 /// Milliseconds since the epoch of an RFC 3339 time (2026-09-27T00:00:02.500Z); None for anything else.
-fn epoch_ms(at: &str) -> Option<f64> {
+pub(crate) fn epoch_ms(at: &str) -> Option<f64> {
     let b = at.as_bytes();
     if b.len() < 19 || b[4] != b'-' || b[10] != b'T' {
         return None;
@@ -212,6 +212,18 @@ fn group_row(members: &[Member]) -> Value {
     json!({ "key": key, "kind": kind, "text": parts.join(" · "), "live": false, "entry": first.entry })
 }
 
+/// A row's mark, by what it is: the name of an icon in ember's own set (design/icons, drawn for both clients).
+pub fn icon(kind: &str) -> &'static str {
+    match kind {
+        "read" | "search" | "edit" | "command" | "web" | "agent" | "thread" | "think" => ["read", "search", "edit", "command", "web", "agent", "thread", "think"]
+            .into_iter().find(|k| *k == kind).unwrap_or("other"),
+        "in" => "received",
+        "say" => "said",
+        "out" => "send",
+        _ => "other",
+    }
+}
+
 /// The rows kept at most: a preview shows three; the rest let it scroll.
 const ROWS: usize = 50;
 
@@ -301,6 +313,10 @@ pub fn present(live: &Value) -> Value {
     }
     if rows.len() > ROWS {
         rows.drain(..rows.len() - ROWS);
+    }
+    for row in rows.iter_mut() {
+        let kind = row["kind"].as_str().unwrap_or("").to_string();
+        row["icon"] = json!(icon(&kind));
     }
     let rate = live.get("rate").and_then(Value::as_u64).unwrap_or(0);
     let phase = live.get("phase").and_then(|p| p.get("phase")).and_then(Value::as_str).unwrap_or("");

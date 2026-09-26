@@ -4,10 +4,10 @@ import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
 import { CheckCircle2, ExternalLink, KeyRound, Plus, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
-import { agentLabel, connectionText, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, STATUS_LABEL, statusTone } from "../format.ts";
+import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type ConnectMode, type ConnectShown, type ModelChoice, type OverviewShown, type RuntimeKind, type MadeSlackApp } from "../api.ts";
+import { MODE } from "../format.ts";
 import { AppFields, ConfigTokenForm, NEW_APP, SlackAppSection } from "./SlackApp.tsx";
-import { ModelTriple, profilesFrom } from "../ModelTriple.tsx";
+import { ModelTriple } from "../ModelTriple.tsx";
 import { OwnerLabel } from "../components.tsx";
 import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
@@ -17,11 +17,16 @@ import { Button, Choices, Confirm, ConnectKindIcon, Dialog, Empty, Field, ICON, 
 
 export function ConnectPage() {
   const { id } = useParams();
-  const overview = useOverview(useStation().address);
-  const connect = overview.value?.connects.find((c) => c.id === id);
-  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <Loading label="正在读取连接…" />;
-  if (!connect) return <Empty><p>没有 ID 为 {id} 的连接。</p></Empty>;
-  return <ConnectDetail key={connect.id} connect={connect} overview={overview.value} />;
+  const station = useStation();
+  const overview = useOverview(station.address);
+  const connects = useConnects(scopeOf(station.address));
+  const item = connects.value?.items.find((i) => i.station === station.address && i.connect.id === id);
+  if (!overview.value || !connects.value || (connects.value.loading && !item)) {
+    const error = overview.error ?? connects.error;
+    return error ? <Empty><p>{error.message}</p></Empty> : <Loading label="正在读取连接…" />;
+  }
+  if (!item) return <Empty><p>没有 ID 为 {id} 的连接。</p></Empty>;
+  return <ConnectDetail key={item.connect.id} item={item} overview={overview.value} />;
 }
 
 /** Saving a connect's settings; `put(input, done)` runs `done` once saved. */
@@ -31,21 +36,18 @@ function useSaveConnect(id: string) {
   return { ...save, put: (input: ConnectInput, done?: () => void) => void save.run(input).then((saved) => { if (saved) done?.(); }) };
 }
 
-export function connectSubtitle(c: ConnectView): string {
-  return `${RUNTIME_LABEL[c.bind.runtime]} · ${agentLabel(c.bind.model ?? undefined, c.bind.effort)}`;
-}
-
 function useStationView() {
   const station = useStation();
   return useStations(scopeOf(station.address)).value?.find((s) => s.station === station.address);
 }
 
 /** The models the station can run, each with the runtimes it runs on (the core's). */
-function useStationModels(): { model: string; runtimes: RuntimeKind[] }[] {
+function useStationModels(): ModelChoice[] {
   return useStationView()?.models ?? [];
 }
 
-function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: Overview }) {
+function ConnectDetail({ item, overview }: { item: ConnectItem; overview: OverviewShown }) {
+  const connect = item.connect;
   const api = useApi();
   const station = useStation();
   const navigate = useNavigate();
@@ -68,7 +70,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
         <div className="identity-text">
           <h1 className="identity-name">{connect.name}</h1>
           <p className="identity-sub">
-            <span className="connect-status"><StatusDot state={presence(c)} />{connectionText(c)}</span>
+            <span className="connect-status"><StatusDot state={connect.presence} />{connect.statusText}</span>
             <span className="kind-tag"><SlackLogo size={13} />{connect.team ?? "Slack"}</span>
             {station.name && <span className="station-tag">{station.name}</span>}
             <span className="owner-line">所属 <OwnerLabel owner={connect.createdBy} /></span>
@@ -90,8 +92,8 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
       {save.error && <p className="field-error page-error" role="alert">{save.error.message}</p>}
 
       <SlackSection connect={connect} />
-      <RunSection connect={connect} />
-      <ConnectSessions connect={connect} />
+      <RunSection item={item} />
+      <ConnectSessions item={item} />
       <SlackAppSection connect={connect} />
 
       {replacing && <TokenDialog connect={connect} onClose={() => setReplacing(false)} />}
@@ -104,7 +106,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
 }
 
 /** The Slack link, when it needs something: tokens to connect with, or an error. Up and running, the header says so. */
-function SlackSection({ connect }: { connect: ConnectView }) {
+function SlackSection({ connect }: { connect: ConnectShown }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
@@ -130,7 +132,7 @@ function SlackSection({ connect }: { connect: ConnectView }) {
 }
 
 /** Replaces the connect's Slack tokens (either one; the other kept), verified before they are saved. */
-function TokenDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
+function TokenDialog({ connect, onClose }: { connect: ConnectShown; onClose(): void }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
@@ -167,25 +169,23 @@ export function ModeChoices({ mode, requireMention, onChange, disabled }:
  * How it runs, in one card: the model it runs (and who runs it), how its conversations become sessions, and in
  * single-session mode the session they go into. The runtime is its own for good: a line under them.
  */
-function RunSection({ connect }: { connect: ConnectView }) {
+function RunSection({ item }: { item: ConnectItem }) {
+  const { connect, bound } = item;
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const station = useStation();
   const link = useLink();
-  const overview = useOverview(station.address).value;
-  const sessions = useSessions(station.address).value ?? [];
   const [changingMode, setChangingMode] = useState(false);
   const [choosing, setChoosing] = useState(false);
-  const models = useStationModels().filter((m) => m.runtimes.includes(connect.bind.runtime)).map((m) => ({ ...m, runtimes: [connect.bind.runtime] }));
-  const bound = sessions.find((s) => s.key === connect.session);
+  const models = useStationModels().filter((m) => m.runtimes.includes(connect.bind.runtime));
   return (
     <Section title="怎么跑">
       <div className="card run-card">
         <div className="run-card-row">
           <span className="run-card-label">模型</span>
           {models.length === 0
-            ? <Link className="inline-link" to={profilesPage(station)}>{RUNTIME_LABEL[connect.bind.runtime]} 的 Profile 还没有启用模型 · 去勾选</Link>
-            : <ModelTriple title="换模型、思考深度和账号" runtimeFixed options={models} profilesFor={profilesFrom(overview?.profiles ?? [])}
+            ? <Link className="inline-link" to={profilesPage(station)}>{connect.runtimeText} 的 Profile 还没有启用模型 · 去勾选</Link>
+            : <ModelTriple title="换模型、思考深度和账号" runtimeFixed options={models}
                 value={{ model: connect.bind.model ?? "", runtime: connect.bind.runtime, effort: connect.bind.effort, profile: connect.bind.profile }}
                 onPick={(p) => save.put({ bind: { model: p.model, effort: p.effort ?? "", profile: p.profile } }, () => toast("已保存，新会话会用新的设置"))} />}
         </div>
@@ -202,23 +202,23 @@ function RunSection({ connect }: { connect: ConnectView }) {
             <span className="run-card-label">当前</span>
             <span className="run-card-text">
               {bound
-                ? <Link className="inline-link" to={link(`/chats/${encodeURIComponent(bound.key)}`)}>{sessionTitle(bound, connect.name)}</Link>
+                ? <Link className="inline-link" to={link(`/chats/${encodeURIComponent(bound.key)}`)}>{bound.titleText}</Link>
                 : <span className="muted">还没有会话；下一条消息会开始一个新的。</span>}
             </span>
             <button type="button" className="text-button" onClick={() => setChoosing(true)}>换一个</button>
           </div>
         )}
         {save.error && <p className="field-error" role="alert">{save.error.message}</p>}
-        <p className="card-foot muted">跑在 {RUNTIME_LABEL[connect.bind.runtime]} 上，创建后不能换；要用另一种运行时，新建一个连接。进行中的会话继续用开始时的设置。</p>
+        <p className="card-foot muted">跑在 {connect.runtimeText} 上，创建后不能换；要用另一种运行时，新建一个连接。进行中的会话继续用开始时的设置。</p>
       </div>
-      {changingMode && <ModeDialog connect={connect} onClose={() => setChangingMode(false)} />}
-      {choosing && <ChooseSessionDialog connect={connect} onClose={() => setChoosing(false)} />}
+      {changingMode && <ModeDialog connect={connect} running={item.running} onClose={() => setChangingMode(false)} />}
+      {choosing && <ChooseSessionDialog item={item} onClose={() => setChoosing(false)} />}
     </Section>
   );
 }
 
 /** What switching to `next` does to this connect's conversations, in plain words. */
-function consequences(connect: ConnectView, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
+function consequences(connect: ConnectShown, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
   const out: string[] = [];
   if (connect.mode === "multi-session" && next.mode === "single-session") {
     out.push("之后它收到的消息都进同一个会话；已有的每个 thread 的会话不再收到新消息，包括这些 thread 里的回复。记录会保留。");
@@ -237,13 +237,11 @@ function consequences(connect: ConnectView, next: { mode: ConnectMode; requireMe
   return out;
 }
 
-function ModeDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
+function ModeDialog({ connect, running, onClose }: { connect: ConnectShown; running: number; onClose(): void }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
-  const sessions = useSessions(useStation().address).value ?? [];
   const [next, setNext] = useState({ mode: connect.mode, requireMention: connect.requireMention });
   const changed = next.mode !== connect.mode || (next.mode === "single-session" && next.requireMention !== connect.requireMention);
-  const running = sessions.filter((s) => (s.connect === connect.id || s.boundTo.includes(connect.id)) && s.process === "running").length;
   const effects = changed ? consequences(connect, next, running) : [];
   return (
     <Dialog open onClose={onClose} wide title="更改会话方式"
@@ -267,27 +265,17 @@ function ModeDialog({ connect, onClose }: { connect: ConnectView; onClose(): voi
   );
 }
 
-/** Where a session was last talked to: the chat with the latest message it takes part in, or null. */
-function useLatestChat(): (key: string) => number | null {
-  const threads = useThreads(useStation().address).value ?? [];
-  return (key) => threads.find((t) => t.sessions.some((m) => m.session === key))?.id ?? null;
-}
-
 /** A single-session connect's session: the one its messages go into, which people can switch or start afresh. */
-function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
+function ChooseSessionDialog({ item, onClose }: { item: ConnectItem; onClose(): void }) {
+  const { connect, candidates } = item;
   const api = useApi();
   const toast = useToast();
-  const station = useStation();
-  const all = useSessions(station.address).value ?? [];
-  const overview = useOverview(station.address).value;
-  const candidates = all.filter((s) => s.runtime === connect.bind.runtime).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
   const [choice, setChoice] = useState<string>(connect.session ?? "new");
   const [title, setTitle] = useState("");
   const bind = useAction(() => api.bindSession(connect.id, choice === "new" ? null : choice, title), () => {
     toast(choice === "new" ? "已新建会话" : "已换成这个会话");
     onClose();
   });
-  const nameOf = (id: string) => overview?.connects.find((c) => c.id === id)?.name ?? id;
   return (
     <Dialog open onClose={onClose} wide title="选择会话"
       description={`之后「${connect.name}」收到的消息都进选中的会话。原来的会话保留，但不再收到这个连接的新消息。`}
@@ -304,8 +292,8 @@ function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClo
           },
           ...candidates.map((s) => ({
             value: s.key,
-            title: <>{sessionTitle(s, nameOf(s.connect))}{s.key === connect.session && <span className="choice-badge">当前</span>}</>,
-            description: `${s.scope === "all" ? "单会话" : "来自一个 thread"} · ${nameOf(s.connect)} · ${s.turns} 轮 · ${relativeTime(s.lastActiveAt)}${s.boundTo.filter((c) => c !== connect.id).length ? ` · 也被 ${s.boundTo.filter((c) => c !== connect.id).map(nameOf).join("、")} 使用` : ""}`,
+            title: <>{s.titleText}{s.current && <span className="choice-badge">当前</span>}</>,
+            description: s.description,
           })),
         ]} />
       </div>
@@ -314,21 +302,19 @@ function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClo
   );
 }
 
-function ConnectSessions({ connect }: { connect: ConnectView }) {
+function ConnectSessions({ item }: { item: ConnectItem }) {
+  const { connect, sessions } = item;
   const link = useLink();
-  const latest = useLatestChat();
-  const sessions = (useSessions(useStation().address).value ?? []).filter((s) => s.connect === connect.id).sort((a, b) => b.lastActiveAt - a.lastActiveAt).slice(0, 12);
   return (
     <Section title="最近的会话">
       {sessions.length === 0 ? <p className="muted">还没有会话。在 Slack 里 @{connect.name} 就会开始。</p> : (
         <ul className="list">
           {sessions.map((s) => {
-            const status = sessionStatus(s);
             const row = (
               <>
-                <span className="list-row-title">{sessionTitle(s, connect.name)}</span>
-                <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
-                <Time className="muted list-row-time" at={s.lastActiveAt} />
+                <span className="list-row-title">{s.titleText}</span>
+                <Pill tone={s.tone}>{s.statusText}</Pill>
+                <Time className="muted list-row-time" stamp={s.time?.lastActiveAt} />
               </>
             );
             return <li key={s.key}><Link className="list-row" to={link(`/chats/${encodeURIComponent(s.key)}`)}>{row}</Link></li>;
@@ -346,7 +332,7 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
  */
 type NewStep = "team" | "app" | "install" | "manual" | "bind";
 
-type SlackTeam = Overview["slackTeams"][number];
+type SlackTeam = OverviewShown["slackTeams"][number];
 
 /** A Slack workspace's icon, or Slack's mark before it is known. */
 function SlackTeamIcon({ team }: { team: SlackTeam }) {
@@ -493,7 +479,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
           <Field label="模型" hint={entry && entry.runtimes.length > 1 ? "这个模型两个运行时都能跑；运行时创建后不能换。" : undefined}>
             {models.length === 0
               ? <Link className="input input-link" to={profilesPage(station)}>Profile 还没有启用模型 · 去勾选</Link>
-              : <ModelTriple title="用哪个模型、运行时、思考深度和账号" options={models} profilesFor={profilesFrom(overview.value?.profiles ?? [])}
+              : <ModelTriple title="用哪个模型、运行时、思考深度和账号" options={models}
                   value={{ model: entry?.model ?? "", runtime, effort: effort || null, profile }}
                   onPick={(p) => { setModel(p.model); setPicked(p.runtime); setEffort(p.effort ?? ""); setProfile(p.profile); }} />}
           </Field>
@@ -541,7 +527,7 @@ function MadeAppSteps({ made, installed }: { made: MadeSlackApp; installed: { in
 }
 
 /** Hands a connect to another person: a workspace member in ember cloud, any email on the station's own page. */
-function OwnerDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
+function OwnerDialog({ connect, onClose }: { connect: ConnectShown; onClose(): void }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const people = [...useContext(PeopleContext).values()];

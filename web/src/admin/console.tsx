@@ -8,7 +8,7 @@ import { Boxes, Copy, LogOut, Plus, Ticket, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation } from "react-router";
 import { Lockup } from "../brand.tsx";
-import { timeUntil } from "../format.ts";
+import { stamp } from "../api.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, StatusDot, Tip, Time, ICON, type Tone } from "../ui.tsx";
 import { signOut, useAccounts, type Account } from "../cloud/accounts.ts";
@@ -126,7 +126,7 @@ function UserItem({ user }: { user: AdminUser }) {
         <Pill tone={admission.tone}>{admission.label}</Pill>
       </div>
       <p className="admin-meta muted">
-        <Time at={user.created_at * 1000} />首次登录 · {user.last_seen ? <><Time at={user.last_seen * 1000} />来过</> : "还没有来访记录"}
+        <Time stamp={stamp(user, "created_at")} />首次登录 · {user.last_seen ? <><Time stamp={stamp(user, "last_seen")} />来过</> : "还没有来访记录"}
       </p>
       {user.workspaces.length > 0 && (
         <div className="chips">{user.workspaces.map((w) => <span key={w.id} className="chip">{w.name} · {ROLE_LABEL[w.role]}</span>)}</div>
@@ -158,7 +158,7 @@ function WorkspaceItem({ workspace: w }: { workspace: AdminWorkspace }) {
       <div className="admin-head">
         <span className="list-row-text">
           <span className="list-row-title">{w.name}</span>
-          <span className="muted">{w.created_by ? w.created_by.name || w.created_by.email : "已不在的人"} 创建于 <Time at={w.created_at * 1000} /> · <span className="mono">{w.id}</span></span>
+          <span className="muted">{w.created_by ? w.created_by.name || w.created_by.email : "已不在的人"} 创建于 <Time stamp={stamp(w, "created_at")} /> · <span className="mono">{w.id}</span></span>
         </span>
       </div>
       <div className="admin-group">
@@ -178,7 +178,7 @@ function WorkspaceItem({ workspace: w }: { workspace: AdminWorkspace }) {
           <div key={s.id} className="admin-line">
             <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
             <span className="admin-line-text">{s.name}<span className="muted">{s.version ? `ember-mesh ${s.version}` : ""}</span></span>
-            <span className="muted">{s.online ? "在线" : s.last_seen ? <><Time at={s.last_seen * 1000} />在线</> : "还没上线"}</span>
+            <span className="muted">{s.online ? "在线" : s.last_seen ? <><Time stamp={stamp(s, "last_seen")} />在线</> : "还没上线"}</span>
           </div>
         ))}
       </div>
@@ -188,7 +188,7 @@ function WorkspaceItem({ workspace: w }: { workspace: AdminWorkspace }) {
           {w.invitations.map((i) => (
             <div key={i.id} className="admin-line">
               <span className="admin-line-text">{i.email ?? "任何拿到链接的人"}<span className="muted">{i.inviter ? `${i.inviter} 邀请` : ""}</span></span>
-              <span className="muted">{ROLE_LABEL[i.role]} · {timeUntil(i.expires_at * 1000)}过期</span>
+              <span className="muted">{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span>
             </div>
           ))}
         </div>
@@ -202,7 +202,7 @@ function WorkspaceItem({ workspace: w }: { workspace: AdminWorkspace }) {
 function codeState(c: InviteCodeView): { label: string; tone: Tone } {
   if (c.used_by || c.used_at) return { label: "已使用", tone: "neutral" };
   if (c.revoked_at) return { label: "已撤回", tone: "red" };
-  if (c.expires_at * 1000 <= Date.now()) return { label: "已过期", tone: "amber" };
+  if (stamp(c, "expires_at")?.past) return { label: "已过期", tone: "amber" };
   return { label: "可用", tone: "green" };
 }
 
@@ -231,9 +231,9 @@ function CodesPage({ account }: { account: Account }) {
                     <span className="list-row-text">
                       <span className="list-row-title"><span className="mono admin-code">{c.code}</span>{c.note && <span className="admin-note">{c.note}</span>}</span>
                       <span className="muted">
-                        <Time at={c.created_at * 1000} />生成 · {c.used_at ? <>
-                          {c.used_by ? c.used_by.name || c.used_by.email : "已不在的人"} <Time at={c.used_at * 1000} />用它建了{c.workspace ? `「${c.workspace.name}」` : " workspace（已删除）"}
-                        </> : c.revoked_at ? <><Time at={c.revoked_at * 1000} />撤回</> : state.label === "已过期" ? <><Time at={c.expires_at * 1000} />过期</> : `${timeUntil(c.expires_at * 1000)}过期`}
+                        <Time stamp={stamp(c, "created_at")} />生成 · {c.used_at ? <>
+                          {c.used_by ? c.used_by.name || c.used_by.email : "已不在的人"} <Time stamp={stamp(c, "used_at")} />用它建了{c.workspace ? `「${c.workspace.name}」` : " workspace（已删除）"}
+                        </> : c.revoked_at ? <><Time stamp={stamp(c, "revoked_at")} />撤回</> : state.label === "已过期" ? <><Time stamp={stamp(c, "expires_at")} />过期</> : `${stamp(c, "expires_at")?.until}过期`}
                       </span>
                     </span>
                     <Pill tone={state.tone}>{state.label}</Pill>
@@ -265,7 +265,7 @@ function NewCodeDialog({ account, onMade, onClose }: { account: Account; onMade(
   const made = make.result;
   return (
     <Dialog open onClose={onClose} wide title={made ? "邀请码已生成" : "生成邀请码"}
-      description={made ? `把邀请码或注册链接发给对方。只能用一次，${timeUntil(made.expires_at * 1000)}过期。` : "对方登录 ember 后，用它建一个自己的 workspace。一个邀请码只能用一次。"}
+      description={made ? `把邀请码或注册链接发给对方。只能用一次，${days} 天后过期。` : "对方登录 ember 后，用它建一个自己的 workspace。一个邀请码只能用一次。"}
       footer={made ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
         <Button variant="ghost" onClick={onClose}>取消</Button>
         <Button variant="primary" busy={make.busy} onClick={() => make.run()}>生成</Button>

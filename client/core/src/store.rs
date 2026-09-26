@@ -78,6 +78,10 @@ struct Inner {
     window_open: bool,
     /// The values of the topics the data center holds (`data.rs`): read there, never kept here but as sent.
     held: Option<Rc<dyn Fn(&Topic) -> Option<Value>>>,
+    /// The minute clock runs: times in words go out fresh each minute while anything is shown.
+    clock: bool,
+    /// The clock is wanted (a UI's core; tests leave it off, their time is their own).
+    clock_on: bool,
 }
 
 #[derive(Default)]
@@ -157,6 +161,46 @@ impl Store {
         if started {
             self.start(&topic, source);
         }
+        self.tick();
+    }
+
+    /// Wakes a second past each minute, while any topic is live, to send again what shows times in words ("3 分钟前",
+    /// a day's heading); stops when none is.
+    /// Starts the minute clock (see `tick`).
+    pub fn set_clock(&self) {
+        self.inner.borrow_mut().clock_on = true;
+        self.tick();
+    }
+
+    fn tick(&self) {
+        {
+            let mut inner = self.inner.borrow_mut();
+            if !inner.clock_on || std::mem::replace(&mut inner.clock, true) {
+                return;
+            }
+        }
+        let now = self.host.now_ms();
+        let next = ((now / 60_000.0).floor() + 1.0) * 60_000.0 + 1000.0;
+        let sleep = self.host.sleep((next - now).max(0.0) as u64);
+        let store = self.me.clone();
+        self.host.spawn(
+            async move {
+                sleep.await;
+                let Some(store) = store.upgrade() else { return };
+                store.inner.borrow_mut().clock = false;
+                let shown: Vec<Topic> = store.inner.borrow().topics.iter()
+                    .filter(|(t, e)| !e.subscribers.is_empty() && crate::present::ticks(t))
+                    .map(|(t, _)| t.clone()).collect();
+                if shown.is_empty() {
+                    return;
+                }
+                for topic in &shown {
+                    store.invalidate(topic);
+                }
+                store.tick();
+            }
+            .boxed_local(),
+        );
     }
 
     pub fn unsubscribe(&self, client: ClientId, id: RequestId) {
@@ -351,6 +395,12 @@ impl Store {
                 changed = watchers(entry);
             }
             let Some(value) = entry.value.clone() else { return };
+            // With what the clients show of it put in (present.rs).
+            let clock = crate::present::Clock { now: self.host.now_ms(), offset_min: self.host.utc_offset_min(self.host.now_ms()) };
+            let value = value.map(|mut v| {
+                crate::present::decorate(topic, &mut v, clock);
+                v
+            });
             let out = match (&entry.sent, &value) {
                 (Some(Ok(old)), Ok(new)) => {
                     let ops = delta::diff(old, new);

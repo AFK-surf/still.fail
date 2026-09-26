@@ -66,6 +66,8 @@ pub enum Topic {
     /// One item's page: its chat (`thread`: the thread, its messages and its agents), or, before its agent has a
     /// chat (`session`), that agent alone.
     Chat { station: String, #[serde(default)] thread: Option<u64>, #[serde(default)] session: Option<String> },
+    /// An agent's execution history, as people read it (history.rs): its transcript in items, what streams now.
+    History { station: String, key: String },
 }
 
 impl Topic {
@@ -75,11 +77,11 @@ impl Topic {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } => None,
-            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } => None,
+            Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } => None,
         }
     }
 
     pub fn is_view(&self) -> bool {
-        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. })
+        matches!(self, Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. })
     }
 }

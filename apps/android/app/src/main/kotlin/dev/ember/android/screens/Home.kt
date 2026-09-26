@@ -77,12 +77,7 @@ import dev.ember.android.data.badgeState
 import dev.ember.android.data.ChatsView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceEntry
-import dev.ember.android.data.cleanText
-import dev.ember.android.data.dayLabel
-import dev.ember.android.data.isMe
-import dev.ember.android.data.originLabel
 import dev.ember.android.data.page
-import dev.ember.android.data.relativeTime
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.data.state
 import dev.ember.android.ui.Avatar
@@ -157,7 +152,7 @@ private fun ChatPane(chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListS
             if (offline.isNotEmpty()) item(key = "offline") { Note("${offline.joinToString("、") { it.name }} 离线，它们的会话暂时看不到。") }
             if (view.days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(view, onlyMine) }
             for (day in view.days) {
-                item(key = "h/${day.daysAgo}") { SectionHeader(dayLabel(day.daysAgo, day.at)) }
+                item(key = "h/${day.daysAgo}") { SectionHeader(day.label) }
                 items(day.items, key = { "${it.station}/${it.id}" }) { ChatRow(it, view) }
             }
         }
@@ -217,13 +212,13 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
                 )
                 // Only an agent that came from elsewhere (Slack, the only kind of connect) says so.
                 Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
-                    if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originLabel() }) { SlackMark(13.dp) }
+                    if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp) }
                 }
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // The state rides on the agent's picture, when the agent said the last thing; nowhere else.
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item) } }
-                if (held) Text(relativeTime(item.lastActiveAt), fontSize = 12.sp, color = C.subtle, maxLines = 1)
+                if (held) Text(item.time["lastActiveAt"]?.ago ?: "", fontSize = 12.sp, color = C.subtle, maxLines = 1)
             }
         }
     }
@@ -235,13 +230,13 @@ private fun LastMessage(item: ChatItem) {
     // Who said it, and an agent's state on its picture, are the core's (present.rs).
     val last = item.last!!
     val by = last.by
-    val name = by?.name ?: last.authorName ?: last.author
-    val text = cleanText(last.text).ifEmpty { "（文件）" }
+    val name = by?.label?.ifEmpty { null } ?: by?.name ?: last.author
+    val text = last.preview
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "$name：$text" }) {
         when (by?.kind) {
             "ember" -> Mark(13.dp)
             "agent" -> Box {
-                MakerIcon(by.model, by.runtime, 13.dp)
+                MakerIcon(by.maker, by.runtime, 13.dp)
                 badgeState(by.state)?.let { state -> Box(Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp)) { Badge(state, 8.dp, 1.5.dp, C.bg) } }
             }
             else -> Avatar(last.author, name, 13.dp, picture = by?.picture)

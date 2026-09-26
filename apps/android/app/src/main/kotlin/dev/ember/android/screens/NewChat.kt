@@ -49,12 +49,9 @@ import dev.ember.android.LocalApp
 import dev.ember.android.R
 import dev.ember.android.Screen
 import dev.ember.android.data.ChatOf
-import dev.ember.android.data.EFFORTS
-import dev.ember.android.data.EFFORT_LABEL
 import dev.ember.android.data.RUNTIME_LABEL
 import dev.ember.android.data.ModelRuntimes
 import dev.ember.android.data.StationView
-import dev.ember.android.data.timeUntil
 import dev.ember.android.data.Topics
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.ui.C
@@ -120,7 +117,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
     val entry = view.models.firstOrNull { it.model == choice?.model } ?: view.models.firstOrNull()
     val model = entry?.model
     val runtime = entry?.runtimes?.firstOrNull { it == choice?.runtime } ?: entry?.runtimes?.firstOrNull()
-    val effort = choice?.effort?.takeIf { it != "-" && runtime != null && it in EFFORTS[runtime].orEmpty() } ?: ""
+    val efforts = runtime?.let { entry?.efforts?.get(it) }.orEmpty()
+    val effort = choice?.effort?.takeIf { it != "-" && it in efforts } ?: ""
     val pick = { next: Choice -> choice = next; app.keepChoice(view.station, next) }
     // The model list is what a profile's check found; profiles not checked since the station started are checked now, once.
     val profiles = view.overview?.profiles.orEmpty()
@@ -167,7 +165,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
     // Chosen anyway (it is the person's call), but said: what is sent waits for its quota.
     entry?.spent?.let { s ->
         Text(
-            "${entry.model} 能用的账号额度都用完了" + (s.until?.let { "，${timeUntil(it.toLong())}恢复" } ?: "") + "。现在发的消息要等额度恢复才会有回复；也可以换一个模型。",
+            "${entry.model} 能用的账号额度都用完了" + (s.back?.let { "，$it" } ?: "") + "。现在发的消息要等额度恢复才会有回复；也可以换一个模型。",
             fontSize = 13.sp, color = C.ink,
             modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
         )
@@ -181,15 +179,15 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
                 // Nothing to choose from: the chooser leads to where models are enabled.
                 Chooser(haze, null, "没有可用模型 · 去勾选") { app.push(Screen.Station(view.station)) }
             } else {
-                Chooser(haze, { MakerIcon(model, runtime, 14.dp) }, model) {
+                Chooser(haze, { MakerIcon(entry.maker, runtime, 14.dp) }, model) {
                     pickModel(app, view, model) { m -> val rt = m.runtimes.firstOrNull { it == runtime } ?: m.runtimes.first(); pick(Choice(rt, m.model, if (rt != runtime) "" else effort)) }
                 }
                 // The runtime only when the model runs on more than one.
                 if ((entry?.runtimes?.size ?: 0) > 1) Chooser(haze, { MakerIcon(null, runtime, 13.dp) }, RUNTIME_LABEL[runtime] ?: runtime) {
                     pickRuntime(app, entry!!.runtimes, runtime) { rt -> pick(Choice(rt, model, "")) }
                 }
-                Chooser(haze, null, "思考 " + (EFFORT_LABEL[effort] ?: "默认")) {
-                    pickEffort(app, runtime, effort) { e -> pick(Choice(runtime, model, e)) }
+                Chooser(haze, null, effort.ifEmpty { "默认深度" }) {
+                    pickEffort(app, efforts, effort) { e -> pick(Choice(runtime, model, e)) }
                 }
             }
         }
@@ -250,8 +248,7 @@ private fun pickModel(app: AppState, view: StationView, current: String, onPick:
         SheetHead("用哪个模型")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             view.models.forEach { m ->
-                val spent = m.spent?.let { s -> "额度用完" + (s.until?.let { " · ${timeUntil(it.toLong())}恢复" } ?: "") }
-                PickRow(m.model, listOfNotNull(m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, spent).joinToString(" · "), checked = m.model == current, leading = { ModelMark(m.model, m.runtimes.first(), 36.dp) }) { onPick(m); app.sheet = null }
+                PickRow(m.model, listOfNotNull(m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, m.spent?.text).joinToString(" · "), checked = m.model == current, leading = { ModelMark(m.maker, m.runtimes.first(), 36.dp) }) { onPick(m); app.sheet = null }
             }
         }
     }
@@ -267,14 +264,14 @@ private fun pickRuntime(app: AppState, runtimes: List<String>, current: String, 
     }
 }
 
-private fun pickEffort(app: AppState, runtime: String, current: String, onPick: (String) -> Unit) {
+private fun pickEffort(app: AppState, efforts: List<String>, current: String, onPick: (String) -> Unit) {
     app.sheet = SheetSpec(0.48f) {
         SheetGrab()
         SheetHead("思考深度")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow("运行时默认", checked = current.isEmpty()) { onPick(""); app.sheet = null }
-            EFFORTS[runtime].orEmpty().forEach { e ->
-                PickRow("${EFFORT_LABEL[e] ?: e}（$e）", checked = current == e) { onPick(e); app.sheet = null }
+            PickRow("默认", checked = current.isEmpty()) { onPick(""); app.sheet = null }
+            efforts.forEach { e ->
+                PickRow(e, checked = current == e) { onPick(e); app.sheet = null }
             }
         }
     }

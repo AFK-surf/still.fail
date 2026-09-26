@@ -87,6 +87,8 @@ object Topics {
         when (of) { is ChatOf.Thread -> put("thread", of.id); is ChatOf.Session -> put("session", of.key) }
     }
     fun live(station: String, key: String) = buildJsonObject { put("topic", "live"); put("station", station); put("key", key) }
+    /** An agent's execution history, read for people (the core's). */
+    fun history(station: String, key: String) = buildJsonObject { put("topic", "history"); put("station", station); put("key", key) }
 }
 
 /** What an item's page is of: its chat's thread, or its agent's session while it has no chat. */

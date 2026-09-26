@@ -80,17 +80,23 @@ import dev.ember.android.R
 import dev.ember.android.data.ChatState
 import dev.ember.android.data.Creator
 import dev.ember.android.data.Maker
-import dev.ember.android.data.maker
 
 // ── model marks ────────────────────────────────────────────────────────
 
+private val MAKER_MARKS = mapOf(
+    "anthropic" to R.drawable.maker_anthropic, "openai" to R.drawable.maker_openai, "deepseek" to R.drawable.maker_deepseek,
+    "qwen" to R.drawable.maker_qwen, "zhipu" to R.drawable.maker_zhipu, "gemini" to R.drawable.maker_gemini,
+    "kimi" to R.drawable.maker_kimi, "minimax" to R.drawable.maker_minimax, "xai" to R.drawable.maker_xai,
+)
+
+/** Marks of one colour, drawn in the page's ink. */
+private val MONO = setOf("anthropic", "openai", "kimi", "xai")
+
+/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's. */
 @Composable
-fun MakerIcon(model: String?, runtime: String, size: Dp, modifier: Modifier = Modifier) {
-    val m = maker(model, runtime)
-    val res = when (m) { Maker.OpenAI -> R.drawable.maker_openai; Maker.Anthropic -> R.drawable.maker_anthropic; Maker.Zhipu -> R.drawable.maker_zhipu; Maker.DeepSeek -> R.drawable.maker_deepseek }
-    // OpenAI's and Anthropic's marks are one color: the ink of the page.
-    val mono = m == Maker.OpenAI || m == Maker.Anthropic
-    Image(painterResource(res), null, modifier.size(size), colorFilter = if (mono) ColorFilter.tint(C.ink) else null)
+fun MakerIcon(maker: Maker?, runtime: String, size: Dp, modifier: Modifier = Modifier) {
+    val id = maker?.id?.takeIf { it in MAKER_MARKS } ?: if (runtime == "codex") "openai" else "anthropic"
+    Image(painterResource(MAKER_MARKS.getValue(id)), maker?.name, modifier.size(size), colorFilter = if (id in MONO) ColorFilter.tint(C.ink) else null)
 }
 
 /** A state badge: solid orange = block, a still hollow orange ring = at work, red = failed; done has none. Nothing blinks. */
@@ -115,14 +121,14 @@ internal fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier
 
 /** An agent: its model maker's mark on a soft tile, with its state as a badge. */
 @Composable
-fun ModelMark(model: String?, runtime: String, size: Dp = 36.dp, state: ChatState? = null, around: Color = C.bg) {
+fun ModelMark(maker: Maker?, runtime: String, size: Dp = 36.dp, state: ChatState? = null, around: Color = C.bg) {
     val xs = size < 30.dp
     Box(Modifier.size(size)) {
         Box(
             Modifier.size(size).clip(RoundedCornerShape(if (xs) 6.dp else 11.dp)).background(C.surface)
                 .border(1.dp, C.line, RoundedCornerShape(if (xs) 6.dp else 11.dp)),
             contentAlignment = Alignment.Center,
-        ) { MakerIcon(model, runtime, if (xs) size * 0.6f else size * 0.56f) }
+        ) { MakerIcon(maker, runtime, if (xs) size * 0.6f else size * 0.56f) }
         if (state != null && state != ChatState.Done) {
             val badge = if (xs) 11.dp else 15.dp
             Badge(state, badge, if (xs) 1.5.dp else 2.dp, around, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp))
@@ -173,7 +179,7 @@ fun PeopleStack(people: List<Creator>, size: Dp = 18.dp, ring: Color = C.bg) {
     Row {
         people.forEachIndexed { i, p ->
             Box(Modifier.offset(x = (-5 * i).dp).zIndex(-i.toFloat()).size(size + 3.dp).clip(CircleShape).background(ring), contentAlignment = Alignment.Center) {
-                Avatar(p.id, p.name, size)
+                Avatar(p.id, p.shown?.display ?: p.name, size, picture = p.shown?.picture)
             }
         }
     }
@@ -181,9 +187,9 @@ fun PeopleStack(people: List<Creator>, size: Dp = 18.dp, ring: Color = C.bg) {
 
 // ── rings ──────────────────────────────────────────────────────────────
 
-/** A percentage as a ring: green, amber past 65, red past 85. */
+/** A percentage as a ring, coloured by the core's level. */
 @Composable
-fun Ring(percent: Int, label: String, size: Dp = 46.dp) {
+fun Ring(percent: Int, label: String, level: String, size: Dp = 46.dp) {
     val c = C
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(Modifier.size(size), contentAlignment = Alignment.Center) {
@@ -193,7 +199,7 @@ fun Ring(percent: Int, label: String, size: Dp = 46.dp) {
                 val box = Size(this.size.width - inset * 2, this.size.height - inset * 2)
                 drawArc(c.line, 0f, 360f, false, Offset(inset, inset), box, style = Stroke(w))
                 val p = percent.coerceIn(0, 100)
-                if (p > 0) drawArc(if (p > 85) c.red else if (p > 65) c.warn else c.green, -90f, 360f * p / 100, false, Offset(inset, inset), box, style = Stroke(w, cap = StrokeCap.Round))
+                if (p > 0) drawArc(levelColor(c, level), -90f, 360f * p / 100, false, Offset(inset, inset), box, style = Stroke(w, cap = StrokeCap.Round))
             }
             Text("$percent", fontSize = if (size < 44.dp) 12.sp else 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         }
@@ -201,47 +207,39 @@ fun Ring(percent: Int, label: String, size: Dp = 46.dp) {
     }
 }
 
+/** How full, as a colour: the core's level (ok | amber | red). */
+private fun levelColor(c: EmberColors, level: String): Color = when (level) { "red" -> c.red; "amber" -> c.warn; else -> c.green }
+
 /**
- * An allowance as a ring, as the web draws it: what is left, eaten clockwise from the top as it is used; green, amber
- * from 70% used, red from 90%. The number is what is left, and a full one shows none.
+ * An allowance as a ring, as the web draws it: what is left, eaten clockwise from the top as it is used; coloured by
+ * the core's level. The number is what is left, and a full one shows none.
  */
 @Composable
-fun QuotaRing(usedPercent: Double, size: Dp = 20.dp) {
+fun QuotaRing(left: Int, level: String, size: Dp = 20.dp) {
     val c = C
-    val used = usedPercent.roundToInt().coerceIn(0, 100)
-    val left = 100 - used
-    val tone = if (used >= 90) c.red else if (used >= 70) c.warn else c.green
+    val used = 100 - left
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val w = 2.dp.toPx()
             val inset = w / 2 + 0.5.dp.toPx()
             val box = Size(this.size.width - inset * 2, this.size.height - inset * 2)
             drawArc(c.line, 0f, 360f, false, Offset(inset, inset), box, style = Stroke(w))
-            if (left > 0) drawArc(tone, -90f + used * 3.6f, 360f * left / 100, false, Offset(inset, inset), box, style = Stroke(w, cap = StrokeCap.Round))
+            if (left > 0) drawArc(levelColor(c, level), -90f + used * 3.6f, 360f * left / 100, false, Offset(inset, inset), box, style = Stroke(w, cap = StrokeCap.Round))
         }
         if (left < 100) Text("$left", fontSize = (size.value * 0.42f).sp, lineHeight = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold, color = C.ink)
     }
 }
 
-/** A window's short mark: 5H, 7D, W (weekly), M (monthly). */
-fun quotaMark(label: String): Pair<String, Int> {
-    if (label.startsWith("每月")) return "M" to 3
-    if (label.startsWith("每周")) return "W" to 2
-    Regex("^(\\d+) 小时").find(label)?.let { return "${it.groupValues[1]}H" to 0 }
-    Regex("^(\\d+) 天").find(label)?.let { return "${it.groupValues[1]}D" to 1 }
-    return label to 1
-}
-
-/** A profile's allowance in a line: every window, shortest first, a ring with its mark beside it. */
+/** A profile's allowance in a line: every window (shortest first, as the core puts them), a ring with its mark beside it. */
 @Composable
 fun QuotaRings(quota: dev.ember.android.data.ProfileQuota?) {
-    val windows = quota?.takeIf { it.state == "ok" }?.windows.orEmpty().sortedBy { quotaMark(it.label).second }
+    val windows = quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     if (windows.isEmpty()) return
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         windows.forEach { w ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                QuotaRing(w.usedPercent)
-                Text(quotaMark(w.label).first, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = C.subtle)
+                QuotaRing(w.left, w.level)
+                Text(w.mark, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = C.subtle)
             }
         }
     }
@@ -258,7 +256,7 @@ fun ProviderMark(runtime: String, kind: String?, size: Dp = 16.dp) {
         }
         return
     }
-    MakerIcon(if (runtime == "claude" || kind == "anthropic-api") "claude" else "openai", runtime, size)
+    MakerIcon(if (runtime == "claude" || kind == "anthropic-api") Maker("anthropic", "Anthropic") else Maker("openai", "OpenAI"), runtime, size)
 }
 
 // ── controls ───────────────────────────────────────────────────────────

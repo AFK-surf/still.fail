@@ -11,6 +11,8 @@ pub mod core;
 pub mod delta;
 pub mod entries;
 pub mod error;
+pub mod format;
+pub mod history;
 pub mod host;
 pub mod kept;
 pub mod mesh;

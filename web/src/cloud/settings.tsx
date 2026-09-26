@@ -7,7 +7,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
-import { ACCESS, checkTone, RUNTIME_LABEL, timeUntil } from "../format.ts";
+import { ACCESS, RUNTIME_LABEL } from "../format.ts";
+import { stamp } from "../api.ts";
 import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { AddAccountDialog } from "../pages/Accounts.tsx";
@@ -86,7 +87,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
               <li key={s.id} className="list-row">
                 <span className="list-row-text">
                   <span className="list-row-title">{s.name || "未命名设备"}{s.current && <span className="choice-badge">这里</span>}</span>
-                  <span className="muted"><Time at={s.created_at * 1000} />登录 · {timeUntil(s.expires_at * 1000)}过期</span>
+                  <span className="muted"><Time stamp={stamp(s, "created_at")} />登录 · {stamp(s, "expires_at")?.until}过期</span>
                 </span>
                 {!s.current && <Button variant="ghost" busy={revoke.busy && revoke.arg === s.id} onClick={() => revoke.run(s.id)}>退出</Button>}
               </li>
@@ -230,7 +231,6 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
               : (
                 <ul className="list">
                   {overview.profiles.map((p) => {
-                    const tone = checkTone(p.check);
                     return (
                       <li key={p.id}>
                         <Link className="list-row" to={`${base}/settings/accounts/${p.id}`}>
@@ -240,7 +240,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
                             <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · ${p.usedBy.length} 个连接在用` : ""}</span>
                           </span>
                           <QuotaBars quota={p.quota} compact />
-                          <Pill tone={tone.tone}>{tone.label}</Pill>
+                          <Pill tone={p.checkTone}>{p.checkText}</Pill>
                         </Link>
                       </li>
                     );
@@ -271,7 +271,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
               <span className="list-row-text">
                 <span className="list-row-title">{s.name}</span>
                 <span className="muted">
-                  {s.online ? "在线" : s.lastSeen ? <><Time at={s.lastSeen * 1000} />在线</> : "还没上线"}
+                  {s.online ? "在线" : s.lastSeen ? <><Time stamp={stamp(s, "lastSeen")} />在线</> : "还没上线"}
                   {s.version ? ` · ember-mesh ${s.version}` : ""} · <span className="mono">{s.id.slice(0, 12)}</span>
                 </span>
               </span>
@@ -282,7 +282,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
             </div>
               {s.online && (
                 <div className="station-device">
-                  <DeviceCard host={s.host ?? undefined} processes={s.overview?.processes} />
+                  <DeviceCard host={s.host} processes={s.overview?.processesText} />
                 </div>
               )}
             </li>
@@ -377,7 +377,7 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
               <li key={i.id} className="list-row">
                 <span className="list-row-text">
                   <span className="list-row-title">{i.email ?? "任何拿到链接的人"}</span>
-                  <span className="muted">{ROLE_LABEL[i.role]} · {timeUntil(i.expires_at * 1000)}过期</span>
+                  <span className="muted">{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span>
                 </span>
                 <Button variant="ghost" busy={revoke.busy && revoke.arg === i.id} onClick={() => revoke.run(i.id)}>撤回</Button>
               </li>

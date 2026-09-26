@@ -8,14 +8,13 @@
 //! brings the watches in line with the workspace's station list: a station
 //! that comes online is watched, one that goes offline is let go.
 //!
-//! The one timer here is a clock: while a `chats` view is live, its days are
-//! recomputed at the viewer's next local midnight (`daysAgo` changes then).
+//! Times in words (a day's heading, "3 分钟前") go out fresh each minute: the store's clock invalidates what is
+//! shown (store.rs, `tick`).
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::{Rc, Weak};
 
-use futures::FutureExt;
 use serde_json::{Value, json};
 
 use crate::entries::merge;
@@ -35,14 +34,11 @@ pub struct Views {
     host: Rc<dyn Host>,
     store: Rc<Store>,
     email_of: EmailOf,
-    me: Weak<Views>,
     /// Per live view, the topics it watches.
     views: RefCell<HashMap<Topic, HashMap<Topic, Watch>>>,
     /// Messages sent from here that the chat does not show yet, per (station, thread), oldest first.
     outbox: RefCell<HashMap<(String, u64), Vec<Value>>>,
     sent: Cell<u64>,
-    /// The midnight clock is running.
-    clock: Cell<bool>,
 }
 
 /// A station of a scope, as the workspace lists it.
@@ -57,15 +53,13 @@ struct StationInfo {
 
 impl Views {
     pub fn new(host: Rc<dyn Host>, store: Rc<Store>, email_of: EmailOf) -> Rc<Views> {
-        Rc::new_cyclic(|me| Views {
+        Rc::new(Views {
             host,
             store,
             email_of,
-            me: me.clone(),
             views: RefCell::default(),
             outbox: RefCell::default(),
             sent: Cell::new(0),
-            clock: Cell::new(false),
         })
     }
 
@@ -144,35 +138,11 @@ impl Views {
         self.views.borrow_mut().insert(view.clone(), HashMap::new());
         self.sync(view);
         self.store.invalidate(view);
-        if matches!(view, Topic::Chats { .. }) && !self.clock.replace(true) {
-            self.tick();
-        }
     }
 
-    /// Waits for the viewer's next local midnight, then recomputes the `chats` views; stops when none is live.
-    fn tick(&self) {
+    fn clock(&self) -> crate::present::Clock {
         let now = self.host.now_ms();
-        let offset = self.host.utc_offset_min(now) as f64 * 60_000.0;
-        let midnight = (((now + offset) / DAY_MS).floor() + 1.0) * DAY_MS - offset;
-        // A second past it, so the day has surely turned.
-        let sleep = self.host.sleep((midnight - now).max(0.0) as u64 + 1000);
-        let me = self.me.clone();
-        self.host.spawn(
-            async move {
-                sleep.await;
-                let Some(views) = me.upgrade() else { return };
-                let chats: Vec<Topic> = views.views.borrow().keys().filter(|v| matches!(v, Topic::Chats { .. })).cloned().collect();
-                if chats.is_empty() {
-                    views.clock.set(false);
-                    return;
-                }
-                for view in &chats {
-                    views.store.invalidate(view);
-                }
-                views.tick();
-            }
-            .boxed_local(),
-        );
+        crate::present::Clock { now, offset_min: self.host.utc_offset_min(now) }
     }
 
     pub fn stop(&self, view: &Topic) {
@@ -198,6 +168,7 @@ impl Views {
                 None => self.unchatted(station, key),
             },
             Topic::Chat { .. } => Some(Err(CoreError::invalid("chat 要有 thread 或 session"))),
+            Topic::History { station, key } => self.history(station, key),
             _ => None,
         }
     }
@@ -231,7 +202,8 @@ impl Views {
             // Its overview says which Slack users are the viewer (a row's last thing said by one is "你").
             Topic::Chats { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Link { station }]),
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
-            Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station }]),
+            // Its sessions (the recent ones, the one it delivers into) and the chats they were last talked to in.
+            Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station: station.clone() }, Topic::Sessions { station: station.clone() }, Topic::Threads { station }]),
             Topic::Chat { station, thread: None, session: Some(key) } if self.bound_thread(station, key).is_some() => {
                 let thread = self.bound_thread(station, key);
                 return self.sources(&Topic::Chat { station: station.clone(), thread, session: None });
@@ -246,6 +218,15 @@ impl Views {
                 topics.insert(Topic::Overview { station: station.clone() });
                 topics.insert(Topic::Link { station: station.clone() });
                 // Whether it is online (offline, nothing can be sent).
+                if let Some((scope, _)) = station.split_once('/') {
+                    topics.insert(Topic::Workspace { workspace: scope.to_string() });
+                }
+                return topics;
+            }
+            Topic::History { station, key } => {
+                topics.insert(Topic::Live { station: station.clone(), key: key.clone() });
+                topics.insert(Topic::Session { station: station.clone(), key: key.clone() });
+                topics.insert(Topic::Overview { station: station.clone() });
                 if let Some((scope, _)) = station.split_once('/') {
                     topics.insert(Topic::Workspace { workspace: scope.to_string() });
                 }
@@ -383,8 +364,32 @@ impl Views {
                     // What the clients draw of it, decided here (present.rs).
                     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
                     row["state"] = json!(crate::present::row_state(&agents));
+                    for agent in row.get_mut("agents").and_then(Value::as_array_mut).into_iter().flatten() {
+                        crate::present::session(agent);
+                    }
+                    // Where it came from, for its mark's tip: the Slack workspace, then the thread's channel.
+                    if row.get("connect").is_some_and(|c| !c.is_null()) {
+                        let o = row.get("origin").cloned().unwrap_or(Value::Null);
+                        let text = |k: &str| o.get(k).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+                        let place = text("channelName").map(|n| format!("#{n}"))
+                            .or_else(|| text("channel").filter(|c| c.starts_with('D')).map(|_| "私信".to_string()));
+                        row["originText"] = json!(["Slack".to_string()].into_iter().chain(text("teamName")).chain(place).collect::<Vec<_>>().join(" · "));
+                    }
+                    // Its line: what was said last, without mentions (a file alone says so).
+                    if let Some(last) = row.get_mut("last").filter(|l| l.is_object()) {
+                        let text = crate::format::clean_text(last.get("text").and_then(Value::as_str).unwrap_or(""));
+                        last["preview"] = json!(if text.is_empty() { "（文件）".to_string() } else { text });
+                    }
                     if let Some(by) = crate::present::last_by(&row, &me, &slack_users, &members) {
                         row["last"]["by"] = by;
+                        // What its picture says when pointed at: who, and an agent's state.
+                        let name = row["last"]["by"]["name"].as_str().unwrap_or("").to_string();
+                        row["last"]["by"]["label"] = json!(match row["last"]["by"]["state"].as_str() {
+                            Some(state) => format!("{name}（{}）", crate::present::badge_text(state)),
+                            None => name,
+                        });
+                        let model = row["last"]["by"]["model"].as_str().map(str::to_string);
+                        row["last"]["by"]["maker"] = crate::present::maker(model.as_deref());
                     }
                     rows.push(row);
                 }
@@ -429,7 +434,10 @@ impl Views {
                 _ => days.push((d, t, vec![row])),
             }
         }
-        days.into_iter().map(|(d, t, items)| json!({ "daysAgo": today - d, "at": t, "items": items })).collect()
+        let (now, offset) = (self.host.now_ms(), self.host.utc_offset_min(self.host.now_ms()));
+        days.into_iter()
+            .map(|(d, t, items)| json!({ "daysAgo": today - d, "at": t, "label": crate::format::day_label(t, now, offset), "items": items }))
+            .collect()
     }
 
     fn stations_view(&self, scope: &str) -> Option<Result<Value>> {
@@ -441,14 +449,35 @@ impl Views {
             // Offline, what was kept of it still shows (the data center holds its overview).
             let read = |topic: Topic| self.ok(topic);
             let overview = read(Topic::Overview { station: s.address.clone() });
-            let host = read(Topic::Host { station: s.address.clone() });
+            let host = read(Topic::Host { station: s.address.clone() }).map(|mut h| {
+                crate::present::host(&mut h);
+                h
+            });
+            let mut shown = overview.clone();
+            if let Some(o) = shown.as_mut() {
+                crate::present::decorate(&Topic::Overview { station: s.address.clone() }, o, self.clock());
+            }
+            // Its line in a list: offline since when, or what it is and whether its agents are at work.
+            let c = self.clock();
+            let summary = if !s.online {
+                match s.last_seen.as_f64() {
+                    Some(seen) => format!("离线 · {}", crate::format::relative_time(seen * 1000.0, c.now, c.offset_min)),
+                    None => "离线".to_string(),
+                }
+            } else if let Some(h) = &host {
+                let running = overview.as_ref().and_then(|o| o.get("counts")).and_then(|c| c.get("running")).and_then(Value::as_u64).unwrap_or(0);
+                let what = h.get("cpuModel").and_then(Value::as_str).filter(|m| !m.is_empty()).or_else(|| h.get("os").and_then(Value::as_str)).unwrap_or("");
+                format!("{what} · {}", if running > 0 { format!("{running} 个 agent 在跑") } else { "空闲".to_string() })
+            } else {
+                "正在连接…".to_string()
+            };
             json!({
-                "station": s.address, "id": s.id, "name": s.name,
+                "station": s.address, "id": s.id, "name": s.name, "summary": summary,
                 "online": s.online, "lastSeen": s.last_seen, "version": s.version,
                 "link": self.link(&s.address, s.online),
                 "runtimes": runtimes(overview.as_ref()),
-                "models": models(overview.as_ref()),
-                "overview": overview, "host": host,
+                "models": models(overview.as_ref(), self.host.now_ms()),
+                "overview": shown, "host": host,
             })
         });
         Some(Ok(Value::Array(items.collect())))
@@ -460,6 +489,9 @@ impl Views {
             Err(error) => return Some(Err(error)),
         };
         let me = self.me(scope);
+        let members: Vec<Value> = if scope == "local" { Vec::new() } else {
+            self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default()
+        };
         let mut items = Vec::new();
         let mut loading = false;
         for s in stations.iter().filter(|s| s.online) {
@@ -467,13 +499,23 @@ impl Views {
                 None => loading = true,
                 Some(Err(_)) => {}
                 Some(Ok(overview)) => {
-                    for connect in overview.get("connects").and_then(Value::as_array).into_iter().flatten() {
+                    let sessions: Vec<Value> = self.ok(Topic::Sessions { station: s.address.clone() }).and_then(|v| v.as_array().cloned()).unwrap_or_default();
+                    let threads: Vec<Value> = self.ok(Topic::Threads { station: s.address.clone() }).and_then(|v| v.as_array().cloned()).unwrap_or_default();
+                    let connects = overview.get("connects").and_then(Value::as_array).cloned().unwrap_or_default();
+                    for connect in &connects {
                         // Who added it is an email, or "local" (as the web's Connects page read it).
                         let creator = connect.get("createdBy").and_then(|c| c.get("id")).map(|id| json!({ "id": id, "email": id }));
                         if mine && !is_mine(&me, creator.as_ref()) {
                             continue;
                         }
-                        items.push(json!({ "station": s.address, "stationName": s.name, "connect": connect }));
+                        let mut shown = connect.clone();
+                        crate::present::connect(&mut shown);
+                        if let Some(owner) = shown.get_mut("createdBy") {
+                            crate::present::person(owner, &me, &members);
+                        }
+                        let mut item = json!({ "station": s.address, "stationName": s.name, "connect": shown });
+                        connect_sessions(&mut item, connect, &connects, &sessions, &threads, self.clock());
+                        items.push(item);
                     }
                 }
             }
@@ -513,12 +555,49 @@ impl Views {
         let slack_users: Vec<String> = self.ok(Topic::Overview { station: station.to_string() })
             .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
             .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
+        let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
+        let members: Vec<Value> = if scope == "local" { Vec::new() } else {
+            self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default()
+        };
+        // Mentions of its agents' bots read as their connects' names.
+        let bots: Vec<(String, String)> = agents.iter().filter_map(|a| crate::present::bot_of(a.get("connect")?)).collect();
+        // The messages its agents have not taken yet are the last people wrote: they wait.
+        let waiting = agents.iter().filter_map(|a| a["session"].get("pending").and_then(Value::as_u64)).max().unwrap_or(0) as usize;
+        let people_seqs: Vec<u64> = messages.iter().filter(|m| m.get("authorKind").and_then(Value::as_str) == Some("person"))
+            .filter_map(|m| m.get("seq").and_then(Value::as_u64)).collect();
+        let waits = &people_seqs[people_seqs.len().saturating_sub(waiting)..];
         for m in messages.iter_mut() {
-            let person = m.get("authorKind").and_then(Value::as_str) == Some("person");
+            let kind = m.get("authorKind").and_then(Value::as_str).unwrap_or("").to_string();
             let author = m.get("author").and_then(Value::as_str).unwrap_or("").to_string();
-            m["mine"] = json!(person && crate::present::is_viewer(&viewer, &author, &slack_users));
+            let said_name = m.get("authorName").and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string);
+            m["mine"] = json!(kind == "person" && crate::present::is_viewer(&viewer, &author, &slack_users));
             // What ember itself says in a chat (a limit hit, a failure): a notice, not someone's message.
-            m["system"] = json!(m.get("authorKind").and_then(Value::as_str) == Some("ember"));
+            m["system"] = json!(kind == "ember");
+            // Who said it, as its line shows them: an agent by its label and mark, a person by name and picture.
+            m["by"] = match kind.as_str() {
+                "agent" => {
+                    let agent = agents.iter().find(|a| a["session"].get("key").and_then(Value::as_str) == Some(&author));
+                    let session = agent.map(|a| &a["session"]);
+                    json!({
+                        "name": session.and_then(|s| s.get("agentText")).and_then(Value::as_str).map(str::to_string).or(said_name).unwrap_or_else(|| "agent".into()),
+                        "agent": agent.map(|_| author.clone()),
+                        "maker": session.map(|s| s["maker"].clone()),
+                        "runtime": session.and_then(|s| s.get("runtime")).cloned(),
+                    })
+                }
+                "ember" => json!({ "name": "ember" }),
+                _ => {
+                    let member = members.iter().find(|x| x.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(&author)));
+                    let name = crate::present::member_name(&members, &author).map(str::to_string).or(said_name)
+                        .unwrap_or_else(|| if author == "local" { "本机".into() } else { author.clone() });
+                    json!({ "name": name, "picture": member.and_then(|x| x.get("picture")).filter(|p| p.as_str().is_some_and(|p| !p.is_empty())) })
+                }
+            };
+            if kind == "person" {
+                let text = m.get("text").and_then(Value::as_str).unwrap_or("").to_string();
+                m["text"] = json!(crate::present::mentions(&text, &bots, &members));
+            }
+            m["waiting"] = json!(m.get("seq").and_then(Value::as_u64).is_some_and(|s| waits.contains(&s)));
         }
         // A sent message leaves the outbox as its own entry (or anything later) arrives.
         let newest = page.get("last").and_then(Value::as_u64);
@@ -533,16 +612,38 @@ impl Views {
             }
             shown
         };
-        // The scope the station belongs to: "local", or its workspace.
-        let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
+        // Its people, and who started it, named as the workspace knows them.
+        let mut people = thread.get("people").cloned().unwrap_or_else(|| json!([]));
+        for p in people.as_array_mut().into_iter().flatten() {
+            crate::present::person(p, &viewer, &members);
+        }
+        let mut thread = thread;
+        if let Some(creator) = thread.get_mut("creator") {
+            crate::present::person(creator, &viewer, &members);
+        }
+        // Where a Slack chat is, in words, and the way to it in Slack (while its connect is signed in there).
+        let str_of = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+        let slack = str_of(&thread, "surface") != "ember";
+        let channel = str_of(&thread, "channel");
+        let place = slack.then(|| if channel.starts_with('D') { "私信".to_string() } else {
+            format!("#{}", thread.get("channelName").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or(&channel))
+        });
+        let workspace_url = agents.iter().filter_map(|a| a.get("connect")).filter(|c| str_of(c, "kind") == "slack")
+            .find_map(|c| {
+                let conn = c.get("connection")?;
+                matches!(conn.get("state").and_then(Value::as_str), Some("connected" | "reconnecting")).then(|| conn.get("workspace")?.get("url")?.as_str().map(str::to_string)).flatten()
+            });
+        let slack_url = workspace_url.filter(|_| slack).map(|url| format!("{url}archives/{channel}/p{}", str_of(&thread, "threadTs").replace('.', "")));
         Some(Ok(json!({
             "me": self.me(scope),
+            "place": place,
+            "slackUrl": slack_url,
             // The same title the sidebar shows: the station's for its item, while it has one (as kept, until read).
             "title": self.store.value(&Topic::ChatRows { station: station.to_string() }).and_then(Result::ok)
                 .and_then(|rows| rows.as_array()?.iter().find(|r| r.get("thread").and_then(Value::as_u64) == Some(id))?.get("title").cloned())
                 .or_else(|| page.get("title").filter(|t| t.is_string()).cloned())
                 .unwrap_or_else(|| json!(chat_title(&thread))),
-            "people": thread.get("people").cloned().unwrap_or_else(|| json!([])),
+            "people": people,
             "agents": agents,
             "messages": messages,
             // Entries before those loaded (the thread counts from 1).
@@ -556,6 +657,40 @@ impl Views {
 }
 
 impl Views {
+    /// An agent's execution history (history.rs): its transcript read with its threads, its connect's bot, and the
+    /// workspace's people. It shows as soon as its transcript does; the rest names things as it arrives.
+    fn history(&self, station: &str, key: &str) -> Option<Result<Value>> {
+        let live = match self.store.value(&Topic::Live { station: station.to_string(), key: key.to_string() })? {
+            Ok(live) => live,
+            Err(error) => return Some(Err(error)),
+        };
+        let detail = self.ok(Topic::Session { station: station.to_string(), key: key.to_string() });
+        let session = detail.as_ref().and_then(|d| d.get("session")).cloned().unwrap_or(Value::Null);
+        let threads: Vec<Value> = detail.as_ref().and_then(|d| d.get("threads")).and_then(Value::as_array).cloned().unwrap_or_default();
+        let overview = self.ok(Topic::Overview { station: station.to_string() });
+        let connect = find(overview.as_ref().and_then(|o| o.get("connects")), session.get("connect"));
+        let connection = connect.get("connection");
+        let signed_in = connection.and_then(|c| c.get("state")).and_then(Value::as_str).is_some_and(|s| s == "connected" || s == "reconnecting");
+        let bot_user_id = connection.filter(|_| signed_in).and_then(|c| c.get("botUserId")).and_then(Value::as_str);
+        let bot_name = connect.get("name").and_then(Value::as_str).or_else(|| session.get("connect").and_then(Value::as_str)).unwrap_or("");
+        let slack_users: Vec<String> = overview.as_ref().and_then(|o| o.get("slackUsers")).and_then(Value::as_array).into_iter().flatten()
+            .filter_map(|u| u.as_str().map(str::to_string)).collect();
+        let members: Vec<Value> = station.split_once('/').and_then(|(scope, _)| self.ok(Topic::Workspace { workspace: scope.to_string() }))
+            .and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default();
+        let now = self.host.now_ms();
+        let cx = crate::history::Context {
+            threads: &threads,
+            members: &members,
+            slack_users: &slack_users,
+            bot_user_id,
+            bot_name,
+            runtime: session.get("runtime").and_then(Value::as_str).unwrap_or("claude"),
+            started: session.get("runtimeSessionId").is_some_and(|id| id.is_string()),
+            offset_min: self.host.utc_offset_min(now),
+        };
+        Some(Ok(crate::history::present(&live, &cx)))
+    }
+
     /// An agent of a chat: its session, the connect that started it, its profile, turns and threads. Until its detail
     /// is read it is its summary from the station's list (no turns, no threads yet); one that cannot be read at all
     /// (removed meanwhile) is `None`.
@@ -572,20 +707,28 @@ impl Views {
         };
         let overview = self.ok(Topic::Overview { station: station.to_string() });
         let of = |list: &str, id: Option<&Value>| find(overview.as_ref().and_then(|o| o.get(list)), id);
-        let session = detail.get("session").cloned().unwrap_or(Value::Null);
+        let mut session = detail.get("session").cloned().unwrap_or(Value::Null);
+        crate::present::session(&mut session);
+        let mut connect = of("connects", session.get("connect"));
+        crate::present::connect(&mut connect);
+        let mut profile = of("profiles", session.get("profile"));
+        crate::present::profile(&mut profile);
         Some(json!({
             // Where it stands, and its mark: decided here for every client (present.rs).
             "status": crate::present::session_status(&session),
             "badge": crate::present::badge(crate::present::session_status(&session)),
             "session": session,
-            "connect": of("connects", session.get("connect")),
-            "profile": of("profiles", session.get("profile")),
+            "connect": connect,
+            "profile": profile,
             // Whom it can be moved to: the profiles that run its runtime (its transcripts are shared by them all).
-            "profiles": runnable_on(overview.as_ref(), &session),
+            "profiles": runnable_on(overview.as_ref(), &session, self.host.now_ms()),
             // What it can be moved to, a model at a time: another model, and then who runs it.
-            "choices": choices(overview.as_ref(), &session),
+            "choices": choices(overview.as_ref(), &session, self.host.now_ms()),
             // What is worth a look about it now (a quota running out, the disk filling up): its history's summary.
-            "attention": attention(overview.as_ref(), &session),
+            "attention": attention(overview.as_ref(), &session, self.host.now_ms()),
+            // When its running turn began (null when none runs): its activity counts from there.
+            "since": detail.get("turns").and_then(Value::as_array).and_then(|t| t.last())
+                .filter(|t| t.get("endedAt").is_none_or(Value::is_null)).and_then(|t| t.get("startedAt")).cloned().unwrap_or(Value::Null),
             "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
             "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
         }))
@@ -704,6 +847,54 @@ fn is_mine(me: &Value, creator: Option<&Value>) -> bool {
     email(me).is_some_and(|mine| email(creator) == Some(mine))
 }
 
+/// A connect's sessions as its page shows them: `sessions`, its latest dozen (each with `chat`, the chat it was last
+/// talked in); `bound`, the one a single-session connect delivers into; `candidates`, those of its runtime it could
+/// deliver into instead, described; `running`, how many of its own run now.
+fn connect_sessions(item: &mut Value, connect: &Value, connects: &[Value], sessions: &[Value], threads: &[Value], clock: crate::present::Clock) {
+    let id = connect.get("id").and_then(Value::as_str).unwrap_or("");
+    let str_of = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    let at = |v: &Value| v.get("lastActiveAt").and_then(Value::as_f64).unwrap_or(0.0);
+    let name_of = |c: &str| connects.iter().find(|x| str_of(x, "id") == c).map(|x| str_of(x, "name")).filter(|n| !n.is_empty()).unwrap_or_else(|| c.to_string());
+    let shown = |s: &Value| {
+        let mut s = s.clone();
+        crate::present::session(&mut s);
+        let key = str_of(&s, "key");
+        s["chat"] = threads.iter()
+            .find(|t| t.get("sessions").and_then(Value::as_array).is_some_and(|m| m.iter().any(|m| m.get("session").and_then(Value::as_str) == Some(&key))))
+            .and_then(|t| t.get("id").cloned()).unwrap_or(Value::Null);
+        s
+    };
+    let mut by_recent: Vec<&Value> = sessions.iter().collect();
+    by_recent.sort_by(|a, b| at(b).total_cmp(&at(a)));
+    let bound_to = |s: &Value| s.get("boundTo").and_then(Value::as_array).is_some_and(|b| b.iter().any(|c| c.as_str() == Some(id)));
+    let own: Vec<Value> = by_recent.iter().filter(|s| str_of(s, "connect") == id).take(12).map(|s| shown(s)).collect();
+    let running = sessions.iter().filter(|s| (str_of(s, "connect") == id || bound_to(s)) && str_of(s, "process") == "running").count();
+    let current = connect.get("session").and_then(Value::as_str);
+    let runtime = connect.get("bind").and_then(|b| b.get("runtime")).and_then(Value::as_str).unwrap_or("");
+    let candidates: Vec<Value> = by_recent.iter().filter(|s| str_of(s, "runtime") == runtime).map(|s| {
+        let mut c = shown(s);
+        let others: Vec<String> = s.get("boundTo").and_then(Value::as_array).into_iter().flatten()
+            .filter_map(Value::as_str).filter(|c| *c != id).map(name_of).collect();
+        let mut description = format!(
+            "{} · {} · {} 轮 · {}",
+            if str_of(s, "scope") == "all" { "单会话" } else { "来自一个 thread" },
+            name_of(&str_of(s, "connect")),
+            s.get("turns").and_then(Value::as_u64).unwrap_or(0),
+            crate::format::relative_time(at(s), clock.now, clock.offset_min),
+        );
+        if !others.is_empty() {
+            description.push_str(&format!(" · 也被 {} 使用", others.join("、")));
+        }
+        c["description"] = json!(description);
+        c["current"] = json!(Some(str_of(s, "key").as_str()) == current);
+        c
+    }).collect();
+    item["sessions"] = json!(own);
+    item["bound"] = sessions.iter().find(|s| current.is_some_and(|k| str_of(s, "key") == k)).map(shown).unwrap_or(Value::Null);
+    item["candidates"] = json!(candidates);
+    item["running"] = json!(running);
+}
+
 /// The runtimes a chat can start on and their models: those with a profile that has models enabled,
 /// each with its profiles' models (modelsOf in web/src/NewChat.tsx: distinct and sorted).
 fn runtimes(overview: Option<&Value>) -> Value {
@@ -729,19 +920,28 @@ const LOW_DISK_BYTES: f64 = 10.0 * 1024.0 * 1024.0 * 1024.0;
 /// `{ kind: "account", state, name, detail }` (its account cannot run: signed out, key refused),
 /// `{ kind: "quota", label, left, until }` (a window of its account running out),
 /// `{ kind: "disk", freeBytes, totalBytes }` (the station's disk filling up).
-fn attention(overview: Option<&Value>, session: &Value) -> Value {
+fn attention(overview: Option<&Value>, session: &Value, now: f64) -> Value {
     let mut out = Vec::new();
     let profile = find(overview.and_then(|o| o.get("profiles")), session.get("profile"));
     if let Some(p) = Some(&profile).filter(|p| p.is_object()) {
         let check = p.get("check");
         if let Some(state @ ("login" | "failed")) = check.and_then(|c| c.get("state")).and_then(Value::as_str) {
-            out.push(json!({ "kind": "account", "state": state, "name": p.get("name"), "detail": check.and_then(|c| c.get("detail")) }));
+            let name = p.get("name").and_then(Value::as_str).unwrap_or("");
+            let text = if state == "login" { format!("「{name}」要重新登录") } else { format!("「{name}」的 key 被拒绝") };
+            out.push(json!({ "kind": "account", "state": state, "name": name, "detail": check.and_then(|c| c.get("detail")), "text": text }));
         }
         if p.get("quota").and_then(|q| q.get("state")).and_then(Value::as_str) == Some("ok") {
             for w in p.get("quota").and_then(|q| q.get("windows")).and_then(Value::as_array).into_iter().flatten() {
                 let left = 100.0 - w.get("usedPercent").and_then(Value::as_f64).unwrap_or(0.0);
                 if left <= LOW_LEFT {
-                    out.push(json!({ "kind": "quota", "label": w.get("label"), "left": left.max(0.0).round(), "until": w.get("resetsAt") }));
+                    let label = w.get("label").and_then(Value::as_str).unwrap_or("");
+                    let left = left.max(0.0).round();
+                    let refills = w.get("resetsAt").and_then(Value::as_f64).map(|at| crate::format::refills_in(at, now));
+                    out.push(json!({
+                        "kind": "quota", "label": label, "left": left, "until": w.get("resetsAt"),
+                        "mark": crate::format::window_mark(label).0, "tip": [format!("{label}剩余 {left}%"), refills],
+                        "level": if left <= 10.0 { "red" } else { "amber" },
+                    }));
                 }
             }
         }
@@ -749,7 +949,7 @@ fn attention(overview: Option<&Value>, session: &Value) -> Value {
     if let Some(disk) = overview.and_then(|o| o.get("disk")).filter(|d| d.is_object()) {
         let (free, total) = (disk.get("freeBytes").and_then(Value::as_f64).unwrap_or(0.0), disk.get("totalBytes").and_then(Value::as_f64).unwrap_or(0.0));
         if total > 0.0 && (free / total * 100.0 <= LOW_DISK || free <= LOW_DISK_BYTES) {
-            out.push(json!({ "kind": "disk", "freeBytes": free, "totalBytes": total }));
+            out.push(json!({ "kind": "disk", "freeBytes": free, "totalBytes": total, "text": format!("磁盘剩 {}", crate::format::gb(free)) }));
         }
     }
     Value::Array(out)
@@ -757,16 +957,16 @@ fn attention(overview: Option<&Value>, session: &Value) -> Value {
 
 /// The profiles a session can run on, those of its runtime with its model enabled: `{ id, name, current, spent, kind, runtime, quota }`
 /// (`spent`: a window of it is used up, and when it is back).
-fn runnable_on(overview: Option<&Value>, session: &Value) -> Value {
+fn runnable_on(overview: Option<&Value>, session: &Value, now: f64) -> Value {
     let runtime = session.get("runtime").and_then(Value::as_str).unwrap_or("");
     let model = session.get("model").and_then(Value::as_str);
     let current = session.get("profile").and_then(Value::as_str);
-    profiles_running(overview, runtime, model, current)
+    profiles_running(overview, runtime, model, current, now)
 }
 
 /// The models a session can move to (those a profile of its runtime has enabled), each with the profiles that run it:
 /// `[{ model, profiles }]`, `profiles` as `runnable_on` has them.
-fn choices(overview: Option<&Value>, session: &Value) -> Value {
+fn choices(overview: Option<&Value>, session: &Value, now: f64) -> Value {
     let runtime = session.get("runtime").and_then(Value::as_str).unwrap_or("");
     let current = session.get("profile").and_then(Value::as_str);
     let models: BTreeSet<&str> = overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
@@ -774,11 +974,14 @@ fn choices(overview: Option<&Value>, session: &Value) -> Value {
         .flat_map(|p| p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str))
         .collect();
     Value::Array(models.into_iter()
-        .map(|model| json!({ "model": model, "profiles": profiles_running(overview, runtime, Some(model), current) }))
+        .map(|model| json!({
+            "model": model, "maker": crate::present::maker(Some(model)),
+            "profiles": profiles_running(overview, runtime, Some(model), current, now),
+        }))
         .collect())
 }
 
-fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>, current: Option<&str>) -> Value {
+fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>, current: Option<&str>, now: f64) -> Value {
     Value::Array(overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
         .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
         // With a model chosen, only those that have it enabled can run it.
@@ -788,7 +991,7 @@ fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>
             let spent = spent_until(p);
             json!({
                 "id": id, "name": p.get("name").cloned().unwrap_or(json!(id)), "current": Some(id) == current,
-                "spent": spent.map(|until| json!({ "until": until.is_finite().then_some(until) })),
+                "spent": spent.map(|until| spent_view(until, now)),
                 // What its line shows: whose account it is, and its quota.
                 "kind": p.get("access").and_then(|a| a.get("kind")).cloned().unwrap_or(Value::Null),
                 "runtime": p.get("runtime").cloned().unwrap_or(Value::Null),
@@ -800,7 +1003,7 @@ fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>
 
 /// The models the station can run, each with the runtimes it runs on (those of the profiles that have it enabled):
 /// a model is chosen first, and a runtime only when it has more than one.
-fn models(overview: Option<&Value>) -> Value {
+fn models(overview: Option<&Value>, now: f64) -> Value {
     let mut on: BTreeMap<&str, (BTreeSet<&str>, Vec<Option<f64>>)> = BTreeMap::new();
     for p in overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten() {
         let runtimes: Vec<&str> = p.get("runtimes").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
@@ -818,8 +1021,26 @@ fn models(overview: Option<&Value>) -> Value {
         runtimes.sort_by_key(order);
         // Spent when every account that runs it has a window used up; back when the first of them refills.
         let spent = backs.iter().all(Option::is_some).then(|| backs.iter().flatten().copied().fold(f64::INFINITY, f64::min));
-        json!({ "model": model, "runtimes": runtimes, "spent": spent.map(|until| json!({ "until": until.is_finite().then_some(until) })) })
+        // For each runtime: how hard it can think, and who can run it there.
+        let efforts: serde_json::Map<String, Value> = runtimes.iter().map(|r| (r.to_string(), json!(crate::format::efforts(r)))).collect();
+        let accounts: serde_json::Map<String, Value> = runtimes.iter().map(|r| (r.to_string(), profiles_running(overview, r, Some(model), None, now))).collect();
+        json!({
+            "model": model, "runtimes": runtimes, "maker": crate::present::maker(Some(model)),
+            "efforts": efforts, "accounts": accounts,
+            "spent": spent.map(|until| spent_view(until, now)),
+        })
     }).collect())
+}
+
+/// Used up until a time (or for no one knows how long): `{ until, text, back }` (额度用完 · 3 小时后恢复; 3 小时后恢复).
+fn spent_view(until: f64, now: f64) -> Value {
+    let until = until.is_finite().then_some(until);
+    let back = until.map(|at| format!("{}恢复", crate::format::time_until(at, now)));
+    let text = match &back {
+        Some(back) => format!("额度用完 · {back}"),
+        None => "额度用完".to_string(),
+    };
+    json!({ "until": until, "text": text, "back": back })
 }
 
 /// When a profile whose quota has a window used up can run again: when the last of those windows refills (unknown:
@@ -1018,11 +1239,11 @@ mod tests {
             "disk": {"freeBytes": free, "totalBytes": 1000e9},
         });
         let session = json!({"profile": "a"});
-        assert_eq!(attention(Some(&overview("ok", 50.0, 500e9)), &session), json!([]), "nothing when all is well");
-        assert_eq!(attention(Some(&overview("login", 92.0, 5e9)), &session), json!([
-            {"kind": "account", "state": "login", "name": "A", "detail": "d"},
-            {"kind": "quota", "label": "每周", "left": 8.0, "until": 2},
-            {"kind": "disk", "freeBytes": 5e9, "totalBytes": 1000e9},
+        assert_eq!(attention(Some(&overview("ok", 50.0, 500e9)), &session, 0.0), json!([]), "nothing when all is well");
+        assert_eq!(attention(Some(&overview("login", 92.0, 5e9)), &session, 0.0), json!([
+            {"kind": "account", "state": "login", "name": "A", "detail": "d", "text": "「A」要重新登录"},
+            {"kind": "quota", "label": "每周", "left": 8.0, "until": 2, "mark": "W", "tip": ["每周剩余 8%", "马上刷新"], "level": "red"},
+            {"kind": "disk", "freeBytes": 5e9, "totalBytes": 1000e9, "text": "磁盘剩 5 GB"},
         ]));
     }
 
@@ -1036,12 +1257,12 @@ mod tests {
         ]});
         // Of its runtime, and with its model enabled.
         let session = json!({"runtime": "codex", "profile": "a", "model": "m"});
-        assert_eq!(runnable_on(Some(&overview), &session), json!([
+        assert_eq!(runnable_on(Some(&overview), &session, 0.0), json!([
             {"id": "a", "name": "A", "current": true, "spent": null, "kind": null, "runtime": null, "quota": null},
-            {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0}, "kind": null, "runtime": null, "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}},
+            {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0, "text": "额度用完 · 1 分钟内恢复", "back": "1 分钟内恢复"}, "kind": null, "runtime": null, "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}},
         ]));
         // Every model of its runtime, each with who runs it.
-        let choices = choices(Some(&overview), &session);
+        let choices = choices(Some(&overview), &session, 0.0);
         assert!(choices.as_array().unwrap().iter().any(|c| c["model"] == "m" && c["profiles"].as_array().unwrap().len() == 2));
     }
 
@@ -1089,7 +1310,7 @@ mod tests {
             shown["stationName"] = json!("alpha");
             // What clients draw of it is the core's: its state (none: its agent is idle).
             shown["state"] = Value::Null;
-            assert_eq!(items[2], shown);
+            assert_eq!(plain(&items[2]), shown);
 
             // A station going offline keeps its chats listed, as they were read (the data center keeps them); it only
             // says it is offline.
@@ -1305,16 +1526,21 @@ mod tests {
             assert_eq!(v[0]["version"], "0.4.0");
             assert_eq!(v[0]["online"], true);
             assert_eq!(v[0]["link"], json!({"state": "error", "message": "没有权限"}));
-            assert_eq!(v[0]["overview"], overview_a);
-            assert_eq!(v[0]["host"], json!({"hostname": "studio"}));
+            assert_eq!(plain(&v[0]["overview"]), overview_a);
+            assert_eq!(v[0]["host"]["hostname"], "studio");
             assert_eq!(v[0]["runtimes"], json!([{"runtime": "claude", "models": ["deepseek-flash", "opus", "sonnet"]}, {"runtime": "codex", "models": ["deepseek-flash", "gpt-5", "o3"]}]));
             // An account run on both offers its model on both: a runtime is chosen for it.
-            assert_eq!(v[0]["models"], json!([
-                {"model": "deepseek-flash", "runtimes": ["claude", "codex"], "spent": null}, {"model": "gpt-5", "runtimes": ["codex"], "spent": {"until": 5000.0}},
-                {"model": "o3", "runtimes": ["codex"], "spent": {"until": 5000.0}}, {"model": "opus", "runtimes": ["claude"], "spent": null}, {"model": "sonnet", "runtimes": ["claude"], "spent": null},
-            ]));
+            let models: Vec<Value> = v[0]["models"].as_array().unwrap().iter().map(|m| json!({"model": m["model"], "runtimes": m["runtimes"], "spent": m["spent"]["until"]})).collect();
+            assert_eq!(models, vec![
+                json!({"model": "deepseek-flash", "runtimes": ["claude", "codex"], "spent": null}), json!({"model": "gpt-5", "runtimes": ["codex"], "spent": 5000.0}),
+                json!({"model": "o3", "runtimes": ["codex"], "spent": 5000.0}), json!({"model": "opus", "runtimes": ["claude"], "spent": null}), json!({"model": "sonnet", "runtimes": ["claude"], "spent": null}),
+            ]);
+            // Each with its maker, how hard each runtime can think, who runs it there, and a used-up quota in words.
+            let gpt = &v[0]["models"][1];
+            assert_eq!((gpt["maker"]["id"].as_str(), gpt["efforts"]["codex"][0].as_str(), gpt["accounts"]["codex"][0]["id"].as_str()), (Some("openai"), Some("minimal"), Some("p1")));
+            assert!(gpt["spent"]["text"].as_str().unwrap().starts_with("额度用完 · "));
             assert_eq!(
-                v[1],
+                plain(&v[1]),
                 json!({"station": "ws/b", "id": "b", "name": "beta", "online": false, "lastSeen": v[1]["lastSeen"], "version": null,
                     "link": {"state": "offline", "message": null}, "overview": null, "host": null, "runtimes": [], "models": []})
             );
@@ -1330,7 +1556,7 @@ mod tests {
             t.subscribe(1, Topic::Connects { scope: "ws".into(), mine: false });
             t.set(workspace(), stations(t.now_s(), true, true));
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![workspace(), overview("ws/a"), overview("ws/b")]));
+            assert_eq!(sorted(t.started()), sorted(vec![workspace(), overview("ws/a"), overview("ws/b"), sessions("ws/a"), sessions("ws/b"), threads("ws/a"), threads("ws/b")]));
             let me = json!({"id": "Me@x.com", "email": "Me@x.com"});
             assert_eq!(ui.value.as_ref().unwrap(), &json!({"me": me, "items": [], "loading": true}));
             let c1 = json!({"id": "c1", "createdBy": {"id": "me@x.com", "name": "我"}});
@@ -1338,38 +1564,50 @@ mod tests {
             t.set(overview("ws/a"), json!({"connects": [c1, c2]}));
             t.store.set(&overview("ws/b"), Err(CoreError::new("offline", "连不上")));
             t.read(&mut ui, 1).await;
-            assert_eq!(ui.value.as_ref().unwrap(), &json!({"me": me, "items": [
-                {"station": "ws/a", "stationName": "alpha", "connect": c1},
-                {"station": "ws/a", "stationName": "alpha", "connect": c2},
-            ], "loading": false}));
+            let none = json!({"sessions": [], "bound": null, "candidates": [], "running": 0});
+            let item = |c: &Value| {
+                let mut item = json!({"station": "ws/a", "stationName": "alpha", "connect": c});
+                item.as_object_mut().unwrap().extend(none.as_object().unwrap().clone());
+                item
+            };
+            assert_eq!(plain(ui.value.as_ref().unwrap()), json!({"me": me, "items": [item(&c1), item(&c2)], "loading": false}));
+            // What it says of itself is the core's.
+            assert_eq!(ui.value.as_ref().unwrap()["items"][0]["connect"]["statusText"], "未连接 Slack");
             // Only mine: the connects the viewer added.
             let mut mine = Ui::default();
             t.subscribe(2, Topic::Connects { scope: "ws".into(), mine: true });
             t.read(&mut mine, 2).await;
-            assert_eq!(mine.value.unwrap()["items"], json!([{"station": "ws/a", "stationName": "alpha", "connect": c1}]));
+            assert_eq!(plain(&mine.value.unwrap()["items"]), json!([item(&c1)]));
         });
     }
 
     #[test]
-    fn chats_turns_the_day_at_local_midnight() {
+    fn times_in_words_go_out_fresh_each_minute() {
         run(async {
             let t = setup();
             t.host.set_utc_offset_min(480);
+            t.store.set_clock();
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
             t.read(&mut ui, 1).await;
-            // One clock, set for the next local midnight (and a second).
-            let now = t.host.now_ms();
-            let offset = 480.0 * 60_000.0;
-            let midnight = (((now + offset) / DAY_MS).floor() + 1.0) * DAY_MS - offset;
-            let asked: Vec<u64> = t.host.sleeps.borrow().iter().copied().filter(|ms| *ms > EVICT_AFTER_MS).collect();
-            assert_eq!(asked.len(), 1, "{:?}", t.host.sleeps.borrow());
-            assert!((asked[0] as f64 - (midnight - now + 1000.0)).abs() < 2000.0);
-            // A second chats view shares it.
+            // One clock, set for a second past the next minute (and again each minute), shared by everything shown.
+            let clock = |ms: &u64| *ms > 1000 && *ms <= 61_000 && *ms != EVICT_AFTER_MS;
+            let count = || t.host.sleeps.borrow().iter().filter(|ms| clock(ms)).count();
+            let before = count();
+            assert!(before >= 1, "{:?}", t.host.sleeps.borrow());
             t.subscribe(2, Topic::Chats { scope: "local".into(), mine: true });
-            t.host.settle().await;
-            assert_eq!(t.host.sleeps.borrow().iter().filter(|ms| **ms > EVICT_AFTER_MS).count(), 1);
+            assert_eq!(count(), before, "a second view shares it");
         });
+    }
+
+    /// A value without what the clients show of it (present.rs): what a view puts together, alone.
+    fn plain(v: &Value) -> Value {
+        const SHOWN: [&str; 31] = ["time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "mark", "summary"];
+        match v {
+            Value::Array(items) => Value::Array(items.iter().map(plain).collect()),
+            Value::Object(map) => Value::Object(map.iter().filter(|(k, _)| !SHOWN.contains(&k.as_str())).map(|(k, v)| (k.clone(), plain(v))).collect()),
+            other => other.clone(),
+        }
     }
 
     fn session_of(st: &str, key: &str) -> Topic {
@@ -1457,7 +1695,7 @@ mod tests {
             assert_eq!(v["agents"], json!([]));
             t.set(sessions("ws/a"), json!([{"key": "j", "connect": "ember", "profile": "p1"}]));
             t.read(&mut ui, 1).await;
-            assert_eq!(ui.value.clone().unwrap()["agents"], json!([{"status": "idle", "badge": null, "session": {"key": "j", "connect": "ember", "profile": "p1"}, "connect": null, "profile": null, "profiles": [], "choices": [], "attention": [], "turns": [], "threads": []}]));
+            assert_eq!(plain(&ui.value.clone().unwrap()["agents"]), json!([{"status": "idle", "badge": null, "session": {"key": "j", "connect": "ember", "profile": "p1"}, "connect": null, "profile": null, "profiles": [], "choices": [], "attention": [], "turns": [], "threads": []}]));
 
             t.set(session_of("ws/a", "k"), json!({"session": {"key": "k", "connect": "c1", "profile": "p2"}, "threads": [chat.clone()], "turns": [{"id": "t1"}]}));
             t.store.set(&session_of("ws/a", "j"), Err(CoreError::new("http_404", "没有这个会话")));
@@ -1465,22 +1703,23 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             assert_eq!(v["title"], "排查");
-            assert_eq!(v["thread"], chat);
-            assert_eq!(v["people"], chat["people"]);
+            assert_eq!(plain(&v["thread"]), chat);
+            assert_eq!(plain(&v["people"]), chat["people"]);
+            assert_eq!(v["people"][0]["shown"]["name"], "本机管理页");
             assert_eq!(v["link"], json!({"state": "connecting", "message": null}));
             assert_eq!((v["messages"].as_array().unwrap().len(), v["more"].clone()), (30, json!(true)));
             assert_eq!(v["agents"].as_array().unwrap().len(), 1, "an agent that cannot be read is left out");
             assert_eq!(v["agents"][0]["session"]["key"], "k");
             assert_eq!(v["agents"][0]["turns"], json!([{"id": "t1"}]));
-            assert_eq!(v["agents"][0]["threads"], json!([chat]));
+            assert_eq!(plain(&v["agents"][0]["threads"]), json!([chat]));
             assert_eq!((v["agents"][0]["connect"].clone(), v["agents"][0]["profile"].clone()), (Value::Null, Value::Null));
 
             t.set(overview("ws/a"), json!({"connects": [{"id": "c1", "name": "Slack"}], "profiles": [{"id": "p1"}, {"id": "p2", "name": "主力"}]}));
             t.set(link("ws/a"), json!({"state": "online"}));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
-            assert_eq!(v["agents"][0]["connect"], json!({"id": "c1", "name": "Slack"}));
-            assert_eq!(v["agents"][0]["profile"], json!({"id": "p2", "name": "主力"}));
+            assert_eq!(plain(&v["agents"][0]["connect"]), json!({"id": "c1", "name": "Slack"}));
+            assert_eq!(plain(&v["agents"][0]["profile"]), json!({"id": "p2", "name": "主力"}));
             assert_eq!(v["link"], json!({"state": "online", "message": null}));
 
             // A new message goes out as an append.
@@ -1496,7 +1735,7 @@ mod tests {
             let mut appended = merge(&[entry(41, "新的")]);
             appended[0]["mine"] = json!(false);
             appended[0]["system"] = json!(false);
-            assert_eq!(serde_json::to_value(delta).unwrap(), json!([{"path": ["messages"], "append": appended}]));
+            assert_eq!(plain(&serde_json::to_value(delta).unwrap()), json!([{"path": ["messages"], "append": appended}]));
             delta::apply(ui.value.as_mut().unwrap(), delta);
             // An edit shows in its message: merged here, not by the page.
             t.store.update(&page_of("ws/a", 7), &mut |p| {
@@ -1574,7 +1813,7 @@ mod tests {
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             assert_eq!((v["thread"].clone(), v["title"].clone(), v["messages"].clone(), v["outbox"].clone(), v["more"].clone()), (Value::Null, json!("部署挂了"), json!([]), json!([]), json!(false)));
-            assert_eq!(v["agents"], json!([{"status": "idle", "badge": null, "session": {"key": "k", "connect": "c1", "profile": "p1"}, "connect": {"id": "c1", "name": "Slack"}, "profile": null, "profiles": [], "choices": [], "attention": [],
+            assert_eq!(plain(&v["agents"]), json!([{"status": "idle", "badge": null, "session": {"key": "k", "connect": "c1", "profile": "p1"}, "connect": {"id": "c1", "name": "Slack"}, "profile": null, "profiles": [], "choices": [], "attention": [],
                 "turns": [{"id": "t1"}], "threads": [{"id": 3, "surface": "slack:T1"}]}]));
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             // Deleted: the page says so.

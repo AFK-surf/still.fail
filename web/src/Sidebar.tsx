@@ -4,7 +4,6 @@ import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation } from "react-router";
 import { MeContext, useChats, type ChatItem } from "./api.ts";
-import { BADGE_LABEL, cleanText, dayLabel } from "./format.ts";
 import { Avatar, ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
@@ -93,15 +92,12 @@ function ChatPane({ chats, scope, onlyMine, newChat, settings, hidden }: { chats
           : stations.length ? <>还没有会话。在 Slack 里 @ {stations.length > 1 ? "它们" : "它"}，或者 <NavLink className="inline-link" to={newChat}>新建对话</NavLink>。</>
           : <>还没有 station，到 <NavLink className="inline-link" to={`${settings}/stations`}>设置 → Station</NavLink> 添加。</>}</p>
       )}
-      {days.map((day) => {
-        const label = dayLabel(day.at);
-        return (
-          <section key={day.daysAgo} aria-label={label}>
-            <div className="nav-heading">{label}</div>
-            {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} />)}
-          </section>
-        );
-      })}
+      {days.map((day) => (
+        <section key={day.daysAgo} aria-label={day.label}>
+          <div className="nav-heading">{day.label}</div>
+          {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} />)}
+        </section>
+      ))}
     </div>
   );
 }
@@ -124,23 +120,16 @@ function ChatRow({ item }: { item: ChatItem }) {
           <span className="nav-session-title">{item.title}</span>
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Slack is the only kind of connect there is. */}
-          {connect && <Tip label={originLabel(item)} side="right"><span className="session-kind"><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
+          {connect && <Tip label={item.originText ?? "Slack"} side="right"><span className="session-kind"><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
         </span>
         {/* People are in the chat itself; here only the last thing said and when. */}
         <span className="nav-session-meta">
           {item.last ? <LastMessage item={item} /> : <span className="nav-session-last" />}
-          <Time className="nav-time" at={item.lastActiveAt} fixed />
+          <Time className="nav-time" stamp={item.time?.lastActiveAt} fixed />
         </span>
       </span>
     </NavLink>
   );
-}
-
-/** Where a chat's agent came from, for the connect icon's tip: the Slack workspace, then the thread's channel. */
-function originLabel(item: ChatItem): string {
-  const o = item.origin;
-  const where = !o ? null : o.channelName ? `#${o.channelName}` : o.channel.startsWith("D") ? "私信" : null;
-  return ["Slack", o?.teamName, where].filter(Boolean).join(" · ");
 }
 
 /**
@@ -150,12 +139,11 @@ function originLabel(item: ChatItem): string {
 function LastMessage({ item }: { item: ChatItem }) {
   const last = item.last!;
   const by = last.by;
-  const name = by?.name ?? last.authorName ?? last.author;
+  const name = by?.name ?? last.author;
   const who = !by || by.kind === "person"
     ? by?.picture ? <img className="person-pic" src={by.picture} alt="" width={12} height={12} referrerPolicy="no-referrer" /> : <Avatar id={last.author} name={name} size={12} />
     : by.kind === "ember" ? <Mark size={12} />
-    : <span className="who-agent" data-badge={by.state ?? undefined}><ModelLogo model={by.model ?? null} runtime={by.runtime ?? "claude"} size={12} /></span>;
-  const label = by?.kind === "agent" && by.state ? `${name}（${BADGE_LABEL[by.state]}）` : name;
-  const text = cleanText(last.text) || "（文件）";
-  return <span className="nav-session-last"><span className="nav-session-who" title={label} aria-label={`${label}：`}>{who}</span>{text}</span>;
+    : <span className="who-agent" data-badge={by.state ?? undefined}><ModelLogo maker={by.maker} runtime={by.runtime ?? "claude"} size={12} /></span>;
+  const label = by?.label ?? name;
+  return <span className="nav-session-last"><span className="nav-session-who" title={label} aria-label={`${label}：`}>{who}</span>{last.preview}</span>;
 }

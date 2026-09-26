@@ -140,19 +140,15 @@ import dev.ember.android.data.ChatAgentView
 import dev.ember.android.data.ChatOf
 import dev.ember.android.data.ChatState
 import dev.ember.android.data.ChatView
+import dev.ember.android.data.Maker
 import dev.ember.android.data.ChatsView
 import dev.ember.android.data.LiveView
 import dev.ember.android.data.MessageView
 import dev.ember.android.data.OutboxItem
-import dev.ember.android.data.PROCESS_LABEL
 import dev.ember.android.data.Quote
 import dev.ember.android.data.ThreadView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceView
-import dev.ember.android.data.agentLabel
-import dev.ember.android.data.elapsed
-import dev.ember.android.data.isMe
-import dev.ember.android.data.relativeTime
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.data.state
 import dev.ember.android.ui.Avatar
@@ -188,15 +184,6 @@ import kotlinx.coroutines.withContext
 /** The station part of an address ("ws/studio" → "studio"). */
 fun stationName(address: String) = address.substringAfter('/')
 
-/** People by email, from the workspace's members: how the web names people too. */
-@Composable
-fun rememberPeople(station: String): (String) -> String? {
-    val app = LocalApp.current
-    val ws by rememberTopic<WorkspaceView>(app.core, Topics.workspace(station.substringBefore('/')))
-    val members = ws.value?.members.orEmpty().associate { it.email.lowercase() to it.name }
-    return { id -> members[id.lowercase()]?.takeIf { it.isNotEmpty() } }
-}
-
 /** A station's name in its workspace. */
 @Composable
 fun rememberStationName(station: String): String {
@@ -209,8 +196,8 @@ fun rememberStationName(station: String): String {
 class ChatAgent(val view: ChatAgentView, val live: LiveView?) {
     val key get() = view.session.key
     val runtime get() = view.session.runtime
-    val model get() = live?.usage?.model ?: view.session.model
-    val who get() = agentLabel(model, view.session.effort)
+    val maker get() = view.session.maker
+    val who get() = view.session.agentText
     val state get() = view.state
 }
 
@@ -257,7 +244,7 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ch
         if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
         agents.forEach { a ->
             // Not clipped: the state's dot sits over the mark's corner, partly outside it.
-            Box(Modifier.clickable { openHistory(app, station, of, a.key) }) { ModelMark(a.model, a.runtime, 22.dp, a.state) }
+            Box(Modifier.clickable { openHistory(app, station, of, a.key) }) { ModelMark(a.maker, a.runtime, 22.dp, a.state) }
         }
     }
 }
@@ -310,16 +297,12 @@ private sealed interface Entry {
 }
 
 /** An agent at work: who it is, its transcript and steps in flight, and since when its turn runs. */
-class AgentAtWork(val key: String, val who: String, val runtime: String, val model: String?, val live: LiveView?, val since: Long?)
+class AgentAtWork(val key: String, val who: String, val runtime: String, val maker: Maker?, val live: LiveView?, val since: Long?)
 
 /** What the messages need to know about the chat: who is who, and whose workspace keeps a file. */
-private class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<ChatAgent>, val person: (String) -> String?) {
-    val mentions: Map<String, String> = view.agents.mapNotNull { a -> a.connect?.let { c -> c.botUserId?.let { it to c.name } } }.toMap()
+private class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<ChatAgent>) {
     fun agent(key: String) = agents.firstOrNull { it.key == key }
     fun mine(m: MessageView) = m.mine
-    fun name(m: MessageView) = person(m.author) ?: m.authorName ?: if (m.author == "local") "本机" else m.author
-    /** Slack's <@U…> mentions by name: an agent's bot by its connect's, a person by theirs where known. */
-    fun mention(text: String) = text.replace(Regex("<@([A-Z0-9]+)>")) { r -> "@" + (mentions[r.groupValues[1]] ?: person(r.groupValues[1]) ?: r.groupValues[1]) }
     /** Files are kept in a session's workspace: the agent whose workspace holds it, else the first. */
     fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key
 }
@@ -328,7 +311,7 @@ private class Here(val station: String, val of: ChatOf, val view: ChatView, val 
 @Composable
 private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, haze: HazeState, modifier: Modifier, top: Dp = 0.dp, bottom: Dp = 0.dp) {
     val app = LocalApp.current
-    val ctx = Here(station, of, view, agents, rememberPeople(station))
+    val ctx = Here(station, of, view, agents)
     val thread = view.thread
     val api = app.api(station)
     val messages = view.messages
@@ -345,11 +328,9 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     val lineAt = if (above) null else messages.firstOrNull(unread)?.seq
     LaunchedEffect(above, first) { if (above && thread != null) try { api.older(thread.id) } catch (_: CoreException) {} }
 
-    // Messages the agents have not taken yet are the last people wrote; after a second, yours say they wait.
-    val waiting = agents.maxOfOrNull { it.view.session.pending } ?: 0
-    val pending = if (waiting > 0) messages.filter { it.authorKind == "person" }.takeLast(waiting).map { it.seq }.toSet() else emptySet()
+    // Messages the agents have not taken yet (the core says which): after a second, yours say they wait.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    val youngest = messages.filter { it.seq in pending }.maxOfOrNull { it.createdAt } ?: 0
+    val youngest = messages.filter { it.waiting }.maxOfOrNull { it.createdAt } ?: 0
     LaunchedEffect(youngest) {
         val wait = youngest + 1000 - System.currentTimeMillis()
         if (youngest > 0 && wait > 0) { delay(wait + 20); now = System.currentTimeMillis() }
@@ -358,10 +339,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     // Agents at work; a message on its way already counts, for every agent it goes to.
     val working = agents.filter { it.state == ChatState.Running }
     val sendingNow = view.outbox.any { it.state == "sending" }
-    val busy = working.ifEmpty { if (sendingNow) agents else emptyList() }.map { a ->
-        val last = a.view.turns.lastOrNull()
-        AgentAtWork(a.key, a.who, a.runtime, a.model, a.live, last?.takeIf { it.endedAt == null }?.startedAt)
-    }
+    val busy = working.ifEmpty { if (sendingNow) agents else emptyList() }.map { a -> AgentAtWork(a.key, a.who, a.runtime, a.maker, a.live, a.view.since) }
     // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
     val lastBusy = remember { mutableStateOf<List<AgentAtWork>>(emptyList()) }
     var leaving by remember { mutableStateOf(false) }
@@ -507,7 +485,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
                         Entry.Older -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Spinner(16.dp) }
                         Entry.Empty -> Text("在这里发消息，这个对话里的 agent 会在这里回复。", color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 24.dp))
                         Entry.Line -> UnreadLine()
-                        is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.seq in pending && now - row.m.createdAt > 1000)
+                        is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.waiting && now - row.m.createdAt > 1000)
                         is Entry.Out -> Out(ctx, row.o)
                         is Entry.Working -> Activity(ctx, row.agent, leaving)
                         is Entry.Floor -> Spacer(Modifier.fillMaxWidth().height(with(LocalDensity.current) { row.px.toDp() }))
@@ -547,14 +525,14 @@ fun Spinner(size: androidx.compose.ui.unit.Dp) = CircularProgressIndicator(Modif
 
 /** An agent's line over its words: its mark and name (both open its history), and a note. */
 @Composable
-private fun AgentHead(key: String, who: String, model: String?, runtime: String, note: String, ctx: Here, trailing: (@Composable RowScope.() -> Unit)? = null) {
+private fun AgentHead(key: String, who: String, maker: Maker?, runtime: String, note: String, ctx: Here, trailing: (@Composable RowScope.() -> Unit)? = null) {
     val app = LocalApp.current
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             Modifier.clip(RoundedCornerShape(6.dp)).clickable { openHistory(app, ctx.station, ctx.of, key) },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            ModelMark(model, runtime, 20.dp)
+            ModelMark(maker, runtime, 20.dp)
             Text(who, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Text(note, fontSize = 11.sp, color = C.subtle, maxLines = 1)
@@ -614,26 +592,26 @@ private fun Said(ctx: Here, m: MessageView, draft: Draft, list: androidx.compose
             Files(ctx, m.attachments)
             if (waitingNow) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 Spinner(10.dp); Text("等待 agent 接收", fontSize = 11.sp, color = C.subtle)
-            } else Text(relativeTime(m.createdAt), fontSize = 11.sp, color = C.subtle)
+            } else Text(m.time["createdAt"]?.ago ?: "", fontSize = 11.sp, color = C.subtle)
         }
         return
     }
-    val agent = if (m.authorKind == "agent") ctx.agent(m.author) else null
-    val who = when (m.authorKind) { "agent" -> agent?.who ?: m.authorName ?: "agent"; "ember" -> "ember"; else -> ctx.name(m) }
+    val agent = m.by.agent?.let { ctx.agent(it) }
+    val who = m.by.name
     val (hold, press) = holdMenu(m.text, who, m.ts, if (m.authorKind == "agent") "agent" else "person", draft)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (agent != null) AgentHead(agent.key, who, agent.model, agent.runtime, relativeTime(m.createdAt), ctx)
+        if (agent != null) AgentHead(agent.key, who, agent.maker, agent.runtime, m.time["createdAt"]?.ago ?: "", ctx)
         else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             when (m.authorKind) {
                 "agent", "ember" -> Mark(18.dp)
-                else -> Avatar(m.author, who, 18.dp)
+                else -> Avatar(m.author, who, 18.dp, picture = m.by.picture)
             }
             Text(who, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-            Text(relativeTime(m.createdAt), fontSize = 11.sp, color = C.subtle)
+            Text(m.time["createdAt"]?.ago ?: "", fontSize = 11.sp, color = C.subtle)
         }
         m.quotes.forEach { QuoteCard(it, jump) }
         Box(hold.clip(RoundedCornerShape(12.dp)).background(press)) {
-            if (m.authorKind == "person") { if (m.text.isNotEmpty()) Text(ctx.mention(m.text), fontSize = 15.sp, lineHeight = 23.sp, color = C.ink) }
+            if (m.authorKind == "person") { if (m.text.isNotEmpty()) Text(m.text, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink) }
             else Markdown(m.text)
         }
         Files(ctx, m.attachments)
@@ -728,7 +706,7 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
     val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(220), label = "leaving")
     val count = if (collapsed) 1 else 3
     Column(Modifier.fillMaxWidth().alpha(fade), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        AgentHead(agent.key, agent.who, agent.model, agent.runtime, (activity?.status ?: "处理中") + (agent.since?.let { " · ${elapsed(now - it)}" } ?: ""), ctx) {
+        AgentHead(agent.key, agent.who, agent.maker, agent.runtime, (activity?.status ?: "处理中") + (agent.since?.let { " · ${elapsed(now - it)}" } ?: ""), ctx) {
             Box(Modifier.size(22.dp).clip(CircleShape).clickable { collapsed = !collapsed; app.setFlag("activityCollapsed", collapsed) }, contentAlignment = Alignment.Center) {
                 IconIn(if (collapsed) Icons.ChevronDown else Icons.ChevronUp, 13.dp, C.subtle)
             }
@@ -752,7 +730,7 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
-                            if (r.live) Spinner(11.dp) else IconIn(activityIcon(r.kind), 13.dp, C.subtle)
+                            if (r.live) Spinner(11.dp) else IconIn(activityIcon(r.icon), 13.dp, C.subtle)
                         }
                         Text(r.text, fontSize = 13.sp, color = if (r.live) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -763,10 +741,11 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
 }
 
 /** A row's icon, by what kind of thing it does. */
-private fun activityIcon(kind: String) = when (kind) {
+/** A row's mark, by the icon the core names for it (activity.rs). */
+private fun activityIcon(icon: String) = when (icon) {
     "read" -> Icons.File; "search" -> Icons.Search; "edit" -> Icons.Pen; "command" -> Icons.Terminal; "web" -> Icons.Globe
     "agent" -> Icons.Spark; "thread" -> Icons.Quote; "think" -> Icons.Spark
-    "in" -> Icons.Received; "say" -> Icons.Said; "out" -> Icons.Send; else -> Icons.Wrench
+    "received" -> Icons.Received; "said" -> Icons.Said; "send" -> Icons.Send; else -> Icons.Wrench
 }
 
 // ── files ──────────────────────────────────────────────────────────────
@@ -1124,28 +1103,26 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ThreadView)
         SheetHead("对话信息")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
             InfoList {
-                Detail("来自", if (thread.surface == "ember") "ember 对话" else "Slack · " + if (thread.channel.startsWith("D")) "私信" else "#${thread.channelName ?: thread.channel}")
-                Detail("发起", thread.creator?.let { c -> if (view?.me?.isMe(c) == true) "你" else c.name } ?: "未记录")
+                Detail("来自", view?.place?.let { "Slack · $it" } ?: "ember 对话")
+                Detail("发起", (view?.thread ?: thread).creator?.shown?.display ?: "未记录")
                 Detail("参与", "${view?.people?.size ?: 0} 人") { view?.people?.let { if (it.isNotEmpty()) PeopleStack(it.take(8), 16.dp, C.surface2) } }
-                Detail("创建", relativeTime(thread.createdAt))
-                (view?.thread ?: thread).lastMessage?.let { Detail("最近消息", relativeTime(it.createdAt)) }
+                Detail("创建", (view?.thread ?: thread).time["createdAt"]?.ago ?: "")
+                (view?.thread ?: thread).lastMessage?.let { Detail("最近消息", it.time["createdAt"]?.ago ?: "") }
             }
             if (view != null && view.agents.isNotEmpty()) {
                 GroupLabel("参与的 agent · 点开看它的执行历史")
                 InfoList {
                     view.agents.forEach { a ->
                         val s = a.session
-                        // The model is the one actually running, as everywhere.
-                        val model = key(s.key) { rememberTopic<LiveView>(app.core, Topics.live(station, s.key)).value.value?.usage?.model } ?: s.model
                         InfoRow(onClick = { openHistory(app, station, of, s.key) }) {
-                            ModelMark(model, s.runtime, 36.dp, a.state, around = C.surface2)
+                            ModelMark(s.maker, s.runtime, 36.dp, a.state, around = C.surface2)
                             Column(Modifier.weight(1f)) {
-                                Text(agentLabel(model, s.effort), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(s.agentText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 // One line: it gives way with an ellipsis rather than wrapping.
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     if (a.connect != null) SlackMark(11.dp)
                                     Text(
-                                        listOfNotNull(a.connect?.name, PROCESS_LABEL[s.process] ?: s.process, relativeTime(s.lastActiveAt)).joinToString(" · "),
+                                        listOfNotNull(a.connect?.name, s.processText, s.time["lastActiveAt"]?.ago).joinToString(" · "),
                                         fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
                                 }
@@ -1182,4 +1159,10 @@ fun InfoRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> U
         Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = content,
     )
+}
+
+/** A running clock's reading: seconds, then minutes and seconds (as the web's). */
+private fun elapsed(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    return if (s < 60) "${s}s" else "${s / 60}m ${s % 60}s"
 }

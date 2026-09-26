@@ -4,16 +4,17 @@
 import { ChevronDown } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useLayoutEffect, useRef, useState } from "react";
-import type { ProfileView, RunnableProfile, RuntimeKind } from "./api.ts";
+import type { ModelChoice, RunnableProfile, RuntimeKind } from "./api.ts";
 import { QuotaBars } from "./components.tsx";
-import { EFFORTS, RUNTIME_LABEL, timeUntil } from "./format.ts";
-import { makerName, ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
+import { RUNTIME_LABEL } from "./format.ts";
+import { ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
 
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
 const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
 
-/** A model that can be chosen: the runtimes it runs on, and whether its accounts' quota is used up. */
-export interface ModelOption { model: string; runtimes: RuntimeKind[]; spent?: { until: number | null } | null }
+/** A model that can be chosen, as the core gives it: its maker, the runtimes it runs on, for each how hard it can think
+ * and who runs it, and whether its accounts' quota is used up. */
+export type ModelOption = ModelChoice;
 
 /** `profile`: the one kept to; null: the station picks. */
 export interface Pick { model: string; runtime: RuntimeKind; effort: string | null; profile: string | null }
@@ -22,18 +23,10 @@ export interface Pick { model: string; runtime: RuntimeKind; effort: string | nu
 export type Account = Pick_<RunnableProfile, "id" | "name" | "kind" | "quota">;
 type Pick_<T, K extends keyof T> = { [P in K]: T[P] };
 
-/** Who can run a model on a runtime, from a station's profiles (those with it on). */
-export function profilesFrom(profiles: ProfileView[]): (model: string, runtime: RuntimeKind) => Account[] {
-  return (model, runtime) => profiles
-    .filter((p) => p.runtimes.includes(runtime) && p.models.includes(model))
-    .map((p) => ({ id: p.id, name: p.name, kind: p.access.kind, quota: p.quota ?? null }));
-}
-
-export function ModelTriple({ options, value, onPick, profilesFor, current, runtimeFixed, side = "bottom", title = "换模型" }: {
+export function ModelTriple({ options, value, onPick, current, runtimeFixed, side = "bottom", title = "换模型" }: {
   options: ModelOption[];
   value: Pick;
   onPick(pick: Pick): void;
-  profilesFor(model: string, runtime: RuntimeKind): Account[];
   /** A session's: the account it runs on now (the station's pick shows it). */
   current?: Account;
   runtimeFixed?: boolean;
@@ -45,22 +38,23 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
   const option = options.find((o) => o.model === draft.model);
   const on: RuntimeKind = runtimeFixed ? value.runtime : option?.runtimes.includes(draft.runtime) ? draft.runtime : option?.runtimes[0] ?? value.runtime;
   const askRuntime = !runtimeFixed && (option?.runtimes.length ?? 0) > 1;
-  const accounts = option ? profilesFor(option.model, on) : [];
+  const accounts: Account[] = option?.accounts[on] ?? [];
+  const efforts = option?.efforts[on] ?? [];
   // An account kept to that does not run the model drafted gives way to the station's pick, said so.
   const profile = draft.profile && accounts.some((a) => a.id === draft.profile) ? draft.profile : null;
   const dropped = draft.profile !== null && profile === null;
-  const effort = draft.effort && EFFORTS[on].includes(draft.effort) ? draft.effort : null;
+  const effort = draft.effort && efforts.includes(draft.effort) ? draft.effort : null;
   const next: Pick = { model: option?.model ?? value.model, runtime: on, effort, profile };
   const changed = next.model !== value.model || next.runtime !== value.runtime || next.effort !== value.effort || next.profile !== value.profile;
-  const kept = value.profile ? profilesFor(value.model, value.runtime).find((a) => a.id === value.profile) ?? current : undefined;
-  const shown = kept ?? current;
   const valueOption = options.find((o) => o.model === value.model);
+  const kept = value.profile ? valueOption?.accounts[value.runtime]?.find((a) => a.id === value.profile) ?? current : undefined;
+  const shown = kept ?? current;
   const set = (patch: Partial<Pick>) => setDraft((d) => ({ ...d, ...patch }));
   const [filter, setFilter] = useState("");
   const listed = options.filter((o) => o.model.toLowerCase().includes(filter.trim().toLowerCase()));
   const byMaker = new Map<string, ModelOption[]>();
   for (const o of listed) {
-    const who = makerName(o.model) ?? "其他";
+    const who = o.maker?.name ?? "其他";
     byMaker.set(who, [...(byMaker.get(who) ?? []), o]);
   }
   const groups = [...byMaker].sort(([a], [b]) => (a === "其他" ? 1 : b === "其他" ? -1 : a.localeCompare(b)));
@@ -93,7 +87,7 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
         <Popover.Trigger className="model-triple" title={title} disabled={options.length === 0} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className="triple-model">没有可用模型</span> : (
             <>
-              <span className="triple-model"><ModelLogo model={value.model} runtime={value.runtime} size={13} /><span className="triple-model-name">{value.model || "选模型"}</span></span>
+              <span className="triple-model"><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={13} /><span className="triple-model-name">{value.model || "选模型"}</span></span>
               {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className="triple-part triple-runtime">{RUNTIME_LABEL[value.runtime]}</span>}
               <span className="triple-part triple-effort" data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
               <span className="triple-part triple-account">
@@ -121,8 +115,8 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
                   {groups.length > 1 && <h5>{who}</h5>}
                   {list.map((o) => (
                     <button key={o.model} type="button" className="run-picker-option" aria-pressed={next.model === o.model} onClick={() => set({ model: o.model })}>
-                      <ModelLogo model={o.model} runtime={o.runtimes[0] ?? value.runtime} size={13} />
-                      <span className="run-option-text"><span>{o.model}</span>{o.spent && <span className="run-picker-spent">额度用完{o.spent.until ? ` · ${timeUntil(o.spent.until)}恢复` : ""}</span>}</span>
+                      <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={13} />
+                      <span className="run-option-text"><span>{o.model}</span>{o.spent && <span className="run-picker-spent">{o.spent.text}</span>}</span>
                     </button>
                   ))}
                 </div>
@@ -141,7 +135,7 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
             )}
             <div className="run-picker-column">
               <h4>思考深度</h4>
-              {[null, ...EFFORTS[on]].map((e) => (
+              {[null, ...efforts].map((e) => (
                 <button key={e ?? ""} type="button" className="run-picker-option" aria-pressed={effort === e} onClick={() => set({ effort: e })}>{e ?? "默认"}</button>
               ))}
             </div>

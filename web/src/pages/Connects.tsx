@@ -7,7 +7,6 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { useConnects, useStations } from "../api.ts";
 import { MineFilter, OwnerLabel } from "../components.tsx";
-import { connectionText, modeText, presence, RUNTIME_LABEL } from "../format.ts";
 import { StationContext, stationBase, useOnlyMine, type Station } from "../station.tsx";
 import { Button, ConnectKindIcon, MobileBack, SlackLogo, StatusDot } from "../ui.tsx";
 import { NewConnectDialog } from "./Connect.tsx";
@@ -57,14 +56,14 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
                 <ConnectKindIcon kind={c.kind} />
                 <span className="list-row-text">
                   <span className="list-row-title">{c.name}{c.team && <span className="connect-team"><SlackLogo size={11} />{c.team}</span>}</span>
-                  <span className="muted">{modeText(c.mode, c.requireMention)} · {RUNTIME_LABEL[c.bind.runtime]}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>
+                  <span className="muted">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>
                 </span>
                 <span className="connect-facts">
                   {showStation && <span className="station-tag">{stationName}</span>}
                   <OwnerLabel owner={c.createdBy} />
                 </span>
-                <span className="nav-note">{connectionText(c.connection)}</span>
-                <StatusDot state={presence(c.connection)} label={connectionText(c.connection)} />
+                <span className="nav-note">{c.statusText}</span>
+                <StatusDot state={c.presence} label={c.statusText} />
               </Link>
             </li>
           ))}

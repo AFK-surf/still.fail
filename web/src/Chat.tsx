@@ -4,8 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArrowDown, ArrowUp, Bot, Brain, ChevronDown, ChevronUp, Download, FileText, Globe, MessagesSquare, Pencil, Plus, Quote as QuoteIcon, Search, Terminal, Wrench, X, ArrowDownToLine, MessageSquare, Send, Sparkle, Sparkles } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ActivityView } from "./api.ts";
-import { agentLabel, botUserIdOf, sessionStatus } from "./format.ts";
+import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type Maker, type MessageView, type Quote, type SessionShown, type SessionSummary, type ActivityView } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
@@ -15,7 +14,8 @@ import { useStickToBottom } from "./scroll.ts";
 import { track } from "./telemetry.ts";
 
 /** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
-interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null; session: SessionSummary; status: ChatView["agents"][number]["status"]; live: LiveView | undefined; turns: ChatView["agents"][number]["turns"] }
+interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime"]; maker: Maker | null; session: SessionShown; status: ChatView["agents"][number]["status"]; live: LiveView | undefined; since: number | null }
+type ChatMessage = ChatView["messages"][number];
 
 /**
  * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
@@ -34,7 +34,6 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
-  const member = usePerson();
   const isMine = useIsMine();
   // Whose a message is, the core says.
   const mineOf = (m: MessageView & { mine?: boolean }) => m.mine === true;
@@ -52,11 +51,9 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   // Messages there when the chat opened (and older pages loaded later) show at once; newer ones ease in, except a reply that already streamed in place.
   const firstSeq = useRef<number | null>(null);
   if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
-  const agents: ChatAgent[] = chat.agents.map(({ session, status, turns }) => {
-    const live = lives.get(session.key);
-    const model = live?.usage?.model ?? session.model;
-    return { key: session.key, who: agentLabel(model, session.effort), runtime: session.runtime, model, session, status, live, turns };
-  });
+  const agents: ChatAgent[] = chat.agents.map(({ session, status, since }) => (
+    { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, session, status, live: lives.get(session.key), since }
+  ));
   const agentOf = (key: string) => agents.find((a) => a.key === key);
   // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
   const lastAgents = useRef<AgentAtWork[] | null>(null);
@@ -77,22 +74,6 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
     const gone = setTimeout(() => { wasBusy.current = false; lastAgents.current = null; setLeaving(false); rerender((n) => n + 1); }, 600 + 220);
     return () => { clearTimeout(fade); clearTimeout(gone); };
   }, [busy]);
-  const name = (m: MessageView) => member(m.author)?.name || m.authorName || (m.author === "local" ? "本机" : m.author);
-  // Slack's <@U…> mentions by name: an agent's bot by its connect's, a person by theirs where known.
-  const bots = new Map(chat.agents.flatMap((a) => { const id = botUserIdOf(a.connect ?? undefined); return id && a.connect ? [[id, a.connect.name] as const] : []; }));
-  const mention = (text: string) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${bots.get(id) ?? member(id)?.name ?? id}`);
-  // The messages the agents have not taken yet are the last people wrote; after a second, yours show that they wait.
-  const people = messages.filter((m) => m.authorKind === "person");
-  const waiting = Math.max(0, ...agents.map((a) => a.session.pending));
-  const pending = new Set(waiting > 0 ? people.slice(-waiting).map((m) => m.seq) : []);
-  const [, tick] = useState(0);
-  const youngest = messages.filter((m) => pending.has(m.seq)).reduce((t, m) => Math.max(t, m.createdAt), 0);
-  useEffect(() => {
-    const wait = youngest + 1000 - Date.now();
-    if (!youngest || wait <= 0) return;
-    const timer = setTimeout(() => tick((n) => n + 1), wait + 20);
-    return () => clearTimeout(timer);
-  }, [youngest]);
   // Where agents post to reach this chat.
   const address = thread ? `${thread.channel}/${thread.threadTs}` : null;
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
@@ -146,9 +127,10 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
                 <Quotes quotes={m.quotes} />
                 {m.text && <div className="msg-bubble"><div className="msg-plain">{m.text}</div></div>}
                 <Files owner={ownerOf} files={m.attachments} />
-                {pending.has(m.seq) && Date.now() - m.createdAt > 1000
-                  ? <span className="msg-time msg-waiting"><span className="spinner" aria-hidden="true" />等待 agent 接收</span>
-                  : <Time className="msg-time" at={m.createdAt} />}
+                {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
+                {m.waiting
+                  ? <span className="msg-time msg-waiting msg-waiting-late"><span className="spinner" aria-hidden="true" />等待 agent 接收</span>
+                  : <Time className="msg-time" stamp={m.time?.createdAt} />}
               </div>
             )];
           }
@@ -159,26 +141,26 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
                 <div className="msg-system-box">
                   <Mark size={14} />
                   <div className="markdown"><Prose>{m.text}</Prose></div>
-                  <Time className="msg-time" at={m.createdAt} />
+                  <Time className="msg-time" stamp={m.time?.createdAt} />
                 </div>
               </div>
             )];
           }
-          const agent = m.authorKind === "agent" ? agentOf(m.author) : undefined;
-          const who = m.authorKind === "agent" ? agent?.who ?? m.authorName ?? "agent" : m.authorKind === "ember" ? "ember" : name(m);
+          const agent = m.by.agent ? agentOf(m.by.agent) : undefined;
+          const who = m.by.name;
           return [line, (
             <div key={m.seq} className="msg msg-row" data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"} data-enter={enter}>
               <div className="msg-main">
                 <div className="msg-head">
-                  <MessageAvatar message={m} name={who} agent={agent} />
+                  <MessageAvatar message={m} name={who} />
                   {agent
                     ? <button type="button" className="msg-name msg-agent" onClick={() => onOpenHistory(agent.key)} title="打开或关闭执行历史">{who}</button>
                     : <span className="msg-name">{who}</span>}
-                  <Time className="msg-time" at={m.createdAt} />
+                  <Time className="msg-time" stamp={m.time?.createdAt} />
                 </div>
                 <Quotes quotes={m.quotes} />
                 {m.authorKind === "person"
-                  ? m.text && <div className="msg-plain">{mention(m.text)}</div>
+                  ? m.text && <div className="msg-plain">{m.text}</div>
                   : <div className="markdown"><Prose>{m.text}</Prose></div>}
                 <Files owner={ownerOf} files={m.attachments} />
               </div>
@@ -202,9 +184,9 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
           // A reply comes whole, as a message: while the agent works, its activity says what it is doing.
           if (!busy && !lastAgents.current) return null;
           const atWork: AgentAtWork[] = busy ? busyAgents.map((a) => ({
-            key: a.key, who: a.who, runtime: a.runtime, model: a.model,
+            key: a.key, who: a.who, runtime: a.runtime, maker: a.maker,
             activity: a.live?.activity ?? null,
-            since: a.turns.at(-1)?.endedAt == null ? a.turns.at(-1)?.startedAt ?? null : null,
+            since: a.since,
           })) : lastAgents.current!;
           if (busy) lastAgents.current = atWork;
           // The activity is always the last thing in the chat.
@@ -386,11 +368,10 @@ function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView, read:
   }, [floor, newest, known]);
 }
 
-function MessageAvatar({ message, name, agent }: { message: MessageView; name: string; agent: ChatAgent | undefined }) {
-  const member = usePerson();
-  if (message.authorKind === "agent") return <span className="msg-avatar msg-avatar-agent">{agent ? <ModelLogo model={agent.model} runtime={agent.runtime} size={12} /> : <Mark size={12} />}</span>;
+function MessageAvatar({ message, name }: { message: ChatMessage; name: string }) {
+  if (message.authorKind === "agent") return <span className="msg-avatar msg-avatar-agent">{message.by.runtime ? <ModelLogo maker={message.by.maker} runtime={message.by.runtime} size={12} /> : <Mark size={12} />}</span>;
   if (message.authorKind === "ember") return <span className="msg-avatar msg-avatar-agent"><Mark size={12} /></span>;
-  const picture = member(message.author)?.picture;
+  const picture = message.by.picture;
   return picture
     ? <img className="msg-avatar" src={picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />
     : <span className="msg-avatar"><Avatar id={message.author} name={name} size={18} /></span>;
@@ -745,17 +726,15 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
 
 /** An agent in this chat that is at work: who it is, its execution history, and its running turn. */
 interface AgentAtWork {
-  key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null;
+  key: string; who: string; runtime: SessionSummary["runtime"]; maker: Maker | null;
   /** What it is doing, as the core says (null until its live view has come). */
   activity: ActivityView | null; since: number | null;
 }
 
-/** A row's icon, by what kind of thing it does. */
-const ACTIVITY_ICON: Record<ActivityView["rows"][number]["kind"], typeof Terminal> = {
-  // As Android draws them, one set on both.
-  read: FileText, search: Search, edit: Pencil, command: Terminal, web: Globe, agent: Sparkles, thread: QuoteIcon, think: Sparkle, other: Wrench,
-  // What it received, said and posted.
-  in: ArrowDownToLine, say: MessageSquare, out: Send,
+/** A row's mark, by the icon the core names for it (activity.rs). */
+const ACTIVITY_ICON: Record<string, typeof Terminal> = {
+  read: FileText, search: Search, edit: Pencil, command: Terminal, web: Globe, agent: Sparkles,
+  thread: QuoteIcon, think: Sparkle, other: Wrench, received: ArrowDownToLine, said: MessageSquare, send: Send,
 };
 
 const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
@@ -790,7 +769,7 @@ function Activity({ agent, collapsed, onToggle, onOpen, leaving }: { agent: Agen
     <div className="msg msg-row agent-activity" data-transient="" data-collapsed={collapsed || undefined} data-leaving={leaving || undefined}>
       <div className="msg-main">
         <div className="msg-head">
-          <span className="msg-avatar msg-avatar-agent"><ModelLogo model={agent.model} runtime={agent.runtime} size={12} /></span>
+          <span className="msg-avatar msg-avatar-agent"><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span>
           <button type="button" className="msg-name msg-agent" onClick={() => onOpen()} title="打开执行历史">{agent.who}</button>
           <span className="msg-time activity-status">{agent.activity?.status ?? "处理中"}{agent.since ? <> · <Elapsed since={agent.since} /></> : null}</span>
           <button type="button" className="activity-toggle" onClick={onToggle} aria-label={collapsed ? "展开为三行" : "收起为一行"}>
@@ -800,7 +779,7 @@ function Activity({ agent, collapsed, onToggle, onOpen, leaving }: { agent: Agen
         <div className="activity-window">
           <div key={overflowing ? newest : "fill"} className="activity-rows" data-shift={overflowing || undefined}>
             {shown.map((r) => {
-              const Icon = ACTIVITY_ICON[r.kind] ?? Wrench;
+              const Icon = ACTIVITY_ICON[r.icon] ?? Wrench;
               return (
                 <button type="button" key={r.key} className="activity-row" data-live={r.live || undefined} onClick={() => onOpen(r.entry ?? undefined)} title="在执行历史里查看">
                   <span className="activity-mark" aria-hidden="true">{r.live ? <span className="spinner" /> : <Icon size={13} />}</span>

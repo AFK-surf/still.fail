@@ -1,176 +1,46 @@
-// Execution history, after Zork's: a readable account of what actually ran.
-// Messages in and out, state marks and the agent's own words are boundaries;
-// the tool calls and thinking between two boundaries fold into one group.
+// Execution history, after Zork's: a readable account of what actually ran. The core puts it together
+// (client/core/src/history.rs): messages in and out, state marks and the agent's words stand alone; the tool calls and
+// thinking between them fold into one group. Here it is only drawn.
 import { useToast } from "./toast.tsx";
 import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useApi, useOverview, type ConnectView, type LiveView, type SessionSummary, type ShownPhase, type ShownStep, type ThreadView, type TimelineEntry } from "./api.ts";
-import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, splitThread, threadNamer, type SourcedMessage } from "./format.ts";
-import { Avatar, ICON, Pill, SlackLogo } from "./ui.tsx";
-import { useLink, usePerson, useStation } from "./station.tsx";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useApi, useHistory, type HistoryItem, type HistoryView, type Place } from "./api.ts";
+import { ICON, Pill, SlackLogo } from "./ui.tsx";
+import { useLink } from "./station.tsx";
 import { Link } from "react-router";
 import { Prose } from "./Prose.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { Mark } from "./brand.tsx";
 
-export function parseArgs(text: string): Record<string, unknown> | null {
-  try {
-    const value = JSON.parse(text) as unknown;
-    return value && typeof value === "object" ? value as Record<string, unknown> : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Tool names without the MCP server prefix ember's tools carry. */
-export function toolName(tool: string | undefined): string {
-  return (tool ?? "").replace(/^mcp__ember__|^ember__|^ember\./, "");
-}
-
-type Category = "read" | "search" | "edit" | "command" | "web" | "agent" | "thread" | "other";
-
-const CATEGORY: Record<Category, { verb: string; unit: string }> = {
-  read: { verb: "读取", unit: "个文件" },
-  search: { verb: "搜索", unit: "次" },
-  edit: { verb: "编辑", unit: "个文件" },
-  command: { verb: "运行", unit: "条命令" },
-  web: { verb: "访问", unit: "个网页" },
-  agent: { verb: "派出", unit: "个子 agent" },
-  thread: { verb: "读取 thread", unit: "次" },
-  other: { verb: "其他", unit: "项" },
-};
-
-function categorize(tool: string): Category {
-  const name = toolName(tool);
-  if (/^(Read|NotebookRead|view_image)$/.test(name)) return "read";
-  if (/^(Glob|Grep|LS|ToolSearch)$/.test(name)) return "search";
-  if (/^(Edit|MultiEdit|Write|NotebookEdit|apply_patch)$/.test(name)) return "edit";
-  if (/^(Bash|BashOutput|KillShell|exec_command|shell|local_shell|write_stdin|unified_exec)$/.test(name)) return "command";
-  if (/^(WebFetch|WebSearch|web_search)$/.test(name)) return "web";
-  if (/^(Task|Agent|spawn_agent)$/.test(name)) return "agent";
-  if (name === "chat_history") return "thread";
-  return "other";
-}
-
-/** One line that says what a call did: the command, the file, the pattern. */
-function hint(entry: TimelineEntry): string {
-  const args = parseArgs(entry.text);
-  const value = args ? args.command ?? args.cmd ?? args.file_path ?? args.path ?? args.pattern ?? args.url ?? args.query ?? args.description ?? args.prompt : entry.text;
-  const text = typeof value === "string" ? value : Array.isArray(value) ? value.join(" ") : "";
-  return text.split("\n")[0]!.slice(0, 160);
-}
-
-function fileOf(entry: TimelineEntry): string | null {
-  const args = parseArgs(entry.text);
-  const path = args?.file_path ?? args?.path ?? args?.notebook_path;
-  return typeof path === "string" ? path : null;
-}
-
-interface Step { call: TimelineEntry; result: TimelineEntry | null }
-type Item =
-  | { type: "received"; entry: TimelineEntry }
-  | { type: "text"; entry: TimelineEntry }
-  | { type: "post"; step: Step }
-  | { type: "mark"; kind: string }
-  | { type: "group"; steps: Step[]; thinking: TimelineEntry[] };
-
-/** Which transcript entries each item draws, first to last: an activity row opens the history at its entry. */
-type Spans = Map<Item, [number, number]>;
-
-function toItems(entries: TimelineEntry[]): { items: Item[]; spans: Spans } {
-  const items: Item[] = [];
-  const spans: Spans = new Map();
-  const cover = (item: Item, i: number) => {
-    const span = spans.get(item);
-    spans.set(item, span ? [span[0], i] : [i, i]);
-  };
-  const steps = new Map<string, Step>();
-  let group: Extract<Item, { type: "group" }> | null = null;
-  let lastStep: Step | null = null;
-  const openGroup = () => {
-    if (!group) {
-      group = { type: "group", steps: [], thinking: [] };
-      items.push(group);
-    }
-    return group;
-  };
-  entries.forEach((e, i) => {
-    if (e.kind === "tool_result") {
-      const step = (e.callId && steps.get(e.callId)) || (lastStep && !lastStep.result ? lastStep : null);
-      if (step) step.result = e;
-      if (items.length) cover(items.at(-1)!, i);
-      return;
-    }
-    if (e.kind === "tool_call") {
-      const step: Step = { call: e, result: null };
-      if (e.callId) steps.set(e.callId, step);
-      lastStep = step;
-      const name = toolName(e.tool);
-      const args = parseArgs(e.text);
-      if (name === "chat_post" && typeof args?.text === "string" && !e.subagent) {
-        items.push({ type: "post", step });
-        group = null;
-      } else if (name === "chat_state" && typeof args?.kind === "string" && !e.subagent) {
-        items.push({ type: "mark", kind: args.kind });
-        group = null;
-      } else {
-        openGroup().steps.push(step);
-      }
-      cover(items.at(-1)!, i);
-      return;
-    }
-    if (e.kind === "thinking") {
-      openGroup().thinking.push(e);
-      cover(items.at(-1)!, i);
-      return;
-    }
-    group = null;
-    items.push(e.kind === "user" ? { type: "received", entry: e } : { type: "text", entry: e });
-    cover(items.at(-1)!, i);
-  });
-  return { items, spans };
-}
-
 /**
- * The session as it ran: the main view of a session. `state` says where it
- * stands (in the header line) and `actions` what can
- * be done to it right now (stop a turn, release the process).
+ * The session as it ran: the main view of a session. `summary` says who it is (in the head), `actions` what can be done
+ * to it right now (stop a turn, release the process), `details` unfolds under the head.
  */
-export function History({ session, threads, connect, summary, actions, details, live, focus }: {
-  /** Who the agent is shows on the tab; the head carries a short summary (allowance, disk, cache) and `details` unfolds under it. */
-  session: SessionSummary; threads: ThreadView[]; connect: ConnectView | undefined; summary?: ReactNode; actions?: ReactNode; details?: ReactNode;
-  /** The transcript as it grows, the steps the runtime is streaming right now after its last entry, and where the running turn stands. */
-  live: LiveView | undefined;
+export function History({ station, sessionKey, summary, actions, details, focus }: {
+  station: string; sessionKey: string; summary?: ReactNode; actions?: ReactNode; details?: ReactNode;
   /** An entry to bring into view (n changes each time it is asked for). */
   focus?: { entry: number; n: number } | null;
 }) {
-  const botUserId = botUserIdOf(connect);
-  const member = usePerson();
+  const history = useHistory(station, sessionKey).value;
   const link = useLink();
-  const threadName = threadNamer(threads);
-  // A thread address as a place: its platform's mark, its name, and the way to its chat.
-  const where = (address: string | null | undefined): ReactNode => {
-    const t = address ? splitThread(address) : null;
-    if (!t) return null;
-    const name = threadName(t.channel, t.threadTs).where;
-    const inner = <>{t.channel === "EMBER" ? <Mark size={13} /> : <SlackLogo size={13} />}{name}</>;
-    const thread = threads.find((x) => x.channel === t.channel && x.threadTs === t.threadTs);
-    return thread
-      // An ember chat is its agent's item: its address is the session it is bound to.
-      ? <Link className="h-place" to={link(`/chats/${encodeURIComponent(thread.sessions[0]?.session ?? "")}`)} title="打开对话">{inner}</Link>
+  // A place as its platform's mark and its name; an ember chat opens its agent's page.
+  const where = (place: Place | null): ReactNode => {
+    if (!place) return null;
+    const inner = <>{place.surface === "ember" ? <Mark size={13} /> : <SlackLogo size={13} />}{place.name}</>;
+    return place.session
+      ? <Link className="h-place" to={link(`/chats/${encodeURIComponent(place.session)}`)} title="打开对话">{inner}</Link>
       : <span className="h-place">{inner}</span>;
   };
   const [usageOpen, setUsageOpen] = useState(false);
   const body = useRef<HTMLDivElement>(null);
   // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
   useStickToBottom(body, ".h-item, .live-tail, .h-text");
-  const timeline = live?.timeline;
-  const { items, spans } = useMemo(() => toItems(timeline ?? []), [timeline]);
+  const items = history?.items ?? [];
   // Opened at an entry (an activity row): the item that draws it comes into view, and says so for a moment.
   useEffect(() => {
     if (!focus) return;
-    const at = items.findIndex((item) => { const span = spans.get(item); return span !== undefined && span[0] <= focus.entry && focus.entry <= span[1]; });
+    const at = items.findIndex((item) => item.entries[0] <= focus.entry && focus.entry <= item.entries[1]);
     const el = at < 0 ? null : body.current?.querySelector<HTMLElement>(`[data-item="${at}"]`);
     if (!el) return;
     el.scrollIntoView({ block: "center" });
@@ -180,12 +50,8 @@ export function History({ session, threads, connect, summary, actions, details, 
   }, [focus?.n, items.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
   // What was there when the history opened shows at once; only what comes later animates.
   const firstCount = useRef(Number.POSITIVE_INFINITY);
-  if (firstCount.current === Number.POSITIVE_INFINITY && live?.loaded) firstCount.current = items.length;
-  const usage = live?.usage;
-  const steps = live?.steps ?? [];
-  const phase = live?.phase ?? null;
-  const name = connect?.name ?? session.connect;
-  const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
+  if (firstCount.current === Number.POSITIVE_INFINITY && history?.loaded) firstCount.current = items.length;
+  const usage = history?.usage;
 
   return (
     <section className="history" aria-label="执行历史">
@@ -202,32 +68,21 @@ export function History({ session, threads, connect, summary, actions, details, 
       </header>
       {usageOpen && details && <div className="history-details">{details}</div>}
       {usageOpen && usage && !details && (
-        <dl className="usage">
-          <div><dt>模型调用</dt><dd>{usage.modelCalls} 次</dd></div>
-          <div><dt>输入</dt><dd>{compactNumber(usage.inputTokens)}</dd></div>
-          <div><dt>其中缓存</dt><dd>{compactNumber(usage.cachedTokens)}</dd></div>
-          <div><dt>输出</dt><dd>{compactNumber(usage.outputTokens)}</dd></div>
-          <div><dt>缓存命中率</dt><dd>{hitRate === null ? "未报告" : `${hitRate}%`}</dd></div>
-        </dl>
+        <dl className="usage">{usage.map((u) => <div key={u.label}><dt>{u.label}</dt><dd>{u.value}</dd></div>)}</dl>
       )}
       <div className="history-body" ref={body}>
-        {!live?.loaded && !items.length ? (
-          <p className="history-edge">正在读取执行历史…</p>
-        ) : !items.length && !steps.length && !phase ? (
-          <p className="history-edge">{live?.offline ? "station 离线，这台设备上还没有这个会话的执行历史。" : session.runtimeSessionId ? "找不到运行时记录，可能已归档。" : "运行时还没开始这个会话。"}</p>
-        ) : (
+        {!history ? <p className="history-edge">正在读取执行历史…</p> : history.empty ? <p className="history-edge">{history.edge}</p> : (
           <>
-            <p className="history-edge">已到 Session 开始处</p>
+            <p className="history-edge">{history.edge}</p>
             {items.map((item, i) => (
               // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
-              <div key={i} className="h-item" data-item={i} data-enter={i >= firstCount.current && item.type !== "text" ? true : undefined}>
-                <HistoryItem item={item} where={where} person={(m) => (m.slack ? <SlackName user={m.user} name={m.name || m.user} /> : member(m.user)?.name || m.name || m.user)}
-                  mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : member(id)?.name ?? id}`)} />
+              <div key={item.key} className="h-item" data-item={i} data-enter={i >= firstCount.current && item.kind !== "text" ? true : undefined}>
+                <HistoryItemView item={item} where={where} />
               </div>
             ))}
             {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}
-            {steps.filter((s) => !s.subagent && s.step !== "tool").map((s) => <LiveStepView key={s.id} step={s} />)}
-            {phase && <PhaseLine phase={phase} runtime={RUNTIME_LABEL[session.runtime]} />}
+            {history.live.map((s) => <div key={s.id} className="h-live-thinking">{s.text}</div>)}
+            {history.phase && <PhaseLine phase={history.phase} />}
           </>
         )}
       </div>
@@ -235,45 +90,37 @@ export function History({ session, threads, connect, summary, actions, details, 
   );
 }
 
-function HistoryItem({ item, mention, person, where }: {
-  item: Item; mention(text: string): string;
-  /** Who sent a message: as known here, else as the prompt said; a Slack user's name can be taken as the viewer's. */
-  person(message: SourcedMessage): ReactNode;
-  where(address: string | null | undefined): ReactNode;
-}) {
-  switch (item.type) {
-    case "received": {
-      const { messages, note } = parsePrompt(item.entry.text);
+function HistoryItemView({ item, where }: { item: HistoryItem; where(place: Place | null): ReactNode }) {
+  switch (item.kind) {
+    case "received":
       return (
         <>
-          {note && <Received from="ember" text={note} />}
-          {messages.map((m) => <Received key={m.ts} from={person(m)} text={mention(m.text)} place={where(m.thread)} />)}
+          {item.note && <Received from="ember" text={item.note} />}
+          {item.messages.map((m) => (
+            <Received key={m.key} text={m.text} place={where(m.place)}
+              from={m.from.slackUser ? <SlackName user={m.from.slackUser} name={m.from.name} bound={m.from.bound} /> : m.from.name} />
+          ))}
         </>
       );
-    }
     case "text":
-      return <Fold className={`h-text markdown${item.entry.subagent ? " h-sub" : ""}`}><Prose>{item.entry.text}</Prose></Fold>;
-    case "post": {
-      const args = parseArgs(item.step.call.text)!;
-      const kind = typeof args.kind === "string" ? args.kind : null;
-      const failed = item.step.result?.ok === false;
+      return <Fold className={`h-text markdown${item.subagent ? " h-sub" : ""}`}><Prose>{item.text}</Prose></Fold>;
+    case "post":
       return (
         // Drawn like a received message (a line, then the words beside a bar): the two answer each other.
-        <div className="h-received h-post" data-failed={failed}>
+        <div className="h-received h-post" data-failed={item.failed}>
           <div className="h-label">
             <Send {...ICON} size={14} />
-            发送到 {where(typeof args.to === "string" ? args.to : null) ?? <span className="h-place"><SlackLogo size={13} />Slack</span>}
-            {kind === "block" && <Pill tone="blue">Block</Pill>}
-            {failed && <Pill tone="red">发送失败</Pill>}
+            发送到 {where(item.place) ?? <span className="h-place"><SlackLogo size={13} />Slack</span>}
+            {item.block && <Pill tone="blue">Block</Pill>}
+            {item.failed && <Pill tone="red">发送失败</Pill>}
           </div>
-          <Fold className="h-quote h-quote-md markdown"><Prose>{String(args.text)}</Prose></Fold>
+          <Fold className="h-quote h-quote-md markdown"><Prose>{item.text}</Prose></Fold>
         </div>
       );
-    }
     case "mark":
-      return <div className="h-mark">{item.kind === "final" ? "标记为已完成" : item.kind === "block" ? "进入 block 状态：agent 停下来等人处理" : `标记为 ${item.kind}`}</div>;
+      return <div className="h-mark">{item.text}</div>;
     case "group":
-      return <Group steps={item.steps} thinking={item.thinking} />;
+      return <Group group={item} />;
   }
 }
 
@@ -281,13 +128,12 @@ function HistoryItem({ item, mention, person, where }: {
  * A Slack user's name: "你" once the viewer said it is them. Clicking it offers "这是我" (the station then takes that
  * Slack user for the viewer), or "不是我" once it does.
  */
-function SlackName({ user, name }: { user: string; name: string }) {
+function SlackName({ user, name, bound }: { user: string; name: string; bound: boolean }) {
   const api = useApi();
   const toast = useToast();
-  const bound = useOverview(useStation().address).value?.slackUsers.includes(user) ?? false;
   return (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger className="h-person">{bound ? "你" : name}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger className="h-person">{name}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="popover menu-list" align="start" sideOffset={4} collisionPadding={8}>
           <DropdownMenu.Item className="menu-item" onSelect={() => void api.slackIdentity(user, !bound).catch((error: unknown) => toast(`${bound ? "解除" : "绑定"}没有成功：${error instanceof Error ? error.message : String(error)}`))}>{bound ? "不是我" : "这是我"}</DropdownMenu.Item>
@@ -306,115 +152,39 @@ function Received({ from, text, place }: { from: ReactNode; text: string; place?
   );
 }
 
-function Group({ steps, thinking }: { steps: Step[]; thinking: TimelineEntry[] }) {
+function Group({ group }: { group: Extract<HistoryItem, { kind: "group" }> }) {
   const [open, setOpen] = useState(false);
-  const counts = new Map<Category, Set<string> | number>();
-  for (const s of steps) {
-    const c = categorize(s.call.tool ?? "");
-    const file = (c === "read" || c === "edit") ? fileOf(s.call) : null;
-    if (file) {
-      const set = (counts.get(c) as Set<string> | undefined) ?? new Set<string>();
-      set.add(file);
-      counts.set(c, set);
-    } else {
-      counts.set(c, ((counts.get(c) as number | undefined) ?? 0) + 1);
-    }
-  }
-  const parts = [...counts].map(([c, v]) => `${CATEGORY[c].verb} ${typeof v === "number" ? v : v.size} ${CATEGORY[c].unit}`);
-  const failed = steps.filter((s) => s.result?.ok === false).length;
-  const pending = steps.filter((s) => !s.result).length;
-  const firstThought = thinking[0]?.text.split("\n").find((l) => l.trim()) ?? "";
-  // The group is named by its latest tool call: its description, else what it did and to what. Thinking and model requests do not count.
-  const last = steps.at(-1);
-  const lastText = last ? describe(last.call) ?? `${CATEGORY[categorize(last.call.tool ?? "")].verb === "其他" ? toolName(last.call.tool) : CATEGORY[categorize(last.call.tool ?? "")].verb} ${hint(last.call)}`.trim() : "";
-  const summary = !steps.length ? `思考：${firstThought.slice(0, 80)}` : steps.length === 1 ? lastText : `${lastText} · 共 ${steps.length} 项`;
+  const { steps, thinking } = group;
   return (
-    <div className="h-group" data-failed={failed > 0}>
-      <button type="button" className="h-group-head" aria-expanded={open} onClick={() => setOpen(!open)} title={parts.join("、") || undefined}>
+    <div className="h-group" data-failed={group.failures > 0}>
+      <button type="button" className="h-group-head" aria-expanded={open} onClick={() => setOpen(!open)} title={group.title || undefined}>
         {open ? <ChevronDown {...ICON} size={14} /> : <ChevronRight {...ICON} size={14} />}
-        <span>{summary}</span>
-        {failed > 0 && <Pill tone="red">{failed} 项失败</Pill>}
-        {pending > 0 && <Pill tone="accent">{pending} 项进行中</Pill>}
+        <span>{group.summary}</span>
+        {group.failures > 0 && <Pill tone="red">{group.failures} 项失败</Pill>}
+        {group.pending > 0 && <Pill tone="accent">{group.pending} 项进行中</Pill>}
       </button>
       {open && (
         <div className="h-steps">
           {thinking.map((t, i) => steps.length ? (
             <details key={`t${i}`} className="h-step">
-              <summary><span className="h-step-name">思考</span><span className="h-step-hint">{t.text.split("\n").find((l) => l.trim())}</span></summary>
+              <summary><span className="h-step-name">思考</span><span className="h-step-hint">{t.first}</span></summary>
               <div className="h-step-body muted">{t.text}</div>
             </details>
           ) : <div key={`t${i}`} className="h-thinking">{t.text}</div>)}
-          {steps.map((s, i) => <StepRow key={i} step={s} />)}
+          {steps.map((step, i) => (
+            <details key={i} className="h-step" data-failed={step.failed}>
+              <summary>
+                {step.said
+                  ? <span className="h-step-said">{step.said}</span>
+                  : <><span className="h-step-name">{step.name}</span><span className="h-step-hint">{step.hint}</span></>}
+                <span className="h-step-meta">{step.meta}</span>
+              </summary>
+              <pre className="code">{step.call}</pre>
+              {step.result !== null && <pre className="code" data-failed={step.failed}>{step.result}</pre>}
+            </details>
+          ))}
         </div>
       )}
-    </div>
-  );
-}
-
-/** What the agent said a call is for, when the tool takes a description (Bash, Task, …). */
-function describe(entry: TimelineEntry): string | null {
-  const d = parseArgs(entry.text)?.description;
-  return typeof d === "string" && d.trim() ? d.trim().split("\n")[0]!.slice(0, 160) : null;
-}
-
-function StepRow({ step }: { step: Step }) {
-  const said = describe(step.call);
-  const took = step.result?.at && step.call.at ? Date.parse(step.result.at) - Date.parse(step.call.at) : null;
-  const state = !step.result ? "进行中" : step.result.ok === false ? "失败" : null;
-  return (
-    <details className="h-step" data-failed={step.result?.ok === false}>
-      <summary>
-        {said
-          ? <span className="h-step-said">{said}</span>
-          : <><span className="h-step-name">{toolName(step.call.tool)}</span><span className="h-step-hint">{hint(step.call)}</span></>}
-        <span className="h-step-meta">{state ?? (took !== null && took >= 0 ? duration(took) : "")}</span>
-      </summary>
-      <pre className="code">{step.call.text}</pre>
-      {step.result && <pre className="code" data-failed={step.result.ok === false}>{step.result.text}</pre>}
-    </details>
-  );
-}
-
-/** A value being written as JSON, read before it is complete: the string at `field`, as far as it has arrived. */
-export function partialString(json: string, field: string): string | null {
-  const m = new RegExp(`"${field}"\\s*:\\s*"`).exec(json);
-  if (!m) return null;
-  let out = "";
-  for (let i = m.index + m[0].length; i < json.length; i++) {
-    const c = json[i]!;
-    if (c === '"') return out;
-    if (c !== "\\") { out += c; continue; }
-    const next = json[++i];
-    if (next === undefined) break;
-    if (next === "n") out += "\n";
-    else if (next === "t") out += "\t";
-    else if (next === "u") {
-      const hex = json.slice(i + 1, i + 5);
-      if (hex.length < 4) break;
-      out += String.fromCharCode(parseInt(hex, 16));
-      i += 4;
-    } else out += next;
-  }
-  return out;
-}
-
-/**
- * A step in flight, as the station tells it (its turning points, not what it writes as it goes): writing, thinking,
- * or a tool running with what it runs. What it wrote comes with its entry.
- */
-function LiveStepView({ step }: { step: ShownStep }) {
-  if (step.step === "text") return <div className="h-live-thinking">正在输出…</div>;
-  if (step.step === "thinking") return <div className="h-live-thinking">正在思考…</div>;
-  const name = toolName(step.tool);
-  const posting = name === "chat_post";
-  const hintText = posting ? "" : hint({ kind: "tool_call", tool: step.tool ?? "", text: step.input, at: null } as TimelineEntry) || step.input.slice(0, 160);
-  return (
-    <div className="h-live-tool" data-ended={step.ended || undefined}>
-      <div className="h-live-tool-head">
-        {step.ended ? <span className="h-live-done" aria-hidden="true">✓</span> : <span className="spinner" aria-hidden="true" />}
-        <strong>{posting ? "正在发送消息" : name}</strong>
-        {hintText && <code>{hintText}</code>}
-      </div>
     </div>
   );
 }
@@ -450,33 +220,19 @@ function Fold({ children, className }: { children: ReactNode; className?: string
   );
 }
 
-/** The turn's state with the model, with a running clock: starting up, waiting for the first token, or thinking. */
-function PhaseLine({ phase, runtime }: { phase: ShownPhase; runtime: string }) {
+/** The turn's state with the model (the core's words), with a running clock. */
+function PhaseLine({ phase }: { phase: NonNullable<HistoryView["phase"]> }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
   const seconds = Math.max(0, Math.floor((now - phase.since) / 1000));
-  const text = phase.phase === "starting" ? `正在启动 ${runtime}` : phase.phase === "requesting" ? "已发送请求，等待模型响应" : phase.phase === "working" ? "执行工具中" : "Thinking";
   return (
     <div className="h-phase" data-phase={phase.phase}>
       <span className="activity-pulse inline" aria-hidden="true" />
-      <span key={phase.phase} className="h-phase-text">{text}</span>
+      <span key={phase.phase} className="h-phase-text">{phase.text}</span>
       <span className="h-phase-time">{seconds}s</span>
     </div>
   );
-}
-
-const DOING: Record<Category, string> = {
-  read: "正在读取文件", search: "正在搜索", edit: "正在编辑文件", command: "正在运行命令",
-  web: "正在访问网页", agent: "正在派出子 agent", thread: "正在读取对话", other: "正在执行操作",
-};
-
-/** What a running tool call is doing, in words: its own description when it has one, else its kind. */
-export function activityText(tool: string | undefined, input: string): string {
-  const said = partialString(input, "description")?.trim();
-  if (said) return said;
-  if (toolName(tool) === "chat_post") return "正在写回复";
-  return DOING[categorize(tool ?? "")];
 }

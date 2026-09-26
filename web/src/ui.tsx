@@ -2,6 +2,7 @@
 // dismissal come from Radix), styled with ember's tokens. Pages compose these
 // instead of styling their own buttons, fields or menus.
 import { Mark } from "./brand.tsx";
+import type { Badge, Maker, Stamp } from "./api.ts";
 import { Check, ChevronDown, ChevronLeft, Copy, MessageCircle, MoreHorizontal, SlidersHorizontal, X } from "lucide-react";
 import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
@@ -10,7 +11,6 @@ import {
 import { Link, useNavigate } from "react-router";
 import { forwardRef, useEffect, useId, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type ReactNode } from "react";
 
-import { absoluteTime, BADGE_LABEL, relativeTime, type Badge } from "./format.ts";
 
 export const ICON = { size: 16, strokeWidth: 1.7 } as const;
 
@@ -436,30 +436,13 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
   );
 }
 
-/** Model makers, by what their model names look like. Marks from Zork's provider set and lobehub icons (MIT). */
-const MODEL_MAKERS: [RegExp, string, string, boolean][] = [
-  [/claude|opus|sonnet|haiku|fable/i, "anthropic", "Anthropic", true],
-  [/gpt|^o\d|codex|openai/i, "openai", "OpenAI", true],
-  [/deepseek/i, "deepseek", "DeepSeek", false],
-  [/qwen|qwq/i, "qwen", "Qwen", false],
-  [/glm|zhipu/i, "zhipu", "智谱", false],
-  [/gemini|gemma/i, "gemini", "Google", false],
-  [/kimi|moonshot/i, "kimi", "Kimi", true],
-  [/minimax|abab/i, "minimax", "MiniMax", false],
-  [/grok/i, "xai", "xAI", true],
-];
+/** Makers whose marks are one colour (drawn in the text's). Marks from Zork's provider set and lobehub icons (MIT). */
+const MONO = new Set(["anthropic", "openai", "kimi", "xai"]);
 
-/** Who made a model, by name; null when the marks here do not know it. */
-export function makerName(model: string): string | null {
-  return MODEL_MAKERS.find(([re]) => re.test(model))?.[2] ?? null;
-}
-
-/** The mark of the company that made a model; the runtime's mark when the model is unknown. */
-export function ModelLogo({ model, runtime, size = 14 }: { model: string | null | undefined; runtime: "claude" | "codex"; size?: number }) {
-  const maker = model ? MODEL_MAKERS.find(([re]) => re.test(model)) : undefined;
+/** The mark of the company that made a model (the core says which); the runtime's mark when it does not know. */
+export function ModelLogo({ maker, runtime, size = 14 }: { maker: Maker | null | undefined; runtime: "claude" | "codex"; size?: number }) {
   if (!maker) return <RuntimeLogo runtime={runtime} size={size} />;
-  const [, file, name, mono] = maker;
-  return <img className="model-logo" src={`${import.meta.env.BASE_URL}models/${file}.svg`} alt={name} title={name} width={size} height={size} data-mono={mono || undefined} />;
+  return <img className="model-logo" src={`${import.meta.env.BASE_URL}models/${maker.id}.svg`} alt={maker.name} title={maker.name} width={size} height={size} data-mono={MONO.has(maker.id) || undefined} />;
 }
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
@@ -475,7 +458,7 @@ function OpenCodeMark({ size = 16 }: { size?: number }) {
 export function ProviderLogo({ runtime, kind, size = 16 }: { runtime: "claude" | "codex"; kind: string; size?: number }) {
   if (kind === "opencode-go") return <OpenCodeMark size={size} />;
   if (kind === "env") return <SlidersHorizontal size={size} strokeWidth={1.7} aria-hidden="true" />;
-  return <ModelLogo model={runtime === "claude" || kind === "anthropic-api" ? "claude" : "openai"} runtime={runtime} size={size} />;
+  return <ModelLogo maker={runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : { id: "openai", name: "OpenAI" }} runtime={runtime} size={size} />;
 }
 
 /** The runtimes a profile runs, as small marks after its name: CC for Claude Code, Codex. */
@@ -488,10 +471,10 @@ export function RuntimeTags({ runtimes }: { runtimes: ("claude" | "codex")[] }) 
 }
 
 /** An agent as the phone shows it: its model's maker on a tile, and where it stands as a badge. */
-export function AgentMark({ model, runtime, badge, size = 20 }: { model: string | null | undefined; runtime: "claude" | "codex"; badge: Badge | null; size?: number }) {
+export function AgentMark({ maker, runtime, badge, badgeText, size = 20 }: { maker: Maker | null | undefined; runtime: "claude" | "codex"; badge: Badge | null; badgeText?: string | null; size?: number }) {
   return (
-    <span className="agent-mark" style={{ "--mark": `${size}px` } as CSSProperties} data-badge={badge ?? undefined} role="img" aria-label={badge ? BADGE_LABEL[badge] : undefined}>
-      <ModelLogo model={model} runtime={runtime} size={Math.round(size * 0.62)} />
+    <span className="agent-mark" style={{ "--mark": `${size}px` } as CSSProperties} data-badge={badge ?? undefined} role="img" aria-label={badgeText ?? undefined}>
+      <ModelLogo maker={maker} runtime={runtime} size={Math.round(size * 0.62)} />
     </span>
   );
 }
@@ -511,21 +494,15 @@ function useAbsoluteTime(): [boolean, () => void] {
   }];
 }
 
-/** A time, relative by default; clicking flips every time on the page to absolute and back. `fixed`: always relative, not a switch (the sidebar's), the date on hover. */
-export function Time({ at, className, fixed = false }: { at: number; className?: string; fixed?: boolean }) {
+/** A time as the core says it (fresh each minute): relative by default; clicking flips every time on the page to absolute and back. `fixed`: always relative, not a switch (the sidebar's), the date on hover. */
+export function Time({ stamp, className, fixed = false }: { stamp: Stamp | undefined; className?: string; fixed?: boolean }) {
   const [switched, flip] = useAbsoluteTime();
+  if (!stamp) return null;
   const absolute = switched && !fixed;
-  // Re-render now and then so "刚刚" becomes "1 分钟前" without other changes.
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (absolute) return;
-    const timer = setInterval(() => tick((n) => n + 1), 30_000);
-    return () => clearInterval(timer);
-  }, [absolute]);
   return (
-    <time className={`${fixed ? "" : "time-toggle"}${className ? ` ${className}` : ""}`.trim()} dateTime={new Date(at).toISOString()} title={absolute ? relativeTime(at) : absoluteTime(at)}
+    <time className={`${fixed ? "" : "time-toggle"}${className ? ` ${className}` : ""}`.trim()} dateTime={new Date(stamp.at).toISOString()} title={absolute ? stamp.ago : stamp.full}
       onClick={fixed ? undefined : (e) => { e.preventDefault(); e.stopPropagation(); flip(); }}>
-      {absolute ? absoluteTime(at) : relativeTime(at)}
+      {absolute ? stamp.full : stamp.ago}
     </time>
   );
 }

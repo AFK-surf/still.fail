@@ -121,6 +121,7 @@ fn run(data_dir: PathBuf, cloud_origin: String, listener: Arc<dyn CoreListener>,
 async fn serve(host: Rc<NativeHost>, mut queue: UnboundedReceiver<Command>, clients: &mut BTreeSet<ClientId>) -> Option<String> {
     // Messages that arrive meanwhile wait in the queue, in order.
     let core = Core::new(host.clone() as Rc<dyn Host>).await;
+    core.keep_time();
     while let Some(command) = queue.recv().await {
         match command {
             Command::Connect(client) => {

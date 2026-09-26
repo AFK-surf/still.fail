@@ -1,7 +1,7 @@
 // Small pieces the station client and ember cloud share.
 import { useAppearance } from "./theme.ts";
-import { useIsMine, type Creator, type HostInfo, type ProcessView, type ProfileQuota } from "./api.ts";
-import { useOnlyMine, usePerson } from "./station.tsx";
+import type { HostShown, PersonShown, QuotaShown } from "./api.ts";
+import { useOnlyMine } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
 import { Check, ListFilter } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
@@ -32,64 +32,41 @@ export function MineFilter({ label = "筛选", mine = "我创建的", compact }:
   );
 }
 
-/** "由 X 创建", with "你" for the viewer. */
-export function CreatorText({ creator, verb = "创建" }: { creator: Pick<Creator, "id" | "name" | "email" | "via"> | null | undefined; verb?: string }) {
-  const isMine = useIsMine();
-  const person = usePerson();
-  if (!creator) return null;
-  // Names come from ember cloud's member list where the person is a member; the station only keeps emails.
-  const who = isMine(creator) ? "你" : person(creator.email)?.name || creator.name || creator.email || creator.id;
+/** "由 X 创建": the person as the core names them (你 for the viewer). */
+export function CreatorText({ creator, verb = "创建" }: { creator: { via?: string | null; shown?: PersonShown } | null | undefined; verb?: string }) {
+  if (!creator?.shown) return null;
   const where = creator.via === "slack" ? "（Slack）" : "";
-  return <span className="creator">由 {who}{where} {verb}</span>;
+  return <span className="creator">由 {creator.shown.display}{where} {verb}</span>;
 }
 
-/** Who a connect belongs to: avatar and name from ember cloud's members where known. */
-export function OwnerLabel({ owner }: { owner: { id: string; name: string } | null | undefined }) {
-  const isMine = useIsMine();
-  const person = usePerson();
-  if (!owner) return <span className="owner owner-none">未设置所属用户</span>;
-  const member = person(owner.id);
-  const name = owner.id === "local" ? "本机管理页" : member?.name || owner.name || owner.id;
+/** Who a connect belongs to: avatar and name as the core names them. */
+export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown } | null | undefined }) {
+  if (!owner?.shown) return <span className="owner owner-none">未设置所属用户</span>;
+  const { name, picture, mine } = owner.shown;
   return (
     <span className="owner" title={owner.id === "local" ? undefined : owner.id}>
-      {member?.picture
-        ? <img className="person" src={member.picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
+      {picture
+        ? <img className="person" src={picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
         : <span className="person person-letter" style={{ width: 16, height: 16, fontSize: 9 }} aria-hidden="true">{([...name][0] ?? "?").toUpperCase()}</span>}
-      {isMine({ id: owner.id, email: owner.id }) ? `${name}（你）` : name}
+      {mine ? `${name}（你）` : name}
     </span>
   );
 }
 
-
-/** How long until a quota window refills, in words: "40 分钟后刷新", "3 小时 20 分钟后刷新", "2 天 5 小时后刷新". */
-export function refillsIn(ms: number | null): string {
-  if (ms === null) return "";
-  const minutes = Math.round((ms - Date.now()) / 60_000);
-  if (minutes <= 0) return "马上刷新";
-  if (minutes < 60) return `${minutes} 分钟后刷新`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时${minutes % 60 ? ` ${minutes % 60} 分钟` : ""}后刷新`;
-  return `${Math.floor(hours / 24)} 天${hours % 24 ? ` ${hours % 24} 小时` : ""}后刷新`;
-}
-
-const level = (p: number) => (p >= 90 ? "red" : p >= 70 ? "amber" : "ok");
-
-/** A profile's allowance: one bar per window (compact: a single line of the fullest window). */
+/** A profile's allowance, as the core puts its windows (shortest first, each marked): compact, a ring per window. */
 /** `ring`: the size of a compact ring, where a line is lower than a row (the model control). */
-export function QuotaBars({ quota, compact, ring }: { quota: ProfileQuota | null | undefined; compact?: boolean; ring?: number }) {
+export function QuotaBars({ quota, compact, ring }: { quota: QuotaShown | null | undefined; compact?: boolean; ring?: number }) {
   if (!quota) return compact ? null : <p className="muted quota-note">还没查过额度。</p>;
   if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className="muted quota-note">{quota.detail ?? "查不到额度。"}</p>;
   if (compact) {
-    // Every window, shortest first, each a ring marked by its length.
-    const windows = byLength(quota.windows);
     return (
       <span className="quota-rings">
-        {windows.map((w) => (
+        {quota.windows.map((w) => (
           <span key={w.label} className="quota-ring-cell">
-            <Tip label={<>{w.label}剩余 {100 - w.usedPercent}%{w.resetsAt !== null && <><br />{refillsIn(w.resetsAt)}</>}</>}>
-              <span className="quota-ring-hit"><QuotaRing percent={w.usedPercent} {...(ring ? { size: ring } : {})} /></span>
+            <Tip label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>
+              <span className="quota-ring-hit"><QuotaRing left={w.left} level={w.level} {...(ring ? { size: ring } : {})} /></span>
             </Tip>
-            <span className="quota-ring-letter">{mark(w.label).text}</span>
+            <span className="quota-ring-letter">{w.mark}</span>
           </span>
         ))}
       </span>
@@ -98,42 +75,27 @@ export function QuotaBars({ quota, compact, ring }: { quota: ProfileQuota | null
   // The profile's own page: each window a larger ring, what is left of it and when it refills under it.
   return (
     <div className="quota-dials">
-      {byLength(quota.windows).map((w) => (
+      {quota.windows.map((w) => (
         <div key={w.label} className="quota-dial">
-          <QuotaRing percent={w.usedPercent} size={64} />
+          <QuotaRing left={w.left} level={w.level} size={64} />
           <span className="quota-dial-label">{w.label}</span>
-          <span className="quota-dial-reset">{w.resetsAt !== null ? refillsIn(w.resetsAt) : "\u00a0"}</span>
+          <span className="quota-dial-reset">{w.refills ?? "\u00a0"}</span>
         </div>
       ))}
     </div>
   );
 }
 
-/** A window marked by its length (5H five hours, W a week, M a month, 3D) and where it goes among the others. */
-export function mark(label: string): { text: string; order: number } {
-  if (label.startsWith("每月")) return { text: "M", order: 3 };
-  if (label.startsWith("每周")) return { text: "W", order: 2 };
-  const hours = /^(\d+) 小时/.exec(label);
-  if (hours) return { text: `${hours[1]}H`, order: 0 };
-  const days = /^(\d+) 天/.exec(label);
-  return { text: days ? `${days[1]}D` : label, order: 1 };
-}
-
-function byLength<T extends { label: string }>(windows: T[]): T[] {
-  return [...windows].sort((a, b) => mark(a.label).order - mark(b.label).order);
-}
-
-/** What is left of the most used window, as a ring: full and green when untouched, shorter and redder as it goes; the
+/** What is left of a window, as a ring: full when untouched, shorter as it goes, coloured by the core's `level`; the
  * number left inside (up to 99; a full ring says 100 by itself). Use eats it clockwise from the top. */
-export function QuotaRing({ percent, size = 26 }: { percent: number; size?: number }) {
-  const used = Math.max(0, Math.min(100, Math.round(percent)));
-  const left = 100 - used;
+export function QuotaRing({ left, level, size = 26 }: { left: number; level: "ok" | "amber" | "red"; size?: number }) {
+  const used = 100 - left;
   const stroke = size > 40 ? 5 : 3;
   const c = size / 2;
   const r = c - stroke / 2 - 0.5;
   const around = 2 * Math.PI * r;
   return (
-    <span className="quota-ring" data-level={level(used)} data-size={size > 40 ? "large" : undefined} style={{ width: size, height: size }} role="img" aria-label={`剩余 ${left}%`}>
+    <span className="quota-ring" data-level={level} data-size={size > 40 ? "large" : undefined} style={{ width: size, height: size }} role="img" aria-label={`剩余 ${left}%`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ strokeWidth: stroke }}>
         <circle className="quota-ring-track" cx={c} cy={c} r={r} />
         {left > 0 && <circle className="quota-ring-fill" cx={c} cy={c} r={r} strokeDasharray={`${(around * left) / 100} ${around}`} transform={`rotate(${-90 + used * 3.6} ${c} ${c})`} />}
@@ -143,97 +105,55 @@ export function QuotaRing({ percent, size = 26 }: { percent: number; size?: numb
   );
 }
 
-/** A small stack of people's avatars; names in the tooltip. */
-export function PeopleStack({ people, max = 3 }: { people: Creator[] | undefined; max?: number }) {
-  const person = usePerson();
-  const isMine = useIsMine();
+/** A small stack of people's avatars (as the core names them); names in the tooltip. */
+export function PeopleStack({ people, max = 3 }: { people: { id: string; shown: PersonShown }[] | undefined; max?: number }) {
   if (!people?.length) return null;
-  const name = (c: Creator) => (isMine(c) ? "你" : person(c.email)?.name || c.name || c.email || c.id);
   return (
-    <span className="people-stack" title={`参与：${people.map(name).join("、")}`}>
-      {people.slice(0, max).map((c) => {
-        const picture = person(c.email)?.picture;
-        return picture
-          ? <img key={c.id} className="person" src={picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
-          : <span key={c.id} className="person person-letter" aria-hidden="true">{([...name(c)][0] ?? "?").toUpperCase()}</span>;
-      })}
+    <span className="people-stack" title={`参与：${people.map((p) => p.shown.display).join("、")}`}>
+      {people.slice(0, max).map((p) => p.shown.picture
+        ? <img key={p.id} className="person" src={p.shown.picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
+        : <span key={p.id} className="person person-letter" aria-hidden="true">{([...p.shown.display][0] ?? "?").toUpperCase()}</span>)}
       {people.length > max && <span className="people-more">+{people.length - max}</span>}
     </span>
   );
 }
 
-/** "参与：A、B、C" with avatars, for a session's header. */
-export function Participants({ people }: { people: Creator[] | undefined }) {
-  const person = usePerson();
-  const isMine = useIsMine();
-  if (!people?.length) return null;
-  const name = (c: Creator) => (isMine(c) ? "你" : person(c.email)?.name || c.name || c.email || c.id);
-  return (
-    <span className="participants">
-      <PeopleStack people={people} max={4} />
-      <span className="participants-names">{people.slice(0, 4).map(name).join("、")}{people.length > 4 ? ` 等 ${people.length} 人` : ""}</span>
-    </span>
-  );
-}
-
-const gb = (bytes: number) => `${(bytes / 2 ** 30).toFixed(bytes >= 100 * 2 ** 30 ? 0 : 1)} GB`;
-
-function uptime(sec: number): string {
-  const days = Math.floor(sec / 86400);
-  const hours = Math.floor((sec % 86400) / 3600);
-  return days ? `${days} 天 ${hours} 小时` : `${hours} 小时`;
-}
-
-function Meter({ label, percent, value, note }: { label: string; percent: number; value: string; note?: string | undefined }) {
-  const p = Math.max(0, Math.min(100, Math.round(percent)));
+function Meter({ meter }: { meter: HostShown["meters"][number] }) {
   return (
     <div className="quota-row device-row">
-      <span className="quota-label">{label}</span>
-      <span className="quota-track"><span className="quota-fill" data-level={p >= 90 ? "red" : p >= 75 ? "amber" : "ok"} style={{ width: `${p}%` }} /></span>
-      <span className="device-value">{value}</span>
-      <span className="quota-reset">{note ?? ""}</span>
+      <span className="quota-label">{meter.label}</span>
+      <span className="quota-track"><span className="quota-fill" data-level={meter.level} style={{ width: `${meter.percent}%` }} /></span>
+      <span className="device-value">{meter.value}</span>
+      <span className="quota-reset">{meter.note ?? ""}</span>
     </div>
   );
 }
 
-/** The machine a station runs on: what it is, and how loaded. `processes` are the agents ember started. */
-export function DeviceCard({ host, processes }: { host: HostInfo | undefined; processes?: ProcessView[] | undefined }) {
+/** The machine a station runs on: what it is, and how loaded (the core's words); `processes`: its agents', in a line. */
+export function DeviceCard({ host, processes }: { host: HostShown | null | undefined; processes: string | undefined }) {
   if (!host) return <div className="device muted">正在读取设备信息…</div>;
-  const mem = host.memory;
-  const agentMb = (processes ?? []).reduce((sum, p) => sum + (p.rssMb ?? 0), 0);
-  const used = host.disk.totalBytes - host.disk.freeBytes;
   return (
     <div className="device">
-      <div className="device-facts">
-        <span>{host.hostname}</span>
-        <span>{host.os}</span>
-        <span>{host.arch} · {host.cpus} 核</span>
-        <span>已运行 {uptime(host.uptimeSec)}</span>
-      </div>
-      <div className="quota">
-        <Meter label="CPU 负载" percent={host.load * 100} value={`${Math.round(host.load * 100)}%`} note={host.cpuModel} />
-        <Meter label="内存" percent={(mem.usedBytes / mem.totalBytes) * 100} value={`${gb(mem.usedBytes)} / ${gb(mem.totalBytes)}`}
-          note={mem.swapUsedBytes ? `swap ${gb(mem.swapUsedBytes)}` : undefined} />
-        <Meter label="磁盘" percent={host.disk.totalBytes ? (used / host.disk.totalBytes) * 100 : 0} value={`剩 ${gb(host.disk.freeBytes)} / ${gb(host.disk.totalBytes)}`} />
-      </div>
+      <div className="device-facts">{host.facts.map((f) => <span key={f}>{f}</span>)}</div>
+      <div className="quota">{host.meters.map((m) => <Meter key={m.label} meter={m} />)}</div>
       <div className="device-facts muted">
-        <span>ember {Math.round(host.emberRssBytes / 2 ** 20)} MB</span>
-        <span>{processes?.length ? `${processes.length} 个 agent 进程 ${agentMb >= 1024 ? `${(agentMb / 1024).toFixed(1)} GB` : `${agentMb} MB`}` : "没有运行中的 agent 进程"}</span>
+        <span>{host.emberText}</span>
+        {processes && <span>{processes}</span>}
       </div>
     </div>
   );
 }
 
 /** A percentage as a small ring, filled clockwise from the top; colour follows the same levels as the bars. */
-export function Ring({ percent, size = 28, label, title }: { percent: number; size?: number; label: string; title?: string }) {
-  const p = Math.max(0, Math.min(100, Math.round(percent)));
+export function Ring({ percent, level, size = 28, label, title }: { percent: number; level: "ok" | "amber" | "red"; size?: number; label: string; title?: string }) {
+  const p = percent;
   const r = (size - 4) / 2;
   const c = 2 * Math.PI * r;
   return (
     <span className="ring" title={title ?? `${label} ${p}%`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle className="ring-track" cx={size / 2} cy={size / 2} r={r} />
-        <circle className="ring-fill" data-level={level(p)} cx={size / 2} cy={size / 2} r={r}
+        <circle className="ring-fill" data-level={level} cx={size / 2} cy={size / 2} r={r}
           strokeDasharray={`${(c * p) / 100} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
         <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle">{p}</text>
       </svg>

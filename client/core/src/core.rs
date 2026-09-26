@@ -106,6 +106,11 @@ enum SocketState {
 }
 
 impl Core {
+    /// Keeps times in words fresh while anything is shown (a UI's core; see `Store::tick`).
+    pub fn keep_time(&self) {
+        self.inner.store.set_clock();
+    }
+
     pub async fn new(host: Rc<dyn Host>) -> Core {
         Core::traced(host, trace::SAMPLE).await
     }

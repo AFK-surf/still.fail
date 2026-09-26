@@ -5,6 +5,9 @@
 
 use serde_json::{Value, json};
 
+use crate::format;
+use crate::protocol::Topic;
+
 /// Where a session stands: running, queued, final, block, failed, aborted, unexpected (a turn that ended without
 /// saying final or block, or was left open by a crash), or idle.
 pub fn session_status(s: &Value) -> &'static str {
@@ -52,6 +55,63 @@ pub fn is_viewer(me: &Value, person: &str, slack_users: &[String]) -> bool {
     id == Some(person) || email.is_some_and(|e| e.eq_ignore_ascii_case(person)) || slack_users.iter().any(|u| u == person)
 }
 
+/// A workspace member's name, by email.
+pub fn member_name<'a>(members: &'a [Value], email: &str) -> Option<&'a str> {
+    members.iter()
+        .find(|m| m.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(email)))
+        .and_then(|m| m.get("name")).and_then(Value::as_str).filter(|n| !n.is_empty())
+}
+
+/// Slack's `<@U…>` mentions by name: a bot by its connect's (`bots`: bot user id, name), a person as the workspace
+/// knows them, else the id.
+pub fn mentions(text: &str, bots: &[(String, String)], members: &[Value]) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(at) = rest.find("<@") {
+        out.push_str(&rest[..at]);
+        let tail = &rest[at + 2..];
+        let len = tail.find(|c: char| !(c.is_ascii_uppercase() || c.is_ascii_digit())).unwrap_or(tail.len());
+        if len > 0 && tail[len..].starts_with('>') {
+            let id = &tail[..len];
+            let name = bots.iter().find(|(b, _)| b == id).map(|(_, n)| n.as_str()).or_else(|| member_name(members, id)).unwrap_or(id);
+            out.push('@');
+            out.push_str(name);
+            rest = &tail[len + 1..];
+        } else {
+            out.push_str("<@");
+            rest = tail;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A connect's bot, while it is signed in to Slack: its user id and the connect's name (what a mention of it reads).
+pub fn bot_of(connect: &Value) -> Option<(String, String)> {
+    let c = connect.get("connection")?;
+    let on = matches!(c.get("state").and_then(Value::as_str), Some("connected" | "reconnecting"));
+    let id = c.get("botUserId").and_then(Value::as_str).filter(|_| on)?;
+    Some((id.to_string(), connect.get("name").and_then(Value::as_str).unwrap_or("").to_string()))
+}
+
+/// A person (`{ id, email, name }`: someone who made or takes part in a chat, or owns a connect) as the clients show
+/// them: `shown: { name, display, picture, mine }`, `name` as the workspace knows them (本机管理页 for this machine's
+/// page), `display` the same but 你 for the viewer.
+pub fn person(p: &mut Value, me: &Value, members: &[Value]) {
+    if !p.is_object() {
+        return;
+    }
+    let str_of = |k: &str| p.get(k).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+    let (id, email) = (str_of("id").unwrap_or_default(), str_of("email"));
+    let key = email.clone().unwrap_or_else(|| id.clone());
+    let member = members.iter().find(|m| m.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(&key)));
+    let member_name = member.and_then(|m| m.get("name")).and_then(Value::as_str).filter(|n| !n.is_empty()).map(str::to_string);
+    let name = if id == "local" { "本机管理页".to_string() } else { member_name.or_else(|| str_of("name")).or(email.clone()).unwrap_or(id.clone()) };
+    let mine = is_viewer(me, &id, &[]) || email.as_deref().is_some_and(|e| is_viewer(me, e, &[]));
+    let picture = member.and_then(|m| m.get("picture")).and_then(Value::as_str).filter(|p| !p.is_empty());
+    p["shown"] = json!({ "name": name, "display": if mine { "你".to_string() } else { name.clone() }, "picture": picture, "mine": mine });
+}
+
 /// Who said a row's last thing, as its line shows them: `{ kind, name, model?, runtime?, picture?, mine, state? }`,
 /// the agent's state riding on its picture when it is an agent of the row.
 pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value]) -> Option<Value> {
@@ -90,6 +150,230 @@ pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value
     })
 }
 
+/// The viewer's clock: now, and their UTC offset (minutes) then.
+#[derive(Clone, Copy)]
+pub struct Clock {
+    pub now: f64,
+    pub offset_min: i32,
+}
+
+/// A moment as the clients show it: `{ at, ago, full, until, past }` (3 分钟前; 9/20 14:05:09; 3 小时后; whether it has
+/// come).
+pub fn stamp(ms: f64, c: Clock) -> Value {
+    json!({
+        "past": ms <= c.now,
+        "at": ms,
+        "ago": format::relative_time(ms, c.now, c.offset_min),
+        "full": format::absolute_time(ms, c.offset_min),
+        "until": format::time_until(ms, c.now),
+    })
+}
+
+/// Times kept in seconds (ember cloud's) and in milliseconds (the station's).
+const SECONDS: [&str; 6] = ["created_at", "expires_at", "used_at", "revoked_at", "last_seen", "lastSeen"];
+const MILLIS: [&str; 4] = ["createdAt", "lastActiveAt", "checkedAt", "resetsAt"];
+
+/// A quota's windows as the clients draw them, shortest first: each with its mark (5H, W), what is left, how full it
+/// is (ok, amber, red), and when it refills in words.
+fn windows(list: &mut Vec<Value>, c: Clock) {
+    for w in list.iter_mut() {
+        let label = w.get("label").and_then(Value::as_str).unwrap_or("").to_string();
+        let used = w.get("usedPercent").and_then(Value::as_f64).unwrap_or(0.0);
+        let (mark, order) = format::window_mark(&label);
+        w["mark"] = json!(mark);
+        w["order"] = json!(order);
+        w["left"] = json!((100.0 - used).max(0.0).round());
+        w["level"] = json!(if used >= 90.0 { "red" } else if used >= 70.0 { "amber" } else { "ok" });
+        w["refills"] = json!(w.get("resetsAt").and_then(Value::as_f64).map(|at| format::refills_in(at, c.now)));
+    }
+    list.sort_by_key(|w| w.get("order").and_then(Value::as_u64).unwrap_or(1));
+}
+
+/// Every time in a value, in words beside it: an object with some gets `time: { <field>: stamp }`; a quota's windows
+/// are put as they are drawn (`windows`). Refreshed each
+/// minute while shown (`Store::refresh`).
+pub fn times(value: &mut Value, c: Clock) {
+    match value {
+        Value::Array(items) => items.iter_mut().for_each(|v| times(v, c)),
+        Value::Object(map) => {
+            let mut stamps = serde_json::Map::new();
+            for (key, v) in map.iter_mut() {
+                if let Some(n) = v.as_f64().filter(|n| *n > 0.0) {
+                    if SECONDS.contains(&key.as_str()) {
+                        stamps.insert(key.clone(), stamp(n * 1000.0, c));
+                    } else if MILLIS.contains(&key.as_str()) {
+                        stamps.insert(key.clone(), stamp(n, c));
+                    }
+                } else if key == "windows" && v.as_array().is_some_and(|l| l.iter().any(|w| w.get("usedPercent").is_some())) {
+                    if let Some(list) = v.as_array_mut() {
+                        windows(list, c);
+                    }
+                } else if key != "time" {
+                    times(v, c);
+                }
+            }
+            if !stamps.is_empty() {
+                map.insert("time".into(), Value::Object(stamps));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// A session's summary with what the clients show of it: where it stands in words and a tone, and its mark (`mark`: run, block, failed; and in words); its
+/// title, its agent's label (`agentText`), its model's maker; its runtime and process in words; the efforts its runtime has.
+pub fn session(s: &mut Value) {
+    if !s.is_object() {
+        return;
+    }
+    let status = session_status(s);
+    let (text, tone) = format::status_text(status);
+    let fields = s.clone();
+    let str_of = |k: &str| fields.get(k).and_then(Value::as_str).map(str::to_string);
+    let runtime = str_of("runtime").unwrap_or_else(|| "claude".into());
+    let model = str_of("model");
+    let title = str_of("title").filter(|t| !t.is_empty())
+        .or_else(|| str_of("firstText").map(|t| format::clean_text(&t)).filter(|t| !t.is_empty()))
+        .unwrap_or_else(|| "（还没有消息）".into());
+    let badge = badge(status);
+    s["statusText"] = json!(text);
+    s["tone"] = json!(tone);
+    s["mark"] = json!(badge);
+    s["badgeText"] = json!(badge.map(badge_text));
+    s["titleText"] = json!(title);
+    let effort = str_of("effort");
+    let process = str_of("process");
+    s["agentText"] = json!(format::agent_label(model.as_deref(), effort.as_deref()));
+    s["maker"] = maker(model.as_deref());
+    s["runtimeText"] = json!(format::runtime_label(&runtime));
+    s["processText"] = json!(process.map(|p| format::process_text(&p)));
+    s["efforts"] = json!(format::efforts(&runtime));
+}
+
+/// A mark in words: what it says when pointed at.
+pub fn badge_text(badge: &str) -> &'static str {
+    match badge {
+        "block" => "Block：agent 停下来等人处理",
+        "run" => "工作中",
+        _ => "失败了，需要处理",
+    }
+}
+
+/// A model's maker as the clients mark it: `{ id, name }`, or null when the marks do not know it (the runtime's mark
+/// stands in).
+pub fn maker(model: Option<&str>) -> Value {
+    match model.and_then(format::maker_of) {
+        Some((id, name)) => json!({ "id": id, "name": name }),
+        None => Value::Null,
+    }
+}
+
+/// A connect with its state and how it runs in words.
+pub fn connect(c: &mut Value) {
+    if !c.is_object() {
+        return;
+    }
+    let (text, presence) = format::connection(c.get("connection").unwrap_or(&Value::Null));
+    let mode = c.get("mode").and_then(Value::as_str).unwrap_or("multi-session").to_string();
+    let (mode_text, mode_short) = format::mode_text(&mode, c.get("requireMention").and_then(Value::as_bool).unwrap_or(true));
+    let bind = c.get("bind").cloned().unwrap_or(Value::Null);
+    let runtime = bind.get("runtime").and_then(Value::as_str).unwrap_or("claude");
+    let label = format::agent_label(bind.get("model").and_then(Value::as_str), bind.get("effort").and_then(Value::as_str));
+    c["statusText"] = json!(text);
+    c["presence"] = json!(presence);
+    c["modeText"] = json!(mode_text);
+    c["modeShort"] = json!(mode_short);
+    c["runtimeText"] = json!(format::runtime_label(runtime));
+    c["runText"] = json!(format!("{} · {label}", format::runtime_label(runtime)));
+}
+
+/// A profile with its last check in words, and the makers of its models and of those its check found (`makers`, by model).
+pub fn profile(p: &mut Value) {
+    if !p.is_object() {
+        return;
+    }
+    let (text, tone) = format::check_text(p.get("check").unwrap_or(&Value::Null));
+    p["checkText"] = json!(text);
+    p["checkTone"] = json!(tone);
+    // Its models' makers, by model.
+    let found = p.get("check").and_then(|c| c.get("models")).and_then(Value::as_array).cloned().unwrap_or_default();
+    let makers: serde_json::Map<String, Value> = p.get("models").and_then(Value::as_array).into_iter().flatten().chain(found.iter())
+        .filter_map(Value::as_str).map(|m| (m.to_string(), maker(Some(m)))).collect();
+    p["makers"] = Value::Object(makers);
+}
+
+/// A machine as the clients show it: `summary` (8 核 · 32 GB), `line` (macOS · 8 核 · 32 GB · 已运行 3 天), `facts`
+/// (what it is), `meters` (CPU, memory, disk: `{ label, percent, level, value, note }`), `emberText`.
+pub fn host(h: &mut Value) {
+    if !h.is_object() {
+        return;
+    }
+    let src = h.clone();
+    let n = |path: &[&str]| path.iter().try_fold(&src, |v, k| v.get(*k)).and_then(Value::as_f64).unwrap_or(0.0);
+    let (cpus, load, uptime) = (n(&["cpus"]), n(&["load"]), n(&["uptimeSec"]));
+    let (mem_used, mem_total) = (n(&["memory", "usedBytes"]), n(&["memory", "totalBytes"]));
+    let (disk_free, disk_total) = (n(&["disk", "freeBytes"]), n(&["disk", "totalBytes"]));
+    let os = src.get("os").and_then(Value::as_str).unwrap_or("").to_string();
+    let summary = format!("{cpus} 核 · {}", format::gb(mem_total));
+    h["summary"] = json!(summary);
+    h["line"] = json!(format!("{os} · {summary} · 已运行 {} 天", (uptime / 86_400.0).floor()));
+    // Its card: what it is, how loaded (each meter coloured by how full), and what ember itself takes.
+    let days = (uptime / 86_400.0).floor();
+    let hours = ((uptime % 86_400.0) / 3600.0).floor();
+    let arch = src.get("arch").and_then(Value::as_str).unwrap_or("").to_string();
+    let meter = |label: &str, short: &str, percent: f64, value: String, note: Option<String>| {
+        let p = percent.clamp(0.0, 100.0).round();
+        json!({ "label": label, "short": short, "percent": p, "level": if p >= 90.0 { "red" } else if p >= 75.0 { "amber" } else { "ok" }, "value": value, "note": note })
+    };
+    let swap = n(&["memory", "swapUsedBytes"]);
+    h["facts"] = json!([
+        src.get("hostname").and_then(Value::as_str).unwrap_or(""), os, format!("{arch} · {cpus} 核"),
+        format!("已运行 {}", if days > 0.0 { format!("{days} 天 {hours} 小时") } else { format!("{hours} 小时") }),
+    ]);
+    h["meters"] = json!([
+        meter("CPU 负载", "CPU", load * 100.0, format!("{}%", (load * 100.0).round()), src.get("cpuModel").and_then(Value::as_str).map(str::to_string)),
+        meter("内存", "内存", if mem_total > 0.0 { mem_used / mem_total * 100.0 } else { 0.0 }, format!("{} / {}", format::gb1(mem_used), format::gb1(mem_total)),
+            (swap > 0.0).then(|| format!("swap {}", format::gb1(swap)))),
+        meter("磁盘", "磁盘", if disk_total > 0.0 { (disk_total - disk_free) / disk_total * 100.0 } else { 0.0 }, format!("剩 {} / {}", format::gb1(disk_free), format::gb1(disk_total)), None),
+    ]);
+    h["emberText"] = json!(format!("ember {} MB", (n(&["emberRssBytes"]) / 1024f64.powi(2)).round()));
+}
+
+/// Whether what goes out of a topic shows times in words (sent again each minute).
+pub fn ticks(topic: &Topic) -> bool {
+    !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. })
+}
+
+/// What goes out of a topic, with what the clients show of it put in (see above). The transcript and a thread's
+/// pages go as they are: the views that show them put in their own.
+pub fn decorate(topic: &Topic, value: &mut Value, c: Clock) {
+    match topic {
+        Topic::Host { .. } => return host(value),
+        _ if !ticks(topic) => return,
+        Topic::Sessions { .. } => value.as_array_mut().into_iter().flatten().for_each(session),
+        Topic::Session { .. } => {
+            if let Some(s) = value.get_mut("session") {
+                session(s);
+            }
+        }
+        Topic::Overview { .. } => {
+            // Its agents' processes, in a line.
+            if let Some(processes) = value.get("processes").and_then(Value::as_array).cloned() {
+                let mb: f64 = processes.iter().filter_map(|p| p.get("rssMb").and_then(Value::as_f64)).sum();
+                value["processesText"] = json!(if processes.is_empty() {
+                    "没有运行中的 agent 进程".to_string()
+                } else {
+                    format!("{} 个 agent 进程 {}", processes.len(), if mb >= 1024.0 { format!("{:.1} GB", mb / 1024.0) } else { format!("{mb} MB") })
+                });
+            }
+            value.get_mut("connects").and_then(Value::as_array_mut).into_iter().flatten().for_each(connect);
+            value.get_mut("profiles").and_then(Value::as_array_mut).into_iter().flatten().for_each(profile);
+        }
+        _ => {}
+    }
+    times(value, c);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,4 +410,38 @@ mod tests {
         assert_eq!(last_by(&row("person", "A@x.com"), &me, &[], &members).unwrap()["name"], "你");
         assert_eq!(last_by(&row("person", "U7"), &me, &["U7".into()], &members).unwrap()["mine"], true, "a Slack user who is the viewer");
     }
+
+    #[test]
+    fn what_the_clients_show_is_put_in_here() {
+        let c = Clock { now: 1_790_467_200_000.0, offset_min: 480 };
+        // A session: where it stands in words, its title, label and maker, and its runtime's efforts.
+        let mut s = json!({"runtime": "codex", "model": "gpt-6-astra", "effort": "medium", "process": "warm", "lastTurn": {"declared": "block"}, "firstText": "<@U1> 看看 CI"});
+        session(&mut s);
+        assert_eq!((s["statusText"].as_str(), s["tone"].as_str(), s["badgeText"].as_str()), (Some("Block"), Some("blue"), Some("Block：agent 停下来等人处理")));
+        assert_eq!((s["titleText"].as_str(), s["agentText"].as_str(), s["maker"]["id"].as_str()), (Some("看看 CI"), Some("gpt-6-astra · medium"), Some("openai")));
+        assert_eq!((s["processText"].as_str(), s["efforts"][0].as_str()), (Some("保温中"), Some("minimal")));
+        // Times anywhere, and a quota's windows shortest first, marked.
+        let mut v = json!({"createdAt": c.now - 180_000.0, "quota": {"windows": [
+            {"label": "每周", "usedPercent": 95, "resetsAt": c.now + 3_900_000.0},
+            {"label": "5 小时", "usedPercent": 10, "resetsAt": null},
+        ]}});
+        times(&mut v, c);
+        assert_eq!(v["time"]["createdAt"]["ago"], "3 分钟前");
+        let w = &v["quota"]["windows"];
+        assert_eq!((w[0]["mark"].as_str(), w[1]["mark"].as_str(), w[1]["level"].as_str(), w[1]["refills"].as_str()), (Some("5H"), Some("W"), Some("red"), Some("1 小时 5 分钟后刷新")));
+        // Mentions by name; a person as the workspace knows them, 你 for the viewer.
+        let members = [json!({"email": "a@x.com", "name": "阿一", "picture": "https://p/a"})];
+        assert_eq!(mentions("<@UBOT> 和 <@U9> 看下", &[("UBOT".into(), "ds-ember".into())], &members), "@ds-ember 和 @U9 看下");
+        let mut me = json!({"id": "a@x.com", "email": "a@x.com", "name": "A"});
+        person(&mut me, &json!({"id": "a@x.com", "email": "a@x.com"}), &members);
+        assert_eq!(me["shown"], json!({"name": "阿一", "display": "你", "picture": "https://p/a", "mine": true}));
+        // A machine in words.
+        let mut h = json!({"hostname": "studio", "os": "macOS 26", "arch": "arm64", "cpus": 8, "load": 0.5, "uptimeSec": 90_000,
+            "memory": {"usedBytes": 8.0 * 1024f64.powi(3), "totalBytes": 32.0 * 1024f64.powi(3), "swapUsedBytes": null},
+            "disk": {"totalBytes": 1000.0 * 1024f64.powi(3), "freeBytes": 50.0 * 1024f64.powi(3)}, "emberRssBytes": 100.0 * 1024f64.powi(2)});
+        host(&mut h);
+        assert_eq!((h["summary"].as_str(), h["facts"][3].as_str()), (Some("8 核 · 32 GB"), Some("已运行 1 天 1 小时")));
+        assert_eq!((h["meters"][2]["level"].as_str(), h["meters"][2]["value"].as_str(), h["emberText"].as_str()), (Some("red"), Some("剩 50.0 GB / 1000 GB"), Some("ember 100 MB")));
+    }
+
 }

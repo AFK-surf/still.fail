@@ -50,8 +50,6 @@ import dev.ember.android.data.ProfileView
 import dev.ember.android.data.StationView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceEntry
-import dev.ember.android.data.gb
-import dev.ember.android.data.relativeTime
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.ui.C
 import dev.ember.android.ui.Card
@@ -83,13 +81,6 @@ private fun Buddy(s: StationView, size: Int = 40) {
     Image(painterResource(face), null, Modifier.size(size.dp))
 }
 
-private fun summary(s: StationView): String {
-    if (!s.online) return "离线" + (s.lastSeen?.let { " · ${relativeTime(it * 1000)}" } ?: "")
-    val host = s.host ?: return "正在连接…"
-    val running = s.overview?.counts?.running ?: 0
-    return listOf(host.cpuModel.ifEmpty { host.os }, if (running > 0) "$running 个 agent 在跑" else "空闲").joinToString(" · ")
-}
-
 /** Back to the chats, at the top of a large-title page. */
 @Composable
 fun TopBack(label: String, onBack: () -> Unit) {
@@ -114,14 +105,14 @@ fun StationsScreen(current: WorkspaceEntry) {
                         Buddy(s)
                         Column(Modifier.weight(1f)) {
                             Text(s.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink)
-                            Text(summary(s), fontSize = 13.sp, color = C.muted)
+                            Text(s.summary, fontSize = 13.sp, color = C.muted)
                         }
                         IconIn(Icons.Chevron, 14.dp, C.subtle)
                     }
                     val host = s.host
                     if (s.online && host != null) {
                         Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            Ring(host.cpuPercent, "CPU", 40.dp); Ring(host.memPercent, "内存", 40.dp); Ring(host.diskPercent, "磁盘", 40.dp)
+                            host.meters.forEach { Ring(it.percent, it.short, it.level, 40.dp) }
                         }
                     } else if (!s.online) {
                         Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -151,9 +142,9 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
             if (s.online && host != null) {
                 Card {
                     Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        Ring(host.cpuPercent, "CPU"); Ring(host.memPercent, "内存"); Ring(host.diskPercent, "磁盘")
+                        host.meters.forEach { Ring(it.percent, it.short, it.level) }
                     }
-                    Text("${host.os} · ${host.cpus} 核 · ${gb(host.memory.totalBytes)} · 已运行 ${host.uptimeSec / 86400} 天", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp))
+                    Text(host.line, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp))
                 }
             } else if (!s.online) {
                 Card {

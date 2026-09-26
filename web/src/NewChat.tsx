@@ -6,10 +6,9 @@ import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useStations, type RuntimeKind, type StationView } from "./api.ts";
 import { Composer } from "./Chat.tsx";
-import { timeUntil } from "./format.ts";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Chooser, ChooserItem as Item } from "./ui.tsx";
-import { ModelTriple, profilesFrom } from "./ModelTriple.tsx";
+import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
 
@@ -98,7 +97,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         runtime, model,
         ...(choice.effort ? { effort: choice.effort } : {}),
         // Kept to a profile only while it still runs the model there.
-        ...(choice.profile && profilesFrom(profiles)(model, runtime).some((a) => a.id === choice.profile) ? { profile: choice.profile } : {}),
+        ...(choice.profile && entry?.accounts[runtime]?.some((a) => a.id === choice.profile) ? { profile: choice.profile } : {}),
       });
       track("chat_created", { runtime, model, ...(choice.effort ? { effort: choice.effort } : {}), ms: Math.round(performance.now() - at) });
       return { key, thread: thread.id };
@@ -116,7 +115,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         // Nothing to choose from: the chooser leads to where models are enabled.
         <Link className="chooser" to={profilesPage(station)} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
       ) : (
-        <ModelTriple side="top" title="用哪个模型、运行时、思考深度和账号" options={view.models} profilesFor={profilesFrom(profiles)}
+        <ModelTriple side="top" title="用哪个模型、运行时、思考深度和账号" options={view.models}
           value={{ model, runtime, effort: choice.effort || null, profile: choice.profile || null }}
           onPick={(p) => pick({ model: p.model, runtime: p.runtime, effort: p.effort ?? "", profile: p.profile ?? "" })} />
       )}
@@ -135,7 +134,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
         {entry?.spent && (
           <p className="spent-notice" role="status">
-            {entry.model} 能用的账号额度都用完了{entry.spent.until ? `，${timeUntil(entry.spent.until)}恢复` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。
+            {entry.model} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。
           </p>
         )}
         <Composer thread={null} sessionKey={null} ensureChat={ensureChat} placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
