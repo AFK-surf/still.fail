@@ -25,7 +25,7 @@ import kotlinx.serialization.Serializable
 }
 
 @Serializable data class SlackIdentity(val url: String? = null, val team: String? = null)
-@Serializable data class ConnectState(val state: String, val workspace: SlackIdentity? = null, val error: String? = null)
+@Serializable data class ConnectState(val state: String, val workspace: SlackIdentity? = null, val botUserId: String? = null, val error: String? = null)
 
 @Serializable data class ConnectView(
     val id: String,
@@ -34,8 +34,9 @@ import kotlinx.serialization.Serializable
     val enabled: Boolean = true,
     val connection: ConnectState = ConnectState("disabled"),
 ) {
-    /** The Slack workspace's URL while connected, for links to threads. */
-    val slackUrl: String? get() = connection.workspace?.url?.takeIf { connection.state == "connected" || connection.state == "reconnecting" }
+    private val live: Boolean get() = connection.state == "connected" || connection.state == "reconnecting"
+    /** Its bot's Slack user, while connected: how `<@U…>` mentions of it are named. */
+    val botUserId: String? get() = connection.botUserId?.takeIf { live }
 }
 
 @Serializable data class Counts(val sessions: Int = 0, val running: Int = 0, val warm: Int = 0)
@@ -44,6 +45,8 @@ import kotlinx.serialization.Serializable
     val connects: List<ConnectView> = emptyList(),
     val profiles: List<ProfileView> = emptyList(),
     val counts: Counts = Counts(),
+    /** The Slack users the viewer said are them: the station takes them for the viewer. */
+    val slackUsers: List<String> = emptyList(),
 )
 
 @Serializable data class Memory(val totalBytes: Long, val usedBytes: Long)

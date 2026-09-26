@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.animation.core.CubicBezierEasing
 import dev.ember.android.data.AccountWorkspaces
 import dev.ember.android.data.Account
+import dev.ember.android.data.ChatOf
 import dev.ember.android.data.StationApi
 import dev.ember.android.data.Topics
 import dev.ember.android.data.entries
@@ -52,11 +53,15 @@ import dev.ember.android.ui.SheetSpec
 import dev.ember.android.ui.MenuSpec
 import dev.ember.android.ui.ToastHost
 import dev.ember.core.EmberCore
+import kotlinx.coroutines.MainScope
 
 sealed interface Screen {
     val id: String
     data object Home : Screen { override val id = "home" }
-    data class Chat(val station: String, val key: String) : Screen { override val id = "chat/$station/$key" }
+    /** An item's page: its chat, or its agent before it has one. */
+    data class Chat(val station: String, val of: ChatOf) : Screen {
+        override val id = "chat/$station/" + when (of) { is ChatOf.Thread -> of.id.toString(); is ChatOf.Session -> of.key }
+    }
     /** Rises from the bottom rather than coming in from the side. */
     data object NewChat : Screen { override val id = "new" }
     data object Stations : Screen { override val id = "stations" }
@@ -95,6 +100,11 @@ class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cl
     fun home() { sheet = null; forward = false; stack = listOf(Screen.Home) }
 
     fun api(station: String) = StationApi(core, station)
+    /** For what outlives the page that started it (a message sent as the page moves to its new chat). */
+    val scope = MainScope()
+
+    /** Where each chat was left: the message at the top of the list and how far below the top it sat. */
+    val places = HashMap<String, Pair<String, Int>>()
     fun web(path: String) = cloudOrigin.trimEnd('/') + path
 }
 
@@ -143,7 +153,7 @@ private fun Pages(app: AppState, current: dev.ember.android.data.WorkspaceEntry)
             Box(Modifier.fillMaxSize().background(C.bg)) {
                 when (screen) {
                     Screen.Home -> HomeScreen(current)
-                    is Screen.Chat -> ChatScreen(screen.station, screen.key)
+                    is Screen.Chat -> ChatScreen(screen.station, screen.of)
                     Screen.NewChat -> NewChatScreen(current.workspace.id)
                     Screen.Stations -> StationsScreen(current)
                     is Screen.Station -> StationScreen(current, screen.address)

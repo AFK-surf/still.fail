@@ -1,16 +1,16 @@
-// Home is an inbox: chats where an agent is blocked first (with quick
-// replies), then running ones (one line of what they are doing), then the
-// rest by day. A fixed head (you → settings · workspace · stations) and one
-// bottom toolbar (全部 / 我参与的 · new chat), like Mail.
+// Home is the `chats` view as the web's sidebar lists it: one kind of item (an
+// agent with its chat, or an agent with no chat yet), newest first and grouped
+// by day. A fixed head (you → settings · workspace · stations) and one bottom
+// toolbar (全部 / 我参与的 · new chat), like Mail.
 package dev.ember.android.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -21,33 +21,32 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,52 +58,41 @@ import dev.ember.android.data.AccountWorkspaces
 import dev.ember.android.data.ChatItem
 import dev.ember.android.data.ChatState
 import dev.ember.android.data.ChatsView
-import dev.ember.android.data.LiveView
-import dev.ember.android.data.Me
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceEntry
-import dev.ember.android.data.activityRows
+import dev.ember.android.data.cleanText
 import dev.ember.android.data.dayLabel
 import dev.ember.android.data.entries
-import dev.ember.android.data.inbox
 import dev.ember.android.data.isMe
+import dev.ember.android.data.originLabel
+import dev.ember.android.data.page
 import dev.ember.android.data.relativeTime
 import dev.ember.android.data.rememberTopic
-import dev.ember.android.data.rowTime
-import dev.ember.android.data.sessionTitle
 import dev.ember.android.data.state
 import dev.ember.android.ui.Avatar
 import dev.ember.android.ui.C
 import dev.ember.android.ui.IconIn
 import dev.ember.android.ui.Icons
 import dev.ember.android.ui.Illustration
-import dev.ember.android.ui.ModelStack
+import dev.ember.android.ui.MakerIcon
+import dev.ember.android.ui.Mark
 import dev.ember.android.ui.NavButton
-import dev.ember.android.ui.Seg
 import dev.ember.android.ui.SectionHeader
+import dev.ember.android.ui.Seg
 import dev.ember.android.ui.SheetGrab
 import dev.ember.android.ui.SheetHead
 import dev.ember.android.ui.SheetSpec
+import dev.ember.android.ui.SlackMark
 import dev.ember.android.ui.avatarColor
 import dev.ember.android.ui.initial
-import dev.ember.core.CoreException
-import kotlinx.coroutines.launch
-
-/**
- * Quick answers to a block. The agent's question carries no choices yet, so
- * these are the answers that fit most questions; the last opens the chat.
- */
-internal val QUICK = listOf("可以，继续", "先别")
 
 @Composable
 fun HomeScreen(current: WorkspaceEntry) {
     val app = LocalApp.current
     val scope = current.workspace.id
     val chats by rememberTopic<ChatsView>(app.core, Topics.chats(scope, app.onlyMine))
-    var query by rememberSaveable { mutableStateOf("") }
     val list = rememberLazyListState()
     Column(Modifier.fillMaxSize()) {
-        // The head stays put; search scrolls away with the chats.
         Row(
             Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -120,34 +108,23 @@ fun HomeScreen(current: WorkspaceEntry) {
         }
         Box(Modifier.weight(1f)) {
             val view = chats.value
-            val inbox = view?.inbox()
-            val match = { c: ChatItem -> query.isBlank() || sessionTitle(c.session).contains(query.trim(), ignoreCase = true) }
             LazyColumn(Modifier.fillMaxSize(), state = list) {
-                item(key = "search") { Search(query) { query = it } }
                 if (view == null) {
-                    item(key = "wait") { Quiet(chats.error?.message ?: "正在读取会话…") }
-                } else if (inbox != null) {
-                    val needs = inbox.needs.filter(match)
-                    val running = inbox.running.filter(match)
-                    if (needs.isNotEmpty()) {
-                        item(key = "h-needs") { SectionHeader("需要你处理", "${needs.size} 个 agent 在 block") }
-                        items(needs, key = { "n/${it.station}/${it.session.key}" }) { NeedCard(it, view.me) }
+                    item(key = "wait") { Note(chats.error?.message ?: "正在读取会话…", error = chats.error != null) }
+                } else {
+                    val stations = view.stations
+                    val connecting = stations.filter { it.state == "connecting" }
+                    val failed = stations.filter { it.state == "error" }
+                    val offline = stations.filter { it.state == "offline" }
+                    connecting.forEach { s -> item(key = "c/${s.station}") { Note("正在连接 ${s.name}…") } }
+                    failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
+                    if (view.days.isEmpty() && view.loading) item(key = "loading") { Note("正在读取会话…") }
+                    if (offline.isNotEmpty()) item(key = "offline") { Note("${offline.joinToString("、") { it.name }} 离线，它们的会话暂时看不到。") }
+                    if (view.days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(view, app.onlyMine) }
+                    for (day in view.days) {
+                        item(key = "h/${day.daysAgo}") { SectionHeader(dayLabel(day.daysAgo, day.at)) }
+                        items(day.items, key = { "${it.station}/${it.id}" }) { ChatRow(it, view) }
                     }
-                    if (running.isNotEmpty()) {
-                        item(key = "h-running") { SectionHeader("进行中", "${running.size}") }
-                        items(running, key = { "r/${it.station}/${it.session.key}" }) { c ->
-                            ChatRow(c, view.me) { RunningLine(c) }
-                        }
-                    }
-                    for ((day, rows) in inbox.rest) {
-                        val shown = rows.filter(match)
-                        if (shown.isEmpty()) continue
-                        item(key = "h-${day.daysAgo}") { SectionHeader(dayLabel(day.daysAgo, day.at)) }
-                        items(shown, key = { "d/${it.station}/${it.session.key}" }) { c ->
-                            ChatRow(c, view.me, time = rowTime(c.session.lastActiveAt, day.daysAgo))
-                        }
-                    }
-                    if (inbox.needs.isEmpty() && inbox.running.isEmpty() && inbox.rest.isEmpty()) item(key = "empty") { Empty(view, app.onlyMine) }
                 }
                 item(key = "pad") { Spacer(Modifier.height(96.dp)) }
             }
@@ -157,131 +134,104 @@ fun HomeScreen(current: WorkspaceEntry) {
 }
 
 @Composable
-private fun Search(query: String, onChange: (String) -> Unit) {
-    Row(
-        Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp).fillMaxWidth().height(36.dp).clip(RoundedCornerShape(11.dp)).background(C.chip).padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        IconIn(Icons.Search, 16.dp, C.subtle)
-        Box(Modifier.weight(1f)) {
-            if (query.isEmpty()) Text("搜索会话", color = C.subtle, fontSize = 15.sp)
-            BasicTextField(query, onChange, singleLine = true, textStyle = TextStyle(color = C.ink, fontSize = 15.sp), cursorBrush = SolidColor(C.accent), modifier = Modifier.fillMaxWidth())
-        }
-    }
-}
-
-@Composable
-private fun Quiet(text: String) = Text(text, color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp))
+private fun Note(text: String, error: Boolean = false) =
+    Text(text, color = if (error) C.red else C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
 
 @Composable
 private fun Empty(view: ChatsView, onlyMine: Boolean) {
+    val app = LocalApp.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val online = view.stations.any { it.state == "online" }
-        Illustration(if (online) R.drawable.illus_new_chat else R.drawable.illus_station_offline, if (online) R.drawable.illus_new_chat_dark else R.drawable.illus_station_offline_dark, 240.dp)
-        Text(if (onlyMine) "你还没有参与的会话" else "还没有会话", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Text(if (online) "点右下角的笔，让 agent 做点什么。" else "这个 workspace 的 station 都不在线。", fontSize = 14.sp, color = C.muted)
-    }
-}
-
-/** Someone else's chat carries its starter's face before the title. */
-@Composable
-private fun Starter(c: ChatItem, me: Me) {
-    val creator = c.session.creator
-    if (creator != null && !me.isMe(creator)) Avatar(creator.id, creator.name, 16.dp, Modifier.padding(end = 6.dp))
-}
-
-@Composable
-private fun NeedCard(c: ChatItem, me: Me) {
-    val app = LocalApp.current
-    val scope = rememberCoroutineScope()
-    val shape = RoundedCornerShape(22.dp)
-    Column(
-        Modifier.padding(horizontal = 12.dp).padding(top = 2.dp, bottom = 10.dp).fillMaxWidth()
-            .shadow(8.dp, shape, ambientColor = C.accent.copy(alpha = 0.3f), spotColor = C.accent.copy(alpha = 0.25f))
-            .clip(shape).background(Brush.verticalGradient(0f to lerp(C.surface, C.accentBg, 0.55f), 0.7f to C.surface))
-            .clickable { app.push(Screen.Chat(c.station, c.session.key)) }.padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            ModelStack(c.models, ChatState.Block, around = C.surface)
-            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Starter(c, me)
-                Text(sessionTitle(c.session), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        val any = view.stations.isNotEmpty()
+        Illustration(if (any) R.drawable.illus_new_chat else R.drawable.illus_station_offline, if (any) R.drawable.illus_new_chat_dark else R.drawable.illus_station_offline_dark, 240.dp)
+        when {
+            onlyMine -> Text("没有你参与的会话。", fontSize = 14.sp, color = C.muted)
+            any -> {
+                Text("还没有会话。在 Slack 里 @ ${if (view.stations.size > 1) "它们" else "它"}，或者", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+                Text("新建对话", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.NewChat) })
             }
-            Text(relativeTime(c.session.lastActiveAt), fontSize = 12.sp, color = C.muted, modifier = Modifier.align(Alignment.Top))
-        }
-        val question = c.last?.takeIf { it.declared == "block" }?.text
-        Text(question ?: "agent 停下来等你决定", fontSize = 15.sp, lineHeight = 22.sp, color = if (question != null) C.ink else C.muted, maxLines = 4, overflow = TextOverflow.Ellipsis)
-        QuickReplies(QUICK, onMore = { app.push(Screen.Chat(c.station, c.session.key)) }) { text ->
-            scope.launch { answer(app, c.station, c.session.key, text) }
+            else -> {
+                Text("还没有 station。", fontSize = 14.sp, color = C.muted)
+                Text("看看 Station", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.Stations) })
+            }
         }
     }
 }
 
-suspend fun answer(app: AppState, station: String, key: String, text: String, toast: Boolean = true) {
-    try {
-        app.api(station).send(key, text)
-        if (toast) app.toast = "已回复：$text"
-    } catch (e: CoreException) {
-        app.toast = "没发出去：${e.message}"
+/** An agent's state as a dot: solid orange block, a hollow ring at work, red failed; done has none. */
+@Composable
+fun StateDot(state: ChatState) {
+    val shape = CircleShape
+    val dot = Modifier.size(8.dp).clip(shape)
+    when (state) {
+        ChatState.Block -> Box(dot.background(C.accent))
+        ChatState.Running -> Box(dot.border(2.dp, C.accent, shape))
+        ChatState.Failed -> Box(dot.background(C.red))
+        ChatState.Done -> {}
     }
 }
 
-/** Answers in a row, the first one filled; "我来看看" opens the chat. */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * A row: its title (bold while something in it is unread, a blue dot in the
+ * margin) and, for an agent that came from Slack, the connect's mark; under
+ * it the last thing said, and the agents' state as a dot. Two lines, always
+ * the same height. The time shows only while the row is held.
+ */
 @Composable
-fun QuickReplies(answers: List<String>, onMore: (() -> Unit)?, onAnswer: (String) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        answers.forEachIndexed { i, q -> QuickButton(q, primary = i == 0) { onAnswer(q) } }
-        if (onMore != null) QuickButton("我来看看", primary = false, onClick = onMore)
-    }
-}
-
-@Composable
-private fun QuickButton(text: String, primary: Boolean, onClick: () -> Unit) {
+private fun ChatRow(item: ChatItem, view: ChatsView) {
+    val app = LocalApp.current
+    var held by remember { mutableStateOf(false) }
     Box(
-        Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(if (primary) C.ink else C.chip).clickable(onClick = onClick).padding(horizontal = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) { Text(text, fontSize = 14.sp, color = if (primary) C.bg else C.ink) }
-}
-
-@Composable
-private fun ChatRow(c: ChatItem, me: Me, time: String? = null, line: (@Composable () -> Unit)? = null) {
-    val app = LocalApp.current
-    val state = c.session.state()
-    Row(
-        Modifier.fillMaxWidth().clickable { app.push(Screen.Chat(c.station, c.session.key)) }.padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ModelStack(c.models, state)
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Starter(c, me)
-                Text(
-                    sessionTitle(c.session), fontSize = 15.sp, fontWeight = if (c.unread > 0) FontWeight.SemiBold else FontWeight.Medium,
-                    color = if (state == ChatState.Failed) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        Modifier.fillMaxWidth().height(62.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
+            .pointerInput(item.station, item.id) {
+                detectTapGestures(
+                    onPress = { tryAwaitRelease(); held = false },
+                    onLongPress = { held = true },
+                    onTap = { app.push(Screen.Chat(item.station, item.page)) },
                 )
+            },
+    ) {
+        if (item.unread) Box(Modifier.padding(start = 8.dp, top = 19.dp).size(7.dp).clip(CircleShape).background(C.blue).semantics { contentDescription = "有未读消息" })
+        Column(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp), verticalArrangement = Arrangement.Center) {
+            Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    item.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = if (item.unread) FontWeight.SemiBold else FontWeight.Normal,
+                    color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
+                // Only an agent that came from elsewhere (Slack, the only kind of connect) says so.
+                Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
+                    if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originLabel() }) { SlackMark(13.dp) }
+                }
             }
-            line?.invoke()
-        }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            if (time != null) Text(time, fontSize = 12.sp, color = if (c.unread > 0) C.ink else C.subtle)
-            // Unread is not "needs you": ink, not the ember orange.
-            if (c.unread > 0) Text(
-                "${c.unread}", fontSize = 11.sp, color = C.bg, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clip(CircleShape).background(C.ink).padding(horizontal = 6.dp),
-            )
+            Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { item.last?.let { LastMessage(item, view) } }
+                if (held) Text(relativeTime(item.lastActiveAt), fontSize = 12.sp, color = C.subtle, maxLines = 1)
+                Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) { StateDot(item.state()) }
+            }
         }
     }
 }
 
-/** A running chat's one line: what its agent is doing now. */
+/** The last thing said, on one line: a small picture of who said it, then what, in the secondary colour. */
 @Composable
-private fun RunningLine(c: ChatItem) {
-    val app = LocalApp.current
-    val live by rememberTopic<LiveView>(app.core, Topics.live(c.station, c.session.key))
-    val now = live.value?.let { activityRows(emptyList(), it.steps, it.phase).lastOrNull()?.text }
-    Text(now ?: "进行中", fontSize = 13.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun LastMessage(item: ChatItem, view: ChatsView) {
+    val last = item.last!!
+    val agent = if (last.authorKind == "agent") item.agents.firstOrNull { it.key == last.author } else null
+    val mine = last.authorKind == "person" && view.me.isMe(last.author)
+    val name = when {
+        last.authorKind == "ember" -> "ember"
+        last.authorKind == "agent" -> agent?.model ?: last.authorName ?: "agent"
+        mine -> "你"
+        else -> last.authorName ?: last.author
+    }
+    val text = if (last.deletedAt != null) "（已删除）" else cleanText(last.text).ifEmpty { "（文件）" }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "$name：$text" }) {
+        when (last.authorKind) {
+            "ember" -> Mark(13.dp)
+            "agent" -> MakerIcon(agent?.model, agent?.runtime ?: "claude", 13.dp)
+            else -> Avatar(last.author, name, 13.dp)
+        }
+        Text(text, fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 @Composable

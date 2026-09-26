@@ -1,5 +1,6 @@
-// The `chats` view (docs/client-core.md → Views): the home inbox. Shapes follow
-// web/src/api.ts (ChatsView) and src/admin/types.ts (SessionSummary).
+// The `chats` view (docs/client-core.md → Views): the home list, every
+// station's rows side by side, grouped by day. Shapes follow web/src/api.ts
+// (ChatsView) and src/admin/types.ts (ChatRow, SessionSummary).
 package dev.ember.android.data
 
 import kotlinx.serialization.Serializable
@@ -20,12 +21,13 @@ import kotlinx.serialization.Serializable
     val createdBy: String? = null,
     val creator: Creator? = null,
     val participants: List<Creator> = emptyList(),
-    val channel: String = "",
-    val threadTs: String = "",
     val runtime: String = "claude",
     val profile: String = "",
     val model: String? = null,
     val effort: String? = null,
+    val runtimeSessionId: String? = null,
+    /** Where its files are kept on the station. */
+    val workspace: String = "",
     val running: Boolean = false,
     val createdAt: Long = 0,
     val lastActiveAt: Long = 0,
@@ -35,23 +37,55 @@ import kotlinx.serialization.Serializable
     val lastTurn: TurnSummary? = null,
 )
 
-/** An agent of a chat's thread (docs/station-storage.md: a thread has any number of sessions). */
-@Serializable data class AgentRef(val key: String, val model: String? = null, val runtime: String = "claude")
+/** An agent of a row: what it runs on and where its work stands. */
+@Serializable data class RowAgent(
+    val key: String,
+    val runtime: String = "claude",
+    val model: String? = null,
+    val effort: String? = null,
+    val process: String = "cold",
+    val pending: Int = 0,
+    val lastTurn: TurnSummary? = null,
+)
 
+/** A row's last message, its text cut to 200 characters. */
+@Serializable data class RowMessage(
+    val seq: Long = 0,
+    /** person | agent | ember */
+    val authorKind: String,
+    val author: String,
+    val authorName: String? = null,
+    val text: String = "",
+    val createdAt: Long = 0,
+    val deletedAt: Long? = null,
+)
+
+/** The Slack thread a row's agent came from. */
+@Serializable data class Origin(val teamName: String? = null, val channel: String = "", val channelName: String? = null, val threadTs: String = "")
+
+/**
+ * An item of the home list, as its station puts it together for the viewer:
+ * an agent merged with its internal chat, or an agent that has no chat yet.
+ */
 @Serializable data class ChatItem(
     val station: String,
     val stationName: String,
-    val session: SessionSummary,
-    val connect: ConnectView? = null,
-    /** Messages after the viewer's read position, not their own. */
-    val unread: Int = 0,
-    // Not in the view yet (docs/station-storage.md has both on threads): the thread's agents, and its
-    // last message, whose text is the question when an agent blocked. Without them a chat is its one session.
-    val agents: List<AgentRef> = emptyList(),
-    val last: MessageView? = null,
-) {
-    val models: List<String?> get() = agents.map { it.model }.ifEmpty { listOf(session.model) }
-}
+    /** Where its page is: its chat's thread id, or its session's key while it has no chat. */
+    val id: String,
+    /** Its agent (the first of its chat's). */
+    val session: String,
+    /** Its internal chat; null until the first message makes it. */
+    val thread: Long? = null,
+    val title: String,
+    val agents: List<RowAgent> = emptyList(),
+    val last: RowMessage? = null,
+    val unread: Boolean = false,
+    val mine: Boolean = false,
+    val lastActiveAt: Long = 0,
+    /** The connect its agent came from; null for one made on ember. */
+    val connect: String? = null,
+    val origin: Origin? = null,
+)
 
 @Serializable data class ChatDay(val daysAgo: Int, val at: Long, val items: List<ChatItem> = emptyList())
 
@@ -60,30 +94,37 @@ import kotlinx.serialization.Serializable
 @Serializable data class ChatsView(
     val me: Me,
     val stations: List<StationState> = emptyList(),
+    /** An online station has not answered its rows yet. */
     val loading: Boolean = false,
     val days: List<ChatDay> = emptyList(),
 )
 
-/** Where a chat stands, as its badge shows it. */
+/** Where an agent stands, as its badge shows it: solid orange block, hollow ring at work, red failed; done has none. */
 enum class ChatState { Block, Running, Done, Failed }
 
-fun SessionSummary.state(): ChatState = when (status(this)) {
+fun agentState(process: String, pending: Int, lastTurn: TurnSummary?): ChatState = when (status(process, pending, lastTurn)) {
     Status.Running, Status.Queued -> ChatState.Running
     Status.Block -> ChatState.Block
     Status.Failed, Status.Unexpected -> ChatState.Failed
     else -> ChatState.Done
 }
 
+fun SessionSummary.state(): ChatState = agentState(process, pending, lastTurn)
+fun RowAgent.state(): ChatState = agentState(process, pending, lastTurn)
+
+/** A row's badge, from its agents': one that is blocked comes first, then one at work, then one that failed. */
+fun ChatItem.state(): ChatState {
+    val states = agents.map { it.state() }.toSet()
+    return listOf(ChatState.Block, ChatState.Running, ChatState.Failed).firstOrNull { it in states } ?: ChatState.Done
+}
+
 fun Me.isMe(c: Creator?): Boolean = c != null && (c.id == id || (email != null && c.email.equals(email, ignoreCase = true)))
 
-/**
- * The phone's inbox: chats where an agent is blocked first, then running
- * ones, then the rest by day. The view is already sorted newest first.
- */
-data class Inbox(val needs: List<ChatItem>, val running: List<ChatItem>, val rest: List<Pair<ChatDay, List<ChatItem>>>)
+/** Whether a person's id (an email, "local", a Slack user) is the viewer. */
+fun Me.isMe(person: String): Boolean = person == id || (email != null && person.equals(email, ignoreCase = true))
 
-fun ChatsView.inbox(): Inbox {
-    val all = days.flatMap { it.items }
-    val rest = days.map { day -> day to day.items.filter { it.session.state() == ChatState.Done || it.session.state() == ChatState.Failed } }.filter { it.second.isNotEmpty() }
-    return Inbox(all.filter { it.session.state() == ChatState.Block }, all.filter { it.session.state() == ChatState.Running }, rest)
+/** Where a row's agent came from, for its connect icon: the Slack workspace, then the thread's channel. */
+fun ChatItem.originLabel(): String {
+    val where = origin?.let { o -> o.channelName?.let { "#$it" } ?: if (o.channel.startsWith("D")) "私信" else null }
+    return listOfNotNull("Slack", origin?.teamName, where).joinToString(" · ")
 }

@@ -73,8 +73,8 @@ import dev.ember.android.data.maker
 // ── model marks ────────────────────────────────────────────────────────
 
 @Composable
-fun MakerIcon(model: String?, size: Dp, modifier: Modifier = Modifier) {
-    val m = maker(model)
+fun MakerIcon(model: String?, runtime: String, size: Dp, modifier: Modifier = Modifier) {
+    val m = maker(model, runtime)
     val res = when (m) { Maker.OpenAI -> R.drawable.maker_openai; Maker.Anthropic -> R.drawable.maker_anthropic; Maker.Zhipu -> R.drawable.maker_zhipu; Maker.DeepSeek -> R.drawable.maker_deepseek }
     // OpenAI's and Anthropic's marks are one color: the ink of the page.
     val mono = m == Maker.OpenAI || m == Maker.Anthropic
@@ -103,36 +103,18 @@ private fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier:
 
 /** An agent: its model maker's mark on a soft tile, with its state as a badge. */
 @Composable
-fun ModelMark(model: String?, size: Dp = 36.dp, state: ChatState? = null, around: Color = C.bg) {
+fun ModelMark(model: String?, runtime: String, size: Dp = 36.dp, state: ChatState? = null, around: Color = C.bg) {
     val xs = size < 30.dp
     Box(Modifier.size(size)) {
         Box(
             Modifier.size(size).clip(RoundedCornerShape(if (xs) 6.dp else 11.dp)).background(C.surface)
                 .border(1.dp, C.line, RoundedCornerShape(if (xs) 6.dp else 11.dp)),
             contentAlignment = Alignment.Center,
-        ) { MakerIcon(model, if (xs) size * 0.6f else size * 0.56f) }
+        ) { MakerIcon(model, runtime, if (xs) size * 0.6f else size * 0.56f) }
         if (state != null && state != ChatState.Done) {
             val badge = if (xs) 11.dp else 15.dp
             Badge(state, badge, if (xs) 1.5.dp else 2.dp, around, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp))
         }
-    }
-}
-
-/** A chat's agents: one mark, or two small tiles on a diagonal like a group's avatar; the badge belongs to the pair. */
-@Composable
-fun ModelStack(models: List<String?>, state: ChatState?, around: Color = C.bg) {
-    if (models.size < 2) return ModelMark(models.firstOrNull(), 36.dp, state, around)
-    Box(Modifier.size(36.dp)) {
-        models.take(2).forEachIndexed { i, m ->
-            val shape = RoundedCornerShape(8.dp)
-            Box(
-                Modifier.align(if (i == 0) Alignment.TopStart else Alignment.BottomEnd).size(if (i == 0) 24.dp else 28.dp)
-                    .let { if (i == 1) it.clip(RoundedCornerShape(10.dp)).background(around).padding(2.dp) else it }
-                    .clip(shape).background(C.surface).border(1.dp, C.line, shape),
-                contentAlignment = Alignment.Center,
-            ) { MakerIcon(m, 14.dp) }
-        }
-        if (state != null && state != ChatState.Done) Badge(state, 15.dp, 2.dp, around, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp).zIndex(2f))
     }
 }
 

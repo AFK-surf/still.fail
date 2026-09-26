@@ -22,6 +22,8 @@ data class EmberColors(
     val ink: Color, val muted: Color, val subtle: Color, val line: Color,
     val accent: Color, val accentBg: Color, val accentInk: Color,
     val green: Color, val red: Color, val warn: Color,
+    /** Unread: news, not "this needs you". */
+    val blue: Color,
     val chip: Color, val bubble: Color,
 )
 
@@ -30,7 +32,7 @@ val Light = EmberColors(
     bg = Color(0xFFF5F3EF), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFFBFAF7),
     ink = Color(0xFF24272B), muted = Color(0xFF7A7D83), subtle = Color(0xFFA6A8AC), line = Color(0xFFE7E3DC),
     accent = Color(0xFFE5704A), accentBg = Color(0xFFFBE6DC), accentInk = Color(0xFFB9471F),
-    green = Color(0xFF2F8F5B), red = Color(0xFFC9412E), warn = Color(0xFFD9962B),
+    green = Color(0xFF2F8F5B), red = Color(0xFFC9412E), warn = Color(0xFFD9962B), blue = Color(0xFF1559C4),
     chip = Color(0xFFEFECE6), bubble = Color(0xFFEDEAE4),
 )
 
@@ -39,7 +41,7 @@ val Dark = EmberColors(
     bg = Color(0xFF1B1C1F), surface = Color(0xFF26272B), surface2 = Color(0xFF2C2D31),
     ink = Color(0xFFECECED), muted = Color(0xFF9A9DA3), subtle = Color(0xFF6E7177), line = Color(0xFF34353A),
     accent = Color(0xFFEF7A55), accentBg = Color(0xFF4A2F25), accentInk = Color(0xFFF6A383),
-    green = Color(0xFF5CC08A), red = Color(0xFFEB6B58), warn = Color(0xFFD9962B),
+    green = Color(0xFF5CC08A), red = Color(0xFFEB6B58), warn = Color(0xFFD9962B), blue = Color(0xFF81AEFA),
     chip = Color(0xFF313237), bubble = Color(0xFF33343A),
 )
 

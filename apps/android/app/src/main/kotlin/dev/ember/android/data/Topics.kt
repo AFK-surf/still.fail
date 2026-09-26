@@ -64,6 +64,22 @@ object Topics {
     val workspaces = buildJsonObject { put("topic", "workspaces") }
     fun chats(scope: String, mine: Boolean) = buildJsonObject { put("topic", "chats"); put("scope", scope); put("mine", mine) }
     fun stations(scope: String) = buildJsonObject { put("topic", "stations"); put("scope", scope) }
-    fun chat(station: String, key: String) = buildJsonObject { put("topic", "chat"); put("station", station); put("key", key) }
+    fun workspace(id: String) = buildJsonObject { put("topic", "workspace"); put("workspace", id) }
+    fun overview(station: String) = buildJsonObject { put("topic", "overview"); put("station", station) }
+    fun host(station: String) = buildJsonObject { put("topic", "host"); put("station", station) }
+    /** An item's page: its chat, or its agent before it has one. */
+    fun chat(station: String, of: ChatOf) = buildJsonObject {
+        put("topic", "chat"); put("station", station)
+        when (of) { is ChatOf.Thread -> put("thread", of.id); is ChatOf.Session -> put("session", of.key) }
+    }
     fun live(station: String, key: String) = buildJsonObject { put("topic", "live"); put("station", station); put("key", key) }
 }
+
+/** What an item's page is of: its chat's thread, or its agent's session while it has no chat. */
+sealed interface ChatOf {
+    data class Thread(val id: Long) : ChatOf
+    data class Session(val key: String) : ChatOf
+}
+
+/** A row's page. */
+val ChatItem.page: ChatOf get() = thread?.let { ChatOf.Thread(it) } ?: ChatOf.Session(session)

@@ -1,4 +1,4 @@
-// You: who is signed in, what wakes you, which accounts and workspaces, how it looks.
+// You: who is signed in, which accounts and workspaces, how it looks.
 package dev.ember.android.screens
 
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,8 +16,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,17 +63,6 @@ fun MeScreen(current: WorkspaceEntry) {
                 }
             }
         }
-        SectionHeader("推送", "手机主要用来被叫醒", start = 24.dp)
-        ListCard {
-            listOf(Triple("push.block", "agent 进入 block", true), Triple("push.final", "一轮完成", false), Triple("push.failed", "失败或意外停止", true)).forEach { (key, label, default) ->
-                ListRow {
-                    Text(label, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                    var on by remember { mutableStateOf(app.flag(key, default)) }
-                    Toggle(on) { on = it; app.setFlag(key, it) }
-                }
-            }
-        }
-        Text("推送还没接上 ember cloud，这里先记下你的选择。", fontSize = 12.sp, color = C.subtle, modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 4.dp))
         SectionHeader("账号与 workspace", start = 24.dp)
         ListCard {
             val entries = workspaces.value?.entries().orEmpty()
@@ -98,17 +84,22 @@ fun MeScreen(current: WorkspaceEntry) {
                 Toggle(app.dark ?: system) { app.useDark(it) }
             }
         }
+        // Signing out is per account, as on the web; with one account it is just 退出登录.
         ListCard {
-            ListRow(onClick = {
-                scope.launch {
-                    try {
-                        for (a in accounts.value.orEmpty()) Auth.signOut(app.core, a.sub)
-                        app.home()
-                    } catch (e: CoreException) {
-                        app.toast = "没能退出：${e.message}"
+            val list = accounts.value.orEmpty()
+            list.forEach { a ->
+                ListRow(onClick = {
+                    scope.launch {
+                        try {
+                            Auth.signOut(app.core, a.sub)
+                            app.home()
+                            if (list.size > 1) app.toast = "已退出 ${a.email}"
+                        } catch (e: CoreException) {
+                            app.toast = "没能退出：${e.message}"
+                        }
                     }
-                }
-            }) { Text(if ((accounts.value?.size ?: 0) > 1) "退出所有账号" else "退出登录", fontSize = 15.sp, color = C.red) }
+                }) { Text(if (list.size > 1) "退出 ${a.email}" else "退出登录", fontSize = 15.sp, color = C.red) }
+            }
         }
         Spacer(Modifier.height(30.dp))
     }

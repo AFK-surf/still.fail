@@ -84,7 +84,6 @@ private fun hint(entry: TimelineEntry): String {
 
 private fun describe(entry: TimelineEntry): String? = args(entry.text)?.string("description")?.trim()?.takeIf { it.isNotEmpty() }?.lineSequence()?.first()?.take(160)
 
-private fun fileOf(entry: TimelineEntry): String? = args(entry.text)?.let { it.string("file_path") ?: it.string("path") ?: it.string("notebook_path") }
 
 // ── the running turn's rows ────────────────────────────────────────────
 
@@ -126,19 +125,24 @@ fun activityRows(timeline: List<TimelineEntry>, live: List<LiveStep>, phase: Sho
     return rows
 }
 
-/** The reply the agent is writing to this chat right now, as far as it has streamed. */
-fun writingNow(live: List<LiveStep>): String? =
-    live.firstOrNull { it.step == "tool" && !it.ended && toolName(it.tool) == "chat_post" }?.let { partialString(it.input, "text") }?.takeIf { it.isNotEmpty() }
+/** The reply an agent is writing to the chat at `address` (CHANNEL/THREAD_TS) right now, as far as it has streamed. */
+fun writingNow(live: List<LiveStep>, address: String): String? =
+    live.firstOrNull { it.step == "tool" && !it.ended && toolName(it.tool) == "chat_post" && partialString(it.input, "to") == address }
+        ?.let { partialString(it.input, "text") }?.takeIf { it.isNotEmpty() }
 
 // ── the execution history ──────────────────────────────────────────────
 
 data class Step(val call: TimelineEntry, var result: TimelineEntry?)
 
+/** A message a prompt carried: who said it (and their name, as the prompt had it), where, and whether on Slack. */
+data class SourcedMessage(val user: String, val name: String?, val ts: String, val text: String, val thread: String?, val slack: Boolean)
+
 sealed interface HistoryItem {
-    /** A message the agent received: who sent it and what it said. */
-    data class Received(val from: String, val text: String) : HistoryItem
-    data class Text(val text: String) : HistoryItem
-    data class Post(val text: String, val kind: String?, val failed: Boolean) : HistoryItem
+    /** What a prompt carried: ember's own words around them (`note`), then the messages. */
+    data class Received(val note: String, val messages: List<SourcedMessage>) : HistoryItem
+    data class Text(val text: String, val subagent: Boolean) : HistoryItem
+    /** A message the agent sent: where to (a thread address), its words, whether it ended its work, whether it failed. */
+    data class Post(val to: String?, val text: String, val kind: String?, val failed: Boolean) : HistoryItem
     data class Mark(val kind: String) : HistoryItem
     data class Group(val steps: List<Step>, val thinking: List<TimelineEntry>) : HistoryItem {
         /** Named by its latest call: its description, else what it did and to what. */
@@ -148,35 +152,47 @@ sealed interface HistoryItem {
             val text = describe(last.call) ?: "${if (c == Category.Other) toolName(last.call.tool) else c.verb} ${hint(last.call)}".trim()
             return if (steps.size == 1) text else "$text · 共 ${steps.size} 项"
         }
-        val counts: String get() {
-            val seen = linkedMapOf<Category, MutableSet<String>>()
-            steps.forEachIndexed { i, s ->
-                val c = categorize(s.call.tool)
-                seen.getOrPut(c) { mutableSetOf() } += (if (c == Category.Read || c == Category.Edit) fileOf(s.call) else null) ?: "#$i"
-            }
-            return seen.entries.joinToString("、") { (c, v) -> "${c.verb} ${v.size} ${c.unit}" }
-        }
         val failed: Int get() = steps.count { it.result?.ok == false }
         val pending: Int get() = steps.count { it.result == null }
     }
 }
 
 private val MESSAGE = Regex("<message ([^>]*)>\\n?([\\s\\S]*?)\\n?</message>")
+private val SLACK = Regex("<slack user=\"([^\"]*)\"(?: bot)? ts=\"([^\"]*)\">\\n?([\\s\\S]*?)\\n?</slack>")
 
-/** A prompt ember built, split into the chat messages it carried and ember's own words around them. */
-fun parsePrompt(text: String, person: (String) -> String): List<HistoryItem.Received> {
-    val out = mutableListOf<HistoryItem.Received>()
+private fun unescape(v: String) = v.replace("&quot;", "\"").replace("&amp;", "&")
+
+/** Splits a prompt ember built into the chat messages it carried and ember's own words around them (the current <message …> form and the older <slack …> one). */
+fun parsePrompt(text: String): HistoryItem.Received {
+    val messages = mutableListOf<SourcedMessage>()
     val note = MESSAGE.replace(text) { m ->
-        val from = Regex("from=\"([^\"]*)\"").find(m.groupValues[1])?.groupValues?.get(1)?.replace("&quot;", "\"")?.replace("&amp;", "&") ?: ""
-        val id = Regex("\\(([^()\\s]+)\\)$").find(from)?.groupValues?.get(1) ?: from
-        val name = Regex("^(.*) \\([^()]*\\)$").find(from)?.groupValues?.get(1)?.takeIf { it.isNotBlank() } ?: person(id)
-        out += HistoryItem.Received(name, m.groupValues[2])
+        val attrs = m.groupValues[1]
+        fun attr(name: String) = Regex("$name=\"([^\"]*)\"").find(attrs)?.groupValues?.get(1)
+        val from = unescape(attr("from") ?: "")
+        val named = Regex("^(.*) \\(([^()\\s]+)\\)$").find(from)
+        messages += SourcedMessage(named?.groupValues?.get(2) ?: from, named?.groupValues?.get(1), attr("ts") ?: "", m.groupValues[2], attr("thread"), attr("via") == "slack")
         ""
+    }.let { rest ->
+        SLACK.replace(rest) { m ->
+            messages += SourcedMessage(m.groupValues[1], null, m.groupValues[2], m.groupValues[3], null, true)
+            ""
+        }
     }.replace(Regex("^\\(Thread \\S+ had messages before you were brought in;.*\\)$", RegexOption.MULTILINE), "").trim()
-    return if (note.isNotEmpty()) listOf(HistoryItem.Received("ember", note)) + out else out
+    return HistoryItem.Received(note, messages)
 }
 
-fun historyItems(entries: List<TimelineEntry>, person: (String) -> String): List<HistoryItem> {
+/** "C0OPS/1727.0001" → its channel and thread. */
+fun splitThread(address: String): Pair<String, String>? =
+    Regex("^([A-Z0-9]+)/(\\d+\\.\\d+)$").find(address)?.let { it.groupValues[1] to it.groupValues[2] }
+
+/** A thread as a place in a history: a chat on ember's page by its title (else what was first said in it), a Slack one by its channel. */
+fun placeName(threads: List<ThreadView>, channel: String, threadTs: String): String {
+    val thread = threads.firstOrNull { it.channel == channel && it.threadTs == threadTs }
+    if (channel == "EMBER") return thread?.title?.takeIf { it.isNotEmpty() } ?: cleanText(thread?.firstText).ifEmpty { "ember 对话" }
+    return if (channel.startsWith("D")) "私信" else "#${thread?.channelName ?: channel}"
+}
+
+fun historyItems(entries: List<TimelineEntry>): List<HistoryItem> {
     val items = mutableListOf<HistoryItem>()
     val steps = HashMap<String, Step>()
     var group: MutableList<Step>? = null
@@ -204,7 +220,7 @@ fun historyItems(entries: List<TimelineEntry>, person: (String) -> String): List
                 val a = args(e.text)
                 if (name == "chat_post" && a?.string("text") != null && !e.subagent) {
                     posts += items.size to step
-                    items += HistoryItem.Post(a.string("text")!!, a.string("kind"), false)
+                    items += HistoryItem.Post(a.string("to"), a.string("text")!!, a.string("kind"), false)
                     group = null
                 } else if (name == "chat_state" && a?.string("kind") != null && !e.subagent) {
                     items += HistoryItem.Mark(a.string("kind")!!)
@@ -216,7 +232,7 @@ fun historyItems(entries: List<TimelineEntry>, person: (String) -> String): List
             "thinking" -> { openGroup(); thinking!! += e }
             else -> {
                 group = null
-                if (e.kind == "user") items += parsePrompt(e.text, person) else items += HistoryItem.Text(e.text)
+                items += if (e.kind == "user") parsePrompt(e.text) else HistoryItem.Text(e.text, e.subagent)
             }
         }
     }

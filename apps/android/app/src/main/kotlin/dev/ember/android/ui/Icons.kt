@@ -39,6 +39,13 @@ object Icons {
     val Check = stroked("check", 3f, "M5 12l5 5 9-10")
     val Chevron = stroked("chevron", 2.4f, "M9 6l6 6-6 6")
     val ChevronDown = stroked("chevron-down", 2.5f, "M6 9l6 6 6-6")
+    val ChevronUp = stroked("chevron-up", 2.5f, "M6 15l6-6 6 6")
+    val ChevronRight = stroked("chevron-right", 2.5f, "M9 6l6 6-6 6")
+    val Down = stroked("down", 2.4f, "M12 5v14M5 12l7 7 7-7")
+    val Received = stroked("received", 2f, "M12 3v12M7 10l5 5 5-5", "M5 21h14")
+    val Send = stroked("send", 2f, "M22 2L11 13", "M22 2l-7 20-4-9-9-4z")
+    val Stop = stroked("stop", 2f, roundRect(6f, 6f, 12f, 12f, 2f))
+    val Unplug = stroked("unplug", 2f, "M19 5l3-3", "M2 22l3-3", "M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4z", "M7.5 13.5L10 11", "M10.5 16.5L13 14", "M12 6l6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0z")
     val Back = stroked("back", 2.5f, "M15 5l-7 7 7 7")
     val Close = stroked("close", 2.2f, "M6 6l12 12M18 6L6 18")
     val Server = ImageVector.Builder("server", 24.dp, 24.dp, 24f, 24f).apply {

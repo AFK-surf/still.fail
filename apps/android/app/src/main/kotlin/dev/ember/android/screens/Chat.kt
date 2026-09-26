@@ -1,15 +1,18 @@
-// A chat: your messages sit right in a bubble; everyone else (people and
-// agents) gets a face, a name and the time over their words. An agent's name,
-// mark or activity opens its execution history; "…" is the chat's own page.
-// Long-press quotes or copies a message; ＋ adds files.
+// An item's page, one for every item (web/src/pages/ChatPage.tsx, Chat.tsx):
+// its chat's messages (none before its agent has a chat), the composer, and
+// each agent's execution history as a sheet opened from its mark or name.
+// Your messages sit right in a bubble; everyone else gets a face, a name and
+// the time over their words. Long-press quotes or copies a message; ＋ adds files.
 package dev.ember.android.screens
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.LruCache
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,6 +20,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -24,13 +28,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,9 +44,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -50,16 +56,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -67,11 +77,13 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
@@ -79,39 +91,54 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import dev.ember.android.AppState
 import dev.ember.android.LocalApp
-import dev.ember.android.data.Agent
+import dev.ember.android.Screen
+import dev.ember.android.data.ActivityRow
 import dev.ember.android.data.Attachment
-import dev.ember.android.data.Author
+import dev.ember.android.data.ChatAgentView
+import dev.ember.android.data.ChatOf
 import dev.ember.android.data.ChatState
 import dev.ember.android.data.ChatView
+import dev.ember.android.data.ChatsView
 import dev.ember.android.data.LiveView
-import dev.ember.android.data.Message
+import dev.ember.android.data.MessageView
+import dev.ember.android.data.OutboxItem
+import dev.ember.android.data.PROCESS_LABEL
 import dev.ember.android.data.Quote
-import dev.ember.android.data.Thread
+import dev.ember.android.data.ThreadView
 import dev.ember.android.data.Topics
+import dev.ember.android.data.WorkspaceView
 import dev.ember.android.data.activityRows
+import dev.ember.android.data.agentLabel
 import dev.ember.android.data.elapsed
+import dev.ember.android.data.isMe
 import dev.ember.android.data.relativeTime
 import dev.ember.android.data.rememberTopic
-import dev.ember.android.data.thread
+import dev.ember.android.data.state
 import dev.ember.android.data.writingNow
 import dev.ember.android.ui.Avatar
 import dev.ember.android.ui.C
 import dev.ember.android.ui.IconIn
 import dev.ember.android.ui.Icons
 import dev.ember.android.ui.Loading
-import dev.ember.android.ui.MakerIcon
 import dev.ember.android.ui.Mark
 import dev.ember.android.ui.Markdown
 import dev.ember.android.ui.MenuItem
@@ -124,237 +151,441 @@ import dev.ember.android.ui.SheetGrab
 import dev.ember.android.ui.SheetHead
 import dev.ember.android.ui.SheetSpec
 import dev.ember.android.ui.SlackMark
-import dev.ember.android.ui.Toggle
+import dev.ember.android.ui.awayFromEnd
+import dev.ember.android.ui.endInView
+import dev.ember.android.ui.rememberFollow
 import dev.ember.core.CoreException
 import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val STATE_LABEL = mapOf(ChatState.Block to "在 block", ChatState.Running to "进行中", ChatState.Done to "空闲", ChatState.Failed to "失败")
-
 /** The station part of an address ("ws/studio" → "studio"). */
 fun stationName(address: String) = address.substringAfter('/')
 
-/** The web page of a chat, for links and "在电脑上打开". */
-fun chatUrl(app: AppState, station: String, key: String): String {
-    val (ws, st) = station.split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-    return app.web("/w/$ws/s/$st/sessions/${Uri.encode(key)}")
+/** People by email, from the workspace's members: how the web names people too. */
+@Composable
+fun rememberPeople(station: String): (String) -> String? {
+    val app = LocalApp.current
+    val ws by rememberTopic<WorkspaceView>(app.core, Topics.workspace(station.substringBefore('/')))
+    val members = ws.value?.members.orEmpty().associate { it.email.lowercase() to it.name }
+    return { id -> members[id.lowercase()]?.takeIf { it.isNotEmpty() } }
+}
+
+/** A station's name in its workspace. */
+@Composable
+fun rememberStationName(station: String): String {
+    val app = LocalApp.current
+    val ws by rememberTopic<WorkspaceView>(app.core, Topics.workspace(station.substringBefore('/')))
+    return ws.value?.stations?.firstOrNull { it.id == stationName(station) }?.name ?: stationName(station)
+}
+
+/** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
+class ChatAgent(val view: ChatAgentView, val live: LiveView?) {
+    val key get() = view.session.key
+    val runtime get() = view.session.runtime
+    val model get() = live?.usage?.model ?: view.session.model
+    val who get() = agentLabel(model, view.session.effort)
+    val state get() = view.session.state()
 }
 
 @Composable
-fun ChatScreen(station: String, key: String) {
+fun ChatScreen(station: String, of: ChatOf) {
     val app = LocalApp.current
-    val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, key))
-    val live by rememberTopic<LiveView>(app.core, Topics.live(station, key))
+    if (of is ChatOf.Session) {
+        // Once a chat is made for this agent (here or elsewhere), the page moves to it.
+        val chats by rememberTopic<ChatsView>(app.core, Topics.chats(station.substringBefore('/'), false))
+        val made = chats.value?.days?.flatMap { it.items }?.firstOrNull { it.station == station && it.thread != null && it.agents.any { a -> a.key == of.key } }?.thread
+        LaunchedEffect(made) { if (made != null) app.replace(Screen.Chat(station, ChatOf.Thread(made))) }
+    }
+    val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
     val view = chat.value
     if (view == null) {
         Column(Modifier.fillMaxSize()) {
             NavBar("会话", app::pop, "")
-            Loading(chat.error?.let { "读不到这个会话：${it.message}" } ?: "正在读取会话…")
+            val name = rememberStationName(station)
+            Loading(chat.error?.let { "读不到这个对话：${it.message}" } ?: "正在从 $name 读取对话…")
         }
         return
     }
-    val thread = view.thread(station)
-    val composer = remember(key) { Draft() }
+    val agents = view.agents.map { a ->
+        key(a.session.key) { ChatAgent(a, rememberTopic<LiveView>(app.core, Topics.live(station, a.session.key)).value.value) }
+    }
+    val draft = remember { Draft() }
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
-        ChatBar(thread, app)
-        Messages(thread, view, live.value, composer, Modifier.weight(1f))
-        Composer(thread, composer)
+        ChatBar(station, of, view, agents)
+        Messages(station, of, view, agents, draft, Modifier.weight(1f))
+        Composer(station, of, view, agents, draft)
     }
 }
 
-/** The chat's bar, as on the computer: its title from the left, then its people, then its agents' marks; "…" is the chat's own page. */
+/** The chat's bar: its title from the left, then its people, then its agents' marks (each opens its history); "…" is the chat's own page. */
 @Composable
-private fun ChatBar(thread: Thread, app: AppState) {
+private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>) {
+    val app = LocalApp.current
     Column(Modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.statusBars)) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = app::pop), contentAlignment = Alignment.Center) { IconIn(Icons.Back, 22.dp, C.accent) }
             Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(thread.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                PeopleStack(thread.people, 16.dp)
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) { thread.agents.forEach { MakerIcon(it.model, 14.dp) } }
+                Text(view.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
+                agents.forEach { a ->
+                    Box(Modifier.clip(RoundedCornerShape(6.dp)).clickable { openHistory(app, station, of, a.key) }) { ModelMark(a.model, a.runtime, 22.dp, a.state) }
+                }
             }
-            NavButton(Icons.More, { openChatInfo(app, thread) })
+            val thread = view.thread
+            if (thread != null) NavButton(Icons.More, { openChatInfo(app, station, of, thread) })
         }
     }
 }
 
 // ── the list ───────────────────────────────────────────────────────────
 
-private sealed interface Row {
+private sealed interface Entry {
     val id: String
-    data class Said(val m: Message) : Row { override val id get() = m.id }
-    data class Writing(val agent: Agent, val text: String) : Row { override val id get() = "writing" }
-    data class Working(val agent: Agent) : Row { override val id get() = "activity" }
+    data object Older : Entry { override val id = "older" }
+    data object Empty : Entry { override val id = "empty" }
+    data object Line : Entry { override val id = "line" }
+    data class Said(val m: MessageView) : Entry { override val id get() = "m:${m.ts}" }
+    data class Out(val o: OutboxItem) : Entry { override val id get() = "o:${o.id}" }
+    data class Writing(val agent: ChatAgent, val text: String) : Entry { override val id get() = "writing" }
+    data class Working(val agent: AgentAtWork) : Entry { override val id get() = "act:${agent.key}" }
+}
+
+/** An agent at work: who it is, its transcript and steps in flight, and since when its turn runs. */
+class AgentAtWork(val key: String, val who: String, val runtime: String, val model: String?, val live: LiveView?, val since: Long?)
+
+/** What the messages need to know about the chat: who is who, and whose workspace keeps a file. */
+private class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<ChatAgent>, val person: (String) -> String?) {
+    val mentions: Map<String, String> = view.agents.mapNotNull { a -> a.connect?.let { c -> c.botUserId?.let { it to c.name } } }.toMap()
+    fun agent(key: String) = agents.firstOrNull { it.key == key }
+    fun mine(m: MessageView) = m.authorKind == "person" && view.me.isMe(m.author)
+    fun name(m: MessageView) = person(m.author) ?: m.authorName ?: if (m.author == "local") "本机" else m.author
+    /** Slack's <@U…> mentions by name: an agent's bot by its connect's, a person by theirs where known. */
+    fun mention(text: String) = text.replace(Regex("<@([A-Z0-9]+)>")) { r -> "@" + (mentions[r.groupValues[1]] ?: person(r.groupValues[1]) ?: r.groupValues[1]) }
+    /** Files are kept in a session's workspace: the agent whose workspace holds it, else the first. */
+    fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key
 }
 
 @Composable
-private fun Messages(thread: Thread, view: ChatView, live: LiveView?, draft: Draft, modifier: Modifier) {
+private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, modifier: Modifier) {
     val app = LocalApp.current
-    val main = thread.agents.first()
-    val writing = live?.let { writingNow(it.steps) }
-    val running = thread.state == ChatState.Running
-    // Newest at the bottom: the list is laid out from the end, so it stays there as things arrive.
-    val rows = buildList {
-        thread.messages.forEach { add(Row.Said(it)) }
-        if (writing != null) add(Row.Writing(main, writing))
-        // The activity is always last.
-        if (running) add(Row.Working(main))
-    }.asReversed()
-    val list = rememberLazyListState()
-    val api = app.api(thread.station)
-    LaunchedEffect(rows.size) { if (list.firstVisibleItemIndex <= 1) list.animateScrollToItem(0) }
-    // What is shown is read.
-    LaunchedEffect(thread.lastSeq) { if (thread.lastSeq > 0) try { api.read(thread.key, thread.lastSeq) } catch (_: CoreException) {} }
-    // Scrolled up to the oldest message shown: the page before it comes in.
-    val atOldest by remember(rows.size) { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index == rows.size - 1 } }
-    LaunchedEffect(atOldest, thread.more, rows.size) { if (atOldest && thread.more) try { api.older(thread.key) } catch (_: CoreException) {} }
-    if (thread.messages.isEmpty() && !running) {
-        Box(modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) {
-            Text("在这里给这个会话发消息，agent 会在这里回复。", color = C.muted, fontSize = 14.sp)
-        }
-        return
+    val ctx = Here(station, of, view, agents, rememberPeople(station))
+    val thread = view.thread
+    val api = app.api(station)
+    // Deleted messages keep their place for the station's cursors; here they are simply gone.
+    val messages = view.messages.filter { it.deletedAt == null }
+
+    // What was unread when the chat opened: after the read position, up to the newest message then. It stays put for the visit.
+    val open = remember { Triple(thread?.read ?: 0L, thread?.last?.seq ?: 0L, (thread?.unread ?: 0) > 0) }
+    val (readAt, newestAt, unread) = open
+    val first = view.messages.firstOrNull()?.seq
+    // Those not loaded yet may hold it: the pages before are loaded first.
+    val above = unread && view.more && first != null && first > readAt
+    val lineAt = if (unread && !above) messages.firstOrNull { it.seq > readAt && it.seq <= newestAt && !ctx.mine(it) }?.seq else null
+    LaunchedEffect(above, first) { if (above && thread != null) try { api.older(thread.id) } catch (_: CoreException) {} }
+
+    // Messages the agents have not taken yet are the last people wrote; after a second, yours say they wait.
+    val waiting = agents.maxOfOrNull { it.view.session.pending } ?: 0
+    val pending = if (waiting > 0) messages.filter { it.authorKind == "person" }.takeLast(waiting).map { it.seq }.toSet() else emptySet()
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val youngest = messages.filter { it.seq in pending }.maxOfOrNull { it.createdAt } ?: 0
+    LaunchedEffect(youngest) {
+        val wait = youngest + 1000 - System.currentTimeMillis()
+        if (youngest > 0 && wait > 0) { delay(wait + 20); now = System.currentTimeMillis() }
     }
-    LazyColumn(modifier.fillMaxWidth(), state = list, reverseLayout = true, contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.Bottom)) {
-        items(rows, key = { it.id }) { row ->
-            Box(Modifier.animateItem(fadeInSpec = tween(250), placementSpec = tween(250), fadeOutSpec = tween(200))) {
-                when (row) {
-                    is Row.Said -> Said(thread, row.m, draft)
-                    // The reply being written, above the activity (which stays while the agent works).
-                    is Row.Writing -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        AgentHead(row.agent, "正在输入") { openHistory(app, thread, row.agent) }
-                        Markdown(row.text)
-                    }
-                    is Row.Working -> Activity(thread, row.agent, view, live)
-                }
+
+    // The reply an agent is writing to this chat right now; once written it stays until the posted message arrives, so it never blinks out.
+    val address = thread?.let { "${it.channel}/${it.threadTs}" }
+    val writer = address?.let { a -> agents.firstNotNullOfOrNull { ag -> ag.live?.let { writingNow(it.steps, a) }?.let { ag to it } } }
+    val held = remember { mutableStateOf<Triple<ChatAgent, String, Int>?>(null) }
+    val reply = when {
+        writer != null -> writer.also { held.value = Triple(it.first, it.second, messages.size) }
+        held.value?.third == messages.size -> held.value!!.let { it.first to it.second }
+        else -> { held.value = null; null }
+    }
+
+    // Agents at work; a message on its way already counts, for every agent it goes to.
+    val working = agents.filter { it.state == ChatState.Running }
+    val sendingNow = view.outbox.any { it.state == "sending" }
+    val busy = working.ifEmpty { if (sendingNow) agents else emptyList() }.map { a ->
+        val last = a.view.turns.lastOrNull()
+        AgentAtWork(a.key, a.who, a.runtime, a.model, a.live, last?.takeIf { it.endedAt == null }?.startedAt)
+    }
+    // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
+    val lastBusy = remember { mutableStateOf<List<AgentAtWork>>(emptyList()) }
+    var leaving by remember { mutableStateOf(false) }
+    if (busy.isNotEmpty()) lastBusy.value = busy
+    LaunchedEffect(busy.isEmpty()) {
+        leaving = false
+        if (busy.isEmpty() && lastBusy.value.isNotEmpty()) {
+            delay(1200); leaving = true; delay(520)
+            lastBusy.value = emptyList(); leaving = false
+        }
+    }
+    val atWork = busy.ifEmpty { lastBusy.value }
+
+    val rows = buildList {
+        if (view.more) add(Entry.Older)
+        if (messages.isEmpty() && view.outbox.isEmpty()) add(Entry.Empty)
+        messages.forEach { m ->
+            if (m.seq == lineAt) add(Entry.Line)
+            add(Entry.Said(m))
+        }
+        view.outbox.forEach { add(Entry.Out(it)) }
+        // The activity is always the last thing in the chat; the reply being written comes before it.
+        reply?.let { add(Entry.Writing(it.first, it.second)) }
+        atWork.forEach { add(Entry.Working(it)) }
+    }
+
+    val list = rememberLazyListState()
+    val follow = rememberFollow(list)
+    val density = LocalDensity.current
+    val placeKey = "$station:${thread?.id ?: agents.firstOrNull()?.key ?: ""}"
+    // Put in place once: back where the chat was left, else at the unread line, else at the newest.
+    LaunchedEffect(above, messages.isNotEmpty()) {
+        if (follow.placed || above) return@LaunchedEffect
+        val saved = app.places[placeKey]
+        val back = saved?.let { (id, _) -> rows.indexOfFirst { it.id == id } }?.takeIf { it >= 0 }
+        val line = rows.indexOfFirst { it is Entry.Line }.takeIf { it >= 0 }
+        when {
+            back != null -> list.scrollToItem(back, -saved.second)
+            line != null -> list.scrollToItem(line, -with(density) { 12.dp.roundToPx() })
+            else -> follow.toEnd()
+        }
+        follow.placed = true
+        follow.on = !list.canScrollForward
+    }
+    // A message arriving at the end while it is followed is kept in view from its top (the activity never is: it folds away).
+    follow.indexOf = { key -> rows.indexOfFirst { it.id == key } }
+    val newestKey = rows.lastOrNull { it !is Entry.Working }?.id
+    val knownNewest = remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(newestKey, follow.placed) {
+        if (!follow.placed) return@LaunchedEffect
+        if (knownNewest.value != null && newestKey != knownNewest.value && follow.on) follow.anchor = newestKey
+        knownNewest.value = newestKey
+    }
+    // Remember where the chat is left: the message at the top and its offset, so what arrives below does not move it.
+    DisposableEffect(placeKey) {
+        onDispose {
+            list.layoutInfo.visibleItemsInfo.firstOrNull { (it.key as? String)?.startsWith("m:") == true }?.let { app.places[placeKey] = (it.key as String) to it.offset }
+        }
+    }
+    // Near the top: the page before comes in (once per page); what is on screen stays put.
+    val asked = remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(view.more, first, follow.placed) {
+        if (!view.more || thread == null || !follow.placed) return@LaunchedEffect
+        snapshotFlow { list.firstVisibleItemIndex }.collect { index ->
+            if (index <= 2 && asked.value != first) {
+                asked.value = first
+                try { api.older(thread.id) } catch (_: CoreException) { asked.value = null }
             }
         }
     }
-}
+    // What is shown is read: up to the newest message, once the end is in view on a page in front.
+    val resumed by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val seen = endInView(list) && follow.placed && resumed.isAtLeast(Lifecycle.State.RESUMED)
+    val newest = view.messages.lastOrNull()?.seq ?: 0
+    val sent = remember { mutableLongStateOf(0L) }
+    LaunchedEffect(seen, newest, thread?.read) {
+        if (!seen || thread == null || newest <= thread.read || sent.longValue >= newest) return@LaunchedEffect
+        sent.longValue = newest
+        try { api.read(thread.id, newest) } catch (_: CoreException) { sent.longValue = 0 }
+    }
 
-@Composable
-private fun AgentHead(agent: Agent, note: String, badge: ChatState? = null, onOpen: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOpen)) {
-        ModelMark(agent.model, 20.dp, badge)
-        Text(agent.model ?: "默认模型", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Text(note, fontSize = 11.sp, color = C.subtle)
+    Box(modifier.fillMaxWidth()) {
+        LazyColumn(
+            Modifier.fillMaxSize(), state = list,
+            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            items(rows, key = { it.id }) { row ->
+                Box(Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = tween(200))) {
+                    when (row) {
+                        Entry.Older -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Spinner(16.dp) }
+                        Entry.Empty -> Text("在这里发消息，这个对话里的 agent 会在这里回复。", color = C.muted, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 16.dp))
+                        Entry.Line -> UnreadLine()
+                        is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.seq in pending && now - row.m.createdAt > 1000)
+                        is Entry.Out -> Out(ctx, row.o)
+                        is Entry.Writing -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            AgentHead(row.agent.key, row.agent.who, row.agent.model, row.agent.runtime, "正在输入", ctx)
+                            Markdown(row.text)
+                        }
+                        is Entry.Working -> Activity(ctx, row.agent, leaving)
+                    }
+                }
+            }
+        }
+        if (awayFromEnd(list)) {
+            val scope = rememberCoroutineScope()
+            Box(
+                Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 12.dp).size(38.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(C.surface)
+                    .clickable { scope.launch { follow.jump() } },
+                contentAlignment = Alignment.Center,
+            ) { IconIn(Icons.Down, 18.dp, C.ink) }
+        }
     }
 }
 
+@Composable
+private fun UnreadLine() {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.weight(1f).height(1.dp).background(C.blue.copy(alpha = 0.5f)))
+        Text("以下是新消息", fontSize = 12.sp, color = C.blue)
+        Box(Modifier.weight(1f).height(1.dp).background(C.blue.copy(alpha = 0.5f)))
+    }
+}
+
+@Composable
+fun Spinner(size: androidx.compose.ui.unit.Dp) = CircularProgressIndicator(Modifier.size(size), color = C.subtle, strokeWidth = 1.5.dp)
+
+/** An agent's line over its words: its mark and name (both open its history), and a note. */
+@Composable
+private fun AgentHead(key: String, who: String, model: String?, runtime: String, note: String, ctx: Here, trailing: (@Composable RowScope.() -> Unit)? = null) {
+    val app = LocalApp.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier.clip(RoundedCornerShape(6.dp)).clickable { openHistory(app, ctx.station, ctx.of, key) },
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            ModelMark(model, runtime, 20.dp)
+            Text(who, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(note, fontSize = 11.sp, color = C.subtle, maxLines = 1)
+        trailing?.invoke(this)
+    }
+}
+
+/** Long-press on a message: quote it, or copy it. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Said(thread: Thread, m: Message, draft: Draft) {
+private fun holdMenu(text: String, who: String, ts: String?, role: String, draft: Draft): Pair<Modifier, Color> {
     val app = LocalApp.current
     val context = LocalContext.current
     var pressed by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf(Rect.Zero) }
-    val hold = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.combinedClickable(
+    if (app.menu == null && pressed) pressed = false
+    val modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.combinedClickable(
         interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {},
         onLongClick = {
             pressed = true
             app.menu = MenuSpec(bounds, listOf(
-                MenuItem("引用", Icons.Quote) {
-                    val flat = m.text.replace(Regex("[`*#>]"), "").replace(Regex("\\s+"), " ").trim()
-                    draft.quote = Quote(m.name, flat.take(60) + if (flat.length > 60) "…" else "", "", m.id, if (m.author == Author.Agent) "agent" else "person")
-                    draft.focus++
-                },
+                MenuItem("引用", Icons.Quote) { draft.quote(who, plain(text), ts, role) },
                 MenuItem("拷贝", Icons.Copy) {
-                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("ember", m.text))
+                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("ember", text))
                 },
             ), onDismiss = { pressed = false })
         },
     )
-    val press = if (pressed && app.menu != null) C.accent.copy(alpha = 0.12f) else Color.Transparent
-    if (app.menu == null && pressed) pressed = false
-    when (m.author) {
-        Author.Me -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            m.quotes.forEach { QuoteCard(it) }
-            if (m.text.isNotEmpty()) BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                Text(
-                    m.text, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink,
-                    modifier = Modifier.widthIn(max = maxWidth * 0.82f).then(hold)
-                        .clip(RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp)).background(C.bubble).background(press).padding(horizontal = 14.dp, vertical = 9.dp),
-                )
-            }
-            Files(thread, m.attachments)
-            when {
-                m.failed != null -> Failed(thread, m)
-                m.sending -> Text("发送中…", fontSize = 11.sp, color = C.subtle)
-                else -> Text(relativeTime(m.createdAt), fontSize = 11.sp, color = C.subtle)
-            }
+    return modifier to if (pressed && app.menu != null) C.accent.copy(alpha = 0.12f) else Color.Transparent
+}
+
+/** A message's words as read, without markdown's marks: what a quote carries. */
+private fun plain(text: String) = text.replace(Regex("[`*#>]"), "").replace(Regex("\\s+"), " ").trim()
+
+@Composable
+private fun Said(ctx: Here, m: MessageView, draft: Draft, list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>, waitingNow: Boolean) {
+    val jump = rememberJump(list, rows)
+    if (ctx.mine(m)) {
+        val (hold, press) = holdMenu(m.text, "你", m.ts, "person", draft)
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            m.quotes.forEach { QuoteCard(it, jump) }
+            if (m.text.isNotEmpty()) Bubble(m.text, hold, press)
+            Files(ctx, m.attachments)
+            if (waitingNow) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Spinner(10.dp); Text("等待 agent 接收", fontSize = 11.sp, color = C.subtle)
+            } else Text(relativeTime(m.createdAt), fontSize = 11.sp, color = C.subtle)
         }
-        Author.Ember -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Mark(18.dp)
-                Text("ember", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text(relativeTime(m.createdAt), fontSize = 11.sp, color = C.subtle)
+        return
+    }
+    val agent = if (m.authorKind == "agent") ctx.agent(m.author) else null
+    val who = when (m.authorKind) { "agent" -> agent?.who ?: m.authorName ?: "agent"; "ember" -> "ember"; else -> ctx.name(m) }
+    val (hold, press) = holdMenu(m.text, who, m.ts, if (m.authorKind == "agent") "agent" else "person", draft)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (agent != null) AgentHead(agent.key, who, agent.model, agent.runtime, relativeTime(m.createdAt), ctx)
+        else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            when (m.authorKind) {
+                "agent", "ember" -> Mark(18.dp)
+                else -> Avatar(m.author, who, 18.dp)
             }
-            Text(m.text, fontSize = 14.sp, lineHeight = 21.sp, color = C.muted, modifier = hold)
+            Text(who, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+            Text(relativeTime(m.createdAt), fontSize = 11.sp, color = C.subtle)
         }
-        Author.Person -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Avatar(m.personId, m.name, 20.dp)
-                Text(m.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text(relativeTime(m.createdAt), fontSize = 11.sp, color = C.subtle)
-            }
-            m.quotes.forEach { QuoteCard(it) }
-            if (m.text.isNotEmpty()) Text(m.text, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink, modifier = hold.clip(RoundedCornerShape(12.dp)).background(press))
-            Files(thread, m.attachments)
+        m.quotes.forEach { QuoteCard(it, jump) }
+        Box(hold.clip(RoundedCornerShape(12.dp)).background(press)) {
+            if (m.authorKind == "person") { if (m.text.isNotEmpty()) Text(ctx.mention(m.text), fontSize = 15.sp, lineHeight = 23.sp, color = C.ink) }
+            else Markdown(m.text)
         }
-        Author.Agent -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            val agent = m.agent!!
-            AgentHead(agent, if (m.declared == "block") "block" else relativeTime(m.createdAt)) { openHistory(app, thread, agent) }
-            m.quotes.forEach { QuoteCard(it) }
-            Box(hold.clip(RoundedCornerShape(12.dp)).background(press)) { Markdown(m.text) }
-            Files(thread, m.attachments)
-            if (m.declared == "block" && thread.state == ChatState.Block) BlockCard(thread)
-        }
+        Files(ctx, m.attachments)
     }
 }
 
-/** A message of yours that did not go: why, and what to do about it. */
 @Composable
-private fun Failed(thread: Thread, m: Message) {
+private fun Bubble(text: String, hold: Modifier, press: Color) {
+    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+        Text(
+            text, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink,
+            modifier = Modifier.widthIn(max = maxWidth * 0.82f).then(hold)
+                .clip(RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp)).background(C.bubble).background(press).padding(horizontal = 14.dp, vertical = 9.dp),
+        )
+    }
+}
+
+/** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
+@Composable
+private fun Out(ctx: Here, o: OutboxItem) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    val api = app.api(thread.station)
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("没发出去：${m.failed}", fontSize = 11.sp, color = C.red, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        Text("重试", fontSize = 12.sp, color = C.accent, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { scope.launch { try { api.retry(thread.key, m.id) } catch (_: CoreException) {} } })
-        Text("丢弃", fontSize = 12.sp, color = C.muted, modifier = Modifier.clickable { scope.launch { try { api.discard(thread.key, m.id) } catch (_: CoreException) {} } })
-    }
-}
-
-/** The agent waits on people: its question is the message above; answers are one tap. */
-@Composable
-private fun BlockCard(thread: Thread) {
-    val app = LocalApp.current
-    val scope = rememberCoroutineScope()
-    Column(
-        Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.accentBg).padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(C.accent))
-            Text("agent 停下来等你决定", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.accentInk)
+    val thread = ctx.view.thread
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        o.quotes.forEach { QuoteCard(it, null) }
+        if (o.text.isNotEmpty()) Bubble(o.text, Modifier, Color.Transparent)
+        Files(ctx, o.attachments)
+        if (o.state == "failed") Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("发送失败" + (o.error?.let { "：$it" } ?: ""), fontSize = 11.sp, color = C.red, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text("重试", fontSize = 12.sp, color = C.accent, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable {
+                if (thread != null) scope.launch { try { app.api(ctx.station).retry(thread.id, o.id) } catch (_: CoreException) {} }
+            })
+            Text("删除", fontSize = 12.sp, color = C.muted, modifier = Modifier.clickable {
+                if (thread != null) scope.launch { try { app.api(ctx.station).discard(thread.id, o.id) } catch (_: CoreException) {} }
+            })
+        } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Spinner(10.dp); Text("正在发送", fontSize = 11.sp, color = C.subtle)
         }
-        QuickReplies(QUICK, onMore = null) { text -> scope.launch { answer(app, thread.station, thread.key, text, toast = false) } }
+    }
+}
+
+/** Scrolls the chat to a message by its ts. */
+@Composable
+private fun rememberJump(list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>): (String) -> Unit {
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    return { ts ->
+        val index = rows.indexOfFirst { it.id == "m:$ts" }
+        if (index >= 0) scope.launch { list.animateScrollToItem(index, -with(density) { 80.dp.roundToPx() }) }
+    }
+}
+
+/** A quote as sent: the quoted part on a warm ground (whose message, the passage) leading back to it, then what was said about it. */
+@Composable
+private fun QuoteCard(q: Quote, onJump: ((String) -> Unit)?) {
+    Column(Modifier.widthIn(max = 280.dp).clip(RoundedCornerShape(12.dp)).background(C.chip)) {
+        val ts = q.ts
+        Row(
+            Modifier.fillMaxWidth().background(C.accentBg.copy(alpha = 0.6f)).let { if (ts != null && onJump != null) it.clickable { onJump(ts) } else it }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            IconIn(Icons.Quote, 11.dp, C.accentInk, Modifier.padding(top = 3.dp))
+            Text(quoteText(q.author, q.text), fontSize = 12.sp, color = C.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        }
+        if (q.comment.isNotEmpty()) Text(q.comment, fontSize = 13.sp, color = C.ink, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
     }
 }
 
 @Composable
-private fun QuoteCard(q: Quote) {
-    Column(Modifier.widthIn(max = 260.dp).clip(RoundedCornerShape(12.dp)).background(C.chip).padding(horizontal = 10.dp, vertical = 6.dp)) {
-        Text(buildQuote(q.author, q.text), fontSize = 12.sp, color = C.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        if (q.comment.isNotEmpty()) Text(q.comment, fontSize = 13.sp, color = C.ink)
-    }
-}
-
-@Composable
-private fun buildQuote(who: String, text: String) = androidx.compose.ui.text.buildAnnotatedString {
+private fun quoteText(who: String, text: String) = androidx.compose.ui.text.buildAnnotatedString {
     pushStyle(androidx.compose.ui.text.SpanStyle(color = C.ink, fontWeight = FontWeight.Medium)); append("$who："); pop()
     append(text)
 }
@@ -362,35 +593,38 @@ private fun buildQuote(who: String, text: String) = androidx.compose.ui.text.bui
 // ── the running turn ───────────────────────────────────────────────────
 
 /**
- * An agent at work: its last three rows in three fixed lines, the newest
- * coming in from below and pushing the oldest out above. The whole block
- * opens the execution history: it is a glimpse of it.
+ * An agent at work: its last three rows in three fixed lines (or the newest
+ * in one), the newest coming in from below and pushing the oldest out above.
  */
 @Composable
-private fun Activity(thread: Thread, agent: Agent, view: ChatView, live: LiveView?) {
+private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
     val app = LocalApp.current
-    val rows = activityRows(live?.timeline ?: emptyList(), live?.steps ?: emptyList(), live?.phase)
-        .ifEmpty { listOf(dev.ember.android.data.ActivityRow("idle", "正在处理", true)) }
-    val since = view.turns.lastOrNull()?.takeIf { it.endedAt == null }?.startedAt ?: live?.phase?.since
+    var collapsed by remember { mutableStateOf(app.flag("activityCollapsed", false)) }
+    val rows = activityRows(agent.live?.timeline ?: emptyList(), agent.live?.steps ?: emptyList(), agent.live?.phase)
+        .ifEmpty { listOf(ActivityRow("idle", "正在处理", true)) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { openHistory(app, thread, agent) }.padding(vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        AgentHead(agent, "工作中" + (since?.let { " · ${elapsed(now - it)}" } ?: ""), ChatState.Running) { openHistory(app, thread, agent) }
+    val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(520), label = "leaving")
+    val count = if (collapsed) 1 else 3
+    Column(Modifier.fillMaxWidth().alpha(fade), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        AgentHead(agent.key, agent.who, agent.model, agent.runtime, "工作中" + (agent.since?.let { " · ${elapsed(now - it)}" } ?: ""), ctx) {
+            Box(Modifier.size(22.dp).clip(CircleShape).clickable { collapsed = !collapsed; app.setFlag("activityCollapsed", collapsed) }, contentAlignment = Alignment.Center) {
+                IconIn(if (collapsed) Icons.ChevronDown else Icons.ChevronUp, 13.dp, C.subtle)
+            }
+        }
         // One row more than fits sits above the window, so the oldest can slide out as the rest move up.
-        val shown = rows.takeLast(4)
+        val shown = rows.takeLast(count + 1)
+        val overflowing = shown.size > count
         val shift = remember { Animatable(0f) }
         val newest = shown.last().key
         var seen by remember { mutableStateOf(newest) }
         LaunchedEffect(newest) {
-            if (newest != seen && rows.size > 3) { shift.snapTo(1f); shift.animateTo(0f, tween(450, easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f))) }
+            if (newest != seen && overflowing) { shift.snapTo(1f); shift.animateTo(0f, tween(450, easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f))) }
             seen = newest
         }
         // Rows fill from the top; once there are more than fit, the newest sits at the bottom.
-        Box(Modifier.fillMaxWidth().height(66.dp).clipToBounds(), contentAlignment = if (shown.size > 3) Alignment.BottomStart else Alignment.TopStart) {
-            Column(Modifier.wrapContentHeight(if (shown.size > 3) Alignment.Bottom else Alignment.Top, unbounded = true).graphicsLayer { translationY = shift.value * 22.dp.toPx() }) {
+        Box(Modifier.fillMaxWidth().height(22.dp * count).clipToBounds(), contentAlignment = if (overflowing) Alignment.BottomStart else Alignment.TopStart) {
+            Column(Modifier.wrapContentHeight(if (overflowing) Alignment.Bottom else Alignment.Top, unbounded = true).graphicsLayer { translationY = shift.value * 22.dp.toPx() }) {
                 shown.forEach { r ->
                     Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.width(9.dp), contentAlignment = Alignment.Center) {
@@ -409,49 +643,89 @@ private fun Activity(thread: Thread, agent: Agent, view: ChatView, live: LiveVie
 private val IMAGE = Regex("\\.(png|jpe?g|gif|webp)$", RegexOption.IGNORE_CASE)
 
 /** Files sent never change: each is fetched once and the most recent are kept. */
-private val images = LruCache<String, ImageBitmap>(40)
+private val files = LruCache<String, ByteArray>(40)
 
-@Composable
-private fun Files(thread: Thread, files: List<Attachment>) {
-    if (files.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        files.forEach { f -> if (IMAGE.containsMatchIn(f.name)) StationImage(thread, f) else FileCard(f.name, f.size) }
+private suspend fun fileBytes(app: AppState, station: String, key: String, file: Attachment): ByteArray? {
+    val id = "$station/$key/${file.path}"
+    files.get(id)?.let { return it }
+    return try {
+        app.api(station).file(key, file.path.substringAfterLast('/')).also { files.put(id, it) }
+    } catch (_: CoreException) {
+        null
     }
 }
 
 @Composable
-private fun StationImage(thread: Thread, file: Attachment) {
-    val app = LocalApp.current
-    val id = "${thread.station}/${thread.key}/${file.path}"
-    val image by produceState(images.get(id), id) {
-        if (value != null) return@produceState
-        value = try {
-            val bytes = app.api(thread.station).file(thread.key, file.path.substringAfterLast('/'))
-            withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }?.also { images.put(id, it) }
-        } catch (_: CoreException) {
-            null
-        }
+private fun Files(ctx: Here, list: List<Attachment>) {
+    if (list.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        list.forEach { f -> val owner = ctx.owner(f); if (IMAGE.containsMatchIn(f.name) && owner != null) StationImage(ctx.station, owner, f) else FileCard(f.name, f.size) }
     }
-    // The box is known before the image loads: its own proportions within 240×200.
+}
+
+/** An image at its own proportions within 240×200 (known before it loads); a tap shows it whole. */
+@Composable
+private fun StationImage(station: String, key: String, file: Attachment) {
+    val app = LocalApp.current
+    val image by produceState<ImageBitmap?>(null, station, key, file.path) {
+        val bytes = fileBytes(app, station, key, file) ?: return@produceState
+        value = withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }
+    }
+    var open by remember { mutableStateOf(false) }
     val (w, h) = if (file.width != null && file.height != null) {
         val scale = minOf(1f, 240f / file.width, 200f / file.height)
-        (file.width * scale).dp to (file.height * scale).dp
+        (file.width * scale).coerceAtLeast(40f).dp to (file.height * scale).coerceAtLeast(40f).dp
     } else 170.dp to 120.dp
-    Box(Modifier.size(w, h).clip(RoundedCornerShape(14.dp)).background(C.chip)) {
+    Box(Modifier.size(w, h).clip(RoundedCornerShape(14.dp)).background(C.chip).clickable(enabled = image != null) { open = true }) {
         image?.let { Image(it, file.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+    }
+    val shown = image
+    if (open && shown != null) Lightbox(station, key, file, shown) { open = false }
+}
+
+/** An image at full size over a dimmed page, with its name, size and a download; a tap outside closes it. */
+@Composable
+private fun Lightbox(station: String, key: String, file: Attachment, image: ImageBitmap, onClose: () -> Unit) {
+    val app = LocalApp.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.9f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
+            Box(Modifier.weight(1f).fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+                Image(image, file.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            }
+            Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(file.name, color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(fileSize(file.size), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                Text("下载", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable {
+                    scope.launch {
+                        val bytes = fileBytes(app, station, key, file)
+                        app.toast = if (bytes != null && download(context, file.name, bytes)) "已存到「下载」" else "没能下载"
+                    }
+                })
+                Text("关闭", color = Color.White, fontSize = 13.sp, modifier = Modifier.clickable(onClick = onClose))
+            }
+        }
     }
 }
 
+/** Puts a file in the phone's Downloads. */
+private suspend fun download(context: Context, name: String, bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
+    val values = ContentValues().apply { put(MediaStore.Downloads.DISPLAY_NAME, name) }
+    val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return@withContext false
+    context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } != null
+}
+
 @Composable
-private fun FileCard(name: String, size: Long, note: String? = null, onRemove: (() -> Unit)? = null) {
+private fun FileCard(name: String, size: Long, note: String? = null, busy: Boolean = false, onRemove: (() -> Unit)? = null) {
     Row(
         Modifier.widthIn(max = 260.dp).clip(RoundedCornerShape(12.dp)).background(C.chip).padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        IconIn(Icons.File, 18.dp, C.muted)
+        if (busy) Spinner(16.dp) else IconIn(Icons.File, 18.dp, C.muted)
         Column(Modifier.weight(1f, fill = false)) {
             Text(name, fontSize = 13.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(note ?: fileSize(size), fontSize = 11.sp, color = C.muted)
+            Text(note ?: fileSize(size), fontSize = 11.sp, color = if (note != null && !busy) C.red else C.muted)
         }
         if (onRemove != null) Box(Modifier.size(20.dp).clickable(onClick = onRemove), contentAlignment = Alignment.Center) { IconIn(Icons.Close, 12.dp, C.subtle) }
     }
@@ -459,7 +733,7 @@ private fun FileCard(name: String, size: Long, note: String? = null, onRemove: (
 
 fun fileSize(bytes: Long): String = when {
     bytes < 1024 -> "$bytes B"
-    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+    bytes < 1024 * 1024 -> "${Math.round(bytes / 1024.0)} KB"
     else -> String.format(java.util.Locale.ROOT, "%.1f MB", bytes / 1024.0 / 1024.0)
 }
 
@@ -471,17 +745,33 @@ class Pending(val id: Long, val name: String, val size: Long, val preview: Image
     var error by mutableStateOf<String?>(null)
 }
 
-/** What is being written: text, a quote, files. Kept while the chat is open. */
+/** A passage quoted in the message being written, with what is said about it. */
+class DraftQuote(val id: Long, val author: String, val text: String, val ts: String?, val role: String) {
+    var comment by mutableStateOf("")
+    fun sent() = Quote(author, text, comment.trim(), ts, role)
+}
+
+/** What is being written: text, quotes, files. Kept while the chat is open. */
 class Draft {
     var text by mutableStateOf("")
-    var quote by mutableStateOf<Quote?>(null)
+    val quotes = mutableStateListOf<DraftQuote>()
     val files = mutableStateListOf<Pending>()
-    var sending by mutableStateOf(false)
-    /** Bumped to put the cursor in the field (after quoting). */
-    var focus by mutableStateOf(0)
+    /** A new chat is being made for the first message. */
+    var starting by mutableStateOf(false)
+    var error by mutableStateOf<String?>(null)
+    /** The quote whose comment line takes the focus. */
+    var focusQuote by mutableStateOf<Long?>(null)
+    /** Bumped to put the cursor in the text. */
+    var focus by mutableIntStateOf(0)
     var warmed = 0L
     val uploading get() = files.any { it.done == null && it.error == null }
-    val ready get() = (text.isNotBlank() || quote != null || files.any { it.done != null }) && !uploading && !sending
+    val ready get() = (text.isNotBlank() || files.any { it.done != null } || quotes.isNotEmpty()) && !uploading && !starting
+
+    fun quote(author: String, text: String, ts: String?, role: String) {
+        val q = DraftQuote(System.nanoTime(), author, text, ts, role)
+        quotes += q
+        focusQuote = q.id
+    }
 }
 
 private const val MAX_FILE = 50L * 1024 * 1024
@@ -505,7 +795,7 @@ fun photoPicked(bitmap: Bitmap): Picked {
 }
 
 /** Files go to the station as soon as they are added, into the session `key()` names (a new chat makes it then). */
-fun AppState.upload(draft: Draft, station: String, key: suspend () -> String, picked: Picked, scope: kotlinx.coroutines.CoroutineScope) {
+fun AppState.upload(draft: Draft, station: String, key: suspend () -> String, picked: Picked, scope: CoroutineScope) {
     val p = Pending(System.nanoTime(), picked.name, picked.bytes.size.toLong(), picked.preview)
     draft.files += p
     if (picked.bytes.size > MAX_FILE) { p.error = "超过 50 MB"; return }
@@ -555,17 +845,29 @@ fun openAttach(app: AppState, launchers: Triple<() -> Unit, () -> Unit, () -> Un
     }
 }
 
-/** What waits to go with the message: the quote, then the files. */
+/** What waits to go with the message: the quotes (each with a line for a comment), then the files. */
 @Composable
 fun DraftExtras(draft: Draft) {
-    draft.quote?.let { q ->
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.chip).padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            IconIn(Icons.Quote, 14.dp, C.accent)
-            Text(buildQuote(q.author, q.text), fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Box(Modifier.size(22.dp).clickable { draft.quote = null }, contentAlignment = Alignment.Center) { IconIn(Icons.Close, 14.dp, C.subtle) }
+    draft.quotes.forEach { q ->
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.chip)) {
+            Row(
+                Modifier.fillMaxWidth().background(C.accentBg.copy(alpha = 0.6f)).padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                IconIn(Icons.Quote, 12.dp, C.accentInk)
+                Text(quoteText(q.author, q.text), fontSize = 12.sp, color = C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Box(Modifier.size(24.dp).clickable { draft.quotes.remove(q) }, contentAlignment = Alignment.Center) { IconIn(Icons.Close, 13.dp, C.subtle) }
+            }
+            val focus = remember { FocusRequester() }
+            LaunchedEffect(draft.focusQuote) { if (draft.focusQuote == q.id) { focus.requestFocus(); draft.focusQuote = null } }
+            Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
+                if (q.comment.isEmpty()) Text("对这段说点什么（可以不写）", color = C.subtle, fontSize = 13.sp)
+                BasicTextField(
+                    q.comment, { q.comment = it }, singleLine = true, textStyle = TextStyle(color = C.ink, fontSize = 13.sp), cursorBrush = SolidColor(C.accent),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { draft.focus++ }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                )
+            }
         }
     }
     if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -574,17 +876,17 @@ fun DraftExtras(draft: Draft) {
             if (f.preview != null) Box(Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(C.chip)) {
                 Image(f.preview, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
-                    if (f.error != null) Text("失败", color = Color.White, fontSize = 11.sp)
+                    if (f.error != null) Text("失败", color = Color.White, fontSize = 11.sp) else CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 1.5.dp)
                 }
                 Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(18.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
                     IconIn(Icons.Close, 10.dp, Color.White)
                 }
-            } else FileCard(f.name, f.size, f.error ?: if (f.done == null) "正在上传…" else null, remove)
+            } else FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) "正在上传…" else null, busy = f.done == null && f.error == null, onRemove = remove)
         }
     }
 }
 
-/** The bar: ＋, a field that grows with the text, and a round send button. */
+/** The bar: ＋, a field that grows with the text, and a round send button (a spinner while a new chat is made). */
 @Composable
 fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit) {
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -606,110 +908,115 @@ fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: (
         Box(
             Modifier.size(36.dp).clip(CircleShape).background(if (ready) C.ink else C.line).clickable(enabled = ready, onClick = onSend),
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Up, 18.dp, if (ready) C.bg else C.surface) }
+        ) {
+            if (draft.starting) CircularProgressIndicator(Modifier.size(16.dp), color = C.surface, strokeWidth = 2.dp)
+            else IconIn(Icons.Up, 18.dp, if (ready) C.bg else C.surface)
+        }
     }
 }
 
+/**
+ * Where people write to the chat. The composer empties at once: the message
+ * lives in the chat's outbox until the station has it (a failure shows there
+ * too). Before the agent has a chat, the first message makes one, bound to
+ * the agent, and the page moves to it.
+ */
 @Composable
-private fun Composer(thread: Thread, draft: Draft) {
+private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    val api = app.api(thread.station)
-    val launchers = AttachLaunchers { app.upload(draft, thread.station, { thread.key }, it, scope) }
+    val api = app.api(station)
+    // Files are kept in a session's workspace: what is sent here goes to the first agent's.
+    val keeper = agents.firstOrNull()?.key
+    val launchers = AttachLaunchers { picked ->
+        app.upload(draft, station, { keeper ?: throw CoreException("no_agent", "这个对话里没有 agent，文件无处可放", null) }, picked, scope)
+    }
+    val thread = view.thread
     Column(Modifier.fillMaxWidth().background(C.bg).padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         DraftExtras(draft)
-        ComposerBar(draft, "给这个会话发消息", onPlus = { openAttach(app, launchers) },
+        ComposerBar(draft, "发消息", onPlus = { openAttach(app, launchers) },
             // Typing starts the session's runtime, so a cold start overlaps the writing.
             onType = {
-                if (System.currentTimeMillis() - draft.warmed > 60_000) {
+                if (keeper != null && System.currentTimeMillis() - draft.warmed > 60_000) {
                     draft.warmed = System.currentTimeMillis()
-                    scope.launch { try { api.warm(thread.key) } catch (_: CoreException) {} }
+                    scope.launch { try { api.warm(keeper) } catch (_: CoreException) {} }
                 }
             },
-            // The message shows at once from the chat's outbox; one that fails stays there with a way to retry.
             onSend = {
                 val text = draft.text.trim()
-                val files = draft.files.mapNotNull { it.done }
-                val quotes = listOfNotNull(draft.quote)
-                draft.text = ""; draft.quote = null; draft.files.clear()
-                scope.launch { try { api.send(thread.key, text, files, quotes) } catch (_: CoreException) {} }
+                val files = draft.files.toList()
+                val quotes = draft.quotes.toList()
+                draft.text = ""; draft.files.clear(); draft.quotes.clear(); draft.error = null
+                scope.launch {
+                    val to = thread?.id ?: try {
+                        draft.starting = true
+                        api.chatFor((of as ChatOf.Session).key)
+                    } catch (e: CoreException) {
+                        // No chat to send into: the draft comes back.
+                        draft.text = text; draft.files.addAll(files); draft.quotes.addAll(quotes)
+                        draft.error = e.message
+                        return@launch
+                    } finally {
+                        draft.starting = false
+                    }
+                    // Sent from the app's scope: the page may move to the new chat before the station answers.
+                    app.scope.launch { try { api.send(to, text, files.mapNotNull { it.done }, quotes.map { it.sent() }) } catch (_: CoreException) {} }
+                    if (thread == null) app.replace(Screen.Chat(station, ChatOf.Thread(to)))
+                }
             })
+        draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }
     }
 }
 
 // ── the chat's own page ────────────────────────────────────────────────
 
-/** Who takes part (each agent leads to its history), notifications, actions. */
-fun openChatInfo(app: AppState, thread: Thread) {
+/** The chat itself: where it came from, who started it and takes part, its agents (each leads to its history). */
+fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ThreadView) {
     app.sheet = SheetSpec(0.72f, draggable = true) {
-        val context = LocalContext.current
-        val scope = rememberCoroutineScope()
+        val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
+        val view = chat.value
         SheetGrab()
         SheetHead("对话信息")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
-            GroupLabel("参与的 agent · 点开看它的执行历史")
             InfoList {
-                thread.agents.forEach { a ->
-                    InfoRow(onClick = { openHistory(app, thread, a) }) {
-                        ModelMark(a.model, 36.dp, a.state, around = C.surface2)
-                        Column(Modifier.weight(1f)) {
-                            Text(a.model ?: "默认模型", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                            Text("${stationName(a.station)} · ${STATE_LABEL[a.state]}", fontSize = 12.sp, color = C.muted)
-                        }
-                        IconIn(Icons.Chevron, 14.dp, C.subtle)
-                    }
-                }
+                Detail("来自", if (thread.surface == "ember") "ember 对话" else "Slack · " + if (thread.channel.startsWith("D")) "私信" else "#${thread.channelName ?: thread.channel}")
+                Detail("发起", thread.creator?.let { c -> if (view?.me?.isMe(c) == true) "你" else c.name } ?: "未记录")
+                Detail("参与", "${view?.people?.size ?: 0} 人") { view?.people?.let { if (it.isNotEmpty()) PeopleStack(it.take(8), 16.dp, C.surface2) } }
+                Detail("创建", relativeTime(thread.createdAt))
+                (view?.thread ?: thread).last?.let { Detail("最近消息", relativeTime(it.createdAt)) }
             }
-            GroupLabel("参与的人")
-            InfoList {
-                thread.people.forEach { p ->
-                    InfoRow {
-                        Avatar(p.id, p.name, 28.dp)
-                        Column(Modifier.weight(1f)) {
-                            Text(p.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                            if (thread.isMe(p)) Text("你", fontSize = 12.sp, color = C.muted)
-                            else if (p.via == "slack") Text("Slack", fontSize = 12.sp, color = C.muted)
-                        }
-                    }
-                }
-            }
-            GroupLabel("通知")
-            InfoList {
-                InfoRow {
-                    Column(Modifier.weight(1f)) {
-                        Text("这个对话的推送", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                        Text("agent block 时通知我", fontSize = 12.sp, color = C.muted)
-                    }
-                    var on by remember { mutableStateOf(app.flag("push/${thread.station}/${thread.key}", true)) }
-                    Toggle(on) { on = it; app.setFlag("push/${thread.station}/${thread.key}", it) }
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            InfoList {
-                thread.slackUrl?.let { url ->
-                    InfoRow(onClick = { openUrl(context, url) }) { SlackMark(14.dp); Text("在 Slack 中打开", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
-                }
-                InfoRow(onClick = {
-                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("ember", chatUrl(app, thread.station, thread.key)))
-                    app.toast = "链接已拷贝"
-                }) { Text("拷贝链接", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
-                InfoRow(onClick = { openUrl(context, chatUrl(app, thread.station, thread.key)) }) {
-                    Text("在电脑上打开", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.weight(1f))
-                    IconIn(Icons.External, 14.dp, C.subtle)
-                }
-                InfoRow(onClick = {
-                    scope.launch {
-                        try {
-                            app.api(thread.station).archive(thread.key)
-                            app.pop()
-                            app.toast = "已归档"
-                        } catch (e: CoreException) {
-                            app.toast = "没能归档：${e.message}"
+            if (view != null && view.agents.isNotEmpty()) {
+                GroupLabel("参与的 agent · 点开看它的执行历史")
+                InfoList {
+                    view.agents.forEach { a ->
+                        val s = a.session
+                        InfoRow(onClick = { openHistory(app, station, of, s.key) }) {
+                            ModelMark(s.model, s.runtime, 36.dp, s.state(), around = C.surface2)
+                            Column(Modifier.weight(1f)) {
+                                Text(agentLabel(s.model, s.effort), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (a.connect != null) SlackMark(11.dp)
+                                    Text(
+                                        listOfNotNull(a.connect?.name, PROCESS_LABEL[s.process] ?: s.process, "最近活动 ${relativeTime(s.lastActiveAt)}").joinToString(" · "),
+                                        fontSize = 12.sp, color = C.muted,
+                                    )
+                                }
+                            }
+                            IconIn(Icons.Chevron, 14.dp, C.subtle)
                         }
                     }
-                }) { Text("归档对话", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.red) }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun Detail(label: String, value: String, extra: (@Composable () -> Unit)? = null) {
+    InfoRow {
+        Text(label, fontSize = 14.sp, color = C.muted, modifier = Modifier.width(72.dp))
+        extra?.invoke()
+        Text(value, fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
     }
 }
 
@@ -722,7 +1029,7 @@ fun InfoList(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun InfoRow(onClick: (() -> Unit)? = null, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+fun InfoRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
     Row(
         Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = content,

@@ -1,7 +1,8 @@
-// An agent's execution history, as a sheet that drags between half and full
-// height: what it received, what it did (grouped, each group opening to its
-// commands and output), what it posted; and its details (model, quota, the
-// station it runs on).
+// An agent's execution history (web/src/History.tsx), as a sheet that drags
+// between half and full height: what it received and what it sent, drawn
+// alike (a line, then the words beside a bar); what it did in between,
+// grouped, each group opening to its commands and output; and its details
+// (model, allowance, the station it runs on).
 package dev.ember.android.screens
 
 import androidx.compose.foundation.background
@@ -11,14 +12,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -28,198 +37,422 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ember.android.AppState
 import dev.ember.android.LocalApp
-import dev.ember.android.data.Agent
-import dev.ember.android.data.ChatState
+import dev.ember.android.Screen
+import dev.ember.android.data.ChatAgentView
+import dev.ember.android.data.ChatOf
 import dev.ember.android.data.ChatView
-import dev.ember.android.data.EFFORT_LABEL
 import dev.ember.android.data.HistoryItem
+import dev.ember.android.data.HostInfo
+import dev.ember.android.data.LiveStep
 import dev.ember.android.data.LiveView
-import dev.ember.android.data.StationView
-import dev.ember.android.data.Thread
+import dev.ember.android.data.Overview
+import dev.ember.android.data.PROCESS_LABEL
+import dev.ember.android.data.RUNTIME_LABEL
+import dev.ember.android.data.ShownPhase
+import dev.ember.android.data.SourcedMessage
+import dev.ember.android.data.Status
+import dev.ember.android.data.Step
 import dev.ember.android.data.Topics
-import dev.ember.android.data.activityText
+import dev.ember.android.data.agentLabel
 import dev.ember.android.data.compactNumber
+import dev.ember.android.data.duration
+import dev.ember.android.data.gb
 import dev.ember.android.data.historyItems
+import dev.ember.android.data.placeName
 import dev.ember.android.data.rememberTopic
+import dev.ember.android.data.splitThread
+import dev.ember.android.data.status
 import dev.ember.android.data.stepLabel
 import dev.ember.android.ui.C
+import dev.ember.android.ui.IconIn
+import dev.ember.android.ui.Icons
+import dev.ember.android.ui.Mark
 import dev.ember.android.ui.Markdown
+import dev.ember.android.ui.MenuItem
+import dev.ember.android.ui.MenuSpec
 import dev.ember.android.ui.ModelMark
 import dev.ember.android.ui.Mono
 import dev.ember.android.ui.Ring
 import dev.ember.android.ui.Seg
 import dev.ember.android.ui.SheetGrab
 import dev.ember.android.ui.SheetSpec
+import dev.ember.android.ui.SlackMark
+import dev.ember.android.ui.rememberFollow
+import dev.ember.core.CoreException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-fun openHistory(app: AppState, thread: Thread, agent: Agent) {
-    app.sheet = SheetSpec(0.55f, draggable = true) { HistorySheet(thread, agent) }
+/** Opens an agent's execution history, over the item's page it belongs to. */
+fun openHistory(app: AppState, station: String, of: ChatOf, key: String) {
+    app.sheet = SheetSpec(0.55f, draggable = true) { HistorySheet(station, of, key) }
 }
 
 @Composable
-private fun ColumnScope.HistorySheet(thread: Thread, agent: Agent) {
+private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String) {
     val app = LocalApp.current
-    val chat by rememberTopic<ChatView>(app.core, Topics.chat(agent.station, agent.key))
-    val live by rememberTopic<LiveView>(app.core, Topics.live(agent.station, agent.key))
+    val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
+    val live by rememberTopic<LiveView>(app.core, Topics.live(station, key))
+    val host by rememberTopic<HostInfo>(app.core, Topics.host(station))
+    val agent = chat.value?.agents?.firstOrNull { it.session.key == key }
     var tab by rememberSaveable { mutableStateOf(0) }
     SheetGrab()
-    Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ModelMark(agent.model, 20.dp)
-        Text(agent.model ?: "默认模型", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1)
-        // On a narrow screen the words give way before the model's name does.
-        Text("执行历史", fontSize = 13.sp, color = C.muted, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
-        Seg(listOf("步骤", "详情"), tab, { tab = it })
-    }
-    val view = chat.value
-    Box(Modifier.weight(1f).fillMaxWidth()) {
-        when {
-            view == null -> Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
-            tab == 0 -> Steps(view, live.value, agent.state == ChatState.Running || view.session.process == "running")
-            else -> Details(view, live.value, agent)
-        }
-    }
-}
-
-@Composable
-private fun Steps(view: ChatView, live: LiveView?, running: Boolean) {
-    val names = (view.session.participants + listOfNotNull(view.session.creator)).associate { it.id to it.name }
-    val timeline = live?.timeline
-    val items = remember(timeline) { historyItems(timeline ?: emptyList()) { names[it] ?: it } }
-    if (timeline == null || timeline.isEmpty()) {
-        Text(if (live == null || !live.loaded) "正在读取…" else if (view.turns.isEmpty()) "运行时还没开始这个会话。" else "找不到运行时记录，可能已归档。", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
+    if (agent == null) {
+        Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
         return
     }
-    // Newest at the bottom, where the sheet opens.
-    LazyColumn(Modifier.fillMaxWidth(), reverseLayout = true, contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp)) {
-        item(key = "note") {
-            Text("工具调用按它自己的描述显示；展开一组能看到命令和输出", color = C.subtle, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
+    val s = agent.session
+    val model = live.value?.usage?.model ?: s.model
+    Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ModelMark(model, s.runtime, 20.dp)
+        Text(agentLabel(model, s.effort), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        // On a narrow screen the words give way before the agent's name does.
+        Text("执行历史", fontSize = 13.sp, color = C.muted, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
+        Actions(station, agent)
+        Seg(listOf("步骤", "详情"), tab, { tab = it })
+    }
+    Summary(agent, live.value, host.value)
+    Box(Modifier.weight(1f).fillMaxWidth()) {
+        if (tab == 0) Steps(station, of, agent, live.value) else Details(station, agent, live.value, host.value)
+    }
+}
+
+/** What can be done to it right now: stop a turn, release an idle process. */
+@Composable
+private fun Actions(station: String, agent: ChatAgentView) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val s = agent.session
+    val st = status(s)
+    @Composable
+    fun act(icon: androidx.compose.ui.graphics.vector.ImageVector, done: String, call: suspend () -> Unit) {
+        var busy by remember { mutableStateOf(false) }
+        Box(
+            Modifier.size(28.dp).clip(CircleShape).background(C.chip).clickable(enabled = !busy) {
+                busy = true
+                scope.launch {
+                    try { call(); app.toast = done } catch (e: CoreException) { app.toast = e.message } finally { busy = false }
+                }
+            },
+            contentAlignment = Alignment.Center,
+        ) { IconIn(icon, 14.dp, if (busy) C.subtle else C.ink) }
+    }
+    if (st == Status.Running || st == Status.Queued) act(Icons.Stop, "已请求停止") { app.api(station).stop(s.key) }
+    if (s.process == "warm") act(Icons.Unplug, "已释放进程") { app.api(station).evict(s.key) }
+}
+
+/** The head's short line: the allowance left, the cache hit rate, the station's free disk. */
+@Composable
+private fun Summary(agent: ChatAgentView, live: LiveView?, host: HostInfo?) {
+    val usage = live?.usage
+    val hit = usage?.takeIf { it.inputTokens > 0 }?.let { Math.round(it.cachedTokens * 100.0 / it.inputTokens) }
+    val windows = agent.profile?.quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
+    val parts = windows.map { "${it.label} 已用 ${Math.round(it.usedPercent)}%" } +
+        listOfNotNull(hit?.let { "缓存命中 $it%" }, host?.takeIf { it.disk.totalBytes > 0 }?.let { "磁盘剩 ${gb(it.disk.freeBytes)}" })
+    if (parts.isNotEmpty()) Text(parts.joinToString(" · "), fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 4.dp))
+    Box(Modifier.height(8.dp))
+}
+
+private sealed interface Line {
+    data class Item(val item: HistoryItem) : Line
+    data class Live(val step: LiveStep) : Line
+    data class Phase(val phase: ShownPhase) : Line
+}
+
+@Composable
+private fun Steps(station: String, of: ChatOf, agent: ChatAgentView, live: LiveView?) {
+    val app = LocalApp.current
+    val overview by rememberTopic<Overview>(app.core, Topics.overview(station))
+    val person = rememberPeople(station)
+    val timeline = live?.timeline
+    val items = remember(timeline) { historyItems(timeline ?: emptyList()) }
+    val steps = live?.steps.orEmpty().filter { !it.subagent && it.step != "tool" }
+    val phase = live?.phase
+    if (live?.loaded != true && items.isEmpty()) return Edge("正在读取执行历史…")
+    if (items.isEmpty() && steps.isEmpty() && phase == null) {
+        return Edge(if (agent.session.runtimeSessionId != null) "找不到运行时记录，可能已归档。" else "运行时还没开始这个会话。")
+    }
+    val lines = items.map { Line.Item(it) } + steps.map { Line.Live(it) } + listOfNotNull(phase?.let { Line.Phase(it) })
+    val list = rememberLazyListState()
+    val follow = rememberFollow(list)
+    // It opens at its newest, and follows new steps while the reader stays there.
+    LaunchedEffect(Unit) { follow.toEnd(); follow.placed = true; follow.on = true }
+    val bot = agent.connect?.botUserId
+    val mention = { text: String -> text.replace(Regex("<@([A-Z0-9]+)>")) { r -> val id = r.groupValues[1]; "@" + (if (id == bot) agent.connect?.name ?: id else person(id) ?: id) } }
+    val bound = overview.value?.slackUsers.orEmpty()
+    LazyColumn(Modifier.fillMaxWidth(), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item(key = "edge") { Edge("已到 Session 开始处") }
+        itemsIndexed(lines, key = { i, l -> if (l is Line.Live) "live/${l.step.id}" else if (l is Line.Phase) "phase" else "i$i" }) { _, line ->
+            when (line) {
+                is Line.Item -> Item(line.item, station, of, agent, mention, bound, person)
+                is Line.Live -> LiveStepView(line.step)
+                is Line.Phase -> PhaseLine(line.phase, RUNTIME_LABEL[agent.session.runtime] ?: agent.session.runtime)
+            }
         }
-        if (running) item(key = "live") { LiveLine(live) }
-        itemsIndexed(items.asReversed(), key = { i, _ -> items.size - i }) { _, item -> Item(item) }
-        item(key = "edge") { Text("已到 Session 开始处", color = C.subtle, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) }
     }
 }
 
 @Composable
-private fun Item(item: HistoryItem) {
+private fun Edge(text: String) = Text(text, color = C.subtle, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp))
+
+@Composable
+private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgentView, mention: (String) -> String, bound: List<String>, person: (String) -> String?) {
     when (item) {
-        is HistoryItem.Received -> Column(Modifier.padding(vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.chip).padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(if (item.from == "ember") "收到来自 ember 的提醒" else "收到来自 ${item.from} 的消息", fontSize = 12.sp, color = C.subtle)
-            Text(item.text, fontSize = 14.sp, color = C.ink, maxLines = 6, overflow = TextOverflow.Ellipsis)
+        is HistoryItem.Received -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (item.note.isNotEmpty()) Message(Icons.Received, { Text("收到来自 ", fontSize = 13.sp, color = C.muted); Strong("ember"); Text(" 的提醒", fontSize = 13.sp, color = C.muted) }) {
+                Fold { Text(item.note, fontSize = 14.sp, lineHeight = 21.sp, color = C.ink) }
+            }
+            item.messages.forEach { m ->
+                Message(Icons.Received, {
+                    Text("收到来自 ", fontSize = 13.sp, color = C.muted)
+                    if (m.slack) SlackName(station, m, bound) else Strong(person(m.user) ?: m.name ?: m.user)
+                    Text(" 的消息", fontSize = 13.sp, color = C.muted)
+                    m.thread?.let { Text(" · ", fontSize = 13.sp, color = C.muted); Place(station, of, agent, it) }
+                }) { Fold { Text(mention(m.text), fontSize = 14.sp, lineHeight = 21.sp, color = C.ink) } }
+            }
         }
-        is HistoryItem.Group -> Group(item)
-        is HistoryItem.Post -> Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                "↗ 发出回复" + when { item.failed -> " · 发送失败"; item.kind == "block" -> " · block"; item.kind == "final" -> " · 已完成"; else -> "" },
-                fontSize = 12.sp, color = if (item.failed) C.red else C.accentInk,
-            )
-            Text(item.text, fontSize = 14.sp, color = C.ink, maxLines = 8, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 16.dp))
-        }
+        is HistoryItem.Post -> Message(Icons.Send, {
+            Text("发送到 ", fontSize = 13.sp, color = C.muted)
+            if (item.to != null) Place(station, of, agent, item.to) else Row(verticalAlignment = Alignment.CenterVertically) { SlackMark(12.dp); Strong(" Slack") }
+            if (item.kind == "final") Pill("已完成", C.green)
+            if (item.kind == "block") Pill("Block", C.blue)
+            if (item.failed) Pill("发送失败", C.red)
+        }) { Fold { Markdown(item.text, size = 14) } }
         is HistoryItem.Mark -> Text(
             when (item.kind) { "final" -> "标记为已完成"; "block" -> "进入 block 状态：agent 停下来等人处理"; else -> "标记为 ${item.kind}" },
-            fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(vertical = 8.dp),
+            fontSize = 13.sp, color = C.muted,
         )
-        is HistoryItem.Text -> Column(Modifier.padding(vertical = 8.dp)) { Markdown(item.text, size = 14) }
+        is HistoryItem.Text -> Box(Modifier.let { if (item.subagent) it.padding(start = 12.dp) else it }) { Fold { Markdown(item.text, size = 14) } }
+        is HistoryItem.Group -> Group(item)
     }
+}
+
+@Composable
+private fun Strong(text: String) = Text(text, fontSize = 13.sp, color = C.ink, fontWeight = FontWeight.SemiBold)
+
+/** A message in or out, drawn alike: a line saying what and where, then the words beside a bar (they answer each other). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Message(icon: androidx.compose.ui.graphics.vector.ImageVector, label: @Composable () -> Unit, body: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        FlowRow(verticalArrangement = Arrangement.Center, itemVerticalAlignment = Alignment.CenterVertically) {
+            IconIn(icon, 14.dp, C.muted, Modifier.padding(end = 5.dp))
+            label()
+        }
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            Box(Modifier.width(2.dp).fillMaxHeight().clip(RoundedCornerShape(1.dp)).background(C.line))
+            Box(Modifier.padding(start = 10.dp).weight(1f)) { body() }
+        }
+    }
+}
+
+@Composable
+private fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
+    Text(text, fontSize = 11.sp, color = color, modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp))
+
+/** A thread as a place: its platform's mark and its name; a chat on ember's page leads to it. */
+@Composable
+private fun Place(station: String, of: ChatOf, agent: ChatAgentView, address: String) {
+    val app = LocalApp.current
+    val (channel, ts) = splitThread(address) ?: return Strong(address)
+    val thread = agent.threads.firstOrNull { it.channel == channel && it.threadTs == ts }
+    val open = thread?.takeIf { channel == "EMBER" }?.let { t -> { if (of != ChatOf.Thread(t.id)) app.push(Screen.Chat(station, ChatOf.Thread(t.id))) else app.sheet = null } }
+    Row(
+        Modifier.clip(RoundedCornerShape(4.dp)).let { if (open != null) it.clickable(onClick = open) else it },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        if (channel == "EMBER") Mark(12.dp) else SlackMark(12.dp)
+        Text(placeName(agent.threads, channel, ts), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (open != null) C.accentInk else C.ink)
+    }
+}
+
+/**
+ * A Slack user's name: "你" once the viewer said it is them. A tap offers "这是我" (the station then takes that Slack
+ * user for the viewer), or "不是我" once it does.
+ */
+@Composable
+private fun SlackName(station: String, m: SourcedMessage, bound: List<String>) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val mine = m.user in bound
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    Text(
+        if (mine) "你" else m.name ?: m.user, fontSize = 13.sp, color = C.accentInk, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.clip(RoundedCornerShape(4.dp)).clickable {
+            app.menu = MenuSpec(bounds, listOf(MenuItem(if (mine) "不是我" else "这是我", if (mine) Icons.Close else Icons.Check) {
+                scope.launch {
+                    try {
+                        app.api(station).slackIdentity(m.user, !mine)
+                    } catch (e: CoreException) {
+                        app.toast = "${if (mine) "解除" else "绑定"}没有成功：${e.message}"
+                    }
+                }
+            }))
+        },
+    )
 }
 
 @Composable
 private fun Group(g: HistoryItem.Group) {
     var open by remember { mutableStateOf(false) }
     Column {
-        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 9.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (open) "⌄" else "›", color = C.subtle, fontSize = 14.sp, modifier = Modifier.width(10.dp))
-            Text(g.summary, color = C.muted, fontSize = 14.sp, maxLines = if (open) 3 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { open = !open }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconIn(if (open) Icons.ChevronDown else Icons.ChevronRight, 13.dp, C.subtle)
+            Text(g.summary, color = if (g.failed > 0) C.red else C.muted, fontSize = 14.sp, maxLines = if (open) 3 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             if (g.failed > 0) Pill("${g.failed} 项失败", C.red)
             if (g.pending > 0) Pill("${g.pending} 项进行中", C.accentInk)
         }
-        if (open) Column(Modifier.padding(start = 18.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (g.steps.isNotEmpty()) Text(g.counts, fontSize = 12.sp, color = C.subtle)
-            g.thinking.forEach { Text(it.text, fontSize = 13.sp, color = C.muted, maxLines = 8, overflow = TextOverflow.Ellipsis) }
-            g.steps.forEach { s ->
-                val (label, hint) = stepLabel(s)
-                Text(if (hint != null) "$label  $hint" else label, fontSize = 13.sp, color = if (s.result?.ok == false) C.red else C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Code(s.call.text)
-                s.result?.let { Code(it.text) }
+        if (open) Column(Modifier.padding(start = 19.dp, top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            g.thinking.forEach { t ->
+                if (g.steps.isEmpty()) Text(t.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted)
+                else Folding("思考", t.text.lineSequence().firstOrNull { it.isNotBlank() } ?: "", null, false) { Text(t.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
             }
+            g.steps.forEach { StepRow(it) }
         }
     }
 }
 
 @Composable
-private fun Code(text: String) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.surface2).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 8.dp)) {
-        Text(text.take(2000), style = Mono, color = C.ink, softWrap = false, maxLines = 12)
+private fun StepRow(step: Step) {
+    val (label, hint) = stepLabel(step)
+    val result = step.result
+    val took = result?.at?.let { r -> step.call.at?.let { c -> parseIso(r) - parseIso(c) } }
+    val meta = when {
+        result == null -> "进行中"
+        result.ok == false -> "失败"
+        took != null && took >= 0 -> duration(took)
+        else -> ""
+    }
+    Folding(label, hint, meta, result?.ok == false) {
+        Code(step.call.text)
+        result?.let { Code(it.text, failed = it.ok == false) }
+    }
+}
+
+private fun parseIso(at: String): Long = try { java.time.Instant.parse(at).toEpochMilli() } catch (_: java.time.format.DateTimeParseException) { 0 }
+
+/** A line that opens to what is behind it. */
+@Composable
+private fun Folding(name: String, hint: String?, meta: String?, failed: Boolean, body: @Composable () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(name, fontSize = 13.sp, color = if (failed) C.red else C.ink, fontWeight = if (hint != null) FontWeight.Medium else null, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = hint == null))
+            if (hint != null) Text(hint, fontSize = 12.sp, style = Mono, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (!meta.isNullOrEmpty()) Text(meta, fontSize = 11.sp, color = if (failed) C.red else C.subtle)
+        }
+        if (open) body()
     }
 }
 
 @Composable
-private fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
-    Text(text, fontSize = 11.sp, color = color, modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(C.chip).padding(horizontal = 6.dp, vertical = 2.dp))
+private fun Code(text: String, failed: Boolean = false) {
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (failed) C.red.copy(alpha = 0.08f) else C.surface2).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 8.dp)) {
+        Text(text.take(4000), style = Mono, color = C.ink, softWrap = false, maxLines = 40)
+    }
+}
 
-/** The turn in flight: its newest step and how long the model has been at it. */
+/**
+ * Long text folds to five lines; a button unfolds it. The height is measured,
+ * so markdown (lists, code) folds the same way as plain text.
+ */
 @Composable
-private fun LiveLine(live: LiveView) {
+private fun Fold(lineHeight: Dp = 21.dp, content: @Composable () -> Unit) {
+    var long by remember { mutableStateOf(false) }
+    var open by remember { mutableStateOf(false) }
+    val max = with(LocalDensity.current) { (lineHeight * 5).roundToPx() }
+    Column {
+        Box(Modifier.clipToBounds().layout { m, c ->
+            val p = m.measure(c.copy(maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+            val over = p.height > max + 4
+            if (over != long) long = over
+            layout(p.width, if (over && !open) max else p.height) { p.place(0, 0) }
+        }) { content() }
+        if (long) Text(if (open) "收起" else "展开", fontSize = 12.sp, color = C.accentInk, modifier = Modifier.padding(top = 2.dp).clickable { open = !open })
+    }
+}
+
+/** A step the runtime is streaming: the reply as it is written (its last five lines), or thinking (its last line). */
+@Composable
+private fun LiveStepView(step: LiveStep) {
+    if (step.step == "text") {
+        if (step.text.isNotEmpty()) Box(Modifier.fillMaxWidth().clipToBounds().layout { m, c ->
+            // A window onto the end of the growing reply, five lines tall at most.
+            val p = m.measure(c.copy(maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+            val max = (21.dp * 5).roundToPx()
+            val h = minOf(p.height, max)
+            layout(p.width, h) { p.place(0, h - p.height) }
+        }) { Markdown(step.text, size = 14) }
+        return
+    }
+    val last = step.text.trim().lineSequence().lastOrNull() ?: ""
+    Text("思考：$last", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
+
+/** The turn's state with the model, with a running clock: starting up, waiting for the first token, working, or thinking. */
+@Composable
+private fun PhaseLine(phase: ShownPhase, runtime: String) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
-    val step = live.steps.lastOrNull { !it.ended && !it.subagent }
-    val text = step?.let { if (it.step == "thinking") "正在思考" else activityText(it.tool, it.input) } ?: "正在处理"
-    val phase = live.phase
-    Column(Modifier.padding(vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.width(6.dp).height(6.dp).clip(RoundedCornerShape(3.dp)).background(C.accent))
-            Text("$text…", fontSize = 14.sp, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-        if (phase != null) {
-            val what = when (phase.phase) { "starting" -> "正在启动"; "requesting" -> "等待模型响应"; "working" -> "执行工具中"; else -> "Thinking" }
-            Text("$what ${((now - phase.since) / 1000).coerceAtLeast(0)}s", fontSize = 12.sp, color = C.subtle)
-        }
+    val text = when (phase.phase) { "starting" -> "正在启动 $runtime"; "requesting" -> "已发送请求，等待模型响应"; "working" -> "执行工具中"; else -> "Thinking" }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent))
+        Text(text, fontSize = 13.sp, color = C.ink)
+        Text("${((now - phase.since) / 1000).coerceAtLeast(0)}s", fontSize = 12.sp, color = C.subtle)
     }
 }
 
+/** The model and its use, the allowance, the station. */
 @Composable
-private fun Details(view: ChatView, live: LiveView?, agent: Agent) {
-    val app = LocalApp.current
-    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(agent.station.substringBefore('/')))
-    val s = view.session
+private fun Details(station: String, agent: ChatAgentView, live: LiveView?, host: HostInfo?) {
+    val s = agent.session
     val usage = live?.usage
-    val hit = usage?.takeIf { it.inputTokens > 0 }?.let { (it.cachedTokens * 100 / it.inputTokens).toInt() }
-    val st = stations.value?.firstOrNull { it.station == agent.station }
+    val hit = usage?.takeIf { it.inputTokens > 0 }?.let { Math.round(it.cachedTokens * 100.0 / it.inputTokens) }
+    val quota = agent.profile?.quota
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
         GroupLabel("模型")
-        Column(Modifier.padding(top = 6.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Detail("模型", usage?.model ?: s.model ?: "默认模型")
-            Detail("思考深度", s.effort?.let { EFFORT_LABEL[it] ?: it } ?: "默认")
-            Detail("Profile", view.profile?.name ?: s.profile)
-            if (usage != null) Detail("消耗", "${compactNumber(usage.inputTokens + usage.outputTokens)} tokens" + (hit?.let { " · 缓存 $it%" } ?: ""))
-        }
-        GroupLabel("额度")
-        val quota = view.profile?.quota
-        if (quota?.state == "ok" && quota.windows.isNotEmpty()) {
-            Row(Modifier.padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) { quota.windows.forEach { Ring(it.usedPercent.toInt(), it.label) } }
-        } else {
-            Text("额度：${quota?.detail ?: if (quota != null) "查不到" else "还没查过"}", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(vertical = 10.dp))
-        }
-        GroupLabel("Station · ${st?.name ?: stationName(agent.station)}")
-        val host = st?.host
-        if (host != null) {
-            Row(Modifier.padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Ring(host.cpuPercent, "CPU"); Ring(host.memPercent, "内存"); Ring(host.diskPercent, "磁盘")
+        Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Detail("运行时", RUNTIME_LABEL[s.runtime] ?: s.runtime)
+            Detail("Profile", agent.profile?.name ?: s.profile)
+            Detail("进程", PROCESS_LABEL[s.process] ?: s.process)
+            if (usage != null) {
+                Detail("调用", "${usage.modelCalls} 次")
+                Detail("输入", compactNumber(usage.inputTokens) + (hit?.let { " · 缓存 $it%" } ?: ""))
+                Detail("输出", compactNumber(usage.outputTokens))
             }
+        }
+        if (quota?.state == "ok" && quota.windows.isNotEmpty()) {
+            Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) { quota.windows.forEach { Ring(Math.round(it.usedPercent).toInt(), it.label) } }
         } else {
-            Text(if (st?.online == false) "离线" else "正在读取…", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(vertical = 10.dp))
+            Text("额度：${quota?.detail ?: if (quota != null) "查不到" else "还没查过"}", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(vertical = 6.dp))
+        }
+        GroupLabel("Station")
+        Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Detail("名字", rememberStationName(station))
+            if (host != null) Detail("机器", "${host.hostname} · ${host.cpus} 核 · ${gb(host.memory.totalBytes)}")
+        }
+        if (host != null) Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            Ring(host.cpuPercent, "CPU"); Ring(host.memPercent, "内存")
+            if (host.disk.totalBytes > 0) Ring(host.diskPercent, "磁盘")
         }
     }
 }

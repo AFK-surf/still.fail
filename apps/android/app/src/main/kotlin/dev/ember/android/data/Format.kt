@@ -16,36 +16,42 @@ fun turnResult(turn: TurnSummary?): Status = when {
     else -> Status.Unexpected // completed without saying final or block
 }
 
-fun status(s: SessionSummary): Status = when {
-    s.process == "running" -> Status.Running
-    s.pending > 0 -> Status.Queued
-    else -> turnResult(s.lastTurn).let { if (it == Status.Running) Status.Unexpected else it } // a turn left open by a crash
+fun status(process: String, pending: Int, lastTurn: TurnSummary?): Status = when {
+    process == "running" -> Status.Running
+    pending > 0 -> Status.Queued
+    else -> turnResult(lastTurn).let { if (it == Status.Running) Status.Unexpected else it } // a turn left open by a crash
 }
 
-private val SLACK_MENTION = Regex("<@[A-Z0-9]+>")
+fun status(s: SessionSummary): Status = status(s.process, s.pending, s.lastTurn)
 
-/** What a chat is called: its given title, else its first message. */
-fun sessionTitle(s: SessionSummary): String =
-    s.title?.takeIf { it.isNotBlank() } ?: s.firstText?.replace(SLACK_MENTION, "")?.replace(Regex("\\s+"), " ")?.trim()?.takeIf { it.isNotEmpty() } ?: "（还没有消息）"
+val PROCESS_LABEL = mapOf("running" to "运行中", "warm" to "保温中", "cold" to "已释放")
+
+/** Slack mentions and spacing removed, for use as a title or a one-line preview. */
+fun cleanText(text: String?): String = (text ?: "").replace(Regex("<@[A-Z0-9]+>"), "").replace(Regex("\\s+"), " ").trim()
+
+/** How an agent is named: it has no name, only its model and how hard it thinks. */
+fun agentLabel(model: String?, effort: String?): String =
+    listOfNotNull(model?.takeIf { it.isNotEmpty() } ?: "默认模型", effort?.let { "思考${EFFORT_LABEL[it] ?: it}" }).joinToString(" · ")
 
 private fun hhmm(ms: Long) = Calendar.getInstance().apply { timeInMillis = ms }.let { String.format(Locale.ROOT, "%02d:%02d", it.get(Calendar.HOUR_OF_DAY), it.get(Calendar.MINUTE)) }
 
 fun relativeTime(ms: Long, now: Long = System.currentTimeMillis()): String {
-    val seconds = (now - ms) / 1000
+    val seconds = Math.round((now - ms) / 1000.0)
     if (seconds < 45) return "刚刚"
-    val minutes = (seconds + 30) / 60
+    val minutes = Math.round(seconds / 60.0)
     if (minutes < 60) return "$minutes 分钟前"
-    val hours = (minutes + 30) / 60
+    val hours = Math.round(minutes / 60.0)
     if (hours < 24) return "$hours 小时前"
     val c = Calendar.getInstance().apply { timeInMillis = ms }
     return if (hours < 48) "昨天 ${hhmm(ms)}" else "${c.get(Calendar.MONTH) + 1}月${c.get(Calendar.DAY_OF_MONTH)}日 ${hhmm(ms)}"
 }
 
-/** A row's time: minutes ago within the hour, then the clock, then the day. */
-fun rowTime(ms: Long, daysAgo: Int, now: Long = System.currentTimeMillis()): String = when {
-    now - ms < 3_600_000 -> relativeTime(ms, now)
-    daysAgo == 0 -> hhmm(ms)
-    else -> dayLabel(daysAgo, ms)
+fun duration(ms: Long): String {
+    if (ms < 1000) return "${ms}ms"
+    val s = Math.round(ms / 1000.0)
+    if (s < 60) return "$s 秒"
+    val m = s / 60
+    return if (m < 60) "$m 分 ${s % 60} 秒" else "${m / 60} 小时 ${m % 60} 分"
 }
 
 /** Groups by calendar day, as the web's chat list does: 今天, 昨天, 星期三, 9月20日. */
@@ -74,13 +80,16 @@ fun gb(bytes: Long) = "${bytes / (1024L * 1024 * 1024)} GB"
 /** Agents are their model: the maker's mark, as on the web. */
 enum class Maker { OpenAI, Anthropic, Zhipu, DeepSeek }
 
-fun maker(model: String?): Maker {
+/** A model the marks here do not know (or none) shows its runtime's maker. */
+fun maker(model: String?, runtime: String): Maker {
     val m = model?.lowercase() ?: ""
     return when {
-        Regex("gpt|codex|astra|o\\d").containsMatchIn(m) -> Maker.OpenAI
-        Regex("claude|opus|sonnet|haiku").containsMatchIn(m) -> Maker.Anthropic
-        "glm" in m -> Maker.Zhipu
-        else -> Maker.DeepSeek
+        Regex("claude|opus|sonnet|haiku|fable").containsMatchIn(m) -> Maker.Anthropic
+        Regex("gpt|^o\\d|codex|openai").containsMatchIn(m) -> Maker.OpenAI
+        "deepseek" in m -> Maker.DeepSeek
+        Regex("glm|zhipu").containsMatchIn(m) -> Maker.Zhipu
+        runtime == "codex" -> Maker.OpenAI
+        else -> Maker.Anthropic
     }
 }
 

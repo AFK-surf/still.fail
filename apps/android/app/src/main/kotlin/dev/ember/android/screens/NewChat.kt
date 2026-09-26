@@ -8,7 +8,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -22,11 +21,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +42,7 @@ import dev.ember.android.AppState
 import dev.ember.android.LocalApp
 import dev.ember.android.R
 import dev.ember.android.Screen
+import dev.ember.android.data.ChatOf
 import dev.ember.android.data.EFFORTS
 import dev.ember.android.data.EFFORT_LABEL
 import dev.ember.android.data.RUNTIME_LABEL
@@ -50,6 +50,8 @@ import dev.ember.android.data.StationView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.ui.C
+import dev.ember.android.ui.IconIn
+import dev.ember.android.ui.Icons
 import dev.ember.android.ui.Illustration
 import dev.ember.android.ui.Loading
 import dev.ember.android.ui.MakerIcon
@@ -73,8 +75,6 @@ private fun AppState.keepChoice(station: String, c: Choice) {
     setStrings("newChat/$station", listOf(c.runtime, c.model, c.effort.ifEmpty { "-" }))
     setStrings("newChat.last", listOf(station))
 }
-
-private val COMMON = listOf("跑一下测试，失败的话看看是哪个", "看看这台机器的磁盘和内存", "帮我 review 最近一个 PR")
 
 @Composable
 fun NewChatScreen(scope: String) {
@@ -113,50 +113,56 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
     val model = runtime?.models?.firstOrNull { it == choice?.model } ?: runtime?.models?.firstOrNull()
     val effort = choice?.effort?.takeIf { it != "-" && runtime != null && it in EFFORTS[runtime.runtime].orEmpty() } ?: ""
     val pick = { next: Choice -> choice = next; app.keepChoice(view.station, next) }
-    // The session is made on the first file or message, once.
-    var made by remember(view.station) { mutableStateOf<Deferred<String>?>(null) }
-    val ensure: suspend () -> String = {
+    // The model list is what a profile's check found; profiles not checked since the station started are checked now, once.
+    val profiles = view.overview?.profiles.orEmpty()
+    val checked = remember(view.station) { mutableSetOf<String>() }
+    LaunchedEffect(profiles) {
+        for (p in profiles) if (p.check == null && checked.add(p.id)) launch { try { app.api(view.station).checkProfile(p.id) } catch (_: CoreException) {} }
+    }
+    // The chat and its session are made on the first file or message, once.
+    var made by remember(view.station) { mutableStateOf<Deferred<Pair<String, Long>>?>(null) }
+    var making by remember(view.station) { mutableStateOf(false) }
+    val ensure: suspend () -> Pair<String, Long> = {
         val m = model ?: throw CoreException("no_model", "先在 Profile 里启用模型", null)
-        made ?: CompletableDeferred<String>().also { d ->
+        made ?: CompletableDeferred<Pair<String, Long>>().also { d ->
             made = d
+            making = true
             try {
-                d.complete(app.api(view.station).newSession(runtime!!.runtime, m, effort.ifEmpty { null }))
+                d.complete(app.api(view.station).newChat(runtime!!.runtime, m, effort.ifEmpty { null }))
             } catch (e: CoreException) {
                 made = null
                 d.completeExceptionally(e)
+            } finally {
+                making = false
             }
         }
         made!!.await()
     }
-    val launchers = AttachLaunchers { app.upload(draft, view.station, ensure, it, scope) }
+    val launchers = AttachLaunchers { app.upload(draft, view.station, { ensure().first }, it, scope) }
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
         Column(Modifier.fillMaxWidth().padding(start = 30.dp, end = 30.dp, top = 30.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 230.dp)
             Text("想让 agent 做什么？", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.padding(top = 6.dp))
-            Text("选好在哪台机器、用什么模型，然后说就行。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
-        }
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val recent = app.strings("newChat.recent")
-            (recent.map { it to "最近用过" } + COMMON.filter { it !in recent }.map { it to "常用" }).take(3).forEach { (text, sub) ->
-                Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(14.dp))
-                        .clickable { draft.text = text }.padding(horizontal = 14.dp, vertical = 11.dp),
-                ) {
-                    Text(text, fontSize = 14.sp, color = C.ink)
-                    Text(sub, fontSize = 12.sp, color = C.muted)
-                }
+            Text("说要做什么。它会在 ${view.name} 上用选好的模型开一个新会话。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+            val problem = when {
+                view.overview == null -> "正在读取 ${view.name} 的 Profile…"
+                profiles.isEmpty() -> "这台 station 还没有 Profile，先在电脑上到 设置 → Profile 里加一个。"
+                view.runtimes.isEmpty() -> "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。"
+                else -> null
             }
+            if (problem != null) Text(problem, fontSize = 13.sp, color = if (view.overview == null) C.muted else C.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+            if (making) Text("正在 ${view.name} 上创建会话…", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 6.dp))
         }
     }
     Column(Modifier.fillMaxWidth().background(C.bg).padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Chooser({ Box(Modifier.size(8.dp).clip(CircleShape).background(C.green)) }, view.name) { pickStation(app, stations, view.station, onStation) }
+            Chooser({ IconIn(Icons.Server, 13.dp, C.ink) }, view.name) { pickStation(app, stations, view.station, onStation) }
             if (runtime == null || model == null) {
                 // Nothing to choose from: the chooser leads to where models are enabled.
                 Chooser(null, "没有可用模型 · 去勾选") { app.push(Screen.Station(view.station)) }
             } else {
-                Chooser({ MakerIcon(model, 14.dp) }, model) {
-                    pickModel(app, view, model) { rt, m -> pick(Choice(rt, m, if (rt != runtime.runtime) "" else effort)) }
+                Chooser({ MakerIcon(model, runtime.runtime, 14.dp) }, model) {
+                    pickModel(app, view, runtime.runtime, model) { rt, m -> pick(Choice(rt, m, if (rt != runtime.runtime) "" else effort)) }
                 }
                 Chooser(null, "思考 " + (EFFORT_LABEL[effort] ?: "默认")) {
                     pickEffort(app, runtime.runtime, effort) { e -> pick(Choice(runtime.runtime, model, e)) }
@@ -165,21 +171,25 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
         }
         DraftExtras(draft)
         ComposerBar(draft, "做任何事", onPlus = { openAttach(app, launchers) }, onType = {}, onSend = {
-            draft.sending = true
+            val text = draft.text.trim()
+            val files = draft.files.toList()
+            draft.text = ""; draft.files.clear(); draft.error = null
+            draft.starting = true
             scope.launch {
-                try {
-                    val key = ensure()
-                    val text = draft.text.trim()
-                    app.api(view.station).send(key, text, draft.files.mapNotNull { it.done })
-                    if (text.isNotEmpty()) app.setStrings("newChat.recent", (listOf(text) + app.strings("newChat.recent").filter { it != text }).take(3))
-                    app.replace(Screen.Chat(view.station, key))
+                val thread = try {
+                    ensure().second
                 } catch (e: CoreException) {
-                    app.toast = "没发出去：${e.message}"
+                    // No chat to send into: the draft comes back.
+                    draft.text = text; draft.files.addAll(files); draft.error = e.message
+                    return@launch
                 } finally {
-                    draft.sending = false
+                    draft.starting = false
                 }
+                app.scope.launch { try { app.api(view.station).send(thread, text, files.mapNotNull { it.done }) } catch (_: CoreException) {} }
+                app.replace(Screen.Chat(view.station, ChatOf.Thread(thread)))
             }
         })
+        draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }
     }
 }
 
@@ -200,23 +210,22 @@ private fun pickStation(app: AppState, stations: List<StationView>, current: Str
         SheetHead("在哪台 station 上跑")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             stations.forEach { s ->
-                PickRow(s.name, listOfNotNull(s.host?.os, "在线").joinToString(" · "), checked = s.station == current) { onPick(s.station); app.sheet = null }
+                PickRow(s.name, checked = s.station == current) { onPick(s.station); app.sheet = null }
             }
         }
     }
 }
 
-private fun pickModel(app: AppState, view: StationView, current: String, onPick: (String, String) -> Unit) {
+private fun pickModel(app: AppState, view: StationView, currentRuntime: String, current: String, onPick: (String, String) -> Unit) {
     app.sheet = SheetSpec(0.5f) {
         SheetGrab()
         SheetHead("用哪个模型")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             view.runtimes.forEach { rt ->
                 rt.models.forEach { m ->
-                    PickRow(m, RUNTIME_LABEL[rt.runtime] ?: rt.runtime, checked = m == current, leading = { ModelMark(m, 36.dp) }) { onPick(rt.runtime, m); app.sheet = null }
+                    PickRow(m, RUNTIME_LABEL[rt.runtime] ?: rt.runtime, checked = rt.runtime == currentRuntime && m == current, leading = { ModelMark(m, rt.runtime, 36.dp) }) { onPick(rt.runtime, m); app.sheet = null }
                 }
             }
-            Text("只列出在 Profile 里勾选过的模型；由 station 的账号池挑一个有余量的账号来跑。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 30.dp))
         }
     }
 }

@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
@@ -26,12 +27,12 @@ class StationApi(private val core: EmberCore, val station: String) {
             if (body != null) put("body", body)
         })
 
-    private suspend fun chat(call: String, key: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}) =
-        core.call(call, buildJsonObject { put("station", station); put("key", key); fill() })
+    private suspend fun chat(call: String, thread: Long, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}) =
+        core.call(call, buildJsonObject { put("station", station); put("thread", thread); fill() })
 
     /** Sends to the chat: the message shows at once from the view's outbox, and leaves it once the station has it. */
-    suspend fun send(key: String, text: String, attachments: List<Attachment> = emptyList(), quotes: List<Quote> = emptyList()) {
-        chat("chat.send", key) {
+    suspend fun send(thread: Long, text: String, attachments: List<Attachment> = emptyList(), quotes: List<Quote> = emptyList()) {
+        chat("chat.send", thread) {
             put("text", text)
             put("attachments", EmberJson.encodeToJsonElement(ListSerializer(Attachment.serializer()), attachments))
             put("quotes", EmberJson.encodeToJsonElement(ListSerializer(Quote.serializer()), quotes))
@@ -39,29 +40,39 @@ class StationApi(private val core: EmberCore, val station: String) {
     }
 
     /** A failed message from the outbox: send it again, or drop it. */
-    suspend fun retry(key: String, id: String) { chat("chat.retry", key) { put("id", id) } }
-    suspend fun discard(key: String, id: String) { chat("chat.discard", key) { put("id", id) } }
+    suspend fun retry(thread: Long, id: String) { chat("chat.retry", thread) { put("id", id) } }
+    suspend fun discard(thread: Long, id: String) { chat("chat.discard", thread) { put("id", id) } }
 
-    /** Brings the page before the chat's first shown message into the view. */
-    suspend fun older(key: String) { chat("chat.older", key) }
+    /** Brings the page before the chat's first loaded message into the view. */
+    suspend fun older(thread: Long) { chat("chat.older", thread) }
 
     /** The viewer has read the chat up to `seq`. */
-    suspend fun read(key: String, seq: Long) { chat("chat.read", key) { put("seq", seq) } }
+    suspend fun read(thread: Long, seq: Long) { chat("chat.read", thread) { put("seq", seq) } }
 
     /** Starts the session's runtime ahead of a message. */
     suspend fun warm(key: String) { request("POST", "/sessions/${at(key)}/warm") }
 
     suspend fun stop(key: String) { request("POST", "/sessions/${at(key)}/stop") }
 
-    /** Hides the chat from lists (docs/station-storage.md → Housekeeping). */
-    suspend fun archive(key: String) { request("POST", "/sessions/${at(key)}/archive") }
+    /** Releases an idle agent's process. */
+    suspend fun evict(key: String) { request("POST", "/sessions/${at(key)}/evict") }
 
-    /** A new chat's session, made before its first message so files can go into it. */
-    suspend fun newSession(runtime: String, model: String, effort: String?): String =
+    /** A new chat: its session and its thread, made before its first message so files can go into it. */
+    suspend fun newChat(runtime: String, model: String, effort: String?): Pair<String, Long> =
         request("POST", "/sessions", buildJsonObject {
             put("runtime", runtime); put("model", model)
             if (effort != null) put("effort", effort)
-        }).jsonObject["key"]!!.jsonPrimitive.content
+        }).jsonObject.let { it["key"]!!.jsonPrimitive.content to it["thread"]!!.jsonObject["id"]!!.jsonPrimitive.long }
+
+    /** The chat of an agent that has none yet, bound to its session; answers the thread. */
+    suspend fun chatFor(session: String): Long =
+        request("POST", "/threads", buildJsonObject { put("session", session) }).jsonObject["id"]!!.jsonPrimitive.long
+
+    /** Checks a profile, which lists the models it can use. */
+    suspend fun checkProfile(id: String) { request("POST", "/profiles/${at(id)}/check") }
+
+    /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */
+    suspend fun slackIdentity(user: String, bound: Boolean) { request(if (bound) "PUT" else "DELETE", "/me/slack/${at(user)}") }
 
     /** Replaces a profile's enabled models. */
     suspend fun setModels(profile: String, models: List<String>) {

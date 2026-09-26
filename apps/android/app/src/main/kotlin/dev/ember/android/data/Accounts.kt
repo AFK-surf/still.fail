@@ -21,3 +21,10 @@ import kotlinx.serialization.json.JsonElement
 data class WorkspaceEntry(val workspace: WorkspaceSummary, val account: Account)
 
 fun List<AccountWorkspaces>.entries(): List<WorkspaceEntry> = flatMap { a -> a.workspaces.map { WorkspaceEntry(it, a.account) } }.distinctBy { it.workspace.id }
+
+@Serializable data class Member(val email: String, val name: String = "")
+
+@Serializable data class WorkspaceStation(val id: String, val name: String = "")
+
+/** The `workspace` topic, as far as the app reads it: its members, to name people by their email, and its stations' names. */
+@Serializable data class WorkspaceView(val id: String, val name: String = "", val members: List<Member> = emptyList(), val stations: List<WorkspaceStation> = emptyList())
