@@ -38,12 +38,12 @@
   --field-focus: #646970;
   --online: oklch(68% .15 150);
 
-  --r-field: 18px;
-  --r-card: 30px;
-  --r-dialog: 48px;
-  --r-nav: 18px;
-  --r-menu: 30px;
-  --r-option: 18px;
+  --r-field: 12px;
+  --r-card: 20px;
+  --r-dialog: 32px;
+  --r-nav: 12px;
+  --r-menu: 20px;
+  --r-option: 12px;
 
   --text-xs: 12px;
   --text-sm: 13px;
