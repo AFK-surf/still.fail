@@ -250,10 +250,10 @@ export class AdminApi {
           ...(Number.isInteger(w) && Number.isInteger(h) && w > 0 && h > 0 && w < 100_000 && h < 100_000 ? { width: w, height: h } : {}),
         };
       });
-      const quotes: Quote[] = (Array.isArray(input.quotes) ? input.quotes : []).slice(0, 20).map((q: Record<string, unknown>) => ({
+      const quotes: Quote[] = (Array.isArray(input.quotes) ? input.quotes : []).slice(0, 20).map((q: Record<string, unknown>): Quote => ({
         author: String(q.author ?? "消息").slice(0, 100), text: String(q.text ?? "").slice(0, 4000), comment: String(q.comment ?? "").slice(0, 4000),
         ...(typeof q.ts === "string" && /^\d+\.\d+$/.test(q.ts) ? { ts: q.ts } : {}),
-        ...(q.role === "agent" || q.role === "person" ? { role: q.role } : {}),
+        ...(q.role === "agent" || q.role === "person" ? { role: q.role as "agent" | "person" } : {}),
       })).filter((q: Quote) => q.text.trim());
       if (!text && attachments.length === 0 && quotes.length === 0) throw new HttpError(400, "消息是空的");
       return send(res, 200, { threadTs: await this.#deps.hub.sayToSession(id, viewerId(viewer), text, attachments, quotes) });
