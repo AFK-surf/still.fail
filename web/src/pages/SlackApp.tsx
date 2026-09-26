@@ -268,11 +268,10 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
         }} />
         <div className="app-look-main">
           <input id="app-name" className="input app-name-input" aria-label="名字" placeholder="名字" value={settings.name} onChange={(e) => setName(e.target.value)} />
-          {apart ? (
+          {apart && (
             <input id="app-display" className="input" aria-label="在消息里显示的名字" placeholder="在消息里显示的名字" value={settings.displayName} onChange={(e) => set("displayName", e.target.value)} />
-          ) : (
-            <button type="button" className="text-button app-look-link" onClick={() => setApart(true)}>消息里用别的名字</button>
           )}
+          <input id="app-desc" className="input app-desc" aria-label="简介" maxLength={140} placeholder="简介，显示在 app 资料卡上" value={settings.description} onChange={(e) => set("description", e.target.value)} />
           <div className="app-colour">
             <input type="color" className="color-swatch" aria-label="底色" value={/^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor) ? settings.backgroundColor : "#7a2e0e"}
               onChange={(e) => colour(e.target.value.toUpperCase(), true)} />
@@ -280,14 +279,14 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
             {recommended && colourSet && recommended.toLowerCase() !== settings.backgroundColor.toLowerCase() && (
               <button type="button" className="text-button" onClick={() => colour(recommended, false)}>用推荐色</button>
             )}
+            {!apart && <button type="button" className="text-button app-look-link" onClick={() => setApart(true)}>消息里用别的名字</button>}
           </div>
         </div>
       </div>
-      <div className="avatar-picker">
-        <div className="avatar-grid" aria-label="ember 头像">{(buddyList ?? []).map((a) => tile(a, false))}</div>
-        <div className="avatar-grid" aria-label="模型厂商">{MAKERS.map((a) => tile(a, true))}</div>
+      <div className="avatar-picker" aria-label="头像">
+        {(buddyList ?? []).map((a) => tile(a, false))}
+        {MAKERS.map((a) => tile(a, true))}
       </div>
-      <input id="app-desc" className="input app-desc" aria-label="简介" maxLength={140} placeholder="简介，显示在 app 资料卡上" value={settings.description} onChange={(e) => set("description", e.target.value)} />
       <details className="app-perms">
         <summary>权限 · 开了 {on} / {Object.keys(GROUPS).length} 项</summary>
         <div className="switch-list">
