@@ -1095,3 +1095,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .quote-card:not(:has(.quote-card-comment)) .quote-card-source { padding-bottom: 7px; }
 .composer-quote .quote-card { max-width: none; }
 .composer-quote .quote-card-source { padding-right: 30px; }
+
+/* The quoted passage, highlighted where it was said after following a quote. */
+::highlight(quote-flash) { background-color: color-mix(in oklch, var(--accent) 28%, transparent); color: inherit; }
+:root[data-quote-flash="fading"] ::highlight(quote-flash) { background-color: color-mix(in oklch, var(--accent) 12%, transparent); }

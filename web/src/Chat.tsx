@@ -179,11 +179,19 @@ function MessageAvatar({ message, name, runtime, model }: { message: ChatMessage
  */
 function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
   if (!quotes?.length) return null;
-  const jump = (ts: string | undefined) => {
+  const jump = (ts: string | undefined, text: string) => {
     const target = ts ? document.querySelector<HTMLElement>(`.chat-list [data-ts="${ts}"]`) : null;
     if (!target) return;
     // A reader's move: the pane lets it take the position.
     target.closest(".chat-list")?.dispatchEvent(new WheelEvent("wheel"));
+    const range = findText(target, text);
+    if (range && "highlights" in CSS) {
+      const rect = range.getBoundingClientRect();
+      const pane = target.closest<HTMLElement>(".chat-list");
+      if (pane) pane.scrollTop += rect.top + rect.height / 2 - (pane.getBoundingClientRect().top + pane.clientHeight / 2);
+      flashRange(range);
+      return;
+    }
     target.scrollIntoView({ block: "center" });
     target.classList.remove("msg-flash");
     void target.offsetWidth;
@@ -191,7 +199,7 @@ function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
   };
   return (
     <div className="quote-cards">
-      {quotes.map((q, i) => <QuoteCard key={i} quote={q} onJump={q.ts ? () => jump(q.ts) : undefined} />)}
+      {quotes.map((q, i) => <QuoteCard key={i} quote={q} onJump={q.ts ? () => jump(q.ts, q.text) : undefined} />)}
     </div>
   );
 }
@@ -573,4 +581,45 @@ function Elapsed({ since }: { since: number }) {
   }, []);
   const s = Math.max(0, Math.floor((now - since) / 1000));
   return <>{s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`}</>;
+}
+
+/** The quoted passage inside a message, as a range over its text nodes (whitespace-insensitive), or null. */
+function findText(root: Element, wanted: string): Range | null {
+  const nodes: Text[] = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
+  // Collapse whitespace on both sides, keeping a map from the collapsed text back to node offsets.
+  let flat = "";
+  const map: { node: Text; offset: number }[] = [];
+  for (const node of nodes) {
+    const t = node.data;
+    for (let i = 0; i < t.length; i++) {
+      const c = /\s/.test(t[i]!) ? " " : t[i]!;
+      if (c === " " && flat.endsWith(" ")) continue;
+      flat += c;
+      map.push({ node, offset: i });
+    }
+  }
+  const needle = wanted.replace(/\s+/g, " ").trim();
+  const at = needle ? flat.indexOf(needle) : -1;
+  if (at < 0) return null;
+  const start = map[at]!, end = map[at + needle.length - 1]!;
+  const range = document.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset + 1);
+  return range;
+}
+
+let flashTimer: ReturnType<typeof setTimeout> | undefined;
+/** Highlights a range for a moment (CSS custom highlights; the style fades via the ::highlight rule). */
+function flashRange(range: Range): void {
+  const highlights = (CSS as unknown as { highlights: Map<string, unknown> }).highlights;
+  const Highlight = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
+  highlights.set("quote-flash", new Highlight(range));
+  document.documentElement.dataset.quoteFlash = "on";
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { document.documentElement.dataset.quoteFlash = "fading"; }, 1600);
+  setTimeout(() => {
+    if (document.documentElement.dataset.quoteFlash === "fading") { highlights.delete("quote-flash"); delete document.documentElement.dataset.quoteFlash; }
+  }, 2600);
 }
