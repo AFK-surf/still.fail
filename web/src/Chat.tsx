@@ -150,6 +150,18 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
               </div>
             )];
           }
+          // What ember itself says (a limit hit, a failure): a notice across the chat, not someone's message.
+          if (m.system) {
+            return [line, (
+              <div key={m.seq} className="msg msg-system" data-ts={m.ts} data-role="system" data-enter={enter} role="note">
+                <div className="msg-system-box">
+                  <Mark size={14} />
+                  <div className="markdown"><Prose>{m.text}</Prose></div>
+                  <Time className="msg-time" at={m.createdAt} />
+                </div>
+              </div>
+            )];
+          }
           const agent = m.authorKind === "agent" ? agentOf(m.author) : undefined;
           const who = m.authorKind === "agent" ? agent?.who ?? m.authorName ?? "agent" : m.authorKind === "ember" ? "ember" : name(m);
           return [line, (

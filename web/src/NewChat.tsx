@@ -7,7 +7,7 @@ import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useStations, type RuntimeKind, type StationView } from "./api.ts";
 import { Composer } from "./Chat.tsx";
-import { EFFORTS, EFFORT_LABEL, RUNTIME_LABEL } from "./format.ts";
+import { EFFORTS, EFFORT_LABEL, RUNTIME_LABEL, timeUntil } from "./format.ts";
 import { StationContext, stationBase, type Station } from "./station.tsx";
 import { ModelLogo, RuntimeLogo } from "./ui.tsx";
 import { Illustration } from "./brand.tsx";
@@ -120,6 +120,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         {view.models.map((m) => (
           <Item key={m.model} checked={model === m.model} onSelect={() => pick({ model: m.model, ...(m.runtimes.includes(runtime!) ? {} : { runtime: m.runtimes[0], effort: "" }) })}>
             <ModelLogo model={m.model} runtime={m.runtimes[0]!} size={12} />{m.model}
+            {m.spent && <span className="chooser-note">额度用完{m.spent.until ? ` · ${timeUntil(m.spent.until)}恢复` : ""}</span>}
           </Item>
         ))}
       </Chooser>
@@ -148,6 +149,12 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         {!view.overview ? <p className="muted">正在读取 {station.name} 的 Profile…</p>
           : profiles.length === 0 ? <p className="field-error">这台 station 还没有 Profile，先到 <Link className="inline-link" to={`${station.base}/settings/accounts`}>设置 → Profile</Link> 里加一个。</p>
           : !runtimes.length && <p className="field-error">这台 station 的 Profile 都还没有启用模型。到 <Link className="inline-link" to={`${station.base}/settings/accounts`}>设置 → Profile</Link> 里勾选可以用的模型。</p>}
+        {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
+        {entry?.spent && (
+          <p className="spent-notice" role="status">
+            {entry.model} 能用的账号额度都用完了{entry.spent.until ? `，${timeUntil(entry.spent.until)}恢复` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。
+          </p>
+        )}
         <Composer thread={null} sessionKey={null} ensureChat={ensureChat} placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
           onSent={() => { void made.current?.then(({ key }) => onCreated(station.address, key)); }} />
         {making && <p className="muted new-chat-making">正在 {station.name} 上创建会话…</p>}

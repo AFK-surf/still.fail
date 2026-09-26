@@ -60,7 +60,7 @@ export interface StationView {
   /** Runtimes with an enabled model, and those models. */
   runtimes: { runtime: RuntimeKind; models: string[] }[];
   /** The models it can run, each with the runtimes it runs on (the core's). */
-  models: { model: string; runtimes: RuntimeKind[] }[];
+  models: { model: string; runtimes: RuntimeKind[]; spent: { until: number | null } | null }[];
 }
 
 export interface ConnectsView { items: { station: string; stationName: string; connect: ConnectView }[]; loading: boolean }
@@ -88,7 +88,8 @@ export interface ChatView {
   people: Creator[];
   agents: ChatAgentView[];
   /** Each says whose it is (`mine`: the viewer's), as the core decides. */
-  messages: (MessageView & { mine: boolean })[];
+  /** `system`: said by ember itself (a limit hit, a failure), shown as a notice. */
+  messages: (MessageView & { mine: boolean; system: boolean })[];
   more: boolean;
   outbox: OutboxMessage[];
   link: LinkView;

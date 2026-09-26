@@ -651,6 +651,17 @@
 .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-sm); animation: appear 0s linear 400ms both; }
 .loading-fill { flex: 1; min-height: 100%; justify-content: center; }
 .gate .loading { justify-content: center; }
+/* What ember itself says in a chat: a notice across it, apart from people's and agents' messages. */
+.msg-system { display: flex; justify-content: center; }
+.msg-system-box { display: flex; align-items: flex-start; gap: 8px; max-width: min(560px, 100%); padding: 8px 12px; border-radius: 12px; background: color-mix(in oklch, var(--amber) 10%, var(--canvas)); border: 1px solid color-mix(in oklch, var(--amber) 22%, transparent); font-size: var(--text-sm); color: var(--text); }
+.msg-system-box > img { flex: none; margin-top: 2px; }
+.msg-system-box .markdown { min-width: 0; }
+.msg-system-box .markdown > :first-child { margin-top: 0; }
+.msg-system-box .markdown > :last-child { margin-bottom: 0; }
+.msg-system-box .msg-time { flex: none; margin-top: 1px; }
+/* A model chosen though its accounts' quota is used up: said, not refused. */
+.chooser-note { margin-left: auto; padding-left: 12px; font-size: var(--text-xs); color: var(--amber); }
+.spent-notice { margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; background: color-mix(in oklch, var(--amber) 12%, transparent); color: var(--text); font-size: var(--text-sm); }
 /* A profile's enabled models, as chips. */
 .model-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .model-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--hover); font-size: var(--text-sm); }
