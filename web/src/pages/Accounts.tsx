@@ -415,10 +415,12 @@ function QuotaSection({ profile }: { profile: ProfileView }) {
  * only to a profile that has its model enabled.
  */
 function ModelPool({ profile, found, onSave }: { profile: ProfileView; found: string[] | null; onSave(models: string[]): void }) {
-  const [enabled, setEnabled] = useState(() => new Set(profile.models));
+  // A station from before model pools sends no list.
+  const own = profile.models ?? [];
+  const [enabled, setEnabled] = useState(() => new Set(own));
   const [filter, setFilter] = useState("");
-  useEffect(() => setEnabled(new Set(profile.models)), [profile.models.join("\n")]);
-  const all = [...new Set([...(found ?? []), ...profile.models])].sort();
+  useEffect(() => setEnabled(new Set(own)), [own.join("\n")]);
+  const all = [...new Set([...(found ?? []), ...own])].sort();
   const shown = all.filter((m) => m.toLowerCase().includes(filter.trim().toLowerCase()));
   const commit = (next: Set<string>) => {
     setEnabled(next);

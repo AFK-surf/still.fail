@@ -351,7 +351,7 @@ function BindSection({ connect, overview }: { connect: ConnectView; overview: Ov
           </Field>
         </div>
         <div className="field-grid">
-          <Field label="模型" htmlFor="bind-model" hint={chosen?.models.length ? `这个 Profile 启用了 ${chosen.models.length} 个模型。` : "在「Profile」页面勾选模型后，这里才能选。"}>
+          <Field label="模型" htmlFor="bind-model" hint={chosen?.models?.length ? `这个 Profile 启用了 ${chosen.models.length} 个模型。` : "在「Profile」页面勾选模型后，这里才能选。"}>
             <ModelPicker id="bind-model" account={chosen} value={model} onChange={setModel} />
           </Field>
           <Field label="思考深度" htmlFor="bind-effort">
