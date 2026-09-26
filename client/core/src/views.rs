@@ -359,40 +359,43 @@ impl Views {
         let mut rows = Vec::new();
         let mut loading = false;
         for s in &stations {
+            // What was read from it shows whatever its state: an offline station's chats are still there to read (the
+            // data center kept them), only not to write to.
+            let read = self.store.value(&Topic::ChatRows { station: s.address.clone() });
+            if let Some(Ok(list)) = &read {
+                let slack_users: Vec<String> = self.ok(Topic::Overview { station: s.address.clone() })
+                    .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
+                    .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
+                for row in list.as_array().into_iter().flatten() {
+                    if mine && row.get("mine").and_then(Value::as_bool) != Some(true) {
+                        continue;
+                    }
+                    let mut row = row.clone();
+                    row["station"] = json!(s.address);
+                    row["stationName"] = json!(s.name);
+                    // What the clients draw of it, decided here (present.rs).
+                    let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+                    row["state"] = json!(crate::present::row_state(&agents));
+                    if let Some(by) = crate::present::last_by(&row, &me, &slack_users, &members) {
+                        row["last"]["by"] = by;
+                    }
+                    rows.push(row);
+                }
+            }
             let (state, message) = if !s.online {
                 ("offline", Value::Null)
             } else {
                 let link = self.link(&s.address, true);
                 let link_state = link["state"].as_str().unwrap_or("connecting");
                 let link_message = link["message"].clone();
-                match self.store.value(&Topic::ChatRows { station: s.address.clone() }) {
+                match read {
                     Some(Err(error)) => ("error", json!(error.message)),
-                    Some(Ok(list)) => {
-                        let slack_users: Vec<String> = self.ok(Topic::Overview { station: s.address.clone() })
-                            .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
-                            .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
-                        for row in list.as_array().into_iter().flatten() {
-                            if mine && row.get("mine").and_then(Value::as_bool) != Some(true) {
-                                continue;
-                            }
-                            let mut row = row.clone();
-                            row["station"] = json!(s.address);
-                            row["stationName"] = json!(s.name);
-                            // What the clients draw of it, decided here (present.rs).
-                            let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
-                            row["state"] = json!(crate::present::row_state(&agents));
-                            if let Some(by) = crate::present::last_by(&row, &me, &slack_users, &members) {
-                                row["last"]["by"] = by;
-                            }
-                            rows.push(row);
-                        }
-                        // Rows already read stay in view while the link comes back.
-                        match link_state {
-                            "error" => ("error", link_message),
-                            "offline" => ("connecting", link_message),
-                            _ => ("online", Value::Null),
-                        }
-                    }
+                    // Rows already read stay in view while the link comes back.
+                    Some(Ok(_)) => match link_state {
+                        "error" => ("error", link_message),
+                        "offline" => ("connecting", link_message),
+                        _ => ("online", Value::Null),
+                    },
                     None => {
                         loading = true;
                         if link_state == "error" { ("error", link_message) } else { ("connecting", Value::Null) }
@@ -946,6 +949,14 @@ mod tests {
             // What clients draw of it is the core's: its state (none: its agent is idle).
             shown["state"] = Value::Null;
             assert_eq!(items[2], shown);
+
+            // An offline station's chats, as they were kept, are still listed; the station says it is offline.
+            t.set(rows("ws/c"), json!([row("9", now - 500.0)]));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().unwrap();
+            assert_eq!(ids(&v), vec!["9", "1", "1", "s1"]);
+            assert_eq!(v["stations"][2]["state"], "offline");
+            t.store.set(&rows("ws/c"), Ok(json!([])));
 
             // One station failing shows as that station's state; the other's rows stay.
             t.store.set(&rows("ws/a"), Err(CoreError::new("http_500", "坏了")));
