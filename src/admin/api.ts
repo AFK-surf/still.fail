@@ -6,12 +6,12 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import type { EventEmitter } from "node:events";
-import { createReadStream, createWriteStream, existsSync, mkdirSync, renameSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, extname, join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Connections } from "../connections.ts";
-import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from "../config.ts";
+import { RUNTIMES, type ConnectMode, type RawConfig, type RawConnect, type RawProfile, type RuntimeKind } from "../config.ts";
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
 import type { MeshStatus } from "../mesh.ts";
@@ -26,7 +26,7 @@ import { log } from "../log.ts";
 import { parseTraceparent, route, serverSpan } from "../tracing.ts";
 import type { Settings } from "../settings.ts";
 import type { Store } from "../store.ts";
-import { checkProfile, loginCommand, type ProfileCheck } from "../profiles.ts";
+import { ACCESS_KINDS, checkProfile, KEYED, loginCommand, type AccessKind, type ProfileCheck } from "../profiles.ts";
 import { AccessDenied, AccessGate, viewerId, viewerName, type Viewer } from "./access.ts";
 import { verifySlackTokens } from "../chat/slack.ts";
 import { createAppUrl, slackManifest } from "./slack-manifest.ts";
@@ -182,6 +182,7 @@ export class AdminApi {
     );
     // A finished sign-in changes what the profile can do; check it again right away.
     deps.logins.changes.on("change", (id: string) => {
+      if (this.#pending.has(id)) this.#pendingChanged(id, this.#pending.get(id)!.by);
       this.#overviewChanged();
       if (deps.logins.get(id)?.state === "done") void this.#check(id).catch((error) => log.warn("check after login failed", { profile: id, error }));
     });
@@ -437,6 +438,8 @@ export class AdminApi {
       await this.#deps.connections.reconcile(this.#deps.settings.config);
       return send(res, 200, { ok: true });
     }
+    // A new keyed profile: made only once its key is checked and works.
+    if (method === "POST" && path === "/profiles") return send(res, 200, await this.#newKeyedProfile(await body(req), viewer));
     if (resource === "profiles" && id && !action && method === "PUT") {
       const overview = this.#putProfile(id, await body(req), viewer);
       this.#check(id).catch((error) => log.warn("profile check failed", { profile: id, error })); // report the new state once known
@@ -444,6 +447,22 @@ export class AdminApi {
     }
     if (resource === "profiles" && id && action === "check" && method === "POST") return send(res, 200, await this.#check(id));
     if (resource === "profiles" && id && action === "quota" && method === "POST") return send(res, 200, await this.#refreshQuota(id));
+    // Signing in a subscription before there is a profile: the profile is made once the sign-in succeeds.
+    if (method === "POST" && path === "/logins") return send(res, 200, this.#newLogin(await body(req), viewer));
+    if (resource === "logins" && id && this.#pending.has(id)) {
+      if (!action && method === "DELETE") {
+        this.#dropLogin(id);
+        return send(res, 200, { ok: true });
+      }
+      if (action === "code" && method === "POST") {
+        const input = await body(req);
+        try {
+          return send(res, 200, { job: this.#deps.logins.submitCode(id, String(input.code ?? "")) });
+        } catch (error) {
+          throw new HttpError(400, error instanceof Error ? error.message : String(error));
+        }
+      }
+    }
     if (resource === "profiles" && id && action === "login") {
       const profile = this.#deps.settings.config.profiles.find((p) => p.id === id);
       if (!profile) throw new HttpError(404, `unknown profile ${id}`);
@@ -585,6 +604,92 @@ export class AdminApi {
     return { permissionsUpdated, iconError, links: slackAppLinks(appId) };
   }
 
+  /** Sign-ins with no profile yet, by id: their runtime, their home while signing in, who started them, what they made. */
+  readonly #pending = new Map<string, { runtime: RuntimeKind; home: string; by: Viewer; created: string | null }>();
+
+  #newLogin(input: Record<string, any>, viewer: Viewer) {
+    const runtime = input.runtime as RuntimeKind;
+    if (!RUNTIMES.includes(runtime)) throw new HttpError(400, `unknown runtime ${String(input.runtime)}`);
+    const id = `login-${randomBytes(4).toString("hex")}`;
+    const home = join(this.#deps.settings.config.dataDir, "homes", id);
+    this.#pending.set(id, { runtime, home, by: viewer, created: null });
+    const profile = { id, name: id, runtime, access: { kind: "subscription" }, home } as unknown as Profile;
+    log.info("sign-in for a new profile started", { login: id, runtime, by: viewerId(viewer) });
+    return { id, job: this.#deps.logins.start(profile) };
+  }
+
+  /** A sign-in for a new profile moved on: once it succeeds the profile is made, named by the account signed in. */
+  #pendingChanged(id: string, viewer: Viewer): void {
+    const pending = this.#pending.get(id)!;
+    const job = this.#deps.logins.get(id);
+    if (job?.state === "failed" || job?.state === "cancelled") {
+      void rm(pending.home, { recursive: true, force: true });
+      return;
+    }
+    if (job?.state !== "done" || pending.created) return;
+    const email = accountEmail(pending.runtime, pending.home);
+    const taken = new Set(this.#deps.settings.config.profiles.map((p) => p.id));
+    const base = (email ?? `${pending.runtime}-subscription`).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || pending.runtime;
+    let profileId = base;
+    for (let n = 2; taken.has(profileId); n++) profileId = `${base}-${n}`;
+    const home = join(this.#deps.settings.config.dataDir, "homes", profileId);
+    try {
+      renameSync(pending.home, home);
+    } catch (error) {
+      log.warn("could not move a new profile's home", { login: id, error });
+      return;
+    }
+    const name = email ?? (pending.runtime === "claude" ? "Claude 订阅" : "ChatGPT 订阅");
+    this.#save(viewer, `profile ${profileId} from a sign-in`, (raw) => ({
+      ...raw,
+      profiles: [...(raw.profiles ?? []), { id: profileId, name, runtime: pending.runtime, access: { kind: "subscription" }, home: `homes/${profileId}`, env: {} }],
+    }));
+    pending.created = profileId;
+    void this.#check(profileId).catch((error) => log.warn("check after sign-in failed", { profile: profileId, error }));
+    // Kept a while for the page that started it to follow it to the profile.
+    setTimeout(() => this.#dropLogin(id), 15 * 60_000).unref();
+  }
+
+  async #newKeyedProfile(input: Record<string, any>, viewer: Viewer) {
+    const runtime = input.runtime as RuntimeKind;
+    if (!RUNTIMES.includes(runtime)) throw new HttpError(400, `unknown runtime ${String(input.runtime)}`);
+    const kind = String(input.access?.kind ?? "") as AccessKind;
+    if (!ACCESS_KINDS[runtime].includes(kind) || kind === "subscription") throw new HttpError(400, kind === "subscription" ? "订阅账号用登录来添加" : `unknown access ${kind}`);
+    const key = String(input.access?.key ?? "").trim();
+    if (KEYED.has(kind) && !key) throw new HttpError(400, "要填 key");
+    const trial = join(this.#deps.settings.config.dataDir, "homes", `new-${randomBytes(4).toString("hex")}`);
+    await mkdir(trial, { recursive: true });
+    const check = await (this.#deps.checkProfile ?? checkProfile)({ runtime, kind, key, home: trial, env: process.env });
+    if (check.state !== "ok" && KEYED.has(kind)) {
+      await rm(trial, { recursive: true, force: true });
+      throw new HttpError(400, `验证没通过：${check.detail}`);
+    }
+    const label = { "opencode-go": "OpenCode Go", "anthropic-api": "Anthropic API", env: "环境变量" }[kind as string] ?? kind;
+    const taken = new Set(this.#deps.settings.config.profiles.map((p) => p.id));
+    const base = `${runtime}-${kind}`;
+    let id = base;
+    for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+    const home = join(this.#deps.settings.config.dataDir, "homes", id);
+    renameSync(trial, home);
+    const overview = this.#save(viewer, `profile ${id}`, (raw) => ({
+      ...raw,
+      profiles: [...(raw.profiles ?? []), { id, name: `${runtime === "claude" ? "Claude" : "Codex"} · ${label}`, runtime, access: { kind, ...(key ? { key } : {}) }, home: `homes/${id}`, env: {} }],
+    }));
+    this.#checks.set(id, check);
+    this.#deps.store.setProfileCheck(id, check);
+    this.#overviewChanged();
+    return { id, overview };
+  }
+
+  #dropLogin(id: string): void {
+    const pending = this.#pending.get(id);
+    if (!pending) return;
+    this.#pending.delete(id);
+    this.#deps.logins.cancel(id);
+    if (!pending.created) void rm(pending.home, { recursive: true, force: true });
+    this.#overviewChanged();
+  }
+
   async #makeSlackApp(input: Record<string, any>) {
     if (!this.#deps.settings.config.slackConfigToken) throw new HttpError(400, "还没有设置 Slack 的 App 配置 token");
     const name = typeof input.name === "string" && input.name.trim() ? input.name.trim() : "ember";
@@ -675,6 +780,8 @@ export class AdminApi {
       slackUsers: this.#deps.store.slackIdentities(viewerId(viewer)),
       // Whether ember can make and edit Slack apps itself (the workspace's app configuration token).
       slackConfig: this.#configTokenView(),
+      // Sign-ins that will make a profile when they succeed (POST /logins), with the profile they made once they did.
+      logins: [...this.#pending].map(([id, p]) => ({ id, runtime: p.runtime, job: this.#deps.logins.get(id), created: p.created })),
     };
   }
 
@@ -1266,6 +1373,27 @@ export class AdminApi {
       return { ...raw, profiles: (raw.profiles ?? []).filter((p) => p.id !== id) };
     });
   }
+}
+
+/** The account a subscription home is signed in as, when its files say: Codex's id token, Claude's account record. */
+function accountEmail(runtime: RuntimeKind, home: string): string | null {
+  try {
+    if (runtime === "codex") {
+      const auth = JSON.parse(readFileSync(join(home, "auth.json"), "utf8")) as { tokens?: { id_token?: string } };
+      const payload = auth.tokens?.id_token?.split(".")[1];
+      if (!payload) return null;
+      const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, any>;
+      return claims.email ?? claims["https://api.openai.com/profile"]?.email ?? null;
+    }
+    for (const file of [join(home, ".claude.json"), join(home, "claude.json")]) {
+      if (!existsSync(file)) continue;
+      const config = JSON.parse(readFileSync(file, "utf8")) as { oauthAccount?: { emailAddress?: string } };
+      if (config.oauthAccount?.emailAddress) return config.oauthAccount.emailAddress;
+    }
+  } catch {
+    // Unreadable: the profile is named by its kind instead.
+  }
+  return null;
 }
 
 /** A profile leaving its runtime (deleted, or moved to another): refused when it is the last one of a runtime that connects run. */
