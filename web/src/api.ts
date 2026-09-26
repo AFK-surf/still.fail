@@ -267,7 +267,7 @@ export function stationApi(t: StationCall) {
     /** A new Slack connect from its tokens: the station names it as its bot is named in Slack. */
     createConnect: (input: ConnectInput) => request<{ id: string; overview: Overview }>("POST", "/connects", input),
     /** How a session runs from its next turn on: its profile, model, effort (null: the runtime's default). */
-    sessionSettings: (key: string, input: { profile?: string; model?: string | null; effort?: string | null }) => request<{ ok: true }>("POST", `/sessions/${at(key)}/settings`, input),
+    sessionSettings: (key: string, input: { profile?: string | null; model?: string | null; effort?: string | null }) => request<{ ok: true }>("POST", `/sessions/${at(key)}/settings`, input),
     putConfigToken: (refreshToken: string) => request<{ configured: boolean; teamId: string | null }>("PUT", "/slack/config-token", { refreshToken }),
     deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${at(id)}`),
     /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */
