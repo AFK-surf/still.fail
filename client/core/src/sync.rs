@@ -109,3 +109,55 @@ impl Sync {
         }.boxed_local());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::CoreError;
+    use crate::store::Source;
+    use crate::testing::{FakeHost, run};
+    use serde_json::json;
+
+    #[derive(Default)]
+    struct Started(RefCell<Vec<Topic>>);
+
+    impl Source for Started {
+        fn start(&self, topic: &Topic) {
+            self.0.borrow_mut().push(topic.clone());
+        }
+        fn stop(&self, _topic: &Topic) {}
+        fn compute(&self, _topic: &Topic) -> Option<Result<Value, CoreError>> {
+            None
+        }
+    }
+
+    #[test]
+    fn the_core_keeps_its_workspaces_stations_and_agents_at_work_with_nobody_looking() {
+        run(async {
+            let host = FakeHost::new();
+            let store = Store::new(host.clone());
+            let started = Rc::new(Started::default());
+            store.set_source(started.clone());
+            let sync = Sync::new(store.clone(), host.clone());
+            sync.start();
+            host.settle().await;
+            assert_eq!(started.0.borrow().as_slice(), &[Topic::Workspaces]);
+            store.set(&Topic::Workspaces, Ok(json!([{ "workspaces": [{ "id": "ws" }] }])));
+            host.settle().await;
+            let ws = Topic::Workspace { workspace: "ws".into() };
+            assert!(started.0.borrow().contains(&ws));
+            store.set(&ws, Ok(json!({ "id": "ws", "stations": [{ "id": "st", "online": true }] })));
+            host.settle().await;
+            let rows = Topic::ChatRows { station: "ws/st".into() };
+            for topic in [rows.clone(), Topic::Link { station: "ws/st".into() }, Topic::Overview { station: "ws/st".into() }, Topic::Sessions { station: "ws/st".into() }, Topic::Threads { station: "ws/st".into() }] {
+                assert!(started.0.borrow().contains(&topic), "{topic:?}");
+            }
+            // An agent at work: its live state is kept too.
+            store.set(&rows, Ok(json!([{ "agents": [{ "key": "k", "process": "running" }, { "key": "idle", "process": "warm" }] }])));
+            host.settle().await;
+            let live = |key: &str| Topic::Live { station: "ws/st".into(), key: key.into() };
+            assert!(started.0.borrow().contains(&live("k")));
+            assert!(!started.0.borrow().contains(&live("idle")));
+        });
+    }
+}
