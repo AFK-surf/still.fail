@@ -80,3 +80,23 @@ test("codex code mode: the tool calls in an exec script are its steps, read as d
   assert.deepEqual(scriptCalls("await tools.mcp__ember__chat_post(build())"), { calls: [], only: false });
   assert.deepEqual(scriptCalls("await tools.x({a:`${secret}`})").calls, []);
 });
+
+test("a transcript leaves out its agent's posts (the station keeps them), directly or in a Codex script, and weaves them back by time", async () => {
+  const { TranscriptTail } = await import("../src/transcript.ts");
+  const dir = mkdtempSync(join(tmpdir(), "ember-posts-"));
+  const path = join(dir, "rollout.jsonl");
+  const line = (payload: object, timestamp: string) => JSON.stringify({ type: "response_item", timestamp, payload });
+  writeFileSync(path, [
+    line({ type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] }, "2026-09-27T00:00:00.000Z"),
+    line({ type: "custom_tool_call", name: "exec", call_id: "c1", input: 'text(await tools.mcp__ember__chat_post({to:"EMBER/1",text:"hello",kind:"final"}));' }, "2026-09-27T00:00:02.000Z"),
+    line({ type: "custom_tool_call_output", call_id: "c1", output: [{ type: "input_text", text: "Script completed" }] }, "2026-09-27T00:00:03.000Z"),
+    line({ type: "function_call", name: "mcp__ember__chat_post", call_id: "c2", arguments: "{}" }, "2026-09-27T00:00:04.000Z"),
+    line({ type: "function_call_output", call_id: "c2", output: "Posted" }, "2026-09-27T00:00:05.000Z"),
+    line({ type: "message", role: "assistant", content: [{ type: "output_text", text: "done" }] }, "2026-09-27T00:00:06.000Z"),
+  ].join("\n") + "\n");
+  const tail = new TranscriptTail("codex", path);
+  tail.read();
+  assert.deepEqual(tail.entries.map((e) => e.kind), ["user", "assistant"], "the posting calls and their outputs are left out");
+  tail.weave([{ at: "2026-09-27T00:00:02.500Z", kind: "tool_call", tool: "mcp__ember__chat_post", text: "{}", callId: "post:1:1" }]);
+  assert.deepEqual(tail.entries.map((e) => e.kind), ["user", "tool_call", "assistant"], "woven in by time");
+});

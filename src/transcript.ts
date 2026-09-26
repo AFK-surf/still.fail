@@ -62,7 +62,13 @@ function toText(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-function claudeTimeline(records: Record<string, any>[]): TimelineEntry[] {
+/** Posting a message: the station keeps what an agent posted (its messages), so a transcript's copies of the calls are left out. */
+export const POSTING = /^mcp__ember__chat_post$/;
+
+/** What reading a transcript keeps between reads: the calls left out (their results follow later), and calls taken out of a script. */
+interface ReadState { skip: Set<string>; inner: Map<string, number> }
+
+function claudeTimeline(records: Record<string, any>[], state: ReadState): TimelineEntry[] {
   const out: TimelineEntry[] = [];
   for (const r of records) {
     if ((r.type !== "user" && r.type !== "assistant") || r.isMeta) continue;
@@ -77,8 +83,10 @@ function claudeTimeline(records: Record<string, any>[]): TimelineEntry[] {
       if (block.type === "text" && block.text) out.push({ ...base, kind: r.type, text: clip(block.text) });
       else if (block.type === "thinking" && block.thinking) out.push({ ...base, kind: "thinking", text: clip(block.thinking) });
       else if (block.type === "tool_use") {
+        if (POSTING.test(String(block.name))) { if (block.id) state.skip.add(String(block.id)); continue; }
         out.push({ ...base, kind: "tool_call", tool: String(block.name), text: clip(JSON.stringify(block.input, null, 2)), ...(block.id ? { callId: String(block.id) } : {}) });
       } else if (block.type === "tool_result") {
+        if (block.tool_use_id && state.skip.has(String(block.tool_use_id))) continue;
         out.push({ ...base, kind: "tool_result", ok: !block.is_error, text: clip(toText(block.content)), ...(block.tool_use_id ? { callId: String(block.tool_use_id) } : {}) });
       }
     }
@@ -89,9 +97,8 @@ function claudeTimeline(records: Record<string, any>[]): TimelineEntry[] {
 /** Codex prepends context it generated itself as user messages; they are not what anyone said. */
 const INJECTED = /^\s*<(environment_context|user_instructions|permissions|skills_instructions|collaboration_mode)\b/;
 
-function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
-  // Calls taken out of a script that does more than call them: they are done when the script is.
-  const inner = new Map<string, number>();
+function codexTimeline(records: Record<string, any>[], state: ReadState): TimelineEntry[] {
+  const { skip, inner } = state;
   const out: TimelineEntry[] = [];
   for (const r of records) {
     if (r.type !== "response_item") continue;
@@ -105,18 +112,23 @@ function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
       const text = toText(p.content?.length ? p.content : p.summary ?? []);
       if (text.trim()) out.push({ at, kind: "thinking", text: clip(text) });
     } else if (p.type === "custom_tool_call" && p.name === "exec") {
-      // Codex's code mode: the model calls tools from a script. The calls in it are the steps; the script itself is
-      // one only when it does more than call them.
+      // Codex's code mode: the model calls tools from a script. The calls in it are the steps (posts are the station's
+      // own record); the script itself is one only when it does more than call them.
       const script = String(p.input ?? "");
+      const id = p.call_id ? String(p.call_id) : null;
       const { calls, only } = scriptCalls(script);
-      if (!only) out.push({ at, kind: "tool_call", tool: "exec", text: clip(script), ...(p.call_id ? { callId: String(p.call_id) } : {}) });
-      if (!only && p.call_id && calls.length) inner.set(String(p.call_id), calls.length);
-      calls.forEach((c, i) => out.push({
+      const others = calls.filter((c) => !POSTING.test(c.tool));
+      if (only && others.length === 0) { if (id) skip.add(id); continue; }
+      if (!only) out.push({ at, kind: "tool_call", tool: "exec", text: clip(script), ...(id ? { callId: id } : {}) });
+      others.forEach((c, i) => out.push({
         at, kind: "tool_call", tool: c.tool, text: clip(JSON.stringify(c.args, null, 2)),
         // The script's output answers its first call when the script is nothing but calls.
-        ...(p.call_id ? { callId: only && i === 0 ? String(p.call_id) : `${String(p.call_id)}#${i}` } : {}),
+        ...(id ? { callId: only && i === 0 ? id : `${id}#${i}` } : {}),
       }));
+      // Calls taken out of a script that does more: they are done when the script is.
+      if (!only && id && others.length) inner.set(id, others.length);
     } else if (p.type === "function_call" || p.type === "custom_tool_call") {
+      if (POSTING.test(String(p.name))) { if (p.call_id) skip.add(String(p.call_id)); continue; }
       let args: string = String(p.arguments ?? p.input ?? "");
       try {
         args = JSON.stringify(JSON.parse(args), null, 2);
@@ -125,6 +137,7 @@ function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
       }
       out.push({ at, kind: "tool_call", tool: String(p.name), text: clip(args), ...(p.call_id ? { callId: String(p.call_id) } : {}) });
     } else if (p.type === "function_call_output" || p.type === "custom_tool_call_output") {
+      if (p.call_id && skip.has(String(p.call_id))) continue;
       const text = toText(p.output);
       const failed = /Process exited with code [1-9]/.test(text);
       out.push({ at, kind: "tool_result", ok: !failed, text: clip(text), ...(p.call_id ? { callId: String(p.call_id) } : {}) });
@@ -246,6 +259,7 @@ export class TranscriptTail {
   readonly entries: TimelineEntry[] = [];
   readonly usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
   readonly #seen = new Set<string>();
+  readonly #state: ReadState = { skip: new Set(), inner: new Map() };
 
   constructor(runtime: RuntimeKind, path: string) {
     this.runtime = runtime;
@@ -282,9 +296,35 @@ export class TranscriptTail {
       }
     });
     this.#addUsage(recs);
-    const entries = this.runtime === "claude" ? claudeTimeline(recs) : codexTimeline(recs);
+    const entries = this.runtime === "claude" ? claudeTimeline(recs, this.#state) : codexTimeline(recs, this.#state);
     this.entries.push(...entries);
     return { start, entries };
+  }
+
+  /**
+   * Weaves entries from elsewhere (the station's record of ember's own tool calls) into what was read, by time. For a
+   * tail nobody has been told of yet: it reorders what is there.
+   */
+  weave(entries: TimelineEntry[]): void {
+    if (entries.length === 0) return;
+    const time = (e: TimelineEntry) => (e.at ? Date.parse(e.at) : NaN);
+    const merged: TimelineEntry[] = [];
+    let next = 0;
+    for (const e of this.entries) {
+      const t = time(e);
+      while (next < entries.length && !Number.isNaN(t) && time(entries[next]!) <= t) merged.push(entries[next++]!);
+      merged.push(e);
+    }
+    merged.push(...entries.slice(next));
+    this.entries.length = 0;
+    this.entries.push(...merged);
+  }
+
+  /** Entries from elsewhere that happen now: after all that was read. Returns where they start. */
+  append(entries: TimelineEntry[]): number {
+    const start = this.entries.length;
+    this.entries.push(...entries);
+    return start;
   }
 
   #addUsage(recs: Record<string, any>[]): void {

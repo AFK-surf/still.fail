@@ -64,7 +64,11 @@ export class LiveHub {
   /** Where a session's transcript is, once its runtime has started one. */
   readonly #locate: (key: string) => { runtime: RuntimeKind; path: string } | undefined;
 
-  constructor(locate: (key: string) => { runtime: RuntimeKind; path: string } | undefined) {
+  /** What a session's agent posted, as timeline entries: woven into its transcript's (which leaves its posts out). */
+  readonly #posts: (key: string) => TimelineEntry[];
+
+  constructor(locate: (key: string) => { runtime: RuntimeKind; path: string } | undefined, posts: (key: string) => TimelineEntry[] = () => []) {
+    this.#posts = posts;
     this.#locate = locate;
   }
 
@@ -93,6 +97,14 @@ export class LiveHub {
     this.#soon(key);
     this.#emit(key, { type: "step", event });
     this.#stopped(key);
+  }
+
+  /** The agent posted: its history shows it now, after what was read. */
+  posted(key: string, entries: TimelineEntry[]): void {
+    const watched = this.#watched.get(key);
+    if (!watched) return;
+    const start = watched.tail.append(entries);
+    this.#emit(key, { type: "timeline", start, entries, usage: { ...watched.tail.usage } });
   }
 
   /** The turn is over: whatever was in flight is in the transcript now, or never will be. */
@@ -185,6 +197,7 @@ export class LiveHub {
     if (!where) return undefined;
     const tail = new TranscriptTail(where.runtime, where.path);
     tail.read(); // what is already there counts as known; subscribers ask for what they lack
+    tail.weave(this.#posts(key));
     const watched: Watched = { tail, watcher: null, timer: null };
     try {
       watched.watcher = watch(where.path, () => this.#soon(key));

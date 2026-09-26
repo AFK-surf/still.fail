@@ -27,7 +27,7 @@ import type { AgentDriver } from "./runtime/types.ts";
 import { SessionActor, type DeclaredState } from "./session.ts";
 import { EMBER_SURFACE, slackSurface, writeCompressed, type Attachment, type Quote, type SessionRow, type SessionScope, type Store, type ThreadRow } from "./store.ts";
 import { LiveHub } from "./live.ts";
-import { transcriptPath } from "./transcript.ts";
+import { transcriptPath, type TimelineEntry } from "./transcript.ts";
 import { imageSize } from "./image-size.ts";
 
 /** A multi-session connect's session for one thread. */
@@ -89,7 +89,7 @@ export class Hub {
       const profile = row && this.#config.profiles.find((p) => p.id === row.profile);
       const path = row?.runtimeSessionId && profile ? transcriptPath(row.runtime, profile.home, row.runtimeSessionId) : undefined;
       return path && row ? { runtime: row.runtime, path } : undefined;
-    });
+    }, (key) => postEntries(this.#store.postsBy(key)));
   }
 
   get #config(): Config {
@@ -526,6 +526,8 @@ export class Hub {
           const files = paths.length ? this.#attach(key, paths) : [];
           const ts = await this.#chat(thread.connect).post(thread, text, files);
           this.#store.insertMessage({ thread: thread.id, ts, authorKind: "agent", author: key, text, attachments: files, declared: kind ?? null });
+          const post = this.#store.postsBy(key).at(-1);
+          if (post) this.live.posted(key, postEntries([post]));
           if (kind) this.#actors.get(key)?.declare(kind);
           const where = threadAddress(thread.channel, thread.threadTs);
           return kind ? `Posted to ${where}, and recorded state ${kind}.` : `Posted to ${where}.`;
@@ -646,4 +648,20 @@ export class Hub {
     }
     return actor;
   }
+}
+
+/**
+ * What an agent posted, as its execution history shows a post: the call (to the thread, its text, files and state)
+ * and that it went out. The station's own record of its messages, whatever the runtime wrote of the call.
+ */
+function postEntries(posts: ReturnType<Store["postsBy"]>): TimelineEntry[] {
+  return posts.flatMap((p) => {
+    const at = new Date(p.at).toISOString();
+    const callId = `post:${p.thread}:${p.n}`;
+    const args = { to: threadAddress(p.channel, p.threadTs), text: p.text, ...(p.declared ? { kind: p.declared } : {}), ...(p.attachments.length ? { files: p.attachments.map((a) => a.name) } : {}) };
+    return [
+      { at, kind: "tool_call" as const, tool: "mcp__ember__chat_post", text: JSON.stringify(args, null, 2), callId },
+      { at, kind: "tool_result" as const, ok: true, text: `Posted to ${args.to}.`, callId },
+    ];
+  });
 }

@@ -493,6 +493,16 @@ export class Store {
     this.notify(s.key);
   }
 
+  /** The messages a session's agent posted, in every thread, oldest first: its execution history's record of them. */
+  postsBy(key: string): { thread: number; n: number; channel: string; threadTs: string; text: string; attachments: Attachment[]; declared: string | null; at: number }[] {
+    return (this.#db.prepare(`SELECT e.thread, e.n, t.channel, t.thread_ts, e.text, e.attachments, e.declared, e.at FROM entries e JOIN threads t ON t.id = e.thread
+      WHERE e.kind = 'message' AND e.author_kind = 'agent' AND e.author = ? ORDER BY e.at, e.thread, e.n`).all(key) as Record<string, any>[])
+      .map((r) => ({
+        thread: Number(r.thread), n: Number(r.n), channel: String(r.channel), threadTs: String(r.thread_ts), text: String(r.text ?? ""),
+        attachments: r.attachments ? JSON.parse(String(r.attachments)) as Attachment[] : [], declared: r.declared ? String(r.declared) : null, at: Number(r.at),
+      }));
+  }
+
   /** Moves a session to another profile (its transcripts are shared by its runtime's profiles); `pinned` keeps it there. */
   setSessionProfile(key: string, profile: string, pinned: boolean): void {
     this.#db.prepare("UPDATE sessions SET profile = ?, profile_pinned = ? WHERE key = ?").run(profile, pinned ? 1 : 0, key);
