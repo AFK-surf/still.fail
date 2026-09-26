@@ -1716,9 +1716,6 @@ mod tests {
         value
     }
 
-    fn msg(value: Value) -> String {
-        format!("event: {}\ndata: {}\n\n", value["type"].as_str().unwrap(), value)
-    }
     fn summary(key: &str, turns: u64) -> Value {
         json!({"key": key, "title": null, "archivedAt": null, "turns": turns, "lastTurn": null})
     }
@@ -2319,7 +2316,7 @@ mod tests {
             host.settle().await;
             let push = |v: Value| wire.event("live", with_key("k", v));
             let now = host.now_ms();
-            push(json!({"type": "steps", "steps": [{"id": "s0", "step": "text", "text": "hi", "input": "", "output": "", "startedAt": 1}], "phase": {"phase": "thinking", "elapsedMs": 5000}}));
+            push(json!({"type": "steps", "steps": [{"id": "s0", "step": "text", "input": "", "startedAt": 1}], "phase": {"phase": "thinking", "elapsedMs": 5000}}));
             host.settle().await;
             let v = live_of(&sink, "k");
             assert_eq!(v["steps"][0]["id"], "s0");
@@ -2327,14 +2324,14 @@ mod tests {
             let since = v["phase"]["since"].as_f64().unwrap();
             assert!((since - (now - 5000.0)).abs() < 1000.0, "{since} vs {now}");
             push(json!({"type": "step", "event": {"kind": "start", "id": "t1", "step": "tool", "tool": "Bash", "input": "ls"}}));
-            push(json!({"type": "step", "event": {"kind": "delta", "id": "t1", "field": "output", "text": "a"}}));
-            push(json!({"type": "step", "event": {"kind": "delta", "id": "t1", "field": "output", "text": "b"}}));
             push(json!({"type": "step", "event": {"kind": "end", "id": "t1"}}));
             push(json!({"type": "step", "event": {"kind": "phase", "phase": "responding"}}));
             host.settle().await;
             let v = live_of(&sink, "k");
             let t1 = &v["steps"][1];
-            assert_eq!((t1["tool"].as_str(), t1["input"].as_str(), t1["output"].as_str(), t1["ended"].as_bool()), (Some("Bash"), Some("ls"), Some("ab"), Some(true)));
+            // What it is, not what it wrote: the station tells turning points only.
+            assert_eq!((t1["tool"].as_str(), t1["input"].as_str(), t1["ended"].as_bool()), (Some("Bash"), Some("ls"), Some(true)));
+            assert!(t1.get("output").is_none() && t1.get("text").is_none());
             assert!(t1.get("subagent").is_none());
             assert_eq!(v["phase"]["phase"], "responding");
             assert!(v["phase"]["since"].as_f64().unwrap() >= now);
