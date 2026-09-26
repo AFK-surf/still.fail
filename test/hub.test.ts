@@ -527,20 +527,26 @@ test("chat_post attaches files to an ember chat, measuring images; Slack refuses
   assert.equal(sizeOf(Buffer.from("not an image")), null);
 });
 
-test("a session moves to another profile of its runtime by hand, and is taken on by another when its own cannot run", async () => {
+test("a session changes profile, model and effort by hand, and is taken on by another profile when its own cannot run", async () => {
   const { config, store, hub, accept, call, claude } = setup();
   const m = message({ text: "<@UBOT> fix the build" });
   await accept(m);
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
   config.profiles.push({ ...config.profiles[0]!, id: "cc2", name: "another" });
-  await assert.rejects(hub.setProfile(key, "cc2"), /正在跑/, "not while a turn runs");
+  await assert.rejects(hub.configure(key, { profile: "cc2" }), /正在跑/, "not while a turn runs");
   await call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
   claude.last.end();
   await settle();
-  await hub.setProfile(key, "cc2");
+  await hub.configure(key, { profile: "cc2" });
   assert.equal(store.getSession(key)!.profile, "cc2");
-  await assert.rejects(hub.setProfile(key, "cx"), /不能跑 Claude Code/);
+  await assert.rejects(hub.configure(key, { profile: "cx" }), /不能跑 Claude Code/);
+  // Its model and effort change too, to what a profile of its runtime runs.
+  await assert.rejects(hub.configure(key, { model: "gpt-5" }), /没有能跑 gpt-5 的 Claude Code Profile/);
+  await assert.rejects(hub.configure(key, { effort: "ultra" }), /思考深度只有/);
+  (config.profiles.find((p) => p.id === "cc2")!.models as string[]).push("sonnet");
+  await hub.configure(key, { model: "sonnet", effort: "low" });
+  assert.deepEqual([store.getSession(key)!.model, store.getSession(key)!.effort], ["sonnet", "low"]);
   // Its own used up: the next start of its runtime runs on the other one, which takes it on.
   await hub.evict(key);
   hub.setProfileHealth((id) => ({ check: null, quota: id === "cc2" ? { state: "ok", windows: [{ label: "每周", usedPercent: 100, resetsAt: null }], detail: null, checkedAt: 0 } : null }));

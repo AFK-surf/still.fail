@@ -17,7 +17,7 @@ import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
 import { EFFORTS, profilesFor, RUNTIMES, type Config, type Connect, type Profile, type RuntimeKind } from "./config.ts";
-import { pickProfile, usable, type ProfileHealth } from "./pool.ts";
+import { pickProfile, serves, usable, type ProfileHealth } from "./pool.ts";
 import { INTERNAL_CHANNEL, INTERNAL_CONNECT, nextTs, type InternalChat } from "./chat/internal.ts";
 import type { ChatEvent, ChatMessage, ChatSurface, InboundMessage } from "./chat/types.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "./instructions.ts";
@@ -336,22 +336,30 @@ export class Hub {
   }
 
   /**
-   * Moves a session to another profile of its runtime, by hand (another account, say). Its transcript is shared by the
-   * runtime's profiles, so the next message resumes it there with all it had; its idle process ends first. Not while
-   * a turn runs.
+   * Changes how a session runs from its next turn on: another profile of its runtime (another account, say), another
+   * model it can run, another effort. Its transcript is shared by the runtime's profiles, so the next message resumes it
+   * with all it had; its idle process ends first so the change takes. Not while a turn runs.
    */
-  async setProfile(key: string, profileId: string): Promise<void> {
+  async configure(key: string, change: { profile?: string; model?: string | null; effort?: string | null }): Promise<void> {
     const row = this.#store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
-    if (row.profile === profileId) return;
-    const next = this.#config.profiles.find((p) => p.id === profileId);
-    if (!next) throw new Error(`unknown profile ${profileId}`);
-    if (!next.runtimes.includes(row.runtime)) throw new Error(`「${next.name}」不能跑 ${row.runtime === "claude" ? "Claude Code" : "Codex"}`);
-    if (this.processState(key) === "running") throw new Error("这个会话正在跑，等这一轮结束再换");
-    // Its transcript is in the runtime's shared place (linkTranscripts): the next turn resumes it on this profile.
+    const runtimeName = row.runtime === "claude" ? "Claude Code" : "Codex";
+    if (change.profile !== undefined && change.profile !== row.profile) {
+      const next = this.#config.profiles.find((p) => p.id === change.profile);
+      if (!next) throw new Error(`unknown profile ${change.profile}`);
+      if (!next.runtimes.includes(row.runtime)) throw new Error(`「${next.name}」不能跑 ${runtimeName}`);
+    }
+    const model = change.model === undefined ? row.model : change.model || null;
+    const effort = change.effort === undefined ? row.effort : change.effort || null;
+    if (model && !this.#config.profiles.some((p) => p.runtimes.includes(row.runtime) && p.models.includes(model))) {
+      throw new Error(`没有能跑 ${model} 的 ${runtimeName} Profile：先在一个 Profile 上启用它`);
+    }
+    if (effort && !EFFORTS[row.runtime].includes(effort)) throw new Error(`${runtimeName} 的思考深度只有 ${EFFORTS[row.runtime].join("、")}`);
+    if (this.processState(key) === "running") throw new Error("这个会话正在跑，等这一轮结束再改");
     await this.evict(key);
-    this.#store.setSessionProfile(key, profileId);
-    log.info("session moved to another profile", { session: key, from: row.profile, to: profileId });
+    if (change.profile !== undefined && change.profile !== row.profile) this.#store.setSessionProfile(key, change.profile);
+    if (model !== row.model || effort !== row.effort) this.#store.setSessionModel(key, model, effort);
+    log.info("session changed", { session: key, profile: change.profile, model, effort });
   }
 
   /**
@@ -363,7 +371,8 @@ export class Hub {
     if (!row) throw new Error(`unknown session ${key}`);
     const candidates = this.#config.profiles.filter((p) => p.runtimes.includes(row.runtime));
     const current = candidates.find((p) => p.id === row.profile);
-    if (current && usable(this.#health(current.id))) return current;
+    // Its own while it can run it: usable, and with its model enabled.
+    if (current && usable(this.#health(current.id)) && serves(current, row.model ?? null)) return current;
     if (candidates.length === 0) throw new Error(`session ${key}: no profile runs ${row.runtime}`);
     const next = this.#pick(candidates, row.model ?? null, false);
     if (next.id !== row.profile) {

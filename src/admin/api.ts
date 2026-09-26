@@ -430,10 +430,16 @@ export class AdminApi {
       await sweepStaged(dir);
       return send(res, 200, await saveUpload(req, dir, url.searchParams.get("name") ?? "file"));
     }
-    if (resource === "sessions" && id && action === "profile" && method === "POST") {
+    if (resource === "sessions" && id && action === "settings" && method === "POST") {
+      // How the session runs from its next turn on: its profile, model, effort (Hub.configure).
       const input = await body(req);
+      const pick = (name: string) => (name in input ? (input[name] === null ? null : String(input[name])) : undefined);
       try {
-        await this.#deps.hub.setProfile(id, String(input.profile ?? ""));
+        await this.#deps.hub.configure(id, {
+          ...(typeof input.profile === "string" ? { profile: input.profile } : {}),
+          ...(pick("model") !== undefined ? { model: pick("model") } : {}),
+          ...(pick("effort") !== undefined ? { effort: pick("effort") } : {}),
+        });
       } catch (error) {
         throw new HttpError(400, error instanceof Error ? error.message : String(error));
       }

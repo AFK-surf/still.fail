@@ -488,9 +488,15 @@ export class Store {
     this.notify(s.key);
   }
 
-  /** Moves a session to another profile (Hub.setProfile has copied its transcript there). */
+  /** Moves a session to another profile (its transcripts are shared by its runtime's profiles). */
   setSessionProfile(key: string, profile: string): void {
     this.#db.prepare("UPDATE sessions SET profile = ? WHERE key = ?").run(profile, key);
+    this.notify(key);
+  }
+
+  /** A session's model and effort from its next start on (null: the runtime's default). */
+  setSessionModel(key: string, model: string | null, effort: string | null): void {
+    this.#db.prepare("UPDATE sessions SET model = ?, effort = ? WHERE key = ?").run(model, effort, key);
     this.notify(key);
   }
 
