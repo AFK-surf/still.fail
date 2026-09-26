@@ -5,6 +5,13 @@
 package dev.ember.android.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import dev.ember.android.ui.glass
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.HazeState
 import dev.ember.android.data.Topic
 import kotlin.math.roundToInt
 import androidx.compose.ui.unit.IntOffset
@@ -101,9 +108,21 @@ fun HomeScreen(current: WorkspaceEntry) {
     val allList = rememberLazyListState()
     val mineList = rememberLazyListState()
     val shift by animateFloatAsState(if (app.onlyMine) 1f else 0f, tween(240, easing = FastOutSlowInEasing), label = "mine")
-    Column(Modifier.fillMaxSize()) {
+    // The lists run under both bars, which are frosted glass over them.
+    val haze = remember { HazeState() }
+    val density = LocalDensity.current
+    var topBar by remember { mutableIntStateOf(0) }
+    var bottomBar by remember { mutableIntStateOf(0) }
+    val padding = with(density) { PaddingValues(top = topBar.toDp(), bottom = bottomBar.toDp() + 12.dp) }
+    Box(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze)) {
+            val width = constraints.maxWidth
+            ChatPane(all, false, allList, padding, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
+            ChatPane(mine, true, mineList, padding, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
+        }
         Row(
-            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.glass(haze)
+                .windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Avatar(current.account.email, current.account.name.ifEmpty { current.account.email }, 34.dp, Modifier.clip(CircleShape).clickable { app.push(Screen.Me) }, picture = current.account.picture)
@@ -114,22 +133,15 @@ fun HomeScreen(current: WorkspaceEntry) {
             }
             NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
         }
-        Box(Modifier.weight(1f)) {
-            BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
-                val width = constraints.maxWidth
-                ChatPane(all, false, allList, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
-                ChatPane(mine, true, mineList, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
-            }
-            Toolbar(app, Modifier.align(Alignment.BottomCenter))
-        }
+        Toolbar(app, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.glass(haze))
     }
 }
 
 /** One of the two lists, all or the viewer's: its states (connecting, offline, empty) and its days. */
 @Composable
-private fun ChatPane(chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListState, modifier: Modifier) {
+private fun ChatPane(chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListState, padding: PaddingValues, modifier: Modifier) {
     val view = chats.value
-    LazyColumn(modifier.fillMaxHeight(), state = list) {
+    LazyColumn(modifier.fillMaxHeight(), state = list, contentPadding = padding) {
         if (view == null) {
             item(key = "wait") { Note(chats.error?.message ?: "正在读取会话…", error = chats.error != null) }
         } else {
@@ -147,7 +159,6 @@ private fun ChatPane(chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListS
                 items(day.items, key = { "${it.station}/${it.id}" }) { ChatRow(it, view) }
             }
         }
-        item(key = "pad") { Spacer(Modifier.height(96.dp)) }
     }
 }
 
@@ -246,7 +257,7 @@ private fun LastMessage(item: ChatItem) {
 @Composable
 private fun Toolbar(app: AppState, modifier: Modifier) {
     Row(
-        modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.navigationBars)
+        modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

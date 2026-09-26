@@ -148,8 +148,10 @@ fun EmberApp(app: AppState) {
                 }
             }
         }
-        // Pages scroll under the status bar; it keeps the paper behind its icons.
-        Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
+        // Pages scroll under the status bar; it keeps the paper behind its icons (the list and a chat have frosted bars
+        // there instead, which show what runs under them).
+        val top = app.stack.lastOrNull()
+        if (top !is Screen.Home && top !is Screen.Chat) Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
         SheetHost(app)
         ReaderHost(app)
         MenuHost(app)

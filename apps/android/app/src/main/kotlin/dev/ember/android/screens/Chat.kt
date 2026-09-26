@@ -65,6 +65,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Dp
+import dev.ember.android.ui.glass
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.HazeState
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -219,19 +223,24 @@ fun ChatScreen(station: String, of: ChatOf) {
         key(a.session.key) { ChatAgent(a, rememberTopic<LiveView>(app.core, Topics.live(station, a.session.key)).value.value) }
     }
     val draft = remember { Draft() }
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
-        ChatBar(station, of, view, agents)
-        Messages(station, of, view, agents, draft, Modifier.weight(1f))
-        Composer(station, of, view, agents, draft)
+    // The messages run under the bar and the composer, which are frosted glass over them.
+    val haze = remember { HazeState() }
+    val density = LocalDensity.current
+    var topBar by remember { mutableIntStateOf(0) }
+    var bottomBar by remember { mutableIntStateOf(0) }
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
+        Messages(station, of, view, agents, draft, Modifier.fillMaxSize().hazeSource(haze), with(density) { topBar.toDp() }, with(density) { bottomBar.toDp() })
+        ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze))
+        Composer(station, of, view, agents, draft, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.glass(haze))
     }
 }
 
 /** The chat's bar: its title from the left, then its people, then its agents' marks (each opens its history); "…" is the chat's own page. */
 @Composable
-private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>) {
+private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val thread = view.thread
-    BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }) {
+    BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }, modifier = modifier) {
         if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
         agents.forEach { a ->
             // Not clipped: the state's dot sits over the mark's corner, partly outside it.
@@ -242,9 +251,9 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ch
 
 /** The bar's frame, the same while the chat loads and once it has: back, the title, what follows it, and "…". */
 @Composable
-private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, after: @Composable RowScope.() -> Unit) {
+private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, modifier: Modifier = Modifier.background(C.bg), after: @Composable RowScope.() -> Unit) {
     val app = LocalApp.current
-    Column(Modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.statusBars)) {
+    Column(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = app::pop), contentAlignment = Alignment.Center) { IconIn(Icons.Back, 22.dp, C.accent) }
             Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -302,8 +311,9 @@ private class Here(val station: String, val of: ChatOf, val view: ChatView, val 
     fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key
 }
 
+/** `top` and `bottom`: the bars over it, which the list keeps its ends clear of. */
 @Composable
-private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, modifier: Modifier) {
+private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, modifier: Modifier, top: Dp = 0.dp, bottom: Dp = 0.dp) {
     val app = LocalApp.current
     val ctx = Here(station, of, view, agents, rememberPeople(station))
     val thread = view.thread
@@ -469,7 +479,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     Box(modifier.fillMaxWidth()) {
         LazyColumn(
             Modifier.fillMaxSize(), state = list,
-            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
+            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp + top, bottom = 10.dp + bottom), verticalArrangement = Arrangement.spacedBy(14.dp, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
         ) {
             items(rows, key = { it.id }) { row ->
                 val fresh = remember(row.id) { row.id !in known }
@@ -494,7 +504,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         if (awayFromEnd(list)) {
             val scope = rememberCoroutineScope()
             Box(
-                Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 12.dp).size(38.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(C.surface)
+                Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 12.dp + bottom).size(38.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(C.surface)
                     .clickable { scope.launch { follow.jump() } },
                 contentAlignment = Alignment.Center,
             ) { IconIn(Icons.Down, 18.dp, C.ink) }
@@ -1014,7 +1024,7 @@ fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: (
  * the agent, and the page moves to it.
  */
 @Composable
-private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft) {
+private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val api = app.api(station)
@@ -1024,7 +1034,7 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<C
         app.upload(draft, station, { keeper ?: throw CoreException("no_agent", "这个对话里没有 agent，文件无处可放", null) }, picked, scope)
     }
     val thread = view.thread
-    Column(Modifier.fillMaxWidth().background(C.bg).padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         DraftExtras(draft)
         ComposerBar(draft, "发消息", onPlus = { openAttach(app, launchers) },
             // Typing starts the session's runtime, so a cold start overlaps the writing.
