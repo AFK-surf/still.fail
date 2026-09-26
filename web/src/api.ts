@@ -170,20 +170,17 @@ export type ShownStep = LiveStep & { ended?: boolean };
 /** Where the turn stands with the model, since when (this browser's clock). */
 export interface ShownPhase { phase: LivePhase; since: number }
 
-export function useLiveSession(key: string | undefined): { steps: ShownStep[]; phase: ShownPhase | null; trail: ShownStep[] } {
+export function useLiveSession(key: string | undefined): { steps: ShownStep[]; phase: ShownPhase | null } {
   const client = useQueryClient();
   const station = useStation();
   const [steps, setSteps] = useState<ShownStep[]>([]);
   const [phase, setPhase] = useState<ShownPhase | null>(null);
-  // Every step of the running turn, kept after it lands in the transcript: what the activity lines are made of.
-  const [trail, setTrail] = useState<ShownStep[]>([]);
   const queryKey = useMemo(() => (key ? keys.session(station.id, key) : null), [station.id, key]);
   const known = useRef(0);
   useEffect(() => {
     if (!key || !queryKey || !station.online) return;
     setSteps([]);
     setPhase(null);
-    setTrail([]);
     const length = () => client.getQueryData<SessionDetail>(queryKey)?.transcript?.timeline.length ?? 0;
     const stop = station.transport.stream(
       () => `/sessions/${encodeURIComponent(key)}/live?from=${(known.current = length())}`,
@@ -205,12 +202,10 @@ export function useLiveSession(key: string | undefined): { steps: ShownStep[]; p
           if (message.entries.length) setSteps((all) => all.filter((s) => !s.ended));
         } else if (message.type === "steps") {
           setSteps(message.steps);
-          setTrail(message.steps);
           setPhase(message.phase ? { phase: message.phase.phase, since: Date.now() - message.phase.elapsedMs } : null);
         } else if (message.type === "clear") {
           setSteps([]);
           setPhase(null);
-          setTrail([]);
         } else {
           const e = message.event;
           if (e.kind === "phase") {
@@ -228,13 +223,12 @@ export function useLiveSession(key: string | undefined): { steps: ShownStep[]; p
             return all.map((s) => (s.id === e.id ? { ...s, ended: true } : s));
           };
           setSteps(apply);
-          // The trail keeps only what names a step (a tool's input, for its description), not streamed text.
-          setTrail((all) => (e.kind === "delta" && e.field !== "input" ? all : apply(all).slice(-60)));
         }
       },
       () => {},
     );
     return () => stop();
-  }, [key, queryKey, station, client]);
-  return { steps, phase, trail };
+    // The station object is rebuilt on every workspace refresh; follow only what identifies the stream.
+  }, [key, queryKey, station.id, station.online, station.transport, client]);
+  return { steps, phase };
 }

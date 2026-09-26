@@ -5,17 +5,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, ChevronDown, ChevronUp, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownPhase, type ShownStep } from "./api.ts";
+import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
 import { absoluteTime, agentLabel, relativeTime, sessionStatus } from "./format.ts";
 import { useIsMine, usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
 
-export function ChatPanel({ detail, chat, live = [], phase = null, trail = [], onOpenHistory }: {
-  detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; live?: ShownStep[]; phase?: ShownPhase | null;
-  /** The running turn's steps so far, for the activity. */
-  trail?: ShownStep[]; onOpenHistory(): void;
+export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory }: {
+  detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; live?: ShownStep[]; phase?: ShownPhase | null; onOpenHistory(): void;
 }) {
   const list = useRef<HTMLDivElement>(null);
   const messages = chat?.messages ?? [];
@@ -131,7 +129,12 @@ export function ChatPanel({ detail, chat, live = [], phase = null, trail = [], o
             );
           }
           if (!busy) return null;
-          return <Activities agents={[{ key: detail.session.key, who: agent, trail, phase }]} onOpenHistory={onOpenHistory} />;
+          return (
+            <Activities onOpenHistory={onOpenHistory} agents={[{
+              key: detail.session.key, who: agent, runtime: detail.session.runtime, model: detail.transcript?.usage?.model ?? detail.session.model,
+              timeline: detail.transcript?.timeline ?? [], live, phase, since: detail.turns.at(-1)?.endedAt == null ? detail.turns.at(-1)?.startedAt ?? null : null,
+            }]} />
+          );
         })()}
       </div>
       {picked && (
@@ -362,17 +365,42 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
 
 const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
 
-/** One line of what a step did or is doing. */
-function stepText(s: ShownStep): string {
-  return s.step === "thinking" ? "思考" : s.step === "text" ? "写回复" : activityText(s.tool, s.input);
+/** An agent in this chat that is at work: who it is, its execution history, and its running turn. */
+interface AgentAtWork {
+  key: string; who: string; runtime: SessionDetail["session"]["runtime"]; model: string | null;
+  timeline: TimelineEntry[]; live: ShownStep[]; phase: ShownPhase | null; since: number | null;
 }
 
-/** An agent in this chat that is at work: who it is, and its running turn's steps so far. */
-interface AgentAtWork { key: string; who: string; trail: ShownStep[]; phase: ShownPhase | null }
+/** A row of an agent's activity: one entry of its execution history, or a step still streaming. */
+interface ActivityRow { key: string; text: string; live: boolean }
+
+/** The running turn's rows: execution history since the last message the agent received, then what is still streaming. */
+function activityRows(timeline: TimelineEntry[], live: ShownStep[], phase: ShownPhase | null): ActivityRow[] {
+  let start = timeline.length;
+  while (start > 0 && !(timeline[start - 1]!.kind === "user" && !timeline[start - 1]!.subagent)) start--;
+  const rows: ActivityRow[] = [];
+  timeline.slice(start).forEach((e, i) => {
+    if (e.subagent) return;
+    const text = e.kind === "tool_call" ? activityText(e.tool, e.text) : e.kind === "thinking" ? "思考" : e.kind === "assistant" ? "写回复" : null;
+    if (text) rows.push({ key: `t${start + i}`, text, live: false });
+  });
+  for (const s of live) {
+    if (s.ended || s.subagent) continue;
+    rows.push({ key: s.id, text: s.step === "thinking" ? "正在思考" : s.step === "text" ? "正在写回复" : activityText(s.tool, s.input), live: true });
+  }
+  if (!rows.some((r) => r.live) && phase) {
+    const waiting = phase.phase === "starting" ? "正在启动" : phase.phase === "requesting" ? "等待模型响应" : phase.phase === "responding" ? "正在思考" : null;
+    if (waiting) rows.push({ key: `phase-${phase.phase}-${phase.since}`, text: waiting, live: true });
+  }
+  return rows;
+}
+
+const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
 
 /**
- * One activity per agent in the chat that is at work. A runtime's own
- * sub-agents are not agents of the chat: their steps count as the agent's.
+ * One activity per agent of the chat that is at work, drawn like its
+ * messages. A runtime's own sub-agents are not agents of the chat; their
+ * work is one row of the agent's.
  */
 function Activities({ agents, onOpenHistory }: { agents: AgentAtWork[]; onOpenHistory(): void }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(ACTIVITY_COLLAPSED) === "1");
@@ -380,43 +408,52 @@ function Activities({ agents, onOpenHistory }: { agents: AgentAtWork[]; onOpenHi
     localStorage.setItem(ACTIVITY_COLLAPSED, collapsed ? "0" : "1");
     setCollapsed(!collapsed);
   };
+  return <>{agents.map((a) => <Activity key={a.key} agent={a} collapsed={collapsed} onToggle={toggle} onOpen={onOpenHistory} />)}</>;
+}
+
+/**
+ * An agent at work: its last three rows in three fixed lines (or the newest
+ * in one). A new row comes in from below and pushes the oldest out above.
+ */
+function Activity({ agent, collapsed, onToggle, onOpen }: { agent: AgentAtWork; collapsed: boolean; onToggle(): void; onOpen(): void }) {
+  const rows = activityRows(agent.timeline, agent.live, agent.phase);
+  const count = collapsed ? 1 : 3;
+  // One row more than fits, so the outgoing row is there to slide out.
+  const shown = rows.slice(-(count + 1));
+  const newest = shown.at(-1)?.key ?? "none";
   return (
-    <div className="activities">
-      {agents.map((a) => {
-        const waiting = a.phase?.phase === "starting" ? "正在启动" : a.phase?.phase === "requesting" ? "等待模型响应" : null;
-        return <Activity key={a.key} who={a.who} steps={a.trail} waiting={waiting} collapsed={collapsed} onToggle={toggle} onOpen={onOpenHistory} />;
-      })}
+    <div className="msg msg-row activity" data-collapsed={collapsed || undefined}>
+      <div className="msg-main">
+        <div className="msg-head">
+          <span className="msg-avatar msg-avatar-agent"><ModelLogo model={agent.model} runtime={agent.runtime} size={12} /></span>
+          <button type="button" className="msg-name msg-agent" onClick={onOpen} title="打开执行历史">{agent.who}</button>
+          <span className="msg-time">工作中{agent.since ? <> · <Elapsed since={agent.since} /></> : null}</span>
+          <button type="button" className="activity-toggle" onClick={onToggle} aria-label={collapsed ? "展开为三行" : "收起为一行"}>
+            {collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+          </button>
+        </div>
+        <div className="activity-window">
+          <div key={newest} className="activity-rows" data-shift={shown.length > count || undefined}>
+            {shown.map((r) => (
+              <span key={r.key} className="activity-row" data-live={r.live || undefined}>
+                {r.live ? <span className="activity-pulse inline" aria-hidden="true" /> : <span className="activity-done" aria-hidden="true" />}
+                <span className="activity-what">{r.text}{r.live ? "…" : ""}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-/**
- * One agent at work: its latest three steps, newest last, in three fixed rows
- * (or the newest alone in one), so steps coming and going never move the page.
- */
-function Activity({ who, steps, waiting, collapsed, onToggle, onOpen }: {
-  who: string; steps: ShownStep[]; waiting: string | null; collapsed: boolean; onToggle(): void; onOpen(): void;
-}) {
-  const rows: { text: string; live: boolean; key: string }[] = steps.slice(-3).map((s) => ({ text: stepText(s), live: !s.ended, key: s.id }));
-  if (waiting && !rows.some((r) => r.live)) rows.push({ text: waiting, live: true, key: "waiting" });
-  const shown = collapsed ? rows.slice(-1) : rows.slice(-3);
-  if (!shown.length) shown.push({ text: "正在处理", live: true, key: "idle" });
-  return (
-    <div className="activity" data-collapsed={collapsed || undefined}>
-      <div className="activity-head">
-        <button type="button" className="activity-who" onClick={onOpen} title="打开执行历史">{who}</button>
-        <button type="button" className="activity-toggle" onClick={onToggle} aria-label={collapsed ? "展开为三行" : "收起为一行"}>
-          {collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-        </button>
-      </div>
-      <div className="activity-rows">
-        {shown.map((r) => (
-          <span key={r.key} className="activity-row" data-live={r.live || undefined}>
-            {r.live ? <span className="activity-pulse inline" aria-hidden="true" /> : <span className="activity-done" aria-hidden="true" />}
-            <span className="activity-what">{r.text}{r.live ? "…" : ""}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
+/** Seconds (then minutes) since a moment, ticking. */
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const s = Math.max(0, Math.floor((now - since) / 1000));
+  return <>{s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`}</>;
 }
