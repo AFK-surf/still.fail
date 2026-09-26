@@ -7,9 +7,9 @@ import {
   ToggleGroup, Tooltip,
 } from "radix-ui";
 import { Link } from "react-router";
-import { forwardRef, useEffect, useId, useState, type ButtonHTMLAttributes, type ComponentType, type ReactNode } from "react";
+import { forwardRef, useEffect, useId, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type ReactNode } from "react";
 
-import { absoluteTime, relativeTime } from "./format.ts";
+import { absoluteTime, BADGE_LABEL, relativeTime, type Badge } from "./format.ts";
 
 export const ICON = { size: 16, strokeWidth: 1.7 } as const;
 
@@ -397,6 +397,15 @@ export function ModelLogo({ model, runtime, size = 14 }: { model: string | null 
   if (!maker) return <RuntimeLogo runtime={runtime} size={size} />;
   const [, file, name, mono] = maker;
   return <img className="model-logo" src={`${import.meta.env.BASE_URL}models/${file}.svg`} alt={name} title={name} width={size} height={size} data-mono={mono || undefined} />;
+}
+
+/** An agent as the phone shows it: its model's maker on a tile, and where it stands as a badge. */
+export function AgentMark({ model, runtime, badge, size = 20 }: { model: string | null | undefined; runtime: "claude" | "codex"; badge: Badge | null; size?: number }) {
+  return (
+    <span className="agent-mark" style={{ "--mark": `${size}px` } as CSSProperties} data-badge={badge ?? undefined} role="img" aria-label={badge ? BADGE_LABEL[badge] : undefined}>
+      <ModelLogo model={model} runtime={runtime} size={Math.round(size * 0.62)} />
+    </span>
+  );
 }
 
 const TIME_MODE = "ember.absoluteTime";

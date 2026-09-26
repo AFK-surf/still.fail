@@ -179,6 +179,17 @@ export function slug(name: string): string {
   return name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
 }
 
+/** The badge on an agent's mark, as on the phone: solid orange block, hollow ring at work, green done, red failed; none otherwise. */
+export type Badge = "block" | "run" | "done" | "failed";
+export function statusBadge(status: Status): Badge | null {
+  if (status === "running" || status === "queued") return "run";
+  if (status === "block") return "block";
+  if (status === "final") return "done";
+  if (status === "failed" || status === "unexpected") return "failed";
+  return null;
+}
+export const BADGE_LABEL: Record<Badge, string> = { block: "Block：agent 停下来等人处理", run: "工作中", done: "已完成", failed: "失败了，需要处理" };
+
 export function statusTone(status: Status): Tone {
   if (status === "running" || status === "queued") return "accent";
   if (status === "final") return "green";

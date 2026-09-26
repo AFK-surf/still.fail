@@ -4,8 +4,8 @@ import { lastChat } from "./lastChat.ts";
 import { MineFilter, PeopleStack } from "./components.tsx";
 import { NavLink, useLocation, useParams } from "react-router";
 import { MeContext, useChats, type ChatItem } from "./api.ts";
-import { dayLabel, sessionStatus, sessionTitle } from "./format.ts";
-import { ConnectKindIcon, ICON, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
+import { agentLabel, BADGE_LABEL, dayLabel, sessionStatus, sessionTitle, statusBadge } from "./format.ts";
+import { AgentMark, ConnectKindIcon, ICON, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { Lockup, Mark } from "./brand.tsx";
 
 export function Sidebar() {
@@ -94,11 +94,10 @@ function SessionRow({ item, showStation }: { item: ChatItem; showStation: boolea
   const { session: s, connect } = item;
   const name = connect?.name ?? s.connect;
   const { key } = useParams();
-  const status = sessionStatus(s);
-  const marker = status === "running" || status === "queued" ? "running"
-    : status === "block" ? "attention" : status === "failed" || status === "unexpected" ? "problem" : null;
+  const badge = statusBadge(sessionStatus(s));
   return (
     <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/sessions/${encodeURIComponent(s.key)}`} aria-current={key === s.key ? "page" : undefined}>
+      <Tip label={badge ? BADGE_LABEL[badge] : agentLabel(s.model, s.effort)} side="right"><span><AgentMark model={s.model} runtime={s.runtime} badge={badge} /></span></Tip>
       <span className="nav-session-text">
         <span className="nav-session-title">{sessionTitle(s, name)}</span>
         <span className="nav-session-meta">
@@ -110,11 +109,6 @@ function SessionRow({ item, showStation }: { item: ChatItem; showStation: boolea
           <Time className="nav-time" at={s.lastActiveAt} />
         </span>
       </span>
-      {marker && (
-        <Tip label={marker === "running" ? "进行中" : marker === "attention" ? "Block：agent 停下来等人处理" : "需要处理"} side="right">
-          <span className="nav-marker" data-kind={marker} role="img" aria-label={marker === "running" ? "进行中" : marker === "attention" ? "Block：agent 停下来等人处理" : "需要处理"} />
-        </Tip>
-      )}
     </NavLink>
   );
 }

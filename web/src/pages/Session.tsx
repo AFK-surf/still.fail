@@ -12,10 +12,10 @@ import { useAction, useApi, useChat, useHost, useLive, type ConnectView, type Pr
 import { History } from "../History.tsx";
 import { ChatPanel } from "../Chat.tsx";
 import {
-  PROCESS_LABEL, RUNTIME_LABEL, STATUS_LABEL, absoluteTime, agentLabel, compactNumber, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusTone, threadNamer, turnResult,
+  BADGE_LABEL, PROCESS_LABEL, RUNTIME_LABEL, absoluteTime, agentLabel, compactNumber, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusBadge, threadNamer, turnResult,
 } from "../format.ts";
 import { useToast } from "../toast.tsx";
-import { Button, ConnectKindIcon, Empty, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, Pill, ResizeHandle, RuntimeLogo, SlackLogo, Time, Tip } from "../ui.tsx";
+import { AgentMark, Button, ConnectKindIcon, Empty, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, ResizeHandle, RuntimeLogo, SlackLogo, Time, Tip } from "../ui.tsx";
 
 export function SessionPage() {
   const { key } = useParams();
@@ -76,7 +76,8 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const slackThreads = threads.filter((t) => t.channel !== "EMBER");
   const single = slackThreads.length === 1 ? slackThreads[0] : undefined;
   const singleUrl = single ? slackThreadUrl(base, single.channel, single.threadTs) : null;
-  const status = sessionStatus(session);
+  const badge = statusBadge(sessionStatus(session));
+  const toggleHistory = () => (tabs.includes("history") && active === "history" ? closeTab("history") : openTab("history"));
   // One chat per session; older sessions may have several, of which the first is the one.
   const chat = chats[0];
   return (
@@ -85,9 +86,13 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
       <header className="page-bar">
         <MobileBack to={link("/sessions")} label="会话" />
         <div className="page-bar-title">
-          {station.name && <span className="station-tag">{station.name}</span>}
+          <Tip label={`${agentLabel(detail.transcript?.usage?.model ?? session.model, session.effort)}${badge ? ` · ${BADGE_LABEL[badge]}` : ""} · 执行历史`}>
+            <button type="button" className="agent-mark-btn" onClick={toggleHistory} aria-label="执行历史">
+              <AgentMark model={detail.transcript?.usage?.model ?? session.model} runtime={session.runtime} badge={badge} size={22} />
+            </button>
+          </Tip>
           <h1>{sessionTitle(session, name)}</h1>
-          <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
+          {station.name && <span className="page-bar-station">{station.name}</span>}
         </div>
         <div className="page-bar-actions">
           {slackThreads.length > 1
@@ -101,7 +106,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
         </div>
       </header>
       {/* The chat is the page; the session's history sits in a tab set that takes the whole right side. */}
-      <ChatPanel detail={detail} chat={chat} outbox={chatView.value.outbox} live={live} phase={phase} onOpenHistory={() => (tabs.includes("history") && active === "history" ? closeTab("history") : openTab("history"))} />
+      <ChatPanel detail={detail} chat={chat} outbox={chatView.value.outbox} live={live} phase={phase} onOpenHistory={toggleHistory} />
       </div>
         {panel && (
           <Tabs.Root className="side-panel" value={tabs.includes(active) ? active : tabs[0]!} onValueChange={setActive}>
@@ -223,7 +228,6 @@ function SessionState({ detail }: { detail: SessionDetail }) {
     : "空闲";
   return (
     <span className="session-state" data-state={running ? "running" : result}>
-      {running && <span className="activity-pulse inline" aria-hidden="true" />}
       {text}
       <span className="history-sep">·</span>
       进程{PROCESS_LABEL[session.process]}
