@@ -41,6 +41,9 @@ use crate::trace::{Kind, Span, SpanContext, Tracer, route};
 
 /// How long a failed or ended stream waits before it is opened again.
 pub const RECONNECT_MS: u64 = 2_000;
+/// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone though nothing
+/// said so, and is read again (from where it was).
+pub const STREAM_IDLE_MS: u64 = 40_000;
 /// A burst of `thread` events becomes one read of each thread's summary.
 pub const EVENTS_COALESCE_MS: u64 = 400;
 /// Entries per page of a thread.
@@ -387,6 +390,22 @@ fn thread_value(first: u64, entries: Vec<Value>, summary: Value, title: Value) -
     json!({ "first": first, "last": last, "entries": entries, "thread": summary, "title": title })
 }
 
+/// A station stream that ends (with an error) when nothing, not even its keepalive, came for [`STREAM_IDLE_MS`].
+fn idle_guarded(host: Rc<dyn Host>, body: LocalBoxStream<'static, Result<Vec<u8>>>) -> LocalBoxStream<'static, Result<Vec<u8>>> {
+    futures::stream::unfold(Some(body), move |body| {
+        let host = host.clone();
+        async move {
+            let mut body = body?;
+            match futures::future::select(body.next(), host.sleep(STREAM_IDLE_MS)).await {
+                futures::future::Either::Left((Some(item), _)) => Some((item, Some(body))),
+                futures::future::Either::Left((None, _)) => None,
+                futures::future::Either::Right(_) => Some((Err(CoreError::new("stream_idle", "和 station 的连接没有回应")), None)),
+            }
+        }
+    })
+    .boxed_local()
+}
+
 /// Threads as the station lists them: the latest message first, then the newest thread.
 fn sort_threads(threads: &mut [Value]) {
     let key = |t: &Value| {
@@ -559,7 +578,7 @@ impl Stations {
             let data: Value = serde_json::from_slice(&bytes).unwrap_or_else(|_| json!({}));
             return Err(http_error(status, &data));
         }
-        Ok(reply.body)
+        Ok(idle_guarded(self.host.clone(), reply.body))
     }
 
     /// Brings the topics a successful write changed up to date before the write answers, so a page that moves on
