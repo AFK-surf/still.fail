@@ -28,6 +28,8 @@ pub struct NativeHost {
     listener: Arc<dyn CoreListener>,
     /// Back to the core thread's loop: a task that panicked ends this core.
     commands: UnboundedSender<Command>,
+    /// Zero of the monotonic clock.
+    started: std::time::Instant,
 }
 
 impl NativeHost {
@@ -38,7 +40,7 @@ impl NativeHost {
             .connect_timeout(std::time::Duration::from_secs(15))
             .build()
             .expect("reqwest client");
-        NativeHost { cloud_origin, tls, http, storage: Storage::new(data_dir), listener, commands }
+        NativeHost { cloud_origin, tls, http, storage: Storage::new(data_dir), listener, commands, started: std::time::Instant::now() }
     }
 }
 
@@ -176,6 +178,10 @@ impl Host for NativeHost {
     fn now_ms(&self) -> f64 {
         let since = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
         since.as_secs_f64() * 1000.0
+    }
+
+    fn monotonic_ms(&self) -> f64 {
+        self.started.elapsed().as_secs_f64() * 1000.0
     }
 
     fn utc_offset_min(&self, at_ms: f64) -> i32 {

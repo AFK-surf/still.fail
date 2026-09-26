@@ -11,3 +11,6 @@ export const LIMITS = {
   burstFrames: 8192,
   framesPerDay: 20_000_000,
 };
+
+/** Trace batches each sender may send a minute (tracing.ts): a client or station sends one every few seconds at most. */
+export const TELEMETRY_BATCHES_PER_MINUTE = 60;

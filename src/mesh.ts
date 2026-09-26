@@ -5,7 +5,8 @@
 // picked up as it is written, and the binary's directory, so a build made
 // after enrolling starts it. Each start gets a fresh secret, which ember-mesh
 // presents on every request it relays so the admin API can tell them from
-// other local callers.
+// other local callers. With traces on, ember-mesh sends the admin API's spans
+// with its own: they go to it on stdin, one JSON line each.
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
@@ -29,7 +30,10 @@ export class MeshSupervisor {
   readonly #dataDir: string;
   readonly #binary: string;
   readonly #admin: string;
+  readonly #traces: () => boolean;
   #secret: string | null = null;
+  /** The running ember-mesh takes spans. */
+  #tracing = false;
   #child: ChildProcess | null = null;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #watchers: FSWatcher[] = [];
@@ -39,9 +43,11 @@ export class MeshSupervisor {
   /** Emits "change" whenever status() may say something new. */
   readonly changes = new EventEmitter();
 
-  constructor(options: { dataDir: string; admin: string; binary?: string }) {
+  /** `traces`: whether the station's config turns traces on, asked at each start of ember-mesh. */
+  constructor(options: { dataDir: string; admin: string; binary?: string; traces?: () => boolean }) {
     this.#dataDir = options.dataDir;
     this.#admin = options.admin;
+    this.#traces = options.traces ?? (() => false);
     this.#binary = options.binary ?? process.env.EMBER_MESH_BIN ?? REPO_BINARY;
   }
 
@@ -51,6 +57,11 @@ export class MeshSupervisor {
 
   secret(): string | null {
     return this.#child ? this.#secret : null;
+  }
+
+  /** A span of the admin API, for ember-mesh to send; dropped while traces are off or ember-mesh is not running. */
+  span(span: object): void {
+    if (this.#tracing && this.#child?.stdin?.writable) this.#child.stdin.write(`${JSON.stringify(span)}\n`);
   }
 
   status(): MeshStatus {
@@ -117,11 +128,15 @@ export class MeshSupervisor {
       return;
     }
     this.#secret = randomBytes(32).toString("base64url");
+    const tracing = this.#traces();
     const child = spawn(this.#binary, ["run", "--data", this.#dataDir, "--admin", this.#admin], {
-      env: { ...process.env, EMBER_MESH_SECRET: this.#secret, RUST_LOG: process.env.RUST_LOG ?? "info,iroh=warn" },
-      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, EMBER_MESH_SECRET: this.#secret, RUST_LOG: process.env.RUST_LOG ?? "info,iroh=warn", ...(tracing ? { EMBER_MESH_TRACES: "1" } : {}) },
+      stdio: [tracing ? "pipe" : "ignore", "pipe", "pipe"],
     });
+    // A span written as it exits is lost, like any span that cannot be sent.
+    child.stdin?.on("error", () => {});
     this.#child = child;
+    this.#tracing = tracing;
     this.changes.emit("change");
     const started = Date.now();
     const relay = (chunk: Buffer) => {

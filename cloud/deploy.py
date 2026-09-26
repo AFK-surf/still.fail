@@ -13,6 +13,8 @@ Inputs (none of them in the repository):
             stations distrust new grants until they re-enroll.
   posthog   ~/ember-deploy/posthog.json, {host, key}: PostHog's project key, built into the web app
             (docs/telemetry.md). Without it the web app is built without analytics.
+  axiom     ~/ember-deploy/axiom.json, {"dataset", "token"}: where traces go (docs/telemetry.md).
+            Without it the cloud takes no traces.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
 import argparse
@@ -32,6 +34,7 @@ REPO = ROOT.parent
 DEPLOY = Path.home() / "ember-deploy"
 KEYS = DEPLOY / "keys.json"
 POSTHOG = DEPLOY / "posthog.json"
+AXIOM = DEPLOY / "axiom.json"
 
 
 def write_private(path: Path, value) -> None:
@@ -84,6 +87,14 @@ def keys() -> dict:
     return value
 
 
+def axiom() -> dict:
+    if not AXIOM.exists():
+        print(f"note: {AXIOM} is missing; the cloud will take no traces")
+        return {}
+    value = json.loads(AXIOM.read_text())
+    return {"AXIOM_TOKEN": value["token"], "AXIOM_DATASET": value["dataset"]}
+
+
 @contextmanager
 def docker_env():
     """A throwaway Docker config: an SSH session cannot unlock the macOS keychain Docker's default helper uses."""
@@ -116,6 +127,7 @@ def main() -> None:
         print("account", account_id())
         print("keys", "present" if KEYS.exists() else "will be created")
         print("posthog", "present" if POSTHOG.exists() else "missing: the web app will have no analytics")
+        print("axiom", "present" if AXIOM.exists() else f"missing: no traces without {AXIOM}")
         return
 
     config = {**template, "account_id": account_id(), "vars": {**template["vars"], "GOOGLE_CLIENT_ID": web["client_id"]}}
@@ -128,7 +140,7 @@ def main() -> None:
             print(f"note: no {POSTHOG}; building the web app without analytics")
         env = {**os.environ, "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else None
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
-    values = {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"]}
+    values = {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom()}
     with docker_env() as env:
         wrangler("deploy", "--config", str(local), "--containers-rollout", "immediate", env=env)
         with tempfile.TemporaryDirectory(prefix="ember-secrets-") as directory:

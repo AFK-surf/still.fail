@@ -101,8 +101,8 @@ export interface Config {
   warmMs: number;
   /** Idle claude processes beyond this count are evicted, oldest first, once past warmMs. */
   maxWarmClaude: number;
-  /** What this station reports to ember's PostHog project (docs/telemetry.md): errors, if its operator says so. */
-  telemetry: { errors: boolean };
+  /** What this station sends ember (docs/telemetry.md), each only if its operator says so: errors to PostHog; traces (the spans of traced requests, through ember-mesh; read when it starts) to ember cloud. */
+  telemetry: { errors: boolean; traces: boolean };
 }
 
 export interface RawConnect {
@@ -153,7 +153,7 @@ export interface RawConfig {
   maxNudges?: number;
   warmMinutes?: number;
   maxWarmClaude?: number;
-  telemetry?: { errors?: boolean };
+  telemetry?: { errors?: boolean; traces?: boolean };
 }
 
 /** Rewrites older config shapes into the current one. Returns the input when already current. */
@@ -244,7 +244,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
     maxNudges: raw.maxNudges ?? 2,
     warmMs: (raw.warmMinutes ?? 30) * 60_000,
     maxWarmClaude: raw.maxWarmClaude ?? 4,
-    telemetry: { errors: raw.telemetry?.errors === true },
+    telemetry: { errors: raw.telemetry?.errors === true, traces: raw.telemetry?.traces === true },
   };
 }
 

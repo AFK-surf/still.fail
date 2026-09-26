@@ -35,7 +35,8 @@ What differs per platform comes in through one trait, `Host`
 - `storage_get` / `storage_set` / `storage_delete` — small persistent values by
   key (accounts and tokens, the device key, UI preferences). Web: IndexedDB
   (a worker has no localStorage); native: a file in the app's data directory.
-- `now_ms`, `utc_offset_min` (the viewer's time zone), `sleep`, `spawn`, `random_bytes`.
+- `now_ms`, `monotonic_ms` (for timing spans: `performance.now()` on the web, a
+  monotonic clock natively), `utc_offset_min` (the viewer's time zone), `sleep`, `spawn`, `random_bytes`.
   `sleep` serves reconnect backoff, coalescing windows, evictions and the
   midnight clock of `chats` — never polling: nothing is read again on a timer.
 - `emit` — delivers a message to one connected UI (by its client id).
@@ -330,6 +331,7 @@ client/
 - `mesh.rs` — the device endpoint and station links: grants, renewal (every 5 min), reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
 - `station.rs` — the admin API over a link (or over HTTP for `local`): the station topics kept current from its events and live streams, threads (paging, posting, read positions), uploads.
 - `views.rs` — the view topics, put together from the others.
+- `trace.rs` — traces of user actions: spans, the `traceparent` every station request carries, batched export to ember cloud (docs/telemetry.md).
 
 ## Native (Android)
 

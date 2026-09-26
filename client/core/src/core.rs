@@ -34,6 +34,7 @@ use crate::mesh::{GrantSource, Mesh};
 use crate::protocol::{ClientId, ClientMessage, CoreMessage, RequestId, Topic};
 use crate::station::{self, MeshSource, StationAddr, StationGrants, Stations, TopicSink};
 use crate::store::{Source, Store};
+use crate::trace::{self, Kind, Span, Tracer};
 use crate::views::{EmailOf, Views};
 
 /// The first wait before an events socket is opened again; it doubles up to [`SOCKET_RETRY_MAX_MS`], and starts
@@ -51,6 +52,7 @@ pub struct Core {
 struct Inner {
     me: Weak<Inner>,
     host: Rc<dyn Host>,
+    tracer: Rc<Tracer>,
     accounts: Rc<Accounts>,
     cloud: Rc<Cloud>,
     store: Rc<Store>,
@@ -93,18 +95,25 @@ enum SocketState {
 
 impl Core {
     pub async fn new(host: Rc<dyn Host>) -> Core {
+        Core::traced(host, trace::SAMPLE).await
+    }
+
+    /// A core that records `sample` of its traces (0: none).
+    pub async fn traced(host: Rc<dyn Host>, sample: f64) -> Core {
+        let tracer = Tracer::new(host.clone(), sample);
         let accounts = Accounts::load(host.clone()).await;
-        let cloud = Cloud::new(host.clone(), accounts.clone());
+        let cloud = Cloud::new(host.clone(), accounts.clone(), tracer.clone());
         let inner = Rc::new_cyclic(|me: &Weak<Inner>| {
             let store = Store::new(host.clone());
             let wire = station::wire(host.clone(), mesh_source(me.clone()), grants(me.clone()));
-            let stations = Stations::new(host.clone(), store.clone() as Rc<dyn TopicSink>, wire);
+            let stations = Stations::new(host.clone(), store.clone() as Rc<dyn TopicSink>, wire, tracer.clone());
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone() }));
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
             Inner {
                 views,
                 me: me.clone(),
                 host: host.clone(),
+                tracer: tracer.clone(),
                 accounts: accounts.clone(),
                 cloud,
                 store,
@@ -121,6 +130,17 @@ impl Core {
                 sockets: RefCell::default(),
             }
         });
+        let me = Rc::downgrade(&inner);
+        tracer.set_export(Rc::new(move |body: Vec<u8>| {
+            let me = me.clone();
+            async move {
+                let Some(core) = me.upgrade() else { return };
+                // Any signed-in account will do: ember cloud only needs to know that someone of ours sends them.
+                let Some(account) = core.accounts.list().into_iter().next() else { return };
+                let _ = core.cloud.traces(&account.sub, body).await;
+            }
+            .boxed_local()
+        }));
         let me = Rc::downgrade(&inner);
         accounts.on_change(Rc::new(move || {
             if let Some(core) = me.upgrade() {
@@ -145,17 +165,25 @@ impl Core {
     /// A message from a UI. Answers and values go out through `Host::emit`.
     pub fn receive(&self, client: ClientId, message: ClientMessage) {
         match message {
-            ClientMessage::Call { id, call, params } => match parse_call(&call, params) {
+            ClientMessage::Call { id, call: name, params } => match parse_call(&name, params) {
                 Err(error) => self.inner.host.emit(client, answer(id, Err(error))),
                 Ok(call) => {
+                    // Each call is a trace: what it asks of stations and ember cloud are its spans.
+                    let tracer = &self.inner.tracer;
+                    let mut span = tracer.root(name, Kind::Internal);
+                    if let Some(station) = call.station() {
+                        span.set("ember.station", station_id(station).to_string());
+                    }
                     let inner = self.inner.clone();
-                    self.inner.host.spawn(
-                        async move {
-                            let result = inner.execute(call).await;
-                            inner.host.emit(client, answer(id, result));
+                    self.inner.host.spawn(tracer.instrument(Some(span.context()), async move {
+                        let result = inner.execute(call).await;
+                        if let Err(error) = &result {
+                            span.fail();
+                            span.set("error.type", error.code.clone());
                         }
-                        .boxed_local(),
-                    );
+                        span.end();
+                        inner.host.emit(client, answer(id, result));
+                    }));
                 }
             },
             ClientMessage::Subscribe { id, subscribe } => self.inner.store.subscribe(client, id, subscribe),
@@ -169,12 +197,33 @@ struct Router {
     core: Weak<Inner>,
     stations: Rc<Stations>,
     views: Rc<Views>,
+    tracer: Rc<Tracer>,
+    /// Views opening: each is a trace (`chat.open`, …) until its first value goes out.
+    opening: RefCell<HashMap<Topic, Span>>,
+}
+
+/// A station's id in its address (`"<workspace>/<station>"`), or `local`.
+fn station_id(address: &str) -> &str {
+    address.rsplit('/').next().unwrap_or(address)
 }
 
 impl Source for Router {
     fn start(&self, topic: &Topic) {
         if topic.is_view() {
-            self.views.start(topic);
+            let (name, station) = match topic {
+                Topic::Chat { station, .. } => ("chat.open", Some(station)),
+                Topic::Chats { .. } => ("chats.open", None),
+                Topic::Stations { .. } => ("stations.open", None),
+                _ => ("connects.open", None),
+            };
+            let mut span = self.tracer.root(name, Kind::Internal);
+            if let Some(station) = station {
+                span.set("ember.station", station_id(station).to_string());
+            }
+            let context = span.context();
+            self.opening.borrow_mut().insert(topic.clone(), span);
+            // The topics it watches start now, inside the trace, and so do their first requests.
+            self.tracer.enter(Some(context), || self.views.start(topic));
         } else if topic.station().is_some() {
             self.stations.start(topic);
         } else if let Some(core) = self.core.upgrade() {
@@ -184,6 +233,9 @@ impl Source for Router {
 
     fn stop(&self, topic: &Topic) {
         if topic.is_view() {
+            // Given up before it had a value: recorded as cancelled.
+            let opening = self.opening.borrow_mut().remove(topic);
+            drop(opening);
             self.views.stop(topic);
         } else if topic.station().is_some() {
             self.stations.stop(topic);
@@ -194,7 +246,18 @@ impl Source for Router {
     }
 
     fn compute(&self, topic: &Topic) -> Option<Result<Value>> {
-        self.views.compute(topic)
+        let Some(context) = self.opening.borrow().get(topic).map(Span::context) else { return self.views.compute(topic) };
+        // Still opening: what it starts now (a chat's agents) is part of it too.
+        let value = self.tracer.enter(Some(context), || self.views.compute(topic));
+        let opened = if value.is_some() { self.opening.borrow_mut().remove(topic) } else { None };
+        if let Some(mut span) = opened {
+            if let Some(Err(error)) = &value {
+                span.fail();
+                span.set("error.type", error.code.clone());
+            }
+            span.end();
+        }
+        value
     }
 }
 
@@ -327,7 +390,7 @@ impl Inner {
                 let pending = async move {
                     let core = core.upgrade().ok_or_else(gone)?;
                     let relay = core.relay_url().await?;
-                    Mesh::new(core.host.clone(), &relay).await
+                    Mesh::new(core.host.clone(), core.tracer.clone(), &relay).await
                 }
                 .boxed_local()
                 .shared();
@@ -721,6 +784,17 @@ enum Call {
     StationUpload { station: String, key: String, name: String, bytes: Vec<u8> },
     StationFile { station: String, key: String, name: String },
     Migrate { accounts: Option<Value>, device: Option<Vec<u8>> },
+}
+
+impl Call {
+    /// The station a call is about, if any.
+    fn station(&self) -> Option<&str> {
+        match self {
+            Call::StationRequest { station, .. } | Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
+            Call::ChatOlder { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
+            Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::CloudRequest { .. } | Call::Migrate { .. } => None,
+        }
+    }
 }
 
 fn parse_call(name: &str, params: Value) -> Result<Call> {
@@ -1127,6 +1201,108 @@ mod tests {
             host.settle().await;
             assert_eq!(host.open_sockets("/v1/events"), 1);
             assert_eq!(count(&host, "/v1/me"), 2, "read again once it opened");
+        });
+    }
+
+    /// A core signed in as one account, on a station's own page (`local`, plain HTTP), whose admin API has chat 7
+    /// with one agent; `sample` of its traces recorded. Its timers run at their real pace.
+    async fn local_core(sample: f64) -> (Rc<FakeHost>, Core) {
+        let host = FakeHost::new();
+        let account = StoredAccount { sub: "s1".into(), email: "a@x.com".into(), name: String::new(), picture: String::new(), access: "tok".into(), refresh: "r0".into(), access_expires: now_s() + 3600.0 };
+        host.store(STORAGE_KEY, serde_json::to_vec(&vec![account]).unwrap());
+        host.on_fetch(|req| {
+            let path = req.url.trim_start_matches("https://ember.test");
+            match path.split('?').next().unwrap() {
+                "/admin/api/threads" => json_response(200, json!([{ "id": 7, "surface": "ember", "sessions": [{ "session": "k1" }], "createdAt": 1 }])),
+                "/admin/api/threads/7/messages" => json_response(200, json!({ "rev": 3, "messages": [], "more": false })),
+                "/admin/api/sessions" => json_response(200, json!([{ "key": "k1" }])),
+                "/admin/api/sessions/k1" => json_response(200, json!({ "session": { "key": "k1" }, "threads": [], "turns": [] })),
+                "/admin/api/overview" => json_response(200, json!({ "connects": [], "profiles": [] })),
+                "/v1/telemetry/traces" => json_response(202, json!({})),
+                _ => json_response(404, json!({})),
+            }
+        });
+        host.on_fetch_stream(|_| Ok(crate::host::StreamResponse { status: 200, headers: vec![], body: futures::stream::pending().boxed_local() }));
+        let core = Core::traced(host.clone(), sample).await;
+        (host, core)
+    }
+
+    fn header(request: &crate::host::HttpRequest, name: &str) -> Option<String> {
+        request.headers.iter().find(|(k, _)| k == name).map(|(_, v)| v.clone())
+    }
+
+    fn exports(host: &FakeHost) -> Vec<crate::host::HttpRequest> {
+        host.requests.borrow().iter().filter(|r| r.url.ends_with("/v1/telemetry/traces")).cloned().collect()
+    }
+
+    #[test]
+    fn a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets() {
+        run(async {
+            let (host, core) = local_core(1.0).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: 7 } });
+            host.settle().await;
+            assert!(host.take_emitted().iter().any(|(_, m)| matches!(m, CoreMessage::Value { id: 1, .. })));
+            let admin: Vec<_> = host.requests.borrow().iter().filter(|r| r.url.contains("/admin/api/")).cloned().collect();
+            let paths: Vec<&str> = admin.iter().map(|r| r.url.trim_start_matches("https://ember.test/admin/api")).collect();
+            assert_eq!(paths.len(), 6, "{paths:?}");
+            assert!(paths.contains(&"/sessions/k1"), "the agent read as the chat opens: {paths:?}");
+            let parents: Vec<String> = admin.iter().map(|r| header(r, "traceparent").expect("traceparent")).collect();
+            let trace = parents[0][3..35].to_string();
+            assert!(parents.iter().all(|p| p[3..35] == trace && p.ends_with("-01")), "{parents:?}");
+            // Spans wait to go out together.
+            assert!(exports(&host).is_empty());
+
+            pass(SPEEDUP * (trace::EXPORT_MS + 100)).await;
+            let sent = exports(&host);
+            assert_eq!(sent.len(), 1);
+            assert_eq!(header(&sent[0], "authorization").as_deref(), Some("Bearer tok"));
+            assert_eq!(header(&sent[0], "traceparent"), None, "sending spans is no trace");
+            let body: Value = serde_json::from_slice(sent[0].body.as_deref().unwrap()).unwrap();
+            let spans = body["resourceSpans"][0]["scopeSpans"][0]["spans"].as_array().unwrap().clone();
+            let named = |name: &str| spans.iter().find(|s| s["name"] == name).unwrap_or_else(|| panic!("no {name}: {spans:?}")).clone();
+            let root = named("chat.open");
+            assert_eq!(root["traceId"], trace.as_str());
+            assert!(root.get("parentSpanId").is_none());
+            let threads = named("GET /admin/api/threads");
+            assert_eq!(threads["parentSpanId"], root["spanId"]);
+            assert!(parents.iter().any(|p| p[36..52] == *threads["spanId"].as_str().unwrap()), "the request carries its own span");
+            assert_eq!(named("GET /admin/api/sessions/:id")["parentSpanId"], root["spanId"]);
+            let connect = named("station.connect");
+            assert_eq!(connect["parentSpanId"], root["spanId"]);
+            assert_eq!(named("GET /admin/api/events")["parentSpanId"], connect["spanId"]);
+            assert!(spans.iter().all(|s| s["traceId"] == trace.as_str()));
+            let text = serde_json::to_string(&spans).unwrap();
+            assert!(!text.contains("a@x.com") && !text.contains("tok"), "{text}");
+
+            // Nothing new: nothing more is sent.
+            pass(SPEEDUP * (trace::EXPORT_MS + 100)).await;
+            assert_eq!(exports(&host).len(), 1);
+        });
+    }
+
+    #[test]
+    fn calls_are_traces_and_nothing_goes_out_when_tracing_is_off() {
+        run(async {
+            let (host, core) = local_core(1.0).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Call { id: 1, call: "station.request".into(), params: json!({ "station": "local", "method": "GET", "path": "/overview" }) });
+            host.settle().await;
+            pass(SPEEDUP * (trace::EXPORT_MS + 100)).await;
+            let body: Value = serde_json::from_slice(exports(&host)[0].body.as_deref().unwrap()).unwrap();
+            let names: Vec<String> = body["resourceSpans"][0]["scopeSpans"][0]["spans"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap().to_string()).collect();
+            assert_eq!(names, ["GET /admin/api/overview", "station.request"]);
+
+            let (host, core) = local_core(0.0).await;
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: 7 } });
+            core.receive(ui, ClientMessage::Call { id: 2, call: "station.request".into(), params: json!({ "station": "local", "method": "GET", "path": "/overview" }) });
+            host.settle().await;
+            pass(SPEEDUP * (trace::EXPORT_MS + 100)).await;
+            assert!(exports(&host).is_empty());
+            // Stations still hear that these are not recorded.
+            let parents: Vec<String> = host.requests.borrow().iter().filter_map(|r| header(r, "traceparent")).collect();
+            assert!(!parents.is_empty() && parents.iter().all(|p| p.ends_with("-00")), "{parents:?}");
         });
     }
 

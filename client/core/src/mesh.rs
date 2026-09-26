@@ -28,6 +28,7 @@ use serde_json::{Value, json};
 use crate::cloud::Grant;
 use crate::error::{CoreError, Result};
 use crate::host::Host;
+use crate::trace::{Kind, Tracer};
 
 pub const DEVICE_KEY: &str = "device";
 pub const ALPN: &[u8] = b"ember/admin/1";
@@ -56,6 +57,7 @@ type Opening = Shared<LocalBoxFuture<'static, Result<Rc<Link>>>>;
 
 pub struct Mesh {
     host: Rc<dyn Host>,
+    tracer: Rc<Tracer>,
     relay_url: String,
     /// Replaced when `migrate` brings another device key.
     endpoint: RefCell<Endpoint>,
@@ -65,7 +67,7 @@ pub struct Mesh {
 impl Mesh {
     /// Binds the endpoint with the stored device key (making and storing one the first time).
     /// An empty `relay_url` binds without a relay (direct addresses only: tests, a LAN).
-    pub async fn new(host: Rc<dyn Host>, relay_url: &str) -> Result<Rc<Mesh>> {
+    pub async fn new(host: Rc<dyn Host>, tracer: Rc<Tracer>, relay_url: &str) -> Result<Rc<Mesh>> {
         let stored = host.storage_get(DEVICE_KEY).await?;
         let secret: [u8; 32] = match stored.and_then(|bytes| bytes.try_into().ok()) {
             Some(secret) => secret,
@@ -78,7 +80,7 @@ impl Mesh {
             }
         };
         let endpoint = bind(&secret, relay_url).await?;
-        Ok(Rc::new(Mesh { host, relay_url: relay_url.to_string(), endpoint: RefCell::new(endpoint), links: RefCell::default() }))
+        Ok(Rc::new(Mesh { host, tracer, relay_url: relay_url.to_string(), endpoint: RefCell::new(endpoint), links: RefCell::default() }))
     }
 
     /// The device key's public half, hex: what grants name.
@@ -102,7 +104,28 @@ impl Mesh {
                 Some(_) => {}
             }
         }
-        let opening = open(self.host.clone(), self.endpoint(), station_id.to_string(), grants).boxed_local().shared();
+        // A span of the request that needed the link; the grant it asks ember cloud for is part of it.
+        let mut span = self.tracer.span("mesh.connect", Kind::Internal);
+        span.set("ember.station", station_id.to_string());
+        let opening = self.tracer.instrument(Some(span.context()), open(self.host.clone(), self.endpoint(), station_id.to_string(), grants));
+        let opening = async move {
+            let link = opening.await;
+            match &link {
+                Ok(link) => {
+                    if let Some(path) = link.path() {
+                        span.set("ember.path", path);
+                    }
+                }
+                Err(error) => {
+                    span.fail();
+                    span.set("error.type", error.code.clone());
+                }
+            }
+            span.end();
+            link
+        }
+        .boxed_local()
+        .shared();
         self.links.borrow_mut().insert(station_id.to_string(), opening.clone());
         opening.await
     }
@@ -285,6 +308,11 @@ impl Link {
     /// Closes the connection now (its streams end with it).
     pub fn close(&self) {
         self.conn.close(0u32.into(), b"closed");
+    }
+
+    /// How the connection runs now: `relay`, or `direct` once hole punching found a way.
+    pub fn path(&self) -> Option<&'static str> {
+        self.conn.paths().iter().find(|p| p.is_selected()).map(|p| if p.is_relay() { "relay" } else { "direct" })
     }
 
     /// Open, and its grant still being renewed.
@@ -515,7 +543,7 @@ mod tests {
 
     async fn setup(host: Rc<dyn Host>) -> (Rc<Mesh>, Station) {
         let station = Station::start().await;
-        let mesh = Mesh::new(host, "").await.unwrap();
+        let mesh = Mesh::new(host.clone(), Tracer::new(host, 1.0), "").await.unwrap();
         mesh.endpoint().address_lookup().unwrap().add(MemoryLookup::from_endpoint_info([station.addr()]));
         (mesh, station)
     }
@@ -646,8 +674,8 @@ mod tests {
     fn keeps_the_device_key_and_migrates_to_the_pages() {
         run(async {
             let host = FakeHost::new();
-            let first = Mesh::new(host.clone(), "").await.unwrap();
-            let again = Mesh::new(host.clone(), "").await.unwrap();
+            let first = Mesh::new(host.clone(), Tracer::new(host.clone(), 1.0), "").await.unwrap();
+            let again = Mesh::new(host.clone(), Tracer::new(host.clone(), 1.0), "").await.unwrap();
             assert_eq!(first.device_id(), again.device_id());
 
             let page = [7u8; 32];
