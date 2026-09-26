@@ -166,7 +166,7 @@ fun StateDot(state: ChatState) {
 /**
  * A row: its title (bold while something in it is unread, a blue dot in the
  * margin) and, for an agent that came from Slack, the connect's mark; under
- * it the last thing said, and the agents' state as a dot. Two lines, always
+ * it the last thing said, the agent's state on its picture when it said it. Two lines, always
  * the same height. The time shows only while the row is held.
  */
 @Composable
@@ -196,11 +196,10 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
                 }
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // The state rides on the agent's picture when the agent said the last thing; else it is a dot at the end.
+                // The state rides on the agent's picture, when the agent said the last thing; nowhere else.
                 val onPicture = item.last?.authorKind == "agent" && item.agents.any { it.key == item.last.author }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item, view, if (onPicture) item.state() else null) } }
                 if (held) Text(relativeTime(item.lastActiveAt), fontSize = 12.sp, color = C.subtle, maxLines = 1)
-                Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) { if (!onPicture) StateDot(item.state()) }
             }
         }
     }
