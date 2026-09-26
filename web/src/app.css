@@ -573,9 +573,10 @@
 .creator { flex: none; font-size: var(--text-xs); color: var(--muted); font-weight: 400; white-space: nowrap; }
 .chat-owner { font-weight: 400; color: var(--muted); font-size: var(--text-xs); }
 .station-tag.inline { margin-left: 8px; }
-.mine-filter { padding: 4px 12px 2px; }
-.mine-filter .segmented { --pad: 2px; }
-.mine-filter .segmented-option { height: 26px; font-size: var(--text-xs); }
+.mine-filter-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: none; height: 32px; min-width: 32px; padding: 0 8px; border: 0; border-radius: calc(8px * var(--corner-scale)); corner-shape: var(--corner-shape); background: none; color: var(--muted); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.mine-filter-btn:hover, .mine-filter-btn[data-state="open"] { background: var(--hover); color: var(--text); }
+.mine-filter-btn[data-on] { color: var(--accent-text); background: var(--accent-bg); }
+.mine-filter-wide { border: 1px solid var(--line); margin-bottom: 12px; }
 .page .mine-filter { padding: 0 0 12px; max-width: 220px; margin: 0; }
 .connect-facts { display: flex; align-items: center; gap: 10px; flex: none; }
 .owner { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text); white-space: nowrap; }
@@ -1204,7 +1205,8 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .chooser-group { display: flex; align-items: center; gap: 6px; }
 .chooser-item { display: flex; align-items: center; gap: 6px; }
 .chooser-check { width: 14px; display: inline-grid; place-items: center; flex: none; }
-.nav-new { padding: 6px 8px 2px; }
+.nav-new { display: flex; align-items: center; gap: 4px; padding: 6px 8px 2px; }
+.nav-new > .nav-row { flex: 1; min-width: 0; }
 
 /* A profile's model pool: a checklist of what it may be used for. */
 .model-pool { display: grid; gap: 8px; }

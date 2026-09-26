@@ -2,16 +2,33 @@
 import { useAppearance } from "./theme.ts";
 import { useIsMine, type Creator, type HostInfo, type ProcessView, type ProfileQuota } from "./api.ts";
 import { useOnlyMine, usePerson } from "./station.tsx";
-import { Segmented, Tip } from "./ui.tsx";
+import { Tip } from "./ui.tsx";
+import { Check, ListFilter } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
 
-/** 全部 / 我参与的 (chats) or 我创建的 (connects) */
-export function MineFilter({ label = "筛选", mine = "我创建的" }: { label?: string; mine?: string }) {
+/**
+ * A filter: 全部 or only the viewer's (我参与的 for chats, 我创建的 for connects), from a menu. `compact`: a filter
+ * button alone, marked while it filters; else the filter's name beside it.
+ */
+export function MineFilter({ label = "筛选", mine = "我创建的", compact }: { label?: string; mine?: string; compact?: boolean }) {
   const [onlyMine, setOnlyMine] = useOnlyMine();
+  const item = (value: boolean, text: string) => (
+    <DropdownMenu.Item className="menu-item chooser-item" onSelect={() => setOnlyMine(value)}>
+      <span className="chooser-check">{onlyMine === value && <Check size={13} />}</span>{text}
+    </DropdownMenu.Item>
+  );
   return (
-    <div className="mine-filter">
-      <Segmented label={label} value={onlyMine ? "mine" : "all"} onChange={(v) => setOnlyMine(v === "mine")}
-        options={[{ value: "all", label: "全部" }, { value: "mine", label: mine }]} />
-    </div>
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger className={compact ? "mine-filter-btn" : "mine-filter-btn mine-filter-wide"} title={`筛选${label}`} aria-label={`筛选${label}：${onlyMine ? mine : "全部"}`} data-on={onlyMine || undefined}>
+        <ListFilter size={15} strokeWidth={1.8} />{!compact && <span>{onlyMine ? mine : "全部"}</span>}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className="popover menu-list chooser-menu" align="end" sideOffset={6} collisionPadding={8}>
+          {item(false, `全部${label}`)}
+          {item(true, mine)}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 

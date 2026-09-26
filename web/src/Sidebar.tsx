@@ -56,8 +56,10 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
   const mine = useChats(scope, true);
   return (
     <MeContext.Provider value={all.value?.me ?? mine.value?.me ?? null}>
-      <div className="nav-new"><NavLink className="nav-row" to={newChat}><SquarePen {...ICON} />新建对话</NavLink></div>
-      <MineFilter label="会话" mine="我参与的" />
+      <div className="nav-new">
+        <NavLink className="nav-row" to={newChat}><SquarePen {...ICON} />新建对话</NavLink>
+        <MineFilter label="会话" mine="我参与的" compact />
+      </div>
       <div className="nav-slider">
         <div className="nav-track" data-mine={onlyMine || undefined}>
           <ChatPane chats={all} scope={scope} onlyMine={false} newChat={newChat} settings={settings} hidden={onlyMine} />
