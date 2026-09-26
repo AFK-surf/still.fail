@@ -4,12 +4,12 @@
 import { StationPreview } from "../Preview.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaBars, QuotaRing, Ring, mark, refillsIn } from "../components.tsx";
-import { Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
+import { Check, ChevronRight, Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
 import { DropdownMenu, Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
-import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall, useStations, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type SessionSummary, type ThreadView } from "../api.ts";
+import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall, useStations, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type RunnableProfile, type RuntimeKind, type SessionSummary, type ThreadView } from "../api.ts";
 import { History } from "../History.tsx";
 import { ChatPanel } from "../Chat.tsx";
 import {
@@ -348,7 +348,6 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
   const toast = useToast();
   const host = useHost(station.address).value;
   const view = useStations(scopeOf(station.address)).value?.find((s) => s.station === station.address);
-  const models = view?.runtimes.find((r) => r.runtime === session.runtime)?.models ?? [];
   const change = useAction((input: { profile?: string | null; model?: string | null; effort?: string | null }) => api.sessionSettings(session.key, input), () => toast("已改，下一轮起生效"));
   const usage = live?.usage;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
@@ -360,10 +359,18 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
       {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota), each a
           menu. The account is the station's pick unless kept to one here. */}
       <div className="run-model">
+        {/* Another model is three picks in one: the model, how hard it thinks, and who runs it. Only the last one changes
+            anything, so a pick left halfway leaves it as it was. */}
         <Chooser className="chooser run-chip" title="换模型" label={<><ModelLogo model={session.model} runtime={session.runtime} size={13} />{session.model ?? "运行时默认"}</>}>
-          <ChooserItem checked={!session.model} onSelect={() => void change.run({ model: null })}>运行时默认</ChooserItem>
-          {[...new Set([...(session.model ? [session.model] : []), ...models])].map((m) => (
-            <ChooserItem key={m} checked={session.model === m} onSelect={() => void change.run({ model: m })}><ModelLogo model={m} runtime={session.runtime} size={12} />{m}</ChooserItem>
+          {agent.choices.map((c) => (
+            <Step key={c.model} checked={session.model === c.model} label={<><ModelLogo model={c.model} runtime={session.runtime} size={12} />{c.model}</>}>
+              {[null, ...EFFORTS[session.runtime]].map((e) => (
+                <Step key={e ?? ""} checked={session.model === c.model && session.effort === e} label={e ?? "默认深度"}>
+                  <ProfileItems profiles={c.profiles} runtime={session.runtime} pinned={session.model === c.model && session.effort === e && session.profilePinned}
+                    onPick={(profile) => void change.run({ model: c.model, effort: e, profile })} />
+                </Step>
+              ))}
+            </Step>
           ))}
         </Chooser>
         <Chooser className="chooser run-chip" title="换思考深度" label={session.effort ?? "默认深度"}>
@@ -378,17 +385,7 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
               <QuotaBars quota={current?.quota ?? profile?.quota} compact />
             </>
           )}>
-          <ChooserItem checked={!session.profilePinned} onSelect={() => void change.run({ profile: null })}>
-            <span className="run-option-text"><strong>自动分配</strong><span className="muted">能用就留在当前账号；额度用完或登录失效时，换一个还有额度的</span></span>
-          </ChooserItem>
-          <DropdownMenu.Separator className="menu-separator" />
-          {agent.profiles.map((p) => (
-            <ChooserItem key={p.id} checked={session.profilePinned && p.current} onSelect={() => void change.run({ profile: p.id })}>
-              <ProviderLogo runtime={p.runtime ?? session.runtime} kind={p.kind ?? "env"} size={15} />
-              <span className="run-option-text"><span>{p.name}</span>{p.current && !session.profilePinned && <span className="muted">当前</span>}</span>
-              <QuotaBars quota={p.quota} compact />
-            </ChooserItem>
-          ))}
+          <ProfileItems profiles={agent.profiles} runtime={session.runtime} pinned={session.profilePinned} onPick={(profile) => void change.run({ profile })} />
         </Chooser>
       </div>
       {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
@@ -410,6 +407,39 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
         )}
       </div>
     </div>
+  );
+}
+
+/** A step of a pick made in steps: its choices open beside it. */
+function Step({ checked, label, children }: { checked: boolean; label: ReactNode; children: ReactNode }) {
+  return (
+    <DropdownMenu.Sub>
+      <DropdownMenu.SubTrigger className="menu-item chooser-item chooser-step">
+        <span className="chooser-check">{checked && <Check size={13} />}</span>{label}<ChevronRight size={13} className="chooser-step-arrow" />
+      </DropdownMenu.SubTrigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.SubContent className="popover menu-list chooser-menu" sideOffset={4} collisionPadding={8}>{children}</DropdownMenu.SubContent>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Sub>
+  );
+}
+
+/** Who runs it: the station's pick, or one kept to by hand (`pinned`: it is), each with its quota. */
+function ProfileItems({ profiles, runtime, pinned, onPick }: { profiles: RunnableProfile[]; runtime: RuntimeKind; pinned: boolean; onPick(profile: string | null): void }) {
+  return (
+    <>
+      <ChooserItem checked={!pinned && profiles.some((p) => p.current)} onSelect={() => onPick(null)}>
+        <span className="run-option-text"><strong>自动分配</strong><span className="muted">能用就留在当前账号；额度用完或登录失效时，换一个还有额度的</span></span>
+      </ChooserItem>
+      <DropdownMenu.Separator className="menu-separator" />
+      {profiles.map((p) => (
+        <ChooserItem key={p.id} checked={pinned && p.current} onSelect={() => onPick(p.id)}>
+          <ProviderLogo runtime={p.runtime ?? runtime} kind={p.kind ?? "env"} size={15} />
+          <span className="run-option-text"><span>{p.name}</span>{p.current && !pinned && <span className="muted">当前</span>}</span>
+          <QuotaBars quota={p.quota} compact />
+        </ChooserItem>
+      ))}
+    </>
   );
 }
 

@@ -82,7 +82,7 @@ export type Attention =
 export interface RunnableProfile { id: string; name: string; current: boolean; spent: { until: number | null } | null; kind: AccessKind | null; runtime: RuntimeKind | null; quota: ProfileQuota | null }
 export interface ChatAgentView {
   session: SessionSummary; status: Status; badge: Badge | null; connect: ConnectView | null; profile: ProfileView | null; turns: TurnRecord[]; threads: ThreadView[];
-  profiles: RunnableProfile[]; attention: Attention[];
+  profiles: RunnableProfile[]; choices: { model: string; profiles: RunnableProfile[] }[]; attention: Attention[];
 }
 
 /**

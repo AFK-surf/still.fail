@@ -1191,6 +1191,7 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .chooser-menu { max-height: 360px; overflow-y: auto; min-width: 220px; }
 .chooser-group { display: flex; align-items: center; gap: 6px; }
 .chooser-item { display: flex; align-items: center; gap: 6px; }
+.chooser-step-arrow { margin-left: auto; padding-left: 12px; box-sizing: content-box; }
 .chooser-check { width: 14px; display: inline-grid; place-items: center; flex: none; }
 .nav-new { padding: 6px 8px 2px; }
 

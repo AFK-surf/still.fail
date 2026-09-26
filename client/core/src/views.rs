@@ -582,6 +582,8 @@ impl Views {
             "profile": of("profiles", session.get("profile")),
             // Whom it can be moved to: the profiles that run its runtime (its transcripts are shared by them all).
             "profiles": runnable_on(overview.as_ref(), &session),
+            // What it can be moved to, a model at a time: another model, and then who runs it.
+            "choices": choices(overview.as_ref(), &session),
             // What is worth a look about it now (a quota running out, the disk filling up): its history's summary.
             "attention": attention(overview.as_ref(), &session),
             "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
@@ -759,6 +761,24 @@ fn runnable_on(overview: Option<&Value>, session: &Value) -> Value {
     let runtime = session.get("runtime").and_then(Value::as_str).unwrap_or("");
     let model = session.get("model").and_then(Value::as_str);
     let current = session.get("profile").and_then(Value::as_str);
+    profiles_running(overview, runtime, model, current)
+}
+
+/// The models a session can move to (those a profile of its runtime has enabled), each with the profiles that run it:
+/// `[{ model, profiles }]`, `profiles` as `runnable_on` has them.
+fn choices(overview: Option<&Value>, session: &Value) -> Value {
+    let runtime = session.get("runtime").and_then(Value::as_str).unwrap_or("");
+    let current = session.get("profile").and_then(Value::as_str);
+    let models: BTreeSet<&str> = overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
+        .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
+        .flat_map(|p| p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str))
+        .collect();
+    Value::Array(models.into_iter()
+        .map(|model| json!({ "model": model, "profiles": profiles_running(overview, runtime, Some(model), current) }))
+        .collect())
+}
+
+fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>, current: Option<&str>) -> Value {
     Value::Array(overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
         .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
         // With a model chosen, only those that have it enabled can run it.
@@ -1020,6 +1040,9 @@ mod tests {
             {"id": "a", "name": "A", "current": true, "spent": null, "kind": null, "runtime": null, "quota": null},
             {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0}, "kind": null, "runtime": null, "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}},
         ]));
+        // Every model of its runtime, each with who runs it.
+        let models: Vec<&str> = choices(Some(&overview), &session).as_array().unwrap().iter().map(|c| c["model"].as_str().unwrap()).collect();
+        assert!(models.contains(&"m"));
     }
 
     #[test]
