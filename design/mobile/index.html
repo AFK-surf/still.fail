@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ember 移动端 · 可交互概念</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<aside class="guide">
+  <img class="guide-lockup" src="assets/lockup.svg" alt="ember">
+  <h1>移动端 · 可交互概念</h1>
+  <p class="guide-lead">手机上的 ember 用来<strong>分派和把关</strong>：谁卡住了等我、谁在跑、跑到哪了，一只手就能处理。细读长输出留给电脑。</p>
+  <div class="guide-group">
+    <div class="guide-label">页面</div>
+    <button data-go="signin">首次登录</button>
+    <button data-go="home">会话（首页）</button>
+    <button data-go="chat:cue">对话 · 在 block 的会话</button>
+    <button data-go="chat:zork">对话 · 正在跑的会话</button>
+    <button data-go="newchat">新对话</button>
+    <button data-go="stations">Station</button>
+    <button data-go="me">我 · 设置</button>
+    <button data-go="lock">锁屏 · Live Activity</button>
+  </div>
+  <div class="guide-group">
+    <div class="guide-label">模拟</div>
+    <button id="sim-push">收到一条 block 推送</button>
+    <button id="sim-theme">切换深色 / 浅色</button>
+  </div>
+  <div class="guide-group guide-tips">
+    <div class="guide-label">试试</div>
+    <p>点会话进入对话；点 agent 的名字、头像或正在工作的活动区打开<strong>执行历史</strong>（可拖到半屏 / 全屏）；长按一条消息<strong>引用</strong>；点 ＋ 加附件；在 block 的会话里点快捷回复；首页标题可以切换 workspace；左上角头像是设置，右上角是 Station。</p>
+  </div>
+</aside>
+
+<main class="stage">
+  <div class="device" id="device" data-theme="light">
+    <div class="island"></div>
+    <div class="statusbar"><span class="sb-time">9:41</span><span class="sb-icons"><i class="sb-signal"></i><i class="sb-wifi"></i><i class="sb-batt"></i></span></div>
+    <div class="screens" id="screens"></div>
+    <nav class="tabbar" id="tabbar">
+      <button data-tab="home" class="on"><span class="tab-ico ico-chat"></span><span>会话</span><em class="tab-badge" id="tab-badge">1</em></button>
+      <button data-tab="stations"><span class="tab-ico ico-server"></span><span>Station</span></button>
+      <button data-tab="me"><span class="tab-ico ico-me"></span><span>我</span></button>
+    </nav>
+    <div class="overlay" id="overlay"></div>
+    <div class="banner" id="banner" hidden></div>
+    <div class="home-indicator"></div>
+  </div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
