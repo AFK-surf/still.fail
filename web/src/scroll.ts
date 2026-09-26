@@ -8,7 +8,8 @@
 // Scrolling by the reader sets the new position.
 // With a `floor` (an empty last child), the content never gets shorter: what
 // leaves the bottom (an activity folding away) leaves its space behind, filled
-// by the floor, so nothing above it drops down.
+// by the floor, so nothing above it drops down. A change of the pane's width
+// lays everything out anew, so the floor lets go of what it was holding.
 import { useEffect, type RefObject } from "react";
 
 /** `messages` selects which of the pane's children count as messages. */
@@ -19,10 +20,12 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     let gap = 0;
     /** The furthest the content has reached; the floor makes up what it has lost since. */
     let reached = 0;
+    let width = el.clientWidth;
     const keepHeight = () => {
       const f = floor?.current;
       if (!f) return;
       const end = el.scrollTop + f.getBoundingClientRect().top - el.getBoundingClientRect().top;
+      if (el.clientWidth !== width) { width = el.clientWidth; reached = 0; }
       reached = Math.max(reached, end);
       const height = `${Math.round(reached - end)}px`;
       if (f.style.height !== height) f.style.height = height;
