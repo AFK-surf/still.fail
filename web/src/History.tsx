@@ -75,8 +75,16 @@ type Item =
   | { type: "mark"; kind: string }
   | { type: "group"; steps: Step[]; thinking: TimelineEntry[] };
 
-function toItems(entries: TimelineEntry[]): Item[] {
+/** Which transcript entries each item draws, first to last: an activity row opens the history at its entry. */
+type Spans = Map<Item, [number, number]>;
+
+function toItems(entries: TimelineEntry[]): { items: Item[]; spans: Spans } {
   const items: Item[] = [];
+  const spans: Spans = new Map();
+  const cover = (item: Item, i: number) => {
+    const span = spans.get(item);
+    spans.set(item, span ? [span[0], i] : [i, i]);
+  };
   const steps = new Map<string, Step>();
   let group: Extract<Item, { type: "group" }> | null = null;
   let lastStep: Step | null = null;
@@ -87,11 +95,12 @@ function toItems(entries: TimelineEntry[]): Item[] {
     }
     return group;
   };
-  for (const e of entries) {
+  entries.forEach((e, i) => {
     if (e.kind === "tool_result") {
       const step = (e.callId && steps.get(e.callId)) || (lastStep && !lastStep.result ? lastStep : null);
       if (step) step.result = e;
-      continue;
+      if (items.length) cover(items.at(-1)!, i);
+      return;
     }
     if (e.kind === "tool_call") {
       const step: Step = { call: e, result: null };
@@ -108,16 +117,19 @@ function toItems(entries: TimelineEntry[]): Item[] {
       } else {
         openGroup().steps.push(step);
       }
-      continue;
+      cover(items.at(-1)!, i);
+      return;
     }
     if (e.kind === "thinking") {
       openGroup().thinking.push(e);
-      continue;
+      cover(items.at(-1)!, i);
+      return;
     }
     group = null;
     items.push(e.kind === "user" ? { type: "received", entry: e } : { type: "text", entry: e });
-  }
-  return items;
+    cover(items.at(-1)!, i);
+  });
+  return { items, spans };
 }
 
 /**
@@ -125,11 +137,13 @@ function toItems(entries: TimelineEntry[]): Item[] {
  * stands (in the header line) and `actions` what can
  * be done to it right now (stop a turn, release the process).
  */
-export function History({ session, threads, connect, summary, actions, details, live }: {
+export function History({ session, threads, connect, summary, actions, details, live, focus }: {
   /** Who the agent is shows on the tab; the head carries a short summary (allowance, disk, cache) and `details` unfolds under it. */
   session: SessionSummary; threads: ThreadView[]; connect: ConnectView | undefined; summary?: ReactNode; actions?: ReactNode; details?: ReactNode;
   /** The transcript as it grows, the steps the runtime is streaming right now after its last entry, and where the running turn stands. */
   live: LiveView | undefined;
+  /** An entry to bring into view (n changes each time it is asked for). */
+  focus?: { entry: number; n: number } | null;
 }) {
   const botUserId = botUserIdOf(connect);
   const member = usePerson();
@@ -152,7 +166,18 @@ export function History({ session, threads, connect, summary, actions, details, 
   // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
   useStickToBottom(body, ".h-item, .live-tail, .h-text");
   const timeline = live?.timeline;
-  const items = useMemo(() => toItems(timeline ?? []), [timeline]);
+  const { items, spans } = useMemo(() => toItems(timeline ?? []), [timeline]);
+  // Opened at an entry (an activity row): the item that draws it comes into view, and says so for a moment.
+  useEffect(() => {
+    if (!focus) return;
+    const at = items.findIndex((item) => { const span = spans.get(item); return span !== undefined && span[0] <= focus.entry && focus.entry <= span[1]; });
+    const el = at < 0 ? null : body.current?.querySelector<HTMLElement>(`[data-item="${at}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center" });
+    el.dataset.focus = "";
+    const timer = setTimeout(() => delete el.dataset.focus, 1600);
+    return () => clearTimeout(timer);
+  }, [focus?.n, items.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
   // What was there when the history opened shows at once; only what comes later animates.
   const firstCount = useRef(Number.POSITIVE_INFINITY);
   if (firstCount.current === Number.POSITIVE_INFINITY && live?.loaded) firstCount.current = items.length;
@@ -195,7 +220,7 @@ export function History({ session, threads, connect, summary, actions, details, 
             <p className="history-edge">已到 Session 开始处</p>
             {items.map((item, i) => (
               // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
-              <div key={i} className="h-item" data-enter={i >= firstCount.current && item.type !== "text" ? true : undefined}>
+              <div key={i} className="h-item" data-item={i} data-enter={i >= firstCount.current && item.type !== "text" ? true : undefined}>
                 <HistoryItem item={item} where={where} person={(m) => (m.slack ? <SlackName user={m.user} name={m.name || m.user} /> : member(m.user)?.name || m.name || m.user)}
                   mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : member(id)?.name ?? id}`)} />
               </div>

@@ -2,10 +2,9 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Bot, Brain, ChevronDown, ChevronUp, Download, FileText, Globe, MessagesSquare, Pencil, Plus, Quote as QuoteIcon, Search, Terminal, Wrench, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
-import { activityText, toolName } from "./History.tsx";
+import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ActivityView } from "./api.ts";
 import { agentLabel, botUserIdOf, sessionStatus } from "./format.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
@@ -23,7 +22,7 @@ interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime
  * `ensureChat` makes the chat with the first message, which `onSent` then follows.
  */
 export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
-  chat: ChatView; lives: ReadonlyMap<string, LiveView>; onOpenHistory(key: string): void;
+  chat: ChatView; lives: ReadonlyMap<string, LiveView>; onOpenHistory(key: string, entry?: number): void;
   ensureChat?: () => Promise<{ key: string; thread: number }>; onSent?: (thread: number) => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
@@ -189,7 +188,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
           if (!busy && !lastAgents.current) return null;
           const atWork: AgentAtWork[] = busy ? busyAgents.map((a) => ({
             key: a.key, who: a.who, runtime: a.runtime, model: a.model,
-            timeline: a.live?.timeline ?? [], live: a.live?.steps ?? [], phase: a.live?.phase ?? null,
+            activity: a.live?.activity ?? null,
             since: a.turns.at(-1)?.endedAt == null ? a.turns.at(-1)?.startedAt ?? null : null,
           })) : lastAgents.current!;
           if (busy) lastAgents.current = atWork;
@@ -733,46 +732,14 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
 /** An agent in this chat that is at work: who it is, its execution history, and its running turn. */
 interface AgentAtWork {
   key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null;
-  timeline: TimelineEntry[]; live: ShownStep[]; phase: ShownPhase | null; since: number | null;
+  /** What it is doing, as the core says (null until its live view has come). */
+  activity: ActivityView | null; since: number | null;
 }
 
-/** A row of an agent's activity: one entry of its execution history, or a step still streaming. */
-interface ActivityRow { key: string; text: string; live: boolean }
-
-/**
- * The running turn's rows: execution history since the last message the agent
- * received, then what is still streaming. Rows say what the agent did for the
- * person watching: a reply being written shows as the message itself, not a
- * row; recording state and the agent's own narration are left out.
- */
-function activityRows(timeline: TimelineEntry[], live: ShownStep[], phase: ShownPhase | null): ActivityRow[] {
-  let start = timeline.length;
-  while (start > 0 && !(timeline[start - 1]!.kind === "user" && !timeline[start - 1]!.subagent)) start--;
-  const done = (tool: string | undefined, input: string): string | null => {
-    const name = toolName(tool);
-    if (name === "chat_state") return null;
-    if (name === "chat_post") return "发出回复";
-    if (name === "chat_history") return "查看对话";
-    return activityText(tool, input).replace(/^正在/, "");
-  };
-  const rows: ActivityRow[] = [];
-  timeline.slice(start).forEach((e, i) => {
-    if (e.subagent) return;
-    const text = e.kind === "tool_call" ? done(e.tool, e.text) : e.kind === "thinking" ? "思考" : null;
-    if (text) rows.push({ key: `t${start + i}`, text, live: false });
-  });
-  for (const s of live) {
-    if (s.ended || s.subagent || s.step === "text") continue;
-    const name = toolName(s.tool);
-    if (s.step === "tool" && (name === "chat_post" || name === "chat_state")) continue;
-    rows.push({ key: s.id, text: s.step === "thinking" ? "正在思考" : activityText(s.tool, s.input), live: true });
-  }
-  if (!rows.some((r) => r.live) && phase) {
-    const waiting = phase.phase === "starting" ? "正在启动" : phase.phase === "requesting" ? "等待模型响应" : phase.phase === "responding" ? "正在思考" : null;
-    if (waiting) rows.push({ key: `phase-${phase.phase}-${phase.since}`, text: waiting, live: true });
-  }
-  return rows;
-}
+/** A row's icon, by what kind of thing it does. */
+const ACTIVITY_ICON: Record<ActivityView["rows"][number]["kind"], typeof Terminal> = {
+  read: FileText, search: Search, edit: Pencil, command: Terminal, web: Globe, agent: Bot, thread: MessagesSquare, think: Brain, other: Wrench,
+};
 
 const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
 
@@ -781,24 +748,24 @@ const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
  * messages. A runtime's own sub-agents are not agents of the chat; their
  * work is one row of the agent's.
  */
-function Activities({ agents, onOpenHistory, leaving = false }: { agents: AgentAtWork[]; onOpenHistory(key: string): void; leaving?: boolean }) {
+function Activities({ agents, onOpenHistory, leaving = false }: { agents: AgentAtWork[]; onOpenHistory(key: string, entry?: number): void; leaving?: boolean }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(ACTIVITY_COLLAPSED) === "1");
   const toggle = () => {
     localStorage.setItem(ACTIVITY_COLLAPSED, collapsed ? "0" : "1");
     setCollapsed(!collapsed);
   };
-  return <>{agents.map((a) => <Activity key={a.key} agent={a} collapsed={collapsed} onToggle={toggle} onOpen={() => onOpenHistory(a.key)} leaving={leaving} />)}</>;
+  return <>{agents.map((a) => <Activity key={a.key} agent={a} collapsed={collapsed} onToggle={toggle} onOpen={(entry) => onOpenHistory(a.key, entry)} leaving={leaving} />)}</>;
 }
 
 /**
- * An agent at work: its last three rows in three fixed lines (or the newest
- * in one). A new row comes in from below and pushes the oldest out above.
+ * An agent at work, as the core puts it (after Zork's): its name and a status line (the action it runs, 请求中,
+ * ≈ N token/s, 思考中…) with how long its turn runs, then its last three rows in three fixed lines (or the newest in
+ * one). A new row comes in from below and pushes the oldest out above; a row opens its history at that entry.
  */
-function Activity({ agent, collapsed, onToggle, onOpen, leaving }: { agent: AgentAtWork; collapsed: boolean; onToggle(): void; onOpen(): void; leaving: boolean }) {
-  const rows = activityRows(agent.timeline, agent.live, agent.phase);
+function Activity({ agent, collapsed, onToggle, onOpen, leaving }: { agent: AgentAtWork; collapsed: boolean; onToggle(): void; onOpen(entry?: number): void; leaving: boolean }) {
+  const rows = [...(agent.activity?.rows ?? [])];
   const count = collapsed ? 1 : 3;
   // Rows fill from the top; once there are more than fit, one extra row is kept above so it can slide out as the rest move up.
-  if (!rows.length) rows.push({ key: "idle", text: "正在处理", live: true });
   const shown = rows.slice(-(count + 1));
   const overflowing = shown.length > count;
   const newest = shown.at(-1)?.key ?? "none";
@@ -807,20 +774,23 @@ function Activity({ agent, collapsed, onToggle, onOpen, leaving }: { agent: Agen
       <div className="msg-main">
         <div className="msg-head">
           <span className="msg-avatar msg-avatar-agent"><ModelLogo model={agent.model} runtime={agent.runtime} size={12} /></span>
-          <button type="button" className="msg-name msg-agent" onClick={onOpen} title="打开执行历史">{agent.who}</button>
-          <span className="msg-time">工作中{agent.since ? <> · <Elapsed since={agent.since} /></> : null}</span>
+          <button type="button" className="msg-name msg-agent" onClick={() => onOpen()} title="打开执行历史">{agent.who}</button>
+          <span className="msg-time activity-status">{agent.activity?.status ?? "处理中"}{agent.since ? <> · <Elapsed since={agent.since} /></> : null}</span>
           <button type="button" className="activity-toggle" onClick={onToggle} aria-label={collapsed ? "展开为三行" : "收起为一行"}>
             {collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
           </button>
         </div>
         <div className="activity-window">
           <div key={overflowing ? newest : "fill"} className="activity-rows" data-shift={overflowing || undefined}>
-            {shown.map((r) => (
-              <span key={r.key} className="activity-row" data-live={r.live || undefined}>
-                <span className="activity-mark" aria-hidden="true">{r.live ? <span className="activity-pulse" /> : <span className="activity-done" />}</span>
-                <span className="activity-what">{r.text}{r.live ? "…" : ""}</span>
-              </span>
-            ))}
+            {shown.map((r) => {
+              const Icon = ACTIVITY_ICON[r.kind] ?? Wrench;
+              return (
+                <button type="button" key={r.key} className="activity-row" data-live={r.live || undefined} onClick={() => onOpen(r.entry ?? undefined)} title="在执行历史里查看">
+                  <span className="activity-mark" aria-hidden="true">{r.live ? <span className="spinner" /> : <Icon size={13} />}</span>
+                  <span className="activity-what">{r.text}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

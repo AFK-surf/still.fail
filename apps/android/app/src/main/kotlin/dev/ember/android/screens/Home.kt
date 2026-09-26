@@ -150,19 +150,6 @@ private fun Empty(view: ChatsView, onlyMine: Boolean) {
     }
 }
 
-/** An agent's state as a dot: solid orange block, a hollow ring at work, red failed; done has none. */
-@Composable
-fun StateDot(state: ChatState) {
-    val shape = CircleShape
-    val dot = Modifier.size(8.dp).clip(shape)
-    when (state) {
-        ChatState.Block -> Box(dot.background(C.accent))
-        ChatState.Running -> Box(dot.border(2.dp, C.accent, shape))
-        ChatState.Failed -> Box(dot.background(C.red))
-        ChatState.Done -> {}
-    }
-}
-
 /**
  * A row: its title (bold while something in it is unread, a blue dot in the
  * margin) and, for an agent that came from Slack, the connect's mark; under

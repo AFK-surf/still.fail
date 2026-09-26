@@ -1002,7 +1002,8 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 .activity-rows { position: absolute; inset: auto 0 0 0; display: grid; grid-auto-rows: 20px; }
 .activity-rows[data-shift] { animation: activity-scroll 260ms var(--ease-out); }
 @keyframes activity-scroll { from { transform: translateY(20px); } to { transform: none; } }
-.activity-row { display: flex; align-items: center; gap: 7px; height: 20px; min-width: 0; font-size: var(--text-sm); color: var(--muted); }
+.activity-row { display: flex; align-items: center; gap: 7px; width: 100%; height: 20px; min-width: 0; padding: 0; border: 0; background: none; font: inherit; font-size: var(--text-sm); text-align: left; color: var(--muted); cursor: pointer; }
+.activity-row:hover { color: var(--text); }
 .activity-row[data-live] { color: var(--text); }
 .activity-row:last-child { animation: fade-in 260ms var(--ease-out); }
 .activity-done { width: 5px; height: 5px; margin: 0 2px; border-radius: 50%; background: var(--line-strong); flex: none; }
@@ -1010,7 +1011,8 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 @media (prefers-reduced-motion: reduce) { .activity-rows[data-shift], .activity-row:last-child { animation: none; } }
 
 /* Every row's mark sits in the same box, so the live pulse and the done dots line up. */
-.activity-mark { display: grid; place-items: center; width: 10px; height: 20px; flex: none; }
+.activity-mark { display: grid; place-items: center; width: 14px; height: 20px; flex: none; color: var(--subtle); }
+.activity-mark .spinner { width: 11px; height: 11px; border-width: 1.5px; }
 .activity-mark .activity-pulse { width: 7px; height: 7px; }
 
 /* Images open in a lightbox. */
@@ -1205,3 +1207,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .invite-code .btn { margin-top: 0; }
 .gate .invite-code .field-error { color: var(--red); }
 .appearance-setting { max-width: 320px; }
+
+/* An entry an activity row opened the history at: shown for a moment, then back to the page. */
+.h-item { border-radius: calc(8px * var(--corner-scale)); transition: background-color 900ms var(--ease-out); corner-shape: var(--corner-shape); }
+.h-item[data-focus] { background: color-mix(in oklch, var(--accent) 10%, transparent); transition: none; }

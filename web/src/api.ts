@@ -84,7 +84,13 @@ export type ShownStep = LiveStep & { ended?: boolean };
 /** Where the turn stands with the model, since when. */
 export interface ShownPhase { phase: LivePhase; since: number }
 /** A session as it runs: its transcript (all of it once `loaded`), the model's use, and the steps in flight. */
-export interface LiveView { loaded: boolean; timeline: TimelineEntry[]; usage: TranscriptUsage | null; steps: ShownStep[]; phase: ShownPhase | null }
+export interface LiveView { loaded: boolean; timeline: TimelineEntry[]; usage: TranscriptUsage | null; steps: ShownStep[]; phase: ShownPhase | null; activity?: ActivityView }
+
+/** What an agent at work is doing, as the core puts it together (client/core/src/activity.rs): a status line and this turn's rows. */
+export interface ActivityView {
+  status: string;
+  rows: { key: string; kind: "read" | "search" | "edit" | "command" | "web" | "agent" | "thread" | "think" | "other"; text: string; live: boolean; entry: number | null }[];
+}
 
 export function useChats(scope: string, mine: boolean): TopicState<ChatsView> {
   return useTopic<ChatsView>({ topic: "chats", scope, mine });

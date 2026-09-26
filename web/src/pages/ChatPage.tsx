@@ -104,6 +104,13 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     commit(next, shown === key ? next.at(-1) ?? null : active);
   };
   const toggleHistory = (key: string) => (open.includes(key) && shown === key ? closeTab(key) : openTab(key));
+  // An activity row: its agent's history, open at that entry.
+  const [focus, setFocus] = useState<{ key: string; entry: number; n: number } | null>(null);
+  const openHistory = (key: string, entry?: number) => {
+    if (entry === undefined) return toggleHistory(key);
+    openTab(key);
+    setFocus({ key, entry, n: Date.now() });
+  };
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>读不到这个对话：{chatView.error.message}</p></Empty>;
     return <Loading label={station.name ? `正在从 ${station.name} 读取对话…` : "正在读取对话…"} />;
@@ -149,7 +156,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
         </div>
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
-      <ChatPanel chat={chat} lives={lives} onOpenHistory={toggleHistory} {...firstMessage} />
+      <ChatPanel chat={chat} lives={lives} onOpenHistory={openHistory} {...firstMessage} />
       </div>
         {panel && shown && (
           <Tabs.Root className="side-panel" value={shown} onValueChange={setActive}>
@@ -179,6 +186,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               return (
                 <Tabs.Content key={key} className="side-content" value={key}>
                   <History session={a.session} threads={a.threads} connect={a.connect ?? undefined} live={live} actions={<SessionActions session={a.session} />}
+                    focus={focus?.key === key ? focus : null}
                     summary={<HistorySummary live={live} profile={a.profile} />}
                     details={<SessionDetails session={a.session} live={live} profile={a.profile} />} />
                 </Tabs.Content>
