@@ -5,13 +5,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownStep } from "./api.ts";
 import { partialString, toolName } from "./History.tsx";
 import { absoluteTime, agentLabel, relativeTime, sessionStatus } from "./format.ts";
 import { useIsMine, usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
+import { Prose } from "./Prose.tsx";
 
 export function ChatPanel({ detail, chat, live = [], onOpenHistory }: { detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; live?: ShownStep[]; onOpenHistory(): void }) {
   const list = useRef<HTMLDivElement>(null);
@@ -79,7 +78,7 @@ export function ChatPanel({ detail, chat, live = [], onOpenHistory }: { detail: 
                 </div>
                 <Quotes quotes={m.quotes} />
                 {m.role === "agent"
-                  ? <div className="markdown"><Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown></div>
+                  ? <div className="markdown"><Prose>{m.text}</Prose></div>
                   : m.text && <div className="msg-plain">{m.text}</div>}
                 <Files sessionKey={detail.session.key} files={m.attachments} />
               </div>
@@ -99,7 +98,7 @@ export function ChatPanel({ detail, chat, live = [], onOpenHistory }: { detail: 
                     <button type="button" className="msg-name msg-agent" onClick={onOpenHistory}>{agent}</button>
                     <span className="msg-time">正在输入</span>
                   </div>
-                  <div className="markdown h-live"><Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown></div>
+                  <div className="markdown h-live"><Prose>{text}</Prose></div>
                 </div>
               </div>
             );

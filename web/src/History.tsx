@@ -3,12 +3,11 @@
 // the tool calls and thinking between two boundaries fold into one group.
 import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type { ConnectView, SessionDetail, ShownStep, TimelineEntry } from "./api.ts";
 import { agentLabel, botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, slackThreadUrl, splitThread, threadNamer } from "./format.ts";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo } from "./ui.tsx";
 import { usePerson } from "./station.tsx";
+import { Prose } from "./Prose.tsx";
 
 export function parseArgs(text: string): Record<string, unknown> | null {
   try {
@@ -234,7 +233,7 @@ function HistoryItem({ item, mention, person, where }: { item: Item; mention(tex
       );
     }
     case "text":
-      return <div className={`h-text markdown${item.entry.subagent ? " h-sub" : ""}`}><Markdown remarkPlugins={[remarkGfm]}>{item.entry.text}</Markdown></div>;
+      return <div className={`h-text markdown${item.entry.subagent ? " h-sub" : ""}`}><Prose>{item.entry.text}</Prose></div>;
     case "post": {
       const args = parseArgs(item.step.call.text)!;
       const kind = typeof args.kind === "string" ? args.kind : null;
@@ -248,7 +247,7 @@ function HistoryItem({ item, mention, person, where }: { item: Item; mention(tex
             {kind === "block" && <Pill tone="blue">等你回复</Pill>}
             {failed && <Pill tone="red">发送失败</Pill>}
           </div>
-          <div className="markdown"><Markdown remarkPlugins={[remarkGfm]}>{String(args.text)}</Markdown></div>
+          <div className="markdown"><Prose>{String(args.text)}</Prose></div>
         </div>
       );
     }
@@ -361,7 +360,7 @@ export function partialString(json: string, field: string): string | null {
 /** A step the runtime is streaming: the reply as it is written, thinking, or a tool running with its output. */
 function LiveStepView({ step }: { step: ShownStep }) {
   if (step.step === "text") {
-    return step.text ? <div className="h-text markdown h-live"><Markdown remarkPlugins={[remarkGfm]}>{step.text}</Markdown></div> : null;
+    return step.text ? <div className="h-text markdown h-live"><Prose>{step.text}</Prose></div> : null;
   }
   if (step.step === "thinking") {
     return (
@@ -381,7 +380,7 @@ function LiveStepView({ step }: { step: ShownStep }) {
         <strong>{said !== null ? "正在发送消息" : name}</strong>
         {hintText && <code>{hintText}</code>}
       </div>
-      {said && <div className="markdown h-live-said"><Markdown remarkPlugins={[remarkGfm]}>{said}</Markdown></div>}
+      {said && <div className="markdown h-live-said"><Prose>{said}</Prose></div>}
       {step.output && <pre className="h-live-output">{lastLines(step.output, 12)}</pre>}
     </div>
   );

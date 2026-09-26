@@ -873,3 +873,23 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 .h-post[data-failed="true"] { background: var(--canvas); border-color: color-mix(in oklch, var(--red) 45%, var(--line)); }
 .h-post[data-failed="true"] .h-post-head { background: var(--red-bg); color: var(--red); }
 .h-post[data-failed="true"] .h-post-head svg { color: var(--red); }
+
+/* Code blocks: a quiet frame, the language and a copy button above, highlighting in the page's own tones. */
+.code-block { margin: 0 0 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); overflow: hidden; }
+.code-bar { display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--line); }
+.code-lang { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+.code-copy { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 6px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 11px; cursor: pointer; }
+.code-copy:hover { background: var(--hover); color: var(--text); }
+.markdown .code-block pre { margin: 0; padding: 10px 12px; border-radius: 0; background: none; font-size: 12px; line-height: 1.55; }
+.markdown pre code { font-family: var(--font-mono); }
+.hljs-comment, .hljs-quote { color: #8a8f98; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-meta .hljs-keyword { color: #a8418f; }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute .hljs-string { color: #3d7a3a; }
+.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet { color: #b05a1a; }
+.hljs-title, .hljs-title.function_, .hljs-section { color: #2f5fb3; }
+.hljs-title.class_, .hljs-type { color: #8a5a00; }
+.hljs-attr, .hljs-variable, .hljs-template-variable, .hljs-property { color: #1f6f8b; }
+.hljs-meta, .hljs-doctag { color: #6b6f78; }
+.hljs-deletion { color: #b3261e; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }
