@@ -790,7 +790,7 @@ export class AdminApi {
     const connect = this.#deps.settings.config.connects.find((c) => c.id === slackConnectOf(t));
     const state = connect ? this.#deps.connections.state(connect) : null;
     const teamName = state && (state.state === "connected" || state.state === "reconnecting") ? state.workspace?.team || null : null;
-    const channelName = await this.#threadChat(t.id)?.channelName?.(t.channel) ?? null;
+    const channelName = this.#threadChat(t.id)?.knownChannel?.(t.channel) ?? null;
     return { teamName, channel: t.channel, channelName, threadTs: t.threadTs };
   }
 
