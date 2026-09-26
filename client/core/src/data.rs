@@ -128,22 +128,22 @@ impl Data {
         let mut ops = Vec::new();
         {
             let mut records = self.records.borrow_mut();
-            let mut put = |records: &mut Tables, table: &str, key: String, value: Value| {
+            fn put(records: &mut Tables, ops: &mut Vec<DbOp>, table: &str, key: String, value: Value) {
                 let at = (table.to_string(), key);
                 if records.get(&at) != Some(&value) {
                     ops.push(DbOp::Put { table: at.0.clone(), key: at.1.clone(), value: serde_json::to_vec(&value).unwrap_or_default() });
                     records.insert(at, value);
                 }
-            };
+            }
             match shape {
-                Shape::One { table, key } => put(&mut records, table, key, value),
+                Shape::One { table, key } => put(&mut records, &mut ops, table, key, value),
                 Shape::List { table, scope, id_field } => {
                     let items = value.as_array().cloned().unwrap_or_default();
                     let mut ids = Vec::new();
                     for item in items {
                         let Some(id) = item.get(id_field).and_then(id_text) else { continue };
                         ids.push(Value::String(id.clone()));
-                        put(&mut records, table, join(&[&scope, &id]), item);
+                        put(&mut records, &mut ops, table, join(&[&scope, &id]), item);
                     }
                     let kept: HashSet<String> = ids.iter().filter_map(|id| Some(join(&[&scope, id.as_str()?]))).collect();
                     let prefix = format!("{scope}{SEP}");
@@ -156,7 +156,7 @@ impl Data {
                         records.remove(&at);
                         ops.push(DbOp::Delete { table: at.0, key: at.1 });
                     }
-                    put(&mut records, "list", join(&[table, &scope]), Value::Array(ids));
+                    put(&mut records, &mut ops, "list", join(&[table, &scope]), Value::Array(ids));
                 }
             }
         }
