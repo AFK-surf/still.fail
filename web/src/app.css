@@ -1367,8 +1367,8 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .token-guide { margin: 0; padding: 0; list-style: none; counter-reset: guide; display: grid; gap: 18px; }
 .token-guide li { counter-increment: guide; display: grid; gap: 4px; padding-left: 36px; position: relative; font-size: var(--text-sm); }
 .token-guide li::before { content: counter(guide); position: absolute; left: 0; top: -1px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--neutral-bg); color: var(--muted); font-size: var(--text-xs); font-weight: 600; font-variant-numeric: tabular-nums; }
-.token-guide .btn, .token-guide .input-row { margin-top: 6px; }
-.token-guide .btn { width: max-content; }
+.token-guide li > .btn, .token-guide li > .input-row { margin-top: 6px; }
+.token-guide li > .btn { width: max-content; }
 .token-manual { margin: 8px 0 0; font-size: var(--text-xs); }
 .text-button { padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .slack-name-apart { margin: 6px 0 0 -10px; }

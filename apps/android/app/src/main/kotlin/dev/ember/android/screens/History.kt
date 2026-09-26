@@ -6,6 +6,8 @@
 package dev.ember.android.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -455,11 +457,14 @@ private fun PhaseLine(phase: ShownPhase, runtime: String) {
 /** How it runs (which can be changed here), what it has used, the station. */
 @Composable
 private fun Details(station: String, agent: ChatAgentView, live: LiveView?, host: HostInfo?) {
+    // Changing how it runs is a page of its own, in place of the details, with a way back.
+    var picking by rememberSaveable { mutableStateOf(false) }
+    if (picking) return RunPickerPage(station, agent) { picking = false }
     val s = agent.session
     val usage = live?.usage
     val hit = usage?.takeIf { it.inputTokens > 0 }?.let { Math.round(it.cachedTokens * 100.0 / it.inputTokens) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
-        RunPicker(station, agent)
+        RunRow(agent) { picking = true }
         Column(Modifier.padding(top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Detail("运行时", RUNTIME_LABEL[s.runtime] ?: s.runtime)
             Detail("进程", PROCESS_LABEL[s.process] ?: s.process)
@@ -481,105 +486,107 @@ private fun Details(station: String, agent: ChatAgentView, live: LiveView?, host
     }
 }
 
+/** How it runs, in one line: the model (never cut short), how hard it thinks, the account (cut short first). */
+@Composable
+private fun RunRow(agent: ChatAgentView, onOpen: () -> Unit) {
+    val s = agent.session
+    val current = agent.profiles.firstOrNull { it.current }
+    val name = current?.name ?: agent.profile?.name ?: s.profile
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp))
+            .border(1.dp, C.line, RoundedCornerShape(10.dp)).clickable(onClick = onOpen).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        MakerIcon(s.model, s.runtime, 15.dp)
+        Text(s.model ?: "选模型", fontSize = 14.sp, color = C.ink, maxLines = 1, softWrap = false)
+        Text(
+            " · ${s.effort ?: "默认深度"} · ${if (s.profilePinned) name else "自动 · $name"}",
+            fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        IconIn(Icons.ChevronDown, 14.dp, C.muted)
+    }
+}
+
 /**
- * How it runs, in one line: the model, how hard it thinks, the account it runs on (with its quota). Tapped, it opens
- * in place to pick them in that order, as the web does: a model only marks a pick; how hard it thinks makes it when the
- * account it is on runs that model too (it stays there); when not, who runs it is to be picked, which makes it. Closed
- * halfway, nothing changes.
+ * Changing how it runs: the model, how hard it thinks, who runs it (the station's pick, or one kept to), as on the web.
+ * Picks are a draft until 确定 (不变 when nothing changed); back leaves it as it was. A profile kept to that does not
+ * run the model drafted gives way to the station's pick, said so.
  */
 @Composable
-private fun RunPicker(station: String, agent: ChatAgentView) {
+private fun RunPickerPage(station: String, agent: ChatAgentView, onClose: () -> Unit) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val s = agent.session
-    var open by remember { mutableStateOf(false) }
-    var model by remember(open) { mutableStateOf(s.model) }
-    var effort by remember(open) { mutableStateOf(s.effort) }
-    var busy by remember { mutableStateOf(false) }
     val current = agent.profiles.firstOrNull { it.current }
-    val name = current?.name ?: agent.profile?.name ?: s.profile
+    val kept = if (s.profilePinned) s.profile else null
+    var model by remember { mutableStateOf(s.model) }
+    var effort by remember { mutableStateOf(s.effort) }
+    var profile by remember { mutableStateOf(kept) }
+    var busy by remember { mutableStateOf(false) }
     val choice = agent.choices.firstOrNull { it.model == model }
-    val same = model == s.model && effort == s.effort
-    val stays = choice?.profiles?.any { it.current } == true
-    fun pick(m: String, e: String?, profile: String?) {
-        busy = true
-        scope.launch {
-            try { app.api(station).sessionSettings(s.key, m, e, profile); app.toast = "已改，下一轮起生效"; open = false }
-            catch (err: CoreException) { app.toast = err.message }
-            finally { busy = false }
+    val accounts = choice?.profiles.orEmpty()
+    val chosen = profile?.takeIf { p -> accounts.any { it.id == p } }
+    val dropped = profile != null && chosen == null
+    val efforts = listOf<String?>(null) + EFFORTS[s.runtime].orEmpty()
+    val changed = model != s.model || effort != s.effort || chosen != kept
+    androidx.activity.compose.BackHandler(onBack = onClose)
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 2.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) { IconIn(Icons.Back, 18.dp, C.ink) }
+            Text("换模型", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
         }
-    }
-    Row(
-        Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).background(if (open) C.chip else androidx.compose.ui.graphics.Color.Transparent)
-            .clickable { open = !open }.padding(horizontal = 8.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        MakerIcon(s.model, s.runtime, 14.dp)
-        Text(s.model ?: "运行时默认", fontSize = 14.sp, color = C.ink, maxLines = 1)
-        Text(s.effort ?: "默认深度", fontSize = 14.sp, color = C.ink, maxLines = 1)
-        ProviderMark(s.runtime, current?.kind, 14.dp)
-        Text(if (s.profilePinned) name else "自动 · $name", fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        QuotaRings(current?.quota ?: agent.profile?.quota)
-        Box(Modifier.weight(0.001f))
-        IconIn(if (open) Icons.ChevronUp else Icons.ChevronDown, 14.dp, C.muted)
-    }
-    androidx.compose.animation.AnimatedVisibility(open) {
-        Column(Modifier.padding(top = 4.dp)) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             GroupLabel("模型")
-            Options(agent.choices.map { it.model }, model) { model = it }
+            agent.choices.forEach { c ->
+                PickLine(c.model, checked = c.model == model, onClick = { model = c.model }, leading = { MakerIcon(c.model, s.runtime, 18.dp) })
+            }
             GroupLabel("思考深度")
-            Options(listOf<String?>(null) + EFFORTS[s.runtime].orEmpty(), effort, { it ?: "默认" }) { e ->
-                effort = e
-                if (choice != null && stays && !busy) pick(choice.model, e, if (s.profilePinned) s.profile else null)
-            }
+            Seg(efforts.map { it ?: "默认" }, efforts.indexOf(effort).coerceAtLeast(0), { effort = efforts[it] }, fill = true, height = 36.dp)
             GroupLabel("账号")
-            if (choice == null) Text("先选一个模型", fontSize = 13.sp, color = C.muted)
-            else {
-                if (!stays) Text("现在的账号没有启用 ${choice.model}，选一个", fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(bottom = 4.dp))
-                Account(checked = same && !s.profilePinned, enabled = !busy, onClick = { pick(choice.model, effort, null) }) {
-                    Column(Modifier.weight(1f)) {
-                        Text("自动分配", fontSize = 14.sp, color = C.ink, fontWeight = FontWeight.SemiBold)
-                        Text("额度用完或登录失效时换一个", fontSize = 12.sp, color = C.muted)
-                    }
-                }
-                choice.profiles.forEach { p ->
-                    Account(checked = same && s.profilePinned && p.current, enabled = !busy, onClick = { pick(choice.model, effort, p.id) }) {
-                        ProviderMark(p.runtime ?: s.runtime, p.kind, 16.dp)
-                        Column(Modifier.weight(1f)) {
-                            Text(p.name, fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (same && p.current && !s.profilePinned) Text("当前", fontSize = 12.sp, color = C.muted)
-                        }
-                        QuotaRings(p.quota)
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** Choices side by side, wrapping: the one marked is filled. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable
-private fun <T> Options(values: List<T>, marked: T, label: (T) -> String = { it.toString() }, onPick: (T) -> Unit) {
-    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        values.forEach { v ->
-            val on = v == marked
-            Text(
-                label(v), fontSize = 14.sp, color = C.ink, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) C.chip else androidx.compose.ui.graphics.Color.Transparent)
-                    .clickable { onPick(v) }.padding(horizontal = 10.dp, vertical = 7.dp),
+            if (dropped) Text("指定的账号没有启用 $model，改成了自动分配", fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(bottom = 4.dp))
+            PickLine(
+                "自动分配", sub = "额度用完或登录失效时换一个" + (if (kept == null && current != null) "；现在：${current.name}" else ""),
+                checked = chosen == null, onClick = { profile = null },
             )
+            accounts.forEach { p ->
+                PickLine(p.name, checked = chosen == p.id, onClick = { profile = p.id },
+                    leading = { ProviderMark(p.runtime ?: s.runtime, p.kind, 18.dp) }, trailing = { QuotaRings(p.quota) })
+            }
+            Box(Modifier.height(12.dp))
         }
+        val go = changed && choice != null && !busy
+        Box(
+            Modifier.padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp))
+                .background(if (changed) C.accent else C.chip)
+                .clickable(enabled = !busy) {
+                    if (!go) { onClose(); return@clickable }
+                    busy = true
+                    scope.launch {
+                        try { app.api(station).sessionSettings(s.key, choice!!.model, effort, chosen); app.toast = "已改，下一轮起生效"; onClose() }
+                        catch (err: CoreException) { app.toast = err.message }
+                        finally { busy = false }
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) { Text(if (changed) "确定" else "不变", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.accentInk else C.ink) }
     }
 }
 
+/** A choice in a list: what it is, a note under it, and a check when it is the one chosen. */
 @Composable
-private fun Account(checked: Boolean, enabled: Boolean, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
+private fun PickLine(label: String, sub: String? = null, checked: Boolean, onClick: () -> Unit, leading: (@Composable () -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (checked) C.chip else androidx.compose.ui.graphics.Color.Transparent)
-            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = content,
-    )
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        leading?.invoke()
+        Column(Modifier.weight(1f)) {
+            Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (sub != null) Text(sub, fontSize = 12.sp, color = C.muted)
+        }
+        trailing?.invoke()
+        Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) { if (checked) IconIn(Icons.Check, 16.dp, C.accent) }
+    }
 }
 
 @Composable
