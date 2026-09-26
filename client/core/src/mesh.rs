@@ -107,7 +107,7 @@ impl Mesh {
         // A span of the request that needed the link; the grant it asks ember cloud for is part of it.
         let mut span = self.tracer.span("mesh.connect", Kind::Internal);
         span.set("ember.station", station_id.to_string());
-        let opening = self.tracer.instrument(Some(span.context()), open(self.host.clone(), self.endpoint(), station_id.to_string(), grants));
+        let opening = self.tracer.instrument(Some(span.context()), open(self.host.clone(), self.endpoint(), self.relay_url.clone(), station_id.to_string(), grants));
         let opening = async move {
             let link = opening.await;
             match &link {
@@ -189,32 +189,57 @@ pub fn transport() -> QuicTransportConfig {
 const ONLINE_WAIT_MS: u64 = 3_000;
 
 /// Connects, presents the first grant, and starts renewing it.
-async fn open(host: Rc<dyn Host>, endpoint: Endpoint, station_id: String, grants: GrantSource) -> Result<Rc<Link>> {
+///
+/// Nothing waits on anything it does not need: the grant is asked of ember
+/// cloud while the connection is being made (to the relay this device already
+/// uses), and the link is handed out as soon as the grant is sent — the
+/// station reads a connection's first stream (the grant) before any request
+/// stream, so requests can follow at once. If it refuses, it closes the
+/// connection, the requests on it fail, and the next `Mesh::link` starts over.
+async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station_id: String, grants: GrantSource) -> Result<Rc<Link>> {
     let id: [u8; 32] = hex::decode(&station_id).ok().and_then(|b| b.try_into().ok()).ok_or_else(|| CoreError::invalid(format!("station id 不对：{station_id}")))?;
     let id = PublicKey::from_bytes(&id).map_err(|_| CoreError::invalid(format!("station id 不对：{station_id}")))?;
     let device = hex::encode(endpoint.id().as_bytes());
-    let grant = grants(device.clone()).await?;
-    // Our own relay link first (a fresh endpoint may not have it yet): packets sent before it is up are dropped,
-    // and QUIC only resends after ~1 s and then ~2 s more. At most ONLINE_WAIT_MS, then try regardless.
-    if !grant.relay_url.is_empty() {
-        let online = endpoint.online().fuse();
-        let waited = host.sleep(ONLINE_WAIT_MS).fuse();
-        pin_mut!(online, waited);
-        futures::select! { _ = online => {}, _ = waited => {} }
-    }
-    let mut addr = EndpointAddr::new(id);
-    if !grant.relay_url.is_empty() {
-        let relay: RelayUrl = grant.relay_url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))?;
-        addr = addr.with_relay_url(relay);
-    }
-    let conn = endpoint.connect(addr, ALPN).await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))?;
+    let connecting = async {
+        // Our own relay link first (a fresh endpoint may not have it yet): packets sent before it is up are dropped,
+        // and QUIC only resends after ~1 s and then ~2 s more. At most ONLINE_WAIT_MS, then try regardless.
+        let mut addr = EndpointAddr::new(id);
+        if !relay_url.is_empty() {
+            let online = endpoint.online().fuse();
+            let waited = host.sleep(ONLINE_WAIT_MS).fuse();
+            pin_mut!(online, waited);
+            futures::select! { _ = online => {}, _ = waited => {} }
+            let relay: RelayUrl = relay_url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))?;
+            addr = addr.with_relay_url(relay);
+        }
+        endpoint.connect(addr, ALPN).await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))
+    };
+    let (grant, conn) = futures::join!(grants(device.clone()), connecting);
+    let conn = conn?;
+    let grant = match grant {
+        Ok(grant) => grant,
+        Err(error) => {
+            conn.close(0u32.into(), b"no grant");
+            return Err(error);
+        }
+    };
     let (send, recv) = conn.open_bi().await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))?;
     let mut control = Control { send, recv, carry: Vec::new() };
-    if let Err(error) = control.exchange(&grant.grant).await {
-        conn.close(0u32.into(), b"grant refused");
-        return Err(error);
-    }
-    let link = Rc::new(Link { conn, control: Mutex::new(control), renewal_failed: Cell::new(false) });
+    control.send_grant(&grant.grant).await?;
+    let link = Rc::new(Link { conn, control: Mutex::new(control), renewal_failed: Cell::new(false), refused: RefCell::new(None) });
+    // The station's answer to the first grant, while requests already go: a refusal closes the link.
+    let answered = link.clone();
+    host.spawn(
+        async move {
+            let answer = answered.control.lock().await.answer().await;
+            if let Err(error) = answer {
+                answered.renewal_failed.set(true);
+                *answered.refused.borrow_mut() = Some(error);
+                answered.conn.close(0u32.into(), b"grant refused");
+            }
+        }
+        .boxed_local(),
+    );
     host.spawn(renew(host.clone(), link.clone(), grants, device).boxed_local());
     Ok(link)
 }
@@ -251,8 +276,17 @@ struct Control {
 impl Control {
     /// Sends a grant line and returns the station's answer; fails if it refused.
     async fn exchange(&mut self, grant: &str) -> Result<Value> {
+        self.send_grant(grant).await?;
+        self.answer().await
+    }
+
+    async fn send_grant(&mut self, grant: &str) -> Result<()> {
         let line = format!("{}\n", json!({ "grant": grant }));
-        self.send.write_all(line.as_bytes()).await.map_err(|e| mesh_error(format!("授权没送到 station：{e}")))?;
+        self.send.write_all(line.as_bytes()).await.map_err(|e| mesh_error(format!("授权没送到 station：{e}")))
+    }
+
+    /// The station's answer to the grant last sent; fails if it refused.
+    async fn answer(&mut self) -> Result<Value> {
         let answer = read_line(&mut self.recv, &mut self.carry).await?.ok_or_else(|| mesh_error("station 关闭了授权通道".into()))?;
         let answer: Value = serde_json::from_str(&answer).map_err(|e| mesh_error(format!("station 的授权答复看不懂：{e}")))?;
         if let Some(error) = answer.get("error") {
@@ -286,11 +320,22 @@ pub struct Link {
     conn: iroh::endpoint::Connection,
     control: Mutex<Control>,
     renewal_failed: Cell<bool>,
+    /// The station's refusal of the first grant, once it answered: what the link's requests fail with.
+    refused: RefCell<Option<CoreError>>,
 }
 
 impl Link {
     /// One request on its own stream.
     pub async fn request(&self, head: RequestHead, body: Vec<u8>) -> Result<Reply> {
+        let result = self.send_request(head, body).await;
+        // A request lost to a refused grant says so, not just that the connection went.
+        match (&result, self.refused.borrow().as_ref()) {
+            (Err(_), Some(refused)) => Err(refused.clone()),
+            _ => result,
+        }
+    }
+
+    async fn send_request(&self, head: RequestHead, body: Vec<u8>) -> Result<Reply> {
         let sent = |e: &dyn std::fmt::Display| mesh_error(format!("请求没送到 station：{e}"));
         let (mut send, mut recv) = self.conn.open_bi().await.map_err(|e| sent(&e))?;
         let headers: serde_json::Map<String, Value> = head.headers.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
