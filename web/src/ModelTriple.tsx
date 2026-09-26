@@ -56,21 +56,25 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
 
   return (
     <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) setDraft(value); }}>
-      <Popover.Trigger className="model-triple" title={title} disabled={options.length === 0}>
-        {options.length === 0 ? <span>没有可用模型</span> : (
-          <>
-            <ModelLogo model={value.model} runtime={value.runtime} size={13} />
-            <span>{value.model || "选模型"}</span>
-            {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <><span className="triple-dot">·</span><span>{RUNTIME_LABEL[value.runtime]}</span></>}
-            <span className="triple-dot">·</span><span>{value.effort ?? "默认深度"}</span>
-            <span className="triple-dot">·</span>
-            {shown && <ProviderLogo runtime={value.runtime} kind={shown.kind ?? "env"} size={13} />}
-            <span className="triple-account">{value.profile ? shown?.name ?? value.profile : shown ? `自动 · ${shown.name}` : "自动分配"}</span>
-            {shown && <QuotaBars quota={shown.quota} compact />}
-          </>
-        )}
-        <ChevronDown size={12} className="chooser-chevron" />
-      </Popover.Trigger>
+      {/* Shown within the room it has: what matters least goes first as it narrows (app.css, .model-triple-fit). */}
+      <span className="model-triple-fit">
+        <Popover.Trigger className="model-triple" title={title} disabled={options.length === 0}>
+          {options.length === 0 ? <span className="triple-model">没有可用模型</span> : (
+            <>
+              <span className="triple-model"><ModelLogo model={value.model} runtime={value.runtime} size={13} /><span className="triple-model-name">{value.model || "选模型"}</span></span>
+              {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className="triple-part triple-runtime">{RUNTIME_LABEL[value.runtime]}</span>}
+              <span className="triple-part triple-effort" data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
+              <span className="triple-part triple-account">
+                {shown && <ProviderLogo runtime={value.runtime} kind={shown.kind ?? "env"} size={13} />}
+                <span className="triple-account-name">{value.profile ? shown?.name ?? value.profile : shown ? `自动 · ${shown.name}` : "自动分配"}</span>
+                {!value.profile && <span className="triple-account-short">自动</span>}
+                {shown && <span className="triple-rings"><QuotaBars quota={shown.quota} compact /></span>}
+              </span>
+            </>
+          )}
+          <ChevronDown size={12} className="chooser-chevron" />
+        </Popover.Trigger>
+      </span>
       <Popover.Portal>
         <Popover.Content className="popover run-picker-panel" side={side} align="start" sideOffset={6} collisionPadding={8}>
           <div className="run-picker">

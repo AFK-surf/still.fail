@@ -1402,9 +1402,19 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .model-triple { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; justify-self: start; align-self: start; width: max-content; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: calc(9px * var(--corner-scale)); corner-shape: var(--corner-shape); background: none; color: var(--text); font: inherit; font-size: var(--text-sm); cursor: pointer; white-space: nowrap; overflow: hidden; }
 .model-triple:hover, .model-triple[data-state="open"] { background: var(--hover); }
 .model-triple:disabled { color: var(--muted); cursor: default; }
-.model-triple .triple-dot { color: var(--muted); }
-.model-triple .triple-account { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* The model control within the room it has, dropping what matters least first: the account's name, then its quota
+   and a default effort, then the runtime, then the effort; the model's name last, cut short. */
+.model-triple-fit { container-type: inline-size; display: block; flex: 1 1 auto; min-width: 0; max-width: 100%; }
+.model-triple .triple-model { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.model-triple .triple-model-name { overflow: hidden; text-overflow: ellipsis; }
+.model-triple .triple-part { display: inline-flex; align-items: center; gap: 5px; flex: none; }
+.model-triple .triple-part::before { content: "·"; color: var(--muted); margin-right: 1px; }
+.model-triple .triple-account-short { display: none; }
 .model-triple .quota-rings { margin-left: 2px; }
+@container (max-width: 440px) { .model-triple .triple-account-name { display: none; } .model-triple .triple-account-short { display: inline; } }
+@container (max-width: 360px) { .model-triple .triple-rings, .model-triple .triple-effort[data-default] { display: none; } }
+@container (max-width: 290px) { .model-triple .triple-runtime { display: none; } }
+@container (max-width: 230px) { .model-triple .triple-effort { display: none; } }
 .model-triple .quota-ring-letter { display: none; }
 .model-triple .chooser-chevron { color: var(--muted); flex: none; }
 .composer .model-triple, .new-chat .model-triple { border-color: transparent; height: 28px; font-size: var(--text-xs); }
