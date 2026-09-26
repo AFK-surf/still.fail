@@ -57,7 +57,7 @@ function ConfigTokenCard({ onSaved }: { onSaved(): void }) {
   );
 }
 
-function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; onSaved(): void }) {
+export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; onSaved(): void }) {
   const api = useApi();
   const toast = useToast();
   const [token, setToken] = useState("");

@@ -637,6 +637,8 @@ export class AdminApi {
         warm: sessions.filter((s) => this.#deps.hub.processState(s.key) === "warm").length,
       },
       slackUsers: this.#deps.store.slackIdentities(viewerId(viewer)),
+      // Whether ember can make and edit Slack apps itself (the workspace's app configuration token).
+      slackConfig: this.#configTokenView(),
     };
   }
 

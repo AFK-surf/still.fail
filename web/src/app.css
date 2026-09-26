@@ -468,6 +468,11 @@
 .sign-in .steps { gap: 14px; }
 .steps li > .btn, .steps li > .input-row, .steps li > .command { margin-top: 8px; }
 .steps li > .btn { display: flex; width: max-content; }
+.steps .step-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+/* Making the Slack app by hand, when there is no configuration token: tucked under the token form. */
+.manual-app { margin-top: 4px; font-size: var(--text-sm); }
+.manual-app summary { cursor: pointer; color: var(--muted); }
+.manual-app[open] summary { margin-bottom: 10px; }
 .activity-pulse.inline { display: inline-block; margin-right: 8px; vertical-align: middle; }
 @media (max-width: 700px) {
   .slack-app-top { flex-direction: column; }

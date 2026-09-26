@@ -1,12 +1,12 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { scopeOf, useStation, useLink } from "../station.tsx";
-import { MessageCircle, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { ExternalLink, MessageCircle, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind } from "../api.ts";
+import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind, type SlackAppLinks } from "../api.ts";
 import { agentLabel, connectionText, EFFORT_LABEL, EFFORTS, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, slug, STATUS_LABEL, statusTone } from "../format.ts";
-import { SlackAppSection } from "./SlackApp.tsx";
+import { ConfigTokenForm, SlackAppSection } from "./SlackApp.tsx";
 import { OwnerLabel } from "../components.tsx";
 import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
@@ -415,7 +415,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const idValid = /^[a-z0-9][a-z0-9-]*$/.test(connectId) && !taken;
 
   const close = () => {
-    setStep(1); setName(""); setId(""); setIdTouched(false); setModel(""); setTokens(emptyTokens);
+    setStep(1); setName(""); setId(""); setIdTouched(false); setModel(""); setTokens(emptyTokens); setMade(null);
     setMode({ mode: "multi-session", requireMention: true });
     onClose();
   };
@@ -429,6 +429,12 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
     navigate(link(`/connects/${connectId}`));
   });
 
+  // The Slack app, made by ember with the configuration token: the connect is saved first, since the app is its.
+  const [made, setMade] = useState<{ appId: string; links: SlackAppLinks } | null>(null);
+  const makeApp = useAction(async () => {
+    await api.putConnect(connectId, { name: name.trim(), kind: "slack", ...mode, bind: { runtime, model: model.trim(), effort } });
+    return api.createSlackApp(connectId, name.trim() || connectId);
+  }, (result) => setMade(result));
   const titles = { 1: "添加连接", 2: "绑定模型", 3: "连接 Slack" } as const;
   const footer = step === 1 ? (
     <>
@@ -442,7 +448,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
     </>
   ) : (
     <>
-      <Button variant="ghost" onClick={() => setStep(2)}>上一步</Button>
+      <Button variant="ghost" disabled={made !== null} onClick={() => setStep(2)}>上一步</Button>
       <Button onClick={() => void create.run(false)} busy={create.busy && create.args?.[0] === false}>稍后连接</Button>
       <Button variant="primary" disabled={!tokens.verified} busy={create.busy && create.args?.[0] === true} onClick={() => void create.run(true)}>添加并连接</Button>
     </>
@@ -487,12 +493,48 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
       )}
       {step === 3 && (
         <>
-          <CreateAppSteps name={name} />
+          {made ? <MadeAppSteps links={made.links} />
+            : overview.value?.slackConfig.configured ? (
+              <div className="callout" data-tone="blue">
+                <span>ember 可以直接在 Slack 建好「{name.trim() || connectId}」这个 app：名字、权限、Socket Mode 都配好。</span>
+                <Button variant="primary" busy={makeApp.busy} onClick={() => void makeApp.run()}>在 Slack 创建 app</Button>
+              </div>
+            ) : (
+              <>
+                <p className="card-lead">设置一次 Slack 的 App 配置 token，ember 就能直接替你建 app，以后也能在这里改名字、图标和权限。</p>
+                <ConfigTokenForm onSaved={() => {}} />
+                <details className="manual-app">
+                  <summary>不用配置 token，自己在 Slack 建</summary>
+                  <CreateAppSteps name={name} />
+                </details>
+              </>
+            )}
+          {makeApp.error && <p className="field-error" role="alert">{makeApp.error.message}</p>}
           <TokenFields value={tokens} onChange={setTokens} />
           {create.error && <p className="field-error" role="alert">{create.error.message}</p>}
         </>
       )}
     </Dialog>
+  );
+}
+
+/** What is left in Slack once ember made the app: installing it (for the bot token) and the app-level token. */
+function MadeAppSteps({ links }: { links: SlackAppLinks }) {
+  return (
+    <ol className="steps">
+      <li>
+        <span>app 已经建好。把它安装到工作区，然后在 OAuth 页复制 Bot User OAuth Token（xoxb- 开头）。</span>
+        <span className="step-actions">
+          <a className="btn btn-primary" href={links.install} target="_blank" rel="noopener"><ExternalLink {...ICON} />安装到工作区</a>
+          <a className="btn btn-secondary" href={links.oauth} target="_blank" rel="noopener">打开 OAuth 页</a>
+        </span>
+      </li>
+      <li>
+        <span>在 Basic Information 页生成 App-Level Token，勾选 connections:write，复制（xapp- 开头）。Slack 没有开放生成它的接口，只能在这里点一下。</span>
+        <a className="btn btn-secondary" href={links.appToken} target="_blank" rel="noopener"><ExternalLink {...ICON} />打开 Basic Information</a>
+      </li>
+      <li>把两个 token 填在下面。</li>
+    </ol>
   );
 }
 
