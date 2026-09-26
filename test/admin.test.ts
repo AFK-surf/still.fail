@@ -487,3 +487,26 @@ test("files sent to a session land in its workspace and reach the agent as paths
     t.close();
   }
 });
+
+test("a new chat makes a session of its own with the chosen runtime, model and effort", async () => {
+  const t = await setup();
+  try {
+    assert.equal((await t.call("POST", "/sessions", { runtime: "gpt" })).status, 400);
+    assert.equal((await t.call("POST", "/sessions", { runtime: "claude", effort: "turbo" })).status, 400);
+    const made = await t.call("POST", "/sessions", { runtime: "claude", model: "deepseek-flash", effort: "high" });
+    assert.equal(made.status, 200);
+    const key = encodeURIComponent(made.body.key);
+    assert.equal((await t.call("POST", `/sessions/${key}/messages`, { text: "开始吧" })).status, 200);
+    await settle();
+    const { body } = await t.call("GET", `/sessions/${key}`);
+    assert.equal(body.session.connect, "ember");
+    assert.equal(body.session.profile, "cc");
+    assert.deepEqual([body.session.model, body.session.effort], ["deepseek-flash", "high"]);
+    assert.equal(body.session.creator.via, "local");
+    assert.equal(body.chats[0].messages[0].text, "开始吧");
+    assert.equal(t.claude.last.options.model, "deepseek-flash");
+    assert.match(t.claude.last.prompts[0]!, /开始吧/);
+  } finally {
+    t.close();
+  }
+});

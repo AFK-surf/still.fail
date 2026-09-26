@@ -153,6 +153,24 @@ export class AdminApi {
     if (method === "GET" && path === "/overview") return send(res, 200, this.#overview(viewer));
     if (method === "GET" && path === "/events") return this.#events(req, res);
     if (method === "GET" && path === "/sessions") return send(res, 200, await this.#sessions(url.searchParams.get("connect")));
+    if (method === "POST" && path === "/sessions") {
+      // A new chat: its session is made first, so files can be uploaded into it before the first message.
+      const input = await body(req);
+      const runtime = String(input.runtime ?? "");
+      if (runtime !== "claude" && runtime !== "codex") throw new HttpError(400, "runtime 必须是 claude 或 codex");
+      try {
+        const key = this.#deps.hub.newSession({
+          runtime, createdBy: viewerId(viewer),
+          ...(typeof input.profile === "string" && input.profile ? { profile: input.profile } : {}),
+          ...(typeof input.model === "string" && input.model ? { model: input.model } : {}),
+          ...(typeof input.effort === "string" && input.effort ? { effort: input.effort } : {}),
+          ...(typeof input.title === "string" ? { title: input.title.slice(0, 120) } : {}),
+        });
+        return send(res, 200, { key });
+      } catch (error) {
+        throw new HttpError(400, error instanceof Error ? error.message : String(error));
+      }
+    }
     if (resource === "sessions" && id && !action && method === "GET") return send(res, 200, await this.#session(id));
     if (resource === "sessions" && id && action === "stop" && method === "POST") {
       await this.#deps.hub.stop(id);

@@ -12,7 +12,7 @@ import { randomBytes } from "node:crypto";
 import { copyFileSync, mkdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
-import { profileFor, RUNTIMES, type Config, type Connect, type RuntimeKind } from "./config.ts";
+import { EFFORTS, profileFor, RUNTIMES, type Config, type Connect, type RuntimeKind } from "./config.ts";
 import { INTERNAL_CONNECT, type InternalChat } from "./chat/internal.ts";
 import type { ChatSurface, InboundMessage, ThreadRef } from "./chat/types.ts";
 import { parseThreadAddress, threadAddress } from "./instructions.ts";
@@ -260,6 +260,30 @@ export class Hub {
       const size = /\.(png|jpe?g|gif|webp)$/i.test(name) ? imageSize(copy) : null;
       return { name, path: copy, size: st.size, ...(size ?? {}) };
     });
+  }
+
+  /**
+   * A session of its own, talked to in ember's chat: the runtime, profile,
+   * model and effort chosen by whoever starts it rather than a connect's.
+   * The profile defaults to the first one of that runtime.
+   */
+  newSession(options: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string; title?: string; createdBy: string }): string {
+    const profiles = this.#config.profiles.filter((p) => p.runtime === options.runtime);
+    const profile = options.profile ? profiles.find((p) => p.id === options.profile) : profiles[0];
+    if (!profile) throw new Error(options.profile ? `no ${options.runtime} profile ${options.profile}` : `no ${options.runtime} profile configured`);
+    if (options.effort && !EFFORTS[options.runtime].includes(options.effort)) throw new Error(`effort must be one of ${EFFORTS[options.runtime].join(", ")}`);
+    const key = `${INTERNAL_CONNECT}:c-${randomBytes(5).toString("hex")}`;
+    const workspace = join(this.#config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(this.reposDir, { recursive: true });
+    const now = Date.now();
+    this.#store.insertSession({
+      key, connect: INTERNAL_CONNECT, scope: "all", title: options.title?.trim() || null, createdBy: options.createdBy, channel: "", threadTs: "",
+      runtime: options.runtime, profile: profile.id, model: options.model?.trim() || profile.model || null, effort: options.effort || null,
+      workspace, token: randomBytes(24).toString("base64url"), createdAt: now, lastActiveAt: now,
+    });
+    log.info("session created", { session: key, connect: INTERNAL_CONNECT, runtime: options.runtime, profile: profile.id, model: options.model ?? null });
+    return key;
   }
 
   /** Starts a session's runtime ahead of a message; see SessionActor.warm. */
