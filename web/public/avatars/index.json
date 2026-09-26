@@ -1,0 +1,6 @@
+[
+  { "id": "buddy-idle", "label": "平常", "bg": "#F3E3D3" },
+  { "id": "buddy-working", "label": "干活", "bg": "#FFE3C2" },
+  { "id": "buddy-done", "label": "完成", "bg": "#DDEFE0" },
+  { "id": "buddy-blocked", "label": "卡住", "bg": "#FBDCD6" }
+]
