@@ -32,8 +32,8 @@ function keepChoice(station: string, choice: Choice): void {
   }
 }
 
-/** A new chat in a scope (a workspace, or "local"); `onCreated` gets the station's address and the new chat's thread. */
-export function NewChat({ scope, onCreated }: { scope: string; onCreated(station: string, thread: number): void }) {
+/** A new chat in a scope (a workspace, or "local"); `onCreated` gets the station's address and the new item's session (its address). */
+export function NewChat({ scope, onCreated }: { scope: string; onCreated(station: string, session: string): void }) {
   const stations = useStations(scope);
   const online = (stations.value ?? []).filter((s) => s.online);
   const [stationId, setStationId] = useState(() => {
@@ -59,7 +59,7 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
   );
 }
 
-function NewChatOn({ view, station, stations, onStation, onCreated }: { view: StationView; station: Station; stations: StationView[]; onStation(id: string): void; onCreated(station: string, thread: number): void }) {
+function NewChatOn({ view, station, stations, onStation, onCreated }: { view: StationView; station: Station; stations: StationView[]; onStation(id: string): void; onCreated(station: string, session: string): void }) {
   const api = useApi();
   const profiles = view.overview?.profiles ?? [];
   const [choice, setChoice] = useState<Choice>(() => ({ runtime: "", model: "", effort: "", ...lastChoice(station.id) }));
@@ -147,7 +147,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
           : profiles.length === 0 ? <p className="field-error">这台 station 还没有 Profile，先到 <Link className="inline-link" to={`${station.base}/settings/accounts`}>设置 → Profile</Link> 里加一个。</p>
           : !runtimes.length && <p className="field-error">这台 station 的 Profile 都还没有启用模型。到 <Link className="inline-link" to={`${station.base}/settings/accounts`}>设置 → Profile</Link> 里勾选可以用的模型。</p>}
         <Composer thread={null} sessionKey={null} ensureChat={ensureChat} placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
-          onSent={(thread) => onCreated(station.address, thread)} />
+          onSent={() => { void made.current?.then(({ key }) => onCreated(station.address, key)); }} />
         {making && <p className="muted new-chat-making">正在 {station.name} 上创建会话…</p>}
       </div>
     </div>

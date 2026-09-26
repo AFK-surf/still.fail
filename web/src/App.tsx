@@ -71,5 +71,5 @@ function LegacyBot() {
 /** A new chat on this station. */
 function LocalNewChat() {
   const navigate = useNavigate();
-  return <NewChat scope="local" onCreated={(_, thread) => navigate(`/chats/${thread}`)} />;
+  return <NewChat scope="local" onCreated={(_, session) => navigate(`/chats/${encodeURIComponent(session)}`)} />;
 }

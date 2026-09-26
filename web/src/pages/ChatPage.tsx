@@ -28,17 +28,9 @@ export function ChatPage() {
   const station = useStation();
   // There is always a chat in view: the one last open, or a new one. In ember cloud the workspace decides which.
   if (!chat) return <Navigate to={station.base ? station.base.replace(/\/s\/[^/]+$/, "") : lastChat("local", "/new")} replace />;
-  const thread = Number(chat);
-  return Number.isInteger(thread) ? <ChatScreen key={chat} of={{ thread }} /> : <Unchatted key={chat} session={chat} />;
-}
-
-/** An agent's item before it has a chat; once one is made for it (elsewhere too), the page moves to it. */
-function Unchatted({ session }: { session: string }) {
-  const station = useStation();
-  const chats = useChats(scopeOf(station.address), false);
-  const made = chats.value?.days.flatMap((d) => d.items).find((i) => i.station === station.address && i.thread !== null && i.agents.some((a) => a.key === session));
-  if (made) return <Navigate to={`${station.base}/chats/${made.thread}`} replace />;
-  return <ChatScreen of={{ session }} />;
+  // An item is its agent's: the address is the session, whether or not it has a chat yet (the core shows the chat
+  // once there is one, at the same address).
+  return <ChatScreen key={chat} of={{ session: chat }} />;
 }
 
 /** Reports how long the chat took to show its messages, once, when they first do. */
@@ -123,7 +115,6 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const session = "session" in of ? of.session : null;
   const firstMessage = session === null ? {} : {
     ensureChat: async () => ({ key: session, thread: (await call.request<{ id: number }>("POST", "/threads", { session })).id }),
-    onSent: (thread: number) => navigate(`${station.base}/chats/${thread}`, { replace: true }),
   };
   return (
     <div className="session-page" data-panel={panel}>

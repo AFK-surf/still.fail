@@ -143,7 +143,8 @@ export function History({ session, threads, connect, summary, actions, details, 
     const inner = <>{t.channel === "EMBER" ? <Mark size={13} /> : <SlackLogo size={13} />}{name}</>;
     const thread = threads.find((x) => x.channel === t.channel && x.threadTs === t.threadTs);
     return thread
-      ? <Link className="h-place" to={link(`/chats/${thread.id}`)} title="打开对话">{inner}</Link>
+      // An ember chat is its agent's item: its address is the session it is bound to.
+      ? <Link className="h-place" to={link(`/chats/${encodeURIComponent(thread.sessions[0]?.session ?? "")}`)} title="打开对话">{inner}</Link>
       : <span className="h-place">{inner}</span>;
   };
   const [usageOpen, setUsageOpen] = useState(false);

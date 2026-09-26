@@ -252,7 +252,6 @@ function BoundSession({ connect }: { connect: ConnectView }) {
   const latest = useLatestChat();
   const [choosing, setChoosing] = useState(false);
   const bound = sessions.find((s) => s.key === connect.session);
-  const chat = bound ? latest(bound.key) : null;
   const body = bound && (
     <>
       <div className="card-row-text">
@@ -266,7 +265,7 @@ function BoundSession({ connect }: { connect: ConnectView }) {
     <Section title="当前会话" description="单会话模式下，消息都进这个会话。可以换成另一个会话，或者新开一个。"
       actions={<Button onClick={() => setChoosing(true)}>换一个会话</Button>}>
       {bound ? (
-        chat !== null ? <Link className="card card-row card-link" to={link(`/chats/${chat}`)}>{body}</Link> : <div className="card card-row">{body}</div>
+        <Link className="card card-row card-link" to={link(`/chats/${encodeURIComponent(bound.key)}`)}>{body}</Link>
       ) : (
         <div className="card card-row"><span className="muted">还没有会话；下一条消息会开始一个新的。</span></div>
       )}
@@ -385,7 +384,6 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
         <ul className="list">
           {sessions.map((s) => {
             const status = sessionStatus(s);
-            const chat = latest(s.key);
             const row = (
               <>
                 <span className="list-row-title">{sessionTitle(s, connect.name)}</span>
@@ -393,7 +391,7 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
                 <Time className="muted list-row-time" at={s.lastActiveAt} />
               </>
             );
-            return <li key={s.key}>{chat !== null ? <Link className="list-row" to={link(`/chats/${chat}`)}>{row}</Link> : <div className="list-row">{row}</div>}</li>;
+            return <li key={s.key}><Link className="list-row" to={link(`/chats/${encodeURIComponent(s.key)}`)}>{row}</Link></li>;
           })}
         </ul>
       )}
