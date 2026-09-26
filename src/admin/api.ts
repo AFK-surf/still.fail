@@ -435,11 +435,13 @@ export class AdminApi {
       const input = await body(req);
       const pick = (name: string) => (name in input ? (input[name] === null ? null : String(input[name])) : undefined);
       try {
-        await this.#deps.hub.configure(id, {
-          ...(typeof input.profile === "string" ? { profile: input.profile } : {}),
-          ...(pick("model") !== undefined ? { model: pick("model") } : {}),
-          ...(pick("effort") !== undefined ? { effort: pick("effort") } : {}),
-        });
+        const change: { profile?: string; model?: string | null; effort?: string | null } = {};
+        if (typeof input.profile === "string") change.profile = input.profile;
+        const model = pick("model");
+        if (model !== undefined) change.model = model;
+        const effort = pick("effort");
+        if (effort !== undefined) change.effort = effort;
+        await this.#deps.hub.configure(id, change);
       } catch (error) {
         throw new HttpError(400, error instanceof Error ? error.message : String(error));
       }
