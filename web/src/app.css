@@ -588,6 +588,9 @@
 .quota-fill[data-level="red"] { background: var(--red); }
 .quota-compact { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .quota-compact .quota-track { width: 48px; }
+.quota-rings { display: inline-flex; gap: 6px; flex: none; }
+.quota-ring-cell { display: grid; justify-items: center; gap: 1px; }
+.quota-ring-letter { font-size: 9px; line-height: 1; font-weight: 600; color: var(--subtle); }
 .quota-ring { position: relative; display: inline-grid; place-items: center; flex: none; width: 26px; height: 26px; color: var(--green); }
 .quota-ring[data-level="amber"] { color: var(--amber); }
 .quota-ring[data-level="red"] { color: var(--red); }
