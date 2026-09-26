@@ -478,10 +478,10 @@ test("files sent to a session land in its workspace and reach the agent as paths
     const thread = after.body.chats[0].threadTs;
     await post.run(summary.key, { to: `EMBER/${thread}`, text: "图在这", files: [shot] });
     const withImage = await t.call("GET", `/sessions/${key}`);
-    const sent = withImage.body.chats[0].messages.at(-1);
-    assert.equal(sent.role, "agent");
-    assert.deepEqual([sent.attachments[0].name, sent.attachments[0].width, sent.attachments[0].height], ["chart.png", 320, 200]);
-    assert.match(sent.attachments[0].path, /\/uploads\/.+-chart\.png$/);
+    const reply = withImage.body.chats[0].messages.at(-1);
+    assert.equal(reply.role, "agent");
+    assert.deepEqual([reply.attachments[0].name, reply.attachments[0].width, reply.attachments[0].height], ["chart.png", 320, 200]);
+    assert.match(reply.attachments[0].path, /\/uploads\/.+-chart\.png$/);
     await assert.rejects(post.run(summary.key, { to: `EMBER/${thread}`, text: "x", files: ["/no/such/file.png"] }), /no such file/);
   } finally {
     t.close();
