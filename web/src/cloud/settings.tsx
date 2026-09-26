@@ -317,7 +317,7 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
       {!enroll.result ? (
         <Field label="名字" htmlFor="station-name" hint="比如机器名：studio、mac-mini、gpu-box。">
           <input id="station-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} maxLength={80}
-            onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) enroll.run(); }} />
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) enroll.run(); }} />
         </Field>
       ) : joined ? (
         <div className="callout" data-tone="green"><Check {...ICON} /><span>「{joined.name}」已加入，现在可以打开它了。</span></div>
@@ -401,7 +401,7 @@ function InviteDialog({ view, account, onClose }: { view: WorkspaceView; account
         <>
           <Field label="邮箱" htmlFor="invite-email" hint="对方登录 ember 用的 Google 账号邮箱。">
             <input id="invite-email" className="input" type="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com"
-              onKeyDown={(e) => { if (e.key === "Enter" && valid) invite.run(); }} />
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && valid) invite.run(); }} />
           </Field>
           <Field label="角色" hint={ROLE_HINT[role]}>
             <Select value={role} onChange={(r) => setRole(r as Role)} label="角色" options={roles.map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />

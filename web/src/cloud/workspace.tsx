@@ -234,7 +234,7 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
       footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="primary" disabled={!name.trim()} busy={create.busy} onClick={() => create.run()}>新建</Button></>}>
       <Field label="名字" htmlFor="ws-name">
         <input id="ws-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="例如：产品团队" maxLength={80}
-          onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.run(); }} />
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) create.run(); }} />
       </Field>
       {list.length > 1 && (
         <Field label="属于哪个账号" htmlFor="ws-owner">
@@ -245,7 +245,7 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
         <Field label="邀请码" htmlFor="ws-code" error={create.error && needsInviteCode(create.error) && code.trim() ? errorText(create.error) : undefined}
           hint="ember 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。">
           <input id="ws-code" className="input mono" value={code} autoFocus onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
-            onKeyDown={(e) => { if (e.key === "Enter" && name.trim() && code.trim()) create.run(); }} />
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && code.trim()) create.run(); }} />
         </Field>
       )}
       {create.error && !needsInviteCode(create.error) && <p className="field-error" role="alert">{create.error.message}</p>}

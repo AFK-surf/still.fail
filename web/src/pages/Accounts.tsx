@@ -171,7 +171,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
         <div className="identity-text">
           {editingName ? (
             <input className="input identity-name-input" value={name} autoFocus aria-label="名称" onChange={(e) => setName(e.target.value)} onBlur={rename}
-              onKeyDown={(e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
             <h1 className="identity-name">{profile.name}<RuntimeTags runtimes={profile.runtimes} /><IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
           )}
@@ -384,7 +384,7 @@ function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: 
             <span>同意后页面上会显示一段授权码，复制过来：</span>
             <div className="input-row">
               <input className="input mono" spellCheck={false} autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder="粘贴授权码" aria-label="授权码"
-                onKeyDown={(e) => { if (e.key === "Enter" && code.trim()) send(); }} />
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && code.trim()) send(); }} />
               <Button variant="primary" disabled={!code.trim()} busy={sending} onClick={() => send()}>完成登录</Button>
             </div>
             {sendError && <p className="field-error" role="alert">{sendError}</p>}
