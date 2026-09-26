@@ -1179,6 +1179,9 @@ mod tests {
             assert_eq!((v["thread"].clone(), v["messages"].clone(), v["title"].clone()), (Value::Null, json!([]), json!("修构建")));
             // A chat is made for it (here or elsewhere): the same page is the chat now, at the same address.
             t.set(rows("ws/a"), json!([{"id": "k", "session": "k", "thread": 7, "title": "修构建", "agents": []}]));
+            t.read(&mut ui, 1).await;
+            // Now it reads that chat, as any chat's page does.
+            assert!(t.started().contains(&page_of("ws/a", 7)), "{:?}", t.started());
             t.set(threads("ws/a"), json!([thread(7, &["k"], now)]));
             t.set(page_of("ws/a", 7), page(1, &["开始吧"], Value::Null));
             t.read(&mut ui, 1).await;
