@@ -1,7 +1,7 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
-import { CheckCircle2, Plus, ExternalLink, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { CheckCircle2, Plus, ExternalLink, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
@@ -12,7 +12,7 @@ import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, Pill, Section, Segmented, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, Section, Segmented, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
 
 export function ConnectPage() {
   const { id } = useParams();
@@ -56,15 +56,9 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
   const navigate = useNavigate();
   const toast = useToast();
   const save = useSaveConnect(connect.id);
-  const [editingName, setEditingName] = useState(false);
-  const [name, setName] = useState(connect.name);
   const [deleting, setDeleting] = useState(false);
   const [owning, setOwning] = useState(false);
   const remove = useAction(() => api.deleteConnect(connect.id), () => { toast("已删除连接"); navigate(`${station.settings}/connects`); });
-  const rename = () => {
-    setEditingName(false);
-    if (name.trim() && name.trim() !== connect.name) save.put({ name: name.trim() }, () => toast("已改名"));
-  };
 
   return (
     <div className="page page-narrow">
@@ -72,16 +66,11 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
       <header className="identity">
         <ConnectKindIcon kind={connect.kind} size={22} tile />
         <div className="identity-text">
-          {editingName ? (
-            <input className="input identity-name-input" value={name} autoFocus aria-label="名称"
-              onChange={(e) => setName(e.target.value)} onBlur={rename}
-              onKeyDown={(e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") { setName(connect.name); setEditingName(false); } }} />
-          ) : (
-            <h1 className="identity-name">{connect.name}<IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
-          )}
+          {/* Known by its bot's name in its Slack workspace; the name is the Slack app's, changed below. */}
+          <h1 className="identity-name">{connect.name}</h1>
           <p className="identity-sub">
+            <span className="kind-tag"><SlackLogo size={13} />{connect.team ?? "Slack"}</span>
             {station.name && <span className="station-tag">{station.name}</span>}
-            <span className="kind-tag"><SlackLogo size={13} />Slack</span>
             <span>{modeText(connect.mode, connect.requireMention)}</span>
             <span>{connectSubtitle(connect)}</span>
             <span className="owner-line">所属 <OwnerLabel owner={connect.createdBy} /></span>

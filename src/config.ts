@@ -69,16 +69,17 @@ export interface Binding {
 export interface Connect {
   /** Stable id; part of session keys, so do not rename a connect that has sessions. */
   id: string;
-  /** How the agent refers to itself. */
-  name: string;
   /** A disabled connect keeps its config and sessions but is not connected. */
   enabled: boolean;
   kind: ConnectKind;
   mode: ConnectMode;
   /** single-session only: whether starting on a new thread needs an @mention. */
   requireMention: boolean;
-  /** appId is known once ember created the app or looked it up. */
-  slack: { appToken: string; botToken: string; appId?: string };
+  /**
+   * appId is known once ember created the app or looked it up. `team` and `botName`: the Slack workspace and the bot's
+   * name there, as last seen connected; together they are what a connect is known by.
+   */
+  slack: { appToken: string; botToken: string; appId?: string; team?: SlackPlace; botName?: string };
   /** Who added it from the admin page: an email, or "local"; absent for older or hand-written ones. */
   createdBy?: { id: string; name: string };
   bind: Binding;
@@ -109,15 +110,17 @@ export interface Config {
 
 export interface RawConnect {
   id: string;
-  name?: string;
   enabled?: boolean;
   kind?: ConnectKind;
   mode?: ConnectMode;
   requireMention?: boolean;
-  slack?: { appToken?: string; botToken?: string; appId?: string };
+  slack?: { appToken?: string; botToken?: string; appId?: string; team?: SlackPlace; botName?: string };
   createdBy?: { id: string; name: string };
   bind: { runtime: RuntimeKind; model?: string; effort?: string };
 }
+
+/** A Slack workspace, as a connect last saw it. */
+export interface SlackPlace { id: string; name: string }
 
 export interface RawProfile {
   id: string;
@@ -184,12 +187,14 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
     if (c.bind.effort && !EFFORTS[runtime].includes(c.bind.effort)) throw new Error(`connect ${c.id}: ${runtime} has no effort ${c.bind.effort}; use ${EFFORTS[runtime].join(", ")}`);
     return {
       id: c.id,
-      name: c.name?.trim() || c.id,
       enabled: c.enabled ?? true,
       kind,
       mode,
       requireMention: mode === "multi-session" ? true : c.requireMention ?? true,
-      slack: { appToken: c.slack?.appToken ?? "", botToken: c.slack?.botToken ?? "", ...(c.slack?.appId ? { appId: c.slack.appId } : {}) },
+      slack: {
+        appToken: c.slack?.appToken ?? "", botToken: c.slack?.botToken ?? "", ...(c.slack?.appId ? { appId: c.slack.appId } : {}),
+        ...(c.slack?.team?.id ? { team: { id: c.slack.team.id, name: c.slack.team.name ?? "" } } : {}), ...(c.slack?.botName ? { botName: c.slack.botName } : {}),
+      },
       bind: { runtime, ...(c.bind.model ? { model: c.bind.model } : {}), ...(c.bind.effort ? { effort: c.bind.effort } : {}) },
       ...(c.createdBy?.id ? { createdBy: { id: c.createdBy.id, name: c.createdBy.name ?? "" } } : {}),
     };
@@ -240,4 +245,9 @@ export function runtimesOf(kind: AccessKind, runtime: RuntimeKind | undefined): 
 
 export function expandRoute(env: Record<string, string>, route: string): Record<string, string> {
   return Object.fromEntries(Object.entries(env).map(([k, v]) => [k, v.replaceAll("{route}", route)]));
+}
+
+/** What a connect is called: its bot's name in its Slack workspace, else its id. */
+export function connectName(connect: Pick<Connect, "id" | "slack">): string {
+  return connect.slack.botName || connect.id;
 }

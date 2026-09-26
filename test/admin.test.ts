@@ -130,7 +130,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string }; st
       { id: "cc", runtime: "claude", home: "homes/cc", env: { ANTHROPIC_API_KEY: "sk-very-secret-value", ANTHROPIC_BASE_URL: "https://example" } },
       { id: "cx", runtime: "codex", home: "homes/cx" },
     ],
-    connects: [{ id: "ds", name: "ember", kind: "slack", mode: "multi-session", bind: { runtime: "claude" }, slack: { appToken: "xapp-1-aaaaaaaaaaaa", botToken: "xoxb-bbbbbbbbbbbb", appId: "A0DS" } }],
+    connects: [{ id: "ds", kind: "slack", mode: "multi-session", bind: { runtime: "claude" }, slack: { appToken: "xapp-1-aaaaaaaaaaaa", botToken: "xoxb-bbbbbbbbbbbb", appId: "A0DS", team: { id: "T0", name: "Acme" }, botName: "ember" } }],
   }));
   const settings = new Settings(path, dataDir);
   const store = options.store ?? new Store(":memory:");
@@ -324,10 +324,13 @@ test("secrets are masked in the overview", async () => {
 test("editing a connect keeps tokens that were left blank and writes config.json privately", async () => {
   const t = await setup();
   try {
-    const { status } = await t.call("PUT", "/connects/ds", { name: "ember-ds", bind: { model: "deepseek-flash" }, slack: { appToken: "", botToken: "" } });
+    const { status } = await t.call("PUT", "/connects/ds", { bind: { model: "deepseek-flash" }, slack: { appToken: "", botToken: "" } });
     assert.equal(status, 200);
     const saved = JSON.parse(readFileSync(t.path, "utf8"));
-    assert.equal(saved.connects[0].name, "ember-ds");
+    // Known by its bot's name in its Slack workspace, kept through the edit.
+    assert.deepEqual([saved.connects[0].slack.team, saved.connects[0].slack.botName], [{ id: "T0", name: "Acme" }, "ember"]);
+    const view = (await t.call("GET", "/overview")).body.connects[0];
+    assert.deepEqual([view.name, view.team], ["ember", "Acme"]);
     assert.equal(saved.connects[0].slack.botToken, "xoxb-bbbbbbbbbbbb");
     assert.equal(saved.connects[0].bind.model, "deepseek-flash");
     assert.equal(saved.bots, undefined);
@@ -518,7 +521,7 @@ test("connects, sessions and chats remember who created them", async () => {
   try {
     await t.call("PUT", "/connects/fresh", { bind: { runtime: "claude" } });
     assert.deepEqual(t.settings.config.connects.find((c) => c.id === "fresh")!.createdBy, { id: "local", name: "本机管理页" });
-    await t.call("PUT", "/connects/fresh", { name: "renamed" });
+    await t.call("PUT", "/connects/fresh", { mode: "single-session" });
     assert.equal(t.settings.config.connects.find((c) => c.id === "fresh")!.createdBy?.id, "local", "editing keeps the creator");
     const { body } = await t.call("GET", "/overview");
     assert.equal(body.connects.find((c: any) => c.id === "ds").createdBy, null, "older connects have none");

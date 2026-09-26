@@ -22,7 +22,9 @@ export type ProcessState = "running" | "warm" | "cold";
 
 export interface ConnectView {
   id: string;
+  /** What it is known by: its bot's name in its Slack workspace (`team`, as last seen; null before it connected). */
   name: string;
+  team: string | null;
   enabled: boolean;
   kind: ConnectKind;
   mode: ConnectMode;
@@ -286,7 +288,6 @@ export interface StationEvents {
 
 /** PUT /connects/:id. Blank or missing tokens keep the stored ones. */
 export interface ConnectInput {
-  name?: string;
   enabled?: boolean;
   kind?: ConnectKind;
   mode?: ConnectMode;

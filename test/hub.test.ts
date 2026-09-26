@@ -20,7 +20,7 @@ function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinu
       { id: "cx", runtime: "codex", home: "homes/cx" },
     ],
     connects: [
-      { id: "cl", name: "Claude bot", bind: { runtime: "claude", model: "opus", effort: "high" } },
+      { id: "cl", slack: { botName: "Claude bot" }, bind: { runtime: "claude", model: "opus", effort: "high" } },
       { id: "gpt", bind: { runtime: "codex" } },
       { id: "team", mode: "single-session", requireMention: team?.requireMention ?? true, bind: { runtime: "claude" } },
     ],

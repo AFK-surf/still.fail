@@ -29,7 +29,7 @@ export async function verifySlackTokens(tokens: { appToken: string; botToken: st
   if (!tokens.botToken.startsWith("xoxb-")) errors.push("Bot Token 应该以 xoxb- 开头");
   else {
     try {
-      identity = identityOf(await slackApi("auth.test", {}, tokens.botToken));
+      identity = await identityOf(await slackApi("auth.test", {}, tokens.botToken), (id) => slackApi("users.info", { user: id }, tokens.botToken));
     } catch (error) {
       errors.push(`Bot Token 无效：${error instanceof Error ? error.message : String(error)}`);
     }
@@ -46,8 +46,12 @@ export async function verifySlackTokens(tokens: { appToken: string; botToken: st
 }
 
 
-function identityOf(auth: Record<string, any>): SlackIdentity {
-  return { team: String(auth.team ?? ""), teamId: String(auth.team_id ?? ""), url: String(auth.url ?? ""), botUserId: String(auth.user_id ?? ""), botName: String(auth.user ?? "") };
+/** Who the bot is, and where: its name as people see it in that workspace (not its handle), when Slack says. */
+async function identityOf(auth: Record<string, any>, userInfo: (id: string) => Promise<Record<string, any>>): Promise<SlackIdentity> {
+  const botUserId = String(auth.user_id ?? "");
+  const user = await userInfo(botUserId).then((d) => d.user, () => null);
+  const shown = [user?.profile?.display_name, user?.real_name, user?.profile?.real_name].find((n) => typeof n === "string" && n.trim());
+  return { team: String(auth.team ?? ""), teamId: String(auth.team_id ?? ""), url: String(auth.url ?? ""), botUserId, botName: shown ? String(shown) : String(auth.user ?? "") };
 }
 
 async function slackApi(method: string, params: Record<string, string>, token: string): Promise<Record<string, any>> {
@@ -125,7 +129,7 @@ export class SlackSurface implements ChatSurface {
   }
 
   async start(handler: (event: ChatEvent) => Promise<void>): Promise<void> {
-    this.#identity = identityOf(await this.#api("auth.test", {}, this.#botToken));
+    this.#identity = await identityOf(await this.#api("auth.test", {}, this.#botToken), (id) => this.#api("users.info", { user: id }, this.#botToken));
     log.info("slack authenticated", { botUserId: this.#identity.botUserId, team: this.#identity.team });
     void this.#connectLoop(handler);
   }

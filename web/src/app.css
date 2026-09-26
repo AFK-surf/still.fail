@@ -1389,3 +1389,5 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .app-perms { margin-top: 10px; font-size: var(--text-sm); }
 .app-perms summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 .app-perms .switch-list { margin-top: 6px; }
+
+.connect-team { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-weight: 400; font-size: var(--text-xs); color: var(--muted); }

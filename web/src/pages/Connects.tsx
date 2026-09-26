@@ -9,7 +9,7 @@ import { useConnects, useStations } from "../api.ts";
 import { MineFilter, OwnerLabel } from "../components.tsx";
 import { connectionText, modeText, presence, RUNTIME_LABEL } from "../format.ts";
 import { StationContext, stationBase, useOnlyMine, type Station } from "../station.tsx";
-import { Button, ConnectKindIcon, MobileBack, StatusDot } from "../ui.tsx";
+import { Button, ConnectKindIcon, MobileBack, SlackLogo, StatusDot } from "../ui.tsx";
 import { NewConnectDialog } from "./Connect.tsx";
 
 /** The connects of a scope (a workspace, or "local"), from the core's `connects` view; `settings` is where the scope's settings live. */
@@ -56,7 +56,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
               <Link className="list-row" to={`${stationBase(station)}/connects/${c.id}`}>
                 <ConnectKindIcon kind={c.kind} />
                 <span className="list-row-text">
-                  <span className="list-row-title">{c.name}</span>
+                  <span className="list-row-title">{c.name}{c.team && <span className="connect-team"><SlackLogo size={11} />{c.team}</span>}</span>
                   <span className="muted">{modeText(c.mode, c.requireMention)} · {RUNTIME_LABEL[c.bind.runtime]}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>
                 </span>
                 <span className="connect-facts">

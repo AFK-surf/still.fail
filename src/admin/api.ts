@@ -11,7 +11,7 @@ import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, extname, join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Connections } from "../connections.ts";
-import { RUNTIMES, runtimesOf, type ConnectMode, type RawConfig, type RawConnect, type RawProfile, type RuntimeKind } from "../config.ts";
+import { connectName, RUNTIMES, runtimesOf, type ConnectMode, type RawConfig, type RawConnect, type RawProfile, type RuntimeKind } from "../config.ts";
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
 import type { MeshStatus } from "../mesh.ts";
@@ -191,6 +191,7 @@ export class AdminApi {
       this.#rowsChanged();
     });
     deps.connections.changes.on("change", () => {
+      this.#rememberIdentities();
       this.#overviewChanged();
       this.#rowsChanged();
     });
@@ -554,6 +555,28 @@ export class AdminApi {
 
   // ── Slack apps ──────────────────────────────────────────────────────────
 
+  /**
+   * Keeps what each connected connect is known by, its Slack workspace and its bot's name there, as Slack says now:
+   * a connect shows by them while it is not connected too.
+   */
+  #rememberIdentities() {
+    const changed = this.#deps.settings.config.connects.flatMap((c) => {
+      const state = this.#deps.connections.state(c);
+      const seen = "workspace" in state ? state.workspace : null;
+      if (!seen?.teamId) return [];
+      const same = c.slack.team?.id === seen.teamId && c.slack.team.name === seen.team && c.slack.botName === seen.botName;
+      return same ? [] : [{ id: c.id, team: { id: seen.teamId, name: seen.team }, botName: seen.botName }];
+    });
+    if (changed.length === 0) return;
+    this.#deps.settings.update((raw) => ({
+      ...raw,
+      connects: (raw.connects ?? []).map((c) => {
+        const seen = changed.find((x) => x.id === c.id);
+        return seen ? { ...c, slack: { ...c.slack, team: seen.team, botName: seen.botName } } : c;
+      }),
+    }));
+  }
+
   /** The viewer's own Slack workspaces (a configuration token each), with whose token it is; never the tokens. */
   #slackTeams(viewer: Viewer) {
     return this.#deps.settings.config.slackConfigTokens.filter((t) => t.by === viewerId(viewer)).map((t) => ({ teamId: t.teamId, name: t.owner?.team || t.teamId, owner: t.owner ?? null }));
@@ -788,7 +811,7 @@ export class AdminApi {
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
     const appId = installed?.appId ?? (typeof input.slack?.appId === "string" && input.slack.appId ? input.slack.appId : null);
-    const overview = this.#putConnect(id, { ...input, name, kind: "slack", slack: { appToken, botToken } }, viewer);
+    const overview = this.#putConnect(id, { ...input, kind: "slack", slack: { appToken, botToken, team: { id: identity.teamId, name: identity.team }, botName: identity.botName } }, viewer);
     if (installed) this.#installs.delete(input.slack.install);
     if (appId) {
       this.#save(viewer, `slack app of ${id}`, (raw) => ({
@@ -804,7 +827,7 @@ export class AdminApi {
     const connect = this.#deps.settings.config.connects.find((c) => c.id === connectId);
     if (!connect) throw new HttpError(404, `unknown connect ${connectId}`);
     if (await this.#appId(connectId)) throw new HttpError(400, "这个连接已经有 Slack app 了");
-    const name = typeof input.name === "string" && input.name.trim() ? input.name.trim() : connect.name;
+    const name = typeof input.name === "string" && input.name.trim() ? input.name.trim() : connectName(connect);
     let appId: string;
     try {
       ({ appId } = await this.#apps.createApp(viewerId(viewer), this.#teamFor(input, viewer), slackManifest(name)));
@@ -829,7 +852,8 @@ export class AdminApi {
       viewer,
       mesh: this.#deps.mesh?.status() ?? null,
       connects: config.connects.map((c) => ({
-        id: c.id, name: c.name, enabled: c.enabled, kind: c.kind, mode: c.mode, requireMention: c.requireMention,
+        // What it is known by: its bot's name in its Slack workspace, and that workspace.
+        id: c.id, name: connectName(c), team: c.slack.team?.name ?? null, enabled: c.enabled, kind: c.kind, mode: c.mode, requireMention: c.requireMention,
         bind: { runtime: c.bind.runtime, model: c.bind.model ?? null, effort: c.bind.effort ?? null },
         slack: { appToken: mask(c.slack.appToken), botToken: mask(c.slack.botToken) },
         connection: this.#deps.connections.state(c),
@@ -1092,7 +1116,8 @@ export class AdminApi {
         const session = this.#deps.store.getSession(author);
         const via = members.find((x) => x.session === author)?.connect;
         const connect = via === INTERNAL_CONNECT || !via ? session?.connect : via;
-        return Promise.resolve(this.#deps.settings.config.connects.find((c) => c.id === connect)?.name ?? session?.title ?? null);
+        const found = this.#deps.settings.config.connects.find((c) => c.id === connect);
+        return Promise.resolve(found ? connectName(found) : session?.title ?? null);
       }
       if (t?.surface === EMBER_SURFACE) return Promise.resolve(author === "local" ? "管理员" : this.#deps.names.get(author) ?? author);
       return Promise.resolve(chat?.knownPerson?.(author)?.name || null);
@@ -1361,13 +1386,16 @@ export class AdminApi {
       const next: RawConnect = {
         id,
         ...ownerOf(existing?.createdBy, input.owner, viewer),
-        name: typeof input.name === "string" && input.name.trim() ? input.name.trim() : existing?.name ?? id,
         enabled: typeof input.enabled === "boolean" ? input.enabled : existing?.enabled ?? true,
         kind: input.kind ?? existing?.kind ?? "slack",
         mode: (input.mode ?? existing?.mode ?? "multi-session") as ConnectMode,
         requireMention: typeof input.requireMention === "boolean" ? input.requireMention : existing?.requireMention ?? true,
-        ...(appToken || botToken || existing?.slack?.appId
-          ? { slack: { ...(appToken ? { appToken } : {}), ...(botToken ? { botToken } : {}), ...(existing?.slack?.appId ? { appId: existing.slack.appId } : {}) } }
+        ...(appToken || botToken || existing?.slack?.appId || input.slack?.team
+          ? { slack: {
+            ...(appToken ? { appToken } : {}), ...(botToken ? { botToken } : {}), ...(existing?.slack?.appId ? { appId: existing.slack.appId } : {}),
+            // Who it is in Slack: given with new tokens (as they were verified), else as last seen.
+            ...(input.slack?.team ? { team: input.slack.team, botName: input.slack.botName } : existing?.slack?.team ? { team: existing.slack.team, botName: existing.slack.botName } : {}),
+          } }
           : {}),
         bind: {
           // A connect's runtime is chosen when it is made: its sessions and their history belong to it.
@@ -1500,7 +1528,7 @@ function accountEmail(runtime: RuntimeKind, home: string): string | null {
 /** A profile leaving its runtime (deleted, or moved to another): refused when it is the last one of a runtime that connects run. */
 function lastOfRuntime(raw: RawConfig, runtime: RuntimeKind, id: string): void {
   if ((raw.profiles ?? []).some((p) => p.id !== id && runtimesOf(p.access?.kind ?? "env", p.runtime).includes(runtime))) return;
-  const users = (raw.connects ?? []).filter((c) => c.bind.runtime === runtime).map((c) => c.name ?? c.id);
+  const users = (raw.connects ?? []).filter((c) => c.bind.runtime === runtime).map((c) => c.slack?.botName || c.id);
   if (users.length) throw new Error(`它是最后一个 ${runtime} 的 Profile，${users.join("、")} 还要用它运行`);
 }
 
