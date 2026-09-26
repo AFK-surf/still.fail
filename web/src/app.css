@@ -1445,4 +1445,4 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
   .brand-phone { display: contents; }
 }
 @media (prefers-reduced-motion: reduce) { .sidebar-buddy, .shell { transition: none; } .sidebar-buddy[data-pose="hop"] img { animation: none; } }
-.model-triple .quota-ring-number { font-size: 7.5px; }
+.model-triple .quota-ring-number { display: none; }
