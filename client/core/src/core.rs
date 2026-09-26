@@ -673,6 +673,12 @@ impl Inner {
                 Ok(self.workspaces_value())
             }
             Topic::Workspace { workspace } => self.workspace_value(workspace).await,
+            // Read as they are now; a write through cloud.request reads them again (refresh_all).
+            Topic::LoginSessions { account } => self.cloud.request(account, "GET", "/v1/auth/sessions", None).await.map(|v| v.get("sessions").cloned().unwrap_or(json!([]))),
+            Topic::Admin { account, list } => match list.as_str() {
+                "users" | "workspaces" | "invite-codes" => self.cloud.request(account, "GET", &format!("/v1/admin/{list}"), None).await,
+                _ => Err(CoreError::invalid("没有这个列表")),
+            },
             _ => return,
         };
         if let (Topic::Workspace { workspace }, Ok(view)) = (topic, &value) {

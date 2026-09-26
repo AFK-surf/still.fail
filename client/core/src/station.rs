@@ -625,6 +625,9 @@ impl Stations {
             Some("connects") => {
                 touched.push(Topic::Overview { station: name.clone() });
                 touched.push(Topic::Sessions { station: name.clone() });
+                if let Some(connect) = parts.get(1) {
+                    touched.push(Topic::SlackApp { station: name.clone(), connect: connect.clone() });
+                }
             }
             Some("profiles") | Some("slack") => touched.push(Topic::Overview { station: name.clone() }),
             // Who the viewer is on Slack: it answers the overview, and changes which rows are theirs.
@@ -699,6 +702,7 @@ impl Stations {
             Topic::Sessions { .. } => "/sessions".to_string(),
             Topic::Threads { .. } => "/threads".to_string(),
             Topic::ChatRows { .. } => "/chats".to_string(),
+            Topic::SlackApp { connect, .. } => format!("/connects/{}/slack-app", encode(connect)),
             Topic::Session { key, .. } => format!("/sessions/{}", encode(key)),
             // A thread already read only asks for what came after it.
             Topic::Thread { thread, .. } => match self.sink.get(topic).and_then(|v| v.get("last")?.as_u64()) {
@@ -1520,7 +1524,7 @@ impl Source for Stations {
                     }
                 });
             }
-            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } => self.refetch(topic),
+            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } => self.refetch(topic),
             Topic::Thread { thread, .. } => {
                 let (this, station, thread) = (self.rc(), station.clone(), *thread);
                 self.spawn(async move { this.open_thread(&station, thread).await });

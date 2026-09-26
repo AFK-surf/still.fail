@@ -53,6 +53,12 @@ pub enum Topic {
     Thread { station: String, thread: u64 },
     /// The station's sidebar rows for the viewer, as it puts them together (`/chats`).
     ChatRows { station: String },
+    /// A connect's Slack app as the station sees it (`/connects/:id/slack-app`): its settings and links.
+    SlackApp { station: String, connect: String },
+    /// An account's signed-in devices (`/v1/auth/sessions`).
+    LoginSessions { account: String },
+    /// ember cloud's operator lists for an admin account: `users`, `workspaces` or `invite-codes` (`/v1/admin/…`).
+    Admin { account: String, list: String },
     // Views: put together from the topics above (see views.rs). `scope` is a workspace id or "local".
     Chats { scope: String, #[serde(default)] mine: bool },
     Stations { scope: String },
@@ -67,8 +73,8 @@ impl Topic {
     pub fn station(&self) -> Option<&str> {
         match self {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } => Some(station),
-            Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } => Some(station),
-            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } => None,
+            Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } => Some(station),
+            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } => None,
         }
     }
