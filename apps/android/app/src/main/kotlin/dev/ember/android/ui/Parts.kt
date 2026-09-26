@@ -2,6 +2,22 @@
 // avatars, rings, toggles, segmented choices, navigation bars and list cards.
 package dev.ember.android.ui
 
+import android.provider.Settings
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -33,7 +49,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -182,17 +197,50 @@ fun Toggle(on: Boolean, onChange: (Boolean) -> Unit) {
     }
 }
 
-/** A segmented choice on a chip-colored track. */
+/** Whether the person asked for less motion (animations off in the system settings). */
+@Composable
+fun reducedMotion(): Boolean {
+    val context = LocalContext.current
+    return remember { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
+}
+
+/**
+ * A segmented choice: a track that tints whatever it sits on (the text colour
+ * at 6%), and a light thumb that slides to the chosen option.
+ */
 @Composable
 fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, height: Dp = 30.dp, fill: Boolean = false) {
-    Row(modifier.height(height).clip(RoundedCornerShape(10.dp)).background(C.chip).padding(2.dp)) {
-        options.forEachIndexed { i, label ->
-            val on = i == selected
-            Box(
-                Modifier.let { if (fill) it.weight(1f) else it }.fillMaxHeight().clip(RoundedCornerShape(8.dp))
-                    .background(if (on) C.surface else Color.Transparent).clickable { onSelect(i) }.padding(horizontal = if (fill) 12.dp else 10.dp),
-                contentAlignment = Alignment.Center,
-            ) { Text(label, fontSize = if (fill) 14.sp else 13.sp, color = if (on) C.ink else C.muted, maxLines = 1) }
+    // Where each option sits in the track, in px: (x, width).
+    val places = remember(options) { mutableStateListOf(*Array(options.size) { 0f to 0f }) }
+    val x = remember { Animatable(0f) }
+    val w = remember { Animatable(0f) }
+    val still = reducedMotion()
+    val (tx, tw) = places.getOrElse(selected) { 0f to 0f }
+    LaunchedEffect(tx, tw) {
+        if (tw == 0f) return@LaunchedEffect
+        // The first placement and reduced motion jump; a change of choice slides.
+        if (w.value == 0f || still) { x.snapTo(tx); w.snapTo(tw); return@LaunchedEffect }
+        val ease = tween<Float>(240, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))
+        launch { x.animateTo(tx, ease) }
+        w.animateTo(tw, ease)
+    }
+    val density = LocalDensity.current
+    val thumb = if (C.dark) Color(0xFF3A3B40) else Color.White
+    Box(modifier.height(height).clip(RoundedCornerShape(10.dp)).background(C.ink.copy(alpha = 0.06f)).padding(2.dp)) {
+        if (w.value > 0f) Box(
+            Modifier.offset { IntOffset(x.value.roundToInt(), 0) }.width(with(density) { w.value.toDp() }).fillMaxHeight()
+                .shadow(1.dp, RoundedCornerShape(8.dp)).background(thumb, RoundedCornerShape(8.dp)),
+        )
+        Row(Modifier.fillMaxHeight().let { if (fill) it.fillMaxWidth() else it }) {
+            options.forEachIndexed { i, label ->
+                Box(
+                    Modifier.let { if (fill) it.weight(1f) else it }.fillMaxHeight()
+                        .onPlaced { places[i] = it.positionInParent().x to it.size.width.toFloat() }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) }
+                        .padding(horizontal = if (fill) 12.dp else 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text(label, fontSize = if (fill) 14.sp else 13.sp, color = if (i == selected) C.ink else C.muted, maxLines = 1) }
+            }
         }
     }
 }
@@ -217,7 +265,7 @@ fun NavButton(icon: ImageVector, onClick: () -> Unit, iconSize: Dp = 18.dp) {
     Box(Modifier.size(34.dp).clip(CircleShape).background(C.chip).clickable(onClick = onClick), contentAlignment = Alignment.Center) { IconIn(icon, iconSize) }
 }
 
-/** A page's compact bar: back, a centered title with a line under it, and one action. */
+/** A page's compact bar: back, a centered title, and one action. No line under it: the page's paper runs on. */
 @Composable
 fun NavBar(back: String, onBack: () -> Unit, title: String, sub: (@Composable RowScope.() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.statusBars)) {
@@ -229,7 +277,6 @@ fun NavBar(back: String, onBack: () -> Unit, title: String, sub: (@Composable Ro
             }
             if (trailing != null) Box(Modifier.align(Alignment.CenterEnd)) { trailing() }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
     }
 }
 
@@ -262,15 +309,14 @@ fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: 
     )
 }
 
-/** Rows on one rounded card, a hairline between them. */
+/** Rows on one rounded card; the card groups them, no lines between. */
 @Composable
 fun ListCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface), content = content)
 }
 
 @Composable
-fun ListRow(first: Boolean, onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
-    if (!first) Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(1.dp).background(C.line))
+fun ListRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
     Row(
         Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = content,
@@ -294,4 +340,3 @@ fun SlackMark(size: Dp = 13.dp) = Image(painterResource(R.drawable.slack), null,
 @Composable
 fun Illustration(light: Int, dark: Int, width: Dp) = Image(painterResource(if (C.dark) dark else light), null, Modifier.width(width))
 
-fun Modifier.hairlineTop(color: Color) = drawBehind { drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }

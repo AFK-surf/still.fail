@@ -164,14 +164,14 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 overview.profiles.forEach { ProfileCard(address, it) }
                 SectionHeader("连接", start = 24.dp)
                 ListCard {
-                    overview.connects.forEachIndexed { i, c ->
-                        ListRow(i == 0) {
+                    overview.connects.forEach { c ->
+                        ListRow {
                             if (c.kind == "slack") SlackMark(14.dp) else Mark(14.dp)
                             Text(c.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                             Text(connectionText(c.connection.state), fontSize = 13.sp, color = C.muted)
                         }
                     }
-                    ListRow(overview.connects.isEmpty()) {
+                    ListRow {
                         Mark(14.dp)
                         Text("ember 对话", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                         Text("内置", fontSize = 13.sp, color = C.muted)

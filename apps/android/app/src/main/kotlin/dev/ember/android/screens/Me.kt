@@ -68,8 +68,8 @@ fun MeScreen(current: WorkspaceEntry) {
         }
         SectionHeader("推送", "手机主要用来被叫醒", start = 24.dp)
         ListCard {
-            listOf(Triple("push.block", "agent 进入 block", true), Triple("push.final", "一轮完成", false), Triple("push.failed", "失败或意外停止", true)).forEachIndexed { i, (key, label, default) ->
-                ListRow(i == 0) {
+            listOf(Triple("push.block", "agent 进入 block", true), Triple("push.final", "一轮完成", false), Triple("push.failed", "失败或意外停止", true)).forEach { (key, label, default) ->
+                ListRow {
                     Text(label, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                     var on by remember { mutableStateOf(app.flag(key, default)) }
                     Toggle(on) { on = it; app.setFlag(key, it) }
@@ -80,26 +80,26 @@ fun MeScreen(current: WorkspaceEntry) {
         SectionHeader("账号与 workspace", start = 24.dp)
         ListCard {
             val entries = workspaces.value?.entries().orEmpty()
-            entries.forEachIndexed { i, e ->
-                ListRow(i == 0, onClick = { app.pickWorkspace(e.workspace.id); app.home() }) {
+            entries.forEach { e ->
+                ListRow(onClick = { app.pickWorkspace(e.workspace.id); app.home() }) {
                     Text(e.workspace.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                     Text(e.account.email, fontSize = 13.sp, color = C.muted)
                 }
             }
-            ListRow(entries.isEmpty(), onClick = { scope.launch { signIn(app, context) } }) {
+            ListRow(onClick = { scope.launch { signIn(app, context) } }) {
                 Text("＋ 登录另一个 Google 账号", fontSize = 15.sp, color = C.accent)
             }
         }
         SectionHeader("外观", start = 24.dp)
         ListCard {
-            ListRow(true) {
+            ListRow {
                 Text("深色模式", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                 val system = isSystemInDarkTheme()
                 Toggle(app.dark ?: system) { app.useDark(it) }
             }
         }
         ListCard {
-            ListRow(true, onClick = {
+            ListRow(onClick = {
                 scope.launch {
                     try {
                         for (a in accounts.value.orEmpty()) Auth.signOut(app.core, a.sub)

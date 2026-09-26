@@ -86,7 +86,6 @@ import dev.ember.android.ui.SheetGrab
 import dev.ember.android.ui.SheetHead
 import dev.ember.android.ui.SheetSpec
 import dev.ember.android.ui.avatarColor
-import dev.ember.android.ui.hairlineTop
 import dev.ember.android.ui.initial
 import dev.ember.core.CoreException
 import kotlinx.coroutines.launch
@@ -137,7 +136,7 @@ fun HomeScreen(current: WorkspaceEntry) {
                     if (running.isNotEmpty()) {
                         item(key = "h-running") { SectionHeader("进行中", "${running.size}") }
                         items(running, key = { "r/${it.station}/${it.session.key}" }) { c ->
-                            ChatRow(c, view.me, first = c == running.first()) { RunningLine(c) }
+                            ChatRow(c, view.me) { RunningLine(c) }
                         }
                     }
                     for ((day, rows) in inbox.rest) {
@@ -145,7 +144,7 @@ fun HomeScreen(current: WorkspaceEntry) {
                         if (shown.isEmpty()) continue
                         item(key = "h-${day.daysAgo}") { SectionHeader(dayLabel(day.daysAgo, day.at)) }
                         items(shown, key = { "d/${it.station}/${it.session.key}" }) { c ->
-                            ChatRow(c, view.me, first = c == shown.first(), time = rowTime(c.session.lastActiveAt, day.daysAgo))
+                            ChatRow(c, view.me, time = rowTime(c.session.lastActiveAt, day.daysAgo))
                         }
                     }
                     if (inbox.needs.isEmpty() && inbox.running.isEmpty() && inbox.rest.isEmpty()) item(key = "empty") { Empty(view, app.onlyMine) }
@@ -247,10 +246,9 @@ private fun QuickButton(text: String, primary: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ChatRow(c: ChatItem, me: Me, first: Boolean, time: String? = null, line: (@Composable () -> Unit)? = null) {
+private fun ChatRow(c: ChatItem, me: Me, time: String? = null, line: (@Composable () -> Unit)? = null) {
     val app = LocalApp.current
     val state = c.session.state()
-    if (!first) Box(Modifier.padding(start = 68.dp).fillMaxWidth().height(1.dp).background(C.line))
     Row(
         Modifier.fillMaxWidth().clickable { app.push(Screen.Chat(c.station, c.session.key)) }.padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
@@ -289,7 +287,7 @@ private fun RunningLine(c: ChatItem) {
 @Composable
 private fun Toolbar(app: AppState, modifier: Modifier) {
     Row(
-        modifier.fillMaxWidth().background(C.bg).hairlineTop(C.line).windowInsetsPadding(WindowInsets.navigationBars)
+        modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

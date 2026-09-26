@@ -113,9 +113,6 @@ private fun Steps(view: ChatView, live: LiveView?, running: Boolean) {
 }
 
 @Composable
-private fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
-
-@Composable
 private fun Item(item: HistoryItem) {
     when (item) {
         is HistoryItem.Received -> Column(Modifier.padding(vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.chip).padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -158,7 +155,6 @@ private fun Group(g: HistoryItem.Group) {
                 s.result?.let { Code(it.text) }
             }
         }
-        Divider()
     }
 }
 
@@ -209,7 +205,6 @@ private fun Details(view: ChatView, live: LiveView?, agent: Agent) {
             Detail("Profile", view.profile?.name ?: s.profile)
             if (usage != null) Detail("消耗", "${compactNumber(usage.inputTokens + usage.outputTokens)} tokens" + (hit?.let { " · 缓存 $it%" } ?: ""))
         }
-        Divider()
         GroupLabel("额度")
         val quota = view.profile?.quota
         if (quota?.state == "ok" && quota.windows.isNotEmpty()) {

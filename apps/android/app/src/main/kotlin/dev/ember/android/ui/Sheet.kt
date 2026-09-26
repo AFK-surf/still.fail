@@ -184,7 +184,6 @@ fun MenuHost(app: AppState) {
         ) {
             Column(Modifier.widthIn(min = width).width(width).shadow(18.dp, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp)).background(C.surface)) {
                 current.items.forEachIndexed { i, item ->
-                    if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
                     Row(
                         Modifier.fillMaxWidth().clickable { app.menu = null; item.action() }.padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,

@@ -4,13 +4,10 @@ import android.content.Context
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.background
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -55,6 +52,5 @@ fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enable
             }
             if (checked) IconIn(Icons.Check, 14.dp, C.accent)
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
     }
 }

@@ -178,7 +178,6 @@ private fun ChatBar(thread: Thread, app: AppState) {
             }
             NavButton(Icons.More, { openChatInfo(app, thread) })
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
     }
 }
 
@@ -650,8 +649,8 @@ fun openChatInfo(app: AppState, thread: Thread) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
             GroupLabel("参与的 agent · 点开看它的执行历史")
             InfoList {
-                thread.agents.forEachIndexed { i, a ->
-                    InfoRow(i == 0, onClick = { openHistory(app, thread, a) }) {
+                thread.agents.forEach { a ->
+                    InfoRow(onClick = { openHistory(app, thread, a) }) {
                         ModelMark(a.model, 36.dp, a.state, around = C.surface2)
                         Column(Modifier.weight(1f)) {
                             Text(a.model ?: "默认模型", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
@@ -663,8 +662,8 @@ fun openChatInfo(app: AppState, thread: Thread) {
             }
             GroupLabel("参与的人")
             InfoList {
-                thread.people.forEachIndexed { i, p ->
-                    InfoRow(i == 0) {
+                thread.people.forEach { p ->
+                    InfoRow {
                         Avatar(p.id, p.name, 28.dp)
                         Column(Modifier.weight(1f)) {
                             Text(p.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
@@ -676,7 +675,7 @@ fun openChatInfo(app: AppState, thread: Thread) {
             }
             GroupLabel("通知")
             InfoList {
-                InfoRow(true) {
+                InfoRow {
                     Column(Modifier.weight(1f)) {
                         Text("这个对话的推送", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                         Text("agent block 时通知我", fontSize = 12.sp, color = C.muted)
@@ -687,20 +686,18 @@ fun openChatInfo(app: AppState, thread: Thread) {
             }
             Spacer(Modifier.height(14.dp))
             InfoList {
-                var first = true
                 thread.slackUrl?.let { url ->
-                    InfoRow(true, onClick = { openUrl(context, url) }) { SlackMark(14.dp); Text("在 Slack 中打开", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
-                    first = false
+                    InfoRow(onClick = { openUrl(context, url) }) { SlackMark(14.dp); Text("在 Slack 中打开", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
                 }
-                InfoRow(first, onClick = {
+                InfoRow(onClick = {
                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("ember", chatUrl(app, thread.station, thread.key)))
                     app.toast = "链接已拷贝"
                 }) { Text("拷贝链接", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
-                InfoRow(false, onClick = { openUrl(context, chatUrl(app, thread.station, thread.key)) }) {
+                InfoRow(onClick = { openUrl(context, chatUrl(app, thread.station, thread.key)) }) {
                     Text("在电脑上打开", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.weight(1f))
                     IconIn(Icons.External, 14.dp, C.subtle)
                 }
-                InfoRow(false, onClick = {
+                InfoRow(onClick = {
                     scope.launch {
                         try {
                             app.api(thread.station).archive(thread.key)
@@ -721,12 +718,11 @@ fun GroupLabel(text: String) = Text(text, fontSize = 13.sp, color = C.muted, mod
 
 @Composable
 fun InfoList(content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.surface2).border(1.dp, C.line, RoundedCornerShape(14.dp))) { content() }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.ink.copy(alpha = 0.05f))) { content() }
 }
 
 @Composable
-fun InfoRow(first: Boolean, onClick: (() -> Unit)? = null, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
-    if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
+fun InfoRow(onClick: (() -> Unit)? = null, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     Row(
         Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = content,
