@@ -65,6 +65,12 @@ const hub: Hub = new Hub({
   internal: new InternalChat((user) => names.get(user) ?? (user === "local" ? "管理员" : user)),
   mcpUrl,
   drivers: { claude: new ClaudeDriver(store), codex },
+  // A session's /o/ link on ember cloud (it opens the app where there is one, else the web), once this station is in
+  // a workspace.
+  link: (session) => {
+    const { origin, station } = mesh.status();
+    return origin && station ? `${origin}/o/${station}/${encodeURIComponent(session)}` : null;
+  },
 });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
 const logins = new LoginManager(settings.config.dataDir);

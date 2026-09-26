@@ -11,8 +11,8 @@ import { FakeChat, FakeDriver, message, settle } from "./fakes.ts";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; team?: { requireMention?: boolean } } = {}) {
-  const { team, ...rest } = overrides;
+function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; team?: { requireMention?: boolean }; link?: boolean } = {}) {
+  const { team, link, ...rest } = overrides;
   const dataDir = mkdtempSync(join(tmpdir(), "ember-test-"));
   const config = parseConfig({
     profiles: [
@@ -32,12 +32,31 @@ function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinu
   const teamChat = new FakeChat("UTEAM");
   const claude = new FakeDriver("claude");
   const codex = new FakeDriver("codex");
-  const hub = new Hub({ config: () => config, store, chats: new Map([["cl", chat], ["gpt", gptChat], ["team", teamChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp", internal: new InternalChat() });
+  const hub = new Hub({ config: () => config, store, chats: new Map([["cl", chat], ["gpt", gptChat], ["team", teamChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp", internal: new InternalChat(),
+    ...(link ? { link: (key: string) => `https://ember.test/o/st/${encodeURIComponent(key)}` } : {}) });
   const tools = Object.fromEntries(hub.tools().map((t) => [t.name, t]));
   const call = (key: string, name: string, args: Record<string, unknown>) => tools[name]!.run(key, args);
   const accept = (m: ReturnType<typeof message>, connect = "cl") => hub.accept(connect, m);
   return { config, store, chat, gptChat, teamChat, claude, codex, hub, call, accept };
 }
+
+test("a new session first says where it can be followed (multi-session connects only)", async () => {
+  const { chat, teamChat, accept } = setup({ link: true });
+  const m = message({ text: "<@UBOT> fix the build" });
+  await accept(m);
+  await settle();
+  assert.equal(chat.posts.length, 1);
+  assert.match(chat.posts[0]!.text, /^\[在 ember 里查看这个会话\]\(https:\/\/ember\.test\/o\/st\/cl%3AC1%3A[\d.]+\)$/);
+  assert.deepEqual(chat.posts[0]!.thread, { channel: "C1", threadTs: m.threadTs });
+  // Its next message is the same session: nothing more.
+  await accept(message({ text: "<@UBOT> and the tests", threadTs: m.threadTs }));
+  await settle();
+  assert.equal(chat.posts.length, 1);
+  // A single-session connect has one session for everything: no link per thread.
+  await accept(message({ text: "<@UBOT> hi" }), "team");
+  await settle();
+  assert.equal(teamChat.posts.length, 0);
+});
 
 test("a mention starts a session and prompts the runtime with the message", async () => {
   const { claude, store, accept } = setup();

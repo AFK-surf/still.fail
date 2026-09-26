@@ -51,6 +51,7 @@ export class Hub {
   readonly #internal: InternalChat | undefined;
   readonly #drivers: Record<RuntimeKind, AgentDriver>;
   readonly #mcpUrl: string;
+  readonly #link: (session: string) => string | null;
   readonly #actors = new Map<string, SessionActor>();
   /** When each idle process is next looked at for eviction. */
   readonly #deadlines = new Map<string, ReturnType<typeof setTimeout>>();
@@ -73,7 +74,10 @@ export class Hub {
     mcpUrl: string;
     /** ember's own chat on the admin page; sessions can be talked to there too. */
     internal?: InternalChat;
+    /** A session's page in ember (its /o/ link, which opens the app where there is one), when the station is in a workspace. */
+    link?: (session: string) => string | null;
   }) {
+    this.#link = options.link ?? (() => null);
     this.#internal = options.internal;
     this.#getConfig = options.config;
     this.#store = options.store;
@@ -122,6 +126,9 @@ export class Hub {
       try {
         this.#createSession(key, connect, single ? "all" : "thread", message, null, `slack:${connect.id}:${message.user}`);
         if (single) this.#store.setBinding(connect.id, key);
+        // As the broker did: a new session says first where it can be followed. Once, as it starts; not waited for.
+        const link = single ? null : this.#link(key);
+        if (link) void chat.post(message, `[在 ember 里查看这个会话](${link})`).catch((error) => log.warn("session link not posted", { session: key, error }));
       } catch (error) {
         log.error("cannot create session", { session: key, error });
         await chat.post(message, `⚠️ 无法创建会话：${error instanceof Error ? error.message : String(error)}`);
@@ -564,7 +571,6 @@ export class Hub {
       actor = new SessionActor(row.key, {
         store: this.#store,
         chat: (id) => this.#chatOf(id),
-        // In ember's own chat the agent keeps the name of the connect that started it.
         drivers: this.#drivers,
         profile: (id) => this.#config.profiles.find((p) => p.id === id),
         mcpUrl: this.#mcpUrl,
