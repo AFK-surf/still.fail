@@ -13,6 +13,8 @@ export interface LiveStep {
   step: LiveStepKind;
   tool?: string;
   subagent?: boolean;
+  /** For a sub-agent's step: the tool call that started the sub-agent. */
+  parent?: string;
   text: string;
   input: string;
   output: string;
@@ -64,7 +66,7 @@ export class LiveHub {
     if (event.kind === "start") {
       steps.set(event.id, {
         id: event.id, step: event.step, text: "", input: event.input ?? "", output: "", startedAt: Date.now(),
-        ...(event.tool ? { tool: event.tool } : {}), ...(event.subagent ? { subagent: true } : {}),
+        ...(event.tool ? { tool: event.tool } : {}), ...(event.subagent ? { subagent: true } : {}), ...(event.parent ? { parent: event.parent } : {}),
       });
     } else if (event.kind === "delta") {
       const step = steps.get(event.id);

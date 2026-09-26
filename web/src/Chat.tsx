@@ -3,7 +3,7 @@
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronUp, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownPhase, type ShownStep } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
@@ -126,12 +126,8 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
               </div>
             );
           }
-          if (!busy || messages.at(-1)?.role !== "person") return null;
-          const doing = live.filter((s) => !s.ended && !s.subagent).at(-1);
-          const what = phase?.phase === "starting" ? "正在启动 agent…"
-            : phase?.phase === "requesting" ? "等待模型响应…"
-            : !doing ? "正在处理…" : doing.step === "thinking" ? "正在思考…" : doing.step === "tool" ? `${activityText(doing.tool, doing.input)}…` : "正在写…";
-          return <button type="button" className="chat-typing" onClick={onOpenHistory}><span className="activity-pulse inline" aria-hidden="true" />{what}</button>;
+          if (!busy) return null;
+          return <Activity steps={live} phase={phase} agent={agent} onOpenHistory={onOpenHistory} />;
         })()}
       </div>
       {picked && (
@@ -356,6 +352,53 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
         </div>
       </form>
       {send.error && <p className="field-error chat-error" role="alert">{send.error.message}</p>}
+    </div>
+  );
+}
+
+const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
+
+/**
+ * Who is doing what right now: the agent and each sub-agent it started, one
+ * line each, three at most. Collapses to one line; the choice is remembered.
+ */
+function Activity({ steps, phase, agent, onOpenHistory }: { steps: ShownStep[]; phase: ShownPhase | null; agent: string; onOpenHistory(): void }) {
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(ACTIVITY_COLLAPSED) === "1");
+  const open = steps.filter((s) => !s.ended);
+  const doing = (s: ShownStep | undefined, fallback: string) =>
+    !s ? fallback : s.step === "thinking" ? "正在思考" : s.step === "text" ? "正在写" : activityText(s.tool, s.input);
+  const main = open.filter((s) => !s.parent);
+  const mainText = phase?.phase === "starting" ? "正在启动"
+    : phase?.phase === "requesting" && !main.length ? "等待模型响应"
+    : doing(main.at(-1), "正在处理");
+  const lines: { who: string; what: string }[] = [{ who: agent, what: mainText }];
+  // Sub-agents, by the call that started them; named by what that call was asked to do.
+  const parents = [...new Set(open.filter((s) => s.parent).map((s) => s.parent!))];
+  for (const parent of parents) {
+    const call = steps.find((s) => s.id === parent);
+    const name = (call && partialString(call.input, "description")) || "子 agent";
+    lines.push({ who: name, what: doing(open.filter((s) => s.parent === parent).at(-1), "正在处理") });
+  }
+  const shown = collapsed ? lines.slice(0, 1) : lines.slice(0, 3);
+  const more = lines.length - shown.length;
+  const toggle = () => {
+    localStorage.setItem(ACTIVITY_COLLAPSED, collapsed ? "0" : "1");
+    setCollapsed(!collapsed);
+  };
+  return (
+    <div className="activity" data-collapsed={collapsed || undefined}>
+      <button type="button" className="activity-lines" onClick={onOpenHistory} title="打开执行历史">
+        {shown.map((l, i) => (
+          <span key={i} className="activity-line">
+            <span className="activity-pulse inline" aria-hidden="true" />
+            <span className="activity-who">{l.who}</span>
+            <span className="activity-what">{l.what}…</span>
+          </span>
+        ))}
+      </button>
+      <button type="button" className="activity-toggle" onClick={toggle} aria-label={collapsed ? "展开活动" : "收起为一行"}>
+        {collapsed ? (more > 0 ? `+${more}` : <ChevronDown size={13} />) : <ChevronUp size={13} />}
+      </button>
     </div>
   );
 }

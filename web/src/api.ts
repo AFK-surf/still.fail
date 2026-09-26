@@ -216,7 +216,7 @@ export function useLiveSession(key: string | undefined): { steps: ShownStep[]; p
             if (e.kind === "start") {
               return [...all.filter((s) => s.id !== e.id), {
                 id: e.id, step: e.step, text: "", input: e.input ?? "", output: "", startedAt: Date.now(),
-                ...(e.tool ? { tool: e.tool } : {}), ...(e.subagent ? { subagent: true } : {}),
+                ...(e.tool ? { tool: e.tool } : {}), ...(e.subagent ? { subagent: true } : {}), ...(e.parent ? { parent: e.parent } : {}),
               }];
             }
             if (e.kind === "delta") return all.map((s) => (s.id === e.id ? { ...s, [e.field]: s[e.field] + e.text } : s));

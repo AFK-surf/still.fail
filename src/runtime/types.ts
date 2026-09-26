@@ -46,7 +46,7 @@ export interface SessionEvents {
  * Nothing here is kept: once a step ends, the transcript is the record.
  */
 export type LiveEvent =
-  | { kind: "start"; id: string; step: LiveStepKind; tool?: string; input?: string; subagent?: boolean }
+  | { kind: "start"; id: string; step: LiveStepKind; tool?: string; input?: string; subagent?: boolean; parent?: string }
   | { kind: "delta"; id: string; field: "text" | "input" | "output"; text: string }
   | { kind: "end"; id: string }
   | { kind: "phase"; phase: LivePhase };

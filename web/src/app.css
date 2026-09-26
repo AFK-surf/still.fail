@@ -938,3 +938,17 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 }
 
 .h-step-said { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+
+/* Activity: one line per agent at work, up to three; collapses to one. */
+.activity { display: flex; align-items: flex-start; gap: 6px; }
+.activity-lines { display: grid; gap: 3px; min-width: 0; padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.activity-line { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--text-xs); color: var(--muted); animation: fade-in 180ms var(--ease-out); }
+.activity-who { flex: none; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 500; }
+.activity-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-toggle { display: grid; place-items: center; min-width: 22px; height: 18px; padding: 0 4px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 11px; cursor: pointer; }
+.activity-toggle:hover { background: var(--hover); color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .activity-line { animation: none; } }
+/* Three rows or one, always: agents starting and finishing never change the height. */
+.activity-lines { grid-template-rows: repeat(3, 18px); height: calc(3 * 18px + 2 * 3px); align-content: start; }
+.activity[data-collapsed] .activity-lines { grid-template-rows: 18px; height: 18px; }
+.activity-line { height: 18px; }

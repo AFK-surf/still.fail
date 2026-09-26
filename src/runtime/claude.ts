@@ -176,7 +176,8 @@ export function liveFromClaude(emit: (event: LiveEvent) => void): (frame: Record
       emit({ kind: "phase", phase: "requesting" });
     } else if (frame.type === "stream_event") {
       const e = frame.event ?? {};
-      const subagent = frame.parent_tool_use_id ? { subagent: true } : {};
+      // A sub-agent's steps name the tool call (Task/Agent) that started it.
+      const subagent = frame.parent_tool_use_id ? { subagent: true, parent: String(frame.parent_tool_use_id) } : {};
       if (e.type === "message_stop" && !frame.parent_tool_use_id) emit({ kind: "phase", phase: "working" });
       if (e.type === "message_start") {
         message = String(e.message?.id ?? `${Date.now()}`);
