@@ -266,11 +266,33 @@ impl Accounts {
         if changed { self.save().await } else { Ok(()) }
     }
 
+    /// Takes the stored credentials of `sub` when another core wrote newer ones; their access token when still good.
+    async fn adopt_stored(&self, sub: &str) -> Option<String> {
+        let bytes = self.host.storage_get(STORAGE_KEY).await.ok().flatten()?;
+        let stored: Vec<StoredAccount> = serde_json::from_slice(&bytes).ok()?;
+        let theirs = stored.into_iter().find(|a| a.sub == sub)?;
+        let ours = self.get(sub)?;
+        if theirs.refresh == ours.refresh {
+            return None;
+        }
+        let good = theirs.access_expires - 60.0 > self.host.now_ms() / 1000.0;
+        let access = theirs.access.clone();
+        if let Some(entry) = self.list.borrow_mut().iter_mut().find(|a| a.sub == sub) {
+            *entry = theirs;
+        }
+        good.then_some(access)
+    }
+
     fn get(&self, sub: &str) -> Option<StoredAccount> {
         self.list.borrow().iter().find(|a| a.sub == sub).cloned()
     }
 
     async fn refresh(&self, sub: &str) -> Result<String> {
+        // Another core on the same storage (a tab still on the worker of an earlier deploy, say) may have refreshed
+        // already: its credentials are the current ones, and refreshing with ours now would be taken for reuse.
+        if let Some(access) = self.adopt_stored(sub).await {
+            return Ok(access);
+        }
         let account = self.get(sub).ok_or_else(|| CoreError::signed_out("这个账号已退出"))?;
         let body = json!({ "request_id": ulid(self.host.as_ref()) });
         let response = self.post("/v1/auth/refresh", Some(&account.refresh), body).await?;
@@ -687,6 +709,21 @@ mod tests {
             assert_eq!((stored[0].refresh.as_str(), stored[0].name.as_str()), ("new-refresh", "旧名"));
             assert_eq!(accounts.access_token("s").await.unwrap(), "new-access");
             assert_eq!(refreshes.get(), 1);
+        });
+    }
+
+    #[test]
+    fn another_core_on_the_same_storage_refreshed_first_so_its_credentials_are_taken() {
+        run(async {
+            let fake = FakeHost::new();
+            fake.on_fetch(|req| panic!("no refresh expected, got {}", req.url));
+            fake.store(STORAGE_KEY, serde_json::to_vec(&[account("s", now() + 30.0)]).unwrap());
+            let accounts = Accounts::load(fake.clone()).await;
+            // Meanwhile another core (a tab on an earlier deploy's worker) rotated and wrote down the new pair.
+            let theirs = StoredAccount { access: "their-access".into(), refresh: "their-refresh".into(), access_expires: now() + 3600.0, ..account("s", 0.0) };
+            fake.store(STORAGE_KEY, serde_json::to_vec(&[theirs]).unwrap());
+            assert_eq!(accounts.access_token("s").await.unwrap(), "their-access");
+            assert_eq!(accounts.get("s").unwrap().refresh, "their-refresh");
         });
     }
 

@@ -170,13 +170,29 @@ test("real Worker login, rotation retries/reuse, session revocation and account 
     const next = (await first.json()) as Tokens;
     assert.equal(JSON.stringify(await retry.json()) === JSON.stringify(next), true, "lost response retry returns the identical rotation");
     assert.equal(next.refresh_token !== original.refresh_token, true);
+    // Another client of the device racing this one (a second tab's core) within the retry window: the same rotation.
+    const raced = await h.fetch("/v1/auth/refresh", {
+      method: "POST",
+      headers: auth(original.refresh_token),
+      body: JSON.stringify({ request_id: ulid() }),
+    });
+    assert.equal(raced.status, 200);
+    assert.equal(JSON.stringify(await raced.json()) === JSON.stringify(next), true, "a racing refresh gets the same rotation");
+    // Once rotated again, a credential two rotations old is reuse: the family is revoked.
+    const again = await h.fetch("/v1/auth/refresh", {
+      method: "POST",
+      headers: auth(next.refresh_token),
+      body: JSON.stringify({ request_id: ulid() }),
+    });
+    assert.equal(again.status, 200);
+    const latest = (await again.json()) as Tokens;
     const reused = await h.fetch("/v1/auth/refresh", {
       method: "POST",
       headers: auth(original.refresh_token),
       body: JSON.stringify({ request_id: ulid() }),
     });
     assert.equal(reused.status, 401);
-    assert.equal((await h.fetch("/v1/auth/session", { headers: auth(next.access_token) })).status, 401, "reuse revokes access");
+    assert.equal((await h.fetch("/v1/auth/session", { headers: auth(latest.access_token) })).status, 401, "reuse revokes access");
     assert.equal((await h.fetch("/v1/auth/session", { headers: auth(other.access_token) })).status, 200, "other account remains valid");
     const loggedOut = await h.fetch("/v1/auth/logout", {
       method: "POST",

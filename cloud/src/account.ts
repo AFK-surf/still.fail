@@ -106,7 +106,9 @@ export class Account extends DurableObject<Env> {
       const session = this.session(data, claims);
       if (!session || !data) return denied();
       if (!this.charge()) return limited();
-      if (session.retry?.hash === hash && session.retry.request === requestId && session.retry.until > nowSeconds()) {
+      // The credential just rotated, back within the retry window: an interrupted rotation, or another client of the
+      // same device (a second tab's core, say) racing this one. Both get the same new credentials; not reuse.
+      if (session.retry?.hash === hash && session.retry.until > nowSeconds()) {
         return reply(await unseal(this.env, session.retry.response));
       }
       if (session.refreshHash !== hash || session.generation !== claims.gen) {
