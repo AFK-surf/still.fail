@@ -129,6 +129,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         <Chooser label={<><RuntimeLogo runtime={runtime} size={12} />{RUNTIME_LABEL[runtime]}</>} title="用哪个运行时">
           {runtimes.map((rt) => <Item key={rt} checked={rt === runtime} onSelect={() => pick({ runtime: rt, effort: "" })}><RuntimeLogo runtime={rt} size={12} />{RUNTIME_LABEL[rt]}</Item>)}
         </Chooser>
+      )}
       {runtime && (
         <Chooser label={<>思考 {choice.effort ? EFFORT_LABEL[choice.effort] ?? choice.effort : "默认"}</>} title="思考深度">
           <Item checked={!choice.effort} onSelect={() => pick({ effort: "" })}>运行时默认</Item>
