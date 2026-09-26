@@ -847,7 +847,7 @@
 .side-tab-close { display: grid; place-items: center; width: 20px; height: 20px; margin-right: 6px; border: 0; border-radius: calc(6px * var(--corner-scale)); background: none; color: var(--muted); cursor: pointer; corner-shape: var(--corner-shape); }
 .side-tab-close:hover { background: var(--line); color: var(--text); }
 .msg-agent { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--text); cursor: pointer; }
-.msg-agent:hover { text-decoration: underline; }
+.msg-agent:hover { color: var(--accent); }
 
 /* Composer: one line sits on the frame's centre line; files ride above the text. */
 .composer-box:not([data-multiline]) { align-items: center; gap: 2px; padding-left: 6px; }

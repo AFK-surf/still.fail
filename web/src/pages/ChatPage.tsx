@@ -394,7 +394,7 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
       {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
       {/* What it used: a line, quiet. */}
       <p className="run-usage muted">
-        {PROCESS_LABEL[session.process]}
+        {RUNTIME_LABEL[session.runtime]} · {PROCESS_LABEL[session.process]}
         {usage && <> · 调用 {usage.modelCalls} 次 · 输入 {compactNumber(usage.inputTokens)}{hitRate === null ? "" : `（缓存 ${hitRate}%）`} · 输出 {compactNumber(usage.outputTokens)}</>}
         {" · "}<Link className="detail-link" to={link(`/settings/accounts/${session.profile}`)}>Profile 详情</Link>
       </p>
