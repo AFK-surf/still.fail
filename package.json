@@ -33,6 +33,6 @@
     "vite": "^7.1.0"
   },
   "dependencies": {
-    "rehype-highlight": "^7.0.2"
+    "shiki": "^4.4.3"
   }
 }
