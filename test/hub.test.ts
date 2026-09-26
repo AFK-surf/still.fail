@@ -528,7 +528,7 @@ test("chat_post attaches files to an ember chat, measuring images; Slack refuses
 });
 
 test("a session moves to another profile of its runtime, its transcript with it", async () => {
-  const { config, store, hub, accept } = setup();
+  const { config, store, hub, accept, call, claude } = setup();
   const m = message({ text: "<@UBOT> fix the build" });
   await accept(m);
   await settle();
@@ -542,7 +542,8 @@ test("a session moves to another profile of its runtime, its transcript with it"
   const other = { ...config.profiles[0]!, id: "cc2", name: "another", home: join(dirname(config.profiles[0]!.home), "cc2") };
   config.profiles.push(other);
   await assert.rejects(hub.setProfile(key, "cc2"), /正在跑/, "not while a turn runs");
-  await hub.stop(key);
+  await call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  claude.last.end();
   await settle();
   await hub.setProfile(key, "cc2");
   assert.equal(store.getSession(key)!.profile, "cc2");
