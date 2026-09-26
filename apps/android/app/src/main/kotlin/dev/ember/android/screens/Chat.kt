@@ -1005,7 +1005,8 @@ fun ComposerBar(draft: Draft, placeholder: String, floating: Boolean = false, on
     val focusManager = LocalFocusManager.current
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = TextStyle(color = C.ink, fontSize = 15.sp, lineHeight = 21.sp)
-    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // In a capsule the text starts right after ＋: no gap between them.
+    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(if (floating) 0.dp else 8.dp)) {
         // The attach sheet comes up in the keyboard's place: the keyboard goes first.
         Box(
             Modifier.size(36.dp).clip(CircleShape).let { if (floating) it else it.background(C.chip) }.clickable { focusManager.clearFocus(); keyboard?.hide(); onPlus() },
@@ -1013,7 +1014,7 @@ fun ComposerBar(draft: Draft, placeholder: String, floating: Boolean = false, on
         ) { IconIn(Icons.Plus, 18.dp) }
         Box(
             Modifier.weight(1f).heightIn(min = 36.dp).clip(RoundedCornerShape(18.dp)).let { if (floating) it else it.background(C.surface).border(1.dp, C.line, RoundedCornerShape(18.dp)) }
-                .padding(horizontal = 14.dp, vertical = 7.dp),
+                .padding(start = if (floating) 0.dp else 14.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             if (draft.text.isEmpty()) Text(placeholder, style = style.copy(color = C.subtle))
