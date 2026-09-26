@@ -141,7 +141,7 @@ createServer((req, res) => {
   if (pathname.startsWith("/admin/api/")) return void api.handle(req, res);
   // Files by path; anything else (client routes, session keys with dots) gets the app shell.
   const rel = normalize(pathname.replace(/^\/admin\/?/, "")) || "index.html";
-  const types: Record<string, string> = { ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
+  const types: Record<string, string> = { ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".woff2": "font/woff2" };
   void readFile(join(ui, rel))
     .then((body) => res.writeHead(200, { "content-type": types[extname(rel)] ?? "text/html" }).end(body))
     .catch(() => readFile(join(ui, "index.html")).then((body) => res.writeHead(200, { "content-type": "text/html" }).end(body)))
