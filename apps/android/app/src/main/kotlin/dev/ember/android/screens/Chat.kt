@@ -65,6 +65,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -261,6 +265,23 @@ private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, afte
 
 // ── the list ───────────────────────────────────────────────────────────
 
+/** A long chat coming in from its newest: how many of its last rows are in the list so far. */
+private class Reveal {
+    var decided = false
+    var count by mutableIntStateOf(Int.MAX_VALUE)
+    val revealing get() = count != Int.MAX_VALUE
+}
+
+/** An item new to the list comes up a little as it fades in. */
+@Composable
+private fun Modifier.rise(on: Boolean): Modifier {
+    if (!on) return this
+    val from = with(LocalDensity.current) { 14.dp.toPx() }
+    val y = remember { Animatable(1f) }
+    LaunchedEffect(Unit) { y.animateTo(0f, tween(320, easing = FastOutSlowInEasing)) }
+    return graphicsLayer { translationY = y.value * from }
+}
+
 private sealed interface Entry {
     val id: String
     data object Older : Entry { override val id = "older" }
@@ -347,7 +368,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     }
     val atWork = busy.ifEmpty { lastBusy.value }
 
-    val rows = buildList {
+    val all = buildList {
         if (view.more) add(Entry.Older)
         if (messages.isEmpty() && view.outbox.isEmpty()) add(Entry.Empty)
         messages.forEach { m ->
@@ -361,6 +382,25 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     }
 
     val placeKey = "$station:${thread?.id ?: agents.firstOrNull()?.key ?: ""}"
+    // A long chat opened at its newest: the newest few first, at the bottom, and the rest rising in above them a
+    // few a frame, rather than one frame building a screenful. (Opened elsewhere, at a place or the unread line,
+    // it is all there at once, to be put in place.)
+    val reveal = remember { Reveal() }
+    if (!reveal.decided && messages.isNotEmpty()) {
+        reveal.decided = true
+        if (all.size > 8 && app.places[placeKey] == null && all.none { it is Entry.Line }) reveal.count = 3
+    }
+    val allSize by rememberUpdatedState(all.size)
+    LaunchedEffect(reveal.decided) {
+        while (reveal.decided && reveal.revealing) {
+            withFrameNanos { }
+            reveal.count = if (reveal.count + 2 >= allSize) Int.MAX_VALUE else reveal.count + 2
+        }
+    }
+    val rows = if (reveal.count < all.size) all.takeLast(reveal.count) else all
+    // What was in the list the last time it was drawn: an item new to it rises in; one scrolled to does not.
+    val known = remember { HashSet<String>() }
+    SideEffect { rows.forEach { known += it.id } }
     // The list starts where it is going (where the chat was left, the unread line, or the newest), rather than
     // composing its top only to jump away from it.
     val list = rememberLazyListState(
@@ -412,8 +452,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     }
     // Near the top: the page before comes in (once per page); what is on screen stays put.
     val asked = remember { mutableStateOf<Long?>(null) }
-    LaunchedEffect(view.more, first, follow.placed) {
-        if (!view.more || thread == null || !follow.placed) return@LaunchedEffect
+    LaunchedEffect(view.more, first, follow.placed, reveal.revealing) {
+        if (!view.more || thread == null || !follow.placed || reveal.revealing) return@LaunchedEffect
         snapshotFlow { list.firstVisibleItemIndex }.collect { index ->
             if (index <= 2 && asked.value != first) {
                 asked.value = first
@@ -435,10 +475,11 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     Box(modifier.fillMaxWidth()) {
         LazyColumn(
             Modifier.fillMaxSize(), state = list,
-            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
         ) {
             items(rows, key = { it.id }) { row ->
-                Box(Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = tween(200))) {
+                val fresh = remember(row.id) { row.id !in known }
+                Box(Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = tween(200)).rise(fresh)) {
                     when (row) {
                         Entry.Older -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Spinner(16.dp) }
                         Entry.Empty -> Text("在这里发消息，这个对话里的 agent 会在这里回复。", color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 24.dp))
