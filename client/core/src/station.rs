@@ -637,7 +637,12 @@ impl Stations {
                     touched.push(Topic::SlackApp { station: name.clone(), connect: connect.clone() });
                 }
             }
-            Some("profiles") | Some("slack") => touched.push(Topic::Overview { station: name.clone() }),
+            Some("profiles") => touched.push(Topic::Overview { station: name.clone() }),
+            // The workspace's Slack settings (its app configuration token): every connect's app reads through them.
+            Some("slack") => {
+                touched.push(Topic::Overview { station: name.clone() });
+                touched.extend(self.live_topics(&name, |t| matches!(t, Topic::SlackApp { .. })));
+            }
             // Who the viewer is on Slack: it answers the overview, and changes which rows are theirs.
             Some("me") => {
                 touched.push(Topic::Overview { station: name.clone() });
@@ -1863,6 +1868,14 @@ mod tests {
             // A read changes nothing.
             stations.request(&remote(), "GET", "/slack/config-token", None).await.unwrap();
             assert_eq!(wire.count("GET", "/admin/api/overview"), o + 1);
+            // The workspace's app configuration token: every connect's app shown is read again, as it now reads.
+            let app = Topic::SlackApp { station: ST.into(), connect: "ds".into() };
+            wire.answer("GET /admin/api/connects/ds/slack-app", 200, json!({"state": "no_config_token"}));
+            stations.start(&app);
+            host.settle().await;
+            wire.answer("GET /admin/api/connects/ds/slack-app", 200, json!({"state": "ok"}));
+            stations.request(&remote(), "PUT", "/slack/config-token", Some(json!({"refreshToken": "x"}))).await.unwrap();
+            assert_eq!(sink.get(&app).unwrap()["state"], "ok");
         });
     }
 
