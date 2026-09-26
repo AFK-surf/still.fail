@@ -25,6 +25,12 @@
 .brand-pic source { display: none; }
 .illus { display: block; max-width: 100%; height: auto; }
 .nav-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 12px; }
+/* 全部 and 我参与的 side by side on one track; the switch slides it, as its thumb slides. */
+.nav-slider { flex: 1; min-height: 0; overflow: hidden; display: flex; }
+.nav-track { flex: none; width: 200%; display: flex; transition: transform 240ms var(--ease-out); }
+.nav-track[data-mine] { transform: translateX(-50%); }
+.nav-track > .nav-scroll { flex: none; width: 50%; }
+@media (prefers-reduced-motion: reduce) { .nav-track { transition: none; } }
 .nav-foot { padding: 8px; border-top: 1px solid var(--line); }
 .nav-foot-row { display: flex; align-items: center; gap: 4px; }
 .nav-foot-row .account-trigger { flex: 1; min-width: 0; }

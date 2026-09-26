@@ -51,7 +51,25 @@ function SettingsNav() {
  */
 export function ChatList({ scope, newChat, settings }: { scope: string; newChat: string; settings: string }) {
   const [onlyMine] = useOnlyMine();
-  const chats = useChats(scope, onlyMine);
+  // Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
+  const all = useChats(scope, false);
+  const mine = useChats(scope, true);
+  return (
+    <MeContext.Provider value={all.value?.me ?? mine.value?.me ?? null}>
+      <div className="nav-new"><NavLink className="nav-row" to={newChat}><SquarePen {...ICON} />新建对话</NavLink></div>
+      <MineFilter label="会话" mine="我参与的" />
+      <div className="nav-slider">
+        <div className="nav-track" data-mine={onlyMine || undefined}>
+          <ChatPane chats={all} scope={scope} onlyMine={false} newChat={newChat} settings={settings} hidden={onlyMine} />
+          <ChatPane chats={mine} scope={scope} onlyMine newChat={newChat} settings={settings} hidden={!onlyMine} />
+        </div>
+      </div>
+    </MeContext.Provider>
+  );
+}
+
+/** One of the two lists, all or the viewer's: its states (connecting, offline, empty) and its days. */
+function ChatPane({ chats, scope, onlyMine, newChat, settings, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; newChat: string; settings: string; hidden: boolean }) {
   const view = chats.value;
   const stations = view?.stations ?? [];
   const days = view?.days ?? [];
@@ -62,31 +80,27 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
   const offline = stations.filter((s) => s.state === "offline");
   const loading = !view || view.loading;
   return (
-    <MeContext.Provider value={view?.me ?? null}>
-      <div className="nav-new"><NavLink className="nav-row" to={newChat}><SquarePen {...ICON} />新建对话</NavLink></div>
-      <MineFilter label="会话" mine="我参与的" />
-      <div className="nav-scroll">
-        {connecting.map((s) => <p key={s.station} className="nav-connecting"><span className="spinner" aria-hidden="true" />正在连接 {s.name}…</p>)}
-        {failed.map((s) => <p key={s.station} className="nav-empty nav-error" title={s.message ?? undefined}>连不上「{s.name}」，正在重试…</p>)}
-        {chats.error && !view && <p className="nav-empty nav-error">{chats.error.message}</p>}
-        {days.length === 0 && loading && !chats.error && <SkeletonRows />}
-        {offline.length > 0 && <p className="nav-empty">{offline.map((s) => s.name).join("、")} 离线，它们的会话暂时看不到。</p>}
-        {days.length === 0 && view && !loading && !failed.length && !connecting.length && (
-          <p className="nav-empty">{onlyMine ? "没有你参与的会话。"
-            : stations.length ? <>还没有会话。在 Slack 里 @ {stations.length > 1 ? "它们" : "它"}，或者 <NavLink className="inline-link" to={newChat}>新建对话</NavLink>。</>
-            : <>还没有 station，到 <NavLink className="inline-link" to={`${settings}/stations`}>设置 → Station</NavLink> 添加。</>}</p>
-        )}
-        {days.map((day) => {
-          const label = dayLabel(day.at);
-          return (
-            <section key={day.daysAgo} aria-label={label}>
-              <div className="nav-heading">{label}</div>
-              {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} />)}
-            </section>
-          );
-        })}
-      </div>
-    </MeContext.Provider>
+    <div className="nav-scroll" aria-hidden={hidden || undefined} inert={hidden || undefined}>
+      {connecting.map((s) => <p key={s.station} className="nav-connecting"><span className="spinner" aria-hidden="true" />正在连接 {s.name}…</p>)}
+      {failed.map((s) => <p key={s.station} className="nav-empty nav-error" title={s.message ?? undefined}>连不上「{s.name}」，正在重试…</p>)}
+      {chats.error && !view && <p className="nav-empty nav-error">{chats.error.message}</p>}
+      {days.length === 0 && loading && !chats.error && <SkeletonRows />}
+      {offline.length > 0 && <p className="nav-empty">{offline.map((s) => s.name).join("、")} 离线，它们的会话暂时看不到。</p>}
+      {days.length === 0 && view && !loading && !failed.length && !connecting.length && (
+        <p className="nav-empty">{onlyMine ? "没有你参与的会话。"
+          : stations.length ? <>还没有会话。在 Slack 里 @ {stations.length > 1 ? "它们" : "它"}，或者 <NavLink className="inline-link" to={newChat}>新建对话</NavLink>。</>
+          : <>还没有 station，到 <NavLink className="inline-link" to={`${settings}/stations`}>设置 → Station</NavLink> 添加。</>}</p>
+      )}
+      {days.map((day) => {
+        const label = dayLabel(day.at);
+        return (
+          <section key={day.daysAgo} aria-label={label}>
+            <div className="nav-heading">{label}</div>
+            {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} />)}
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
