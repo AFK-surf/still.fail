@@ -69,9 +69,13 @@ export function Field({ label, hint, error, children, htmlFor, aside }:
 /** A small set of exclusive options shown side by side. */
 export function Segmented<T extends string>({ options, value, onChange, label }:
   { options: { value: T; label: ReactNode; disabled?: boolean | undefined }[]; value: T; onChange(value: T): void; label: string }) {
+  const index = Math.max(0, options.findIndex((o) => o.value === value));
   return (
     <ToggleGroup.Root type="single" className="segmented" aria-label={label} value={value}
+      style={{ "--n": options.length, "--i": index } as CSSProperties}
       onValueChange={(v) => { if (v) onChange(v as T); }}>
+      {/* The chosen option's ground is one piece that slides between options. */}
+      <span className="segmented-thumb" aria-hidden="true" />
       {options.map((o) => (
         <ToggleGroup.Item key={o.value} value={o.value} disabled={o.disabled ?? false} className="segmented-option">{o.label}</ToggleGroup.Item>
       ))}

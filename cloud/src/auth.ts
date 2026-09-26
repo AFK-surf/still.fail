@@ -38,12 +38,15 @@ export const digest = async (value: string) => b64url(new Uint8Array(await crypt
 export const validSecret = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
 export const validId = (value: unknown): value is string => typeof value === "string" && /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/.test(value);
 
+/** The Android app's callback: the app registers this scheme and host for the Custom Tab to return to. */
+export const APP_REDIRECT = "ember://auth/callback";
+
 /**
- * Where a login may return: the web app's own callback on this origin, or a
- * loopback listener of a command-line client.
+ * Where a login may return: the web app's own callback on this origin, the
+ * native app's callback, or a loopback listener of a command-line client.
  */
 export function validRedirect(env: Env, value: string): boolean {
-  if (value === `${env.PUBLIC_ORIGIN}/auth/callback`) return true;
+  if (value === `${env.PUBLIC_ORIGIN}/auth/callback` || value === APP_REDIRECT) return true;
   try {
     const url = new URL(value);
     return url.protocol === "http:" && url.hostname === "127.0.0.1" && Number(url.port) > 0 && url.pathname === "/oauth/callback" && !url.username && !url.password && !url.search && !url.hash;

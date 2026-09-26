@@ -102,7 +102,7 @@ function SessionRow({ item }: { item: ChatItem }) {
         <span className="nav-session-title">{sessionTitle(s, name)}</span>
         <span className="nav-session-meta">
           {s.connect === "ember"
-            ? <Tip label="ember 对话" side="right"><span className="session-kind"><Mark size={12} /></span></Tip>
+            ? <Tip label="ember 对话" side="right"><span className="session-kind"><Mark size={16} className="kind-mark" /></span></Tip>
             : <Tip label={connect ? `来自 ${connect.name}` : "来自连接"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
           <PeopleStack people={s.participants} />
           <Time className="nav-time" at={s.lastActiveAt} />

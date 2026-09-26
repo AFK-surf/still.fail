@@ -5,6 +5,7 @@
 //   RELAY=http://127.0.0.1:3340 pnpm exec tsx test/dev.ts
 // Development-only routes (never in the Worker):
 //   /__dev/login?user=alice  signs that account into the browser and goes to /
+//   /__dev/account?user=alice  that account as JSON, for the core's `migrate` (native apps)
 //   /__dev/grant?device=hex  a grant for the first station of alice's first workspace
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -27,9 +28,12 @@ const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javas
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", origin);
+  if (url.pathname === "/__dev/account") {
+    const account = await signIn(url.searchParams.get("user") ?? "alice");
+    return void res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(account));
+  }
   if (url.pathname === "/__dev/login") {
-    const tokens = await h.login(url.searchParams.get("user") ?? "alice");
-    const account = { sub: tokens.subject, email: tokens.email, name: tokens.name, picture: "", access: tokens.access_token, refresh: tokens.refresh_token, accessExpires: tokens.expires_at };
+    const account = await signIn(url.searchParams.get("user") ?? "alice");
     res.writeHead(200, { "content-type": "text/html" }).end(`<script>
       const list = JSON.parse(localStorage.getItem("ember.accounts") || "[]").filter((a) => a.sub !== ${JSON.stringify(account.sub)});
       localStorage.setItem("ember.accounts", JSON.stringify([...list, ${JSON.stringify(account)}]));
@@ -77,3 +81,9 @@ server.on("upgrade", (req, socket, head) => {
   socket.on("error", () => upstream.destroy());
 });
 server.listen(port, "127.0.0.1", () => console.log(`READY ember cloud (dev) on :${port}`));
+
+/** An account as the web app kept it in localStorage (what `migrate` takes). */
+async function signIn(user: string) {
+  const tokens = await h.login(user);
+  return { sub: tokens.subject, email: tokens.email, name: tokens.name, picture: "", access: tokens.access_token, refresh: tokens.refresh_token, accessExpires: tokens.expires_at };
+}

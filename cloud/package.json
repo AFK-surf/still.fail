@@ -5,7 +5,7 @@
   "scripts": {
     "types": "wrangler types",
     "check": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts",
+    "test": "tsx --test --test-timeout=60000 test/*.test.ts",
     "dev": "wrangler dev",
     "deploy": "python3 deploy.py"
   },

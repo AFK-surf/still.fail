@@ -53,13 +53,11 @@
 .agent-mark[data-badge]::after { content: ""; position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--ring); }
 .agent-mark[data-badge="block"]::after { background: var(--accent); }
 .agent-mark[data-badge="run"]::after { background: var(--ring); box-shadow: inset 0 0 0 2px var(--accent); }
-.agent-mark[data-badge="done"]::after { background: var(--green); }
 .agent-mark[data-badge="failed"]::after { background: var(--red); }
 /* The same states as a bare dot, where there is no room for the mark (the sidebar's rows). */
 .state-dot { width: 8px; height: 8px; margin-top: 6px; box-sizing: border-box; border-radius: 50%; flex: none; }
 .state-dot[data-badge="block"] { background: var(--accent); }
 .state-dot[data-badge="run"] { border: 2px solid var(--accent); }
-.state-dot[data-badge="done"] { background: var(--green); }
 .state-dot[data-badge="failed"] { background: var(--red); }
 @keyframes ember { 50% { opacity: .35; } }
 
@@ -158,10 +156,16 @@
 .input:focus, .select:focus { outline: none; border-color: var(--field-focus); }
 .field[data-invalid] .input { border-color: var(--red); }
 .input::placeholder { color: var(--subtle); }
-.segmented { display: flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--neutral-bg); }
+/* The track tints whatever it sits on; the chosen option's ground is a thumb that slides. */
+.segmented { --pad: 3px; --gap: 2px; position: relative; isolation: isolate; display: flex; padding: var(--pad); gap: var(--gap); border-radius: 999px; background: color-mix(in oklch, var(--text) 6%, transparent); }
+.segmented-thumb { position: absolute; z-index: -1; top: var(--pad); bottom: var(--pad); left: var(--pad);
+  width: calc((100% - 2 * var(--pad) - (var(--n) - 1) * var(--gap)) / var(--n)); border-radius: 999px;
+  background: var(--canvas); box-shadow: 0 1px 2px var(--shadow), 0 0 0 .5px var(--line);
+  transform: translateX(calc(var(--i) * (100% + var(--gap)))); transition: transform 240ms var(--ease-out); }
+@media (prefers-reduced-motion: reduce) { .segmented-thumb { transition: none; } }
 .segmented-option { flex: 1; height: 30px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: var(--text-sm); cursor: pointer; transition: color var(--dur) var(--ease-out); }
 .segmented-option:hover:not([data-state="on"]) { color: var(--text); }
-.segmented-option[data-state="on"] { background: var(--canvas); color: var(--text); font-weight: 500; box-shadow: 0 1px 2px var(--shadow), 0 0 0 1px var(--line); }
+.segmented-option[data-state="on"] { color: var(--text); font-weight: 500; }
 .switch { position: relative; flex: none; width: 36px; height: 22px; padding: 0; border: 0; border-radius: 999px; background: var(--line-strong); cursor: pointer; transition: background var(--dur) var(--ease-out); }
 .switch[data-state="checked"] { background: var(--accent); }
 .switch:disabled { opacity: .5; cursor: default; }
@@ -327,7 +331,7 @@
 .history-name { color: var(--text); font-weight: 600; }
 .history-sep { color: var(--subtle); }
 .history-summary { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.side-tab-agent { display: inline-flex; align-items: center; gap: 6px; }
+.side-tab-agent { display: inline-flex; align-items: center; gap: 6px; line-height: 1; }
 .chat-info { width: 320px; padding: 12px 14px; }
 .chat-info .details-list { margin-top: 10px; }
 .history-tools { display: flex; align-items: center; gap: 2px; flex: none; }
@@ -437,7 +441,15 @@
 /* ── session: history alone, or chat in the middle with history on the right ── */
 
 .session-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.session-page .page-bar-title { gap: 10px; }
+.session-page .page-bar { grid-template-columns: minmax(0, 1fr) auto; }
+.session-page .page-bar-title { grid-column: 1; justify-self: start; gap: 10px; min-width: 0; padding-left: 8px; }
+.session-page .page-bar-title h1 { max-width: none; min-width: 0; }
+.session-page .page-bar-actions { grid-column: 2; }
+@media (max-width: 1100px) {
+  .session-page .page-bar { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .session-page .page-bar-title { grid-column: 2; padding-left: 0; }
+  .session-page .page-bar-actions { grid-column: 3; }
+}
 .session-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
 .session-body[data-chat="true"] { grid-template-columns: minmax(0, 1fr) minmax(380px, 40%); }
 .session-body .history { min-height: 0; }
@@ -511,7 +523,7 @@
 .chat-owner { font-weight: 400; color: var(--muted); font-size: var(--text-xs); }
 .station-tag.inline { margin-left: 8px; }
 .mine-filter { padding: 4px 12px 2px; }
-.mine-filter .segmented { padding: 2px; }
+.mine-filter .segmented { --pad: 2px; }
 .mine-filter .segmented-option { height: 26px; font-size: var(--text-xs); }
 .page .mine-filter { padding: 0 0 12px; max-width: 220px; margin: 0; }
 .connect-facts { display: flex; align-items: center; gap: 10px; flex: none; }
@@ -557,6 +569,8 @@
 .invite-card { width: min(460px, 90vw); text-align: left; }
 .session-kind { display: inline-grid; flex: none; }
 .session-kind .kind-icon { width: 14px; height: 14px; }
+/* The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks. */
+.session-kind .kind-mark { margin: -1px; }
 .nav-session-meta .nav-time { margin-left: auto; }
 
 /* ── waiting ─────────────────────────────────────────────────────────── */
@@ -628,7 +642,7 @@
 .side-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--canvas); }
 .side-tabs { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--line); flex: none; }
 .side-tab-list { flex: 1; display: flex; gap: 2px; }
-.side-tab { height: 30px; padding: 0 12px; border: 0; border-radius: calc(10px * var(--corner-scale)); background: none; color: var(--muted); font-size: var(--text-sm); cursor: pointer; corner-shape: var(--corner-shape); }
+.side-tab { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border: 0; border-radius: calc(10px * var(--corner-scale)); background: none; color: var(--muted); font-size: var(--text-sm); cursor: pointer; corner-shape: var(--corner-shape); }
 .side-tab:hover { color: var(--text); background: var(--hover); }
 .side-tab[data-state="active"] { color: var(--text); background: var(--selected); font-weight: 500; }
 .side-content { flex: 1; min-height: 0; display: flex; flex-direction: column; outline: none; }

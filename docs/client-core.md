@@ -8,7 +8,7 @@ one Rust crate, `ember-core`, shared by every client:
 | --- | --- | --- |
 | Web (ember.3720.org) | a SharedWorker (a dedicated Worker where SharedWorker is missing, e.g. Chrome on Android) | `client/wasm` (wasm-bindgen) |
 | Desktop (Electron) | a `utilityProcess` | `client/node` (napi-rs), later |
-| iOS / Android (native) | a core thread in the app | `client/ffi` (uniffi), later |
+| Android (iOS later) | a core thread in the app | `client/ffi` (uniffi) |
 
 The UI never talks to ember cloud or a station itself. It sends **calls** and
 holds **subscriptions** to the core over one message channel, and renders the
@@ -280,6 +280,7 @@ bring the same a moment later.
 client/
   core/    ember-core      the core: host trait, protocol, store, accounts, cloud, mesh, station, views
   wasm/    ember-core-wasm web host (IndexedDB, fetch) + SharedWorker entry
+  ffi/     ember-core-ffi  native host (reqwest, files) on a core thread, exported with uniffi
 ```
 
 `ember-core` modules:
@@ -295,6 +296,26 @@ client/
 - `station.rs` — the admin API over a link (or over HTTP for `local`): the station topics kept current from its events and live streams, threads (paging, posting, read positions), uploads.
 - `views.rs` — the view topics, put together from the others.
 
+## Native (Android)
+
+`client/ffi` runs the core on a thread of its own: a tokio current-thread
+runtime with a `LocalSet`. `start(data_dir, cloud_origin, listener)` returns an
+object whose `connect()` / `receive(client, json)` / `disconnect(client)` only
+post to that thread, so they never block the caller; the core answers on its
+thread through `listener.on_message(client, json)`. The host fetches with
+reqwest (rustls, Mozilla's roots like iroh's own TLS), keeps storage as one
+file per key under `data_dir` (written aside and renamed, on a storage thread
+so writes keep their order), and takes the time zone from the C library,
+which on Android follows the system setting. A panic ends the core: every
+client gets `{"fatal": "…"}` and the app starts a new one.
+
+`apps/android` is the app (Gradle; `build.py` builds the core with the NDK,
+generates the uniffi Kotlin bindings from the built library, then runs
+Gradle). Its `:core` module is `dev.ember.core.EmberCore`: `call(name, params)`
+and `topic(topic)` as a `Flow<TopicState>` — shared by everyone who collects
+the same topic, deltas applied as on the web, unsubscribed 2 s after the last
+collector leaves.
+
 ## Web
 
 `web/src/core/` is the UI side: it starts the worker (SharedWorker, else
@@ -308,4 +329,4 @@ In development the core can also run on the page itself, for debugging.
 1. `ember-core` with a fake host in tests: protocol, store, accounts, cloud, mesh, station.
 2. `ember-core-wasm` and `web/src/core`; the web app moves onto the core.
 3. Electron shell (`client/node`).
-4. Native apps (`client/ffi`), with push notifications through ember cloud.
+4. Native apps (`client/ffi`; Android first), with push notifications through ember cloud.

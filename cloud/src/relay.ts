@@ -5,7 +5,7 @@ import { limited, nowSeconds, reply } from "./auth";
 // A bounded shared service budget, never a Mesh membership authority.
 import { LIMITS } from "./limits";
 export { LIMITS };
-type Quota = {
+export type Quota = {
   minute: number;
   connects: number;
   day: number;
@@ -17,13 +17,24 @@ type Quota = {
 };
 type Connection = { close: (code: number, reason: string) => void };
 
+/** How long counted traffic may stay in memory only; a restart forgets at most this much of it. */
+const FLUSH_MS = 30_000;
+
 export class RelayBudget extends DurableObject<Env> {
   private connections = new Set<Connection>();
+  /** The budget as counted; read once, written when a connection is admitted and within FLUSH_MS of traffic, never per frame. */
+  protected quota: Quota | undefined;
+  private flushing = false;
+
+  /**
+   * Frames are counted in memory: a storage write per frame would hold each
+   * frame back until the write is confirmed (the output gate), on every hop.
+   */
   private charge(kind: "connect" | "bytes", amount = 0): boolean {
     const now = nowSeconds();
     const minute = Math.floor(now / 60),
       day = Math.floor(now / 86400);
-    const q = this.ctx.storage.kv.get<Quota>("quota") ?? {
+    const q = (this.quota ??= this.ctx.storage.kv.get<Quota>("quota") ?? {
       minute,
       connects: 0,
       day,
@@ -32,7 +43,7 @@ export class RelayBudget extends DurableObject<Env> {
       balance: LIMITS.burstBytes,
       frameBalance: LIMITS.burstFrames,
       frames: 0,
-    };
+    });
     if (q.minute !== minute) {
       q.minute = minute;
       q.connects = 0;
@@ -57,8 +68,31 @@ export class RelayBudget extends DurableObject<Env> {
       q.bytes += amount;
       q.balance -= amount;
     }
-    this.ctx.storage.kv.put("quota", q);
+    if (kind === "connect") this.ctx.storage.kv.put("quota", q);
+    else if (!this.flushing) {
+      this.flushing = true;
+      void this.ctx.storage.setAlarm(Date.now() + FLUSH_MS);
+    }
     return true;
+  }
+
+  override async alarm(): Promise<void> {
+    this.flushing = false;
+    if (this.quota) this.ctx.storage.kv.put("quota", this.quota);
+  }
+
+  /** For operators: where this object runs, and the round trip from here to the relay process. */
+  async where(): Promise<{ colo: string | null; containerMs: number[] }> {
+    const trace = await (await fetch("https://www.cloudflare.com/cdn-cgi/trace")).text();
+    const colo = /^colo=(.+)$/m.exec(trace)?.[1] ?? null;
+    const relay = this.env.RELAY.getByName("primary");
+    const containerMs: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const start = Date.now();
+      await (await relay.fetch(new Request("http://relay/ping"))).arrayBuffer();
+      containerMs.push(Date.now() - start);
+    }
+    return { colo, containerMs };
   }
 
   async fetch(request: Request): Promise<Response> {

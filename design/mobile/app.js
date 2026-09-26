@@ -165,7 +165,7 @@ render.home = (el) => {
     <div>${running.map((s) => `<div class="row" data-open="${s.id}">${modelStack(s.models, "badge-run")}
       <div class="t"><b>${byOther(s)}${esc(s.title)}</b><small class="live-act"><span class="act" data-live="${s.id}">${esc(s.steps[s.step ?? 0])}</span></small></div></div>`).join("")}</div>` : ""}
     <div class="section-h"><b>今天</b></div>
-    <div>${rest.map((s) => `<div class="row" data-open="${s.id}">${modelStack(s.models, s.state === "failed" ? "badge-failed" : "badge-done")}
+    <div>${rest.map((s) => `<div class="row" data-open="${s.id}">${modelStack(s.models, s.state === "failed" ? "badge-failed" : "")}
       <div class="t"><b class="${s.state === "failed" ? "failed" : ""}">${byOther(s)}${esc(s.title)}</b></div><span class="when">${s.when}</span></div>`).join("")}</div>
     <div class="pad-bottom"></div></div>
     <div class="toolbar">
