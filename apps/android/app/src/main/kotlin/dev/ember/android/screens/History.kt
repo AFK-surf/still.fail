@@ -299,7 +299,9 @@ private fun Place(station: String, of: ChatOf, agent: ChatAgentView, address: St
     val app = LocalApp.current
     val (channel, ts) = splitThread(address) ?: return Strong(address)
     val thread = agent.threads.firstOrNull { it.channel == channel && it.threadTs == ts }
-    val open = thread?.takeIf { channel == "EMBER" }?.let { t -> { if (of != ChatOf.Thread(t.id)) app.push(Screen.Chat(station, ChatOf.Thread(t.id))) else app.sheet = null } }
+    // An ember chat is its agent's item: opened by the session it is bound to.
+    val bound = thread?.takeIf { channel == "EMBER" }?.sessions?.firstOrNull()?.session
+    val open = bound?.let { key -> { if (of != ChatOf.Session(key)) app.push(Screen.Chat(station, ChatOf.Session(key))) else app.sheet = null } }
     Row(
         Modifier.clip(RoundedCornerShape(4.dp)).let { if (open != null) it.clickable(onClick = open) else it },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),

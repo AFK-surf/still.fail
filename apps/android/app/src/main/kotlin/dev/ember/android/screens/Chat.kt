@@ -200,20 +200,13 @@ class ChatAgent(val view: ChatAgentView, val live: LiveView?) {
 @Composable
 fun ChatScreen(station: String, of: ChatOf) {
     val app = LocalApp.current
-    val chats by rememberTopic<ChatsView>(app.core, Topics.chats(station.substringBefore('/'), false))
-    val rows = chats.value?.days?.flatMap { it.items }.orEmpty()
-    if (of is ChatOf.Session) {
-        // Once a chat is made for this agent (here or elsewhere), the page moves to it.
-        val made = rows.firstOrNull { it.station == station && it.thread != null && it.agents.any { a -> a.key == of.key } }?.thread
-        LaunchedEffect(made) { if (made != null) app.replace(Screen.Chat(station, ChatOf.Thread(made))) }
-    }
     val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
     val view = chat.value
     if (view == null) {
         // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in
         // place instead of replacing another page.
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
-            BarFrame("", more = of is ChatOf.Thread) {}
+            BarFrame("", more = false) {}
             val error = chat.error
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (error != null) Text("读不到这个对话：${error.message}", color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(32.dp))
@@ -1029,7 +1022,6 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<C
                     }
                     // Sent from the app's scope: the page may move to the new chat before the station answers.
                     app.scope.launch { try { api.send(to, text, files.mapNotNull { it.done }, quotes.map { it.sent() }) } catch (_: CoreException) {} }
-                    if (thread == null) app.replace(Screen.Chat(station, ChatOf.Thread(to)))
                 }
             })
         draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }

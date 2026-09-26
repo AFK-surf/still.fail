@@ -90,4 +90,5 @@ sealed interface ChatOf {
 }
 
 /** A row's page. */
-val ChatItem.page: ChatOf get() = thread?.let { ChatOf.Thread(it) } ?: ChatOf.Session(session)
+/** A row's page: its agent's, chat or no chat (the core shows the chat once there is one). */
+val ChatItem.page: ChatOf get() = ChatOf.Session(session)

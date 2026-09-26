@@ -175,8 +175,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
             draft.text = ""; draft.files.clear(); draft.error = null
             draft.starting = true
             scope.launch {
-                val thread = try {
-                    ensure().second
+                val (key, thread) = try {
+                    ensure()
                 } catch (e: CoreException) {
                     // No chat to send into: the draft comes back.
                     draft.text = text; draft.files.addAll(files); draft.error = e.message
@@ -185,7 +185,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
                     draft.starting = false
                 }
                 app.scope.launch { try { app.api(view.station).send(thread, text, files.mapNotNull { it.done }) } catch (_: CoreException) {} }
-                app.replace(Screen.Chat(view.station, ChatOf.Thread(thread)))
+                // The new item's page, by its agent (its address from now on).
+                app.replace(Screen.Chat(view.station, ChatOf.Session(key)))
             }
         })
         draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }
