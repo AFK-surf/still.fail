@@ -1,3 +1,10 @@
+/* Corners, after Codex: plain rounding by default; where the browser draws superellipses, rounded rectangles get a
+   superellipse(1.5) corner over a radius a quarter longer. Circles and capsules are never touched. */
+:root { --corner-shape: round; --corner-scale: 1; }
+@supports (corner-shape: superellipse(1.5)) {
+  :root { --corner-shape: superellipse(1.5); --corner-scale: 1.25; }
+}
+
 /* Zork's approved desktop tokens (apps/zork-design-pc/tokens), so ember reads as
    part of the same family: white canvas, warm sidebar, ink text, brand orange,
    status colours with their own tinted grounds. Dark follows the Zork client. */
@@ -38,12 +45,12 @@
   --field-focus: #646970;
   --online: oklch(68% .15 150);
 
-  --r-field: 12px;
-  --r-card: 20px;
-  --r-dialog: 32px;
-  --r-nav: 12px;
-  --r-menu: 20px;
-  --r-option: 12px;
+  --r-field: calc(12px * var(--corner-scale));
+  --r-card: calc(20px * var(--corner-scale));
+  --r-dialog: calc(32px * var(--corner-scale));
+  --r-nav: calc(12px * var(--corner-scale));
+  --r-menu: calc(20px * var(--corner-scale));
+  --r-option: calc(12px * var(--corner-scale));
 
   --text-xs: 12px;
   --text-sm: 13px;
