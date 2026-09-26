@@ -1,12 +1,14 @@
 // Execution history, after Zork's: a readable account of what actually ran.
 // Messages in and out, state marks and the agent's own words are boundaries;
 // the tool calls and thinking between two boundaries fold into one group.
+import { useToast } from "./toast.tsx";
 import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { ConnectView, LiveView, SessionSummary, ShownPhase, ShownStep, ThreadView, TimelineEntry } from "./api.ts";
-import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, splitThread, threadNamer } from "./format.ts";
+import { useApi, useOverview, type ConnectView, type LiveView, type SessionSummary, type ShownPhase, type ShownStep, type ThreadView, type TimelineEntry } from "./api.ts";
+import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, splitThread, threadNamer, type SourcedMessage } from "./format.ts";
 import { Avatar, ICON, Pill, SlackLogo } from "./ui.tsx";
-import { useLink, usePerson } from "./station.tsx";
+import { useLink, usePerson, useStation } from "./station.tsx";
 import { Link } from "react-router";
 import { Prose } from "./Prose.tsx";
 import { useStickToBottom } from "./scroll.ts";
@@ -193,7 +195,7 @@ export function History({ session, threads, connect, summary, actions, details, 
             {items.map((item, i) => (
               // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
               <div key={i} className="h-item" data-enter={i >= firstCount.current && item.type !== "text" ? true : undefined}>
-                <HistoryItem item={item} where={where} person={(id, said) => member(id)?.name || said || id}
+                <HistoryItem item={item} where={where} person={(m) => (m.slack ? <SlackName user={m.user} name={m.name || m.user} /> : member(m.user)?.name || m.name || m.user)}
                   mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : member(id)?.name ?? id}`)} />
               </div>
             ))}
@@ -209,8 +211,8 @@ export function History({ session, threads, connect, summary, actions, details, 
 
 function HistoryItem({ item, mention, person, where }: {
   item: Item; mention(text: string): string;
-  /** A person's name: as known here, else as the prompt said. */
-  person(id: string, said: string | null): string;
+  /** Who sent a message: as known here, else as the prompt said; a Slack user's name can be taken as the viewer's. */
+  person(message: SourcedMessage): ReactNode;
   where(address: string | null | undefined): ReactNode;
 }) {
   switch (item.type) {
@@ -219,7 +221,7 @@ function HistoryItem({ item, mention, person, where }: {
       return (
         <>
           {note && <Received from="ember" text={note} />}
-          {messages.map((m) => <Received key={m.ts} from={person(m.user, m.name)} text={mention(m.text)} place={where(m.thread)} />)}
+          {messages.map((m) => <Received key={m.ts} from={person(m)} text={mention(m.text)} place={where(m.thread)} />)}
         </>
       );
     }
@@ -230,15 +232,16 @@ function HistoryItem({ item, mention, person, where }: {
       const kind = typeof args.kind === "string" ? args.kind : null;
       const failed = item.step.result?.ok === false;
       return (
-        <div className="h-post" data-failed={failed}>
-          <div className="h-post-head">
+        // Drawn like a received message (a line, then the words beside a bar): the two answer each other.
+        <div className="h-received h-post" data-failed={failed}>
+          <div className="h-label">
             <Send {...ICON} size={14} />
             发送到 {where(typeof args.to === "string" ? args.to : null) ?? <span className="h-place"><SlackLogo size={13} />Slack</span>}
             {kind === "final" && <Pill tone="green">已完成</Pill>}
             {kind === "block" && <Pill tone="blue">Block</Pill>}
             {failed && <Pill tone="red">发送失败</Pill>}
           </div>
-          <Fold className="markdown"><Prose>{String(args.text)}</Prose></Fold>
+          <Fold className="h-quote h-quote-md markdown"><Prose>{String(args.text)}</Prose></Fold>
         </div>
       );
     }
@@ -249,7 +252,27 @@ function HistoryItem({ item, mention, person, where }: {
   }
 }
 
-function Received({ from, text, place }: { from: string; text: string; place?: ReactNode }) {
+/**
+ * A Slack user's name: "你" once the viewer said it is them. Clicking it offers "这是我" (the station then takes that
+ * Slack user for the viewer), or "不是我" once it does.
+ */
+function SlackName({ user, name }: { user: string; name: string }) {
+  const api = useApi();
+  const toast = useToast();
+  const bound = useOverview(useStation().address).value?.slackUsers.includes(user) ?? false;
+  return (
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger className="h-person">{bound ? "你" : name}</DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className="popover menu-list" align="start" sideOffset={4} collisionPadding={8}>
+          <DropdownMenu.Item className="menu-item" onSelect={() => void api.slackIdentity(user, !bound).catch((error: unknown) => toast(`${bound ? "解除" : "绑定"}没有成功：${error instanceof Error ? error.message : String(error)}`))}>{bound ? "不是我" : "这是我"}</DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+function Received({ from, text, place }: { from: ReactNode; text: string; place?: ReactNode }) {
   return (
     <div className="h-received">
       <div className="h-label"><ArrowDownToLine {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "ember" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <> · {place}</>}</div>

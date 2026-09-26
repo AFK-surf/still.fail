@@ -7,7 +7,7 @@ import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
 import { ConnectsPage } from "./pages/Connects.tsx";
 import { DevicePage } from "./pages/Device.tsx";
-import { AgentChatPage, ChatPage } from "./pages/ChatPage.tsx";
+import { ChatPage } from "./pages/ChatPage.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
 import { Loading } from "./ui.tsx";
@@ -45,8 +45,7 @@ export function App() {
         <main className="main">
           <Routes>
             <Route path="/" element={<Navigate to="/chats" replace />} />
-            <Route path="/chats/:thread?" element={<ChatPage />} />
-            <Route path="/agents/:key" element={<AgentChatPage />} />
+            <Route path="/chats/:chat?" element={<ChatPage />} />
             <Route path="/new" element={<LocalNewChat />} />
             <Route path="/connects/:id" element={<ConnectPage />} />
             <Route path="/bots/:id" element={<LegacyBot />} />

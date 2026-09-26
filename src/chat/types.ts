@@ -45,6 +45,9 @@ export interface ChatSurface {
   userName?(userId: string): Promise<string | null>;
   /** A person's email, where the platform shares it. */
   userEmail?(userId: string): Promise<string | null>;
+  /** What is already known of a person or a channel, without waiting (unknown ones are fetched in the background). */
+  knownPerson?(userId: string): { name: string; email: string } | null;
+  knownChannel?(channelId: string): string | null;
   /** A channel's name without the #, where the platform says; null for direct messages. */
   channelName?(channelId: string): Promise<string | null>;
   /**

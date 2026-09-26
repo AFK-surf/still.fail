@@ -145,7 +145,7 @@ export interface ThreadSummary extends ThreadRow {
   lastMessage: MessageRow | null;
   /** The viewer's read position (an entry number), 0 if never read. */
   read: number;
-  /** Messages after the read position that are not the viewer's own. */
+  /** Messages after the read position that are not the viewer's own (nor of a Slack user they are). */
   unread: number;
   /** Everyone who wrote in it, as creator references, earliest first. */
   people: string[];
@@ -475,6 +475,12 @@ CREATE TABLE IF NOT EXISTS processes (
   runtime TEXT NOT NULL,
   label TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS identities (
+  viewer TEXT NOT NULL,
+  slack_user TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (viewer, slack_user)
+);
 `;
 
 type Row = Record<string, unknown>;
@@ -562,6 +568,7 @@ const ARCHIVE_CACHE = 32;
  * - "thread" ({ id, entries }): entries were appended there (contiguous, in order), or its sessions changed (none);
  * - "thread-removed" ({ id }): it went, with every entry it had;
  * - "read" ({ viewer, thread, n }): a viewer's read position moved;
+ * - "identities" (viewer): the Slack users a viewer said are them changed;
  * - "processes": the recorded runtime processes changed.
  */
 export class Store {
@@ -855,12 +862,13 @@ export class Store {
     return row ? toMessage(row) : null;
   }
 
-  /** Messages after the viewer's read position (or `read`) that are not the viewer's own. */
+  /** Messages after the viewer's read position (or `read`) that are not the viewer's own (nor of a Slack user they are). */
   unreadCount(viewer: string, thread: number, read = this.readPosition(viewer, thread)): number {
-    const theirs = (m: { authorKind: AuthorKind; author: string }) => !(m.authorKind === "person" && m.author === viewer);
-    if (this.#isArchived(thread)) return this.#archivedMessages(thread).filter((m) => m.n > read && theirs(m)).length;
+    const slack = this.getThread(thread)?.surface !== EMBER_SURFACE;
+    const selves = new Set([viewer, ...(slack ? this.slackIdentities(viewer) : [])]);
+    if (this.#isArchived(thread)) return this.#archivedMessages(thread).filter((m) => m.n > read && !(m.authorKind === "person" && selves.has(m.author))).length;
     return (this.#db.prepare(`SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
-      AND NOT (author_kind = 'person' AND author = ?)`).get(thread, read, viewer) as Row).c as number;
+      AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?)))`).get(thread, read, JSON.stringify([...selves])) as Row).c as number;
   }
 
   /** Everyone who wrote in a thread, as creator references (a Slack user through a connect in it), earliest first. */
@@ -1108,6 +1116,20 @@ export class Store {
     const now = this.readPosition(viewer, thread);
     this.changes.emit("read", { viewer, thread, n: now });
     return now;
+  }
+
+  // ── identities ──────────────────────────────────────────────────────────
+
+  /** The Slack users a viewer said are them: their messages are the viewer's own. */
+  slackIdentities(viewer: string): string[] {
+    return (this.#db.prepare("SELECT slack_user FROM identities WHERE viewer = ? ORDER BY at").all(viewer) as Row[]).map((r) => r.slack_user as string);
+  }
+
+  /** Binds a Slack user to a viewer ("这是我"), or unbinds it. Nobody checks: it is the viewer's word. */
+  setSlackIdentity(viewer: string, user: string, bound: boolean): void {
+    if (bound) this.#db.prepare("INSERT OR IGNORE INTO identities (viewer, slack_user, at) VALUES (?, ?, ?)").run(viewer, user, Date.now());
+    else this.#db.prepare("DELETE FROM identities WHERE viewer = ? AND slack_user = ?").run(viewer, user);
+    this.changes.emit("identities", viewer);
   }
 
   // ── turns ───────────────────────────────────────────────────────────────

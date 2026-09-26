@@ -489,7 +489,21 @@ impl Inner {
             }
             if let Ok(me) = &me {
                 if let Some(url) = me.get("relay_url").and_then(Value::as_str) {
+                    let first = self.relay_url.borrow().is_none();
                     self.relay_url.borrow_mut().get_or_insert_with(|| url.to_string());
+                    // The relay is known: bring the device endpoint up now and let it reach the relay while the page
+                    // loads, so a station link has only its own handshake to do (no request of its own: the URL is here).
+                    if first && self.mesh.borrow().is_none() {
+                        let warm = self.me.clone();
+                        self.host.spawn(
+                            async move {
+                                if let Some(core) = warm.upgrade() {
+                                    let _ = core.mesh().await;
+                                }
+                            }
+                            .boxed_local(),
+                        );
+                    }
                 }
                 self.reach.borrow_mut().insert(account.sub.clone(), me.clone());
             }
@@ -1002,7 +1016,9 @@ mod tests {
         let chats: ClientMessage = serde_json::from_value(json!({"id": 4, "subscribe": {"topic": "chats", "scope": "local"}})).unwrap();
         assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "local".into(), mine: false } });
         let chat: ClientMessage = serde_json::from_value(json!({"id": 5, "subscribe": {"topic": "chat", "station": "w/s", "thread": 7}})).unwrap();
-        assert_eq!(chat, ClientMessage::Subscribe { id: 5, subscribe: Topic::Chat { station: "w/s".into(), thread: 7 } });
+        assert_eq!(chat, ClientMessage::Subscribe { id: 5, subscribe: Topic::Chat { station: "w/s".into(), thread: Some(7), session: None } });
+        let agent: ClientMessage = serde_json::from_value(json!({"id": 6, "subscribe": {"topic": "chat", "station": "w/s", "session": "ds:C1:1.0"}})).unwrap();
+        assert_eq!(agent, ClientMessage::Subscribe { id: 6, subscribe: Topic::Chat { station: "w/s".into(), thread: None, session: Some("ds:C1:1.0".into()) } });
         assert_eq!(subscribe, ClientMessage::Subscribe { id: 8, subscribe: Topic::Session { station: "ws1/st1".into(), key: "k".into() } });
         let accounts: ClientMessage = serde_json::from_value(json!({"id": 2, "subscribe": {"topic": "accounts"}})).unwrap();
         assert_eq!(accounts, ClientMessage::Subscribe { id: 2, subscribe: Topic::Accounts });
@@ -1273,12 +1289,13 @@ mod tests {
         run(async {
             let (host, core) = local_core(1.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: 7 } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
             host.settle().await;
             assert!(host.take_emitted().iter().any(|(_, m)| matches!(m, CoreMessage::Value { id: 1, .. })));
             let admin: Vec<_> = host.requests.borrow().iter().filter(|r| r.url.contains("/admin/api/")).cloned().collect();
             let paths: Vec<&str> = admin.iter().map(|r| r.url.trim_start_matches("https://ember.test/admin/api")).collect();
-            assert_eq!(paths.len(), 6, "{paths:?}");
+            assert_eq!(paths.len(), 7, "{paths:?}");
+            assert!(paths.contains(&"/chats"), "the title as the sidebar has it: {paths:?}");
             assert!(paths.contains(&"/sessions/k1"), "the agent read as the chat opens: {paths:?}");
             let parents: Vec<String> = admin.iter().map(|r| header(r, "traceparent").expect("traceparent")).collect();
             let trace = parents[0][3..35].to_string();
@@ -1328,7 +1345,7 @@ mod tests {
 
             let (host, core) = local_core(0.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: 7 } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
             core.receive(ui, ClientMessage::Call { id: 2, call: "station.request".into(), params: json!({ "station": "local", "method": "GET", "path": "/overview" }) });
             host.settle().await;
             pass(SPEEDUP * (trace::EXPORT_MS + 100)).await;

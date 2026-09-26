@@ -105,6 +105,7 @@ for grants.
 | `overview` | `station` | the admin API's `/overview` |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
 | `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, `last` entry, `lastMessage`, the viewer's `read` and `unread`), latest message first |
+| `chatRows` | `station` | `/chats`: the viewer's sidebar rows as the station puts them together (`ChatRow`; docs/station-storage.md, The sidebar) |
 | `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns }` (no messages, no transcript) |
 | `thread` | `station`, `thread` (id) | `{ first, last, entries, thread }`: the thread's entries `first ..= last` (`EntryView`s, never changed once read): its latest page, older pages in front as `chat.older` loads them; `thread` is its summary as kept on the device (null when read from the station) |
 | `live` | `station`, `key` | the session as it runs (below) |
@@ -155,13 +156,18 @@ that only notifications change it:
   coalesced over 400 ms; a 404 removes it); `thread-removed` takes the thread
   out of them, makes its `thread` topic a 404 error and forgets what is kept of
   it; `read` sets the thread's `read` there, and `unread` to 0 when it covers
-  the last entry (else the thread is read again); `overview` and `host` are
-  the whole values. After the stream was down, every live topic of the station
-  is read once when it reopens (`thread` topics only what came after them:
-  `?after=<last>`); `link` says how the stream is.
+  the last entry (else the thread is read again), and turns off `unread` of
+  that thread's `chatRows` row when it covers the row's last message; `chat`
+  puts a row into `chatRows` (replacing the one with its `id`), `chat-removed`
+  takes one out; `overview` and `host` are the whole values. After the stream
+  was down, every live topic of the station is read once when it reopens
+  (`thread` topics only what came after them: `?after=<last>`); `link` says
+  how the stream is.
 - `thread` shows what is kept on the device of the thread (its latest page)
   at once, then reads `?after=<last>`; with nothing kept it reads the latest
-  page. What it reads is kept (docs/station-storage.md, In the client core).
+  page. What it reads is kept (docs/station-storage.md, In the client core),
+  with the thread's summary and its sidebar title as `threads` and `chatRows`
+  have them.
 - `live` starts from the transcript kept on the device and holds
   `/sessions/:key/live?from=<entries it has>` open, keeping what comes; a
   timeline message that cannot be placed starts it over from 0 (and forgets
@@ -177,9 +183,9 @@ topics above (and keeps current as they change). A view keeps the topics it is
 built from subscribed inside the core (`Store::watch`: it counts as a
 subscriber and hears each change); a change only marks the view stale, and it
 is computed once, when its coalesced emission goes out, however many of them
-changed. A workspace view watches the `sessions` / `overview` / `threads` /
-`link` (for `stations`: `link` / `overview` / `host`) of the stations that are
-online — connected to ember cloud right now, as the `workspace` topic says —
+changed. A workspace view watches the `chatRows` / `link` (for `stations`:
+`link` / `overview` / `host`; for `connects`: `overview`) of the stations that
+are online — connected to ember cloud right now, as the `workspace` topic says —
 and follows the workspace's station list as it changes. It has no value until
 the `workspace` topic has one; a failed `workspace` is the view's error, while
 a failing station only shows in that station's state. `chat` watches the
@@ -194,7 +200,9 @@ the thread as kept beside them; its agents fill in after (an agent whose
 threads; one that fails is left out). A failed `threads` or `thread` is its
 error, and so is its thread missing from `threads` once read (404). Its
 `messages` are its entries merged (entries.rs): each message with its latest
-edit's text, attachments and quotes (`editedAt`).
+edit's text, attachments and quotes (`editedAt`). With `session` instead of
+`thread`, `chat` watches that `session`, `sessions`, `chatRows`, `overview`
+and `link`.
 
 While a `chats` view is live, a clock waits for the viewer's next local
 midnight and recomputes it then (`daysAgo` changes); that is the only timer of
@@ -205,10 +213,10 @@ itself (one station, addressed `"local"`).
 
 | View | Params | Value |
 | --- | --- | --- |
-| `chats` | `scope`, `mine` | the sidebar: `{ me, stations, loading, days }`; a row is a chat (a thread) |
+| `chats` | `scope`, `mine` | the sidebar: `{ me, stations, loading, days }`; every station's rows side by side |
 | `stations` | `scope` | every station of the scope, each with its link, overview, host and usable models |
 | `connects` | `scope`, `mine` | every connect of every online station: `{ me, items: [{ station, stationName, connect }], loading }`; with `mine`, those whose `createdBy.id` is me |
-| `chat` | `station`, `thread` (id) | one chat: `{ me, thread, title, people, agents, messages, more, outbox, link }` |
+| `chat` | `station`, and `thread` (id) or `session` (key) | an item's page: `{ me, thread, title, people, agents, messages, more, outbox, link }` |
 
 `live` (above) stays its own topic: its steps change many times a second,
 while `chat` changes with messages.
@@ -219,35 +227,29 @@ while `chat` changes with messages.
   "me": { "id": "a@b.c", "email": "a@b.c" },     // { "id": "local", "email": null } on a station's own page
   "stations": [{ "station": "ws/st", "id": "st", "name": "studio", "state": "online", "message": null }],
   //   state: "online" | "connecting" | "offline" (not connected to ember cloud) | "error" (message says why)
-  //   error: its sessions could not be read, or its link failed; connecting: sessions not read yet, or the link
-  //   is reconnecting (sessions already read stay listed). The local station is named "".
-  "loading": false,                                // an online station has not answered its sessions or threads yet
+  //   error: its rows could not be read, or its link failed; connecting: rows not read yet, or the link
+  //   is reconnecting (rows already read stay listed). The local station is named "".
+  "loading": false,                                // an online station has not answered its rows yet
   "days": [{ "daysAgo": 0, "at": 1790000000000, "items": [{
-    "station": "ws/st", "stationName": "studio",
-    "thread": { "id": 7, "surface": "slack:T1", "channel": "C1", "channelName": "ops", "threadTs": "1790000000.000100",
-                "title": null, "createdAt": 1790000000000, "creator": { … } | null },   // from the ThreadView
-    "title": "部署挂了",                              // see below
-    "agents": [{ "key": "…", "runtime": "claude", "model": "opus", "effort": null,
-                 "process": "cold", "pending": 0, "lastTurn": { … } | null }],   // its shown sessions, as SessionSummary has them
-    "people": [ … ],                               // Creator: everyone who wrote in it, earliest first
-    "last": { "seq": 42, "authorKind": "agent", "author": "…", "authorName": "…", "text": "…", "createdAt": 1790000000000 } | null,
-    //   the last message, its text cut to 200 characters
-    "unread": true,                                // something after the viewer's read position that is not their own
-    "lastActiveAt": 1790000000000,                 // the last message's time, else the thread's
-    "connect": { … } | null                        // a Slack thread's connect (its first session's that is not "ember"), from the overview
+    "station": "ws/st", "stationName": "studio",   // added here; the rest is the station's row as it is
+    "id": "7", "session": "ds:C1:1790000000.000100", "thread": 7, "title": "部署挂了", "agents": [ … ], "last": { … } | null,
+    "unread": true, "mine": true, "lastActiveAt": 1790000000000, "connect": "ds" | null, "origin": { … } | null
   }] }]
   // days: most recent first, grouped by the viewer's local calendar day; items by lastActiveAt, newest first.
-  // Every thread of the station (Slack threads and chats on ember's page) with at least one shown session: one whose
-  // sessions are all archived is not listed, and a session in no thread is no chat. POST /sessions makes a session
-  // and its thread together, so a new chat is listed at once.
-  // with mine = true only chats the viewer takes part in: they started the thread or wrote in it (the creator or one of
-  // its people matches me: id, or email case-insensitively).
+  // with mine = true only the rows whose `mine` is true.
 }
 ```
 
-A chat's `title` is the thread's title; else the first line of the first thing
-a person said in it (`firstText`, Slack mentions left out, spaces collapsed);
-else its Slack channel (`#name`), `私信` for a direct message, or
+The rows are the station's (`GET /chats`, kept current by its `chat` and
+`chat-removed` events): which chats and agents are listed, what they are
+called, whether they are unread, where their agents came from, and whether the
+viewer takes part all come from the station, which knows who is asking. The
+core joins nothing here: it puts every station's rows side by side, adds their
+station, applies `mine`, and groups them by day.
+
+The `chat` view's `title` is the thread's title; else the first line of the
+first thing a person said in it (`firstText`, Slack mentions left out, spaces
+collapsed); else its Slack channel (`#name`), `私信` for a direct message, or
 `（还没有消息）`.
 
 ```jsonc
@@ -264,8 +266,8 @@ else its Slack channel (`#name`), `私信` for a direct message, or
 // chat
 {
   "me": { … },                   // as in chats
-  "thread": { … },               // the ThreadView (with the viewer's `read` position and `unread`, `people`, `last`, `lastMessage`)
-  "title": "…",                  // as in chats
+  "thread": { … } | null,        // the ThreadView (with the viewer's `read` position and `unread`, `people`, `last`, `lastMessage`); null before the agent has a chat
+  "title": "…",                  // see below (as kept with the entries until `chatRows` is read)
   "people": [ … ],               // the thread's people
   "agents": [{                   // its sessions, in the order they joined
     "session": { … },            // SessionSummary
@@ -283,10 +285,13 @@ else its Slack channel (`#name`), `私信` for a direct message, or
 }
 ```
 
-A chat is any thread: a Slack thread shows all its messages too (the station
-records them), but it is written in Slack — the station takes messages only
-into chats on ember's page (`surface: "ember"`), so a client shows no composer
-for a Slack chat. Where the viewer had read up to when a chat opened is
+Every item of the sidebar opens the same page, the `chat` view: with
+`thread`, an internal chat (`surface: "ember"`); with `session`, an agent that
+has no chat yet — `thread` null, no people or messages, the agent alone (as
+in a chat), titled as the station's item is (the view waits for the station's
+`chatRows`); a session that cannot be read is its error. Its chat is made
+(`POST /threads {session}`) when the first message is sent, and the page
+moves to it. Where the viewer had read up to when a chat opened is
 `thread.read` at that moment (from the thread as kept, when the chat opens
 from what the device kept); a client keeps it for the visit while reading
 moves the position on. The web draws its "以下是新消息" line over the first
@@ -319,9 +324,11 @@ page that navigates right after a write finds what it wrote: an answer that is
 an overview (profile and connect edits) becomes the `overview`; a thread
 (`POST /threads`, `POST /threads/:id/sessions`) goes into `threads` and the
 `session` topics; a read position into the threads; otherwise the touched
-topics are read again (`/sessions/:key/…` → `session` and `sessions`;
-`/connects…` → `overview` and `sessions`; `/profiles…`, `/slack…` →
-`overview`; `/threads/:id/messages` → that `thread`). The station's events
+topics are read again (`/sessions…` → `session`, `sessions` and `chatRows`;
+a thread answered by `/threads…` → `chatRows` as well; `/connects…` →
+`overview` and `sessions`; `/profiles…`, `/slack…` → `overview`;
+`/me/slack/:user` → `overview` (its answer) and `chatRows`;
+`/threads/:id/messages` → that `thread`). The station's events
 bring the same a moment later.
 
 ## Crates

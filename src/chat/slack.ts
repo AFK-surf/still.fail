@@ -4,6 +4,7 @@ import { log } from "../log.ts";
 import { splitForSlack, toMrkdwn } from "./mrkdwn.ts";
 import type { ChatEvent, ChatMessage, ChatSurface, InboundMessage, ThreadRef } from "./types.ts";
 import type { Attachment } from "../store.ts";
+import type { NameBook, Person } from "./names.ts";
 
 /** Message subtypes that are still a person talking. */
 const CONTENT_SUBTYPES = new Set([undefined, "file_share", "thread_broadcast"]);
@@ -85,7 +86,11 @@ export class SlackSurface implements ChatSurface {
   #lastError: string | null = null;
   readonly #statusListeners = new Set<() => void>();
 
-  constructor(tokens: { appToken: string; botToken: string }) {
+  readonly #book: NameBook | undefined;
+
+  /** `book` keeps names across restarts and lets the admin API ask without waiting (knownPerson, knownChannel). */
+  constructor(tokens: { appToken: string; botToken: string }, book?: NameBook) {
+    this.#book = book;
     if (!tokens.appToken.startsWith("xapp-")) throw new Error("slack.appToken must be an app-level token (xapp-…)");
     if (!tokens.botToken.startsWith("xoxb-")) throw new Error("slack.botToken must be a bot token (xoxb-…)");
     this.#appToken = tokens.appToken;
@@ -169,6 +174,16 @@ export class SlackSurface implements ChatSurface {
       this.#names.set(userId, profile);
     }
     return profile;
+  }
+
+  /** A person as far as already known, without waiting; an unknown one is looked up in the background. */
+  knownPerson(userId: string): Person | null {
+    return this.#book?.person(`u:${this.#identity?.teamId ?? "?"}:${userId}`, () => this.#profile(userId)) ?? null;
+  }
+
+  /** A channel's name as far as already known (null for DMs or not yet known), without waiting. */
+  knownChannel(channelId: string): string | null {
+    return this.#book?.channel(`c:${this.#identity?.teamId ?? "?"}:${channelId}`, () => this.channelName(channelId)) ?? null;
   }
 
   /** Channel name via conversations.info (null for DMs), cached for the connection's lifetime. */

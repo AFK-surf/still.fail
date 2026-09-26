@@ -23,8 +23,8 @@ test("paths under home directories lose the home; quoted text in messages is cut
 });
 
 test("station error reports are off by default", () => {
-  assert.deepEqual(parseConfig({}, "/tmp/ember").telemetry, { errors: false });
-  assert.deepEqual(parseConfig({ telemetry: { errors: true } }, "/tmp/ember").telemetry, { errors: true });
+  assert.deepEqual(parseConfig({}, "/tmp/ember").telemetry, { errors: false, traces: false });
+  assert.deepEqual(parseConfig({ telemetry: { errors: true } }, "/tmp/ember").telemetry, { errors: true, traces: false });
   let made = 0;
   const captured: unknown[] = [];
   const client: ReportClient = { captureException: (error: unknown) => void captured.push(error), shutdown: async () => undefined };

@@ -750,3 +750,99 @@ test("profile checks and quotas are kept, so a restart shows them at once", asyn
     again.close();
   }
 });
+
+test("the sidebar is one kind of item, an agent merged with its internal chat; a Slack thread only lends it a title, connect and origin", async () => {
+  const t = await setup();
+  try {
+    await t.hub.accept("ds", message({ ts: "5.000001", threadTs: "5.000001", user: "U42", text: "<@UBOT>  部署挂了\n第二行" }));
+    await settle();
+    const slackKey = "ds:C1:5.000001";
+    const origin = { teamName: "Cue", channel: "C1", channelName: null, threadTs: "5.000001" };
+    const rows = async () => (await t.call("GET", "/chats")).body as any[];
+    const agentRow = (await rows()).find((r) => r.id === slackKey);
+    assert.deepEqual({ ...agentRow, agents: undefined, lastActiveAt: undefined }, {
+      id: slackKey, session: slackKey, thread: null, title: "部署挂了", agents: undefined, last: null,
+      unread: false, mine: false, lastActiveAt: undefined, connect: "ds", origin,
+    });
+    assert.deepEqual(Object.keys(agentRow.agents[0]).sort(), ["effort", "key", "lastTurn", "model", "pending", "process", "runtime"]);
+    assert.equal((await rows()).length, 1, "the Slack thread is no item of its own");
+
+    // A chat made on ember: its item, from no connect.
+    const made = (await t.call("POST", "/sessions", { runtime: "claude" })).body;
+    const own = (await rows()).find((r) => r.id === String(made.thread.id));
+    assert.deepEqual([own.thread, own.session, own.title, own.connect, own.origin, own.last, own.mine], [made.thread.id, made.key, "（还没有消息）", null, null, null, true]);
+
+    // The Slack agent's internal chat: the same item, now with its chat, titled by the Slack thread until it has words of its own.
+    const chat = (await t.call("POST", "/threads", { session: slackKey })).body;
+    let list = await rows();
+    assert.equal(list.some((r) => r.id === slackKey), false);
+    let row = list.find((r) => r.id === String(chat.id));
+    assert.deepEqual([row.session, row.title, row.connect, row.origin, row.agents.map((a: any) => a.key)], [slackKey, "部署挂了", "ds", origin, [slackKey]]);
+    t.hub.say(chat.id, "local", "看看日志");
+    row = (await rows()).find((r) => r.id === String(chat.id));
+    assert.deepEqual([row.title, row.last.text, row.last.authorKind, row.unread, row.mine], ["看看日志", "看看日志", "person", false, true]);
+    // What the agent says is unread until read; the Slack thread's messages never show in the chat.
+    const said = t.store.insertMessage({ thread: chat.id, ts: "9.000001", authorKind: "agent", author: slackKey, text: "x".repeat(300) }).seq;
+    row = (await rows()).find((r) => r.id === String(chat.id));
+    assert.deepEqual([row.unread, row.last.text.length, row.last.seq], [true, 200, said]);
+    await t.call("PUT", `/threads/${chat.id}/read`, { seq: said });
+    assert.equal((await rows()).find((r) => r.id === String(chat.id)).unread, false);
+    assert.deepEqual((await t.call("GET", `/threads/${chat.id}/messages`)).body.messages.map((m: any) => m.text), ["看看日志", "x".repeat(300)]);
+
+    // Archived: its item goes.
+    await t.call("POST", `/sessions/${encodeURIComponent(slackKey)}/archive`);
+    assert.deepEqual((await rows()).map((r) => r.id), [String(made.thread.id)]);
+  } finally {
+    t.close();
+  }
+});
+
+test("a viewer can say a Slack user is them: the station then takes that user for the viewer", async () => {
+  const access = { teamDomain: "afk", aud: "app-aud" };
+  const t = await setup({ access });
+  const dev = { "cf-connecting-ip": "203.0.113.9", "cf-access-jwt-assertion": jwt({ iss: "https://afk.cloudflareaccess.com", aud: ["app-aud"], email: "dev@example.com", exp: Date.now() / 1000 + 600 }) };
+  try {
+    await t.hub.accept("ds", message({ ts: "6.000001", threadTs: "6.000001", user: "U42", text: "<@UBOT> 看一下" }));
+    await t.hub.accept("ds", message({ ts: "6.000002", threadTs: "6.000001", user: "U7", addressed: false, text: "我也在" }));
+    await settle();
+    const key = "ds:C1:6.000001";
+    const mine = async (headers: Record<string, string> = {}) => (await t.call("GET", "/chats", undefined, headers)).body.find((r: any) => r.session === key).mine;
+    const slackUnread = async (headers: Record<string, string> = {}) => (await t.call("GET", `/threads?session=${encodeURIComponent(key)}`, undefined, headers)).body[0].unread;
+    assert.equal(await mine(dev), false);
+    assert.equal(await slackUnread(dev), 2);
+    const devEvents = await follow(`${t.base}/events`, dev);
+    const localEvents = await follow(`${t.base}/events`);
+
+    // "这是我" on the session's creator: the agent's row is now the local viewer's, and only their stream hears of it.
+    const bound = await t.call("PUT", "/me/slack/U42");
+    assert.deepEqual(bound.body.slackUsers, ["U42"]);
+    assert.equal(await mine(), true);
+    assert.equal(await mine(dev), false, "bindings are per viewer");
+    await localEvents.next("chat", (r) => r.session === key && r.mine);
+    await localEvents.next("overview", (o) => o.slackUsers.includes("U42"));
+    await settle();
+    assert.equal(devEvents.events.some((e) => e.event === "chat" && e.data.mine), false);
+    // U7 only wrote in the Slack thread: their words are dev's own now, but the agent's row is not dev's —
+    // with no chat yet, only whoever started the session counts.
+    assert.deepEqual((await t.call("PUT", "/me/slack/U7", undefined, dev)).body.slackUsers, ["U7"]);
+    assert.equal(await mine(dev), false);
+    assert.equal(await slackUnread(dev), 1);
+    await devEvents.next("overview", (o) => o.slackUsers.includes("U7"));
+    assert.deepEqual((await t.call("GET", "/overview", undefined, dev)).body.slackUsers, ["U7"]);
+
+    // "不是我": as before.
+    await t.call("DELETE", "/me/slack/U7", undefined, dev);
+    assert.equal(await mine(dev), false);
+    assert.equal(await slackUnread(dev), 2);
+
+    // Items come and go on the stream: the agent's item, once it has a chat, is at its chat's id.
+    const from = localEvents.events.length;
+    const chat = (await t.call("POST", "/threads", { session: key })).body;
+    assert.equal((await localEvents.next("chat", (r) => r.thread === chat.id, from)).title, "看一下");
+    assert.deepEqual(await localEvents.next("chat-removed", () => true, from), { id: key });
+    devEvents.close();
+    localEvents.close();
+  } finally {
+    t.close();
+  }
+});

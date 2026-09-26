@@ -2,7 +2,7 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
@@ -18,11 +18,19 @@ import { track } from "./telemetry.ts";
 /** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
 interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null; session: SessionSummary; live: LiveView | undefined; turns: ChatView["agents"][number]["turns"] }
 
-export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; lives: ReadonlyMap<string, LiveView>; onOpenHistory(key: string): void }) {
+/**
+ * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
+ * `ensureChat` makes the chat with the first message, which `onSent` then follows.
+ */
+export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
+  chat: ChatView; lives: ReadonlyMap<string, LiveView>; onOpenHistory(key: string): void;
+  ensureChat?: () => Promise<{ key: string; thread: number }>; onSent?: (thread: number) => void;
+}) {
   const list = useRef<HTMLDivElement>(null);
   const floor = useRef<HTMLDivElement>(null);
   const sending = useChatSend();
   const { thread, outbox, messages } = chat;
+  const id = thread?.id ?? null;
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
@@ -30,9 +38,13 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
   const isMine = useIsMine();
   const mineOf = (m: MessageView) => m.authorKind === "person" && isMine({ id: m.author, email: m.author });
   useStickToBottom(list, ".msg", floor);
-  useOlderOnScroll(list, chat, () => sending.older(thread.id));
-  useMarkRead(floor, chat, (seq) => sending.read(thread.id, seq));
-  const divider = useUnreadLine(list, chat, messages, mineOf, () => sending.older(thread.id));
+  // Without a chat there is nothing older to load and nothing to read.
+  const older = () => (id === null ? Promise.resolve() : sending.older(id));
+  useOlderOnScroll(list, chat, older);
+  useMarkRead(floor, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
+  const returning = useRememberPlace(list, `${useStation().address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, messages.length > 0);
+  const divider = useUnreadLine(list, chat, messages, mineOf, older, returning);
+  const away = useAwayFromBottom(list);
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
   for (const o of outbox) sentHere.current.add(o.text);
@@ -83,7 +95,7 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
     return () => clearTimeout(timer);
   }, [youngest]);
   // Where agents post to reach this chat.
-  const address = `${thread.channel}/${thread.threadTs}`;
+  const address = thread ? `${thread.channel}/${thread.threadTs}` : null;
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = agents[0]?.key ?? null;
   const ownerOf = (file: Attachment) => agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.key ?? keeper;
@@ -103,6 +115,20 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
 
   return (
     <section className="chat" aria-label="对话">
+      <div className="chat-pane">
+      {away && (
+        <button type="button" className="chat-to-bottom" aria-label="跳到最新"
+          onClick={() => {
+            const pane = list.current;
+            if (!pane) return;
+            // A reader's move: once at the bottom the pane follows new messages again.
+            pane.dispatchEvent(new WheelEvent("wheel"));
+            // At once: a smooth scroll outlasts what scroll.ts takes for the reader's move, and would be pulled back.
+            pane.scrollTop = pane.scrollHeight;
+          }}>
+          <ArrowDown size={16} strokeWidth={2} />
+        </button>
+      )}
       <div className="chat-list" ref={list} onMouseUp={() => setTimeout(onSelect, 0)} onScroll={() => setPicked(null)}>
         {chat.more && <div className="chat-older" aria-hidden="true"><span className="spinner" /></div>}
         {messages.length === 0 && (
@@ -159,8 +185,8 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
             <Files owner={ownerOf} files={o.attachments} />
             {o.state === "failed"
               ? <span className="msg-time msg-failed">发送失败{o.error ? `：${o.error}` : ""}
-                  <button type="button" className="inline-link" onClick={() => void sending.retry(thread.id, o.id).catch(() => {})}>重试</button>
-                  <button type="button" className="inline-link" onClick={() => void sending.discard(thread.id, o.id)}>删除</button>
+                  <button type="button" className="inline-link" onClick={() => void (id !== null && sending.retry(id, o.id).catch(() => {}))}>重试</button>
+                  <button type="button" className="inline-link" onClick={() => void (id !== null && sending.discard(id, o.id))}>删除</button>
                 </span>
               : <span className="msg-time msg-waiting msg-sending"><span className="spinner" aria-hidden="true" />正在发送</span>}
           </div>
@@ -170,7 +196,7 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
           let writer: ChatAgent | undefined;
           let text: string | null = null;
           for (const a of agents) {
-            const step = a.live?.steps.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && partialString(s.input, "to") === address);
+            const step = a.live?.steps.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && address !== null && partialString(s.input, "to") === address);
             text = step ? partialString(step.input, "text") : null;
             if (text) { writer = a; break; }
           }
@@ -207,6 +233,7 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
         })()}
         <div ref={floor} className="chat-floor" aria-hidden="true" />
       </div>
+      </div>
       {picked && (
         <button type="button" className="quote-pop" style={{ left: picked.at.x, top: picked.at.y }}
           onMouseDown={(e) => e.preventDefault()}
@@ -214,7 +241,8 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
-      <Composer thread={thread.id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
+      <Composer thread={id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)}
+        {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
 }
@@ -230,8 +258,8 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
  * no line, and the chat opens at its bottom. Answers the seq of the message
  * the line goes over.
  */
-function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: MessageView[], mine: (m: MessageView) => boolean, older: () => Promise<unknown>): number | null {
-  const [open] = useState(() => ({ read: chat.thread.read, at: Date.now() }));
+function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: MessageView[], mine: (m: MessageView) => boolean, older: () => Promise<unknown>, returning = false): number | null {
+  const [open] = useState(() => ({ read: chat.thread?.read ?? 0, at: Date.now() }));
   const unread = (m: MessageView) => m.seq > open.read && m.createdAt <= open.at && !mine(m);
   const first = messages[0]?.seq;
   // Those not loaded yet may hold it: the pages before are loaded first.
@@ -239,7 +267,8 @@ function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messa
   const target = above ? null : messages.find(unread)?.seq ?? null;
   const asked = useRef<number | undefined>(undefined);
   // Until something unread shows (it may come from the station a moment after opening), there is nothing to jump to.
-  const jumped = useRef(false);
+  // Coming back to a chat goes back to where it was left (useRememberPlace), not to the line.
+  const jumped = useRef(returning);
   const load = useRef(older);
   load.current = older;
   useEffect(() => {
@@ -258,6 +287,64 @@ function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messa
     pane.scrollTop += line.getBoundingClientRect().top - pane.getBoundingClientRect().top - 12;
   }, [ref, above, target]);
   return target;
+}
+
+/** Whether the reader is scrolled up, away from the newest messages (more than a screenful's corner). */
+function useAwayFromBottom(ref: RefObject<HTMLElement | null>): boolean {
+  const [away, setAway] = useState(false);
+  useEffect(() => {
+    const pane = ref.current;
+    if (!pane) return;
+    const check = () => setAway(pane.scrollHeight - pane.scrollTop - pane.clientHeight > 120);
+    check();
+    pane.addEventListener("scroll", check, { passive: true });
+    const resize = new ResizeObserver(check);
+    resize.observe(pane);
+    return () => {
+      pane.removeEventListener("scroll", check);
+      resize.disconnect();
+    };
+  }, [ref]);
+  return away;
+}
+
+/** Where each chat was left: the message at the top of its pane, and how far below the pane's top it sat. */
+const leftAt = new Map<string, { ts: string; offset: number }>();
+
+/**
+ * Remembers where the reader was in a chat and takes them back there when
+ * they return, instead of opening it from the bottom again. The place is kept
+ * as the message at the top and its offset, so what arrived meanwhile below
+ * does not move it. Answers whether this is a return to a known place.
+ */
+function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean): boolean {
+  const [saved] = useState(() => leftAt.get(key));
+  const restored = useRef(false);
+  useEffect(() => {
+    const pane = ref.current;
+    if (!pane) return;
+    const record = () => {
+      const top = pane.getBoundingClientRect().top;
+      const first = [...pane.querySelectorAll<HTMLElement>(".msg[data-ts]")].find((m) => m.getBoundingClientRect().bottom > top);
+      if (first) leftAt.set(key, { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top });
+    };
+    pane.addEventListener("scroll", record, { passive: true });
+    return () => {
+      record();
+      pane.removeEventListener("scroll", record);
+    };
+  }, [ref, key]);
+  useEffect(() => {
+    if (!saved || !ready || restored.current) return;
+    restored.current = true;
+    const pane = ref.current;
+    const at = pane?.querySelector<HTMLElement>(`.msg[data-ts="${saved.ts}"]`);
+    if (!pane || !at) return;
+    // A reader's move: the pane keeps it rather than holding its bottom.
+    pane.dispatchEvent(new WheelEvent("wheel"));
+    pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - saved.offset;
+  }, [ref, saved, ready]);
+  return saved !== undefined;
 }
 
 /**
@@ -293,7 +380,7 @@ function useOlderOnScroll(ref: RefObject<HTMLElement | null>, chat: ChatView, ol
  */
 function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
   const newest = chat.messages.at(-1)?.seq ?? 0;
-  const known = chat.thread.read;
+  const known = chat.thread?.read ?? 0;
   const sent = useRef(0);
   const record = useRef(read);
   record.current = read;
@@ -587,7 +674,8 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
       const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
       setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null, ...(preview ? { preview } : {}) }]);
       if (tooBig) continue;
-      target().then(({ key }) => {
+      // Files go to the session's workspace: an agent without a chat yet gets its chat only with the first message.
+      (sessionKey ? Promise.resolve({ key: sessionKey }) : target()).then(({ key }) => {
         if (!key) throw new Error("这个对话里没有 agent，文件无处可放");
         return api.uploadFile(key, file);
       }).then(

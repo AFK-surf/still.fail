@@ -83,13 +83,16 @@ impl Log {
     }
 }
 
-/// The run of entries kept of a log, and (for a thread) its summary as last seen, so a chat opens without asking.
+/// The run of entries kept of a log, and (for a thread) its summary and its title in the sidebar as last seen, so a
+/// chat opens without asking.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Held {
     pub first: u64,
     pub last: u64,
     #[serde(default, skip_serializing_if = "Value::is_null")]
     pub thread: Value,
+    #[serde(default, skip_serializing_if = "Value::is_null")]
+    pub title: Value,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -180,13 +183,14 @@ impl Kept {
         self.queued(async move |kept| kept.put(&log, from, entries, truncate, thread).await).map(|_| ()).boxed_local()
     }
 
-    /// Keeps a thread's summary as last seen, if anything of it is kept.
-    pub fn summary(&self, log: &Log, thread: Value) -> LocalBoxFuture<'static, ()> {
+    /// Keeps a thread's summary and sidebar title as last seen (each where given), if anything of it is kept.
+    pub fn summary(&self, log: &Log, thread: Option<Value>, title: Option<Value>) -> LocalBoxFuture<'static, ()> {
         let log = log.clone();
         self.queued(async move |kept| {
             let Some(held) = kept.held(&log).await else { return };
-            if held.thread != thread {
-                kept.set_held(&log, &Held { thread, ..held }).await;
+            let next = Held { thread: thread.unwrap_or_else(|| held.thread.clone()), title: title.unwrap_or_else(|| held.title.clone()), ..held.clone() };
+            if next != held {
+                kept.set_held(&log, &next).await;
             }
         })
         .map(|_| ())
@@ -284,10 +288,11 @@ impl Kept {
         let to = from + entries.len() as u64; // one past the last
         let touches = old.as_ref().is_some_and(|o| from <= o.last + 1 && to >= o.first);
         let thread = thread.or_else(|| old.as_ref().map(|o| o.thread.clone())).unwrap_or(Value::Null);
+        let title = old.as_ref().map_or(Value::Null, |o| o.title.clone());
         let held = match &old {
-            Some(o) if touches => Held { first: o.first.min(from), last: if truncate { to.max(1) - 1 } else { o.last.max(to.max(1) - 1) }, thread },
+            Some(o) if touches => Held { first: o.first.min(from), last: if truncate { to.max(1) - 1 } else { o.last.max(to.max(1) - 1) }, thread, title },
             _ if entries.is_empty() => return,
-            _ => Held { first: from, last: to - 1, thread },
+            _ => Held { first: from, last: to - 1, thread, title },
         };
         if !touches && old.is_some() {
             self.remove(&name).await;
@@ -357,7 +362,7 @@ impl Kept {
     fn restart<'a>(&'a self, log: &'a Log, from: u64, entries: Vec<Value>) -> LocalBoxFuture<'a, ()> {
         async move {
             self.remove(&log.name()).await;
-            let held = Held { first: from, last: from + entries.len() as u64 - 1, thread: Value::Null };
+            let held = Held { first: from, last: from + entries.len() as u64 - 1, thread: Value::Null, title: Value::Null };
             self.put_run(log, None, &held, from, entries).await;
         }
         .boxed_local()
