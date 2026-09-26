@@ -132,7 +132,6 @@ import dev.ember.android.data.ThreadView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceView
 import dev.ember.android.data.activityRows
-import dev.ember.android.data.RowAgent
 import dev.ember.android.data.agentLabel
 import dev.ember.android.data.elapsed
 import dev.ember.android.data.isMe
@@ -209,15 +208,11 @@ fun ChatScreen(station: String, of: ChatOf) {
     }
     val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
     val view = chat.value
-    // This chat's row in the list: its title and agents are known before the chat itself comes.
-    val row = rows.firstOrNull { it.station == station && when (of) { is ChatOf.Thread -> it.thread == of.id; is ChatOf.Session -> it.thread == null && it.session == of.key } }
     if (view == null) {
-        // Until the station answers, the page is already this chat's, as its row in the list has it (title, agents):
-        // what arrives fills it in place instead of replacing another page.
+        // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in
+        // place instead of replacing another page.
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
-            BarFrame(row?.title ?: "", more = of is ChatOf.Thread) {
-                row?.agents?.forEach { ModelMark(it.model, it.runtime, 22.dp, it.state()) }
-            }
+            BarFrame("", more = of is ChatOf.Thread) {}
             val error = chat.error
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (error != null) Text("读不到这个对话：${error.message}", color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(32.dp))
@@ -231,7 +226,7 @@ fun ChatScreen(station: String, of: ChatOf) {
     val draft = remember { Draft() }
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
         ChatBar(station, of, view, agents)
-        Messages(station, of, view, agents, row?.agents.orEmpty(), draft, Modifier.weight(1f))
+        Messages(station, of, view, agents, draft, Modifier.weight(1f))
         Composer(station, of, view, agents, draft)
     }
 }
@@ -299,11 +294,9 @@ private sealed interface Entry {
 class AgentAtWork(val key: String, val who: String, val runtime: String, val model: String?, val live: LiveView?, val since: Long?)
 
 /** What the messages need to know about the chat: who is who, and whose workspace keeps a file. */
-private class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<ChatAgent>, val person: (String) -> String?, val rowAgents: List<RowAgent>) {
+private class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<ChatAgent>, val person: (String) -> String?) {
     val mentions: Map<String, String> = view.agents.mapNotNull { a -> a.connect?.let { c -> c.botUserId?.let { it to c.name } } }.toMap()
     fun agent(key: String) = agents.firstOrNull { it.key == key }
-    /** The chat's own list of agents can come after its messages (kept on the device); its row in the list knows them. */
-    fun rowAgent(key: String) = rowAgents.firstOrNull { it.key == key }
     fun mine(m: MessageView) = m.authorKind == "person" && view.me.isMe(m.author)
     fun name(m: MessageView) = person(m.author) ?: m.authorName ?: if (m.author == "local") "本机" else m.author
     /** Slack's <@U…> mentions by name: an agent's bot by its connect's, a person by theirs where known. */
@@ -313,9 +306,9 @@ private class Here(val station: String, val of: ChatOf, val view: ChatView, val 
 }
 
 @Composable
-private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, rowAgents: List<RowAgent>, draft: Draft, modifier: Modifier) {
+private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, modifier: Modifier) {
     val app = LocalApp.current
-    val ctx = Here(station, of, view, agents, rememberPeople(station), rowAgents)
+    val ctx = Here(station, of, view, agents, rememberPeople(station))
     val thread = view.thread
     val api = app.api(station)
     val messages = view.messages
@@ -582,12 +575,10 @@ private fun Said(ctx: Here, m: MessageView, draft: Draft, list: androidx.compose
         return
     }
     val agent = if (m.authorKind == "agent") ctx.agent(m.author) else null
-    val fromRow = if (m.authorKind == "agent" && agent == null) ctx.rowAgent(m.author) else null
-    val who = when (m.authorKind) { "agent" -> agent?.who ?: fromRow?.let { agentLabel(it.model, it.effort) } ?: m.authorName ?: "agent"; "ember" -> "ember"; else -> ctx.name(m) }
+    val who = when (m.authorKind) { "agent" -> agent?.who ?: m.authorName ?: "agent"; "ember" -> "ember"; else -> ctx.name(m) }
     val (hold, press) = holdMenu(m.text, who, m.ts, if (m.authorKind == "agent") "agent" else "person", draft)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (agent != null) AgentHead(agent.key, who, agent.model, agent.runtime, relativeTime(m.createdAt), ctx)
-        else if (fromRow != null) AgentHead(fromRow.key, who, fromRow.model, fromRow.runtime, relativeTime(m.createdAt), ctx)
         else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             when (m.authorKind) {
                 "agent", "ember" -> Mark(18.dp)
