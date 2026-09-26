@@ -475,7 +475,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
     navigate(link(`/connects/${id}`));
   });
 
-  const TITLES: Record<NewStep, string> = { team: "选 Slack 工作区", app: "配置 app", install: "安装", manual: "连接 Slack", bind: "绑定模型" };
+  const TITLES: Record<NewStep, string> = { team: teams.length === 0 ? "先拿一个 Slack 配置 token" : "选 Slack 工作区", app: "配置 app", install: "安装", manual: "连接 Slack", bind: "绑定模型" };
   const order: NewStep[] = step === "manual" || (step === "bind" && !made) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
   const footer = step === "team" ? (
     <>
@@ -510,7 +510,6 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
           )}
           {teams.length === 0 ? (
             <div className="token-start">
-              <h3>先拿一个 Slack 的 App 配置 token</h3>
               <p className="muted">有了它，ember 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用，这台 station 上的其他人看不到。</p>
               <ConfigTokenForm onSaved={(id) => { setTeam(id); setStep("app"); }} />
             </div>
@@ -526,7 +525,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
       )}
       {step === "app" && (
         <div className="slack-app">
-          <AppFields settings={app} onChange={setApp} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
+          <AppFields fresh settings={app} onChange={setApp} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
           {iconError && <p className="field-error" role="alert">{iconError}</p>}
           {makeApp.error && <p className="field-error" role="alert">{makeApp.error.message}</p>}
         </div>

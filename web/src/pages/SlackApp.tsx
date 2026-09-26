@@ -116,69 +116,248 @@ async function toIcon(file: File): Promise<string> {
   }
 }
 
-/** What a new app starts as: every permission on, ember's name and colour. */
+/** An avatar to start from: a drawing on a background colour of its own (a mono mark is drawn white). */
+interface Avatar { id: string; label: string; src: string; bg: string; mono?: boolean }
+
+const BASE = import.meta.env.BASE_URL;
+
+/** The model makers' marks, each on its own colour. */
+const MAKERS: Avatar[] = [
+  { id: "anthropic", label: "Anthropic", src: `${BASE}models/anthropic.svg`, bg: "#D97757", mono: true },
+  { id: "openai", label: "OpenAI", src: `${BASE}models/openai.svg`, bg: "#0D0D0D", mono: true },
+  { id: "gemini", label: "Gemini", src: `${BASE}models/gemini.svg`, bg: "#FFFFFF" },
+  { id: "deepseek", label: "DeepSeek", src: `${BASE}models/deepseek.svg`, bg: "#FFFFFF" },
+  { id: "qwen", label: "Qwen", src: `${BASE}models/qwen.svg`, bg: "#FFFFFF" },
+  { id: "zhipu", label: "智谱", src: `${BASE}models/zhipu.svg`, bg: "#FFFFFF" },
+  { id: "kimi", label: "Kimi", src: `${BASE}models/kimi.svg`, bg: "#0D0D0D", mono: true },
+  { id: "minimax", label: "MiniMax", src: `${BASE}models/minimax.svg`, bg: "#FFFFFF" },
+  { id: "xai", label: "xAI", src: `${BASE}models/xai.svg`, bg: "#0D0D0D", mono: true },
+];
+
+/** ember's buddy in its many moods (web/public/avatars/index.json). */
+let buddies: Promise<Avatar[]> | null = null;
+function loadBuddies(): Promise<Avatar[]> {
+  buddies ??= fetch(`${BASE}avatars/index.json`).then((r) => r.json() as Promise<{ id: string; label: string; bg: string }[]>)
+    .then((list) => list.map((a) => ({ ...a, src: `${BASE}avatars/${a.id}.svg` })), () => []);
+  return buddies;
+}
+function useBuddies(): Avatar[] | null {
+  const [list, setList] = useState<Avatar[] | null>(null);
+  useEffect(() => { void loadBuddies().then(setList); }, []);
+  return list;
+}
+
+/** An avatar as the app's icon: 1024 px, its colour behind it, the drawing centred (a maker's mark smaller, in white when mono). */
+async function renderAvatar(avatar: Avatar, bg: string, maker: boolean): Promise<string> {
+  const image = new Image();
+  image.src = avatar.src;
+  await image.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 1024;
+  const g = canvas.getContext("2d")!;
+  g.fillStyle = bg;
+  g.fillRect(0, 0, 1024, 1024);
+  const size = maker ? 560 : 880;
+  const at = (1024 - size) / 2;
+  if (avatar.mono) {
+    const mark = document.createElement("canvas");
+    mark.width = mark.height = size;
+    const m = mark.getContext("2d")!;
+    m.drawImage(image, 0, 0, size, size);
+    m.globalCompositeOperation = "source-in";
+    m.fillStyle = "#FFFFFF";
+    m.fillRect(0, 0, size, size);
+    g.drawImage(mark, at, at);
+  } else {
+    g.drawImage(image, at, at, size, size);
+  }
+  return canvas.toDataURL("image/png");
+}
+
+/** The colour an uploaded picture sits on best: the average of its edge. */
+function edgeColour(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 32;
+      const g = canvas.getContext("2d")!;
+      g.drawImage(image, 0, 0, 32, 32);
+      const { data } = g.getImageData(0, 0, 32, 32);
+      let r = 0, gr = 0, b = 0, n = 0;
+      for (let i = 0; i < 32; i++) for (const [x, y] of [[i, 0], [i, 31], [0, i], [31, i]] as const) {
+        const at = (y * 32 + x) * 4;
+        r += data[at]!; gr += data[at + 1]!; b += data[at + 2]!; n++;
+      }
+      const hex = (v: number) => Math.round(v / n).toString(16).padStart(2, "0");
+      resolve(`#${hex(r)}${hex(gr)}${hex(b)}`.toUpperCase());
+    };
+    image.onerror = () => resolve("#7A2E0E");
+    image.src = dataUrl;
+  });
+}
+
+/** What a new app starts as: every permission on; its colour and icon come from the first buddy. */
 export const NEW_APP: SlackAppSettings = {
-  name: "ember", displayName: "ember", description: "Coding agent in your threads (ember)", longDescription: "", backgroundColor: "#7a2e0e",
+  name: "ember", displayName: "ember", description: "Coding agent in your threads (ember)", longDescription: "", backgroundColor: "#F3E3D3",
   groups: Object.fromEntries((Object.keys(GROUPS) as SlackGroup[]).map((g) => [g, true])) as Record<SlackGroup, boolean>,
 };
 
 /**
- * An app's look and permissions: its icon (a PNG data URL, once one is chosen), name, description, colour, groups.
- * One name: the name in messages follows it, unless set apart on purpose.
+ * An app's look and permissions, by how often each is changed: its avatar and name up front (an avatar picked from
+ * ember's buddies or the model makers, or uploaded), then its colour, which follows the avatar until it is set by
+ * hand (and can go back); the description on a line; permissions folded. One name: the name in messages follows it,
+ * unless set apart on purpose. `fresh`: a new app, which starts from the first buddy.
  */
-export function AppFields({ settings, onChange, icon, onIcon }: {
-  settings: SlackAppSettings; onChange(settings: SlackAppSettings): void; icon: string | null; onIcon(icon: string | null, error: string | null): void;
+export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
+  settings: SlackAppSettings; onChange(settings: SlackAppSettings): void; icon: string | null; onIcon(icon: string | null, error: string | null): void; fresh?: boolean;
 }) {
   const file = useRef<HTMLInputElement>(null);
+  const buddyList = useBuddies();
   const [apart, setApart] = useState(settings.displayName !== settings.name);
+  const [picked, setPicked] = useState<{ avatar: Avatar; maker: boolean } | { upload: true; bg: string } | null>(null);
+  const [colourSet, setColourSet] = useState(!fresh);
   const set = <K extends keyof SlackAppSettings>(key: K, value: SlackAppSettings[K]) => onChange({ ...settings, [key]: value });
   const setName = (name: string) => onChange({ ...settings, name, ...(apart ? {} : { displayName: name }) });
+  const recommended = picked ? ("upload" in picked ? picked.bg : picked.avatar.bg) : null;
+  const draw = (p: typeof picked, bg: string) => {
+    if (p && !("upload" in p)) void renderAvatar(p.avatar, bg, p.maker).then((i) => onIcon(i, null), () => onIcon(null, "画不出这个头像"));
+  };
+  const pick = (avatar: Avatar, maker: boolean, next = settings) => {
+    const p = { avatar, maker };
+    setPicked(p);
+    const bg = colourSet ? next.backgroundColor : avatar.bg;
+    if (bg !== next.backgroundColor) onChange({ ...next, backgroundColor: bg });
+    draw(p, bg);
+  };
+  const colour = (bg: string, byHand: boolean) => {
+    setColourSet(byHand);
+    set("backgroundColor", bg);
+    if (/^#[0-9a-fA-F]{6}$/.test(bg)) draw(picked, bg);
+  };
+  // A new app starts from the first buddy, on its colour.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!fresh || started.current || icon || !buddyList?.length) return;
+    started.current = true;
+    pick(buddyList[0]!, false);
+  });
+  const on = (Object.keys(GROUPS) as SlackGroup[]).filter((g) => settings.groups[g]).length;
+  const isPicked = (a: Avatar) => picked !== null && !("upload" in picked) && picked.avatar.id === a.id;
+  const tile = (a: Avatar, maker: boolean) => (
+    <button key={a.id} type="button" className="avatar-tile" data-picked={isPicked(a) || undefined} title={a.label} aria-label={a.label}
+      style={{ background: a.bg }} onClick={() => pick(a, maker)}>
+      <img src={a.src} alt="" data-mono={a.mono || undefined} data-maker={maker || undefined} />
+    </button>
+  );
   return (
     <>
-      <div className="slack-app-top">
-        <button type="button" className="icon-drop" onClick={() => file.current?.click()} aria-label="上传图标"
-          style={{ background: settings.backgroundColor || undefined }}>
-          {icon ? <img src={icon} alt="新图标" /> : <><ImageUp {...ICON} size={20} /><span>上传图标</span></>}
+      <div className="app-look">
+        <button type="button" className="app-avatar" onClick={() => file.current?.click()} title="上传图片" style={{ background: settings.backgroundColor || undefined }}>
+          {icon ? <img src={icon} alt="头像" /> : <span className="app-avatar-empty"><ImageUp {...ICON} size={20} />{fresh ? "上传" : "保持现在的"}</span>}
         </button>
         <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = "";
-          if (f) void toIcon(f).then((i) => onIcon(i, null), () => onIcon(null, "读不了这张图片"));
+          if (f) void toIcon(f).then(async (i) => {
+            const bg = await edgeColour(i);
+            setPicked({ upload: true, bg });
+            onIcon(i, null);
+            if (!colourSet) set("backgroundColor", bg);
+          }, () => onIcon(null, "读不了这张图片"));
         }} />
-        <div className="slack-app-names">
-          <Field label="名字" htmlFor="app-name">
-            <input id="app-name" className="input" value={settings.name} onChange={(e) => setName(e.target.value)} />
-          </Field>
+        <div className="app-look-main">
+          <input id="app-name" className="input app-name-input" aria-label="名字" placeholder="名字" value={settings.name} onChange={(e) => setName(e.target.value)} />
           {apart ? (
-            <Field label="在消息里显示的名字" htmlFor="app-display">
-              <input id="app-display" className="input" value={settings.displayName} onChange={(e) => set("displayName", e.target.value)} />
-            </Field>
+            <input id="app-display" className="input" aria-label="在消息里显示的名字" placeholder="在消息里显示的名字" value={settings.displayName} onChange={(e) => set("displayName", e.target.value)} />
           ) : (
-            <button type="button" className="btn btn-ghost btn-sm slack-name-apart" onClick={() => setApart(true)}>消息里用别的名字</button>
+            <button type="button" className="text-button app-look-link" onClick={() => setApart(true)}>消息里用别的名字</button>
           )}
+          <div className="app-colour">
+            <input type="color" className="color-swatch" aria-label="底色" value={/^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor) ? settings.backgroundColor : "#7a2e0e"}
+              onChange={(e) => colour(e.target.value.toUpperCase(), true)} />
+            <input className="input mono app-colour-hex" aria-label="底色色值" spellCheck={false} value={settings.backgroundColor} onChange={(e) => colour(e.target.value, true)} />
+            {recommended && colourSet && recommended.toLowerCase() !== settings.backgroundColor.toLowerCase() && (
+              <button type="button" className="text-button" onClick={() => colour(recommended, false)}>用推荐色</button>
+            )}
+          </div>
         </div>
       </div>
-      <Field label="简介" htmlFor="app-desc" hint="显示在 app 资料卡上，最多 140 字。">
-        <input id="app-desc" className="input" maxLength={140} value={settings.description} onChange={(e) => set("description", e.target.value)} />
-      </Field>
-      <div className="field-grid">
-        <Field label="背景色" htmlFor="app-color" hint="图标后面的底色。">
-          <div className="input-row">
-            <input type="color" className="color-swatch" aria-label="选择背景色" value={settings.backgroundColor || "#7a2e0e"} onChange={(e) => set("backgroundColor", e.target.value)} />
-            <input id="app-color" className="input mono" spellCheck={false} value={settings.backgroundColor} onChange={(e) => set("backgroundColor", e.target.value)} placeholder="#7a2e0e" />
-          </div>
-        </Field>
+      <div className="avatar-picker">
+        <div className="avatar-grid" aria-label="ember 头像">{(buddyList ?? []).map((a) => tile(a, false))}</div>
+        <div className="avatar-grid" aria-label="模型厂商">{MAKERS.map((a) => tile(a, true))}</div>
       </div>
-      <Field label="权限" hint="关掉的权限不会加到 app 上；以后在连接页可以再打开。">
+      <input id="app-desc" className="input app-desc" aria-label="简介" maxLength={140} placeholder="简介，显示在 app 资料卡上" value={settings.description} onChange={(e) => set("description", e.target.value)} />
+      <details className="app-perms">
+        <summary>权限 · 开了 {on} / {Object.keys(GROUPS).length} 项</summary>
         <div className="switch-list">
           {(Object.keys(GROUPS) as SlackGroup[]).map((g) => (
             <SwitchRow key={g} title={GROUPS[g].label} description={GROUPS[g].description} disabled={g === "base"}
               checked={settings.groups[g] ?? false} onChange={(v) => set("groups", { ...settings.groups, [g]: v })} />
           ))}
         </div>
-      </Field>
+      </details>
     </>
   );
+}
+
+/**
+ * Adds a Slack workspace's app configuration token (by its refresh token); `onSaved` gets the workspace. Pasting the
+ * refresh token saves it at once; pasting the access token Slack shows above it says which one is wanted.
+ */
+export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; onSaved(teamId: string): void }) {
+  const api = useApi();
+  const toast = useToast();
+  const [token, setToken] = useState("");
+  const save = useAction((value: string) => api.addConfigToken(value), ({ teamId }) => { setToken(""); toast("已加上配置 token"); onSaved(teamId); });
+  const wrong = token.startsWith("xoxe.xoxp-") ? "这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。"
+    : token && !token.startsWith("xoxe-") ? "Refresh Token 以 xoxe-1- 开头。" : null;
+  const ready = token.startsWith("xoxe-1-") && token.length > 20;
+  return (
+    <ol className="token-guide">
+      <li>
+        <strong>打开 Slack 的 app 列表</strong>
+        <span className="muted">用要放 bot 的那个 Slack 工作区的账号登录。</span>
+        <a className="btn btn-primary" href="https://api.slack.com/apps" target="_blank" rel="noopener"><ExternalLink {...ICON} />打开 api.slack.com/apps</a>
+      </li>
+      <li>
+        <strong>生成配置 token</strong>
+        <span className="muted">拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。</span>
+      </li>
+      <li>
+        <strong>把 Refresh Token 粘贴到这里</strong>
+        <span className="muted">Slack 会给两个 token，要下面那个以 xoxe-1- 开头的。ember 会自己续期，以后不用再管。</span>
+        <div className="input-row">
+          <input className="input mono" type="password" autoComplete="off" spellCheck={false} value={token} aria-label="Refresh Token"
+            onChange={(e) => setToken(e.target.value.trim())}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text").trim();
+              if (pasted.startsWith("xoxe-1-") && pasted.length > 20) { e.preventDefault(); setToken(pasted); void save.run(pasted); }
+            }}
+            placeholder="xoxe-1-…" />
+          <Button variant="primary" disabled={!ready} busy={save.busy} onClick={() => void save.run(token)}>{replacing ? "换成这个" : "加上"}</Button>
+        </div>
+        {(wrong || save.error) && <p className="field-error" role="alert">{wrong ?? save.error?.message}</p>}
+      </li>
+    </ol>
+  );
+}
+
+/** Crops an image to a centred square and scales it to 1024 px, the size Slack wants (512–2000). */
+async function toIcon(file: File): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const side = Math.min(image.naturalWidth, image.naturalHeight);
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1024;
+    canvas.getContext("2d")!.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 1024, 1024);
+    return canvas.toDataURL("image/png");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 function AppForm({ connect, settings, links, onSaved }: { connect: ConnectView; settings: SlackAppSettings; links: SlackAppLinks; onSaved(): void }) {
