@@ -458,6 +458,9 @@ test("connects, sessions and chats remember who created them", async () => {
     const after = await t.call("GET", `/sessions/${encodeURIComponent(summary.key)}`);
     assert.deepEqual(after.body.session.participants.map((p: any) => p.id), ["slack:ds:U42", "local"]);
     assert.deepEqual(after.body.threads.map((x: any) => x.title), ["排查", null]);
+    assert.deepEqual(after.body.threads.map((x: any) => [x.firstText, x.people.map((p: any) => p.id)]), [
+      ["hello from the page", ["local"]], ["<@UBOT> hi", ["slack:ds:U42"]],
+    ]);
     const slackThread = after.body.threads[1];
     assert.equal((await t.call("POST", `/threads/${slackThread.id}/messages`, { text: "hi" })).status, 400, "Slack threads are written in Slack");
   } finally {

@@ -117,6 +117,10 @@ export interface ThreadSummary extends ThreadRow {
   read: number;
   /** Messages after the read position, not deleted and not the viewer's own. */
   unread: number;
+  /** Everyone who wrote in it, as creator references, earliest first. */
+  people: string[];
+  /** The first thing a person said in it (the start of it), for a title. */
+  firstText: string | null;
 }
 
 export interface TurnSummary {
@@ -618,7 +622,9 @@ export class Store {
         (SELECT MAX(rev) FROM messages m WHERE m.thread = t.id) AS rev,
         (SELECT MAX(seq) FROM messages m WHERE m.thread = t.id) AS last_seq,
         (SELECT COUNT(*) FROM messages m WHERE m.thread = t.id AND m.seq > COALESCE(r.seq, 0) AND m.deleted_at IS NULL
-          AND NOT (m.author_kind = 'person' AND m.author = ?)) AS unread
+          AND NOT (m.author_kind = 'person' AND m.author = ?)) AS unread,
+        (SELECT substr(m.text, 1, 300) FROM messages m WHERE m.thread = t.id AND m.author_kind = 'person' AND m.deleted_at IS NULL
+          ORDER BY m.seq LIMIT 1) AS first_text
       FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?
       ${where}
       ORDER BY COALESCE(last_seq, 0) DESC, t.created_at DESC, t.id DESC
@@ -628,8 +634,18 @@ export class Store {
       return {
         ...toThread(r), sessions: this.threadSessions(r.id as number), last: last ? toMessage(last) : null,
         rev: (r.rev as number | null) ?? 0, read: r.read_seq as number, unread: r.unread as number,
+        people: this.#threadPeople(r.id as number, r.surface as string), firstText: (r.first_text as string | null) ?? null,
       };
     });
+  }
+
+  /** Everyone who wrote in a thread, as creator references (a Slack user through a connect in it), earliest first. */
+  #threadPeople(thread: number, surface: string): string[] {
+    const connect = (this.#db.prepare("SELECT MIN(connect) AS connect FROM thread_sessions WHERE thread = ?").get(thread) as Row).connect as string | null;
+    const authors = (this.#db.prepare(`SELECT author, MIN(seq) AS first FROM messages WHERE thread = ? AND author_kind = 'person'
+      GROUP BY author ORDER BY first`).all(thread) as Row[]).map((r) => r.author as string);
+    if (surface === EMBER_SURFACE) return authors;
+    return connect ? authors.map((author) => `slack:${connect}:${author}`) : [];
   }
 
   // ── messages ────────────────────────────────────────────────────────────

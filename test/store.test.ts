@@ -180,6 +180,16 @@ test("reads move forward only; unread counts skip the viewer's own and deleted m
   assert.deepEqual([view("me@x").unread, view("me@x").read], [0, mine + 1]);
   assert.equal(view("you@x").unread, 2, "each viewer reads for themselves");
   assert.equal(view("me@x").last!.ts, "1.4");
+  // Its people, and the first thing one of them said (a deleted message is no longer said).
+  assert.deepEqual([view("me@x").people, view("me@x").firstText], [["me@x", "you@x"], "q"]);
+  const slack = store.openThread({ surface: "slack:T1", channel: "C1", threadTs: "2.1" });
+  store.joinThread(slack.id, "a", "ds");
+  store.insertMessage({ thread: slack.id, ts: "2.1", authorKind: "agent", author: "a", text: "hello" });
+  store.insertMessage({ thread: slack.id, ts: "2.2", authorKind: "person", author: "U2", text: "<@UBOT> 看看" });
+  store.insertMessage({ thread: slack.id, ts: "2.3", authorKind: "person", author: "U1", text: "嗯" });
+  store.insertMessage({ thread: slack.id, ts: "2.4", authorKind: "person", author: "U2", text: "再看" });
+  const [slackView] = store.listThreads("me@x", { thread: slack.id });
+  assert.deepEqual([slackView!.people, slackView!.firstText], [["slack:ds:U2", "slack:ds:U1"], "<@UBOT> 看看"]);
 });
 
 test("archiving hides; deleting removes the session's rows and the threads only it was in", () => {
