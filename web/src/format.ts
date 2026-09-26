@@ -199,7 +199,8 @@ export function threadNamer(detail: SessionDetail) {
     const when = `${started.getMonth() + 1}月${started.getDate()}日 ${started.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
     if (channel === "EMBER") {
       const chat = detail.chats.find((c) => c.threadTs === threadTs);
-      return { where: chat?.title ? `对话「${chat.title}」` : "管理页对话", when };
+      // ember's own chat goes by its session's name.
+      return { where: chat?.title || sessionTitle(detail.session, ""), when };
     }
     const where = channel.startsWith("D") ? "私信" : `#${detail.channels[channel] ?? channel}`;
     return { where, when };
