@@ -5,7 +5,7 @@ import { MineFilter, PeopleStack } from "./components.tsx";
 import { NavLink, useLocation } from "react-router";
 import { MeContext, useChats, useIsMine, type ChatItem } from "./api.ts";
 import { BADGE_LABEL, chatBadge, cleanText, dayLabel } from "./format.ts";
-import { ConnectKindIcon, ICON, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
+import { Avatar, ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { Lockup, Mark } from "./brand.tsx";
 
 export function Sidebar() {
@@ -120,16 +120,21 @@ function ChatRow({ item }: { item: ChatItem }) {
   );
 }
 
-/** The last thing said in a chat, on one line: who, then what. */
+/** The last thing said in a chat, on one line: a small picture of who said it (name on hover), then what. */
 function LastMessage({ item }: { item: ChatItem }) {
   const person = usePerson();
   const isMine = useIsMine();
   const last = item.last!;
   const agent = last.authorKind === "agent" ? item.agents.find((a) => a.key === last.author) : undefined;
-  const who = last.authorKind === "ember" ? "ember"
+  const mine = last.authorKind === "person" && isMine({ id: last.author, email: last.author });
+  const name = last.authorKind === "ember" ? "ember"
     : last.authorKind === "agent" ? agent?.model || last.authorName || "agent"
-    : isMine({ id: last.author, email: last.author }) ? "你"
-    : person(last.author)?.name || last.authorName || last.author;
+    : mine ? "你" : person(last.author)?.name || last.authorName || last.author;
+  const picture = last.authorKind === "person" ? person(last.author)?.picture : undefined;
+  const who = last.authorKind === "ember" ? <Mark size={12} />
+    : last.authorKind === "agent" ? <ModelLogo model={agent?.model ?? null} runtime={agent?.runtime ?? "claude"} size={12} />
+    : picture ? <img className="person-pic" src={picture} alt="" width={12} height={12} referrerPolicy="no-referrer" />
+    : <Avatar id={last.author} name={name} size={12} />;
   const text = last.deletedAt !== null ? "（已删除）" : cleanText(last.text) || "（文件）";
-  return <span className="nav-session-last"><span className="nav-session-who">{who}：</span>{text}</span>;
+  return <span className="nav-session-last"><span className="nav-session-who" title={name} aria-label={`${name}：`}>{who}</span>{text}</span>;
 }

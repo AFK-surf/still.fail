@@ -51,6 +51,8 @@
 .nav-time { margin-left: auto; flex: none; color: var(--subtle); font-variant-numeric: tabular-nums; }
 .nav-session[data-unread] .nav-session-title { font-weight: 600; color: var(--text); }
 .nav-session-last { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--muted); }
+.nav-session-who { display: inline-flex; vertical-align: -2px; margin-right: 5px; }
+.nav-session-who .person-pic { border-radius: 50%; }
 /* An agent: its model's maker on a tile; where it stands is a badge at the corner, as on the phone. Nothing blinks. */
 .agent-mark { --ring: var(--canvas); position: relative; display: inline-grid; place-items: center; flex: none; width: var(--mark); height: var(--mark); border-radius: calc(var(--mark) * .3 * var(--corner-scale)); background: var(--neutral-bg); corner-shape: var(--corner-shape); }
 .agent-mark[data-badge]::after { content: ""; position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--ring); }
