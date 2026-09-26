@@ -655,7 +655,8 @@
 .composer-box {
   display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 12px;
   border: 1px solid var(--line-strong); border-radius: 999px; background: var(--canvas); cursor: text;
-  transition: border-color var(--dur) var(--ease-out), border-radius var(--dur) var(--ease-out);
+  /* The focus colour comes and goes at once: eased, it showed as a flash on every switch of chats. */
+  transition: border-radius var(--dur) var(--ease-out);
 }
 .composer-box:focus-within { border-color: var(--field-focus); }
 .composer-box[data-multiline] { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; border-radius: calc(32px * var(--corner-scale)); corner-shape: var(--corner-shape); }
