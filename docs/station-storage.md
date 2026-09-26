@@ -164,9 +164,11 @@ migration moves existing rows over (data only; no code keeps the old shape):
 ### Reading
 
 - `GET /threads?session=…` / the thread list of a session (all threads
-  without `session`), `GET /threads/:id`: threads with their sessions, last
-  message, rev, and the viewer's read position and unread count (messages
-  after it, not deleted, not the viewer's own).
+  without `session`), `GET /threads/:id`: threads with their sessions, their
+  people (everyone who wrote in it, earliest first), the first thing a person
+  said (`firstText`, for a chat's title), last message, rev, and the viewer's
+  read position and unread count (messages after it, not deleted, not the
+  viewer's own).
 - `GET /threads/:id/messages?after=<rev>` — every message changed after that
   cursor; `?before=<seq>&limit=` pages back through history (no cursor: the
   latest page). The answer is `{ rev, messages, more }`: follow `after=rev`;

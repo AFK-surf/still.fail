@@ -262,33 +262,24 @@ impl Inner {
             Call::StationRequest { station, method, path, body } => {
                 self.stations.request(&StationAddr::parse(&station)?, &method, &path, body).await
             }
-            Call::ChatSend { station, key, text, attachments, quotes } => {
+            Call::ChatSend { station, thread, text, attachments, quotes } => {
                 let message = json!({ "text": text, "attachments": attachments, "quotes": quotes });
-                let id = self.views.outbox_add(&station, &key, message.clone());
-                self.deliver(&station, &key, &id, message).await
+                let id = self.views.outbox_add(&station, thread, message.clone());
+                self.deliver(&station, thread, &id, message).await
             }
-            Call::ChatRetry { station, key, id } => {
-                let entry = self.views.outbox_get(&station, &key, &id).ok_or_else(|| CoreError::invalid("没有这条待发的消息"))?;
-                self.views.outbox_state(&station, &key, &id, None);
+            Call::ChatRetry { station, thread, id } => {
+                let entry = self.views.outbox_get(&station, thread, &id).ok_or_else(|| CoreError::invalid("没有这条待发的消息"))?;
+                self.views.outbox_state(&station, thread, &id, None);
                 let message = json!({ "text": entry["text"], "attachments": entry["attachments"], "quotes": entry["quotes"] });
-                self.deliver(&station, &key, &id, message).await
+                self.deliver(&station, thread, &id, message).await
             }
-            Call::ChatDiscard { station, key, id } => {
-                self.views.outbox_remove(&station, &key, &id);
+            Call::ChatDiscard { station, thread, id } => {
+                self.views.outbox_remove(&station, thread, &id);
                 Ok(Value::Null)
             }
-            Call::ChatOlder { station, key } => {
-                let addr = StationAddr::parse(&station)?;
-                let Some(thread) = self.stations.ember_thread(&addr, &key).await?.and_then(|t| t.get("id")?.as_u64()) else {
-                    return Ok(json!({ "more": false }));
-                };
-                Ok(json!({ "more": self.stations.older(&addr, thread).await? }))
-            }
-            Call::ChatRead { station, key, seq } => {
-                let addr = StationAddr::parse(&station)?;
-                if let Some(thread) = self.stations.ember_thread(&addr, &key).await?.and_then(|t| t.get("id")?.as_u64()) {
-                    self.stations.read(&addr, thread, seq).await?;
-                }
+            Call::ChatOlder { station, thread } => Ok(json!({ "more": self.stations.older(&StationAddr::parse(&station)?, thread).await? })),
+            Call::ChatRead { station, thread, seq } => {
+                self.stations.read(&StationAddr::parse(&station)?, thread, seq).await?;
                 Ok(Value::Null)
             }
             Call::StationUpload { station, key, name, bytes } => {
@@ -310,23 +301,17 @@ impl Inner {
         }
     }
 
-    /// Posts an outgoing message into the session's chat on ember's page (opening one if it has none). The
-    /// entry leaves the outbox in the emission that brings the message into the chat's messages; a failure
-    /// leaves it there as `failed`.
-    async fn deliver(&self, station: &str, key: &str, id: &str, message: Value) -> Result<Value> {
-        let result = async {
-            let addr = StationAddr::parse(station)?;
-            let thread = self.stations.chat_thread(&addr, key).await?;
-            self.stations.post(&addr, thread, message).await
-        }
-        .await;
+    /// Posts an outgoing message into a chat. The entry leaves the outbox in the emission that brings the message
+    /// into the chat's messages; a failure leaves it there as `failed`.
+    async fn deliver(&self, station: &str, thread: u64, id: &str, message: Value) -> Result<Value> {
+        let result = async { self.stations.post(&StationAddr::parse(station)?, thread, message).await }.await;
         match result {
             Ok(seq) => {
-                self.views.outbox_sent(station, key, id, seq);
+                self.views.outbox_sent(station, thread, id, seq);
                 Ok(json!({ "seq": seq }))
             }
             Err(error) => {
-                self.views.outbox_state(station, key, id, Some(&error.message));
+                self.views.outbox_state(station, thread, id, Some(&error.message));
                 Err(error)
             }
         }
@@ -728,11 +713,11 @@ enum Call {
     SignOut { account: String },
     CloudRequest { account: String, method: String, path: String, body: Option<Value> },
     StationRequest { station: String, method: String, path: String, body: Option<Value> },
-    ChatSend { station: String, key: String, text: String, attachments: Value, quotes: Value },
-    ChatRetry { station: String, key: String, id: String },
-    ChatDiscard { station: String, key: String, id: String },
-    ChatOlder { station: String, key: String },
-    ChatRead { station: String, key: String, seq: u64 },
+    ChatSend { station: String, thread: u64, text: String, attachments: Value, quotes: Value },
+    ChatRetry { station: String, thread: u64, id: String },
+    ChatDiscard { station: String, thread: u64, id: String },
+    ChatOlder { station: String, thread: u64 },
+    ChatRead { station: String, thread: u64, seq: u64 },
     StationUpload { station: String, key: String, name: String, bytes: Vec<u8> },
     StationFile { station: String, key: String, name: String },
     Migrate { accounts: Option<Value>, device: Option<Vec<u8>> },
@@ -770,7 +755,7 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
     #[derive(Deserialize)]
     struct Send {
         station: String,
-        key: String,
+        thread: u64,
         #[serde(default)]
         text: String,
         #[serde(default = "empty_list")]
@@ -784,18 +769,18 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
     #[derive(Deserialize)]
     struct Outgoing {
         station: String,
-        key: String,
+        thread: u64,
         id: String,
     }
     #[derive(Deserialize)]
     struct Chat {
         station: String,
-        key: String,
+        thread: u64,
     }
     #[derive(Deserialize)]
     struct Read {
         station: String,
-        key: String,
+        thread: u64,
         seq: u64,
     }
     #[derive(Deserialize)]
@@ -841,23 +826,23 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "chat.send" => {
             let p: Send = read(params)?;
-            Call::ChatSend { station: p.station, key: p.key, text: p.text, attachments: p.attachments, quotes: p.quotes }
+            Call::ChatSend { station: p.station, thread: p.thread, text: p.text, attachments: p.attachments, quotes: p.quotes }
         }
         "chat.retry" => {
             let p: Outgoing = read(params)?;
-            Call::ChatRetry { station: p.station, key: p.key, id: p.id }
+            Call::ChatRetry { station: p.station, thread: p.thread, id: p.id }
         }
         "chat.discard" => {
             let p: Outgoing = read(params)?;
-            Call::ChatDiscard { station: p.station, key: p.key, id: p.id }
+            Call::ChatDiscard { station: p.station, thread: p.thread, id: p.id }
         }
         "chat.older" => {
             let p: Chat = read(params)?;
-            Call::ChatOlder { station: p.station, key: p.key }
+            Call::ChatOlder { station: p.station, thread: p.thread }
         }
         "chat.read" => {
             let p: Read = read(params)?;
-            Call::ChatRead { station: p.station, key: p.key, seq: p.seq }
+            Call::ChatRead { station: p.station, thread: p.thread, seq: p.seq }
         }
         "station.upload" => {
             let p: Upload = read(params)?;
@@ -909,8 +894,8 @@ mod tests {
         assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "w".into(), mine: true } });
         let chats: ClientMessage = serde_json::from_value(json!({"id": 4, "subscribe": {"topic": "chats", "scope": "local"}})).unwrap();
         assert_eq!(chats, ClientMessage::Subscribe { id: 4, subscribe: Topic::Chats { scope: "local".into(), mine: false } });
-        let chat: ClientMessage = serde_json::from_value(json!({"id": 5, "subscribe": {"topic": "chat", "station": "w/s", "key": "k"}})).unwrap();
-        assert_eq!(chat, ClientMessage::Subscribe { id: 5, subscribe: Topic::Chat { station: "w/s".into(), key: "k".into() } });
+        let chat: ClientMessage = serde_json::from_value(json!({"id": 5, "subscribe": {"topic": "chat", "station": "w/s", "thread": 7}})).unwrap();
+        assert_eq!(chat, ClientMessage::Subscribe { id: 5, subscribe: Topic::Chat { station: "w/s".into(), thread: 7 } });
         assert_eq!(subscribe, ClientMessage::Subscribe { id: 8, subscribe: Topic::Session { station: "ws1/st1".into(), key: "k".into() } });
         let accounts: ClientMessage = serde_json::from_value(json!({"id": 2, "subscribe": {"topic": "accounts"}})).unwrap();
         assert_eq!(accounts, ClientMessage::Subscribe { id: 2, subscribe: Topic::Accounts });
@@ -963,19 +948,21 @@ mod tests {
             Call::StationFile { station: "w/s".into(), key: "k".into(), name: "a.png".into() }
         );
         assert_eq!(
-            parse_call("chat.send", json!({"station": "w/s", "key": "k", "text": "hi"})).unwrap(),
-            Call::ChatSend { station: "w/s".into(), key: "k".into(), text: "hi".into(), attachments: json!([]), quotes: json!([]) }
+            parse_call("chat.send", json!({"station": "w/s", "thread": 7, "text": "hi"})).unwrap(),
+            Call::ChatSend { station: "w/s".into(), thread: 7, text: "hi".into(), attachments: json!([]), quotes: json!([]) }
         );
         assert_eq!(
-            parse_call("chat.retry", json!({"station": "w/s", "key": "k", "id": "out-1"})).unwrap(),
-            Call::ChatRetry { station: "w/s".into(), key: "k".into(), id: "out-1".into() }
+            parse_call("chat.retry", json!({"station": "w/s", "thread": 7, "id": "out-1"})).unwrap(),
+            Call::ChatRetry { station: "w/s".into(), thread: 7, id: "out-1".into() }
         );
         assert_eq!(
-            parse_call("chat.discard", json!({"station": "w/s", "key": "k", "id": "out-1"})).unwrap(),
-            Call::ChatDiscard { station: "w/s".into(), key: "k".into(), id: "out-1".into() }
+            parse_call("chat.discard", json!({"station": "w/s", "thread": 7, "id": "out-1"})).unwrap(),
+            Call::ChatDiscard { station: "w/s".into(), thread: 7, id: "out-1".into() }
         );
-        assert_eq!(parse_call("chat.older", json!({"station": "w/s", "key": "k"})).unwrap(), Call::ChatOlder { station: "w/s".into(), key: "k".into() });
-        assert_eq!(parse_call("chat.read", json!({"station": "w/s", "key": "k", "seq": 12})).unwrap(), Call::ChatRead { station: "w/s".into(), key: "k".into(), seq: 12 });
+        assert_eq!(parse_call("chat.older", json!({"station": "w/s", "thread": 7})).unwrap(), Call::ChatOlder { station: "w/s".into(), thread: 7 });
+        assert_eq!(parse_call("chat.read", json!({"station": "w/s", "thread": 7, "seq": 12})).unwrap(), Call::ChatRead { station: "w/s".into(), thread: 7, seq: 12 });
+        // A chat is a thread: a session key does not name one.
+        assert_eq!(code(parse_call("chat.send", json!({"station": "w/s", "key": "k", "text": "hi"}))), "invalid_params");
     }
 
     #[test]
