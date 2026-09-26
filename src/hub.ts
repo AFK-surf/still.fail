@@ -14,7 +14,7 @@
 // ember post there is recorded after the platform takes it.
 import { randomBytes } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
 import { EFFORTS, profilesFor, RUNTIMES, type Config, type Connect, type Profile, type RuntimeKind } from "./config.ts";
 import { pickProfile, type ProfileHealth } from "./pool.ts";
@@ -333,6 +333,31 @@ export class Hub {
     const row = this.#store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
     return this.#actor(row).stop();
+  }
+
+  /**
+   * Moves a session to another profile of its runtime (another account, say, when this one's quota is used up). Its
+   * transcript is copied into that profile's home at the same place, so the next message resumes it there with all it
+   * had; its idle process ends first. Not while a turn runs.
+   */
+  async setProfile(key: string, profileId: string): Promise<void> {
+    const row = this.#store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    if (row.profile === profileId) return;
+    const next = this.#config.profiles.find((p) => p.id === profileId);
+    if (!next) throw new Error(`unknown profile ${profileId}`);
+    if (!next.runtimes.includes(row.runtime)) throw new Error(`「${next.name}」不能跑 ${row.runtime === "claude" ? "Claude Code" : "Codex"}`);
+    if (this.processState(key) === "running") throw new Error("这个会话正在跑，等这一轮结束再换");
+    await this.evict(key);
+    const old = this.#config.profiles.find((p) => p.id === row.profile);
+    const from = old && row.runtimeSessionId ? transcriptPath(row.runtime, old.home, row.runtimeSessionId) : undefined;
+    if (old && from) {
+      const to = join(next.home, relative(old.home, from));
+      mkdirSync(dirname(to), { recursive: true });
+      copyFileSync(from, to);
+    }
+    this.#store.setSessionProfile(key, profileId);
+    log.info("session moved to another profile", { session: key, from: row.profile, to: profileId, transcript: Boolean(from) });
   }
 
   /** Ends the session's runtime process if it is idle; the conversation resumes on the next message. */

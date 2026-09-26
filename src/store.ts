@@ -674,6 +674,12 @@ export class Store {
     this.notify(s.key);
   }
 
+  /** Moves a session to another profile (Hub.setProfile has copied its transcript there). */
+  setSessionProfile(key: string, profile: string): void {
+    this.#db.prepare("UPDATE sessions SET profile = ? WHERE key = ?").run(profile, key);
+    this.notify(key);
+  }
+
   setTitle(key: string, title: string | null): void {
     this.#db.prepare("UPDATE sessions SET title = ? WHERE key = ?").run(title, key);
     this.notify(key);

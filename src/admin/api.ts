@@ -430,6 +430,15 @@ export class AdminApi {
       await sweepStaged(dir);
       return send(res, 200, await saveUpload(req, dir, url.searchParams.get("name") ?? "file"));
     }
+    if (resource === "sessions" && id && action === "profile" && method === "POST") {
+      const input = await body(req);
+      try {
+        await this.#deps.hub.setProfile(id, String(input.profile ?? ""));
+      } catch (error) {
+        throw new HttpError(400, error instanceof Error ? error.message : String(error));
+      }
+      return send(res, 200, { ok: true });
+    }
     if (resource === "sessions" && id && action === "title" && method === "POST") {
       const input = await body(req);
       if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);

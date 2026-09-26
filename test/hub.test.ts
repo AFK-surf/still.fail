@@ -526,3 +526,23 @@ test("chat_post attaches files to an ember chat, measuring images; Slack refuses
   assert.deepEqual(sizeOf(gif), { width: 32, height: 16 });
   assert.equal(sizeOf(Buffer.from("not an image")), null);
 });
+
+test("a session moves to another profile of its runtime, its transcript with it", async () => {
+  const { config, store, hub, accept } = setup();
+  const m = message({ text: "<@UBOT> fix the build" });
+  await accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const row = store.getSession(key)!;
+  const { mkdirSync, readFileSync, writeFileSync } = await import("node:fs");
+  const { dirname } = await import("node:path");
+  const from = join(config.profiles[0]!.home, "projects", "x", `${row.runtimeSessionId}.jsonl`);
+  mkdirSync(dirname(from), { recursive: true });
+  writeFileSync(from, "{}\n");
+  const other = { ...config.profiles[0]!, id: "cc2", name: "another", home: join(dirname(config.profiles[0]!.home), "cc2") };
+  config.profiles.push(other);
+  await hub.setProfile(key, "cc2");
+  assert.equal(store.getSession(key)!.profile, "cc2");
+  assert.equal(readFileSync(join(other.home, "projects", "x", `${row.runtimeSessionId}.jsonl`), "utf8"), "{}\n", "the next turn resumes it there");
+  await assert.rejects(hub.setProfile(key, "cx"), /不能跑 Claude Code/);
+});
