@@ -186,7 +186,7 @@ export class AdminApi {
     deps.logins.changes.on("change", (id: string) => {
       if (this.#pending.has(id)) this.#pendingChanged(id, this.#pending.get(id)!.by);
       this.#overviewChanged();
-      if (deps.logins.get(id)?.state === "done") void this.#check(id).catch((error) => log.warn("check after login failed", { profile: id, error }));
+      if (deps.logins.get(id)?.state === "done" && !this.#pending.has(id)) this.#afterSignIn(id);
     });
     // The sidebar names connects and their Slack workspaces.
     deps.settings.onChange(() => {
@@ -647,7 +647,7 @@ export class AdminApi {
       profiles: [...(raw.profiles ?? []), { id: profileId, name, runtime: pending.runtime, access: { kind: "subscription" }, home: `homes/${profileId}`, env: {} }],
     }));
     pending.created = profileId;
-    void this.#check(profileId).catch((error) => log.warn("check after sign-in failed", { profile: profileId, error }));
+    this.#afterSignIn(profileId);
     // Kept a while for the page that started it to follow it to the profile.
     setTimeout(() => this.#dropLogin(id), 15 * 60_000).unref();
   }
@@ -683,6 +683,12 @@ export class AdminApi {
     this.#deps.store.setProfileCheck(id, check);
     this.#overviewChanged();
     return { id, overview };
+  }
+
+  /** A profile just signed in: checked (which lists its models) and its quota read, so its page shows them at once. */
+  #afterSignIn(id: string): void {
+    void this.#check(id).catch((error) => log.warn("check after sign-in failed", { profile: id, error }));
+    void this.#refreshQuota(id).catch((error) => log.warn("quota after sign-in failed", { profile: id, error }));
   }
 
   #dropLogin(id: string): void {
