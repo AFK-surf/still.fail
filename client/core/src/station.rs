@@ -2543,16 +2543,25 @@ mod tests {
     }
 
     #[test]
-    fn bad_station_and_failed_fetches_are_errors() {
+    fn a_bad_station_and_a_stations_no_are_errors_a_passing_failure_keeps_loading() {
         run(async {
             let (host, sink, wire, stations) = setup();
             let bad = Topic::Overview { station: "nope".into() };
             stations.start(&bad);
-            wire.answer("GET /admin/api/sessions", 502, json!({"error": "坏了"}));
+            wire.answer("GET /admin/api/sessions", 404, json!({"error": "没有"}));
             stations.start(&sessions());
             host.settle().await;
             assert_eq!(sink.values.borrow()[&bad].as_ref().unwrap_err().code, "invalid_params");
-            assert_eq!(sink.values.borrow()[&sessions()].as_ref().unwrap_err().message, "坏了");
+            assert_eq!(sink.values.borrow()[&sessions()].as_ref().unwrap_err().message, "没有");
+            // A failure that passes (a 502 while the link is down): no error, still loading, read again shortly.
+            wire.answer("GET /admin/api/threads", 502, json!({"error": "坏了"}));
+            stations.start(&threads());
+            host.settle().await;
+            assert!(!sink.values.borrow().contains_key(&threads()), "loading, not an error");
+            wire.answer("GET /admin/api/threads", 200, json!([]));
+            wait(RETRY_MS + 50).await;
+            host.settle().await;
+            assert_eq!(sink.values.borrow()[&threads()].as_ref().unwrap(), &json!([]));
         });
     }
 
