@@ -6,7 +6,7 @@ import { NavLink, useLocation } from "react-router";
 import { MeContext, useChats, type ChatItem } from "./api.ts";
 import { BADGE_LABEL, cleanText, dayLabel } from "./format.ts";
 import { Avatar, ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
-import { Lockup, Mark } from "./brand.tsx";
+import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
 
 export function Sidebar() {
@@ -16,7 +16,7 @@ export function Sidebar() {
     <nav className="sidebar" aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className="brand">
-        <Lockup />
+        <SidebarBrand />
       </div>
       {settings ? <SettingsNav /> : (
         <>

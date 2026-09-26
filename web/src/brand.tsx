@@ -21,6 +21,11 @@ export function Lockup({ height = 30, alt = "ember" }: { height?: number; alt?: 
   return <Themed name="lockup" width={Math.round((height * 264) / 60)} height={height} alt={alt} className="brand-lockup" />;
 }
 
+/** The sidebar's top: the lockup, or in the desktop app the buddy alone, beside the window's buttons. */
+export function SidebarBrand() {
+  return window.emberDesktop ? <Mark size={24} /> : <Lockup />;
+}
+
 type Illus = "new-chat" | "no-station" | "station-offline" | "sign-in";
 const ILLUS_SIZE: Record<Illus, [number, number]> = {
   "new-chat": [320, 160], "no-station": [320, 160], "station-offline": [320, 160], "sign-in": [360, 200],

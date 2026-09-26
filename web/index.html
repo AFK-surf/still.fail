@@ -6,6 +6,8 @@
   <meta name="color-scheme" content="light dark">
   <!-- The appearance chosen (src/theme.ts) before the first paint: a page that paints light and then turns dark blinks. -->
   <script>try{var a=localStorage.getItem("ember.appearance");if(a==="light"||a==="dark")document.documentElement.dataset.theme=a}catch(e){}</script>
+  <!-- In the desktop app (its preload gives emberDesktop) the window has no title bar: the page's top row is it (app.css). -->
+  <script>if("emberDesktop"in window)document.documentElement.dataset.desktop=""</script>
   <title>ember</title>
   <meta name="description" content="ember — 一直在干活的编码 agent">
   <!-- 以 / 开头的 public 文件，Vite 会按 base 补成 /admin/… 或 /… -->

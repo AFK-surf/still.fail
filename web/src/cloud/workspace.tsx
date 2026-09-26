@@ -20,7 +20,7 @@ import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip 
 import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
 import { Avatar } from "./gate.tsx";
-import { Illustration, Lockup } from "../brand.tsx";
+import { Illustration, SidebarBrand } from "../brand.tsx";
 import { identify, track } from "../telemetry.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
@@ -48,7 +48,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
     <PeopleContext.Provider value={people}>
       <div className="shell" data-detail={detail}>
         {settings
-          ? <nav className="sidebar" aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className="brand brand-compact"><Lockup /></div><SettingsNav entry={entry} /><div className="nav-foot"><WorkspaceSwitcher current={entry} /></div></nav>
+          ? <nav className="sidebar" aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className="brand brand-compact"><SidebarBrand /></div><SettingsNav entry={entry} /><div className="nav-foot"><WorkspaceSwitcher current={entry} /></div></nav>
           : <WorkspaceSidebar entry={entry} />}
         <main className="main">
           <Routes>
@@ -111,7 +111,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav className="sidebar" aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
-      <div className="brand brand-compact"><Lockup /></div>
+      <div className="brand brand-compact"><SidebarBrand /></div>
       <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings/stations`} />
       <div className="nav-foot nav-foot-row">
         <WorkspaceSwitcher current={entry} />

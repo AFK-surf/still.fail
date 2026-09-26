@@ -138,6 +138,9 @@ function open(path = "/"): BrowserWindow {
     width: 1280,
     height: 820,
     show: false,
+    // No title bar: the buttons sit in the page's top row (44 px, web/src/app.css), centred on it.
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 15 },
     webPreferences: { preload: join(__dirname, "preload.js"), sandbox: true, contextIsolation: true },
   });
   window.once("ready-to-show", () => window.show());
