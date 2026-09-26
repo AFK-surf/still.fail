@@ -1,0 +1,297 @@
+// The concept's small parts: model marks with their state badge, people's
+// avatars, rings, toggles, segmented choices, navigation bars and list cards.
+package dev.ember.android.ui
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import dev.ember.android.R
+import dev.ember.android.data.ChatState
+import dev.ember.android.data.Creator
+import dev.ember.android.data.Maker
+import dev.ember.android.data.maker
+
+// ── model marks ────────────────────────────────────────────────────────
+
+@Composable
+fun MakerIcon(model: String?, size: Dp, modifier: Modifier = Modifier) {
+    val m = maker(model)
+    val res = when (m) { Maker.OpenAI -> R.drawable.maker_openai; Maker.Anthropic -> R.drawable.maker_anthropic; Maker.Zhipu -> R.drawable.maker_zhipu; Maker.DeepSeek -> R.drawable.maker_deepseek }
+    // OpenAI's and Anthropic's marks are one color: the ink of the page.
+    val mono = m == Maker.OpenAI || m == Maker.Anthropic
+    Image(painterResource(res), null, modifier.size(size), colorFilter = if (mono) ColorFilter.tint(C.ink) else null)
+}
+
+/** A state badge: solid orange = block, a still hollow orange ring = at work, red = failed; done has none. Nothing blinks. */
+@Composable
+private fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier: Modifier = Modifier) {
+    val c = C
+    Canvas(modifier.size(size)) {
+        val r = this.size.minDimension / 2
+        drawCircle(around, r)
+        val inner = r - ring.toPx()
+        when (state) {
+            ChatState.Block -> drawCircle(c.accent, inner)
+            ChatState.Failed -> drawCircle(c.red, inner)
+            ChatState.Done -> {}
+            ChatState.Running -> {
+                val w = 2.5.dp.toPx().coerceAtMost(inner)
+                drawCircle(c.accent, inner - w / 2, style = Stroke(w))
+            }
+        }
+    }
+}
+
+/** An agent: its model maker's mark on a soft tile, with its state as a badge. */
+@Composable
+fun ModelMark(model: String?, size: Dp = 36.dp, state: ChatState? = null, around: Color = C.bg) {
+    val xs = size < 30.dp
+    Box(Modifier.size(size)) {
+        Box(
+            Modifier.size(size).clip(RoundedCornerShape(if (xs) 6.dp else 11.dp)).background(C.surface)
+                .border(1.dp, C.line, RoundedCornerShape(if (xs) 6.dp else 11.dp)),
+            contentAlignment = Alignment.Center,
+        ) { MakerIcon(model, if (xs) size * 0.6f else size * 0.56f) }
+        if (state != null && state != ChatState.Done) {
+            val badge = if (xs) 11.dp else 15.dp
+            Badge(state, badge, if (xs) 1.5.dp else 2.dp, around, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp))
+        }
+    }
+}
+
+/** A chat's agents: one mark, or two small tiles on a diagonal like a group's avatar; the badge belongs to the pair. */
+@Composable
+fun ModelStack(models: List<String?>, state: ChatState?, around: Color = C.bg) {
+    if (models.size < 2) return ModelMark(models.firstOrNull(), 36.dp, state, around)
+    Box(Modifier.size(36.dp)) {
+        models.take(2).forEachIndexed { i, m ->
+            val shape = RoundedCornerShape(8.dp)
+            Box(
+                Modifier.align(if (i == 0) Alignment.TopStart else Alignment.BottomEnd).size(if (i == 0) 24.dp else 28.dp)
+                    .let { if (i == 1) it.clip(RoundedCornerShape(10.dp)).background(around).padding(2.dp) else it }
+                    .clip(shape).background(C.surface).border(1.dp, C.line, shape),
+                contentAlignment = Alignment.Center,
+            ) { MakerIcon(m, 14.dp) }
+        }
+        if (state != null && state != ChatState.Done) Badge(state, 15.dp, 2.dp, around, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp).zIndex(2f))
+    }
+}
+
+// ── people ─────────────────────────────────────────────────────────────
+
+private val AVATAR = listOf(Color(0xFF5B7BB2), Color(0xFF2F8F5B), Color(0xFFB9471F), Color(0xFF8A6BB0), Color(0xFF3F8C99), Color(0xFFB0842F))
+
+fun avatarColor(id: String): Color = AVATAR[Math.floorMod(id.lowercase().hashCode(), AVATAR.size)]
+
+fun initial(name: String): String = name.trim().firstOrNull()?.uppercase() ?: "?"
+
+@Composable
+fun Avatar(id: String, name: String, size: Dp, modifier: Modifier = Modifier) {
+    Box(modifier.size(size).clip(CircleShape).background(avatarColor(id)), contentAlignment = Alignment.Center) {
+        Text(initial(name), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.5f).sp, lineHeight = (size.value * 0.5f).sp)
+    }
+}
+
+/** People overlapping a little, each ringed in the page's color. */
+@Composable
+fun PeopleStack(people: List<Creator>, size: Dp = 18.dp, ring: Color = C.bg) {
+    Row {
+        people.forEachIndexed { i, p ->
+            Box(Modifier.offset(x = (-5 * i).dp).zIndex(-i.toFloat()).size(size + 3.dp).clip(CircleShape).background(ring), contentAlignment = Alignment.Center) {
+                Avatar(p.id, p.name, size)
+            }
+        }
+    }
+}
+
+// ── rings ──────────────────────────────────────────────────────────────
+
+/** A percentage as a ring: green, amber past 65, red past 85. */
+@Composable
+fun Ring(percent: Int, label: String, size: Dp = 46.dp) {
+    val c = C
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val w = 5.dp.toPx() * size.value / 46f
+                val inset = w / 2 + 1.dp.toPx()
+                val box = Size(this.size.width - inset * 2, this.size.height - inset * 2)
+                drawArc(c.line, 0f, 360f, false, Offset(inset, inset), box, style = Stroke(w))
+                val p = percent.coerceIn(0, 100)
+                if (p > 0) drawArc(if (p > 85) c.red else if (p > 65) c.warn else c.green, -90f, 360f * p / 100, false, Offset(inset, inset), box, style = Stroke(w, cap = StrokeCap.Round))
+            }
+            Text("$percent", fontSize = if (size < 44.dp) 12.sp else 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        }
+        Text(label, fontSize = 12.sp, color = C.muted)
+    }
+}
+
+// ── controls ───────────────────────────────────────────────────────────
+
+@Composable
+fun Toggle(on: Boolean, onChange: (Boolean) -> Unit) {
+    Box(
+        Modifier.size(46.dp, 28.dp).clip(CircleShape).background(if (on) C.green else C.line).clickable { onChange(!on) }.padding(2.dp),
+        contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+    ) {
+        Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White))
+    }
+}
+
+/** A segmented choice on a chip-colored track. */
+@Composable
+fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, height: Dp = 30.dp, fill: Boolean = false) {
+    Row(modifier.height(height).clip(RoundedCornerShape(10.dp)).background(C.chip).padding(2.dp)) {
+        options.forEachIndexed { i, label ->
+            val on = i == selected
+            Box(
+                Modifier.let { if (fill) it.weight(1f) else it }.fillMaxHeight().clip(RoundedCornerShape(8.dp))
+                    .background(if (on) C.surface else Color.Transparent).clickable { onSelect(i) }.padding(horizontal = if (fill) 12.dp else 10.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text(label, fontSize = if (fill) 14.sp else 13.sp, color = if (on) C.ink else C.muted, maxLines = 1) }
+        }
+    }
+}
+
+@Composable
+fun IconIn(icon: ImageVector, size: Dp = 18.dp, tint: Color = C.ink, modifier: Modifier = Modifier) = Icon(icon, null, modifier.size(size), tint = tint)
+
+// ── navigation ─────────────────────────────────────────────────────────
+
+/** Back, in the accent color, with where it goes back to. */
+@Composable
+fun NavBack(label: String, onClick: () -> Unit) {
+    Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconIn(Icons.Back, 22.dp, C.accent)
+        Text(label, fontSize = 17.sp, color = C.accent)
+    }
+}
+
+/** A round chip-colored button in a bar. */
+@Composable
+fun NavButton(icon: ImageVector, onClick: () -> Unit, iconSize: Dp = 18.dp) {
+    Box(Modifier.size(34.dp).clip(CircleShape).background(C.chip).clickable(onClick = onClick), contentAlignment = Alignment.Center) { IconIn(icon, iconSize) }
+}
+
+/** A page's compact bar: back, a centered title with a line under it, and one action. */
+@Composable
+fun NavBar(back: String, onBack: () -> Unit, title: String, sub: (@Composable RowScope.() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
+    Column(Modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.statusBars)) {
+        Box(Modifier.fillMaxWidth().padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)) {
+            Box(Modifier.align(Alignment.CenterStart)) { NavBack(back, onBack) }
+            Column(Modifier.align(Alignment.Center).padding(horizontal = 84.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                if (sub != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), content = sub)
+            }
+            if (trailing != null) Box(Modifier.align(Alignment.CenterEnd)) { trailing() }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
+    }
+}
+
+/** A page's large title (stations, settings): a small line over a big word. */
+@Composable
+fun LargeTitle(small: String, big: String) {
+    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp)) {
+        Text(small, fontSize = 13.sp, color = C.muted)
+        Text(big, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.6).sp)
+    }
+}
+
+// ── lists and cards ────────────────────────────────────────────────────
+
+@Composable
+fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp) {
+    Row(Modifier.fillMaxWidth().padding(start = start, end = 20.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom) {
+        Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        Spacer(Modifier.weight(1f))
+        if (trailing != null) Text(trailing, fontSize = 13.sp, color = C.muted)
+    }
+}
+
+@Composable
+fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.surface)
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 14.dp),
+        content = content,
+    )
+}
+
+/** Rows on one rounded card, a hairline between them. */
+@Composable
+fun ListCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface), content = content)
+}
+
+@Composable
+fun ListRow(first: Boolean, onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
+    if (!first) Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(1.dp).background(C.line))
+    Row(
+        Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = content,
+    )
+}
+
+/** Something is on its way: said in words, centered on the page. */
+@Composable
+fun Loading(text: String) {
+    Box(Modifier.fillMaxSize().background(C.bg).padding(32.dp), contentAlignment = Alignment.Center) {
+        Text(text, color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+fun Mark(size: Dp = 14.dp) = Image(painterResource(if (C.dark) R.drawable.ember_mark_dark else R.drawable.ember_mark), null, Modifier.size(size))
+
+@Composable
+fun SlackMark(size: Dp = 13.dp) = Image(painterResource(R.drawable.slack), null, Modifier.size(size))
+
+@Composable
+fun Illustration(light: Int, dark: Int, width: Dp) = Image(painterResource(if (C.dark) dark else light), null, Modifier.width(width))
+
+fun Modifier.hairlineTop(color: Color) = drawBehind { drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
