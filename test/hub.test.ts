@@ -547,9 +547,15 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await assert.rejects(hub.configure(key, { model: "gpt-5" }), /没有能跑 gpt-5 的 Claude Code Profile/);
   await assert.rejects(hub.configure(key, { effort: "ultra" }), /思考深度只有/);
   for (const id of ["cc", "cc2"]) (config.profiles.find((p) => p.id === id)!.models as string[]).push("sonnet");
-  await hub.configure(key, { model: "sonnet", effort: "low" });
+  await hub.configure(key, { model: "sonnet", effort: "low", profile: "cc2" });
   assert.deepEqual([store.getSession(key)!.model, store.getSession(key)!.effort], ["sonnet", "low"]);
   assert.equal(store.getSession(key)!.profilePinned, true, "kept to it by hand");
+  // Another model alone: what went with the old one starts over, the effort default and the profile the station's
+  // pick among those with it enabled.
+  (config.profiles.find((p) => p.id === "cc3")!.models as string[]).push("haiku");
+  await hub.configure(key, { model: "haiku" });
+  assert.deepEqual([store.getSession(key)!.model, store.getSession(key)!.effort, store.getSession(key)!.profile, store.getSession(key)!.profilePinned], ["haiku", null, "cc3", false]);
+  await hub.configure(key, { model: "sonnet", effort: "low", profile: "cc2" });
   // Given back to the station, and its own used up: the next start runs on the other one, which takes it on.
   await hub.configure(key, { profile: null });
   assert.equal(store.getSession(key)!.profilePinned, false);

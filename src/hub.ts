@@ -338,7 +338,9 @@ export class Hub {
   /**
    * Changes how a session runs from its next turn on: another profile of its runtime (another account, say), another
    * model it can run, another effort. Its transcript is shared by the runtime's profiles, so the next message resumes it
-   * with all it had; its idle process ends first so the change takes. Not while a turn runs.
+   * with all it had; its idle process ends first so the change takes. Not while a turn runs. Another model starts
+   * over what went with the old one: its effort back to the runtime's default, its profile back to the station's
+   * choice (picked here, among those with the model enabled), unless given with it.
    */
   async configure(key: string, change: { profile?: string | null; model?: string | null; effort?: string | null }): Promise<void> {
     const row = this.#store.getSession(key);
@@ -353,7 +355,8 @@ export class Hub {
       if (runs && !next.models.includes(runs)) throw new Error(`「${next.name}」没有启用 ${runs}：换一个模型，或先在它的 Profile 里启用`);
     }
     const model = change.model === undefined ? row.model : change.model || null;
-    const effort = change.effort === undefined ? row.effort : change.effort || null;
+    const remodel = model !== row.model;
+    const effort = change.effort !== undefined ? change.effort || null : remodel ? null : row.effort;
     // What changes is checked; what stays is as it was.
     if (change.model && model && !this.#config.profiles.some((p) => p.runtimes.includes(row.runtime) && p.models.includes(model))) {
       throw new Error(`没有能跑 ${model} 的 ${runtimeName} Profile：先在一个 Profile 上启用它`);
@@ -361,9 +364,11 @@ export class Hub {
     if (change.effort && effort && !EFFORTS[row.runtime].includes(effort)) throw new Error(`${runtimeName} 的思考深度只有 ${EFFORTS[row.runtime].join("、")}`);
     if (this.processState(key) === "running") throw new Error("这个会话正在跑，等这一轮结束再改");
     await this.evict(key);
-    if (change.profile !== undefined) this.#store.setSessionProfile(key, change.profile ?? row.profile, change.profile !== null);
+    const profile = change.profile !== undefined ? change.profile : remodel ? null : undefined;
+    if (profile !== undefined) this.#store.setSessionProfile(key, profile ?? row.profile, profile !== null);
     if (model !== row.model || effort !== row.effort) this.#store.setSessionModel(key, model, effort);
-    log.info("session changed", { session: key, profile: change.profile, model, effort });
+    if (profile === null) this.#runOn(key);
+    log.info("session changed", { session: key, profile: this.#store.getSession(key)!.profile, model, effort });
   }
 
   /**
