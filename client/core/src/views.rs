@@ -26,8 +26,6 @@ use crate::store::{Store, Watch};
 /// The runtimes a chat can run on, in the order they are offered.
 const RUNTIMES: [&str; 2] = ["claude", "codex"];
 const DAY_MS: f64 = 86_400_000.0;
-/// How much of a chat's last message the sidebar gets.
-const LAST_CHARS: usize = 200;
 
 /// The email of the signed-in account that reaches a workspace.
 pub type EmailOf = Rc<dyn Fn(&str) -> Option<String>>;
@@ -99,7 +97,7 @@ impl Views {
     /// The station has the message as `seq`: the entry stays until the chat's messages reach it (and leaves in
     /// that emission). Nobody looking at the chat: it goes now.
     pub fn outbox_sent(&self, station: &str, thread: u64, id: &str, seq: u64) {
-        if !self.views.borrow().contains_key(&Topic::Chat { station: station.to_string(), thread }) {
+        if !self.views.borrow().contains_key(&chat_topic(station, thread)) {
             return self.outbox_remove(station, thread, id);
         }
         if let Some(entry) = self.outbox.borrow_mut().get_mut(&(station.to_string(), thread)).and_then(|list| list.iter_mut().find(|m| m["id"] == id)) {
@@ -123,7 +121,7 @@ impl Views {
     }
 
     fn outbox_changed(&self, station: &str, thread: u64) {
-        self.store.invalidate(&Topic::Chat { station: station.to_string(), thread });
+        self.store.invalidate(&chat_topic(station, thread));
     }
 
     pub fn start(&self, view: &Topic) {
@@ -177,7 +175,9 @@ impl Views {
             Topic::Chats { scope, mine } => self.chats(scope, *mine),
             Topic::Stations { scope } => self.stations_view(scope),
             Topic::Connects { scope, mine } => self.connects(scope, *mine),
-            Topic::Chat { station, thread } => self.chat(station, *thread),
+            Topic::Chat { station, thread: Some(thread), .. } => self.chat(station, *thread),
+            Topic::Chat { station, thread: None, session: Some(key) } => self.unchatted(station, key),
+            Topic::Chat { .. } => Some(Err(CoreError::invalid("chat 要有 thread 或 session"))),
             _ => None,
         }
     }
@@ -208,12 +208,21 @@ impl Views {
     fn sources(&self, view: &Topic) -> HashSet<Topic> {
         let mut topics = HashSet::new();
         let (scope, per_station): (&str, fn(String) -> Vec<Topic>) = match view {
-            Topic::Chats { scope, .. } => (scope.as_str(), |station| {
-                vec![Topic::Sessions { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Threads { station: station.clone() }, Topic::Link { station }]
-            }),
+            Topic::Chats { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Link { station }]),
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
             Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station }]),
-            Topic::Chat { station, thread } => {
+            Topic::Chat { station, thread: None, session } => {
+                // An agent with no chat yet: itself, and its title as the station's items have it.
+                if let Some(key) = session {
+                    topics.insert(Topic::Session { station: station.clone(), key: key.clone() });
+                }
+                topics.insert(Topic::ChatRows { station: station.clone() });
+                topics.insert(Topic::Sessions { station: station.clone() });
+                topics.insert(Topic::Overview { station: station.clone() });
+                topics.insert(Topic::Link { station: station.clone() });
+                return topics;
+            }
+            Topic::Chat { station, thread: Some(thread), .. } => {
                 // Its agents, once the station's threads say who they are.
                 for key in self.thread_of(station, *thread).as_ref().map(members).unwrap_or_default() {
                     topics.insert(Topic::Session { station: station.clone(), key });
@@ -294,6 +303,8 @@ impl Views {
         }
     }
 
+    /// The stations' sidebar rows side by side: each station puts its own together for the viewer (`/chats`);
+    /// here they only get their station, the `mine` filter, and days.
     fn chats(&self, scope: &str, mine: bool) -> Option<Result<Value>> {
         let stations = match self.stations(scope)? {
             Ok(stations) => stations,
@@ -310,50 +321,26 @@ impl Views {
                 let link = self.link(&s.address, true);
                 let link_state = link["state"].as_str().unwrap_or("connecting");
                 let link_message = link["message"].clone();
-                let sessions = self.store.value(&Topic::Sessions { station: s.address.clone() });
-                let threads = self.store.value(&Topic::Threads { station: s.address.clone() });
-                match (sessions, threads) {
-                    (Some(Err(error)), _) | (_, Some(Err(error))) => ("error", json!(error.message)),
-                    (Some(Ok(sessions)), Some(Ok(threads))) => {
-                        let connects = self.ok(Topic::Overview { station: s.address.clone() }).and_then(|o| o.get("connects").cloned());
-                        let shown: HashMap<&str, &Value> = sessions.as_array().into_iter().flatten().filter_map(|summary| Some((summary.get("key")?.as_str()?, summary))).collect();
-                        // Chats are ember's own (internal) chats. A Slack thread is Slack's: it is not a chat here, and
-                        // only lends its agent a title and a connect. An agent with no internal chat yet has a row of
-                        // its own, whose chat is made when the first message is written in it.
-                        let all: Vec<&Value> = threads.as_array().into_iter().flatten().collect();
-                        let is_ember = |t: &&Value| t.get("surface").and_then(Value::as_str) == Some("ember");
-                        let mut origin: HashMap<String, &Value> = HashMap::new();
-                        let mut chatted: HashSet<String> = HashSet::new();
-                        for t in &all {
-                            for key in members(t) {
-                                if is_ember(t) {
-                                    chatted.insert(key);
-                                } else {
-                                    origin.entry(key).or_insert(t);
-                                }
+                match self.store.value(&Topic::ChatRows { station: s.address.clone() }) {
+                    Some(Err(error)) => ("error", json!(error.message)),
+                    Some(Ok(list)) => {
+                        for row in list.as_array().into_iter().flatten() {
+                            if mine && row.get("mine").and_then(Value::as_bool) != Some(true) {
+                                continue;
                             }
+                            let mut row = row.clone();
+                            row["station"] = json!(s.address);
+                            row["stationName"] = json!(s.name);
+                            rows.push(row);
                         }
-                        for thread in all.iter().filter(|t| is_ember(t)) {
-                            let from = members(thread).iter().find_map(|k| origin.get(k).copied());
-                            if let Some(row) = chat_row(&me, mine, s, thread, from, &shown, connects.as_ref()) {
-                                rows.push(row);
-                            }
-                        }
-                        for (key, summary) in &shown {
-                            if !chatted.contains(*key) {
-                                if let Some(row) = agent_row(&me, mine, s, summary, origin.get(*key).copied(), connects.as_ref()) {
-                                    rows.push(row);
-                                }
-                            }
-                        }
-                        // Chats already read stay in view while the link comes back.
+                        // Rows already read stay in view while the link comes back.
                         match link_state {
                             "error" => ("error", link_message),
                             "offline" => ("connecting", link_message),
                             _ => ("online", Value::Null),
                         }
                     }
-                    _ => {
+                    None => {
                         loading = true;
                         if link_state == "error" { ("error", link_message) } else { ("connecting", Value::Null) }
                     }
@@ -442,30 +429,7 @@ impl Views {
             Ok(page) => page,
             Err(error) => return Some(Err(error)),
         };
-        let overview = self.ok(Topic::Overview { station: station.to_string() });
-        let of = |list: &str, id: Option<&Value>| find(overview.as_ref().and_then(|o| o.get(list)), id);
-        let summaries = self.ok(Topic::Sessions { station: station.to_string() });
-        let mut agents = Vec::new();
-        for key in members(&thread) {
-            // Until its detail is read, an agent is its summary from the station's list (no turns, no threads yet);
-            // one that cannot be read at all (removed meanwhile) is left out.
-            let detail = match self.store.value(&Topic::Session { station: station.to_string(), key: key.clone() }) {
-                Some(Ok(detail)) => detail,
-                Some(Err(_)) => continue,
-                None => match summaries.as_ref().and_then(Value::as_array).and_then(|list| list.iter().find(|s| s.get("key").and_then(Value::as_str) == Some(&key))) {
-                    Some(summary) => json!({ "session": summary }),
-                    None => continue,
-                },
-            };
-            let session = detail.get("session").cloned().unwrap_or(Value::Null);
-            agents.push(json!({
-                "session": session,
-                "connect": of("connects", session.get("connect")),
-                "profile": of("profiles", session.get("profile")),
-                "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
-                "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
-            }));
-        }
+        let agents: Vec<Value> = members(&thread).iter().filter_map(|key| self.agent(station, key)).collect();
         let messages = page.get("messages").cloned().unwrap_or_else(|| json!([]));
         // A sent message leaves the outbox as its own copy (or anything later) arrives.
         let newest = messages.as_array().and_then(|m| m.last()).and_then(|m| m.get("seq")?.as_u64());
@@ -496,110 +460,72 @@ impl Views {
     }
 }
 
+impl Views {
+    /// An agent of a chat: its session, the connect that started it, its profile, turns and threads. Until its detail
+    /// is read it is its summary from the station's list (no turns, no threads yet); one that cannot be read at all
+    /// (removed meanwhile) is `None`.
+    fn agent(&self, station: &str, key: &str) -> Option<Value> {
+        let detail = match self.store.value(&Topic::Session { station: station.to_string(), key: key.to_string() }) {
+            Some(Ok(detail)) => detail,
+            Some(Err(_)) => return None,
+            None => {
+                let summaries = self.ok(Topic::Sessions { station: station.to_string() })?;
+                json!({ "session": summaries.as_array()?.iter().find(|s| s.get("key").and_then(Value::as_str) == Some(key))? })
+            }
+        };
+        let overview = self.ok(Topic::Overview { station: station.to_string() });
+        let of = |list: &str, id: Option<&Value>| find(overview.as_ref().and_then(|o| o.get(list)), id);
+        let session = detail.get("session").cloned().unwrap_or(Value::Null);
+        Some(json!({
+            "session": session,
+            "connect": of("connects", session.get("connect")),
+            "profile": of("profiles", session.get("profile")),
+            "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
+            "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
+        }))
+    }
+
+    /// The page of an item whose agent has no chat yet: the agent alone, no messages, titled as the station's item
+    /// is. Its chat is made with the first message (`POST /threads {session}`).
+    fn unchatted(&self, station: &str, key: &str) -> Option<Result<Value>> {
+        let agent = match self.agent(station, key) {
+            Some(agent) => agent,
+            // Not read yet, or gone.
+            None => {
+                let detail = self.store.value(&Topic::Session { station: station.to_string(), key: key.to_string() })?;
+                return Some(Err(detail.err().unwrap_or_else(|| CoreError::new("http_404", "没有这个 agent").with_status(404))));
+            }
+        };
+        // Its title is the station's: the page waits for its items.
+        let rows = self.store.value(&Topic::ChatRows { station: station.to_string() })?.ok();
+        let row = rows.as_ref().and_then(Value::as_array).and_then(|rows| rows.iter().find(|r| r.get("id").and_then(Value::as_str) == Some(key)));
+        let title = row.and_then(|r| r.get("title").cloned()).unwrap_or_else(|| json!("（还没有消息）"));
+        let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
+        Some(Ok(json!({
+            "me": self.me(scope),
+            "thread": null,
+            "title": title,
+            "people": [],
+            "agents": [agent],
+            "messages": [],
+            "more": false,
+            "outbox": [],
+            "link": self.link(station, true),
+        })))
+    }
+}
+
+fn chat_topic(station: &str, thread: u64) -> Topic {
+    Topic::Chat { station: station.to_string(), thread: Some(thread), session: None }
+}
+
 /// The session keys taking part in a thread.
 fn members(thread: &Value) -> Vec<String> {
     thread.get("sessions").and_then(Value::as_array).into_iter().flatten().filter_map(|m| Some(m.get("session")?.as_str()?.to_string())).collect()
 }
 
-/// A thread as a row of the sidebar; `None` when none of its agents is shown (all archived), or with `mine` when the
-/// viewer takes no part in it (started it or wrote in it).
-/// An agent without an internal chat yet: its row opens an empty chat, made with the first message.
-fn agent_row(me: &Value, mine: bool, station: &StationInfo, session: &Value, origin: Option<&Value>, connects: Option<&Value>) -> Option<Value> {
-    let origin_people = origin.and_then(|o| o.get("people")).and_then(Value::as_array);
-    let takes_part = is_mine(me, session.get("creator"))
-        || origin.is_some_and(|o| is_mine(me, o.get("creator")))
-        || origin_people.is_some_and(|people| people.iter().any(|p| is_mine(me, Some(p))));
-    if mine && !takes_part {
-        return None;
-    }
-    let field = |name: &str| session.get(name).cloned().unwrap_or(Value::Null);
-    let title = session.get("title").and_then(Value::as_str).filter(|t| !t.trim().is_empty()).map(str::to_string).or_else(|| origin.map(chat_title)).unwrap_or_else(|| "（还没有消息）".to_string());
-    let connect = session.get("connect").filter(|c| c.as_str() != Some("ember")).map_or(Value::Null, |c| find(connects, Some(c)));
-    Some(json!({
-        "station": station.address,
-        "stationName": station.name,
-        "thread": Value::Null,
-        "session": field("key"),
-        "title": title,
-        "agents": [{ "key": field("key"), "runtime": field("runtime"), "model": field("model"), "effort": field("effort"), "process": field("process"), "pending": field("pending"), "lastTurn": field("lastTurn") }],
-        "people": [],
-        "last": Value::Null,
-        "unread": false,
-        "lastActiveAt": field("lastActiveAt"),
-        "connect": connect,
-        "origin": origin_of(origin),
-    }))
-}
-
-/// The Slack thread an agent came from, as the row's tip names it: its channel and when it began.
-fn origin_of(origin: Option<&Value>) -> Value {
-    origin.map_or(Value::Null, |o| {
-        let pick = |name: &str| o.get(name).cloned().unwrap_or(Value::Null);
-        json!({ "channel": pick("channel"), "channelName": pick("channelName"), "threadTs": pick("threadTs") })
-    })
-}
-
-fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, origin: Option<&Value>, shown: &HashMap<&str, &Value>, connects: Option<&Value>) -> Option<Value> {
-    let memberships: Vec<&Value> = thread.get("sessions").and_then(Value::as_array).into_iter().flatten().collect();
-    let agents: Vec<Value> = memberships
-        .iter()
-        .filter_map(|m| shown.get(m.get("session")?.as_str()?))
-        .map(|s| {
-            let field = |name: &str| s.get(name).cloned().unwrap_or(Value::Null);
-            json!({
-                "key": field("key"), "runtime": field("runtime"), "model": field("model"), "effort": field("effort"),
-                "process": field("process"), "pending": field("pending"), "lastTurn": field("lastTurn"),
-            })
-        })
-        .collect();
-    if agents.is_empty() {
-        return None;
-    }
-    let people = thread.get("people").cloned().unwrap_or_else(|| json!([]));
-    let origin_people = origin.and_then(|o| o.get("people")).and_then(Value::as_array);
-    let takes_part = is_mine(me, thread.get("creator"))
-        || people.as_array().is_some_and(|people| people.iter().any(|p| is_mine(me, Some(p))))
-        || origin.is_some_and(|o| is_mine(me, o.get("creator")))
-        || origin_people.is_some_and(|people| people.iter().any(|p| is_mine(me, Some(p))));
-    if mine && !takes_part {
-        return None;
-    }
-    let last = thread.get("last").filter(|l| l.is_object());
-    let created = thread.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0);
-    let last_active = last.and_then(|l| l.get("createdAt")?.as_f64()).map_or(created, |at| at.max(created));
-    // Where its agent came from: the connect of its session's Slack thread; an agent made on ember has none.
-    let connect = origin
-        .and_then(|o| o.get("sessions").and_then(Value::as_array)?.iter().filter_map(|m| m.get("connect")).find(|c| c.as_str() != Some("ember")))
-        .map_or(Value::Null, |c| find(connects, Some(c)));
-    let pick = |from: &Value, names: &[&str]| Value::Object(names.iter().map(|n| (n.to_string(), from.get(*n).cloned().unwrap_or(Value::Null))).collect());
-    let last = last.map_or(Value::Null, |l| {
-        let mut short = pick(l, &["seq", "authorKind", "author", "authorName", "createdAt", "deletedAt"]);
-        short["text"] = json!(l.get("text").and_then(Value::as_str).unwrap_or("").chars().take(LAST_CHARS).collect::<String>());
-        short
-    });
-    Some(json!({
-        "station": station.address,
-        "stationName": station.name,
-        "thread": pick(thread, &["id", "surface", "channel", "channelName", "threadTs", "title", "createdAt", "creator"]),
-        "title": if has_words(thread) { chat_title(thread) } else { origin.map_or_else(|| chat_title(thread), chat_title) },
-        "session": Value::Null,
-        "origin": origin_of(origin),
-        "agents": agents,
-        "people": people,
-        "last": last,
-        "unread": thread.get("unread").and_then(Value::as_u64).unwrap_or(0) > 0,
-        "lastActiveAt": last_active,
-        "connect": connect,
-    }))
-}
-
 /// What a chat is called: its title, else the first line a person wrote in it (Slack mentions left out), else its
 /// Slack channel.
-/// Whether a chat has a title of its own or something said in it to take one from.
-fn has_words(thread: &Value) -> bool {
-    ["title", "firstText"].iter().any(|name| thread.get(*name).and_then(Value::as_str).is_some_and(|t| !t.trim().is_empty()))
-}
-
 pub fn chat_title(thread: &Value) -> String {
     let text = |name: &str| thread.get(name).and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty());
     if let Some(title) = text("title") {
@@ -649,7 +575,7 @@ fn find(list: Option<&Value>, id: Option<&Value>) -> Value {
     list.iter().find(|item| item.get("id") == Some(id)).cloned().unwrap_or(Value::Null)
 }
 
-/// Whether the viewer started a session: its creator's id, or email in any case, is theirs (useIsMine in web/src/station.tsx).
+/// Whether the viewer added something: its creator's id, or email in any case, is theirs (useIsMine in web/src/api.ts).
 fn is_mine(me: &Value, creator: Option<&Value>) -> bool {
     let Some(creator) = creator.filter(|c| c.is_object()) else { return false };
     if creator.get("id").is_some_and(|id| !id.is_null() && Some(id) == me.get("id")) {
@@ -793,6 +719,9 @@ mod tests {
     fn threads(st: &str) -> Topic {
         Topic::Threads { station: st.into() }
     }
+    fn rows(st: &str) -> Topic {
+        Topic::ChatRows { station: st.into() }
+    }
     fn host_of(st: &str) -> Topic {
         Topic::Host { station: st.into() }
     }
@@ -828,8 +757,18 @@ mod tests {
         })
     }
 
-    fn ids(v: &Value) -> Vec<u64> {
-        v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i["thread"]["id"].as_u64().unwrap())).collect()
+    /// A station's sidebar item, as `/chats` has it, last active at `at`: with a chat when `id` is its thread's.
+    fn row(id: &str, at: f64) -> Value {
+        let thread = id.parse::<u64>().ok();
+        json!({
+            "id": id, "session": if thread.is_some() { "s" } else { id }, "thread": thread,
+            "title": format!("{id} 的标题"), "agents": [session(id)], "last": null, "unread": false, "mine": false,
+            "lastActiveAt": at, "connect": null, "origin": null,
+        })
+    }
+
+    fn ids(v: &Value) -> Vec<String> {
+        v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i["id"].as_str().unwrap().to_string())).collect()
     }
 
     #[test]
@@ -842,59 +781,53 @@ mod tests {
             assert_eq!(t.started(), vec![workspace()]);
             assert!(ui.value.is_none(), "nothing to show before the workspace is read");
 
-            t.set(workspace(), stations(t.now_s(), true, false));
+            t.set(workspace(), stations(t.now_s(), true, true));
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![sessions("ws/a"), overview("ws/a"), threads("ws/a"), link("ws/a")]));
+            assert_eq!(sorted(t.started()), sorted(vec![rows("ws/a"), link("ws/a"), rows("ws/b"), link("ws/b")]), "each station's rows, and nothing to join them with");
             let v = ui.value.clone().unwrap();
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             assert_eq!(v["loading"], true);
             assert_eq!(v["stations"], json!([
                 {"station": "ws/a", "id": "a", "name": "alpha", "state": "connecting", "message": null},
-                {"station": "ws/b", "id": "b", "name": "beta", "state": "offline", "message": null},
+                {"station": "ws/b", "id": "b", "name": "beta", "state": "connecting", "message": null},
                 {"station": "ws/c", "id": "c", "name": "gamma", "state": "offline", "message": null},
             ]));
             assert_eq!(v["days"], json!([]));
 
+            // Both stations' rows, merged newest first; each as the station has it, with its station.
             let now = t.host.now_ms();
+            let mut slack = row("s1", now - 2000.0);
+            slack["connect"] = json!("c1");
+            slack["origin"] = json!({"teamName": "Cue", "channel": "C1", "channelName": "ops", "threadTs": "1.0"});
             t.set(link("ws/a"), json!({"state": "online"}));
-            t.set(overview("ws/a"), json!({"connects": [{"id": "c1", "name": "Slack"}]}));
-            t.set(sessions("ws/a"), json!([session("s1"), session("s2")]));
-            t.read(&mut ui, 1).await;
-            assert_eq!(ui.value.as_ref().unwrap()["loading"], true, "its threads are not read yet");
-            let mut slack = thread(2, &["s1"], now - 2000.0);
-            slack["surface"] = json!("slack:T1");
-            slack["channel"] = json!("C1");
-            slack["channelName"] = json!("ops");
-            slack["sessions"] = json!([member(2, "s1", "c1")]);
-            t.set(threads("ws/a"), json!([thread(1, &["s2", "gone"], now - 1000.0), slack]));
+            t.set(rows("ws/a"), json!([row("1", now - 1000.0), slack.clone()]));
+            t.set(link("ws/b"), json!({"state": "online"}));
+            t.set(rows("ws/b"), json!([row("1", now - 1500.0)]));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             assert_eq!(v["loading"], false);
-            assert_eq!(v["stations"][0]["state"], "online");
-            assert_eq!(v["days"][0]["at"], json!(now - 1000.0));
+            assert_eq!((v["stations"][0]["state"].as_str(), v["stations"][1]["state"].as_str()), (Some("online"), Some("online")));
             let items = &v["days"][0]["items"];
-            assert_eq!(ids(&v), vec![1, 2]);
-            assert_eq!(items[0]["connect"], Value::Null, "ember's own chat comes from no connect");
-            assert_eq!(items[0]["agents"], json!([{"key": "s2", "runtime": "claude", "model": "opus", "effort": null, "process": "cold", "pending": 0, "lastTurn": null}]), "only agents still shown");
-            assert_eq!(items[0]["title"], "（还没有消息）");
-            assert_eq!(items[0]["last"], json!({"seq": 10, "authorKind": "agent", "author": "s2", "authorName": null, "createdAt": now - 1000.0, "deletedAt": null, "text": "好的"}));
-            assert_eq!(items[0]["lastActiveAt"], json!(now - 1000.0));
-            assert_eq!(items[1]["connect"], json!({"id": "c1", "name": "Slack"}));
-            assert_eq!(items[1]["title"], "#ops");
-            assert_eq!(items[1]["thread"]["surface"], "slack:T1");
-            assert_eq!(items[1]["unread"], false);
-            assert_eq!((items[1]["station"].as_str(), items[1]["stationName"].as_str()), (Some("ws/a"), Some("alpha")));
+            assert_eq!(ids(&v), vec!["1", "1", "s1"]);
+            assert_eq!((items[0]["station"].as_str(), items[1]["station"].as_str(), items[1]["stationName"].as_str()), (Some("ws/a"), Some("ws/b"), Some("beta")));
+            let mut shown = slack;
+            shown["station"] = json!("ws/a");
+            shown["stationName"] = json!("alpha");
+            assert_eq!(items[2], shown);
 
-            // One station failing shows as that station's state.
-            t.store.set(&threads("ws/a"), Err(CoreError::new("http_500", "坏了")));
+            // One station failing shows as that station's state; the other's rows stay.
+            t.store.set(&rows("ws/a"), Err(CoreError::new("http_500", "坏了")));
             t.read(&mut ui, 1).await;
-            assert_eq!(ui.value.as_ref().unwrap()["stations"][0], json!({"station": "ws/a", "id": "a", "name": "alpha", "state": "error", "message": "坏了"}));
-            // The link dropping, with threads read: reconnecting.
-            t.set(threads("ws/a"), json!([]));
+            let v = ui.value.clone().unwrap();
+            assert_eq!(v["stations"][0], json!({"station": "ws/a", "id": "a", "name": "alpha", "state": "error", "message": "坏了"}));
+            assert_eq!(ids(&v), vec!["1"]);
+            // The link dropping, with rows read: reconnecting, rows kept.
+            t.set(rows("ws/a"), json!([row("1", now - 1000.0)]));
             t.set(link("ws/a"), json!({"state": "offline", "message": "连接断开了"}));
             t.read(&mut ui, 1).await;
-            assert_eq!(ui.value.as_ref().unwrap()["stations"][0]["state"], "connecting");
-            assert_eq!(ui.value.as_ref().unwrap()["stations"][0]["message"], "连接断开了");
+            let v = ui.value.clone().unwrap();
+            assert_eq!((v["stations"][0]["state"].as_str(), v["stations"][0]["message"].as_str()), (Some("connecting"), Some("连接断开了")));
+            assert_eq!(ids(&v).len(), 2);
 
             // The workspace failing is the view's error.
             t.store.set(&workspace(), Err(CoreError::new("not_found", "进不了这个工作区")));
@@ -915,13 +848,13 @@ mod tests {
             // `b` comes online, `a` goes offline.
             t.set(workspace(), stations(t.now_s(), false, true));
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![sessions("ws/b"), overview("ws/b"), threads("ws/b"), link("ws/b")]));
+            assert_eq!(sorted(t.started()), sorted(vec![rows("ws/b"), link("ws/b")]));
             let states: Vec<&str> = ui.value.as_ref().unwrap()["stations"].as_array().unwrap().iter().map(|s| s["state"].as_str().unwrap()).collect();
             assert_eq!(states, vec!["offline", "connecting", "offline"]);
             // `a`'s topics are let go: stopped after the grace, like a UI unsubscribing.
             assert!(t.stopped().is_empty());
             tokio::time::sleep(std::time::Duration::from_millis(EVICT_AFTER_MS * 5 / 4 / SPEEDUP)).await;
-            assert_eq!(t.stopped(), sorted(vec![sessions("ws/a"), overview("ws/a"), threads("ws/a"), link("ws/a")]));
+            assert_eq!(t.stopped(), sorted(vec![rows("ws/a"), link("ws/a")]));
         });
     }
 
@@ -937,27 +870,23 @@ mod tests {
             let today = midnight + (now - midnight) / 2.0;
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
-            t.set(sessions("local"), json!([session("a")]));
-            // A chat nobody has written in yet is as new as the chat itself.
-            let mut empty = thread(5, &["a"], 0.0);
-            empty["last"] = Value::Null;
-            empty["createdAt"] = json!(midnight - 3.0 * DAY_MS - 1000.0);
-            t.set(threads("local"), json!([
-                thread(1, &["a"], midnight - 1000.0),
-                thread(2, &["a"], midnight - 2.0 * DAY_MS - 1000.0),
-                thread(3, &["a"], today),
-                thread(4, &["a"], midnight - DAY_MS + 1000.0),
-                empty,
+            t.set(rows("local"), json!([
+                row("1", midnight - 1000.0),
+                row("2", midnight - 2.0 * DAY_MS - 1000.0),
+                row("3", today),
+                row("4", midnight - DAY_MS + 1000.0),
+                row("a", midnight - 3.0 * DAY_MS - 1000.0),
             ]));
             t.read(&mut ui, 1).await;
             let v = ui.value.unwrap();
-            let days: Vec<(i64, Vec<u64>)> = v["days"]
+            let days: Vec<(i64, Vec<String>)> = v["days"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .map(|d| (d["daysAgo"].as_i64().unwrap(), d["items"].as_array().unwrap().iter().map(|i| i["thread"]["id"].as_u64().unwrap()).collect()))
+                .map(|d| (d["daysAgo"].as_i64().unwrap(), d["items"].as_array().unwrap().iter().map(|i| i["id"].as_str().unwrap().to_string()).collect()))
                 .collect();
-            assert_eq!(days, vec![(0, vec![3]), (1, vec![1, 4]), (3, vec![2]), (4, vec![5])]);
+            let day = |ago: i64, ids: &[&str]| (ago, ids.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+            assert_eq!(days, vec![day(0, &["3"]), day(1, &["1", "4"]), day(3, &["2"]), day(4, &["a"])]);
             assert_eq!(v["days"][1]["at"], json!(midnight - 1000.0));
             assert_eq!(v["me"], json!({"id": "local", "email": null}));
             assert_eq!(v["stations"], json!([{"station": "local", "id": "local", "name": "", "state": "online", "message": null}]));
@@ -965,30 +894,29 @@ mod tests {
     }
 
     #[test]
-    fn mine_keeps_the_chats_the_viewer_takes_part_in() {
+    fn mine_keeps_the_rows_the_station_says_are_the_viewers() {
         run(async {
             let t = setup();
-            let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: true });
-            t.set(workspace(), stations(t.now_s(), true, false));
-            t.read(&mut ui, 1).await;
+            let mut all = Ui::default();
+            let mut mine = Ui::default();
+            t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
+            t.set(workspace(), stations(t.now_s(), true, true));
+            t.read(&mut all, 1).await;
             let now = t.host.now_ms();
-            t.set(sessions("ws/a"), json!([session("a")]));
-            let with = |id: u64, creator: Value, people: Value| {
-                let mut t = thread(id, &["a"], now - id as f64);
-                t["creator"] = creator;
-                t["people"] = people;
-                t
+            let with = |id: &str, at: f64, is_mine: bool| {
+                let mut r = row(id, at);
+                r["mine"] = json!(is_mine);
+                r
             };
-            t.set(threads("ws/a"), json!([
-                with(1, json!({"id": "Me@x.com", "name": "我"}), json!([])),
-                with(2, Value::Null, json!([{"id": "U9", "email": "you@x.com"}, {"id": "U123", "email": "me@X.com"}])),
-                with(3, json!({"id": "U9", "email": "you@x.com"}), json!([{"id": "U9", "email": "you@x.com"}])),
-                with(4, json!({"id": "U8", "email": null}), json!([{"id": "U8", "email": null}])),
-                with(5, Value::Null, json!([])),
-            ]));
-            t.read(&mut ui, 1).await;
-            assert_eq!(ids(ui.value.as_ref().unwrap()), vec![1, 2]);
+            t.set(rows("ws/a"), json!([with("1", now - 1.0, true), with("k", now - 2.0, false)]));
+            t.set(rows("ws/b"), json!([with("1", now - 3.0, false), with("j", now - 4.0, true)]));
+            t.read(&mut all, 1).await;
+            t.subscribe(2, Topic::Chats { scope: "ws".into(), mine: true });
+            t.read(&mut mine, 2).await;
+            assert_eq!(ids(all.value.as_ref().unwrap()), vec!["1", "k", "1", "j"]);
+            let mine = mine.value.unwrap();
+            assert_eq!(ids(&mine), vec!["1", "j"]);
+            assert_eq!(mine["days"][0]["items"][1]["station"], "ws/b");
         });
     }
 
@@ -999,32 +927,25 @@ mod tests {
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
             let now = t.host.now_ms();
-            t.set(sessions("local"), json!([session("a"), session("b")]));
-            let mut named = thread(1, &["a"], now - 1.0);
-            named["title"] = json!(" 排查 ");
-            named["firstText"] = json!("不用这个");
-            named["unread"] = json!(2);
-            let mut said = thread(2, &["a", "b"], now - 2.0);
-            said["firstText"] = json!("\n <@U0BOT>  看看   这个\n第二行");
-            let mut dm = thread(3, &["b"], now - 3.0);
-            dm["surface"] = json!("slack:T1");
-            dm["channel"] = json!("D1");
-            dm["unread"] = json!(7);
-            let archived = thread(4, &["gone"], now - 4.0);
-            t.set(threads("local"), json!([named, said, dm, archived]));
+            // The station says what a row is called and whether it is unread; the view shows it as it is.
+            let mut named = row("1", now - 1.0);
+            named["title"] = json!("排查");
+            named["unread"] = json!(true);
+            named["last"] = json!({"seq": 7, "authorKind": "agent", "author": "a", "authorName": null, "text": "好的", "createdAt": now - 1.0, "deletedAt": null});
+            let mut said = row("2", now - 2.0);
+            said["title"] = json!("看看 这个");
+            t.set(rows("local"), json!([named, said]));
             t.read(&mut ui, 1).await;
-            let items = ui.value.clone().unwrap()["days"][0]["items"].clone();
-            let rows: Vec<(u64, &str, bool, usize)> = items
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|i| (i["thread"]["id"].as_u64().unwrap(), i["title"].as_str().unwrap(), i["unread"].as_bool().unwrap(), i["agents"].as_array().unwrap().len()))
-                .collect();
-            assert_eq!(rows, vec![(1, "排查", true, 1), (2, "看看 这个", false, 2), (3, "私信", true, 1)], "a chat whose agents are all hidden is not listed");
-            // Read: the mark follows the threads topic.
-            t.store.update(&threads("local"), &mut |list| list[0]["unread"] = json!(0));
+            let rows_of = |ui: &Ui| -> Vec<(String, String, bool)> {
+                ui.value.as_ref().unwrap()["days"][0]["items"].as_array().unwrap().iter()
+                    .map(|i| (i["id"].as_str().unwrap().to_string(), i["title"].as_str().unwrap().to_string(), i["unread"].as_bool().unwrap()))
+                    .collect()
+            };
+            assert_eq!(rows_of(&ui), vec![("1".into(), "排查".into(), true), ("2".into(), "看看 这个".into(), false)]);
+            // Read: the mark follows the station's rows.
+            t.store.update(&rows("local"), &mut |list| list[0]["unread"] = json!(false));
             t.read(&mut ui, 1).await;
-            assert_eq!(ui.value.clone().unwrap()["days"][0]["items"][0]["unread"], false);
+            assert_eq!(rows_of(&ui)[0].2, false);
         });
     }
 
@@ -1039,17 +960,15 @@ mod tests {
             let (computed, messages) = (t.router.computed.get(), ui.messages);
             for st in ["ws/a", "ws/b"] {
                 t.set(link(st), json!({"state": "online"}));
-                t.set(overview(st), json!({"connects": []}));
-                t.set(sessions(st), json!([session(st)]));
-                t.set(threads(st), json!([thread(1, &[st], t.host.now_ms())]));
+                t.set(rows(st), json!([row("1", t.host.now_ms())]));
             }
-            t.store.update(&threads("ws/a"), &mut |v| v[0]["title"] = json!("改了"));
+            t.store.update(&rows("ws/a"), &mut |v| v[0]["title"] = json!("改了"));
             t.read(&mut ui, 1).await;
             assert_eq!(t.router.computed.get(), computed + 1);
             assert_eq!(ui.messages, messages + 1);
             assert_eq!(ui.value.as_ref().unwrap()["days"][0]["items"].as_array().unwrap().len(), 2);
             // Recomputed to the same value: nothing goes out.
-            t.set(overview("ws/a"), json!({"connects": []}));
+            t.set(link("ws/a"), json!({"state": "online"}));
             t.read(&mut ui, 1).await;
             assert_eq!(t.router.computed.get(), computed + 2);
             assert_eq!(ui.messages, messages + 1);
@@ -1161,9 +1080,6 @@ mod tests {
         });
     }
 
-    fn chat_topic(st: &str, id: u64) -> Topic {
-        Topic::Chat { station: st.into(), thread: id }
-    }
     fn session_of(st: &str, key: &str) -> Topic {
         Topic::Session { station: st.into(), key: key.into() }
     }
@@ -1276,6 +1192,34 @@ mod tests {
             assert_eq!(v["thread"]["surface"], "slack:T1");
             assert_eq!(v["messages"].as_array().unwrap().len(), 2);
             assert_eq!(v["me"], json!({"id": "local", "email": null}));
+        });
+    }
+
+    #[test]
+    fn an_agent_without_a_chat_is_its_page_with_no_messages() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, Topic::Chat { station: "ws/a".into(), thread: None, session: Some("k".into()) });
+            t.read(&mut ui, 1).await;
+            assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), rows("ws/a"), sessions("ws/a"), overview("ws/a"), link("ws/a")]));
+            t.set(session_of("ws/a", "k"), json!({"session": {"key": "k", "connect": "c1", "profile": "p1"}, "threads": [{"id": 3, "surface": "slack:T1"}], "turns": [{"id": "t1"}]}));
+            t.read(&mut ui, 1).await;
+            assert!(ui.value.is_none(), "its title is the station's: it waits for the items");
+            let mut item = row("k", t.host.now_ms());
+            item["title"] = json!("部署挂了");
+            t.set(rows("ws/a"), json!([row("7", t.host.now_ms()), item]));
+            t.set(overview("ws/a"), json!({"connects": [{"id": "c1", "name": "Slack"}], "profiles": []}));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().unwrap();
+            assert_eq!((v["thread"].clone(), v["title"].clone(), v["messages"].clone(), v["outbox"].clone(), v["more"].clone()), (Value::Null, json!("部署挂了"), json!([]), json!([]), json!(false)));
+            assert_eq!(v["agents"], json!([{"session": {"key": "k", "connect": "c1", "profile": "p1"}, "connect": {"id": "c1", "name": "Slack"}, "profile": null,
+                "turns": [{"id": "t1"}], "threads": [{"id": 3, "surface": "slack:T1"}]}]));
+            assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
+            // Deleted: the page says so.
+            t.store.set(&session_of("ws/a", "k"), Err(CoreError::new("http_404", "这个会话已经删除了").with_status(404)));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.error.as_ref().unwrap().status, Some(404));
         });
     }
 
