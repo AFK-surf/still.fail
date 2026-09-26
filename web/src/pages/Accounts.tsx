@@ -3,8 +3,8 @@ import { ChevronDown, ChevronRight, ExternalLink, KeyRound, LogIn, Pencil, Plus,
 import { Collapsible } from "radix-ui";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, type AccessKind, type Overview, type ProfileInput, type ProfileView, type RuntimeKind } from "../api.ts";
-import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
+import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type ProfileView, type RuntimeKind } from "../api.ts";
+import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, Pill, RuntimeLogo, Section, Segmented, Select, Time } from "../ui.tsx";
@@ -76,6 +76,10 @@ export function AccountsPage() {
   );
 }
 
+/**
+ * A new profile: a subscription is signed in first and the station makes the profile once that succeeds (named by the
+ * account); a key is checked first and the profile made only if it works. Nothing is left behind by one that did not.
+ */
 function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const api = useApi();
   const link = useLink();
@@ -84,42 +88,58 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
   const toast = useToast();
   const [runtime, setRuntime] = useState<RuntimeKind>("claude");
   const [kind, setKind] = useState<AccessKind>("subscription");
-  const [name, setName] = useState("");
   const [key, setKey] = useState("");
-  const id = slug(name) || `${runtime}-${kind}`;
-  const taken = overview.value?.profiles.some((p) => p.id === id) ?? false;
-  const close = () => { setName(""); setKey(""); setKind("subscription"); onClose(); };
-  const add = useAction(
-    () => api.putProfile(id, { name: name.trim() || `${RUNTIME_LABEL[runtime]} · ${ACCESS[kind].label}`, runtime, access: { kind, key } }),
-    () => { toast("已添加 Profile，正在检查"); close(); navigate(link(`/settings/accounts/${id}`)); },
-  );
+  const [login, setLogin] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const pending = login ? overview.value?.logins.find((l) => l.id === login) : undefined;
+  const provider = runtime === "claude" ? "Claude" : "ChatGPT";
+  const close = () => {
+    if (login && !pending?.created) void api.dropLogin(login).catch(() => {});
+    setLogin(null); setKey(""); setCode(""); setKind("subscription");
+    onClose();
+  };
+  const go = (id: string, message: string) => { toast(message); setLogin(null); setKey(""); setCode(""); onClose(); navigate(link(`/settings/accounts/${id}`)); };
+  // The sign-in made its profile: on to it.
+  useEffect(() => { if (pending?.created) go(pending.created, "已登录，添加了 Profile"); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
+  const start = useAction(() => api.newLogin(runtime), ({ id }) => setLogin(id));
+  const send = useAction(() => api.newLoginCode(login!, code), () => setCode(""));
+  const add = useAction(() => api.addProfile({ runtime, access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }), ({ id }) => go(id, "已验证并添加 Profile"));
+  const job = pending?.job ?? null;
+  const signing = login !== null;
   return (
     <Dialog open={open} onClose={close} title="添加 Profile"
       footer={<>
         <Button variant="ghost" onClick={close}>取消</Button>
-        <Button variant="primary" disabled={taken || (KEYED.has(kind) && !key.trim())} busy={add.busy} onClick={() => void add.run()}>添加</Button>
+        {!signing && (kind === "subscription"
+          ? <Button variant="primary" icon={LogIn} busy={start.busy} onClick={() => void start.run()}>登录 {provider}</Button>
+          : <Button variant="primary" disabled={KEYED.has(kind) && !key.trim()} busy={add.busy} onClick={() => void add.run()}>{KEYED.has(kind) ? "验证并添加" : "添加"}</Button>)}
       </>}>
-      <Field label="运行时">
-        <Segmented label="运行时" value={runtime} onChange={(r) => { setRuntime(r); if (!ACCESS_KINDS[r].includes(kind)) setKind("subscription"); }}
-          options={[{ value: "claude", label: "Claude Code" }, { value: "codex", label: "Codex" }]} />
-      </Field>
-      <Field label="接入方式">
-        <Choices label="接入方式" value={kind} onChange={(v) => setKind(v as AccessKind)}
-          options={ACCESS_KINDS[runtime].map((k) => ({
-            value: k, icon: <AccessMark kind={k} size={28} />, description: ACCESS[k].description,
-            title: k === "subscription" ? (runtime === "claude" ? "Claude 订阅" : "ChatGPT 订阅") : ACCESS[k].label,
-          }))} />
-      </Field>
-      {KEYED.has(kind) && (
-        <Field label={kind === "opencode-go" ? "OpenCode Go key" : "API key"} htmlFor="account-key">
-          <input id="account-key" className="input mono" spellCheck={false} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())} />
-        </Field>
+      {signing ? (
+        job?.state === "failed" || job?.state === "cancelled"
+          ? <div className="card"><p className="field-error">{job.error ?? "登录没有完成。"}</p><Button onClick={() => { void api.dropLogin(login!).catch(() => {}); setLogin(null); }}>重新开始</Button></div>
+          : <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
+      ) : (
+        <>
+          <Field label="运行时">
+            <Segmented label="运行时" value={runtime} onChange={(r) => { setRuntime(r); if (!ACCESS_KINDS[r].includes(kind)) setKind("subscription"); }}
+              options={[{ value: "claude", label: "Claude Code" }, { value: "codex", label: "Codex" }]} />
+          </Field>
+          <Field label="接入方式">
+            <Choices label="接入方式" value={kind} onChange={(v) => setKind(v as AccessKind)}
+              options={ACCESS_KINDS[runtime].map((k) => ({
+                value: k, icon: <AccessMark kind={k} size={28} />, description: ACCESS[k].description,
+                title: k === "subscription" ? (runtime === "claude" ? "Claude 订阅" : "ChatGPT 订阅") : ACCESS[k].label,
+              }))} />
+          </Field>
+          {KEYED.has(kind) && (
+            <Field label={kind === "opencode-go" ? "OpenCode Go key" : "API key"} htmlFor="account-key" hint="先验证能用，再添加。">
+              <input id="account-key" className="input mono" spellCheck={false} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value.trim())} />
+            </Field>
+          )}
+          {kind === "subscription" && <p className="muted">登录在运行 ember 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。</p>}
+          {(start.error ?? add.error) && <p className="field-error" role="alert">{(start.error ?? add.error)!.message}</p>}
+        </>
       )}
-      <Field label="名称" htmlFor="account-name" error={taken ? "已经有同名的 Profile 了" : undefined}
-        hint={kind === "subscription" ? "添加后按页面上的命令在服务器上登录一次。" : undefined}>
-        <input id="account-name" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={`${RUNTIME_LABEL[runtime]} · ${ACCESS[kind].label}`} />
-      </Field>
-      {add.error && <p className="field-error" role="alert">{add.error.message}</p>}
     </Dialog>
   );
 }
@@ -347,7 +367,19 @@ function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) 
         <div className="card-row-text"><strong>正在登录 {provider}</strong><span className="muted">15 分钟内完成，过期会自动取消。</span></div>
         <Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>取消</Button>
       </div>
-      {job.state === "starting" && <p className="muted"><span className="activity-pulse inline" aria-hidden="true" />正在生成登录链接…</p>}
+      <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
+    </div>
+  );
+}
+
+/** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude), or the link
+ * and the one-time code to enter (Codex). */
+function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: {
+  job: LoginJob | null; provider: string; code: string; setCode(code: string): void; send(): void; sending: boolean; sendError: string | null;
+}) {
+  if (!job || job.state === "starting") return <p className="muted"><span className="activity-pulse inline" aria-hidden="true" />正在生成 {provider} 的登录链接…</p>;
+  return (
+    <>
       {job.state === "needs_code" && job.url && (
         <ol className="steps">
           <li>
@@ -358,10 +390,10 @@ function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) 
             <span>同意后页面上会显示一段授权码，复制过来：</span>
             <div className="input-row">
               <input className="input mono" spellCheck={false} autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder="粘贴授权码" aria-label="授权码"
-                onKeyDown={(e) => { if (e.key === "Enter" && code.trim()) void send.run(); }} />
-              <Button variant="primary" disabled={!code.trim()} busy={send.busy} onClick={() => void send.run()}>完成登录</Button>
+                onKeyDown={(e) => { if (e.key === "Enter" && code.trim()) send(); }} />
+              <Button variant="primary" disabled={!code.trim()} busy={sending} onClick={() => send()}>完成登录</Button>
             </div>
-            {send.error && <p className="field-error" role="alert">{send.error.message}</p>}
+            {sendError && <p className="field-error" role="alert">{sendError}</p>}
           </li>
         </ol>
       )}
@@ -379,7 +411,8 @@ function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) 
         </ol>
       )}
       {job.state === "verifying" && <p className="muted"><span className="activity-pulse inline" aria-hidden="true" />正在完成登录…</p>}
-    </div>
+      {job.state === "done" && <p className="muted"><span className="activity-pulse inline" aria-hidden="true" />已登录，正在添加…</p>}
+    </>
   );
 }
 

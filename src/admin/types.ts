@@ -88,6 +88,8 @@ export interface Overview {
   slackUsers: string[];
   /** The workspace's Slack app configuration token: with it, ember makes and edits connects' Slack apps. */
   slackConfig: { configured: boolean; teamId: string | null };
+  /** Subscription sign-ins that make a profile once they succeed (POST /logins), with the profile each made. */
+  logins: { id: string; runtime: RuntimeKind; job: LoginJob | null; created: string | null }[];
 }
 
 export interface TurnSummary {
