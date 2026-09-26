@@ -194,7 +194,7 @@ the thread as kept beside them; its agents fill in after (an agent whose
 threads; one that fails is left out). A failed `threads` or `thread` is its
 error, and so is its thread missing from `threads` once read (404). Its
 `messages` are its entries merged (entries.rs): each message with its latest
-edit's text, attachments and quotes (`editedAt`), deleted ones gone.
+edit's text, attachments and quotes (`editedAt`).
 
 While a `chats` view is live, a clock waits for the viewer's next local
 midnight and recomputes it then (`daysAgo` changes); that is the only timer of
@@ -274,7 +274,7 @@ else its Slack channel (`#name`), `私信` for a direct message, or
     "turns": [ … ],              // TurnRecord, oldest first ([] until its session is read)
     "threads": [ … ]             // ThreadView: every thread it takes part in ([] until read), to name the places in its history
   }],
-  "messages": [ … ],             // the thread's messages merged from the entries loaded so far, by seq (a message's entry n); deleted ones gone
+  "messages": [ … ],             // the thread's messages merged from the entries loaded so far, by seq (a message's entry n)
   "more": true,                  // older entries exist: `chat.older` loads the page before them
   "outbox": [{ "id": "out-1", "text": "…", "attachments": [], "quotes": [], "createdAt": 1790000000000, "state": "sending", "error": null, "seq": 42 }],
   //   messages sent from this device that `messages` does not show yet; `seq` (its entry n) once the station has it. An
@@ -287,8 +287,11 @@ A chat is any thread: a Slack thread shows all its messages too (the station
 records them), but it is written in Slack — the station takes messages only
 into chats on ember's page (`surface: "ember"`), so a client shows no composer
 for a Slack chat. Where the viewer had read up to when a chat opened is
-`thread.read` at that moment; a client keeps it for the visit (the web draws
-its "以下是新消息" line from it) while reading moves the position on.
+`thread.read` at that moment (from the thread as kept, when the chat opens
+from what the device kept); a client keeps it for the visit while reading
+moves the position on. The web draws its "以下是新消息" line over the first
+message after it that is not the viewer's own and was said before the chat
+opened, whether it came from what was kept or from the station after opening.
 
 Grouping by day needs the viewer's time zone: `Host::utc_offset_min(at_ms)`
 gives it (web: `-new Date(at).getTimezoneOffset()`).

@@ -99,9 +99,7 @@ export class Hub {
   /** Takes one event from a connect's platform. Resolves once it is durably recorded (or deliberately ignored). */
   async receive(connectId: string, event: ChatEvent): Promise<void> {
     if (event.kind === "message") return this.accept(connectId, event.message);
-    const surface = this.#surface(connectId);
-    if (event.kind === "changed") this.#store.editMessage(surface, event.channel, event.threadTs, event.ts, event.text);
-    else this.#store.deleteMessage(surface, event.channel, event.threadTs, event.ts);
+    this.#store.editMessage(this.#surface(connectId), event.channel, event.threadTs, event.ts, event.text);
   }
 
   /** Accepts one message seen by a connect. Resolves once it is durably recorded (or deliberately ignored). */

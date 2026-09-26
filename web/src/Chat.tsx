@@ -223,19 +223,23 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
  * The line over the first message the viewer had not read when the chat
  * opened (not their own), and the jump to it: the read position is taken as
  * the chat opens and does not move during the visit, so the line stays put as
- * the chat is read. Older pages are loaded first when it lies above them.
- * Nothing unread: no line, and the chat opens at its bottom. Answers the seq
- * of the message the line goes over.
+ * the chat is read. A chat opens from what the device kept, so messages said
+ * before it opened may still arrive from the station: the line goes over the
+ * first of them wherever it came from; what is said during the visit gets
+ * none. Older pages are loaded first when it lies above them. Nothing unread:
+ * no line, and the chat opens at its bottom. Answers the seq of the message
+ * the line goes over.
  */
 function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: MessageView[], mine: (m: MessageView) => boolean, older: () => Promise<unknown>): number | null {
-  // What was unread when the chat opened: after the read position, up to the newest message then.
-  const [open] = useState(() => ({ read: chat.thread.read, newest: chat.thread.lastMessage?.seq ?? 0, unread: chat.thread.unread > 0 }));
+  const [open] = useState(() => ({ read: chat.thread.read, at: Date.now() }));
+  const unread = (m: MessageView) => m.seq > open.read && m.createdAt <= open.at && !mine(m);
   const first = messages[0]?.seq;
   // Those not loaded yet may hold it: the pages before are loaded first.
-  const above = open.unread && chat.more && first !== undefined && first > open.read;
-  const target = open.unread && !above ? messages.find((m) => m.seq > open.read && m.seq <= open.newest && !mine(m))?.seq ?? null : null;
+  const above = chat.more && first !== undefined && first > open.read + 1 && messages.some(unread);
+  const target = above ? null : messages.find(unread)?.seq ?? null;
   const asked = useRef<number | undefined>(undefined);
-  const jumped = useRef(!open.unread);
+  // Until something unread shows (it may come from the station a moment after opening), there is nothing to jump to.
+  const jumped = useRef(false);
   const load = useRef(older);
   load.current = older;
   useEffect(() => {
@@ -244,7 +248,7 @@ function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messa
     void load.current().catch(() => { asked.current = undefined; });
   }, [above, first]);
   useEffect(() => {
-    if (jumped.current || above) return;
+    if (jumped.current || above || target === null) return;
     jumped.current = true;
     const pane = ref.current;
     const line = pane?.querySelector<HTMLElement>("[data-unread-line]");

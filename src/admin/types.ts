@@ -145,7 +145,7 @@ export interface EntryView {
   /** 1, 2, 3 … within the thread, no gaps. */
   n: number;
   kind: EntryKind;
-  /** edit and delete: the n of the message it changes. */
+  /** edit: the n of the message it changes. */
   target: number | null;
   /** message: the platform's id (Slack ts). */
   ts: string | null;
@@ -164,7 +164,7 @@ export interface EntryView {
   at: number;
 }
 
-/** A message as merged from its thread's entries: its latest edit's words, files and quotes. Deleted ones are gone. */
+/** A message as merged from its thread's entries: its latest edit's words, files and quotes. */
 export interface MessageView {
   /** Its entry's n. */
   seq: number;
@@ -203,7 +203,7 @@ export interface ThreadView {
   lastMessage: MessageView | null;
   /** The viewer's read position (an entry number), 0 if never read. */
   read: number;
-  /** Messages after it, not deleted and not the viewer's own. */
+  /** Messages after it that are not the viewer's own. */
   unread: number;
   /** Everyone who wrote in it (Slack or ember's page), once each, earliest first. */
   people: Creator[];

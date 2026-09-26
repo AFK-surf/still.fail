@@ -4,9 +4,9 @@ Two rules shape this:
 
 - **One place for every message.** Whatever is said in a conversation — by a
   person on Slack or on ember's page, or by an agent — is one entry in its
-  thread's log, and entries are only ever appended (an edit or a delete is an
-  entry of its own). Clients read "the entries after n", never the whole
-  thing again, and keep what they read.
+  thread's log, and entries are only ever appended (an edit is an entry of its
+  own; nothing said is taken back — ember has no delete). Clients read "the
+  entries after n", never the whole thing again, and keep what they read.
 - **No polling inside ember.** A station tells its clients what changed; ember
   cloud tells devices what changed; the client core refetches nothing on a
   timer. The only timers left sample things that cannot notify (host load,
@@ -69,10 +69,10 @@ CREATE TABLE thread_sessions (
 CREATE TABLE entries (
   thread INTEGER NOT NULL,
   n INTEGER NOT NULL,                 -- 1, 2, 3 … within the thread, no gaps
-  kind TEXT NOT NULL,                 -- message | edit | delete
-  target INTEGER,                     -- edit/delete: the n of the message it changes
+  kind TEXT NOT NULL,                 -- message | edit
+  target INTEGER,                     -- edit: the n of the message it changes
   ts TEXT,                            -- message: the platform's id (Slack ts), unique per thread
-  author_kind TEXT NOT NULL,          -- person | agent | ember (edit/delete: the message's)
+  author_kind TEXT NOT NULL,          -- person | agent | ember (edit: the message's)
   author TEXT NOT NULL,
   text TEXT,                          -- message and edit: Markdown
   attachments TEXT, quotes TEXT,      -- message and edit: JSON (an edit gives the message's whole new version)
@@ -82,7 +82,7 @@ CREATE TABLE entries (
 );
 CREATE UNIQUE INDEX entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
 CREATE INDEX entries_target ON entries (thread, target) WHERE target IS NOT NULL;
--- Each message as it reads now (its latest edit's words, files and quotes; when a delete came), for the station's
+-- Each message as it reads now (its latest edit's words, files and quotes), for the station's
 -- own reading: delivery, chat_history, lists.
 CREATE VIEW merged AS …;
 
@@ -117,9 +117,10 @@ CREATE TABLE profile_status (
 
 The v10 → v11 migration moves each message to an entry in thread order: an
 edited one becomes its message with the edited text (there is no older text
-to keep), a deleted one a message (its words were cleared already) followed at
-once by a delete. Deliveries follow their messages to `(thread, n)`; a read
-position (a seq) becomes the last entry of the messages it covered. The thread
+to keep); one deleted in v10 is left out (its words were cleared already, and
+ember takes nothing back), with its deliveries. Deliveries follow their
+messages to `(thread, n)`; a read position (a seq) becomes the last entry of
+the messages it covered. The thread
 table is made anew with `AUTOINCREMENT`, keeping every id. `messages` goes.
 
 v10 had `messages` (one row per message, changed in place under a global
@@ -167,13 +168,14 @@ database goes through both steps:
   ember's own notices are recorded as `author_kind = ember`.
 - **`-stop`** is recorded like any message and stops each session it is
   delivered to instead of reaching the agent.
-- **Slack edits and deletes** (`message_changed`, `message_deleted`, found by
-  the thread Slack names — `thread_ts`, or the message's own ts outside a
-  thread) append an `edit` (the message's new words, its files and quotes as
-  they were) or a `delete`. An "edit" with the same words — Slack sends those
-  for thread roots as replies come — changes nothing, and a deleted message
-  takes neither. A message still pending reaches the agent as it reads at
-  delivery (merged); a deleted one not at all.
+- **Slack edits** (`message_changed`, found by the thread Slack names —
+  `thread_ts`, or the message's own ts outside a thread) append an `edit`
+  (the message's new words, its files and quotes as they were). An "edit"
+  with the same words — Slack sends those for thread roots as replies come —
+  changes nothing. A message still pending reaches the agent as it reads at
+  delivery (merged).
+- **Slack deletes** (`message_deleted`) are ignored: ember has no
+  retraction, and the message stays as it was said.
 - Every entry takes its thread's next n in the same transaction.
 
 ### Reading
@@ -183,7 +185,7 @@ database goes through both steps:
   people (everyone who wrote in it, earliest first), the first thing a person
   said (`firstText`, for a chat's title), `last` (the last entry's n) and
   `lastMessage` (the latest message as merged, for lists), and the viewer's
-  read position and unread count (messages after it, not deleted, not the
+  read position and unread count (messages after it that are not the
   viewer's own); the latest said first. The store's `lastMessage(thread)` and
   `unreadCount(viewer, thread)` give the last two for anything else that
   lists threads.
@@ -238,8 +240,7 @@ the thread row is marked archived (`archived_at`). Since entries never change,
 the file is the thread as it was, and clients' kept copies stay valid.
 Reading an archived thread reads the file (the same API and summaries,
 answered from the decompressed entries; the last 32 threads read are kept
-decompressed in memory). A new entry — someone writing in it (an edit or a
-delete too), or a session of it shown again — loads it back into the
+decompressed in memory). A new entry — someone writing in it (an edit too), or a session of it shown again — loads it back into the
 database first and removes the file. Archiving a session also writes its
 transcript copy, `<data>/archive/transcripts/<session>.jsonl.zst` (the
 runtime's file, compressed); the runtime's own file in the profile's home is
@@ -249,8 +250,7 @@ left as it is. Showing the session again or deleting it removes the copy.
 
 Merging happens in one place (`client/core/src/entries.rs`, used by the
 `chat` view): a message shows its latest edit's text, attachments and quotes,
-marked edited (`editedAt`); a deleted message is gone from the view. Unread
-and read positions are entry numbers.
+marked edited (`editedAt`). Unread and read positions are entry numbers.
 
 The client core keeps entries on the device, through `Host` storage (IndexedDB
 on the web, files natively) in chunks — `thread/<station>/<thread>/<chunk>`

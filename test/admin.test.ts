@@ -610,22 +610,21 @@ test("thread entries: the latest page, pages back, what came after n, and a gap 
     assert.deepEqual(back.entries.map((e: any) => e.text), ["m1", "m2", "m3"]);
     assert.deepEqual((await t.call("GET", `/threads/${thread.id}/entries?from=2&to=3`)).body.entries.map((e: any) => e.n), [2, 3]);
     assert.deepEqual((await t.call("GET", `/threads/${thread.id}/entries?after=5`)).body.entries, []);
-    // A Slack thread takes edits and deletes: entries after the ones read, which never change.
+    // A Slack thread takes edits: entries after the ones read, which never change.
     await t.hub.accept("ds", message({ ts: "7.000001", threadTs: "7.000001", text: "<@UBOT> one" }));
     await t.hub.accept("ds", message({ ts: "7.000002", threadTs: "7.000001", addressed: false, text: "two" }));
     const slack = t.store.threadAt("slack:T1", "C1", "7.000001")!;
     const opened = (await t.call("GET", `/threads/${slack.id}/entries`)).body;
     await t.hub.receive("ds", { kind: "changed", channel: "C1", threadTs: "7.000001", ts: "7.000001", text: "<@UBOT> one, edited" });
-    await t.hub.receive("ds", { kind: "deleted", channel: "C1", threadTs: "7.000001", ts: "7.000002" });
     t.hub.say(thread.id, "local", "m6");
     const since = (await t.call("GET", `/threads/${slack.id}/entries?after=${opened.last}`)).body;
-    assert.deepEqual(since.entries.map((e: any) => [e.n, e.kind, e.target, e.text]), [[3, "edit", 1, "<@UBOT> one, edited"], [4, "delete", 2, null]]);
-    assert.equal(since.last, 4);
+    assert.deepEqual(since.entries.map((e: any) => [e.n, e.kind, e.target, e.text]), [[3, "edit", 1, "<@UBOT> one, edited"]]);
+    assert.equal(since.last, 3);
     assert.deepEqual((await t.call("GET", `/threads/${slack.id}/entries?from=1&to=2`)).body.entries, opened.entries);
     assert.deepEqual((await t.call("GET", `/threads/${thread.id}/entries?after=5`)).body.entries.map((e: any) => e.text), ["m6"]);
     // Lists carry the last n and the latest message as merged.
     const [view] = (await t.call("GET", `/threads?session=${encodeURIComponent(t.store.threadSessions(slack.id)[0]!.session)}`)).body;
-    assert.deepEqual([view.last, view.lastMessage.seq, view.lastMessage.text, view.lastMessage.editedAt !== null], [4, 1, "<@UBOT> one, edited", true]);
+    assert.deepEqual([view.last, view.lastMessage.seq, view.lastMessage.text], [3, 2, "two"]);
     assert.equal((await t.call("GET", `/threads/${thread.id}/entries?from=2`)).status, 400);
     assert.equal((await t.call("GET", "/threads/999/entries")).status, 404);
   } finally {

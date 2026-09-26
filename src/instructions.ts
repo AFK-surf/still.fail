@@ -85,7 +85,7 @@ export function formatInbound(messages: readonly PendingMessage[], options: { ne
 
 /** A thread's messages for chat_history: people by name, this session's own posts as "you", other agents and ember marked as bots. */
 export function formatHistory(messages: readonly MessageRow[], options: { surface: string; address: string; self: string; names: ReadonlyMap<string, string> }): string {
-  return messages.filter((m) => m.deletedAt === null).map((m) => {
+  return messages.map((m) => {
     const name = options.names.get(m.author);
     const from = m.authorKind === "agent" && m.author === options.self ? "you"
       : m.authorKind === "ember" ? "ember"

@@ -137,7 +137,7 @@ test("the agent's posts are recorded in the thread, and chat_history shows them 
   assert.match(history, /from="U1" ts="[\d.]+">\n<@UBOT> look[\s\S]*from="you" ts="[\d.]+">\nlooking/);
 });
 
-test("Slack edits and deletes are appended to the thread as entries of their own", async () => {
+test("Slack edits are appended to the thread as entries of their own", async () => {
   const { hub, accept, store } = setup();
   const m = message({ text: "<@UBOT> typo" });
   await accept(m);
@@ -148,10 +148,6 @@ test("Slack edits and deletes are appended to the thread as entries of their own
   const [edit] = store.entriesAfter(thread.id, before);
   assert.deepEqual([edit!.kind, edit!.target, edit!.text], ["edit", before, "<@UBOT> fixed"]);
   assert.equal(store.lastEntry(thread.id), before + 1);
-  await hub.receive("gpt", { kind: "deleted", channel: "C1", threadTs: m.threadTs, ts: m.ts });
-  const [deleted] = store.entriesAfter(thread.id, before + 1);
-  assert.deepEqual([deleted!.kind, deleted!.target], ["delete", before]);
-  assert.equal(store.messageAt(thread.id, m.ts)!.deletedAt !== null, true);
 });
 
 test("chat_state rejects kinds other than final and block", async () => {
@@ -433,7 +429,7 @@ test("a person's message in a chat with several agents reaches each of them once
   assert.equal(message!.quotes[0]!.comment, "这里");
 });
 
-test("a pending message edited before delivery reaches the agent as edited, and a deleted one not at all", async () => {
+test("a pending message edited before delivery reaches the agent as edited", async () => {
   const { claude, hub, accept, store } = setup();
   const m = message();
   await accept(m);
@@ -441,15 +437,13 @@ test("a pending message edited before delivery reaches the agent as edited, and 
   const session = claude.last;
   session.steer = async () => false;
   const edited = message({ threadTs: m.threadTs, ts: "9999.5", addressed: false, text: "first draft" });
-  const gone = message({ threadTs: m.threadTs, ts: "9999.6", addressed: false, text: "never mind" });
   await accept(edited);
-  await accept(gone);
+  await settle(); // it waits: the running turn takes no steer
   await hub.receive("cl", { kind: "changed", channel: "C1", threadTs: m.threadTs, ts: edited.ts, text: "final words" });
-  await hub.receive("cl", { kind: "deleted", channel: "C1", threadTs: m.threadTs, ts: gone.ts });
   session.end();
   await settle();
   assert.match(session.prompts[1]!, /final words/);
-  assert.doesNotMatch(session.prompts[1]!, /first draft|never mind/);
+  assert.doesNotMatch(session.prompts[1]!, /first draft/);
   assert.equal(store.pendingMessages(sessionKey("cl", "C1", m.threadTs)).length, 0);
 });
 

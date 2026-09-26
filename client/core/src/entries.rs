@@ -1,7 +1,7 @@
-//! A thread's entries merged into its messages: the one place edits and
-//! deletes are applied (docs/station-storage.md, Append-only threads). A
-//! message shows its latest edit's text, attachments and quotes, marked
-//! edited; a deleted message is gone.
+//! A thread's entries merged into its messages: the one place edits are
+//! applied (docs/station-storage.md, Append-only threads). A message shows its
+//! latest edit's text, attachments and quotes, marked edited. Nothing is taken
+//! back: ember has no delete.
 
 use std::collections::BTreeMap;
 
@@ -12,8 +12,8 @@ pub fn n_of(entry: &Value) -> Option<u64> {
     entry.get("n").and_then(Value::as_u64)
 }
 
-/// The messages of a run of entries, in thread order, as `MessageView`s (`seq` is the message's n). Edits and
-/// deletes of messages before the run are left out: those messages are not in it.
+/// The messages of a run of entries, in thread order, as `MessageView`s (`seq` is the message's n). Edits of
+/// messages before the run are left out: those messages are not in it.
 pub fn merge(entries: &[Value]) -> Vec<Value> {
     let mut messages: BTreeMap<u64, Value> = BTreeMap::new();
     for entry in entries {
@@ -34,11 +34,6 @@ pub fn merge(entries: &[Value]) -> Vec<Value> {
                 message["attachments"] = entry.get("attachments").cloned().unwrap_or(json!([]));
                 message["quotes"] = entry.get("quotes").cloned().unwrap_or(json!([]));
                 message["editedAt"] = field("at");
-            }
-            Some("delete") => {
-                if let Some(target) = entry.get("target").and_then(Value::as_u64) {
-                    messages.remove(&target);
-                }
             }
             _ => {}
         }
@@ -61,16 +56,16 @@ mod tests {
     }
 
     #[test]
-    fn edits_and_deletes_merge_into_their_messages() {
-        let entries = [message(1, "一"), message(2, "二"), change(3, "edit", 1, Some("一（改）")), change(4, "delete", 2, None), change(5, "edit", 1, Some("一（再改）")), message(6, "三")];
+    fn edits_merge_into_their_messages() {
+        let entries = [message(1, "一"), message(2, "二"), change(3, "edit", 1, Some("一（改）")), message(4, "三"), change(5, "edit", 1, Some("一（再改）")), message(6, "四")];
         let merged = merge(&entries);
-        assert_eq!(merged.iter().map(|m| (m["seq"].as_u64().unwrap(), m["text"].as_str().unwrap())).collect::<Vec<_>>(), vec![(1, "一（再改）"), (6, "三")]);
+        assert_eq!(merged.iter().map(|m| (m["seq"].as_u64().unwrap(), m["text"].as_str().unwrap())).collect::<Vec<_>>(), vec![(1, "一（再改）"), (2, "二"), (4, "三"), (6, "四")]);
         assert_eq!(merged[0]["editedAt"], 50);
         assert_eq!(merged[0]["createdAt"], 10);
         assert_eq!(merged[0]["attachments"], json!([{"name": "b.png"}]), "an edit gives the message's whole new version");
         assert_eq!(merged[1]["editedAt"], Value::Null);
         assert_eq!(merged[1]["authorName"], "阿");
         // Changes to messages before the run have nothing to change.
-        assert_eq!(merge(&entries[2..]).iter().map(|m| m["seq"].clone()).collect::<Vec<_>>(), vec![json!(6)]);
+        assert_eq!(merge(&entries[2..]).iter().map(|m| m["seq"].clone()).collect::<Vec<_>>(), vec![json!(4), json!(6)]);
     }
 }

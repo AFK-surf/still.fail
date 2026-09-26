@@ -1256,18 +1256,16 @@ mod tests {
             assert_eq!(sent.len(), 1);
             let CoreMessage::Delta { delta, .. } = &sent[0].1 else { panic!("{:?}", sent[0]) };
             assert_eq!(serde_json::to_value(delta).unwrap(), json!([{"path": ["messages"], "append": merge(&[entry(41, "新的")])}]));
-            // An edit shows in its message, a delete takes it away: merged here, not by the page.
+            delta::apply(ui.value.as_mut().unwrap(), delta);
+            // An edit shows in its message: merged here, not by the page.
             t.store.update(&page_of("ws/a", 7), &mut |p| {
-                p["entries"].as_array_mut().unwrap().extend([
-                    json!({"n": 42, "kind": "edit", "target": 41, "text": "新的（改）", "attachments": [], "quotes": [], "at": 42}),
-                    json!({"n": 43, "kind": "delete", "target": 40, "at": 43}),
-                ]);
-                p["last"] = json!(43);
+                p["entries"].as_array_mut().unwrap().push(json!({"n": 42, "kind": "edit", "target": 41, "text": "新的（改）", "attachments": [], "quotes": [], "at": 42}));
+                p["last"] = json!(42);
             });
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             let last: Vec<(Value, Value)> = v["messages"].as_array().unwrap().iter().rev().take(2).map(|m| (m["text"].clone(), m["editedAt"].clone())).collect();
-            assert_eq!(last, vec![(json!("新的（改）"), json!(42)), (json!("第 39 条"), Value::Null)]);
+            assert_eq!(last, vec![(json!("新的（改）"), json!(42)), (json!("第 40 条"), Value::Null)]);
             // An older page, in front.
             t.store.update(&page_of("ws/a", 7), &mut |p| {
                 p["entries"].as_array_mut().unwrap().splice(0..0, (1..=10).map(|n| entry(n, "旧的")));
@@ -1275,7 +1273,7 @@ mod tests {
             });
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
-            assert_eq!((v["messages"][0]["seq"].clone(), v["messages"].as_array().unwrap().len(), v["more"].clone()), (json!(1), 40, json!(false)));
+            assert_eq!((v["messages"][0]["seq"].clone(), v["messages"].as_array().unwrap().len(), v["more"].clone()), (json!(1), 41, json!(false)));
 
             // Another agent joins: it is read, and shows once it is.
             t.store.update(&threads("ws/a"), &mut |list| list[1]["sessions"].as_array_mut().unwrap().push(member(7, "n", "ember")));

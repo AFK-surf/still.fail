@@ -140,7 +140,7 @@ test("a message is recorded once and delivered to every session in its thread", 
 
 const plain = (entries: EntryRow[]) => entries.map((e) => [e.n, e.kind, e.target ?? e.ts, e.text]);
 
-test("a thread is a log: edits and deletes are entries of their own, read after n, before n, or from a to b", () => {
+test("a thread is a log: edits are entries of their own, read after n, before n, or from a to b", () => {
   const store = new Store(":memory:");
   const thread = store.openThread({ surface: "slack:T1", channel: "C1", threadTs: "1.1" });
   const other = store.openThread({ surface: "slack:T1", channel: "C1", threadTs: "2.1" });
@@ -150,23 +150,20 @@ test("a thread is a log: edits and deletes are entries of their own, read after 
   assert.deepEqual(store.entriesAfter(thread.id, 3), []);
   assert.equal(store.editMessage("slack:T1", "C1", "1.1", "1.1", "1.1 edited"), thread.id);
   assert.equal(store.editMessage("slack:T1", "C1", "1.1", "1.1", "1.1 edited"), undefined, "the same words are no change");
-  assert.equal(store.deleteMessage("slack:T1", "C1", "1.1", "1.2"), thread.id);
-  assert.equal(store.deleteMessage("slack:T1", "C1", "1.1", "1.2"), undefined, "deleted once");
-  assert.equal(store.editMessage("slack:T1", "C1", "1.1", "1.2", "too late"), undefined, "a deleted message takes no edit");
+  assert.equal(store.editMessage("slack:T1", "C1", "1.1", "1.2", "1.2 edited"), thread.id);
   assert.equal(store.editMessage("slack:T1", "C1", "1.1", "9.9", "never seen"), undefined);
   store.insertMessage({ thread: thread.id, ts: "1.4", authorKind: "agent", author: "a", text: "new", declared: "final" });
-  assert.deepEqual(plain(store.entriesAfter(thread.id, 3)), [[4, "edit", 1, "1.1 edited"], [5, "delete", 2, null], [6, "message", "1.4", "new"]]);
+  assert.deepEqual(plain(store.entriesAfter(thread.id, 3)), [[4, "edit", 1, "1.1 edited"], [5, "edit", 2, "1.2 edited"], [6, "message", "1.4", "new"]]);
   // What was read stays true: the message entries are as they were said.
   assert.deepEqual(plain(store.entriesBetween(thread.id, 1, 2)), [[1, "message", "1.1", "1.1"], [2, "message", "1.2", "1.2"]]);
   assert.deepEqual(plain(store.entriesBetween(thread.id, 5, 9)).map(([n]) => n), [5, 6]);
   assert.deepEqual(store.entriesBefore(thread.id, 4, 2).map((e) => e.n), [2, 3]);
   assert.deepEqual(store.entriesBefore(thread.id, undefined, 2).map((e) => e.n), [5, 6]);
   assert.deepEqual(store.entriesAfter(other.id, 0).map((e) => e.n), [1], "each thread counts from 1");
-  // Merged: the latest edit's words, the deleted one gone.
-  assert.deepEqual(store.messagesBefore(thread.id, undefined, 10).map((m) => [m.n, m.text, m.editedAt !== null]), [[1, "1.1 edited", true], [3, "1.3", false], [6, "new", false]]);
-  assert.deepEqual(store.messagesBefore(thread.id, 3, 1).map((m) => m.ts), ["1.1"]);
+  // Merged: the latest edit's words.
+  assert.deepEqual(store.messagesBefore(thread.id, undefined, 10).map((m) => [m.n, m.text, m.editedAt !== null]), [[1, "1.1 edited", true], [2, "1.2 edited", true], [3, "1.3", false], [6, "new", false]]);
+  assert.deepEqual(store.messagesBefore(thread.id, 3, 1).map((m) => m.ts), ["1.2"]);
   assert.equal(store.lastMessage(thread.id)!.declared, "final");
-  assert.equal(store.messageAt(thread.id, "1.2")!.deletedAt !== null, true);
 });
 
 test("a message still pending reaches the agent as it reads at delivery", () => {
@@ -176,12 +173,11 @@ test("a message still pending reaches the agent as it reads at delivery", () => 
   store.joinThread(thread.id, "a", "ds");
   for (const ts of ["1.1", "1.2"]) store.deliver(thread.id, store.insertMessage({ thread: thread.id, ts, authorKind: "person", author: "U1", text: ts }).n, ["a"]);
   store.editMessage("slack:T1", "C1", "1.1", "1.1", "edited");
-  store.deleteMessage("slack:T1", "C1", "1.1", "1.2");
-  assert.deepEqual(store.pendingMessages("a").map((m) => [m.n, m.text, m.deletedAt !== null]), [[1, "edited", false], [2, "1.2", true]]);
+  assert.deepEqual(store.pendingMessages("a").map((m) => [m.n, m.text]), [[1, "edited"], [2, "1.2"]]);
   assert.equal(store.sessionStats("a").get("a")!.firstText, "edited");
 });
 
-test("reads move forward only; unread counts skip the viewer's own and deleted messages", () => {
+test("reads move forward only; unread counts skip the viewer's own messages", () => {
   const store = new Store(":memory:");
   session(store, "a");
   const thread = store.openThread({ surface: "slack:T1", channel: "C1", threadTs: "1.1" });
@@ -189,17 +185,17 @@ test("reads move forward only; unread counts skip the viewer's own and deleted m
   const mine = store.insertMessage({ thread: thread.id, ts: "1.2", authorKind: "person", author: "me@x", text: "q" }).n;
   store.insertMessage({ thread: thread.id, ts: "1.3", authorKind: "agent", author: "a", text: "answer" });
   store.insertMessage({ thread: thread.id, ts: "1.4", authorKind: "person", author: "you@x", text: "also" });
-  store.deleteMessage("slack:T1", "C1", "1.1", "1.4");
+  store.editMessage("slack:T1", "C1", "1.1", "1.3", "answer, edited");
   const view = (viewer: string) => store.listThreads(viewer, { session: "a" })[0]!;
-  assert.deepEqual([view("me@x").unread, view("me@x").read, view("me@x").last], [1, 0, 4]);
-  assert.equal(store.unreadCount("me@x", thread.id), 1);
+  assert.deepEqual([view("me@x").unread, view("me@x").read, view("me@x").last], [2, 0, 4]);
+  assert.equal(store.unreadCount("me@x", thread.id), 2, "an edit is no message of its own");
   assert.equal(view("you@x").unread, 2);
   assert.equal(store.setRead("me@x", thread.id, mine + 1), mine + 1);
   assert.equal(store.setRead("me@x", thread.id, mine), mine + 1, "never back");
-  assert.deepEqual([view("me@x").unread, view("me@x").read], [0, mine + 1]);
+  assert.deepEqual([view("me@x").unread, view("me@x").read], [1, mine + 1]);
   assert.equal(view("you@x").unread, 2, "each viewer reads for themselves");
-  assert.equal(view("me@x").lastMessage!.ts, "1.3", "a deleted message is gone from lists");
-  // Its people, and the first thing one of them said (a deleted message is no longer said).
+  assert.deepEqual([view("me@x").lastMessage!.ts, view("you@x").lastMessage!.text], ["1.4", "also"]);
+  // Its people, and the first thing one of them said.
   assert.deepEqual([view("me@x").people, view("me@x").firstText], [["slack:ds:me@x", "slack:ds:you@x"], "q"]);
   const slack = store.openThread({ surface: "slack:T1", channel: "C1", threadTs: "2.1" });
   store.joinThread(slack.id, "a", "ds");
@@ -380,20 +376,21 @@ test("a v10 database moves its messages into entry logs", () => {
   assert.equal((raw.prepare("PRAGMA user_version").get() as any).user_version, 11);
   assert.deepEqual(raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'messages%'").all(), []);
   raw.close();
-  // In thread order; the edited message has its edited words, the deleted one is followed by its delete.
-  assert.deepEqual(plain(store.entriesAfter(1, 0)), [[1, "message", "1.1", "hi, edited"], [2, "message", "1.2", ""], [3, "delete", 2, null], [4, "message", "1.3", "answer"]]);
-  assert.deepEqual(store.entriesAfter(1, 0).map((e) => [e.authorKind, e.author, e.at]), [["person", "U1", 100], ["person", "U2", 300], ["person", "U2", 600], ["agent", "ds:C1:1.1", 400]]);
+  // In thread order; the edited message has its edited words, the deleted one is left out (ember takes nothing back).
+  assert.deepEqual(plain(store.entriesAfter(1, 0)), [[1, "message", "1.1", "hi, edited"], [2, "message", "1.3", "answer"]]);
+  assert.deepEqual(store.entriesAfter(1, 0).map((e) => [e.authorKind, e.author, e.at]), [["person", "U1", 100], ["agent", "ds:C1:1.1", 400]]);
   assert.deepEqual(plain(store.entriesAfter(2, 0)), [[1, "message", "2.2", "看看"], [2, "message", "2.3", "好"]]);
   assert.equal(store.entriesAfter(2, 0)[0]!.attachments[0]!.name, "a.png");
   // Deliveries and reads point at (thread, n).
-  assert.deepEqual(store.pendingMessages("ds:C1:1.1").map((m) => [m.thread, m.n, m.deletedAt]), [[1, 2, 600]]);
+  assert.deepEqual(store.pendingMessages("ds:C1:1.1"), [], "the deleted message's delivery went with it");
+  assert.equal(store.sessionStats("ds:C1:1.1").get("ds:C1:1.1")!.pending, 0);
   assert.deepEqual(store.heardThreads("ember:c-1"), new Set([2]));
   const summary = (viewer: string, id: number) => store.listThreads(viewer, { thread: id })[0]!;
-  assert.deepEqual([summary("me@x", 1).read, summary("me@x", 2).read, summary("local", 1).read], [3, 1, 1]);
+  assert.deepEqual([summary("me@x", 1).read, summary("me@x", 2).read, summary("local", 1).read], [1, 1, 1]);
   assert.deepEqual([summary("me@x", 1).unread, summary("local", 1).unread], [1, 1]);
-  assert.deepEqual([summary("me@x", 1).last, summary("me@x", 1).lastMessage!.text], [4, "answer"]);
+  assert.deepEqual([summary("me@x", 1).last, summary("me@x", 1).lastMessage!.text], [2, "answer"]);
   // New entries follow on; new threads never take an old id.
-  assert.deepEqual(store.insertMessage({ thread: 1, ts: "1.4", authorKind: "person", author: "U1", text: "more" }), { n: 5, fresh: true });
+  assert.deepEqual(store.insertMessage({ thread: 1, ts: "1.4", authorKind: "person", author: "U1", text: "more" }), { n: 3, fresh: true });
   assert.equal(store.openThread({ surface: "ember", channel: "EMBER", threadTs: "3.1" }).id, 3);
   store.close();
 });

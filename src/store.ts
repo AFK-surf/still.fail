@@ -3,7 +3,7 @@
 // everything said in the threads its sessions take part in.
 //
 // A thread is a log of entries that are appended and never changed (see
-// docs/station-storage.md): an edit or a delete is an entry of its own, which
+// docs/station-storage.md): an edit is an entry of its own, which
 // readers merge into the message it changes. A thread whose sessions are all
 // archived is written out to a zstd file and read from there.
 import { EventEmitter } from "node:events";
@@ -70,23 +70,23 @@ export interface Membership {
 
 export type AuthorKind = "person" | "agent" | "ember";
 
-export type EntryKind = "message" | "edit" | "delete";
+export type EntryKind = "message" | "edit";
 
-/** One entry of a thread's log. Entries are only ever appended; they go only with their whole thread. */
+/** One entry of a thread's log. Entries are only ever appended; they go only with their whole thread. Nothing said is taken back: ember has no delete. */
 export interface EntryRow {
   thread: number;
   /** 1, 2, 3 … within the thread, no gaps. */
   n: number;
   kind: EntryKind;
-  /** edit and delete: the n of the message it changes. */
+  /** edit: the n of the message it changes. */
   target: number | null;
   /** message: the platform's id (Slack ts; ember makes Slack-like ones), unique in the thread. */
   ts: string | null;
-  /** message: who said it; edit and delete: whose message it changes. */
+  /** message: who said it; edit: whose message it changes. */
   authorKind: AuthorKind;
   /** person: Slack user id, email or "local"; agent: session key; ember: "ember". */
   author: string;
-  /** message and edit: Markdown; null for a delete. */
+  /** Markdown. */
   text: string | null;
   /** message and edit: the files and quotes it has (an edit gives the message's whole new version). */
   attachments: Attachment[];
@@ -111,8 +111,6 @@ export interface MessageRow {
   createdAt: number;
   /** When its latest edit came; null if never edited. */
   editedAt: number | null;
-  /** When a delete came for it; null while it stands. */
-  deletedAt: number | null;
 }
 
 /** A message a session has yet to read, with where it was said and how the session hears that thread. */
@@ -143,11 +141,11 @@ export interface ThreadSummary extends ThreadRow {
   sessions: Membership[];
   /** The thread's last entry number, 0 before anything is said: follow it with entriesAfter. */
   last: number;
-  /** The latest message as merged (deleted ones are gone), for lists. */
+  /** The latest message as merged, for lists. */
   lastMessage: MessageRow | null;
   /** The viewer's read position (an entry number), 0 if never read. */
   read: number;
-  /** Messages after the read position, not deleted and not the viewer's own. */
+  /** Messages after the read position that are not the viewer's own. */
   unread: number;
   /** Everyone who wrote in it, as creator references, earliest first. */
   people: string[];
@@ -260,19 +258,14 @@ const MIGRATIONS: Record<number, (db: DatabaseSync, context: MigrationContext) =
       DROP TABLE threads_v10;
       ${ENTRIES}
 
-      -- Each message in thread order; a deleted one is followed by its delete. An edited one keeps
-      -- the edited words (the older ones are gone); a deleted one's were cleared already.
+      -- Each message in thread order. An edited one keeps the edited words (the older ones are gone);
+      -- a deleted one is left out: ember takes nothing back, and its words were cleared already.
       CREATE TEMP TABLE numbered AS
-        SELECT seq, thread, deleted_at,
-          ROW_NUMBER() OVER (PARTITION BY thread ORDER BY seq)
-            + COALESCE(SUM(deleted_at IS NOT NULL) OVER (PARTITION BY thread ORDER BY seq ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS n
-        FROM messages;
+        SELECT seq, thread, ROW_NUMBER() OVER (PARTITION BY thread ORDER BY seq) AS n
+        FROM messages WHERE deleted_at IS NULL;
       INSERT INTO entries (thread, n, kind, ts, author_kind, author, text, attachments, quotes, declared, at)
         SELECT m.thread, x.n, 'message', m.ts, m.author_kind, m.author, m.text, m.attachments, m.quotes, m.declared, m.created_at
         FROM messages m JOIN numbered x ON x.seq = m.seq;
-      INSERT INTO entries (thread, n, kind, target, author_kind, author, at)
-        SELECT m.thread, x.n + 1, 'delete', x.n, m.author_kind, m.author, m.deleted_at
-        FROM messages m JOIN numbered x ON x.seq = m.seq WHERE m.deleted_at IS NOT NULL;
 
       ALTER TABLE deliveries RENAME TO deliveries_v10;
       ${DELIVERIES}
@@ -280,11 +273,12 @@ const MIGRATIONS: Record<number, (db: DatabaseSync, context: MigrationContext) =
         SELECT x.thread, x.n, d.session, d.delivered_at FROM deliveries_v10 d JOIN numbered x ON x.seq = d.message ORDER BY d.message;
       DROP TABLE deliveries_v10;
 
-      -- A read position was a seq: it becomes the last entry of the messages it covered.
+      -- A read position was a seq: it becomes the last entry of the messages it covered. Deliveries of
+      -- messages left out go with them.
       ALTER TABLE reads RENAME TO reads_v10;
       ${READS}
       INSERT INTO reads (viewer, thread, n, at)
-        SELECT r.viewer, r.thread, COALESCE((SELECT MAX(x.n + (x.deleted_at IS NOT NULL)) FROM numbered x WHERE x.thread = r.thread AND x.seq <= r.seq), 0), r.at
+        SELECT r.viewer, r.thread, COALESCE((SELECT MAX(x.n) FROM numbered x WHERE x.thread = r.thread AND x.seq <= r.seq), 0), r.at
         FROM reads_v10 r;
       DROP TABLE reads_v10;
 
@@ -428,18 +422,16 @@ CREATE TABLE IF NOT EXISTS profile_status (
   check_json TEXT, checked_at INTEGER,
   quota_json TEXT, quota_at INTEGER
 );
--- Each message as it reads now: its latest edit's words, files and quotes, and when a delete came.
+-- Each message as it reads now: its latest edit's words, files and quotes.
 CREATE VIEW IF NOT EXISTS merged AS
   SELECT m.thread, m.n, m.ts, m.author_kind, m.author,
     CASE WHEN e.n IS NULL THEN m.text ELSE e.text END AS text,
     CASE WHEN e.n IS NULL THEN m.attachments ELSE e.attachments END AS attachments,
     CASE WHEN e.n IS NULL THEN m.quotes ELSE e.quotes END AS quotes,
-    m.declared, m.at AS created_at, e.at AS edited_at, d.at AS deleted_at
+    m.declared, m.at AS created_at, e.at AS edited_at
   FROM entries m
   LEFT JOIN entries e ON e.thread = m.thread
-    AND e.n = (SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n AND x.kind = 'edit')
-  LEFT JOIN entries d ON d.thread = m.thread
-    AND d.n = (SELECT MIN(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n AND x.kind = 'delete')
+    AND e.n = (SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n)
   WHERE m.kind = 'message';
 `;
 
@@ -537,7 +529,7 @@ function toMessage(row: Row): MessageRow {
     attachments: row.attachments ? JSON.parse(row.attachments as string) as Attachment[] : [],
     quotes: row.quotes ? JSON.parse(row.quotes as string) as Quote[] : [],
     declared: (row.declared as string | null) ?? null, createdAt: row.created_at as number,
-    editedAt: (row.edited_at as number | null) ?? null, deletedAt: (row.deleted_at as number | null) ?? null,
+    editedAt: (row.edited_at as number | null) ?? null,
   };
 }
 
@@ -548,14 +540,12 @@ function mergeEntries(entries: readonly EntryRow[]): MessageRow[] {
     if (e.kind === "message") {
       messages.set(e.n, {
         thread: e.thread, n: e.n, ts: e.ts ?? "", authorKind: e.authorKind, author: e.author, text: e.text ?? "",
-        attachments: e.attachments, quotes: e.quotes, declared: e.declared, createdAt: e.at, editedAt: null, deletedAt: null,
+        attachments: e.attachments, quotes: e.quotes, declared: e.declared, createdAt: e.at, editedAt: null,
       });
       continue;
     }
     const m = e.target === null ? undefined : messages.get(e.target);
-    if (!m) continue;
-    if (e.kind === "edit") Object.assign(m, { text: e.text ?? "", attachments: e.attachments, quotes: e.quotes, editedAt: e.at });
-    else m.deletedAt ??= e.at;
+    if (m) Object.assign(m, { text: e.text ?? "", attachments: e.attachments, quotes: e.quotes, editedAt: e.at });
   }
   return [...messages.values()];
 }
@@ -858,18 +848,18 @@ export class Store {
     return summaries.sort((a, b) => said(b) - said(a) || b.createdAt - a.createdAt || b.id - a.id);
   }
 
-  /** The thread's latest message as merged (deleted ones are gone), for lists. */
+  /** The thread's latest message as merged, for lists. */
   lastMessage(thread: number): MessageRow | null {
-    if (this.#isArchived(thread)) return this.#archivedMessages(thread).findLast((m) => m.deletedAt === null) ?? null;
-    const row = this.#db.prepare("SELECT * FROM merged WHERE thread = ? AND deleted_at IS NULL ORDER BY n DESC LIMIT 1").get(thread) as Row | undefined;
+    if (this.#isArchived(thread)) return this.#archivedMessages(thread).at(-1) ?? null;
+    const row = this.#db.prepare("SELECT * FROM merged WHERE thread = ? ORDER BY n DESC LIMIT 1").get(thread) as Row | undefined;
     return row ? toMessage(row) : null;
   }
 
-  /** Messages after the viewer's read position (or `read`), not deleted and not the viewer's own. */
+  /** Messages after the viewer's read position (or `read`) that are not the viewer's own. */
   unreadCount(viewer: string, thread: number, read = this.readPosition(viewer, thread)): number {
     const theirs = (m: { authorKind: AuthorKind; author: string }) => !(m.authorKind === "person" && m.author === viewer);
-    if (this.#isArchived(thread)) return this.#archivedMessages(thread).filter((m) => m.n > read && m.deletedAt === null && theirs(m)).length;
-    return (this.#db.prepare(`SELECT COUNT(*) AS c FROM merged WHERE thread = ? AND n > ? AND deleted_at IS NULL
+    if (this.#isArchived(thread)) return this.#archivedMessages(thread).filter((m) => m.n > read && theirs(m)).length;
+    return (this.#db.prepare(`SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
       AND NOT (author_kind = 'person' AND author = ?)`).get(thread, read, viewer) as Row).c as number;
   }
 
@@ -886,8 +876,8 @@ export class Store {
 
   /** The first thing a person said in it (up to 300 characters). */
   #firstText(thread: number): string | null {
-    if (this.#isArchived(thread)) return this.#archivedMessages(thread).find((m) => m.authorKind === "person" && m.deletedAt === null)?.text.slice(0, 300) ?? null;
-    const row = this.#db.prepare(`SELECT substr(text, 1, 300) AS text FROM merged WHERE thread = ? AND author_kind = 'person' AND deleted_at IS NULL
+    if (this.#isArchived(thread)) return this.#archivedMessages(thread).find((m) => m.authorKind === "person")?.text.slice(0, 300) ?? null;
+    const row = this.#db.prepare(`SELECT substr(text, 1, 300) AS text FROM merged WHERE thread = ? AND author_kind = 'person'
       ORDER BY n LIMIT 1`).get(thread) as Row | undefined;
     return row ? row.text as string : null;
   }
@@ -911,26 +901,15 @@ export class Store {
 
   /**
    * A platform edit: an edit entry with the message's new words. Returns the
-   * thread, or undefined for a message ember never recorded, one deleted, or
-   * one whose words did not change.
+   * thread, or undefined for a message ember never recorded or one whose words
+   * did not change.
    */
   editMessage(surface: string, channel: string, threadTs: string, ts: string, text: string): number | undefined {
     const message = this.#platformMessage(surface, channel, threadTs, ts);
-    if (!message || message.deletedAt !== null || message.text === text) return undefined;
+    if (!message || message.text === text) return undefined;
     this.#append({
       thread: message.thread, kind: "edit", target: message.n, ts: null, authorKind: message.authorKind, author: message.author, text,
       attachments: message.attachments, quotes: message.quotes, declared: null, at: Date.now(),
-    });
-    return message.thread;
-  }
-
-  /** A platform delete: a delete entry. Returns the thread, or undefined for a message ember never recorded or one deleted already. */
-  deleteMessage(surface: string, channel: string, threadTs: string, ts: string): number | undefined {
-    const message = this.#platformMessage(surface, channel, threadTs, ts);
-    if (!message || message.deletedAt !== null) return undefined;
-    this.#append({
-      thread: message.thread, kind: "delete", target: message.n, ts: null, authorKind: message.authorKind, author: message.author, text: null,
-      attachments: [], quotes: [], declared: null, at: Date.now(),
     });
     return message.thread;
   }
@@ -990,11 +969,11 @@ export class Store {
     return row ? toMessage(row) : undefined;
   }
 
-  /** The latest `limit` messages before n (the latest of all without it) that are not deleted, as merged, oldest first. */
+  /** The latest `limit` messages before n (the latest of all without it), as merged, oldest first. */
   messagesBefore(thread: number, n: number | undefined, limit: number): MessageRow[] {
     const before = n ?? Number.MAX_SAFE_INTEGER;
-    if (this.#isArchived(thread)) return this.#archivedMessages(thread).filter((m) => m.n < before && m.deletedAt === null).slice(-limit);
-    return (this.#db.prepare("SELECT * FROM merged WHERE thread = ? AND n < ? AND deleted_at IS NULL ORDER BY n DESC LIMIT ?")
+    if (this.#isArchived(thread)) return this.#archivedMessages(thread).filter((m) => m.n < before).slice(-limit);
+    return (this.#db.prepare("SELECT * FROM merged WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?")
       .all(thread, before, limit) as Row[]).reverse().map(toMessage);
   }
 
@@ -1067,7 +1046,7 @@ export class Store {
     return added;
   }
 
-  /** What the session has yet to read, as merged now (deleted ones too, to be marked read), in the order it was handed over. */
+  /** What the session has yet to read, as merged now, in the order it was handed over. */
   pendingMessages(session: string): PendingMessage[] {
     return (this.#db.prepare(`SELECT m.*, t.surface, t.channel, t.thread_ts, ts.connect FROM deliveries d
       JOIN merged m ON m.thread = d.thread AND m.n = d.n JOIN threads t ON t.id = d.thread
@@ -1160,7 +1139,7 @@ export class Store {
         (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
         (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
         (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
-          WHERE d.session = s.key AND m.deleted_at IS NULL ORDER BY d.rowid LIMIT 1) AS first_text,
+          WHERE d.session = s.key ORDER BY d.rowid LIMIT 1) AS first_text,
         l.kind, l.outcome, l.declared, l.detail, l.started_at, l.ended_at
       FROM sessions s
       LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
