@@ -131,7 +131,7 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
               <h4>账号</h4>
               {dropped && <p className="run-picker-note">指定的账号没有启用 {next.model}，改成了自动分配</p>}
               <button type="button" className="run-picker-option" aria-pressed={profile === null} onClick={() => set({ profile: null })}>
-                <span className="run-option-text"><strong>自动分配</strong><span className="muted">{current && !value.profile ? `现在在「${current.name}」；额度用完或登录失效时换一个` : "额度用完或登录失效时换一个"}</span></span>
+                <span className="run-option-text"><strong>自动分配</strong><span className="muted">额度用完或登录失效时换一个</span>{current && !value.profile && <span className="muted">现在：{current.name}</span>}</span>
               </button>
               {accounts.map((a) => (
                 <button key={a.id} type="button" className="run-picker-option" aria-pressed={profile === a.id} onClick={() => set({ profile: a.id })}>
