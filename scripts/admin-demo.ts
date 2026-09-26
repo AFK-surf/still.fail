@@ -150,7 +150,7 @@ const supervisor = process.env.EMBER_DEMO_MESH ? new MeshSupervisor({ dataDir: p
 const api = new AdminApi({
   settings, store, hub, connections, slackApps, names: new Map(),
   // With EMBER_MESH_SECRET set, requests relayed by an ember-mesh started with the same secret are accepted.
-  ...(supervisor ? { mesh: supervisor } : process.env.EMBER_MESH_SECRET ? { mesh: { secret: () => process.env.EMBER_MESH_SECRET!, status: () => ({ state: "running" as const, origin: null, station: null, workspace: null, name: null }) } } : {}),
+  ...(supervisor ? { mesh: supervisor } : process.env.EMBER_MESH_SECRET ? { mesh: { secret: () => process.env.EMBER_MESH_SECRET!, status: () => ({ state: "running" as const, origin: null, station: null, workspace: null, workspaceId: null, name: null }) } } : {}),
   logins: new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin }),
   checkProfile: async (p) => (p.kind === "subscription"
     ? { state: "login", detail: "还没有登录", models: null, checkedAt: Date.now() }
