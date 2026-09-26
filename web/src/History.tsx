@@ -156,7 +156,7 @@ export function History({ detail, connect, state, actions, details, slackBase, o
   const [usageOpen, setUsageOpen] = useState(false);
   const body = useRef<HTMLDivElement>(null);
   // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
-  useStickToBottom(body, ":scope > .h-item, :scope > .live-tail, :scope > .h-text");
+  useStickToBottom(body, ".h-item, .live-tail, .h-text");
   const { session, transcript } = detail;
   const items = useMemo(() => toItems(transcript?.timeline ?? []), [transcript]);
   // What was there when the history opened shows at once; only what comes later animates.

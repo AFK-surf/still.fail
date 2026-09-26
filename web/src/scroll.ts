@@ -8,8 +8,8 @@
 // Scrolling by the reader sets the new position.
 import { useEffect, type RefObject } from "react";
 
-/** `messages` selects the pane's children that count as messages. */
-export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = ":scope > *"): void {
+/** `messages` selects which of the pane's children count as messages. */
+export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = "*"): void {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -22,7 +22,8 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     const reading = () => pointerDown || Date.now() - lastInput < 400;
     const distance = () => el.scrollHeight - el.scrollTop - el.clientHeight;
     const topOf = (node: Element) => el.scrollTop + node.getBoundingClientRect().top - el.getBoundingClientRect().top;
-    const lastMessage = () => [...el.querySelectorAll(messages)].at(-1) ?? null;
+    const isMessage = (n: Node): n is Element => n instanceof Element && n.parentElement === el && n.matches(messages);
+    const lastMessage = () => [...el.children].filter(isMessage).at(-1) ?? null;
     const hold = () => {
       const bottom = Math.max(0, el.scrollHeight - el.clientHeight);
       // A followed message that was replaced (a streamed reply landing) hands over to the newest.
@@ -55,7 +56,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     const watch = () => { resize.disconnect(); resize.observe(el); for (const child of el.children) resize.observe(child); };
     watch();
     const mutations = new MutationObserver((records) => {
-      const added = records.flatMap((r) => [...r.addedNodes]).filter((n): n is Element => n instanceof Element && n.matches(messages));
+      const added = records.flatMap((r) => [...r.addedNodes]).filter(isMessage);
       // Only a message arriving at the bottom is followed; one arriving while the reader is further up leaves them where they are.
       if (added.length && atBottom) { anchor = added.at(-1)!; gap = 0; }
       watch();

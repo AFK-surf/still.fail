@@ -22,7 +22,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
-  useStickToBottom(list, ":scope > .msg");
+  useStickToBottom(list, ".msg");
   // Messages there when the chat opened show at once; later ones ease in, except a reply that already streamed in place.
   const firstCount = useRef<number | null>(null);
   if (firstCount.current === null) firstCount.current = messages.length;
