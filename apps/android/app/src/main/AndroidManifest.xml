@@ -9,6 +9,8 @@
         android:theme="@style/Theme.Ember"
         android:supportsRtl="true"
         android:allowBackup="false">
+        <!-- Frame stats and profiles from the shell, on an optimized build too. -->
+        <profileable android:shell="true" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

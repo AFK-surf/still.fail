@@ -18,6 +18,14 @@ android {
         // Where the core finds ember cloud: -PemberCloud=http://127.0.0.1:8787 for a dev cloud (adb reverse its ports).
         buildConfigField("String", "CLOUD_ORIGIN", "\"${providers.gradleProperty("emberCloud").getOrElse("https://ember.3720.org")}\"")
     }
+    buildTypes {
+        // What goes on a phone: optimized (R8), signed with the debug key for now so it installs over a debug build.
+        release {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
