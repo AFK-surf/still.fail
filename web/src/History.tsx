@@ -171,6 +171,9 @@ export function History({ detail, connect, state, actions, details, slackBase, o
   }, [count, growth]);
   const { session, transcript } = detail;
   const items = useMemo(() => toItems(transcript?.timeline ?? []), [transcript]);
+  // What was there when the history opened shows at once; only what comes later animates.
+  const firstCount = useRef(Number.POSITIVE_INFINITY);
+  if (firstCount.current === Number.POSITIVE_INFINITY && transcript) firstCount.current = items.length;
   const usage = transcript?.usage;
   const model = usage?.model ?? session.model ?? connect?.bind.model ?? null;
   const name = connect?.name ?? session.connect;
@@ -212,8 +215,11 @@ export function History({ detail, connect, state, actions, details, slackBase, o
           <>
             <p className="history-edge">已到 Session 开始处</p>
             {items.map((item, i) => (
-              <HistoryItem key={i} item={item} where={where} person={(id) => member(id)?.name || detail.people[id] || id}
-                mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : detail.people[id] ?? id}`)} />
+              // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
+              <div key={i} className="h-item" data-enter={i >= firstCount.current && item.type !== "text" ? true : undefined}>
+                <HistoryItem item={item} where={where} person={(id) => member(id)?.name || detail.people[id] || id}
+                  mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : detail.people[id] ?? id}`)} />
+              </div>
             ))}
             {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}
             {live.filter((s) => !s.subagent && s.step !== "tool").map((s) => <LiveStepView key={s.id} step={s} />)}
@@ -442,7 +448,7 @@ function PhaseLine({ phase, runtime }: { phase: ShownPhase; runtime: string }) {
   return (
     <div className="h-phase" data-phase={phase.phase}>
       <span className="activity-pulse inline" aria-hidden="true" />
-      <span>{text}</span>
+      <span key={phase.phase} className="h-phase-text">{text}</span>
       <span className="h-phase-time">{seconds}s</span>
     </div>
   );

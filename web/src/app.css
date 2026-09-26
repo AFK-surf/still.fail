@@ -921,3 +921,18 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 .live-tail[data-over] { -webkit-mask-image: linear-gradient(to top, #000 70%, transparent); mask-image: linear-gradient(to top, #000 70%, transparent); }
 .h-live-thinking { font-size: var(--text-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .h-phase { min-height: 20px; }
+
+/* Motion: what arrives while you watch eases in; nothing moves on first paint or for reduced motion. */
+@keyframes enter-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.h-item { display: grid; gap: 14px; min-width: 0; }
+[data-enter] { animation: enter-up 220ms var(--ease-out) both; }
+.h-phase-text { animation: fade-in 180ms var(--ease-out); }
+.composer-quote, .composer-files .file-card { animation: enter-up 180ms var(--ease-out) both; }
+.fold-body { transition: max-height 240ms var(--ease-out); }
+.fold-body:not([data-folded]) { max-height: 4000px; }
+.side-panel { animation: fade-in 160ms var(--ease-out); }
+@media (prefers-reduced-motion: reduce) {
+  [data-enter], .h-phase-text, .composer-quote, .composer-files .file-card, .side-panel { animation: none; }
+  .fold-body { transition: none; }
+}

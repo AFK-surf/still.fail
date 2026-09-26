@@ -21,6 +21,11 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
   useEffect(() => {
     if (list.current) list.current.scrollTop = list.current.scrollHeight;
   }, [messages.length]);
+  // Messages there when the chat opened show at once; later ones ease in, except a reply that already streamed in place.
+  const firstCount = useRef<number | null>(null);
+  if (firstCount.current === null) firstCount.current = messages.length;
+  const wasWriting = useRef(false);
+  const streamedTs = useRef(new Set<string>());
   const status = sessionStatus(detail.session);
   const busy = status === "running" || status === "queued";
   const member = usePerson();
@@ -59,11 +64,16 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
             <p className="muted">{detail.threads.some((t) => t.channel !== "EMBER") ? "它在 Slack 里的来往，在右边的执行历史里能看到。" : ""}</p>
           </div>
         )}
-        {messages.map((m) => {
+        {messages.map((m, index) => {
+          if (index >= firstCount.current! && m.role === "agent" && wasWriting.current && !streamedTs.current.has(m.ts)) {
+            streamedTs.current.add(m.ts);
+            wasWriting.current = false;
+          }
+          const enter = index >= firstCount.current! && !streamedTs.current.has(m.ts) ? true : undefined;
           const mine = m.role === "person" && isMine({ id: m.user, email: m.user });
           if (mine) {
             return (
-              <div key={m.ts} className="msg msg-mine" data-author="你">
+              <div key={m.ts} className="msg msg-mine" data-author="你" data-enter={enter}>
                 {(m.text || m.quotes?.length) ? (
                   <div className="msg-bubble">
                     <Quotes quotes={m.quotes} />
@@ -79,7 +89,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
           }
           const who = m.role === "agent" ? agent : name(m.user);
           return (
-            <div key={m.ts} className="msg msg-row" data-author={who}>
+            <div key={m.ts} className="msg msg-row" data-author={who} data-enter={enter}>
               <div className="msg-main">
                 <div className="msg-head">
                   <MessageAvatar message={m} name={who} runtime={detail.session.runtime} model={detail.transcript?.usage?.model ?? detail.session.model} />
@@ -101,6 +111,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
           // The agent writing to this chat right now: its chat_post, as far as it has streamed.
           const writing = live.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && (partialString(s.input, "to") ?? "").startsWith("EMBER/"));
           const text = writing ? partialString(writing.input, "text") : null;
+          if (text) wasWriting.current = true;
           if (text) {
             return (
               <div className="msg msg-row" data-author={agent}>
@@ -282,6 +293,10 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
       );
     }
   };
+  // Switching to a session puts the cursor in its composer (not on touch screens, where it would raise the keyboard).
+  useEffect(() => {
+    if (window.matchMedia("(pointer: fine)").matches) input.current?.focus();
+  }, [sessionKey]);
   // Grow with the text up to the frame's limit; the frame is never resized by hand.
   useEffect(() => {
     const el = input.current;
