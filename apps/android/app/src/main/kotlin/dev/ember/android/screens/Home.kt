@@ -5,6 +5,16 @@
 package dev.ember.android.screens
 
 import androidx.compose.foundation.background
+import dev.ember.android.data.Topic
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -84,8 +94,12 @@ import dev.ember.android.ui.initial
 fun HomeScreen(current: WorkspaceEntry) {
     val app = LocalApp.current
     val scope = current.workspace.id
-    val chats by rememberTopic<ChatsView>(app.core, Topics.chats(scope, app.onlyMine))
-    val list = rememberLazyListState()
+    // Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
+    val all by rememberTopic<ChatsView>(app.core, Topics.chats(scope, false))
+    val mine by rememberTopic<ChatsView>(app.core, Topics.chats(scope, true))
+    val allList = rememberLazyListState()
+    val mineList = rememberLazyListState()
+    val shift by animateFloatAsState(if (app.onlyMine) 1f else 0f, tween(240, easing = FastOutSlowInEasing), label = "mine")
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
@@ -100,29 +114,39 @@ fun HomeScreen(current: WorkspaceEntry) {
             NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
         }
         Box(Modifier.weight(1f)) {
-            val view = chats.value
-            LazyColumn(Modifier.fillMaxSize(), state = list) {
-                if (view == null) {
-                    item(key = "wait") { Note(chats.error?.message ?: "正在读取会话…", error = chats.error != null) }
-                } else {
-                    val stations = view.stations
-                    val connecting = stations.filter { it.state == "connecting" }
-                    val failed = stations.filter { it.state == "error" }
-                    val offline = stations.filter { it.state == "offline" }
-                    connecting.forEach { s -> item(key = "c/${s.station}") { Note("正在连接 ${s.name}…") } }
-                    failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
-                    if (view.days.isEmpty() && view.loading) item(key = "loading") { Note("正在读取会话…") }
-                    if (offline.isNotEmpty()) item(key = "offline") { Note("${offline.joinToString("、") { it.name }} 离线，它们的会话暂时看不到。") }
-                    if (view.days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(view, app.onlyMine) }
-                    for (day in view.days) {
-                        item(key = "h/${day.daysAgo}") { SectionHeader(dayLabel(day.daysAgo, day.at)) }
-                        items(day.items, key = { "${it.station}/${it.id}" }) { ChatRow(it, view) }
-                    }
-                }
-                item(key = "pad") { Spacer(Modifier.height(96.dp)) }
+            BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
+                val width = constraints.maxWidth
+                ChatPane(all, false, allList, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
+                ChatPane(mine, true, mineList, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
             }
             Toolbar(app, Modifier.align(Alignment.BottomCenter))
         }
+    }
+}
+
+/** One of the two lists, all or the viewer's: its states (connecting, offline, empty) and its days. */
+@Composable
+private fun ChatPane(chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListState, modifier: Modifier) {
+    val view = chats.value
+    LazyColumn(modifier.fillMaxHeight(), state = list) {
+        if (view == null) {
+            item(key = "wait") { Note(chats.error?.message ?: "正在读取会话…", error = chats.error != null) }
+        } else {
+            val stations = view.stations
+            val connecting = stations.filter { it.state == "connecting" }
+            val failed = stations.filter { it.state == "error" }
+            val offline = stations.filter { it.state == "offline" }
+            connecting.forEach { s -> item(key = "c/${s.station}") { Note("正在连接 ${s.name}…") } }
+            failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
+            if (view.days.isEmpty() && view.loading) item(key = "loading") { Note("正在读取会话…") }
+            if (offline.isNotEmpty()) item(key = "offline") { Note("${offline.joinToString("、") { it.name }} 离线，它们的会话暂时看不到。") }
+            if (view.days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(view, onlyMine) }
+            for (day in view.days) {
+                item(key = "h/${day.daysAgo}") { SectionHeader(dayLabel(day.daysAgo, day.at)) }
+                items(day.items, key = { "${it.station}/${it.id}" }) { ChatRow(it, view) }
+            }
+        }
+        item(key = "pad") { Spacer(Modifier.height(96.dp)) }
     }
 }
 
