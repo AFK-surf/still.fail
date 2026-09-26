@@ -9,13 +9,20 @@
 //! the session never has to be refetched whole while it runs. `overview` and
 //! `host` also refresh on a timer (10 s / 15 s).
 
+use std::rc::Rc;
 
-
+use futures::future::LocalBoxFuture;
 use serde_json::Value;
 
 use crate::error::Result;
+use crate::host::Host;
+use crate::mesh::Link;
 use crate::protocol::Topic;
-use crate::store::Source;
+use crate::store::{Source, Store};
+
+/// Opens (or reuses) the mesh link to a remote station, given its workspace and station ids. `Core` supplies it: it knows
+/// which account reaches the workspace (for grants) and brings the mesh up once the relay is known.
+pub type Links = Rc<dyn Fn(String, String) -> LocalBoxFuture<'static, Result<Rc<Link>>>>;
 
 /// `"<workspace>/<station>"` or `"local"`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -34,6 +41,12 @@ impl StationAddr {
 pub struct Stations {}
 
 impl Stations {
+    /// Station topics are written to `store`; `local` goes over `host.fetch`, the rest over `links`.
+    pub fn new(host: Rc<dyn Host>, store: Rc<Store>, links: Links) -> Rc<Stations> {
+        let _ = (host, store, links);
+        todo!("station")
+    }
+
     /// One JSON call to the admin API (path without the `/admin/api` prefix); then refetches the live topics the write can change.
     pub async fn request(&self, station: &StationAddr, method: &str, path: &str, body: Option<Value>) -> Result<Value> {
         let _ = (station, method, path, body);
