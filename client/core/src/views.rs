@@ -456,10 +456,11 @@ impl Views {
     }
 }
 
-/// Unread messages per session key: the sum over the threads it takes part in.
+/// Unread messages per session key: the sum over its ember threads, the ones its chat page shows and reads.
+/// A Slack thread is read in Slack; counting it here would stay unread for good.
 fn unread_by_session(threads: Option<&Value>) -> HashMap<String, u64> {
     let mut counts = HashMap::new();
-    for thread in threads.and_then(Value::as_array).into_iter().flatten() {
+    for thread in threads.and_then(Value::as_array).into_iter().flatten().filter(|t| t.get("surface").and_then(Value::as_str) == Some("ember")) {
         let unread = thread.get("unread").and_then(Value::as_u64).unwrap_or(0);
         for member in thread.get("sessions").and_then(Value::as_array).into_iter().flatten() {
             if let Some(key) = member.get("session").and_then(Value::as_str) {
@@ -905,9 +906,10 @@ mod tests {
             let now = t.host.now_ms();
             t.set(sessions("local"), json!([session("a", now - 1.0, Value::Null), session("b", now - 2.0, Value::Null)]));
             t.set(threads("local"), json!([
-                {"id": 1, "sessions": [member(1, "a")], "unread": 2},
-                {"id": 2, "sessions": [member(2, "a"), member(2, "b")], "unread": 3},
-                {"id": 3, "sessions": [member(3, "gone")], "unread": 9},
+                {"id": 1, "surface": "ember", "sessions": [member(1, "a")], "unread": 2},
+                {"id": 2, "surface": "ember", "sessions": [member(2, "a"), member(2, "b")], "unread": 3},
+                {"id": 3, "surface": "ember", "sessions": [member(3, "gone")], "unread": 9},
+                {"id": 4, "surface": "slack:T1", "sessions": [member(4, "a")], "unread": 7},
             ]));
             t.read(&mut ui, 1).await;
             let items = ui.value.clone().unwrap()["days"][0]["items"].clone();
