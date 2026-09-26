@@ -21,6 +21,9 @@ const port = Number(process.env.PORT ?? 8787);
 const adminPort = Number(process.env.ADMIN_PORT ?? port + 2);
 const origin = `http://127.0.0.1:${port}`;
 const adminOrigin = `http://127.0.0.1:${adminPort}`;
+// The preview host: another port, so another origin (see src/preview.ts).
+const previewPort = port + 3;
+const previewOrigin = `http://127.0.0.1:${previewPort}`;
 const app = join(import.meta.dirname, "..", "..", "dist", "cloud-app");
 const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".wasm": "application/wasm", ".woff2": "font/woff2" };
 
@@ -37,7 +40,7 @@ async function assets(request: Request): Promise<Response> {
 }
 
 // With AXIOM_TOKEN (and AXIOM_DATASET) in the environment, traces go to Axiom as they would from Cloudflare.
-const h = await harness({ origin, adminOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}) });
+const h = await harness({ origin, adminOrigin, previewOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}) });
 const alice = h.as(await h.login("alice"));
 const workspace = await (await alice("POST", "/v1/workspaces", { name: "Dev" })).json() as { id: string };
 for (const name of ["studio", "mac-mini"]) {
@@ -70,7 +73,7 @@ async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
   const headers = Object.fromEntries(Object.entries(req.headers).filter(([k, v]) => typeof v === "string" && !["host", "connection"].includes(k))) as Record<string, string>;
-  const response = await (base === origin ? h.fetch : h.fetchAdmin)(url.pathname + url.search, {
+  const response = await (base === origin ? h.fetch : base === previewOrigin ? h.fetchPreview : h.fetchAdmin)(url.pathname + url.search, {
     method: req.method, headers, redirect: "manual",
     ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
   });
@@ -92,6 +95,7 @@ server.on("upgrade", (req, socket, head) => {
 });
 server.listen(port, "127.0.0.1", () => console.log(`READY ember cloud (dev) on :${port}`));
 createServer((req, res) => void serve(adminOrigin, req, res)).listen(adminPort, "127.0.0.1", () => console.log(`READY admin console (dev) on :${adminPort}`));
+createServer((req, res) => void serve(previewOrigin, req, res)).listen(previewPort, "127.0.0.1", () => console.log(`READY preview host (dev) on :${previewPort}`));
 
 /** An account as the web app kept it in localStorage (what `migrate` takes). */
 async function signIn(user: string) {

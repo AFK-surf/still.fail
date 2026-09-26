@@ -17,6 +17,7 @@ export async function harness(
     adminEmail?: string;
     /** The console's host. */
     adminOrigin?: string;
+    previewOrigin?: string;
     /** The ASSETS binding: a few stand-in files of both web apps unless given. */
     assets?: (request: Request) => Promise<Response> | Response;
     /** Axiom: a stand-in answering its requests, or "real" to reach it (with AXIOM_TOKEN from the environment). */
@@ -25,6 +26,7 @@ export async function harness(
 ) {
   const origin = options.origin ?? "https://relay.example";
   const adminOrigin = options.adminOrigin ?? "https://admin.relay.example";
+  const previewOrigin = options.previewOrigin ?? "https://preview.relay.example";
   const signingKey = options.signingKey ?? randomSecret(),
     adminToken = randomSecret();
   const { publicKey, privateKey } = await generateKeyPair("RS256");
@@ -63,6 +65,7 @@ export async function harness(
       bindings: {
         PUBLIC_ORIGIN: origin,
         ADMIN_ORIGIN: adminOrigin,
+        PREVIEW_ORIGIN: previewOrigin,
         GOOGLE_CLIENT_ID: options.noGoogle ? "" : "test-google-client",
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
@@ -126,6 +129,7 @@ export async function harness(
   const fetch = (path: string, init?: RequestInit) => mf.dispatchFetch(origin + path, init as any);
   /** A request to the console's host. */
   const fetchAdmin = (path: string, init?: RequestInit) => mf.dispatchFetch(adminOrigin + path, init as any);
+  const fetchPreview = (path: string, init?: RequestInit) => mf.dispatchFetch(previewOrigin + path, init as any);
   async function begin(sub = "google-test-user", invalid?: string, callback = "http://127.0.0.1:32145/oauth/callback") {
     const verifier = randomSecret(),
       state = randomSecret();
@@ -199,6 +203,7 @@ export async function harness(
     codes,
     fetch,
     fetchAdmin,
+    fetchPreview,
     begin,
     complete,
     exchange,

@@ -19,6 +19,7 @@ export interface Env {
   PUBLIC_ORIGIN: string;
   /** The admin's console, served by this Worker on a host of its own (see index.ts). */
   ADMIN_ORIGIN: string;
+  PREVIEW_ORIGIN: string;
   /** Where stations and clients find the relay; defaults to PUBLIC_ORIGIN (whose /relay is the relay). */
   RELAY_URL?: string;
   GOOGLE_CLIENT_ID: string;

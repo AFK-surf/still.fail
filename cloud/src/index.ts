@@ -1,4 +1,5 @@
 import { Container } from "@cloudflare/containers";
+import { previewSite } from "./preview.ts";
 import { DurableObject } from "cloudflare:workers";
 import { decodeKey, MAX_AGE_MS, readPayload, verifyPayload } from "./pkarr";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
@@ -102,6 +103,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       google_login: authConfigured(env),
     });
   }
+  if (url.origin === env.PREVIEW_ORIGIN) return previewSite(url);
   if (path === "/relay") {
     if (url.origin !== env.PUBLIC_ORIGIN) return reply({ error: "invalid_origin" }, 421);
     if (request.method !== "GET") return reply({ error: "method_not_allowed" }, 405);

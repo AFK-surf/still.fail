@@ -10,6 +10,7 @@
   "routes": [
     { "pattern": "ember.3720.org", "custom_domain": true },
     { "pattern": "admin.ember.3720.org", "custom_domain": true },
+    { "pattern": "preview.ember.3720.org", "custom_domain": true },
   ],
   "preview_urls": false,
   // Workers Logs: requests, errors and console output of the Worker and its Durable Objects, in the Cloudflare dashboard.
@@ -17,6 +18,8 @@
   "vars": {
     "PUBLIC_ORIGIN": "https://ember.3720.org",
     "ADMIN_ORIGIN": "https://admin.ember.3720.org",
+    // Where clients show a station's web services, apart from ember's own origins (see src/preview.ts).
+    "PREVIEW_ORIGIN": "https://preview.ember.3720.org",
     "GOOGLE_CLIENT_ID": "",
   },
   // The web app at the root, the admin's console under admin-app/. Every

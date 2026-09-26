@@ -46,7 +46,11 @@ export default defineConfig(({ mode }) => {
     publicDir: here("public"),
     base: mode === "cloud" || consoleBuild ? "/" : "/admin/",
     plugins: [react(), ...(posthog && mode !== "cloud" ? [stationKeyFile(posthog)] : [])],
-    define: { __POSTHOG__: JSON.stringify(posthog) },
+    define: {
+      __POSTHOG__: JSON.stringify(posthog),
+      // Where a station's web services are shown (cloud/src/preview.ts); the dev rig gives its own.
+      __PREVIEW_ORIGIN__: JSON.stringify(process.env.EMBER_PREVIEW_ORIGIN ?? "https://preview.ember.3720.org"),
+    },
     // The core's worker (src/core/worker.ts) is a module worker that loads its wasm.
     worker: { format: "es" },
     build: {

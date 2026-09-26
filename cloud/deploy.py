@@ -150,7 +150,7 @@ def main() -> None:
 
     # Cloudflare turns away urllib's default User-Agent. A new custom domain's
     # certificate may take a few minutes; a failure here is not a failed deploy.
-    for each in (origin, template["vars"]["ADMIN_ORIGIN"]):
+    for each in (origin, template["vars"]["ADMIN_ORIGIN"], template["vars"]["PREVIEW_ORIGIN"]):
         request = urllib.request.Request(f"{each}/healthz", headers={"user-agent": "ember-deploy"})
         try:
             with urllib.request.urlopen(request, timeout=30) as response:

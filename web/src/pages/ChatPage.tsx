@@ -1,9 +1,10 @@
 // A chat: a thread (a Slack thread or a chat on ember's page) with its people
 // and agents. The messages are the page; each agent's execution history can
 // be opened beside them, one tab per agent.
+import { StationPreview } from "../Preview.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, Ring } from "../components.tsx";
-import { Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
+import { Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
@@ -89,7 +90,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const tabs = chosen ?? (bound ? [bound] : []);
   const [active, setActiveState] = useState<string | null>(kept?.active ?? null);
   // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
-  const open = agents.length ? tabs.filter((key) => agents.some((a) => a.session.key === key)) : tabs;
+  // A preview's tab (`preview:<port>`) is the chat's own, whatever its agents.
+  const open = agents.length ? tabs.filter((key) => previewPort(key) !== null || agents.some((a) => a.session.key === key)) : tabs;
   const shown = active && open.includes(active) ? active : open[0] ?? null;
   // Tabs and the one in front change together, and are kept for this chat in one write.
   const commit = (next: string[], front: string | null) => {
@@ -152,6 +154,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           })}
         </div>
         <div className="page-bar-actions">
+          <OpenPreview onOpen={(port) => openTab(`preview:${port}`)} />
           {chat.thread && <ChatInfo chat={chat} thread={chat.thread} lives={lives} />}
           {slackUrl && (
             <Tip label="在 Slack 中打开">
@@ -170,6 +173,17 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             <div className="side-bar">
               <Tabs.List className="side-tab-list" aria-label="执行历史">
                 {open.map((key) => {
+                  const port = previewPort(key);
+                  if (port !== null) {
+                    return (
+                      <span key={key} className="side-tab-wrap">
+                        <Tabs.Trigger className="side-tab" value={key} title={`localhost:${port} 的预览`}>
+                          <span className="side-tab-agent"><Globe size={13} strokeWidth={1.75} />localhost:{port}</span>
+                        </Tabs.Trigger>
+                        <button type="button" className="side-tab-close" aria-label={`关闭 localhost:${port} 的预览`} onClick={() => closeTab(key)}><X size={12} strokeWidth={2} /></button>
+                      </span>
+                    );
+                  }
                   const a = agents.find((x) => x.session.key === key);
                   // Not known yet: its place, empty, until it is.
                   if (!a) return <span key={key} className="side-tab-wrap" />;
@@ -189,6 +203,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               <IconButton label="收起侧栏" icon={PanelRightClose} onClick={() => saveTabs([])} />
             </div>
             {open.map((key) => {
+              const port = previewPort(key);
+              if (port !== null) return <Tabs.Content key={key} className="side-content" value={key}><StationPreview station={station.address} port={port} /></Tabs.Content>;
               const a = agents.find((x) => x.session.key === key);
               const live = lives.get(key);
               if (!a) return <Tabs.Content key={key} className="side-content" value={key} />;
@@ -204,6 +220,40 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           </Tabs.Root>
         )}
     </div>
+  );
+}
+
+/** A preview tab's port, from its key (`preview:<port>`); null for an agent's history tab. */
+function previewPort(key: string): number | null {
+  const match = /^preview:(\d{1,5})$/.exec(key);
+  return match ? Number(match[1]) : null;
+}
+
+/** Opens a web service on the station's machine (by its localhost port) in the side panel. */
+function OpenPreview({ onOpen }: { onOpen: (port: number) => void }) {
+  const [port, setPort] = useState("");
+  const [open, setOpen] = useState(false);
+  const valid = /^\d{1,5}$/.test(port) && Number(port) >= 1 && Number(port) <= 65535;
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Tip label="预览这台机器上的网页">
+        <Popover.Trigger asChild>
+          <button type="button" className="icon-btn" aria-label="预览这台机器上的网页"><Globe {...ICON} /></button>
+        </Popover.Trigger>
+      </Tip>
+      <Popover.Portal>
+        <Popover.Content className="popover preview-open" align="end" sideOffset={6} collisionPadding={8}>
+          <form onSubmit={(e) => { e.preventDefault(); if (valid) { onOpen(Number(port)); setOpen(false); } }}>
+            <label className="preview-open-label">
+              <span>localhost:</span>
+              <input autoFocus inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value.trim())} placeholder="3000" aria-label="端口" />
+            </label>
+            <button type="submit" className="btn btn-primary" disabled={!valid}>打开</button>
+          </form>
+          <p className="preview-open-note">station 所在机器上跑着的网页服务，在侧栏里打开。</p>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
