@@ -931,7 +931,7 @@ mod tests {
             // `a`'s topics are let go: stopped after the grace, like a UI unsubscribing.
             assert!(t.stopped().is_empty());
             tokio::time::sleep(std::time::Duration::from_millis(EVICT_AFTER_MS * 5 / 4 / SPEEDUP)).await;
-            assert_eq!(t.stopped(), sorted(vec![rows("ws/a"), link("ws/a")]));
+            assert_eq!(t.stopped(), sorted(vec![rows("ws/a"), link("ws/a"), overview("ws/a")]));
         });
     }
 
