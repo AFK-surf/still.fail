@@ -76,7 +76,7 @@ const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.too
 const logins = new LoginManager(settings.config.dataDir);
 const mesh = new MeshSupervisor({ dataDir: settings.config.dataDir, admin: `http://127.0.0.1:${settings.config.adminHttp.port}`, traces: () => settings.config.telemetry.traces });
 stationId = () => mesh.status().station;
-const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, checkOnStart: true, quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)) });
+const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, checkOnStart: true, quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)), codexModels: (profile) => codex.models(profile) });
 
 settings.onChange((config) => {
   reports.update();

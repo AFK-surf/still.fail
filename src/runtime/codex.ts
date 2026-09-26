@@ -243,6 +243,13 @@ export class CodexDriver implements AgentDriver {
     return host.request("account/rateLimits/read", {});
   }
 
+  /** The models the account can run in Codex, as its app-server lists them (the ones it does not hide). */
+  async models(profile: Profile): Promise<string[]> {
+    const host = await this.#host(profile);
+    const answer = await host.request("model/list", {}) as { data?: { id?: string; model?: string; hidden?: boolean }[] };
+    return (answer.data ?? []).filter((m) => !m.hidden).map((m) => m.id ?? m.model ?? "").filter(Boolean);
+  }
+
   async shutdown(): Promise<void> {
     await Promise.all([...this.#hosts.values()].map((host) => host.kill()));
     this.#hosts.clear();

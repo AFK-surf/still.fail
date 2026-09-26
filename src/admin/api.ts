@@ -53,6 +53,8 @@ export interface AdminDeps {
   quota?: (profile: Profile) => Promise<ProfileQuota>;
   /** How a profile is checked; tests replace it so no real CLI runs. */
   checkProfile?: typeof checkProfile;
+  /** The models a ChatGPT subscription runs in Codex (its app-server's list); its sign-in check does not say. */
+  codexModels?: (profile: Profile) => Promise<string[]>;
   /** Slack's app API; defaults to one using the configuration token in the config. */
   slackApps?: SlackApps;
   /** Decides who may use the API; defaults to Cloudflare Access per the config. */
@@ -1363,7 +1365,14 @@ export class AdminApi {
   async #check(id: string): Promise<ProfileCheck> {
     const profile = this.#deps.settings.config.profiles.find((p) => p.id === id);
     if (!profile) throw new HttpError(404, `unknown profile ${id}`);
-    const check = await (this.#deps.checkProfile ?? checkProfile)({ runtime: profile.runtime, kind: profile.access.kind, key: profile.access.key, home: profile.home, env: process.env });
+    let check = await (this.#deps.checkProfile ?? checkProfile)({ runtime: profile.runtime, kind: profile.access.kind, key: profile.access.key, home: profile.home, env: process.env });
+    if (check.state === "ok" && check.models === null && profile.access.kind === "subscription" && profile.runtime === "codex" && this.#deps.codexModels) {
+      const models = await this.#deps.codexModels(profile).catch((error) => {
+        log.warn("could not list a subscription's codex models", { profile: id, error });
+        return null;
+      });
+      if (models) check = { ...check, models: models.sort() };
+    }
     this.#checks.set(id, check);
     this.#deps.store.setProfileCheck(id, check);
     this.#overviewChanged();
