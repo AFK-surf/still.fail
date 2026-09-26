@@ -366,7 +366,7 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
             <ChooserItem key={m} checked={session.model === m} onSelect={() => void change.run({ model: m })}><ModelLogo model={m} runtime={session.runtime} size={12} />{m}</ChooserItem>
           ))}
         </Chooser>
-        <Chooser className="chooser run-chip" title="换思考深度" label={<>思考 {session.effort ? EFFORT_LABEL[session.effort] ?? session.effort : "默认"}</>}>
+        <Chooser className="chooser run-chip" title="换思考深度" label={session.effort ?? "默认深度"}>
           <ChooserItem checked={!session.effort} onSelect={() => void change.run({ effort: null })}>运行时默认</ChooserItem>
           {EFFORTS[session.runtime].map((e) => <ChooserItem key={e} checked={session.effort === e} onSelect={() => void change.run({ effort: e })}>{EFFORT_LABEL[e] ?? e}（{e}）</ChooserItem>)}
         </Chooser>
