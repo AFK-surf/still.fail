@@ -1190,6 +1190,8 @@ mod tests {
             match path {
                 "/v1/me" => json_response(200, json!({"workspaces": [{"id": "ws", "name": "W"}], "invitations": [], "relay_url": "https://relay.test"})),
                 "/v1/workspaces/ws" => json_response(200, json!({"id": "ws", "stations": [{"id": "st", "name": "studio", "online": false, "last_seen": 1}]})),
+                "/v1/auth/sessions" => json_response(200, json!({"sessions": [{"id": "d1", "current": true}]})),
+                "/v1/auth/sessions/d2" => json_response(200, json!({"ok": true})),
                 "/v1/auth/refresh" => {
                     refreshes.set(refreshes.get() + 1);
                     json_response(200, json!({"access_token": format!("fresh-{}", refreshes.get()), "refresh_token": "r", "subject": "s1", "email": "a@x.com", "expires_at": now_s() + 30.0}))
@@ -1223,6 +1225,24 @@ mod tests {
         for _ in 0..10 {
             tokio::task::yield_now().await;
         }
+    }
+
+    #[test]
+    fn an_accounts_devices_are_a_topic_read_again_after_a_write() {
+        run(async {
+            let (host, core) = cloud_core().await;
+            let ui = core.connect();
+            let mut values = HashMap::new();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::LoginSessions { account: "s1".into() } });
+            host.settle().await;
+            apply(&host, &mut values);
+            assert_eq!(values[&1], json!([{"id": "d1", "current": true}]));
+            let before = count(&host, "/v1/auth/sessions");
+            // Signing a device out, through the core: the list is read again, nobody asks for it.
+            core.receive(ui, ClientMessage::Call { id: 2, call: "cloud.request".into(), params: json!({"account": "s1", "method": "DELETE", "path": "/v1/auth/sessions/d2"}) });
+            host.settle().await;
+            assert_eq!(count(&host, "/v1/auth/sessions"), before + 1);
+        });
     }
 
     #[test]
