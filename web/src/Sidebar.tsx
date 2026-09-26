@@ -112,7 +112,7 @@ function ChatRow({ item }: { item: ChatItem }) {
         {/* People are in the chat itself; here only the last thing said and when. */}
         <span className="nav-session-meta">
           {item.last ? <LastMessage item={item} /> : <span className="nav-session-last" />}
-          <Time className="nav-time" at={item.lastActiveAt} />
+          <Time className="nav-time" at={item.lastActiveAt} fixed />
           {/* The agents' state ends the second line, under the connect icon; its place is kept on every row so times line up. */}
           <span className="state-dot-slot">
             {badge

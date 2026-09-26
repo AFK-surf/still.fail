@@ -2,7 +2,7 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
@@ -44,7 +44,9 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   useOlderOnScroll(list, chat, older);
   useMarkRead(floor, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
-  const divider = useUnreadLine(list, chat, messages, mineOf, older);
+  const returning = useRememberPlace(list, `${useStation().address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, messages.length > 0);
+  const divider = useUnreadLine(list, chat, messages, mineOf, older, returning);
+  const away = useAwayFromBottom(list);
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
   for (const o of outbox) sentHere.current.add(o.text);
@@ -115,6 +117,19 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
 
   return (
     <section className="chat" aria-label="对话">
+      <div className="chat-pane">
+      {away && (
+        <button type="button" className="chat-to-bottom" aria-label="跳到最新"
+          onClick={() => {
+            const pane = list.current;
+            if (!pane) return;
+            // A reader's move: once at the bottom the pane follows new messages again.
+            pane.dispatchEvent(new WheelEvent("wheel"));
+            pane.scrollTo({ top: pane.scrollHeight, behavior: "smooth" });
+          }}>
+          <ArrowDown size={16} strokeWidth={2} />
+        </button>
+      )}
       <div className="chat-list" ref={list} onMouseUp={() => setTimeout(onSelect, 0)} onScroll={() => setPicked(null)}>
         {chat.more && <div className="chat-older" aria-hidden="true"><span className="spinner" /></div>}
         {messages.length === 0 && (
@@ -219,6 +234,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
         })()}
         <div ref={floor} className="chat-floor" aria-hidden="true" />
       </div>
+      </div>
       {picked && (
         <button type="button" className="quote-pop" style={{ left: picked.at.x, top: picked.at.y }}
           onMouseDown={(e) => e.preventDefault()}
@@ -240,7 +256,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
  * Nothing unread: no line, and the chat opens at its bottom. Answers the seq
  * of the message the line goes over.
  */
-function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: MessageView[], mine: (m: MessageView) => boolean, older: () => Promise<unknown>): number | null {
+function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: MessageView[], mine: (m: MessageView) => boolean, older: () => Promise<unknown>, returning = false): number | null {
   // What was unread when the chat opened: after the read position, up to the newest message then.
   const [open] = useState(() => ({ read: chat.thread?.read ?? 0, newest: chat.thread?.last?.seq ?? 0, unread: (chat.thread?.unread ?? 0) > 0 }));
   const first = messages[0]?.seq;
@@ -248,7 +264,8 @@ function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messa
   const above = open.unread && chat.more && first !== undefined && first > open.read;
   const target = open.unread && !above ? messages.find((m) => m.seq > open.read && m.seq <= open.newest && !mine(m))?.seq ?? null : null;
   const asked = useRef<number | undefined>(undefined);
-  const jumped = useRef(!open.unread);
+  // Coming back to a chat goes back to where it was left (useRememberPlace), not to the line.
+  const jumped = useRef(!open.unread || returning);
   const load = useRef(older);
   load.current = older;
   useEffect(() => {
@@ -267,6 +284,64 @@ function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messa
     pane.scrollTop += line.getBoundingClientRect().top - pane.getBoundingClientRect().top - 12;
   }, [ref, above, target]);
   return target;
+}
+
+/** Whether the reader is scrolled up, away from the newest messages (more than a screenful's corner). */
+function useAwayFromBottom(ref: RefObject<HTMLElement | null>): boolean {
+  const [away, setAway] = useState(false);
+  useEffect(() => {
+    const pane = ref.current;
+    if (!pane) return;
+    const check = () => setAway(pane.scrollHeight - pane.scrollTop - pane.clientHeight > 120);
+    check();
+    pane.addEventListener("scroll", check, { passive: true });
+    const resize = new ResizeObserver(check);
+    resize.observe(pane);
+    return () => {
+      pane.removeEventListener("scroll", check);
+      resize.disconnect();
+    };
+  }, [ref]);
+  return away;
+}
+
+/** Where each chat was left: the message at the top of its pane, and how far below the pane's top it sat. */
+const leftAt = new Map<string, { ts: string; offset: number }>();
+
+/**
+ * Remembers where the reader was in a chat and takes them back there when
+ * they return, instead of opening it from the bottom again. The place is kept
+ * as the message at the top and its offset, so what arrived meanwhile below
+ * does not move it. Answers whether this is a return to a known place.
+ */
+function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean): boolean {
+  const [saved] = useState(() => leftAt.get(key));
+  const restored = useRef(false);
+  useEffect(() => {
+    const pane = ref.current;
+    if (!pane) return;
+    const record = () => {
+      const top = pane.getBoundingClientRect().top;
+      const first = [...pane.querySelectorAll<HTMLElement>(".msg[data-ts]")].find((m) => m.getBoundingClientRect().bottom > top);
+      if (first) leftAt.set(key, { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top });
+    };
+    pane.addEventListener("scroll", record, { passive: true });
+    return () => {
+      record();
+      pane.removeEventListener("scroll", record);
+    };
+  }, [ref, key]);
+  useEffect(() => {
+    if (!saved || !ready || restored.current) return;
+    restored.current = true;
+    const pane = ref.current;
+    const at = pane?.querySelector<HTMLElement>(`.msg[data-ts="${saved.ts}"]`);
+    if (!pane || !at) return;
+    // A reader's move: the pane keeps it rather than holding its bottom.
+    pane.dispatchEvent(new WheelEvent("wheel"));
+    pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - saved.offset;
+  }, [ref, saved, ready]);
+  return saved !== undefined;
 }
 
 /**

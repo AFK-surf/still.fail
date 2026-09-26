@@ -427,8 +427,10 @@ function useAbsoluteTime(): [boolean, () => void] {
   }];
 }
 
-export function Time({ at, className }: { at: number; className?: string }) {
-  const [absolute, flip] = useAbsoluteTime();
+/** A time, relative by default; clicking flips every time on the page to absolute and back. `fixed`: always relative, not a switch (the sidebar's), the date on hover. */
+export function Time({ at, className, fixed = false }: { at: number; className?: string; fixed?: boolean }) {
+  const [switched, flip] = useAbsoluteTime();
+  const absolute = switched && !fixed;
   // Re-render now and then so "刚刚" becomes "1 分钟前" without other changes.
   const [, tick] = useState(0);
   useEffect(() => {
@@ -437,8 +439,8 @@ export function Time({ at, className }: { at: number; className?: string }) {
     return () => clearInterval(timer);
   }, [absolute]);
   return (
-    <time className={`time-toggle${className ? ` ${className}` : ""}`} dateTime={new Date(at).toISOString()} title={absolute ? relativeTime(at) : absoluteTime(at)}
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); flip(); }}>
+    <time className={`${fixed ? "" : "time-toggle"}${className ? ` ${className}` : ""}`.trim()} dateTime={new Date(at).toISOString()} title={absolute ? relativeTime(at) : absoluteTime(at)}
+      onClick={fixed ? undefined : (e) => { e.preventDefault(); e.stopPropagation(); flip(); }}>
       {absolute ? absoluteTime(at) : relativeTime(at)}
     </time>
   );
