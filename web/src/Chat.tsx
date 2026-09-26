@@ -68,7 +68,8 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
     const from = (range.commonAncestorContainer instanceof Element ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement)?.closest<HTMLElement>("[data-author]");
     if (!from) return setPicked(null);
     const rect = range.getBoundingClientRect();
-    setPicked({ quote: { id: `${Date.now()}`, author: from.dataset.author!, text, comment: "" }, at: { x: rect.left + rect.width / 2, y: rect.top } });
+    const role = from.dataset.role === "agent" ? "agent" as const : "person" as const;
+    setPicked({ quote: { id: `${Date.now()}`, author: from.dataset.author!, text, comment: "", ...(from.dataset.ts ? { ts: from.dataset.ts } : {}), role }, at: { x: rect.left + rect.width / 2, y: rect.top } });
   };
 
   return (
@@ -89,7 +90,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
           const mine = m.role === "person" && isMine({ id: m.user, email: m.user });
           if (mine) {
             return (
-              <div key={m.ts} className="msg msg-mine" data-author="你" data-enter={enter}>
+              <div key={m.ts} className="msg msg-mine" data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
                 {(m.text || m.quotes?.length) ? (
                   <div className="msg-bubble">
                     <Quotes quotes={m.quotes} />
@@ -105,7 +106,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
           }
           const who = m.role === "agent" ? agent : name(m.user);
           return (
-            <div key={m.ts} className="msg msg-row" data-author={who} data-enter={enter}>
+            <div key={m.ts} className="msg msg-row" data-author={who} data-ts={m.ts} data-role={m.role} data-enter={enter}>
               <div className="msg-main">
                 <div className="msg-head">
                   <MessageAvatar message={m} name={who} runtime={detail.session.runtime} model={detail.transcript?.usage?.model ?? detail.session.model} />
@@ -348,7 +349,7 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
   const send = useMutation({
     mutationFn: async (value: string) => {
       const key = await keyFor();
-      await api.sayToSession(key, value, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ author, text: t, comment }) => ({ author, text: t, comment: comment.trim() })));
+      await api.sayToSession(key, value, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ author, text: t, comment, ts, role }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}) })));
       return key;
     },
     onSuccess: (key) => {

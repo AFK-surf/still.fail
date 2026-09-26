@@ -252,6 +252,8 @@ export class AdminApi {
       });
       const quotes: Quote[] = (Array.isArray(input.quotes) ? input.quotes : []).slice(0, 20).map((q: Record<string, unknown>) => ({
         author: String(q.author ?? "消息").slice(0, 100), text: String(q.text ?? "").slice(0, 4000), comment: String(q.comment ?? "").slice(0, 4000),
+        ...(typeof q.ts === "string" && /^\d+\.\d+$/.test(q.ts) ? { ts: q.ts } : {}),
+        ...(q.role === "agent" || q.role === "person" ? { role: q.role } : {}),
       })).filter((q: Quote) => q.text.trim());
       if (!text && attachments.length === 0 && quotes.length === 0) throw new HttpError(400, "消息是空的");
       return send(res, 200, { threadTs: await this.#deps.hub.sayToSession(id, viewerId(viewer), text, attachments, quotes) });

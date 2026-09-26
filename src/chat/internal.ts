@@ -46,7 +46,13 @@ export class InternalChat implements ChatSurface {
     this.#store.insertChatMessage({ threadTs, ts, role: "person", user, text, createdAt: Date.now(), attachments, quotes });
     // The agent reads quotes as Zork writes them (author, the passage as a
     // blockquote, then the comment), then the words, then the files as paths.
-    const quoted = quotes.map((q) => `${q.author}\n${q.text.split("\n").map((l) => `> ${l}`).join("\n")}${q.comment ? `\n\n${q.comment}` : ""}`);
+    // Each quote says it is one: which message (by id), whose, the passage, then what the sender says about it.
+    const quoted = quotes.map((q) => {
+      const whose = q.role === "agent" ? "your own earlier message" : `a message from ${q.author}`;
+      const which = q.ts ? `${whose} ${q.ts} in this conversation` : whose;
+      const passage = q.text.split("\n").map((l) => `> ${l}`).join("\n");
+      return `[Quote] From ${which}:\n${passage}${q.comment ? `\nTheir comment on it: ${q.comment}` : ""}`;
+    });
     const files = attachments.length ? `Attached files:\n${attachments.map((a) => `- ${a.path} (${a.name}, ${a.size} bytes)`).join("\n")}` : "";
     const forAgent = [...quoted, text, files].filter(Boolean).join("\n\n");
     return { channel: INTERNAL_CHANNEL, threadTs, ts, user, text: forAgent, addressed: true };

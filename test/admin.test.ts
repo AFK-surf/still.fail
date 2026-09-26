@@ -465,10 +465,10 @@ test("files sent to a session land in its workspace and reach the agent as paths
     const back = await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent(file.path.split("/").at(-1))}`);
     assert.equal(await back.text(), "hello file");
     assert.equal((await fetch(`${t.base}/sessions/${key}/files?name=${encodeURIComponent("../../../config.json")}`)).status, 404);
-    await t.call("POST", `/sessions/${key}/messages`, { text: "改一下", quotes: [{ author: "agent", text: "第一行\n第二行", comment: "这里不对" }] });
+    await t.call("POST", `/sessions/${key}/messages`, { text: "改一下", quotes: [{ author: "deepseek-flash", role: "agent", ts: "1790383286.536000", text: "第一行\n第二行", comment: "这里不对" }] });
     await settle();
     const sent = [...t.claude.last.steers, ...t.claude.last.prompts].join("\n---\n");
-    assert.match(sent, /agent\n> 第一行\n> 第二行\n\n这里不对\n\n改一下/);
+    assert.match(sent, /\[Quote\] From your own earlier message 1790383286\.536000 in this conversation:\n> 第一行\n> 第二行\nTheir comment on it: 这里不对\n\n改一下/);
     const after = await t.call("GET", `/sessions/${key}`);
     assert.equal(after.body.chats[0].messages.at(-1).quotes[0].comment, "这里不对");
     // The agent answers with an image; it is copied into the uploads and measured.

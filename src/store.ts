@@ -78,7 +78,11 @@ export interface ChatMessageRow {
 }
 
 /** A passage quoted from an earlier message, and what the sender says about it. */
-export interface Quote { author: string; text: string; comment: string }
+export interface Quote {
+  author: string; text: string; comment: string;
+  /** The quoted message's id (its ts) and whose it is, so the agent knows exactly what is quoted. */
+  ts?: string; role?: "agent" | "person";
+}
 
 /** A file someone sent to a session; `path` is where the agent finds it on the station. */
 export interface Attachment {
