@@ -95,7 +95,7 @@ fun HomeScreen(current: WorkspaceEntry) {
                 if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = "有邀请" })
                 IconIn(Icons.ChevronDown, 16.dp, C.muted)
             }
-            NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp, plain = true)
+            NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
         }
         Box(Modifier.weight(1f)) {
             val view = chats.value

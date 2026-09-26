@@ -46,6 +46,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -147,7 +148,7 @@ private fun rememberPicture(url: String?): androidx.compose.ui.graphics.ImageBit
         if (url.isNullOrBlank() || value != null) return@produceState
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                java.net.URL(url).openStream().use { android.graphics.BitmapFactory.decodeStream(it) }?.let { androidx.compose.ui.graphics.asImageBitmap(it) }
+                java.net.URL(url).openStream().use { android.graphics.BitmapFactory.decodeStream(it) }?.asImageBitmap()
             } catch (_: java.io.IOException) {
                 null
             }
@@ -256,9 +257,9 @@ fun NavBack(label: String, onClick: () -> Unit) {
 
 /** A round chip-colored button in a bar. */
 @Composable
-fun NavButton(icon: ImageVector, onClick: () -> Unit, iconSize: Dp = 18.dp, plain: Boolean = false) {
-    // Plain: the icon alone, no disc behind it.
-    Box(Modifier.size(34.dp).clip(CircleShape).let { if (plain) it else it.background(C.chip) }.clickable(onClick = onClick), contentAlignment = Alignment.Center) { IconIn(icon, iconSize) }
+fun NavButton(icon: ImageVector, onClick: () -> Unit, iconSize: Dp = 18.dp) {
+    // The icon alone, no disc behind it: a bar's buttons are quiet.
+    Box(Modifier.size(34.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) { IconIn(icon, iconSize) }
 }
 
 /** A page's compact bar: back, a centered title, and one action. No line under it: the page's paper runs on. */
