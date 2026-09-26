@@ -825,3 +825,18 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .msg-head { gap: 6px; }
 .msg-avatar { width: 18px; height: 18px; flex: none; }
 .msg-avatar-agent img { width: 12px; height: 12px; }
+
+/* Steps as they stream: the reply grows with a caret, a tool shows what it runs and its output as it comes. */
+.h-live > :last-child::after { content: ""; display: inline-block; width: 7px; height: 1em; margin-left: 2px; vertical-align: -2px; background: var(--accent); animation: caret 1s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .h-live > :last-child::after { animation: none; } }
+.h-live-thinking { display: grid; gap: 4px; font-size: var(--text-xs); color: var(--muted); }
+.h-live-thinking-text { white-space: pre-wrap; font-style: italic; color: var(--subtle); overflow: hidden; }
+.h-live-tool { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: var(--text-xs); }
+.h-live-tool-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.h-live-tool-head .spinner { width: 12px; height: 12px; flex: none; }
+.h-live-tool-head code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-family: var(--font-mono); }
+.h-live-done { color: var(--green); flex: none; }
+.h-live-output { margin: 0; max-height: 220px; overflow: auto; padding: 8px; border-radius: 6px; background: var(--neutral-bg); font-family: var(--font-mono); font-size: 11px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.h-live-said { font-size: var(--text-sm); }
+button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cursor: pointer; text-align: left; }

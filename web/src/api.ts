@@ -1,10 +1,10 @@
 // Talking to ember's admin API. Types come straight from the server code.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStation } from "./station.tsx";
 import type { Transport } from "./transport.ts";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
-import type { Attachment, Quote, ConnectInput, HostInfo, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type { Attachment, ConnectInput, HostInfo, LiveMessage, LiveStep, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, Quote, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
 
 export type * from "../../src/admin/types.ts";
@@ -155,4 +155,65 @@ export function useLiveUpdates(enabled: boolean): void {
 export function useHost() {
   const station = useStation();
   return useQuery({ queryKey: keys.host(station.id), queryFn: () => makeApi(station.transport).host(), refetchInterval: 15_000, enabled: station.online });
+}
+
+/** A step in flight on the page; an ended one stays until the transcript entry that records it arrives. */
+export type ShownStep = LiveStep & { ended?: boolean };
+
+/**
+ * Follows one session as it runs: new transcript entries are appended to the
+ * cached session (no refetch), and the steps the runtime is streaming are
+ * returned, growing delta by delta.
+ */
+export function useLiveSession(key: string | undefined): ShownStep[] {
+  const client = useQueryClient();
+  const station = useStation();
+  const [steps, setSteps] = useState<ShownStep[]>([]);
+  const queryKey = useMemo(() => (key ? keys.session(station.id, key) : null), [station.id, key]);
+  const known = useRef(0);
+  useEffect(() => {
+    if (!key || !queryKey || !station.online) return;
+    setSteps([]);
+    const length = () => client.getQueryData<SessionDetail>(queryKey)?.transcript?.timeline.length ?? 0;
+    const stop = station.transport.stream(
+      () => `/sessions/${encodeURIComponent(key)}/live?from=${(known.current = length())}`,
+      (_name, data) => {
+        const message = JSON.parse(data) as LiveMessage;
+        if (message.type === "timeline") {
+          const detail = client.getQueryData<SessionDetail>(queryKey);
+          if (!detail?.transcript) {
+            // The session's first transcript: fetch it whole once.
+            void client.invalidateQueries({ queryKey });
+          } else {
+            const have = detail.transcript.timeline;
+            if (message.start > have.length) void client.invalidateQueries({ queryKey }); // a gap: start over
+            else {
+              const timeline = [...have.slice(0, message.start), ...message.entries];
+              client.setQueryData<SessionDetail>(queryKey, { ...detail, transcript: { ...detail.transcript, timeline, usage: message.usage } });
+            }
+          }
+          if (message.entries.length) setSteps((all) => all.filter((s) => !s.ended));
+        } else if (message.type === "steps") {
+          setSteps(message.steps);
+        } else if (message.type === "clear") {
+          setSteps([]);
+        } else {
+          const e = message.event;
+          setSteps((all) => {
+            if (e.kind === "start") {
+              return [...all.filter((s) => s.id !== e.id), {
+                id: e.id, step: e.step, text: "", input: e.input ?? "", output: "", startedAt: Date.now(),
+                ...(e.tool ? { tool: e.tool } : {}), ...(e.subagent ? { subagent: true } : {}),
+              }];
+            }
+            if (e.kind === "delta") return all.map((s) => (s.id === e.id ? { ...s, [e.field]: s[e.field] + e.text } : s));
+            return all.map((s) => (s.id === e.id ? { ...s, ended: true } : s));
+          });
+        }
+      },
+      () => {},
+    );
+    return () => stop();
+  }, [key, queryKey, station, client]);
+  return steps;
 }

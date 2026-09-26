@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import { Link, useParams } from "react-router";
 import remarkGfm from "remark-gfm";
-import { useApi, keys, useHost, useOverview, useSession, useSessions, type Attachment, type ConnectView, type SessionDetail } from "../api.ts";
+import { useApi, keys, useHost, useLiveSession, useOverview, useSession, useSessions, type Attachment, type ConnectView, type SessionDetail } from "../api.ts";
 import { History } from "../History.tsx";
 import { ChatPanel } from "../Chat.tsx";
 import {
@@ -50,6 +50,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const station = useStation();
   const link = useLink();
   const detail = useSession(sessionKey);
+  const live = useLiveSession(sessionKey);
   const overview = useOverview();
   // Open tabs on the right; each can be closed, and with none open the panel goes away.
   // On narrow screens nothing opens by itself, since the panel would cover the chat.
@@ -110,7 +111,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
         </div>
       </header>
       {/* The chat is the page; the session's history sits in a tab set that takes the whole right side. */}
-      <ChatPanel detail={detail.data} chat={chat} onOpenHistory={() => (tabs.includes("history") && active === "history" ? closeTab("history") : openTab("history"))} />
+      <ChatPanel detail={detail.data} chat={chat} live={live} onOpenHistory={() => (tabs.includes("history") && active === "history" ? closeTab("history") : openTab("history"))} />
       </div>
         {panel && (
           <Tabs.Root className="side-panel" value={tabs.includes(active) ? active : tabs[0]!} onValueChange={setActive}>
@@ -128,7 +129,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
               <IconButton label="收起侧栏" icon={PanelRightClose} onClick={() => saveTabs([])} />
             </div>
             <Tabs.Content className="side-content" value="history">
-              <History detail={detail.data} connect={connect} actions={<SessionActions detail={detail.data} />} slackBase={base}
+              <History detail={detail.data} connect={connect} live={live} actions={<SessionActions detail={detail.data} />} slackBase={base}
                 onOpenChat={() => (document.querySelector(".composer-text") as HTMLTextAreaElement | null)?.focus()}
                 details={<SessionDetails detail={detail.data} connect={connect} base={base} />} />
             </Tabs.Content>

@@ -22,7 +22,7 @@ export interface Station {
 export const LOCAL_STATION: Station = {
   id: "local", name: "", base: "", online: true, settings: "/settings",
   // Resolved on each call, so a transport set at startup applies.
-  transport: { request: (...a) => transport().request(...a), bytes: (...a) => transport().bytes(...a), events: (...a) => transport().events(...a) },
+  transport: { request: (...a) => transport().request(...a), bytes: (...a) => transport().bytes(...a), events: (...a) => transport().events(...a), stream: (...a) => transport().stream(...a) },
 };
 
 export const StationContext = createContext<Station>(LOCAL_STATION);

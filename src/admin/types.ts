@@ -6,11 +6,14 @@ import type { LoginJob, LoginState } from "../login.ts";
 import type { Attachment, ChatMessageRow, ChatRow, Quote } from "../store.ts";
 import type { MeshStatus } from "../mesh.ts";
 import type { HostInfo } from "../host.ts";
+import type { LiveMessage, LiveStep } from "../live.ts";
+import type { LiveEvent } from "../runtime/types.ts";
 import type { ProfileQuota, QuotaWindow } from "../quota.ts";
 import type { Viewer } from "./access.ts";
 import type { AccessKind, ProfileCheck } from "../profiles.ts";
 import type { TimelineEntry, TranscriptUsage } from "../transcript.ts";
 
+export type { LiveEvent, LiveMessage, LiveStep };
 export type { Attachment, Quote, ChatMessageRow, ChatRow, HostInfo, LoginJob, LoginState, MeshStatus, ProfileQuota, QuotaWindow };
 export type { AccessKind, ConnectKind, ConnectMode, ConnectState, ProfileCheck, RuntimeKind, TimelineEntry, TranscriptUsage };
 

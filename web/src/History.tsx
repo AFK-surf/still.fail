@@ -5,7 +5,7 @@ import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ConnectView, SessionDetail, TimelineEntry } from "./api.ts";
+import type { ConnectView, SessionDetail, ShownStep, TimelineEntry } from "./api.ts";
 import { agentLabel, botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, slackThreadUrl, splitThread, threadNamer } from "./format.ts";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo } from "./ui.tsx";
 import { usePerson } from "./station.tsx";
@@ -121,8 +121,10 @@ function toItems(entries: TimelineEntry[]): Item[] {
  * stands (in the header line) and `actions` what can
  * be done to it right now (stop a turn, release the process).
  */
-export function History({ detail, connect, state, actions, details, slackBase, onOpenChat }: {
+export function History({ detail, connect, state, actions, details, slackBase, onOpenChat, live = [] }: {
   detail: SessionDetail; connect: ConnectView | undefined; state?: ReactNode; actions?: ReactNode; details?: ReactNode;
+  /** Steps the runtime is streaming right now, after the transcript's last entry. */
+  live?: ShownStep[];
   /** The Slack workspace URL, for links to threads. */
   slackBase?: string | null | undefined;
   /** Brings ember's own chat into view. */
@@ -161,9 +163,11 @@ export function History({ detail, connect, state, actions, details, slackBase, o
     el.addEventListener("scroll", onScroll);
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
+  // Streaming grows the last step without adding entries; follow that too.
+  const growth = live.reduce((n, s) => n + s.text.length + s.input.length + s.output.length, live.length);
   useEffect(() => {
     if (pinned.current && body.current) body.current.scrollTop = body.current.scrollHeight;
-  }, [count]);
+  }, [count, growth]);
   const { session, transcript } = detail;
   const items = useMemo(() => toItems(transcript?.timeline ?? []), [transcript]);
   const usage = transcript?.usage;
@@ -210,6 +214,7 @@ export function History({ detail, connect, state, actions, details, slackBase, o
               <HistoryItem key={i} item={item} where={where} person={(id) => member(id)?.name || detail.people[id] || id}
                 mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : detail.people[id] ?? id}`)} />
             ))}
+            {live.filter((s) => !s.subagent).map((s) => <LiveStepView key={s.id} step={s} />)}
           </>
         )}
       </div>
@@ -321,5 +326,63 @@ function StepRow({ step }: { step: Step }) {
       <pre className="code">{step.call.text}</pre>
       {step.result && <pre className="code" data-failed={step.result.ok === false}>{step.result.text}</pre>}
     </details>
+  );
+}
+
+/** The last lines of a stream, so a long command output shows where it is now. */
+function lastLines(text: string, n: number): string {
+  const lines = text.split("\n");
+  return lines.length > n ? lines.slice(-n).join("\n") : text;
+}
+
+/** A value being written as JSON, read before it is complete: the string at `field`, as far as it has arrived. */
+export function partialString(json: string, field: string): string | null {
+  const m = new RegExp(`"${field}"\\s*:\\s*"`).exec(json);
+  if (!m) return null;
+  let out = "";
+  for (let i = m.index + m[0].length; i < json.length; i++) {
+    const c = json[i]!;
+    if (c === '"') return out;
+    if (c !== "\\") { out += c; continue; }
+    const next = json[++i];
+    if (next === undefined) break;
+    if (next === "n") out += "\n";
+    else if (next === "t") out += "\t";
+    else if (next === "u") {
+      const hex = json.slice(i + 1, i + 5);
+      if (hex.length < 4) break;
+      out += String.fromCharCode(parseInt(hex, 16));
+      i += 4;
+    } else out += next;
+  }
+  return out;
+}
+
+/** A step the runtime is streaming: the reply as it is written, thinking, or a tool running with its output. */
+function LiveStepView({ step }: { step: ShownStep }) {
+  if (step.step === "text") {
+    return step.text ? <div className="h-text markdown h-live"><Markdown remarkPlugins={[remarkGfm]}>{step.text}</Markdown></div> : null;
+  }
+  if (step.step === "thinking") {
+    return (
+      <div className="h-live-thinking">
+        <span className="activity-pulse inline" aria-hidden="true" />思考中
+        {step.text && <div className="h-live-thinking-text">{lastLines(step.text, 4)}</div>}
+      </div>
+    );
+  }
+  const name = toolName(step.tool);
+  const said = name === "chat_post" ? partialString(step.input, "text") : null;
+  const hintText = said === null ? hint({ kind: "tool_call", tool: step.tool ?? "", text: step.input, at: null } as TimelineEntry) || step.input.slice(0, 160) : "";
+  return (
+    <div className="h-live-tool" data-ended={step.ended || undefined}>
+      <div className="h-live-tool-head">
+        {step.ended ? <span className="h-live-done" aria-hidden="true">✓</span> : <span className="spinner" aria-hidden="true" />}
+        <strong>{said !== null ? "正在发送消息" : name}</strong>
+        {hintText && <code>{hintText}</code>}
+      </div>
+      {said && <div className="markdown h-live-said"><Markdown remarkPlugins={[remarkGfm]}>{said}</Markdown></div>}
+      {step.output && <pre className="h-live-output">{lastLines(step.output, 12)}</pre>}
+    </div>
   );
 }

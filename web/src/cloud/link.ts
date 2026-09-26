@@ -105,12 +105,17 @@ export class StationTransport implements Transport {
   }
 
   events(onEvent: (name: string, data: string) => void, onOpen: () => void): () => void {
+    return this.stream(() => "/events", onEvent, onOpen);
+  }
+
+  stream(path: () => string, onEvent: (name: string, data: string) => void, onOpen: () => void): () => void {
     let stopped = false;
     let current: { cancel(): void } | null = null;
     void (async () => {
       while (!stopped) {
         try {
-          const { reply } = await this.#send("GET", "/events");
+          const { reply, head } = await this.#send("GET", path());
+          if (head.status !== 200) throw new Error(String(head.status));
           current = reply;
           onOpen();
           const feed = sseParser(onEvent);
@@ -119,7 +124,7 @@ export class StationTransport implements Transport {
         } catch {
           // fall through to retry
         }
-        if (!stopped) await new Promise((r) => setTimeout(r, 3000));
+        if (!stopped) await new Promise((r) => setTimeout(r, 2000));
       }
     })();
     return () => {

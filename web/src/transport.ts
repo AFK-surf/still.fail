@@ -9,6 +9,8 @@ export interface Transport {
   bytes(path: string): Promise<{ status: number; type: string; data: Uint8Array }>;
   /** Follows /admin/api/events; `onEvent(name, data)` per event, `onOpen` on each (re)connect. Returns a stop function. */
   events(onEvent: (name: string, data: string) => void, onOpen: () => void): () => void;
+  /** Follows any event stream of the admin API; `path` is asked again on each (re)connect, so it can say where to resume. */
+  stream(path: () => string, onEvent: (name: string, data: string) => void, onOpen: () => void): () => void;
 }
 
 /** Same-origin HTTP: the page was served by the station. */
@@ -25,6 +27,30 @@ export const localTransport: Transport = {
   async bytes(path) {
     const response = await fetch(`/admin/api${path}`, { credentials: "same-origin" });
     return { status: response.status, type: response.headers.get("content-type") ?? "", data: new Uint8Array(await response.arrayBuffer()) };
+  },
+  stream(path, onEvent, onOpen) {
+    let stopped = false;
+    let abort: AbortController | null = null;
+    void (async () => {
+      while (!stopped) {
+        try {
+          abort = new AbortController();
+          const response = await fetch(`/admin/api${path()}`, { credentials: "same-origin", signal: abort.signal });
+          if (!response.ok || !response.body) throw new Error(String(response.status));
+          onOpen();
+          const feed = sseParser(onEvent);
+          const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+          for (let r = await reader.read(); !r.done && !stopped; r = await reader.read()) feed(r.value);
+        } catch {
+          // fall through to retry
+        }
+        if (!stopped) await new Promise((r) => setTimeout(r, 2000));
+      }
+    })();
+    return () => {
+      stopped = true;
+      abort?.abort();
+    };
   },
   events(onEvent, onOpen) {
     const source = new EventSource("/admin/api/events");

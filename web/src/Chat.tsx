@@ -7,12 +7,13 @@ import { ArrowUp, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail } from "./api.ts";
+import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownStep } from "./api.ts";
+import { partialString, toolName } from "./History.tsx";
 import { absoluteTime, agentLabel, relativeTime, sessionStatus } from "./format.ts";
 import { useIsMine, usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
 
-export function ChatPanel({ detail, chat, onOpenHistory }: { detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; onOpenHistory(): void }) {
+export function ChatPanel({ detail, chat, live = [], onOpenHistory }: { detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; live?: ShownStep[]; onOpenHistory(): void }) {
   const list = useRef<HTMLDivElement>(null);
   const messages = chat?.messages ?? [];
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
@@ -85,9 +86,29 @@ export function ChatPanel({ detail, chat, onOpenHistory }: { detail: SessionDeta
             </div>
           );
         })}
-        {busy && messages.at(-1)?.role === "person" && (
-          <div className="chat-typing"><span className="activity-pulse inline" aria-hidden="true" />正在处理…</div>
-        )}
+        {(() => {
+          // The agent writing to this chat right now: its chat_post, as far as it has streamed.
+          const writing = live.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && (partialString(s.input, "to") ?? "").startsWith("EMBER/"));
+          const text = writing ? partialString(writing.input, "text") : null;
+          if (text) {
+            return (
+              <div className="msg msg-row" data-author={agent}>
+                <div className="msg-main">
+                  <div className="msg-head">
+                    <span className="msg-avatar msg-avatar-agent"><ModelLogo model={detail.transcript?.usage?.model ?? detail.session.model} runtime={detail.session.runtime} size={12} /></span>
+                    <button type="button" className="msg-name msg-agent" onClick={onOpenHistory}>{agent}</button>
+                    <span className="msg-time">正在输入</span>
+                  </div>
+                  <div className="markdown h-live"><Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown></div>
+                </div>
+              </div>
+            );
+          }
+          if (!busy || messages.at(-1)?.role !== "person") return null;
+          const doing = live.filter((s) => !s.ended && !s.subagent).at(-1);
+          const what = !doing ? "正在处理…" : doing.step === "thinking" ? "正在思考…" : doing.step === "tool" ? `正在运行 ${toolName(doing.tool)}…` : "正在写…";
+          return <button type="button" className="chat-typing" onClick={onOpenHistory}><span className="activity-pulse inline" aria-hidden="true" />{what}</button>;
+        })()}
       </div>
       {picked && (
         <button type="button" className="quote-pop" style={{ left: picked.at.x, top: picked.at.y }}
