@@ -14,4 +14,7 @@ target=${CARGO_TARGET_DIR:-target}
 out=../web/src/core/pkg
 rm -rf "$out"
 wasm-bindgen --target web --out-dir "$out" "$target/wasm32-unknown-unknown/wasm-release/ember_core_wasm.wasm"
+# When this core was built: a page on a newer one starts its own worker, and the older retires (web/src/core/built.ts).
+printf 'export const BUILT_AT = %s000;\n' "$(date +%s)" > "$out/built.js"
+printf 'export declare const BUILT_AT: number;\n' > "$out/built.d.ts"
 ls -la "$out"

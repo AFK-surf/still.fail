@@ -1,6 +1,7 @@
 // The worker that runs the core (docs/client-core.md). As a SharedWorker every
 // tab connects a port; as a dedicated Worker (no SharedWorker, e.g. Chrome on
 // Android) the global scope is the one port. Each port is one core client.
+import { BUILT_AT } from "./built.ts";
 import init, { start, type EmberCore } from "./pkg/ember_core_wasm.js";
 import type { WorkerFault } from "./client.ts";
 
@@ -81,8 +82,6 @@ function guard(run: () => void): void {
   }
 }
 
-declare const __BUILT_AT__: number;
-
 /**
  * One core per browser: a tab still on an earlier build keeps that build's worker (another script, so another shared
  * worker), and two cores on the same storage would race each other (a login refreshed twice is taken for theft). So
@@ -92,12 +91,12 @@ const builds = typeof BroadcastChannel === "undefined" ? null : new BroadcastCha
 if (builds) {
   builds.onmessage = (event: MessageEvent) => {
     const other = (event.data as { built?: unknown } | null)?.built;
-    if (typeof other !== "number" || other === __BUILT_AT__) return;
-    if (other > __BUILT_AT__) retire();
+    if (typeof other !== "number" || other === BUILT_AT) return;
+    if (other > BUILT_AT) retire();
     // An older one started after this: it hears of this one and retires.
-    else builds.postMessage({ built: __BUILT_AT__ });
+    else builds.postMessage({ built: BUILT_AT });
   };
-  builds.postMessage({ built: __BUILT_AT__ });
+  builds.postMessage({ built: BUILT_AT });
 }
 
 function retire(): void {

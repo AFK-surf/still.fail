@@ -4,6 +4,7 @@
 // core; a dedicated Worker per tab where SharedWorker is missing (Chrome on
 // Android). In the desktop app (apps/desktop) the core runs in a utility
 // process instead, reached through a MessagePort; the protocol is the same.
+import { BUILT_AT } from "./built.ts";
 import { captureException } from "../telemetry.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core/src/protocol.rs). */
@@ -308,12 +309,12 @@ export function workerOpener(): Opener {
     // Both constructors spelled out: Vite bundles a worker only from a literal
     // `new (Shared)Worker(new URL(…, import.meta.url))`.
     if (typeof SharedWorker !== "undefined") {
-      const worker = new SharedWorker(new URL("./worker.ts", import.meta.url), { type: "module", name: "ember-core" });
+      const worker = new SharedWorker(new URL("./worker.ts", import.meta.url), { type: "module", name: `ember-core-${BUILT_AT}` });
       worker.port.onmessage = receive;
       worker.onerror = () => onFail("共享 worker 没有启动");
       return { post: (message) => worker.port.postMessage(message), close: () => worker.port.close() };
     }
-    const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: "ember-core" });
+    const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: `ember-core-${BUILT_AT}` });
     worker.onmessage = receive;
     worker.onerror = (event) => onFail(event.message || "worker 出错");
     return { post: (message) => worker.postMessage(message), close: () => worker.terminate() };
