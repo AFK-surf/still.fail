@@ -3,6 +3,7 @@ import type { RelayBudget } from "./relay";
 import type { Account } from "./account";
 import type { Directory } from "./directory";
 import type { LoginAttempt, LoginLimiter } from "./login";
+import type { TelemetryLimiter } from "./tracing";
 
 export interface Env {
   RELAY_BUDGET: DurableObjectNamespace<RelayBudget>;
@@ -14,6 +15,7 @@ export interface Env {
   ASSETS?: Fetcher;
   LOGINS: DurableObjectNamespace<LoginAttempt>;
   LOGIN_LIMITS: DurableObjectNamespace<LoginLimiter>;
+  TELEMETRY_LIMITS: DurableObjectNamespace<TelemetryLimiter>;
   PUBLIC_ORIGIN: string;
   /** The admin's console, served by this Worker on a host of its own (see index.ts). */
   ADMIN_ORIGIN: string;
@@ -27,4 +29,7 @@ export interface Env {
   ADMIN_EMAIL?: string;
   /** Ed25519 private JWK (JSON) that signs station grants. */
   GRANT_SIGNING_JWK: string;
+  /** Axiom's ingest token and dataset for traces (tracing.ts); without a token nothing is sent. */
+  AXIOM_TOKEN?: string;
+  AXIOM_DATASET?: string;
 }

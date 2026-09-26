@@ -11,6 +11,8 @@ Inputs (none of them in the repository):
   keys      ~/ember-deploy/keys.json, created on first run: session signing key, admin token and
             the Ed25519 key that signs station grants. Keep it; losing it logs everyone out and makes
             stations distrust new grants until they re-enroll.
+  axiom     ~/ember-deploy/axiom.json, {"dataset", "token"}: where traces go (docs/telemetry.md).
+            Without it the cloud takes no traces.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
 import argparse
@@ -29,6 +31,7 @@ ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
 DEPLOY = Path.home() / "ember-deploy"
 KEYS = DEPLOY / "keys.json"
+AXIOM = DEPLOY / "axiom.json"
 
 
 def write_private(path: Path, value) -> None:
@@ -81,6 +84,14 @@ def keys() -> dict:
     return value
 
 
+def axiom() -> dict:
+    if not AXIOM.exists():
+        print(f"note: {AXIOM} is missing; the cloud will take no traces")
+        return {}
+    value = json.loads(AXIOM.read_text())
+    return {"AXIOM_TOKEN": value["token"], "AXIOM_DATASET": value["dataset"]}
+
+
 @contextmanager
 def docker_env():
     """A throwaway Docker config: an SSH session cannot unlock the macOS keychain Docker's default helper uses."""
@@ -112,6 +123,7 @@ def main() -> None:
     if args.check:
         print("account", account_id())
         print("keys", "present" if KEYS.exists() else "will be created")
+        print("axiom", "present" if AXIOM.exists() else f"missing: no traces without {AXIOM}")
         return
 
     config = {**template, "account_id": account_id(), "vars": {**template["vars"], "GOOGLE_CLIENT_ID": web["client_id"]}}
@@ -120,7 +132,7 @@ def main() -> None:
 
     if not args.skip_build:
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, check=True)
-    values = {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"]}
+    values = {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom()}
     with docker_env() as env:
         wrangler("deploy", "--config", str(local), "--containers-rollout", "immediate", env=env)
         with tempfile.TemporaryDirectory(prefix="ember-secrets-") as directory:

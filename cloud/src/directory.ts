@@ -406,6 +406,11 @@ export class Directory extends DurableObject<Env> {
   }
 
   /** What a grant to reach `station` should say about the caller, if it may. */
+  /** Whether a station is enrolled (in some workspace). */
+  isStation(station: string): boolean {
+    return this.#one("SELECT 1 AS found FROM stations WHERE id = ?", station) !== undefined;
+  }
+
   access(sub: string, workspace: string, station: string): { role: Role; station_name: string } {
     const role = this.#role(sub, workspace);
     const row = this.#one("SELECT name FROM stations WHERE id = ? AND workspace = ?", station, workspace);

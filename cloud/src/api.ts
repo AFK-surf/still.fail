@@ -8,6 +8,7 @@ import { bearerToken, denied, readJson, reply, verifyToken, type Claims } from "
 import { EVENTS_PROTOCOL, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
 import { grantKeys, signGrant, validKeyHex, verifyKeySignature } from "./grants";
+import { receiveTraces } from "./tracing";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
 const STATUS: Record<string, number> = {
@@ -92,6 +93,14 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     const version = request.headers.get("x-ember-version");
     if (version) headers.set("x-ember-version", version.slice(0, 40));
     return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
+  }
+
+  // Spans from a signed-in client, or from a station signing them with its key (tracing.ts).
+  if (path === "/v1/telemetry/traces" && method === "POST") {
+    const token = bearerToken(request);
+    const claims = token ? await account(token, env) : null;
+    if (token && !claims) return denied();
+    return receiveTraces(request, env, claims?.sub ?? null);
   }
 
   if (path === "/v1/events" && method === "GET") {

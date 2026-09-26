@@ -39,9 +39,11 @@
       { "name": "DIRECTORY", "class_name": "Directory" },
       { "name": "LOGINS", "class_name": "LoginAttempt" },
       { "name": "LOGIN_LIMITS", "class_name": "LoginLimiter" },
+      { "name": "TELEMETRY_LIMITS", "class_name": "TelemetryLimiter" },
     ],
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Relay", "DiscoveryRecord", "Account", "Directory", "LoginAttempt", "LoginLimiter", "RelayBudget"] },
+    { "tag": "v2", "new_sqlite_classes": ["TelemetryLimiter"] },
   ],
 }

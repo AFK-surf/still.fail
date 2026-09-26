@@ -1,9 +1,9 @@
 // Only the test bundler imports this entry. Production exports no fixture routes.
 import { DurableObject } from "cloudflare:workers";
-import worker, { Account as ProductionAccount, RelayBudget as ProductionRelayBudget, DiscoveryRecord, Directory as ProductionDirectory, LoginAttempt, LoginLimiter } from "../src/index";
+import worker, { Account as ProductionAccount, RelayBudget as ProductionRelayBudget, DiscoveryRecord, Directory as ProductionDirectory, LoginAttempt, LoginLimiter, TelemetryLimiter } from "../src/index";
 import { signToken, nowSeconds, reply, readJson } from "../src/auth";
 import type { Env } from "../src/env";
-export { DiscoveryRecord, LoginAttempt, LoginLimiter };
+export { DiscoveryRecord, LoginAttempt, LoginLimiter, TelemetryLimiter };
 
 export class Directory extends ProductionDirectory {
   /** The presence alarm's check, as if it ran at `ms`. */
@@ -97,7 +97,7 @@ export class Relay extends DurableObject<{ TEST_RELAY?: Fetcher }> {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (path === "/__test/devices") return reply(deviceRequests);
     if (path === "/__test/offline") {
@@ -110,7 +110,7 @@ export default {
     }
     if (path === "/v1/auth/refresh" && loseRefreshResponse) {
       loseRefreshResponse = false;
-      const response = await worker.fetch(request, env);
+      const response = await worker.fetch(request, env, ctx);
       return response.ok ? reply({ error: "lost_response" }, 503) : response;
     }
     if (offline && path.startsWith("/v1/auth/")) return reply({ error: "unavailable" }, 503);
@@ -130,14 +130,14 @@ export default {
       });
     }
     if (path === "/v1/auth/device" && request.method === "POST") {
-      const response = await worker.fetch(request, env);
+      const response = await worker.fetch(request, env, ctx);
       if (response.ok) {
         deviceRequests.push(((await response.clone().json()) as { verification_uri: string }).verification_uri);
         if (deviceRequests.length > 8) deviceRequests.shift();
       }
       return response;
     }
-    return worker.fetch(request, env);
+    return worker.fetch(request, env, ctx);
   },
 };
 let offline = false;

@@ -19,6 +19,8 @@ export async function harness(
     adminOrigin?: string;
     /** The ASSETS binding: a few stand-in files of both web apps unless given. */
     assets?: (request: Request) => Promise<Response> | Response;
+    /** Axiom: a stand-in answering its requests, or "real" to reach it (with AXIOM_TOKEN from the environment). */
+    axiom?: ((request: Request) => Promise<Response> | Response) | "real";
   } = {},
 ) {
   const origin = options.origin ?? "https://relay.example";
@@ -68,12 +70,13 @@ export async function harness(
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
+        ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
       },
       serviceBindings: {
         ...(options.relay ? { TEST_RELAY: { external: { address: new URL(options.relay).host, http: {} } } } : {}),
         ASSETS: (options.assets ?? standInAssets) as any,
       },
-      durableObjects: Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Relay", "DiscoveryRecord", "RelayBudget", "Directory"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "RELAY", "RECORDS", "RELAY_BUDGET", "DIRECTORY"][i], { className, useSQLite: true }])),
+      durableObjects: Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Relay", "DiscoveryRecord", "RelayBudget", "Directory", "TelemetryLimiter"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "RELAY", "RECORDS", "RELAY_BUDGET", "DIRECTORY", "TELEMETRY_LIMITS"][i], { className, useSQLite: true }])),
       outboundService: async (request) => {
         const url = new URL(request.url);
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
@@ -99,6 +102,11 @@ export async function harness(
             .setAudience(code.invalid === "aud" ? "wrong" : "test-google-client")
             .sign(privateKey);
           return MFResponse.json({ id_token: idToken });
+        }
+        if (url.origin === "https://api.axiom.co" && options.axiom) {
+          if (options.axiom !== "real") return options.axiom(request as unknown as Request) as any;
+          const answer = await globalThis.fetch(url, { method: request.method, headers: Object.fromEntries(request.headers), body: await request.arrayBuffer() });
+          return new MFResponse(await answer.arrayBuffer(), { status: answer.status });
         }
         if (options.relay && url.origin === options.relay) {
           // Workerd networking to the real local relay uses a separate service
