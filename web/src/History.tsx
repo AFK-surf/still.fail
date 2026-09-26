@@ -4,8 +4,8 @@
 import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ConnectView, SessionDetail, ShownPhase, ShownStep, TimelineEntry } from "./api.ts";
-import { agentLabel, botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, slackThreadUrl, splitThread, threadNamer } from "./format.ts";
-import { Avatar, ICON, ModelLogo, Pill, SlackLogo } from "./ui.tsx";
+import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, slackThreadUrl, splitThread, threadNamer } from "./format.ts";
+import { Avatar, ICON, Pill, SlackLogo } from "./ui.tsx";
 import { usePerson } from "./station.tsx";
 import { Prose } from "./Prose.tsx";
 import { useStickToBottom } from "./scroll.ts";
@@ -122,8 +122,9 @@ function toItems(entries: TimelineEntry[]): Item[] {
  * stands (in the header line) and `actions` what can
  * be done to it right now (stop a turn, release the process).
  */
-export function History({ detail, connect, state, actions, details, slackBase, onOpenChat, live = [], phase = null }: {
-  detail: SessionDetail; connect: ConnectView | undefined; state?: ReactNode; actions?: ReactNode; details?: ReactNode;
+export function History({ detail, connect, summary, actions, details, slackBase, onOpenChat, live = [], phase = null }: {
+  /** Who the agent is shows on the tab; the head carries a short summary (allowance, disk, cache) and `details` unfolds under it. */
+  detail: SessionDetail; connect: ConnectView | undefined; summary?: ReactNode; actions?: ReactNode; details?: ReactNode;
   /** Steps the runtime is streaming right now, after the transcript's last entry. */
   live?: ShownStep[];
   /** Where the running turn stands with the model. */
@@ -164,20 +165,13 @@ export function History({ detail, connect, state, actions, details, slackBase, o
   const firstCount = useRef(Number.POSITIVE_INFINITY);
   if (firstCount.current === Number.POSITIVE_INFINITY && transcript) firstCount.current = items.length;
   const usage = transcript?.usage;
-  const model = usage?.model ?? session.model ?? connect?.bind.model ?? null;
   const name = connect?.name ?? session.connect;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
 
   return (
     <section className="history" aria-label="执行历史">
       <header className="history-head">
-        <div className="history-identity">
-          <span className="history-name"><ModelLogo model={model} runtime={session.runtime} size={13} />{agentLabel(model, session.effort)}</span>
-          <span className="history-sep">·</span>
-          <span>{RUNTIME_LABEL[session.runtime]}</span>
-          {usage && <><span className="history-sep">·</span><span>{compactNumber(usage.inputTokens + usage.outputTokens)} tokens</span></>}
-          {state && <><span className="history-sep">·</span>{state}</>}
-        </div>
+        <div className="history-identity">{summary}</div>
         <div className="history-tools">
           {actions}
           {(usage || details) && (

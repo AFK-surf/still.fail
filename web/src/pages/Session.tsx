@@ -3,8 +3,8 @@
 // reaches the agent the way a Slack thread does.
 import { useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, Ring } from "../components.tsx";
-import { PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
-import { DropdownMenu, Tabs } from "radix-ui";
+import { Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
+import { DropdownMenu, Popover, Tabs } from "radix-ui";
 import { useState, type ReactNode } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
@@ -12,7 +12,7 @@ import { useAction, useApi, useChat, useHost, useLive, type ConnectView, type Pr
 import { History } from "../History.tsx";
 import { ChatPanel } from "../Chat.tsx";
 import {
-  BADGE_LABEL, PROCESS_LABEL, RUNTIME_LABEL, absoluteTime, agentLabel, compactNumber, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusBadge, threadNamer, turnResult,
+  BADGE_LABEL, PROCESS_LABEL, RUNTIME_LABEL, absoluteTime, agentLabel, compactNumber, relativeTime, sessionStatus, sessionTitle, slackThreadUrl, statusBadge, threadNamer,
 } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { AgentMark, Button, ConnectKindIcon, Empty, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, ResizeHandle, RuntimeLogo, SlackLogo, Time, Tip } from "../ui.tsx";
@@ -77,6 +77,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const single = slackThreads.length === 1 ? slackThreads[0] : undefined;
   const singleUrl = single ? slackThreadUrl(base, single.channel, single.threadTs) : null;
   const badge = statusBadge(sessionStatus(session));
+  const model = detail.transcript?.usage?.model ?? session.model;
   const toggleHistory = () => (tabs.includes("history") && active === "history" ? closeTab("history") : openTab("history"));
   // One chat per session; older sessions may have several, of which the first is the one.
   const chat = chats[0];
@@ -86,15 +87,16 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
       <header className="page-bar">
         <MobileBack to={link("/sessions")} label="会话" />
         <div className="page-bar-title">
-          <Tip label={`${agentLabel(detail.transcript?.usage?.model ?? session.model, session.effort)}${badge ? ` · ${BADGE_LABEL[badge]}` : ""} · 执行历史`}>
+          <Tip label={`${agentLabel(model, session.effort)}${badge ? ` · ${BADGE_LABEL[badge]}` : ""} · 执行历史`}>
             <button type="button" className="agent-mark-btn" onClick={toggleHistory} aria-label="执行历史">
-              <AgentMark model={detail.transcript?.usage?.model ?? session.model} runtime={session.runtime} badge={badge} size={22} />
+              <AgentMark model={model} runtime={session.runtime} badge={badge} size={22} />
             </button>
           </Tip>
           <h1>{sessionTitle(session, name)}</h1>
           {station.name && <span className="page-bar-station">{station.name}</span>}
         </div>
         <div className="page-bar-actions">
+          <ChatInfo detail={detail} connect={connect} base={base} />
           {slackThreads.length > 1
             ? <ThreadMenu detail={detail} base={base} />
             : singleUrl && (
@@ -115,7 +117,11 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
               <Tabs.List className="side-tab-list" aria-label="会话侧栏">
                 {tabs.map((t) => (
                   <span key={t} className="side-tab-wrap">
-                    <Tabs.Trigger className="side-tab" value={t}>{TAB_LABEL[t]}</Tabs.Trigger>
+                    <Tabs.Trigger className="side-tab" value={t} title={TAB_LABEL[t]}>
+                      {t === "history"
+                        ? <span className="side-tab-agent"><ModelLogo model={model} runtime={session.runtime} size={13} />{agentLabel(model, session.effort)}</span>
+                        : TAB_LABEL[t]}
+                    </Tabs.Trigger>
                     <button type="button" className="side-tab-close" aria-label={`关闭${TAB_LABEL[t]}`} onClick={() => closeTab(t)}><X size={12} strokeWidth={2} /></button>
                   </span>
                 ))}
@@ -126,7 +132,8 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
             <Tabs.Content className="side-content" value="history">
               <History detail={detail} connect={connect ?? undefined} live={live} phase={phase} actions={<SessionActions detail={detail} />} slackBase={base}
                 onOpenChat={() => (document.querySelector(".composer-text") as HTMLTextAreaElement | null)?.focus()}
-                details={<SessionDetails detail={detail} connect={connect} profile={profile} base={base} />} />
+                summary={<HistorySummary detail={detail} profile={profile} />}
+                details={<SessionDetails detail={detail} profile={profile} />} />
             </Tabs.Content>
           </Tabs.Root>
         )}
@@ -134,16 +141,71 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   );
 }
 
-/** What a session is: where it runs, what runs it, who is in it, where it is talked about. */
-function SessionDetails({ detail, connect, profile, base }: { detail: SessionDetail; connect: ConnectView | null; profile: ProfileView | null; base: string | null }) {
+/** The chat itself: where it came from, who started it and takes part, its Slack threads. Opens from the title bar. */
+function ChatInfo({ detail, connect, base }: { detail: SessionDetail; connect: ConnectView | null; base: string | null }) {
+  const { session } = detail;
+  const link = useLink();
+  const name = threadNamer(detail);
+  const threads = detail.threads.filter((t) => t.channel !== "EMBER");
+  const row = (label: string, value: ReactNode) => <div className="detail-row"><dt>{label}</dt><dd>{value}</dd></div>;
+  return (
+    <Popover.Root>
+      <Tip label="对话信息">
+        <Popover.Trigger asChild>
+          <button type="button" className="icon-btn" aria-label="对话信息"><Info {...ICON} /></button>
+        </Popover.Trigger>
+      </Tip>
+      <Popover.Portal>
+        <Popover.Content className="popover chat-info" align="end" sideOffset={6} collisionPadding={8}>
+          <dl className="details">
+            {row("连接", connect ? <Link to={link(`/connects/${connect.id}`)} className="detail-link"><ConnectKindIcon kind={connect.kind} size={13} />{connect.name}</Link> : session.connect)}
+            {row("发起", session.creator ? <CreatorText creator={session.creator} verb="发起" /> : <span className="muted">未记录</span>)}
+            {row("参与", <span className="detail-inline"><PeopleStack people={session.participants} max={8} />{session.participants?.length ?? 0} 人</span>)}
+            {row("创建", <Time at={session.createdAt} />)}
+            {row("最近活动", <Time at={session.lastActiveAt} />)}
+          </dl>
+          {threads.length > 0 && (
+            <ul className="details-list">
+              {threads.map((t) => {
+                const url = slackThreadUrl(base, t.channel, t.threadTs);
+                const { where, when } = name(t.channel, t.threadTs);
+                return (
+                  <li key={`${t.channel}/${t.threadTs}`}>
+                    {url ? <a href={url} target="_blank" rel="noopener" className="detail-link"><SlackLogo size={13} />{where}</a> : <span className="detail-inline"><SlackLogo size={13} />{where}</span>}
+                    <span className="muted">{when} 开始 · {t.messages} 条消息</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/** The history's head, folded: what is worth a glance — the allowance left, the cache hit rate, the station's free disk. */
+function HistorySummary({ detail, profile }: { detail: SessionDetail; profile: ProfileView | null }) {
+  const host = useHost(useStation().address).value;
+  const usage = detail.transcript?.usage;
+  const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
+  const windows = profile?.quota?.state === "ok" ? profile.quota.windows : [];
+  const free = host && host.disk.totalBytes > 0 ? host.disk.freeBytes : null;
+  const parts: ReactNode[] = [
+    ...windows.map((w) => <span key={w.label} title={w.resetsAt ? `${absoluteTime(w.resetsAt)} 重置` : undefined}>{w.label} 已用 {Math.round(w.usedPercent)}%</span>),
+    hitRate !== null && <span key="cache">缓存命中 {hitRate}%</span>,
+    free !== null && <span key="disk">磁盘剩 {Math.round(free / 1024 ** 3)} GB</span>,
+  ].filter(Boolean);
+  return <span className="history-summary">{parts.flatMap((p, i) => (i ? [<span key={`s${i}`} className="history-sep">·</span>, p] : [p]))}</span>;
+}
+
+/** Unfolded under the history's head: the model and its use, the allowance, the station. */
+function SessionDetails({ detail, profile }: { detail: SessionDetail; profile: ProfileView | null }) {
   const { session } = detail;
   const station = useStation();
   const link = useLink();
   const host = useHost(station.address).value;
-  const name = threadNamer(detail);
-  const threads = detail.threads.filter((t) => t.channel !== "EMBER");
   const usage = detail.transcript?.usage;
-  const model = usage?.model ?? session.model;
   const quota = profile?.quota;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
   const gb = (bytes: number) => `${Math.round(bytes / 1024 ** 3)} GB`;
@@ -151,36 +213,11 @@ function SessionDetails({ detail, connect, profile, base }: { detail: SessionDet
   return (
     <div className="session-details">
       <section className="details-group">
-        <h3>会话</h3>
-        <dl className="details">
-          {row("连接", connect ? <Link to={link(`/connects/${connect.id}`)} className="detail-link"><ConnectKindIcon kind={connect.kind} size={13} />{connect.name}</Link> : session.connect)}
-          {row("状态", <SessionState detail={detail} />)}
-          {row("发起", session.creator ? <CreatorText creator={session.creator} verb="发起" /> : <span className="muted">未记录</span>)}
-          {row("参与", <span className="detail-inline"><PeopleStack people={session.participants} max={8} />{session.participants?.length ?? 0} 人</span>)}
-          {row("创建", <Time at={session.createdAt} />)}
-          {row("最近活动", <Time at={session.lastActiveAt} />)}
-        </dl>
-        {threads.length > 0 && (
-          <ul className="details-list">
-            {threads.map((t) => {
-              const url = slackThreadUrl(base, t.channel, t.threadTs);
-              const { where, when } = name(t.channel, t.threadTs);
-              return (
-                <li key={`${t.channel}/${t.threadTs}`}>
-                  {url ? <a href={url} target="_blank" rel="noopener" className="detail-link"><SlackLogo size={13} />{where}</a> : <span className="detail-inline"><SlackLogo size={13} />{where}</span>}
-                  <span className="muted">{when} 开始 · {t.messages} 条消息</span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-      <section className="details-group">
         <h3>模型</h3>
         <dl className="details">
-          {row("模型", <span className="detail-inline"><ModelLogo model={model} runtime={session.runtime} size={13} />{agentLabel(model, session.effort)}</span>)}
           {row("运行时", <span className="detail-inline"><RuntimeLogo runtime={session.runtime} size={13} />{RUNTIME_LABEL[session.runtime]}</span>)}
           {row("Profile", <Link className="detail-link" to={link(`/settings/accounts/${session.profile}`)}>{profile?.name ?? session.profile}</Link>)}
+          {row("进程", PROCESS_LABEL[session.process])}
           {usage && row("调用", `${usage.modelCalls} 次`)}
           {usage && row("输入", `${compactNumber(usage.inputTokens)}${hitRate === null ? "" : ` · 缓存 ${hitRate}%`}`)}
           {usage && row("输出", compactNumber(usage.outputTokens))}
@@ -208,30 +245,6 @@ function SessionDetails({ detail, connect, profile, base }: { detail: SessionDet
         )}
       </section>
     </div>
-  );
-}
-
-/** Where the session stands, for the history's header line. */
-function SessionState({ detail }: { detail: SessionDetail }) {
-  const { session } = detail;
-  const status = sessionStatus(session);
-  const running = status === "running" || status === "queued";
-  const since = detail.turns.at(-1)?.startedAt ?? session.lastActiveAt;
-  const calls = (detail.transcript?.timeline ?? []).filter((e) => e.kind === "tool_call" && e.at && Date.parse(e.at) >= since).length;
-  const result = turnResult(session.lastTurn);
-  const text = running
-    ? (status === "queued" ? "排队中" : `正在执行${calls ? ` · 已执行 ${calls} 项` : ""}`)
-    : result === "block" ? "Block：agent 停下来等人处理"
-    : result === "failed" ? "上一轮失败"
-    : result === "unexpected" ? "上一轮没给出结果"
-    : result === "final" ? "上一轮已完成"
-    : "空闲";
-  return (
-    <span className="session-state" data-state={running ? "running" : result}>
-      {text}
-      <span className="history-sep">·</span>
-      进程{PROCESS_LABEL[session.process]}
-    </span>
   );
 }
 

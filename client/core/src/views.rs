@@ -19,8 +19,6 @@ use crate::host::Host;
 use crate::protocol::Topic;
 use crate::store::{Store, Watch};
 
-/// The cloud counts a station online while it was seen this recently (as `online` in web/src/cloud/gate.tsx).
-pub const ONLINE_WITHIN_S: f64 = 150.0;
 /// The runtimes a chat can run on, in the order they are offered.
 const RUNTIMES: [&str; 2] = ["claude", "codex"];
 const DAY_MS: f64 = 86_400_000.0;
@@ -182,11 +180,11 @@ impl Views {
             Ok(workspace) => workspace,
             Err(error) => return Some(Err(error)),
         };
-        let now_s = self.host.now_ms() / 1000.0;
         let stations = workspace.get("stations").and_then(Value::as_array).into_iter().flatten().filter_map(|s| {
             let id = s.get("id")?.as_str()?.to_string();
             let last_seen = s.get("last_seen").cloned().unwrap_or(Value::Null);
-            let online = last_seen.as_f64().is_some_and(|t| now_s - t < ONLINE_WITHIN_S);
+            // Connected to ember cloud right now (its presence socket), as the cloud says.
+            let online = s.get("online").and_then(Value::as_bool).unwrap_or(false);
             Some(StationInfo {
                 address: format!("{scope}/{id}"),
                 name: s.get("name").and_then(Value::as_str).unwrap_or(&id).to_string(),
@@ -516,13 +514,12 @@ mod tests {
         topics
     }
 
-    /// `a` online, `b` seen too long ago, `c` never.
+    /// `a` and `b` online as asked, `c` never seen.
     fn stations(now_s: f64, a_online: bool, b_online: bool) -> Value {
-        let seen = |online: bool| if online { json!(now_s - 10.0) } else { json!(now_s - 1000.0) };
         json!({"id": "ws", "stations": [
-            {"id": "a", "name": "alpha", "last_seen": seen(a_online), "version": "0.4.0"},
-            {"id": "b", "name": "beta", "last_seen": seen(b_online), "version": null},
-            {"id": "c", "name": "gamma", "last_seen": null, "version": null},
+            {"id": "a", "name": "alpha", "online": a_online, "last_seen": now_s - 10.0, "version": "0.4.0"},
+            {"id": "b", "name": "beta", "online": b_online, "last_seen": now_s - 1000.0, "version": null},
+            {"id": "c", "name": "gamma", "online": false, "last_seen": null, "version": null},
         ]})
     }
 
