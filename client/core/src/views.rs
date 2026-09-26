@@ -245,6 +245,10 @@ impl Views {
                 topics.insert(Topic::Sessions { station: station.clone() });
                 topics.insert(Topic::Overview { station: station.clone() });
                 topics.insert(Topic::Link { station: station.clone() });
+                // Whether it is online (offline, nothing can be sent).
+                if let Some((scope, _)) = station.split_once('/') {
+                    topics.insert(Topic::Workspace { workspace: scope.to_string() });
+                }
                 return topics;
             }
             Topic::Chat { station, thread: Some(thread), .. } => {
@@ -259,6 +263,9 @@ impl Views {
                 topics.insert(Topic::ChatRows { station: station.clone() });
                 topics.insert(Topic::Overview { station: station.clone() });
                 topics.insert(Topic::Link { station: station.clone() });
+                if let Some((scope, _)) = station.split_once('/') {
+                    topics.insert(Topic::Workspace { workspace: scope.to_string() });
+                }
                 return topics;
             }
             _ => return topics,
@@ -473,6 +480,16 @@ impl Views {
         Some(Ok(json!({ "me": me, "items": items, "loading": loading })))
     }
 
+    /// Whether a station is offline, as its workspace says (a station's own page is always online): its chats are read
+    /// from what was kept, and nothing can be sent to them.
+    fn offline(&self, station: &str) -> bool {
+        let Some((scope, _)) = station.split_once('/') else { return false };
+        match self.stations(scope) {
+            Some(Ok(stations)) => stations.iter().find(|s| s.address == station).is_some_and(|s| !s.online),
+            _ => false,
+        }
+    }
+
     fn chat(&self, station: &str, id: u64) -> Option<Result<Value>> {
         // It shows as soon as its latest entries are there (kept on the device, or read); its agents fill in as they are.
         let page = match self.store.value(&Topic::Thread { station: station.to_string(), thread: id })? {
@@ -531,6 +548,7 @@ impl Views {
             "more": page.get("first").and_then(Value::as_u64).is_some_and(|first| first > 1),
             "outbox": outbox,
             "link": self.link(station, true),
+            "offline": self.offline(station),
             "thread": thread,
         })))
     }
@@ -607,6 +625,7 @@ impl Views {
             "more": false,
             "outbox": [],
             "link": self.link(station, true),
+            "offline": self.offline(station),
         })))
     }
 }
