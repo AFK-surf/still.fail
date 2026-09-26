@@ -363,8 +363,6 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
   );
 }
 
-const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
-
 /** An agent in this chat that is at work: who it is, its execution history, and its running turn. */
 interface AgentAtWork {
   key: string; who: string; runtime: SessionDetail["session"]["runtime"]; model: string | null;
