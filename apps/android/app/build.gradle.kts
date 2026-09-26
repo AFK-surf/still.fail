@@ -34,4 +34,10 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.browser)
+    // Markdown as the web reads it (GFM: tables, strikethrough, autolinks, task lists).
+    implementation(libs.commonmark)
+    implementation(libs.commonmark.ext.gfm.tables)
+    implementation(libs.commonmark.ext.gfm.strikethrough)
+    implementation(libs.commonmark.ext.autolink)
+    implementation(libs.commonmark.ext.task.list.items)
 }

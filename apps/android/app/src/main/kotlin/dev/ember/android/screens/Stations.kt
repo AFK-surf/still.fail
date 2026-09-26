@@ -254,11 +254,11 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(p.models - shown.toSet()) })
                 }
             }
+            // Plain rows on the page, no card behind them.
             items(shown, key = { it }) { m ->
                 val on = m in p.models
                 Row(
-                    Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface)
-                        .clickable { save(if (on) p.models - m else p.models + m) }.padding(horizontal = 16.dp, vertical = 12.dp),
+                    Modifier.fillMaxWidth().clickable { save(if (on) p.models - m else p.models + m) }.padding(horizontal = 24.dp, vertical = 11.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (on) C.accent else C.chip), contentAlignment = Alignment.Center) {
@@ -267,7 +267,6 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     Text(m, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (m !in p.available && p.available.isNotEmpty()) Text("检查里没有了", fontSize = 12.sp, color = C.subtle)
                 }
-                Spacer(Modifier.height(4.dp))
             }
         }
     }

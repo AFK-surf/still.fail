@@ -195,19 +195,27 @@ class ChatAgent(val view: ChatAgentView, val live: LiveView?) {
 @Composable
 fun ChatScreen(station: String, of: ChatOf) {
     val app = LocalApp.current
+    val chats by rememberTopic<ChatsView>(app.core, Topics.chats(station.substringBefore('/'), false))
+    val rows = chats.value?.days?.flatMap { it.items }.orEmpty()
     if (of is ChatOf.Session) {
         // Once a chat is made for this agent (here or elsewhere), the page moves to it.
-        val chats by rememberTopic<ChatsView>(app.core, Topics.chats(station.substringBefore('/'), false))
-        val made = chats.value?.days?.flatMap { it.items }?.firstOrNull { it.station == station && it.thread != null && it.agents.any { a -> a.key == of.key } }?.thread
+        val made = rows.firstOrNull { it.station == station && it.thread != null && it.agents.any { a -> a.key == of.key } }?.thread
         LaunchedEffect(made) { if (made != null) app.replace(Screen.Chat(station, ChatOf.Thread(made))) }
     }
     val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
     val view = chat.value
     if (view == null) {
-        Column(Modifier.fillMaxSize()) {
-            NavBar("会话", app::pop, "")
-            val name = rememberStationName(station)
-            Loading(chat.error?.let { "读不到这个对话：${it.message}" } ?: "正在从 $name 读取对话…")
+        // Until the station answers, the page is already this chat's, as its row in the list has it (title, agents):
+        // what arrives fills it in place instead of replacing another page.
+        val row = rows.firstOrNull { it.station == station && if (of is ChatOf.Thread) it.thread == of.id else it.thread == null && it.session == of.key }
+        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
+            BarFrame(row?.title ?: "", more = of is ChatOf.Thread) {
+                row?.agents?.forEach { ModelMark(it.model, it.runtime, 22.dp, it.state()) }
+            }
+            val error = chat.error
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                if (error != null) Text("读不到这个对话：${error.message}", color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(32.dp))
+            }
         }
         return
     }
@@ -226,18 +234,27 @@ fun ChatScreen(station: String, of: ChatOf) {
 @Composable
 private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>) {
     val app = LocalApp.current
+    val thread = view.thread
+    BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }) {
+        if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
+        agents.forEach { a ->
+            Box(Modifier.clip(RoundedCornerShape(6.dp)).clickable { openHistory(app, station, of, a.key) }) { ModelMark(a.model, a.runtime, 22.dp, a.state) }
+        }
+    }
+}
+
+/** The bar's frame, the same while the chat loads and once it has: back, the title, what follows it, and "…". */
+@Composable
+private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, after: @Composable RowScope.() -> Unit) {
+    val app = LocalApp.current
     Column(Modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.statusBars)) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = app::pop), contentAlignment = Alignment.Center) { IconIn(Icons.Back, 22.dp, C.accent) }
             Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(view.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
-                agents.forEach { a ->
-                    Box(Modifier.clip(RoundedCornerShape(6.dp)).clickable { openHistory(app, station, of, a.key) }) { ModelMark(a.model, a.runtime, 22.dp, a.state) }
-                }
+                Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                after()
             }
-            val thread = view.thread
-            if (thread != null) NavButton(Icons.More, { openChatInfo(app, station, of, thread) })
+            if (more) NavButton(Icons.More, onMore)
         }
     }
 }
