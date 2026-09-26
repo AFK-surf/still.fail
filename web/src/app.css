@@ -914,3 +914,10 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
   ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklch, var(--text) 38%, transparent); }
   ::-webkit-scrollbar-corner { background: transparent; }
 }
+
+/* Streaming without jumps: a live reply is a five-line window onto its end; thinking is one line. */
+.live-tail { display: flex; flex-direction: column; justify-content: flex-end; max-height: calc(5lh + 2px); overflow: hidden; font-size: var(--text-sm); line-height: 1.65; }
+.live-tail > * { flex: none; }
+.live-tail[data-over] { -webkit-mask-image: linear-gradient(to top, #000 70%, transparent); mask-image: linear-gradient(to top, #000 70%, transparent); }
+.h-live-thinking { font-size: var(--text-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-phase { min-height: 20px; }

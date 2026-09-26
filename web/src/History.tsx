@@ -2,7 +2,7 @@
 // Messages in and out, state marks and the agent's own words are boundaries;
 // the tool calls and thinking between two boundaries fold into one group.
 import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ConnectView, SessionDetail, ShownPhase, ShownStep, TimelineEntry } from "./api.ts";
 import { agentLabel, botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, slackThreadUrl, splitThread, threadNamer } from "./format.ts";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo } from "./ui.tsx";
@@ -217,7 +217,7 @@ export function History({ detail, connect, state, actions, details, slackBase, o
             ))}
             {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}
             {live.filter((s) => !s.subagent && s.step !== "tool").map((s) => <LiveStepView key={s.id} step={s} />)}
-            {phase && phase.phase !== "working" && <PhaseLine phase={phase} runtime={RUNTIME_LABEL[session.runtime]} />}
+            {phase && <PhaseLine phase={phase} runtime={RUNTIME_LABEL[session.runtime]} />}
           </>
         )}
       </div>
@@ -358,18 +358,32 @@ export function partialString(json: string, field: string): string | null {
   return out;
 }
 
+/** A window onto the end of growing content, five lines tall at most, the start fading out above. */
+function LiveTail({ children }: { children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [over, setOver] = useState(false);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const check = () => setOver(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el.firstElementChild ?? el);
+    return () => observer.disconnect();
+  }, []);
+  return <div ref={box} className="live-tail" data-over={over || undefined}>{children}</div>;
+}
+
 /** A step the runtime is streaming: the reply as it is written, thinking, or a tool running with its output. */
 function LiveStepView({ step }: { step: ShownStep }) {
   if (step.step === "text") {
-    return step.text ? <div className="h-text markdown h-live"><Prose>{step.text}</Prose></div> : null;
+    // Five lines at most, the newest at the bottom: the same height the finished reply folds to, so nothing jumps when it lands.
+    return step.text ? <LiveTail><div className="h-text markdown h-live"><Prose>{step.text}</Prose></div></LiveTail> : null;
   }
   if (step.step === "thinking") {
-    return (
-      <div className="h-live-thinking">
-        <span className="activity-pulse inline" aria-hidden="true" />思考中
-        {step.text && <div className="h-live-thinking-text">{lastLines(step.text, 4)}</div>}
-      </div>
-    );
+    // One line, like the finished thinking in its group.
+    const last = step.text.trim().split("\n").at(-1) ?? "";
+    return <div className="h-live-thinking">思考：{last}</div>;
   }
   const name = toolName(step.tool);
   const said = name === "chat_post" ? partialString(step.input, "text") : null;
@@ -395,7 +409,8 @@ function Fold({ children, className }: { children: ReactNode; className?: string
   const box = useRef<HTMLDivElement>(null);
   const [long, setLong] = useState(false);
   const [open, setOpen] = useState(false);
-  useEffect(() => {
+  // Measured before paint, so a long entry never shows at full height first.
+  useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
     const check = () => {
@@ -423,7 +438,7 @@ function PhaseLine({ phase, runtime }: { phase: ShownPhase; runtime: string }) {
     return () => clearInterval(timer);
   }, []);
   const seconds = Math.max(0, Math.floor((now - phase.since) / 1000));
-  const text = phase.phase === "starting" ? `正在启动 ${runtime}` : phase.phase === "requesting" ? "已发送请求，等待模型响应" : "Thinking";
+  const text = phase.phase === "starting" ? `正在启动 ${runtime}` : phase.phase === "requesting" ? "已发送请求，等待模型响应" : phase.phase === "working" ? "执行工具中" : "Thinking";
   return (
     <div className="h-phase" data-phase={phase.phase}>
       <span className="activity-pulse inline" aria-hidden="true" />
