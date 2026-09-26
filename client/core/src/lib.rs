@@ -12,6 +12,8 @@ pub mod mesh;
 pub mod protocol;
 pub mod station;
 pub mod store;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 
 pub use crate::core::Core;
 pub use error::CoreError;

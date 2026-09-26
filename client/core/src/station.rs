@@ -9,7 +9,7 @@
 //! the session never has to be refetched whole while it runs. `overview` and
 //! `host` also refresh on a timer (10 s / 15 s).
 
-use std::rc::Rc;
+
 
 use serde_json::Value;
 
