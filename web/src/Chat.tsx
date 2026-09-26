@@ -321,7 +321,7 @@ export interface DraftQuote extends Quote { id: string }
 const MAX_FILE = 50 * 1024 * 1024;
 
 /** A file on its way to the station: uploading, uploaded, or failed. */
-interface Pending { id: number; name: string; size: number; done: Attachment | null; error: string | null }
+interface Pending { id: number; name: string; size: number; done: Attachment | null; error: string | null; preview?: string }
 
 /**
  * Where people write to the session; the first message makes its chat. Zork's
@@ -375,6 +375,7 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
       return key;
     },
     onSuccess: (key) => {
+      for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
       setText(""); setFiles([]); setQuotes(() => []);
       void client.invalidateQueries({ queryKey: keys.session(station.id, key) });
       void client.invalidateQueries({ queryKey: keys.sessions(station.id) });
@@ -385,7 +386,9 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
     for (const file of Array.from(list)) {
       const id = nextId.current++;
       const tooBig = file.size > MAX_FILE;
-      setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null }]);
+      // Images show at once from the local file; the preview URL lives until the file leaves the composer.
+      const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
+      setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null, ...(preview ? { preview } : {}) }]);
       if (tooBig) continue;
       keyFor().then((key) => api.uploadFile(key, file)).then(
         (done) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, done } : f))),
@@ -432,9 +435,16 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
         )}
         {files.length > 0 && (
           <div className="composer-files">
-            {files.map((f) => (
-              <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={() => setFiles((all) => all.filter((x) => x.id !== f.id))} />
-            ))}
+            {files.map((f) => {
+              const remove = () => { if (f.preview) URL.revokeObjectURL(f.preview); setFiles((all) => all.filter((x) => x.id !== f.id)); };
+              return f.preview ? (
+                <span key={f.id} className="composer-thumb" title={f.error ?? f.name} data-error={f.error ? true : undefined}>
+                  <img src={f.preview} alt={f.name} />
+                  {!f.done && !f.error && <span className="composer-thumb-busy"><span className="spinner" aria-hidden="true" /></span>}
+                  <button type="button" className="composer-thumb-remove" aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><X size={11} /></button>
+                </span>
+              ) : <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={remove} />;
+            })}
           </div>
         )}
         <textarea ref={input} className="composer-text" rows={1} value={text} placeholder={placeholder} aria-label="消息"
