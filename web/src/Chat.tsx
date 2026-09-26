@@ -480,19 +480,33 @@ interface AgentAtWork {
 /** A row of an agent's activity: one entry of its execution history, or a step still streaming. */
 interface ActivityRow { key: string; text: string; live: boolean }
 
-/** The running turn's rows: execution history since the last message the agent received, then what is still streaming. */
+/**
+ * The running turn's rows: execution history since the last message the agent
+ * received, then what is still streaming. Rows say what the agent did for the
+ * person watching: a reply being written shows as the message itself, not a
+ * row; recording state and the agent's own narration are left out.
+ */
 function activityRows(timeline: TimelineEntry[], live: ShownStep[], phase: ShownPhase | null): ActivityRow[] {
   let start = timeline.length;
   while (start > 0 && !(timeline[start - 1]!.kind === "user" && !timeline[start - 1]!.subagent)) start--;
+  const done = (tool: string | undefined, input: string): string | null => {
+    const name = toolName(tool);
+    if (name === "chat_state") return null;
+    if (name === "chat_post") return "发出回复";
+    if (name === "chat_history") return "查看对话";
+    return activityText(tool, input).replace(/^正在/, "");
+  };
   const rows: ActivityRow[] = [];
   timeline.slice(start).forEach((e, i) => {
     if (e.subagent) return;
-    const text = e.kind === "tool_call" ? activityText(e.tool, e.text) : e.kind === "thinking" ? "思考" : e.kind === "assistant" ? "写回复" : null;
+    const text = e.kind === "tool_call" ? done(e.tool, e.text) : e.kind === "thinking" ? "思考" : null;
     if (text) rows.push({ key: `t${start + i}`, text, live: false });
   });
   for (const s of live) {
-    if (s.ended || s.subagent) continue;
-    rows.push({ key: s.id, text: s.step === "thinking" ? "正在思考" : s.step === "text" ? "正在写回复" : activityText(s.tool, s.input), live: true });
+    if (s.ended || s.subagent || s.step === "text") continue;
+    const name = toolName(s.tool);
+    if (s.step === "tool" && (name === "chat_post" || name === "chat_state")) continue;
+    rows.push({ key: s.id, text: s.step === "thinking" ? "正在思考" : activityText(s.tool, s.input), live: true });
   }
   if (!rows.some((r) => r.live) && phase) {
     const waiting = phase.phase === "starting" ? "正在启动" : phase.phase === "requesting" ? "等待模型响应" : phase.phase === "responding" ? "正在思考" : null;
