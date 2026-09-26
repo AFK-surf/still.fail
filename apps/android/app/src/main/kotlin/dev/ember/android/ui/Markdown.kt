@@ -155,7 +155,8 @@ private fun CodeBlock(code: String, language: String?) {
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(1500); copied = false } }
-    val colored = remember(code, language, C.dark) { highlight(code, language, C.dark) }
+    val dark = C.dark
+    val colored = remember(code, language, dark) { highlight(code, language, dark) }
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.ink.copy(alpha = 0.04f))) {
         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp)) {
             Text(colored, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, lineHeight = 20.sp, color = C.ink, softWrap = false)
