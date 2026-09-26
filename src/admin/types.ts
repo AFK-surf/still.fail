@@ -29,7 +29,8 @@ export interface ConnectView {
   kind: ConnectKind;
   mode: ConnectMode;
   requireMention: boolean;
-  bind: { runtime: RuntimeKind; model: string | null; effort: string | null };
+  /** `profile`: the one its sessions keep to; null: the pool picks per session. */
+  bind: { runtime: RuntimeKind; model: string | null; effort: string | null; profile: string | null };
   /** Masked; empty when unset. */
   slack: { appToken: string; botToken: string };
   connection: ConnectState;
@@ -292,7 +293,7 @@ export interface ConnectInput {
   kind?: ConnectKind;
   mode?: ConnectMode;
   requireMention?: boolean;
-  bind?: { runtime?: RuntimeKind; model?: string; effort?: string };
+  bind?: { runtime?: RuntimeKind; model?: string; effort?: string; profile?: string | null };
   /** `install`: an app installed through Slack's OAuth (its state), whose bot token the station has. */
   slack?: { appToken?: string; botToken?: string; appId?: string; install?: string };
   /** Hands the connect to someone else (an email). Owners, admins, the station itself, or the current owner. */

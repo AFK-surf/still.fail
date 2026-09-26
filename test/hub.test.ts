@@ -565,3 +565,20 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await settle();
   assert.equal(store.getSession(key)!.profile, "cc");
 });
+
+test("a connect or a new chat can keep its sessions to one profile; otherwise the pool picks", async () => {
+  const { config, store, hub, accept } = setup();
+  config.profiles.push({ ...config.profiles[0]!, id: "cc2", name: "second", models: ["opus"] });
+  (config.connects.find((c) => c.id === "cl")!.bind as { profile?: string }).profile = "cc2";
+  const m = message({ text: "<@UBOT> hi" });
+  await accept(m);
+  await settle();
+  const row = store.getSession(sessionKey("cl", "C1", m.threadTs))!;
+  assert.deepEqual([row.profile, row.profilePinned], ["cc2", true]);
+  // A new chat given a profile keeps to it; one that has not the model on is refused.
+  const { key } = hub.newSession({ runtime: "claude", model: "opus", profile: "cc2", createdBy: "local" });
+  assert.deepEqual([store.getSession(key)!.profile, store.getSession(key)!.profilePinned], ["cc2", true]);
+  assert.throws(() => hub.newSession({ runtime: "claude", model: "sonnet", profile: "cc2", createdBy: "local" }), /没有启用 sonnet/);
+  const auto = hub.newSession({ runtime: "claude", createdBy: "local" }).key;
+  assert.equal(store.getSession(auto)!.profilePinned, false);
+});

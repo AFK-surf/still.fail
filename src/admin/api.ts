@@ -854,7 +854,7 @@ export class AdminApi {
       connects: config.connects.map((c) => ({
         // What it is known by: its bot's name in its Slack workspace, and that workspace.
         id: c.id, name: connectName(c), team: c.slack.team?.name ?? null, enabled: c.enabled, kind: c.kind, mode: c.mode, requireMention: c.requireMention,
-        bind: { runtime: c.bind.runtime, model: c.bind.model ?? null, effort: c.bind.effort ?? null },
+        bind: { runtime: c.bind.runtime, model: c.bind.model ?? null, effort: c.bind.effort ?? null, profile: c.bind.profile ?? null },
         slack: { appToken: mask(c.slack.appToken), botToken: mask(c.slack.botToken) },
         connection: this.#deps.connections.state(c),
         createdBy: c.createdBy ?? null,
@@ -1383,6 +1383,14 @@ export class AdminApi {
       const bind = input.bind ?? {};
       const model = bind.model === undefined ? existing?.bind.model : bind.model;
       const effort = bind.effort === undefined ? existing?.bind.effort : bind.effort;
+      // The profile its sessions keep to (null: the pool's pick), one that runs its runtime and model.
+      const profile = bind.profile === undefined ? existing?.bind.profile : bind.profile;
+      if (typeof profile === "string" && profile) {
+        const runtime = (existing?.bind.runtime ?? bind.runtime) as RuntimeKind;
+        const p = (raw.profiles ?? []).find((x) => x.id === profile);
+        if (!p || !runtimesOf(p.access?.kind ?? "env", p.runtime).includes(runtime)) throw new Error(`「${profile}」不能跑 ${runtime}`);
+        if (typeof model === "string" && model && !(p.models ?? []).includes(model)) throw new Error(`「${p.name ?? profile}」没有启用 ${model}`);
+      }
       const next: RawConnect = {
         id,
         ...ownerOf(existing?.createdBy, input.owner, viewer),
@@ -1402,6 +1410,7 @@ export class AdminApi {
           runtime: (existing?.bind.runtime ?? bind.runtime) as RuntimeKind,
           ...(typeof model === "string" && model.trim() ? { model: model.trim() } : {}),
           ...(typeof effort === "string" && effort.trim() ? { effort: effort.trim() } : {}),
+          ...(typeof profile === "string" && profile ? { profile } : {}),
         },
       };
       return { ...raw, connects: existing ? connects.map((c) => (c.id === id ? next : c)) : [...connects, next] };

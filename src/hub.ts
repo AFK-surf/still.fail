@@ -429,15 +429,16 @@ export class Hub {
   }
 
   /**
-   * A session of its own, talked to in ember's chat: the runtime, profile,
-   * model and effort chosen by whoever starts it rather than a connect's.
-   * The profile defaults to the first one of that runtime.
+   * A session of its own, talked to in ember's chat: the runtime, model and effort chosen by whoever starts it rather
+   * than a connect's, and the profile: one given keeps it there; else the pool picks one with the model on.
    */
   newSession(options: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string; title?: string; createdBy: string }): { key: string; thread: ThreadRow } {
     const profiles = this.#config.profiles.filter((p) => p.runtimes.includes(options.runtime));
     if (!profiles.length) throw new Error(`no ${options.runtime} profile configured`);
-    const profile = options.profile ? profiles.find((p) => p.id === options.profile) : this.#pick(profiles, options.model?.trim() || null);
+    const model = options.model?.trim() || null;
+    const profile = options.profile ? profiles.find((p) => p.id === options.profile) : this.#pick(profiles, model);
     if (!profile) throw new Error(`no ${options.runtime} profile ${options.profile}`);
+    if (options.profile && model && !profile.models.includes(model)) throw new Error(`「${profile.name}」没有启用 ${model}`);
     if (options.effort && !EFFORTS[options.runtime].includes(options.effort)) throw new Error(`effort must be one of ${EFFORTS[options.runtime].join(", ")}`);
     const key = `${INTERNAL_CONNECT}:c-${randomBytes(5).toString("hex")}`;
     const workspace = join(this.#config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");
@@ -447,7 +448,7 @@ export class Hub {
     const title = options.title?.trim() || null;
     this.#store.insertSession({
       key, connect: INTERNAL_CONNECT, scope: "all", title, createdBy: options.createdBy,
-      runtime: options.runtime, profile: profile.id, model: options.model?.trim() || profile.model || null, effort: options.effort || null,
+      runtime: options.runtime, profile: profile.id, profilePinned: Boolean(options.profile), model: options.model?.trim() || profile.model || null, effort: options.effort || null,
       workspace, token: randomBytes(24).toString("base64url"), createdAt: now, lastActiveAt: now,
     });
     log.info("session created", { session: key, connect: INTERNAL_CONNECT, runtime: options.runtime, profile: profile.id, model: options.model ?? null });
@@ -608,8 +609,10 @@ export class Hub {
   }
 
   #createSession(key: string, connect: Connect, scope: SessionScope, message: InboundMessage | null, title: string | null = null, createdBy: string | null = null): void {
-    // Any profile of the connect's runtime, the model's first (pool.ts).
-    const profile = this.#pick(profilesFor(this.#config, connect), connect.bind.model ?? null, false);
+    // The connect's own profile when it keeps to one (and it still can run it); else any of its runtime, the model's
+    // first (pool.ts).
+    const kept = connect.bind.profile ? profilesFor(this.#config, connect).find((p) => p.id === connect.bind.profile && serves(p, connect.bind.model ?? null)) : undefined;
+    const profile = kept ?? this.#pick(profilesFor(this.#config, connect), connect.bind.model ?? null, false);
     const dir = scope === "all" ? key.slice(connect.id.length + 1) : `${message!.channel}-${message!.threadTs.replace(".", "-")}`;
     const workspace = join(this.#config.dataDir, "sessions", connect.id, dir, "workspace");
     mkdirSync(workspace, { recursive: true });
@@ -617,7 +620,7 @@ export class Hub {
     const now = Date.now();
     this.#store.insertSession({
       key, connect: connect.id, scope, title, createdBy,
-      runtime: connect.bind.runtime, profile: profile.id, model: connect.bind.model ?? null, effort: connect.bind.effort ?? null,
+      runtime: connect.bind.runtime, profile: profile.id, profilePinned: Boolean(kept), model: connect.bind.model ?? null, effort: connect.bind.effort ?? null,
       workspace, token: randomBytes(24).toString("base64url"), createdAt: now, lastActiveAt: now,
     });
     log.info("session created", { session: key, connect: connect.id, scope, runtime: connect.bind.runtime, profile: profile.id });

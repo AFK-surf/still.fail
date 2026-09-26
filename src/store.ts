@@ -486,10 +486,10 @@ export class Store {
     return (this.#db.prepare("SELECT * FROM sessions ORDER BY last_active_at DESC").all() as Row[]).map(toSession);
   }
 
-  insertSession(s: Omit<SessionRow, "running" | "runtimeSessionId" | "title" | "createdBy" | "effort" | "archivedAt" | "profilePinned"> & { title?: string | null; createdBy?: string | null; effort?: string | null }): void {
-    this.#db.prepare(`INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, model, effort, workspace, token, created_at, last_active_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(s.key, s.connect, s.scope, s.title ?? null, s.createdBy ?? null, s.runtime, s.profile, s.model, s.effort ?? null, s.workspace, s.token, s.createdAt, s.lastActiveAt);
+  insertSession(s: Omit<SessionRow, "running" | "runtimeSessionId" | "title" | "createdBy" | "effort" | "archivedAt" | "profilePinned"> & { title?: string | null; createdBy?: string | null; effort?: string | null; profilePinned?: boolean }): void {
+    this.#db.prepare(`INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, token, created_at, last_active_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(s.key, s.connect, s.scope, s.title ?? null, s.createdBy ?? null, s.runtime, s.profile, s.profilePinned ? 1 : 0, s.model, s.effort ?? null, s.workspace, s.token, s.createdAt, s.lastActiveAt);
     this.notify(s.key);
   }
 

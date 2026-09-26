@@ -64,6 +64,8 @@ export interface Binding {
   effort?: string;
   /** Sessions run on the profiles of `runtime` that have this model enabled, picked per session (pool.ts). */
   model?: string;
+  /** Kept to this profile, when set: its sessions start pinned to it instead of the pool's pick. */
+  profile?: string;
 }
 
 export interface Connect {
@@ -116,7 +118,7 @@ export interface RawConnect {
   requireMention?: boolean;
   slack?: { appToken?: string; botToken?: string; appId?: string; team?: SlackPlace; botName?: string };
   createdBy?: { id: string; name: string };
-  bind: { runtime: RuntimeKind; model?: string; effort?: string };
+  bind: { runtime: RuntimeKind; model?: string; effort?: string; profile?: string };
 }
 
 /** A Slack workspace, as a connect last saw it. */
@@ -195,7 +197,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
         appToken: c.slack?.appToken ?? "", botToken: c.slack?.botToken ?? "", ...(c.slack?.appId ? { appId: c.slack.appId } : {}),
         ...(c.slack?.team?.id ? { team: { id: c.slack.team.id, name: c.slack.team.name ?? "" } } : {}), ...(c.slack?.botName ? { botName: c.slack.botName } : {}),
       },
-      bind: { runtime, ...(c.bind.model ? { model: c.bind.model } : {}), ...(c.bind.effort ? { effort: c.bind.effort } : {}) },
+      bind: { runtime, ...(c.bind.model ? { model: c.bind.model } : {}), ...(c.bind.effort ? { effort: c.bind.effort } : {}), ...(c.bind.profile ? { profile: c.bind.profile } : {}) },
       ...(c.createdBy?.id ? { createdBy: { id: c.createdBy.id, name: c.createdBy.name ?? "" } } : {}),
     };
   });
