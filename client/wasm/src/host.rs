@@ -217,6 +217,16 @@ impl Host for WebHost {
         Box::pin(async move { storage.set(key, value).await })
     }
 
+    fn db_read(&self, range: ember_core::host::DbRange) -> LocalBoxFuture<'static, Result<Vec<(String, Vec<u8>)>, HostError>> {
+        let storage = self.storage.clone();
+        Box::pin(async move { storage.records(range.table, range.from, range.to).await })
+    }
+
+    fn db_write(&self, ops: Vec<ember_core::host::DbOp>) -> LocalBoxFuture<'static, Result<(), HostError>> {
+        let storage = self.storage.clone();
+        Box::pin(async move { storage.write_records(ops).await })
+    }
+
     fn storage_delete(&self, key: &str) -> LocalBoxFuture<'static, Result<(), HostError>> {
         let (storage, key) = (self.storage.clone(), key.to_owned());
         Box::pin(async move { storage.delete(key).await })

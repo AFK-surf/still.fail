@@ -1,6 +1,7 @@
-//! The core's storage on the web: one IndexedDB object store of keys → bytes.
-//! A worker has no localStorage, and IndexedDB is shared by every tab's worker
-//! on the origin.
+//! The core's storage on the web: one IndexedDB object store of keys → bytes
+//! (`values`), and the core's database (docs/core-db.md) as another, records
+//! by [table, key] (`records`). A worker has no localStorage, and IndexedDB is
+//! shared by every tab's worker on the origin.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -16,8 +17,9 @@ use web_sys::{IdbDatabase, IdbFactory, IdbRequest, IdbTransaction, IdbTransactio
 use crate::host::js_error;
 
 const DATABASE: &str = "ember-core";
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 const STORE: &str = "values";
+const RECORDS: &str = "records";
 
 type Open = Shared<LocalBoxFuture<'static, Result<IdbDatabase, HostError>>>;
 
@@ -40,14 +42,58 @@ impl Storage {
     /// A transaction on the store. The browser can close the database under us
     /// (storage cleared, Safari evicting): then open it again.
     async fn transaction(&self, mode: IdbTransactionMode) -> Result<IdbTransaction, HostError> {
+        self.transaction_on(STORE, mode).await
+    }
+
+    async fn transaction_on(&self, store: &str, mode: IdbTransactionMode) -> Result<IdbTransaction, HostError> {
         let db = self.db().await?;
-        match db.transaction_with_str_and_mode(STORE, mode) {
+        match db.transaction_with_str_and_mode(store, mode) {
             Ok(tx) => Ok(tx),
             Err(_) => {
                 self.db.borrow_mut().take();
-                self.db().await?.transaction_with_str_and_mode(STORE, mode).map_err(js_error)
+                self.db().await?.transaction_with_str_and_mode(store, mode).map_err(js_error)
             }
         }
+    }
+
+    /// A table's records with keys in `[from, to)`, in key order.
+    pub async fn records(&self, table: String, from: String, to: String) -> Result<Vec<(String, Vec<u8>)>, HostError> {
+        let tx = self.transaction_on(RECORDS, IdbTransactionMode::Readonly).await?;
+        let store = tx.object_store(RECORDS).map_err(js_error)?;
+        let bound = |key: &str| js_sys::Array::of2(&JsValue::from_str(&table), &JsValue::from_str(key));
+        let range = web_sys::IdbKeyRange::bound_with_lower_open_and_upper_open(&bound(&from), &bound(&to), false, true).map_err(js_error)?;
+        // Both in key order, in one transaction: they line up.
+        let keys = store.get_all_keys_with_key(&range).map_err(js_error)?;
+        let values = store.get_all_with_key(&range).map_err(js_error)?;
+        let keys: js_sys::Array = done(&keys).await?.unchecked_into();
+        let values: js_sys::Array = done(&values).await?.unchecked_into();
+        Ok(keys
+            .iter()
+            .zip(values.iter())
+            .filter_map(|(key, value)| {
+                let key = js_sys::Array::from(&key).get(1).as_string()?;
+                Some((key, Uint8Array::new(&value).to_vec()))
+            })
+            .collect())
+    }
+
+    /// A batch of changes, all or none.
+    pub async fn write_records(&self, ops: Vec<ember_core::host::DbOp>) -> Result<(), HostError> {
+        let tx = self.transaction_on(RECORDS, IdbTransactionMode::Readwrite).await?;
+        let store = tx.object_store(RECORDS).map_err(js_error)?;
+        for op in ops {
+            match op {
+                ember_core::host::DbOp::Put { table, key, value } => {
+                    let at = js_sys::Array::of2(&JsValue::from_str(&table), &JsValue::from_str(&key));
+                    store.put_with_key(&Uint8Array::from(value.as_slice()), &at).map_err(js_error)?;
+                }
+                ember_core::host::DbOp::Delete { table, key } => {
+                    let at = js_sys::Array::of2(&JsValue::from_str(&table), &JsValue::from_str(&key));
+                    store.delete(&at).map_err(js_error)?;
+                }
+            }
+        }
+        committed(&tx).await
     }
 
     pub async fn get(&self, key: String) -> Result<Option<Vec<u8>>, HostError> {
@@ -80,9 +126,15 @@ async fn open() -> Result<IdbDatabase, HostError> {
     let request = factory.open_with_u32(DATABASE, VERSION).map_err(js_error)?;
     let upgrade_request = request.clone();
     let upgrade = Closure::<dyn FnMut()>::new(move || {
-        // Version 1 is the first: the store is always new here.
+        // Version 1 made `values`; version 2 adds `records`. Each store is made if it is not there yet.
         if let Ok(db) = upgrade_request.result() {
-            let _ = db.unchecked_into::<IdbDatabase>().create_object_store(STORE);
+            let db = db.unchecked_into::<IdbDatabase>();
+            let names = db.object_store_names();
+            for store in [STORE, RECORDS] {
+                if !names.contains(store) {
+                    let _ = db.create_object_store(store);
+                }
+            }
         }
     });
     request.set_onupgradeneeded(Some(upgrade.as_ref().unchecked_ref()));

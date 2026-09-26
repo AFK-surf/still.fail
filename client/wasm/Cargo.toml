@@ -17,8 +17,8 @@ js-sys = "0.3"
 web-sys = { version = "0.3", features = [
   "AbortController", "AbortSignal", "Crypto", "Headers", "Request", "RequestInit", "Response",
   "ReadableStream", "ReadableStreamDefaultReader",
-  "IdbDatabase", "IdbFactory", "IdbObjectStore", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode",
-  "DomException", "WebSocket", "MessageEvent", "CloseEvent",
+  "IdbDatabase", "IdbFactory", "IdbKeyRange", "IdbObjectStore", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode",
+  "DomException", "DomStringList", "WebSocket", "MessageEvent", "CloseEvent",
 ] }
 serde = "1"
 serde-wasm-bindgen = "0.6"
