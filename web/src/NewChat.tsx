@@ -35,7 +35,7 @@ function keepChoice(station: string, choice: Choice): void {
 
 /** Models a runtime can be used with on this station: the ones enabled on any of its profiles. */
 function modelsOf(profiles: ProfileView[]): string[] {
-  return [...new Set(profiles.flatMap((p) => p.models ?? []))].sort();
+  return [...new Set(profiles.flatMap((p) => p.models))].sort();
 }
 
 export function NewChat({ stations, onCreated }: { stations: Station[]; onCreated(station: Station, key: string): void }) {
@@ -60,7 +60,7 @@ function NewChatOn({ station, stations, onStation, onCreated }: { station: Stati
   const profiles = overview.data?.profiles ?? [];
   const [choice, setChoice] = useState<Choice>(() => ({ runtime: "", model: "", effort: "", ...lastChoice(station.id) }));
   // Runtimes this station has profiles for; which profile runs the chat is the station's account pool's choice.
-  const runtimes = RUNTIMES.filter((rt) => profiles.some((p) => p.runtime === rt && (p.models ?? []).length));
+  const runtimes = RUNTIMES.filter((rt) => profiles.some((p) => p.runtime === rt && p.models.length));
   const runtime: RuntimeKind | undefined = runtimes.includes(choice.runtime as RuntimeKind) ? (choice.runtime as RuntimeKind) : runtimes[0];
   const enabled = runtime ? modelsOf(profiles.filter((p) => p.runtime === runtime)) : [];
   // Only enabled models can be used: a remembered one that is no longer enabled gives way to the first that is.
