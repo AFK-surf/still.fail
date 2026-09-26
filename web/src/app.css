@@ -51,7 +51,7 @@
 .nav-session-meta { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; overflow: hidden; }
 .nav-time { margin-left: auto; flex: none; color: var(--subtle); font-variant-numeric: tabular-nums; }
 .nav-session[data-unread] .nav-session-title { font-weight: 600; color: var(--text); }
-.nav-session-last { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--muted); }
+.nav-session-last { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--muted); }
 .nav-session-who { display: inline-flex; vertical-align: -2px; margin-right: 5px; }
 .nav-session-who .person-pic { border-radius: 50%; }
 /* An agent: its model's maker on a tile; where it stands is a badge at the corner, as on the phone. Nothing blinks. */
@@ -577,7 +577,7 @@
 .session-kind .kind-icon { width: 14px; height: 14px; }
 /* The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks. */
 .session-kind .kind-mark { margin: -1px; }
-.nav-session-meta .nav-time { margin-left: auto; }
+.nav-session-meta .nav-time { margin-left: auto; flex: none; }
 
 /* ── waiting ─────────────────────────────────────────────────────────── */
 .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-sm); animation: appear 0s linear 200ms both; }

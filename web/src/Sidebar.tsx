@@ -1,7 +1,7 @@
 import { ArrowLeft, KeyRound, Monitor, Plug, Settings, SquarePen } from "lucide-react";
 import { stationBase, useLink, useOnlyMine, usePerson } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
-import { MineFilter, PeopleStack } from "./components.tsx";
+import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation } from "react-router";
 import { MeContext, useChats, useIsMine, type ChatItem } from "./api.ts";
 import { BADGE_LABEL, chatBadge, cleanText, dayLabel } from "./format.ts";
@@ -90,10 +90,9 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
 }
 
 /**
- * A chat in the list: its title (bold while something in it is unread), the
- * last thing said in it, where it came from, its people and when it was last
- * written in. The dot on the right is its agents' state (block before work
- * before failure).
+ * A chat in the list: its title (bold while something in it is unread) and
+ * where it came from, then the last thing said in it and when. The dot on the
+ * right is its agents' state (block before work before failure).
  */
 function ChatRow({ item }: { item: ChatItem }) {
   const { thread, connect } = item;
@@ -108,9 +107,9 @@ function ChatRow({ item }: { item: ChatItem }) {
             ? <Tip label="ember 对话" side="right"><span className="session-kind"><Mark size={16} className="kind-mark" /></span></Tip>
             : <Tip label={connect ? `来自 ${connect.name}` : "来自 Slack"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
         </span>
-        {item.last && <LastMessage item={item} />}
+        {/* People are in the chat itself; here only the last thing said and when. */}
         <span className="nav-session-meta">
-          <PeopleStack people={item.people} />
+          {item.last ? <LastMessage item={item} /> : <span className="nav-session-last" />}
           <Time className="nav-time" at={item.lastActiveAt} />
         </span>
       </span>
