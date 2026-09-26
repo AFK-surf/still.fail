@@ -100,6 +100,14 @@ CREATE TABLE reads (
   PRIMARY KEY (viewer, thread)
 );
 
+-- The Slack users each viewer said are them ("这是我" on a Slack user's name). Not verified: the viewer's word.
+CREATE TABLE identities (
+  viewer TEXT NOT NULL,               -- email, or "local"
+  slack_user TEXT NOT NULL,           -- a Slack user id
+  at INTEGER NOT NULL,
+  PRIMARY KEY (viewer, slack_user)
+);
+
 -- The last check and quota of each profile, so a restart shows them at once.
 CREATE TABLE profile_status (
   profile TEXT PRIMARY KEY,
@@ -168,7 +176,7 @@ migration moves existing rows over (data only; no code keeps the old shape):
   people (everyone who wrote in it, earliest first), the first thing a person
   said (`firstText`, for a chat's title), last message, rev, and the viewer's
   read position and unread count (messages after it, not deleted, not the
-  viewer's own).
+  viewer's own — in a Slack thread, not of a Slack user the viewer is).
 - `GET /threads/:id/messages?after=<rev>` — every message changed after that
   cursor; `?before=<seq>&limit=` pages back through history (no cursor: the
   latest page). The answer is `{ rev, messages, more }`: follow `after=rev`;
@@ -186,9 +194,70 @@ migration moves existing rows over (data only; no code keeps the old shape):
 - A session's transcript comes only from `/sessions/:key/live?from=N` (entries
   from index N, then as they are written); the station keeps each watched
   transcript parsed incrementally instead of re-reading the file per request.
+- `GET /chats` — the viewer's sidebar items (The sidebar, below).
+- `PUT /me/slack/:user` / `DELETE /me/slack/:user` — the viewer says a Slack
+  user is them ("这是我"), or no longer ("不是我"); nothing checks it. The
+  answer is the overview, whose `slackUsers` lists the viewer's Slack users.
 - `GET /sessions/:key` is the session row, its threads, and its turns — no
   messages, no transcript. `GET /sessions` lists shown sessions;
   `?archived=1` lists the archived ones.
+
+### The sidebar
+
+A chat is ember's own internal chat (a thread on surface `ember`), bound to
+one or more sessions, with people. A Slack thread is Slack's conversation,
+not a chat: its messages show only in its agent's execution history. The
+sidebar has one kind of item, merged here at the source: an agent (a shown
+session) with its internal chat. An agent in an internal chat is that chat's
+item (a chat with several agents is one item); an agent with none yet is an
+item without a chat, whose chat is made (`POST /threads {session}`) with its
+first message — none is made ahead. Every item opens the same page. An
+archived session is in no item; a chat whose sessions are all archived is
+not listed. The station puts the items together for whoever asks, since
+unread marks and who takes part are the viewer's:
+
+```jsonc
+{
+  "id": "7",                      // where its page is: its chat's thread id, or its session's key while it has no chat
+  "session": "ds:C1:1790000000.000100",  // its agent (a chat's first)
+  "thread": 7,                    // its internal chat; null until the first message makes it
+  "title": "部署挂了",
+  "agents": [{ "key", "runtime", "model", "effort", "process", "pending", "lastTurn" }],  // its shown sessions
+  "last": { "seq", "authorKind", "author", "authorName", "text", "createdAt", "deletedAt" } | null,
+  //   the chat's latest message, its text cut to 200 characters; null without a chat
+  "unread": true,                 // messages after the viewer's read position that are not their own
+  "mine": true,
+  "lastActiveAt": 1790000000000,  // the latest message's time, else the chat's; without a chat: the session's
+  "connect": "ds" | null,         // the connect its agent came from; null for one made on ember
+  "origin": { "teamName": "Cue", "channel": "C1", "channelName": "ops", "threadTs": "…" } | null
+}
+```
+
+A Slack thread lends its agent's item three things and nothing else: the
+title (only while the chat has no words of its own), the connect, and the
+origin (the web's connect icon's tip: `Slack · <workspace> · #channel`, or
+`私信` for a direct message). An agent's Slack thread is the latest one it is
+in; a chat's is that of the first of its sessions that has one.
+
+- **title**: the chat's title, else the first line of the first thing a person
+  said in it (Slack mentions left out, spaces collapsed); with neither, its
+  Slack thread's (the same, then `#channel`, `私信`); else `（还没有消息）`.
+  Without a chat: the session's title, else its Slack thread's, else
+  `（还没有消息）`.
+- **mine**: a chat the viewer started, wrote in, or is among the people of;
+  without a chat, the viewer started the session or is among the people of
+  its Slack thread. A person is the viewer by id (an email, or `local`), by
+  email (a Slack user's, case aside), or as a Slack user the viewer said is
+  them (`identities`) — who also count as the viewer for unread.
+
+`GET /events` sends the viewer's items as they change: when anything they are
+made of changes (sessions, messages, memberships, read positions, the
+viewer's Slack users, connects), the station reads the items again, once per
+viewer for a burst, and tells each stream what differs from the items it last
+told it: `chat` with the whole item when one is new or changed,
+`chat-removed {id}` when one is gone (an agent's item moves from its session's
+key to its chat's id when the chat is made). The items a stream starts from
+are those at the moment it opened.
 
 ### Housekeeping
 
@@ -276,11 +345,13 @@ when it is small:
 | `session-removed` | `{ key }` (threads that went with it get no event of their own) |
 | `thread` | `{ id, rev, messages: [changed rows] }`; `messages: []` when its sessions changed |
 | `read` | `{ viewer, thread, seq }` (only to that viewer) |
-| `overview` | the whole overview — sent when config, connect status, logins, profile checks, quotas, ember-mesh's state, recorded runtime processes or the running/warm counts change |
+| `chat` | an item of the viewer's sidebar, new or changed (only to that viewer) |
+| `chat-removed` | `{ id }`: an item gone from the viewer's sidebar |
+| `overview` | the whole overview, with the viewer and their Slack users (`slackUsers`) — sent when config, connect status, logins, profile checks, quotas, ember-mesh's state, recorded runtime processes, the running/warm counts or a viewer's Slack users change |
 | `host` | host info; sampled every 10 s **only while some client asks for it** (`/events?host=1`) and sent when it changed |
 
 Changes within one turn of the event loop are gathered: one `session` event
-per session, one `overview`. Per-session live steps stay on
+per session, one `overview`, one round of sidebar items. Per-session live steps stay on
 `/sessions/:key/live`.
 
 Timers that remain on the station and why: host sampling (above), quota

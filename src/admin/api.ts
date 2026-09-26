@@ -28,7 +28,7 @@ import { checkProfile, loginCommand, type ProfileCheck } from "../profiles.ts";
 import { AccessDenied, AccessGate, viewerId, viewerName, type Viewer } from "./access.ts";
 import { verifySlackTokens } from "../chat/slack.ts";
 import { createAppUrl, slackManifest } from "./slack-manifest.ts";
-import type { Creator, MessageView, Overview, ProcessState, SessionDetail, SessionSummary, StationEvents, ThreadMessages, ThreadView } from "./types.ts";
+import type { ChatRow, ChatRowAgent, Creator, MessageView, Overview, ProcessState, SessionDetail, SessionSummary, StationEvents, ThreadMessages, ThreadView } from "./types.ts";
 
 const SECRET_KEY = /KEY|TOKEN|SECRET|PASSWORD|AUTH/i;
 
@@ -59,12 +59,16 @@ const QUOTA_MS = 5 * 60_000;
 const HOST_MS = 10_000;
 /** Keeps proxies (the tunnel) from closing an idle event stream. */
 const PING_MS = 25_000;
+/** How much of a chat's last message the sidebar gets. */
+const LAST_CHARS = 200;
 
 interface Client {
   res: ServerResponse;
   viewer: Viewer;
   /** Wants host samples. */
   host: boolean;
+  /** The sidebar rows last sent to it, by id (as JSON); null until they are read. */
+  rows: Map<string, string> | null;
 }
 
 class HttpError extends Error {
@@ -135,6 +139,9 @@ export class AdminApi {
   /** Changes waiting to be sent, gathered so a burst becomes one event each. */
   readonly #dirtySessions = new Set<string>();
   #overviewDirty = false;
+  /** Viewers whose sidebar rows may have changed; `#rowsDirtyAll`: everyone's. */
+  readonly #rowsDirty = new Set<string>();
+  #rowsDirtyAll = false;
   #flushing = false;
   /** Events go out in order, though some take a lookup (names) first. */
   #outbox: Promise<void> = Promise.resolve();
@@ -169,26 +176,43 @@ export class AdminApi {
       this.#overviewChanged();
       if (deps.logins.get(id)?.state === "done") void this.#check(id).catch((error) => log.warn("check after login failed", { profile: id, error }));
     });
-    deps.settings.onChange(() => this.#overviewChanged());
-    deps.connections.changes.on("change", () => this.#overviewChanged());
+    // The sidebar names connects and their Slack workspaces.
+    deps.settings.onChange(() => {
+      this.#overviewChanged();
+      this.#rowsChanged();
+    });
+    deps.connections.changes.on("change", () => {
+      this.#overviewChanged();
+      this.#rowsChanged();
+    });
     deps.mesh?.changes?.on("change", () => this.#overviewChanged());
     const { changes } = deps.store;
     changes.on("session", (key: string) => {
       this.#dirtySessions.add(key);
-      this.#schedule();
+      this.#rowsChanged();
     });
     changes.on("session-removed", (key: string) => {
       this.#dirtySessions.delete(key);
       this.#processStates.delete(key);
       this.#emit("session-removed", { key });
       this.#overviewChanged();
+      this.#rowsChanged();
     });
     changes.on("thread", (change: { id: number; rev: number; messages: MessageRow[] }) => {
       if (this.#clients.size === 0) return;
       const views = this.#messageViews(change.id, change.messages);
       this.#emitLater("thread", views.then((messages) => ({ id: change.id, rev: change.rev, messages })));
+      this.#rowsChanged();
     });
-    changes.on("read", (read: StationEvents["read"]) => this.#emit("read", read, (c) => viewerId(c.viewer) === read.viewer));
+    changes.on("read", (read: StationEvents["read"]) => {
+      this.#emit("read", read, (c) => viewerId(c.viewer) === read.viewer);
+      this.#rowsChanged(read.viewer);
+    });
+    // Who the viewer is on Slack: their overview says it, and their rows count it.
+    changes.on("identities", (viewer: string) => {
+      this.#overviewChanged();
+      this.#rowsChanged(viewer);
+    });
     changes.on("processes", () => this.#overviewChanged());
   }
 
@@ -270,6 +294,12 @@ export class AdminApi {
     if (resource === "sessions" && id && action === "evict" && method === "POST") {
       await this.#deps.hub.evict(id);
       return send(res, 200, { ok: true });
+    }
+    if (method === "GET" && path === "/chats") return send(res, 200, await this.#chats(viewer));
+    // "这是我" / "不是我" on a Slack user's name: taken at the viewer's word.
+    if (resource === "me" && id === "slack" && action && !parts[3] && (method === "PUT" || method === "DELETE")) {
+      this.#deps.store.setSlackIdentity(viewerId(viewer), action, method === "PUT");
+      return send(res, 200, this.#overview(viewer));
     }
     if (method === "GET" && path === "/threads") {
       const session = url.searchParams.get("session");
@@ -563,6 +593,7 @@ export class AdminApi {
         running: sessions.filter((s) => this.#deps.hub.processState(s.key) === "running").length,
         warm: sessions.filter((s) => this.#deps.hub.processState(s.key) === "warm").length,
       },
+      slackUsers: this.#deps.store.slackIdentities(viewerId(viewer)),
     };
   }
 
@@ -650,6 +681,95 @@ export class AdminApi {
     return { ...t, channelName, creator, last, people };
   }
 
+  // ── the sidebar ─────────────────────────────────────────────────────────
+
+  /**
+   * The viewer's sidebar: one kind of item, an agent (a shown session) merged
+   * with its internal chat. An agent in an internal chat is that chat's item;
+   * one with none yet is an item without a chat, whose chat is made with its
+   * first message. A Slack thread is no item: it lends its agent's item a
+   * title (while the chat has no words of its own), the connect and the origin.
+   */
+  async #chats(viewer: Viewer): Promise<ChatRow[]> {
+    const { store, hub } = this.#deps;
+    const isMine = this.#isMine(viewer);
+    const stats = store.sessionStats();
+    const shown = new Map(store.listSessions().filter((s) => s.archivedAt === null).map((s) => [s.key, s]));
+    const agent = (key: string): ChatRowAgent => {
+      const s = shown.get(key)!;
+      const stat = stats.get(key);
+      return { key, runtime: s.runtime, model: s.model, effort: s.effort, process: hub.processState(key), pending: stat?.pending ?? 0, lastTurn: stat?.lastTurn ?? null };
+    };
+    const threads = store.listThreads(viewerId(viewer));
+    // Per agent: the Slack thread it came from (the latest one it is in), and whether it has an internal chat.
+    const origins = new Map<string, ThreadSummary>();
+    const chatted = new Set<string>();
+    for (const t of threads) {
+      for (const m of t.sessions) {
+        if (t.surface === EMBER_SURFACE) chatted.add(m.session);
+        else if (!origins.has(m.session)) origins.set(m.session, t);
+      }
+    }
+    const chats = threads.filter((t) => t.surface === EMBER_SURFACE && t.sessions.some((m) => shown.has(m.session))).map(async (t): Promise<ChatRow> => {
+      const from = t.sessions.map((m) => origins.get(m.session)).find((o) => o !== undefined);
+      const agents = t.sessions.filter((m) => shown.has(m.session)).map((m) => agent(m.session));
+      const [origin, creator, people, last] = await Promise.all([
+        from ? this.#origin(from) : null,
+        this.#creator(t.createdBy),
+        this.#people(t.people),
+        t.last ? this.#messageViews(t.id, [t.last]).then(([m]) => m!) : null,
+      ]);
+      return {
+        id: String(t.id), session: agents[0]!.key, thread: t.id,
+        title: hasWords(t) || !from ? chatTitle({ ...t, channelName: null }) : chatTitle({ ...from, channelName: origin!.channelName }),
+        agents,
+        last: last && {
+          seq: last.seq, authorKind: last.authorKind, author: last.author, authorName: last.authorName,
+          text: [...last.text].slice(0, LAST_CHARS).join(""), createdAt: last.createdAt, deletedAt: last.deletedAt,
+        },
+        unread: t.unread > 0,
+        mine: isMine(creator) || people.some(isMine),
+        lastActiveAt: Math.max(t.createdAt, t.last?.createdAt ?? 0),
+        connect: from ? slackConnectOf(from) : null,
+        origin,
+      };
+    });
+    const agents = [...shown.values()].filter((s) => !chatted.has(s.key)).map(async (s): Promise<ChatRow> => {
+      const from = origins.get(s.key);
+      const [origin, creator, people] = await Promise.all([from ? this.#origin(from) : null, this.#creator(s.createdBy), this.#people(from?.people ?? [])]);
+      return {
+        id: s.key, session: s.key, thread: null,
+        title: s.title?.trim() || (from ? chatTitle({ ...from, channelName: origin!.channelName }) : NO_WORDS),
+        agents: [agent(s.key)],
+        last: null,
+        unread: false,
+        mine: isMine(creator) || people.some(isMine),
+        lastActiveAt: s.lastActiveAt,
+        connect: s.connect === INTERNAL_CONNECT ? null : s.connect,
+        origin,
+      };
+    });
+    return Promise.all([...chats, ...agents]);
+  }
+
+  /** Whether a person is the viewer: by id, by email, or as a Slack user the viewer said is them. */
+  #isMine(viewer: Viewer): (person: Creator | null) => boolean {
+    const id = viewerId(viewer);
+    const email = viewer.via === "local" ? null : viewer.email.toLowerCase();
+    const slack = new Set(this.#deps.store.slackIdentities(id));
+    return (person) => person !== null && (person.id === id || (email !== null && person.email?.toLowerCase() === email)
+      || (person.via === "slack" && slack.has(person.id.slice(person.id.lastIndexOf(":") + 1))));
+  }
+
+  /** Where a Slack thread is, for the connect icon's tip: the Slack workspace, the channel. */
+  async #origin(t: ThreadSummary): Promise<NonNullable<ChatRow["origin"]>> {
+    const connect = this.#deps.settings.config.connects.find((c) => c.id === slackConnectOf(t));
+    const state = connect ? this.#deps.connections.state(connect) : null;
+    const teamName = state && (state.state === "connected" || state.state === "reconnecting") ? state.workspace?.team || null : null;
+    const channelName = await this.#threadChat(t.id)?.channelName?.(t.channel) ?? null;
+    return { teamName, channel: t.channel, channelName, threadTs: t.threadTs };
+  }
+
   /**
    * GET /threads/:id/messages: `after` (a rev) gives every message changed
    * since; `before` (a seq) pages back; neither gives the latest page.
@@ -726,9 +846,13 @@ export class AdminApi {
   #events(req: IncomingMessage, res: ServerResponse, viewer: Viewer, host: boolean): void {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
     res.write("retry: 3000\n\n");
-    const client: Client = { res, viewer, host };
+    const client: Client = { res, viewer, host, rows: null };
     this.#clients.add(client);
     this.#streams.add(res);
+    // What its sidebar shows now: later changes are told against it.
+    this.#outbox = this.#outbox.then(async () => {
+      client.rows = new Map((await this.#chats(viewer)).map((row) => [row.id, JSON.stringify(row)]));
+    }).catch((error) => log.warn("sidebar rows not read", { error }));
     if (host) void this.#sampleHost(client);
     this.#timers();
     req.on("close", () => {
@@ -813,7 +937,36 @@ export class AdminApi {
     this.#schedule();
   }
 
-  /** Gathers the changes of this turn of the event loop into one event per session and one overview. */
+  /** The sidebar rows of `viewer` (everyone's when absent) may have changed. */
+  #rowsChanged(viewer?: string): void {
+    if (viewer === undefined) this.#rowsDirtyAll = true;
+    else this.#rowsDirty.add(viewer);
+    this.#schedule();
+  }
+
+  /**
+   * Reads the rows of the viewers `pick` chooses again, once per viewer, and tells each of their streams what
+   * changed since its last rows: `chat` for a new or changed row, `chat-removed` for one gone.
+   */
+  #sendRows(pick: (viewer: string) => boolean): void {
+    const clients = [...this.#clients].filter((c) => pick(viewerId(c.viewer)));
+    if (clients.length === 0) return;
+    this.#outbox = this.#outbox.then(async () => {
+      const read = new Map<string, Promise<ChatRow[]>>();
+      for (const client of clients) {
+        if (!client.rows || !this.#clients.has(client)) continue;
+        const id = viewerId(client.viewer);
+        if (!read.has(id)) read.set(id, this.#chats(client.viewer));
+        const rows = await read.get(id)!;
+        const before = client.rows;
+        client.rows = new Map(rows.map((row) => [row.id, JSON.stringify(row)]));
+        for (const row of rows) if (before.get(row.id) !== client.rows.get(row.id)) this.#write(client, "chat", row);
+        for (const gone of before.keys()) if (!client.rows.has(gone)) this.#write(client, "chat-removed", { id: gone });
+      }
+    }).catch((error) => log.warn("sidebar rows not sent", { error }));
+  }
+
+  /** Gathers the changes of this turn of the event loop into one event per session, one overview and one round of rows. */
   #schedule(): void {
     if (this.#flushing) return;
     this.#flushing = true;
@@ -836,8 +989,18 @@ export class AdminApi {
           // One overview for everyone; only who is looking differs.
           const [first] = this.#clients;
           const overview = this.#overview(first!.viewer);
-          for (const client of this.#clients) this.#emitLater("overview", Promise.resolve({ ...overview, viewer: client.viewer }), (c) => c === client);
+          for (const client of this.#clients) {
+            const own = { ...overview, viewer: client.viewer, slackUsers: this.#deps.store.slackIdentities(viewerId(client.viewer)) };
+            this.#emitLater("overview", Promise.resolve(own), (c) => c === client);
+          }
         }
+      }
+      if (this.#rowsDirtyAll || this.#rowsDirty.size > 0) {
+        const all = this.#rowsDirtyAll;
+        const viewers = new Set(this.#rowsDirty);
+        this.#rowsDirtyAll = false;
+        this.#rowsDirty.clear();
+        this.#sendRows((viewer) => all || viewers.has(viewer));
       }
     });
   }
@@ -1007,6 +1170,32 @@ function slackError(error: unknown): string {
  * someone else. Only the station itself, a workspace owner or admin, or the
  * current owner may do that.
  */
+const NO_WORDS = "（还没有消息）";
+
+/** The connect a Slack thread came in through: the first of its sessions' that is not ember's own. */
+function slackConnectOf(t: ThreadSummary): string | null {
+  return t.sessions.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null;
+}
+
+/** Whether a chat has a title of its own, or something a person said in it to take one from. */
+function hasWords(t: Pick<ThreadSummary, "title" | "firstText">): boolean {
+  return Boolean(t.title?.trim() || t.firstText?.trim());
+}
+
+/**
+ * What a thread is called: its title, else the first line a person wrote in it (Slack mentions left out, spaces
+ * collapsed), else its Slack channel (`#name`, 私信 for a direct message).
+ */
+function chatTitle(t: Pick<ThreadSummary, "title" | "firstText" | "surface" | "channel"> & { channelName: string | null }): string {
+  const title = t.title?.trim();
+  if (title) return title;
+  const first = (t.firstText ?? "").replace(/<@[A-Z0-9]+>/g, "").split("\n").map((line) => line.split(/\s+/).filter(Boolean).join(" ")).find((line) => line);
+  if (first) return first;
+  if (t.channelName?.trim()) return `#${t.channelName.trim()}`;
+  if (t.surface !== EMBER_SURFACE && t.channel.startsWith("D")) return "私信";
+  return NO_WORDS;
+}
+
 function ownerOf(current: { id: string; name: string } | undefined, requested: unknown, viewer: Viewer): { createdBy?: { id: string; name: string } } {
   const base = current ?? (requested === undefined ? { id: viewerId(viewer), name: viewerName(viewer) } : undefined);
   if (requested === undefined) return base ? { createdBy: base } : {};

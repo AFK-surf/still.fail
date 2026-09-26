@@ -67,10 +67,11 @@ seeds.forEach((seed, i) => {
     workspace: join(dataDir, "sessions", String(i)), token: `demo-${i}`, createdAt: now - seed.ago - 600_000, lastActiveAt: now - seed.ago });
   if (seed.id) store.setRuntimeSessionId(key, seed.id);
   if (single) { store.setBinding(seed.connect, key); store.setTitle(key, "bridge 值班"); }
+  // Said by the Slack user the reused transcripts name, so the histories and the Slack threads agree.
   const say = (channel: string, threadTs: string, mts: string, text: string, at: number) => {
-    const thread = store.openThread({ surface: "slack:T0DEMO", channel, threadTs, createdBy: `slack:${seed.connect}:U09ABCDEF` });
+    const thread = store.openThread({ surface: "slack:T0DEMO", channel, threadTs, createdBy: `slack:${seed.connect}:U09KY0GE28K` });
     store.joinThread(thread.id, key, seed.connect);
-    const { seq } = store.insertMessage({ thread: thread.id, ts: mts, authorKind: "person", author: "U09ABCDEF", text, createdAt: at });
+    const { seq } = store.insertMessage({ thread: thread.id, ts: mts, authorKind: "person", author: "U09KY0GE28K", text, createdAt: at });
     store.deliver(seq, [key]);
     if (!seed.pending) store.markDelivered(key, [seq]);
   };
