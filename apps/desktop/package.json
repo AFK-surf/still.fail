@@ -46,9 +46,14 @@
     ],
     "mac": {
       "target": "dir",
-      "identity": null,
+      "identity": "Apple Development: zuozijian1994@gmail.com (9C49UVFRK3)",
       "icon": "../../web/public/icon-512.png",
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "ember connects straight to your stations on the local network when it can."
+      }
     },
     "electronDist": "node_modules/electron/dist"
   },

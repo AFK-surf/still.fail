@@ -1,5 +1,6 @@
 #!/bin/sh
-# Builds the desktop app for macOS arm64, unsigned, into out/mac-arm64/ember.app:
+# Builds the desktop app for macOS arm64, signed with the Apple Development certificate in the login keychain
+# (so macOS keeps its Local Network grant across updates), into out/mac-arm64/ember.app:
 # the core (client/node) as build/ember_core.node, the web app (`pnpm run
 # build:cloud`, dist/cloud-app without the admin's console) as build/web, the
 # app's own code as build/app, then electron-builder puts them together.
@@ -10,7 +11,9 @@ here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
 target=${CARGO_TARGET_DIR:-$root/client/target}
 (cd "$root/client" && cargo build -p ember-core-node --release --target aarch64-apple-darwin)
-[ -n "${SKIP_WEB:-}" ] || (cd "$root" && pnpm run build:cloud)
+# The web app carries PostHog when its key is at hand (docs/telemetry.md), as the cloud's does.
+posthog="$HOME/ember-deploy/posthog.json"
+[ -n "${SKIP_WEB:-}" ] || (cd "$root" && if [ -f "$posthog" ]; then EMBER_POSTHOG="$posthog" pnpm run build:cloud; else pnpm run build:cloud; fi)
 rm -rf "$here/build" "$here/out"
 mkdir -p "$here/build"
 cp "$target/aarch64-apple-darwin/release/libember_core_node.dylib" "$here/build/ember_core.node"
