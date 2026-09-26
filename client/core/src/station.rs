@@ -1881,6 +1881,25 @@ mod tests {
     }
 
     #[test]
+    fn an_offline_station_is_asked_for_nothing_until_it_is_back() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/overview", 200, json!({"connects": [], "profiles": []}));
+            stations.set_presence(ST, false);
+            for t in [overview(), link()] {
+                stations.start(&t);
+            }
+            host.settle().await;
+            assert_eq!(wire.count("GET", "/admin/api/overview"), 0, "offline: nothing asked");
+            assert_eq!(sink.get(&link()).unwrap()["state"], "offline");
+            stations.set_presence(ST, true);
+            host.settle().await;
+            assert_eq!(wire.count("GET", "/admin/api/overview"), 1, "back: what it wants is read");
+            assert!(sink.get(&overview()).is_some());
+        });
+    }
+
+    #[test]
     fn writes_bring_what_they_touch_up_to_date() {
         run(async {
             let (host, sink, wire, stations) = setup();
