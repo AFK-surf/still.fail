@@ -1044,7 +1044,9 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 
 /* New chat: a centred composer with the choices of where and on what it runs. */
 .new-chat { flex: 1; min-height: 0; display: grid; place-items: center; padding: 32px; overflow-y: auto; }
-.new-chat-inner { width: 100%; max-width: 720px; display: grid; gap: 10px; }
+.new-chat-inner { width: 100%; max-width: 720px; display: grid; gap: 10px; justify-items: center; text-align: center; }
+/* Centred, except what one writes in: the composer keeps the full width and its text starts on the left. */
+.new-chat-inner > .composer-wrap, .new-chat-inner > form, .new-chat-inner > .composer { justify-self: stretch; text-align: left; }
 .new-chat-title { margin: 0; font-size: var(--text-lg); font-weight: 600; }
 .new-chat-sub { margin: 0 0 8px; color: var(--muted); font-size: var(--text-sm); }
 .new-chat .composer-wrap { padding: 0; }
