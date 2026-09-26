@@ -8,7 +8,7 @@ import { DropdownMenu, Popover, Tabs } from "radix-ui";
 import { useState, type ReactNode } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
-import { useAction, useApi, useChat, useHost, useLive, type ConnectView, type ProfileView, type SessionDetail } from "../api.ts";
+import { useAction, useApi, useChat, useHost, useLive, type ConnectView, type LiveView, type ProfileView, type SessionSummary, type ThreadView } from "../api.ts";
 import { History } from "../History.tsx";
 import { ChatPanel } from "../Chat.tsx";
 import {
@@ -37,9 +37,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
   const station = useStation();
   const link = useLink();
   const chatView = useChat(station.address, sessionKey);
-  const liveView = useLive(station.address, sessionKey).value;
-  const live = liveView?.steps ?? [];
-  const phase = liveView?.phase ?? null;
+  const live = useLive(station.address, sessionKey).value;
   // Open tabs on the right; each can be closed, and with none open the panel goes away.
   // On narrow screens nothing opens by itself, since the panel would cover the chat.
   const [tabs, setTabs] = useState<string[]>(() => {
@@ -69,18 +67,16 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
     if (chatView.error) return <Empty><p>读不到这个会话：{chatView.error.message}</p></Empty>;
     return <Loading label={station.name ? `正在从 ${station.name} 读取会话…` : "正在读取会话…"} />;
   }
-  const { detail, connect, profile } = chatView.value;
-  const { session, threads, chats } = detail;
+  const chat = chatView.value;
+  const { session, threads, connect, profile } = chat;
   const name = connect?.name ?? session.connect;
   const base = workspaceUrl(connect);
-  const slackThreads = threads.filter((t) => t.channel !== "EMBER");
+  const slackThreads = threads.filter((t) => t.surface !== "ember");
   const single = slackThreads.length === 1 ? slackThreads[0] : undefined;
   const singleUrl = single ? slackThreadUrl(base, single.channel, single.threadTs) : null;
   const badge = statusBadge(sessionStatus(session));
-  const model = detail.transcript?.usage?.model ?? session.model;
+  const model = live?.usage?.model ?? session.model;
   const toggleHistory = () => (tabs.includes("history") && active === "history" ? closeTab("history") : openTab("history"));
-  // One chat per session; older sessions may have several, of which the first is the one.
-  const chat = chats[0];
   return (
     <div className="session-page" data-panel={panel}>
       <div className="session-main">
@@ -95,9 +91,9 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
           <h1>{sessionTitle(session, name)}</h1>
         </div>
         <div className="page-bar-actions">
-          <ChatInfo detail={detail} connect={connect} base={base} />
+          <ChatInfo session={session} threads={threads} connect={connect} base={base} />
           {slackThreads.length > 1
-            ? <ThreadMenu detail={detail} base={base} />
+            ? <ThreadMenu session={session} threads={threads} base={base} />
             : singleUrl && (
               <Tip label="在 Slack 中打开">
                 <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
@@ -107,7 +103,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
         </div>
       </header>
       {/* The chat is the page; the session's history sits in a tab set that takes the whole right side. */}
-      <ChatPanel detail={detail} chat={chat} outbox={chatView.value.outbox} live={live} phase={phase} onOpenHistory={toggleHistory} />
+      <ChatPanel chat={chat} live={live} onOpenHistory={toggleHistory} />
       </div>
         {panel && (
           <Tabs.Root className="side-panel" value={tabs.includes(active) ? active : tabs[0]!} onValueChange={setActive}>
@@ -129,10 +125,10 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
               <IconButton label="收起侧栏" icon={PanelRightClose} onClick={() => saveTabs([])} />
             </div>
             <Tabs.Content className="side-content" value="history">
-              <History detail={detail} connect={connect ?? undefined} live={live} phase={phase} actions={<SessionActions detail={detail} />} slackBase={base}
+              <History session={session} threads={threads} connect={connect ?? undefined} live={live} actions={<SessionActions session={session} />} slackBase={base}
                 onOpenChat={() => (document.querySelector(".composer-text") as HTMLTextAreaElement | null)?.focus()}
-                summary={<HistorySummary detail={detail} profile={profile} />}
-                details={<SessionDetails detail={detail} profile={profile} />} />
+                summary={<HistorySummary live={live} profile={profile} />}
+                details={<SessionDetails session={session} live={live} profile={profile} />} />
             </Tabs.Content>
           </Tabs.Root>
         )}
@@ -141,11 +137,10 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
 }
 
 /** The chat itself: where it came from, who started it and takes part, its Slack threads. Opens from the title bar. */
-function ChatInfo({ detail, connect, base }: { detail: SessionDetail; connect: ConnectView | null; base: string | null }) {
-  const { session } = detail;
+function ChatInfo({ session, threads: all, connect, base }: { session: SessionSummary; threads: ThreadView[]; connect: ConnectView | null; base: string | null }) {
   const link = useLink();
-  const name = threadNamer(detail);
-  const threads = detail.threads.filter((t) => t.channel !== "EMBER");
+  const name = threadNamer(session, all);
+  const threads = all.filter((t) => t.surface !== "ember");
   const row = (label: string, value: ReactNode) => <div className="detail-row"><dt>{label}</dt><dd>{value}</dd></div>;
   return (
     <Popover.Root>
@@ -171,7 +166,7 @@ function ChatInfo({ detail, connect, base }: { detail: SessionDetail; connect: C
                 return (
                   <li key={`${t.channel}/${t.threadTs}`}>
                     {url ? <a href={url} target="_blank" rel="noopener" className="detail-link"><SlackLogo size={13} />{where}</a> : <span className="detail-inline"><SlackLogo size={13} />{where}</span>}
-                    <span className="muted">{when} 开始 · {t.messages} 条消息</span>
+                    <span className="muted">{threadMeta(when, t)}</span>
                   </li>
                 );
               })}
@@ -184,9 +179,9 @@ function ChatInfo({ detail, connect, base }: { detail: SessionDetail; connect: C
 }
 
 /** The history's head, folded: what is worth a glance — the allowance left, the cache hit rate, the station's free disk. */
-function HistorySummary({ detail, profile }: { detail: SessionDetail; profile: ProfileView | null }) {
+function HistorySummary({ live, profile }: { live: LiveView | undefined; profile: ProfileView | null }) {
   const host = useHost(useStation().address).value;
-  const usage = detail.transcript?.usage;
+  const usage = live?.usage;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
   const windows = profile?.quota?.state === "ok" ? profile.quota.windows : [];
   const free = host && host.disk.totalBytes > 0 ? host.disk.freeBytes : null;
@@ -199,12 +194,11 @@ function HistorySummary({ detail, profile }: { detail: SessionDetail; profile: P
 }
 
 /** Unfolded under the history's head: the model and its use, the allowance, the station. */
-function SessionDetails({ detail, profile }: { detail: SessionDetail; profile: ProfileView | null }) {
-  const { session } = detail;
+function SessionDetails({ session, live, profile }: { session: SessionSummary; live: LiveView | undefined; profile: ProfileView | null }) {
   const station = useStation();
   const link = useLink();
   const host = useHost(station.address).value;
-  const usage = detail.transcript?.usage;
+  const usage = live?.usage;
   const quota = profile?.quota;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
   const gb = (bytes: number) => `${Math.round(bytes / 1024 ** 3)} GB`;
@@ -248,10 +242,9 @@ function SessionDetails({ detail, profile }: { detail: SessionDetail; profile: P
 }
 
 /** What can be done to it right now: stop a turn, release an idle process. */
-function SessionActions({ detail }: { detail: SessionDetail }) {
+function SessionActions({ session }: { session: SessionSummary }) {
   const api = useApi();
   const toast = useToast();
-  const { session } = detail;
   const stop = useAction(() => api.stop(session.key), () => toast("已请求停止"));
   const evict = useAction(() => api.evict(session.key), () => toast("已释放进程"));
   const status = sessionStatus(session);
@@ -263,8 +256,13 @@ function SessionActions({ detail }: { detail: SessionDetail }) {
   );
 }
 
-function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | null }) {
-  const name = threadNamer(detail);
+/** When a thread began and when it was last written in. */
+function threadMeta(when: string, thread: ThreadView): string {
+  return `${when} 开始${thread.last ? ` · 最近 ${relativeTime(thread.last.createdAt)}` : ""}`;
+}
+
+function ThreadMenu({ session, threads, base }: { session: SessionSummary; threads: ThreadView[]; base: string | null }) {
+  const name = threadNamer(session, threads);
   return (
     <DropdownMenu.Root modal={false}>
       <Tip label="这个会话的 Slack thread">
@@ -275,7 +273,7 @@ function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | nu
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="popover menu-list thread-menu" align="end" sideOffset={4} collisionPadding={8}>
           <DropdownMenu.Label className="menu-label">在 Slack 中打开</DropdownMenu.Label>
-          {detail.threads.filter((t) => t.channel !== "EMBER").map((t) => {
+          {threads.filter((t) => t.surface !== "ember").map((t) => {
             const url = slackThreadUrl(base, t.channel, t.threadTs);
             const { where, when } = name(t.channel, t.threadTs);
             return (
@@ -283,7 +281,7 @@ function ThreadMenu({ detail, base }: { detail: SessionDetail; base: string | nu
                 onSelect={() => { if (url) window.open(url, "_blank", "noopener"); }}>
                 <span className="thread-item">
                   <span>{where}</span>
-                  <span className="muted">{when} 开始 · {t.messages} 条消息</span>
+                  <span className="muted">{threadMeta(when, t)}</span>
                 </span>
               </DropdownMenu.Item>
             );

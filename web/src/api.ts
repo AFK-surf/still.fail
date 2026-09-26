@@ -7,7 +7,10 @@ import { useCall, useTopic, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
-import type { Attachment, ConnectInput, ConnectView, HostInfo, LivePhase, LiveStep, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, ProfileView, Quote, RuntimeKind, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type {
+  Attachment, ConnectInput, ConnectView, HostInfo, LivePhase, LiveStep, LoginJob, MessageView, Overview, ProfileCheck, ProfileInput, ProfileQuota, ProfileView, Quote, RuntimeKind,
+  SessionSummary, ThreadView, TimelineEntry, TranscriptUsage, TurnRecord,
+} from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
 
 export type * from "../../src/admin/types.ts";
@@ -26,8 +29,8 @@ export type SlackAppView =
 /** A station's mesh link as the core holds it. */
 export interface LinkView { state: "connecting" | "online" | "offline" | "error"; message?: string | null }
 
-/** A chat in the sidebar: a session, where it runs and the connect it belongs to. */
-export interface ChatItem { station: string; stationName: string; session: SessionSummary; connect: ConnectView | null }
+/** A chat in the sidebar: a session, where it runs, the connect it belongs to, and what the viewer has not read in its threads. */
+export interface ChatItem { station: string; stationName: string; session: SessionSummary; connect: ConnectView | null; unread: number }
 export interface ChatDay { daysAgo: number; at: number; items: ChatItem[] }
 export interface ChatsView {
   me: Me;
@@ -49,19 +52,38 @@ export interface StationView {
 
 export interface ConnectsView { items: { station: string; stationName: string; connect: ConnectView }[]; loading: boolean }
 
-/** A message sent from here that the session does not show yet. */
+/** A message sent from here that the chat does not show yet; `seq` once the station has it. */
 export interface OutboxMessage {
   id: string; text: string; attachments: Attachment[]; quotes: Quote[]; createdAt: number;
-  state: "sending" | "failed"; error: string | null;
+  state: "sending" | "failed"; error: string | null; seq?: number;
 }
 
-export interface ChatView { detail: SessionDetail; connect: ConnectView | null; profile: ProfileView | null; link: LinkView; outbox: OutboxMessage[] }
+/**
+ * One chat: the session (its row, threads and turns), its chat on ember's
+ * page (`thread`, null until the first message makes one) with the messages
+ * loaded so far (`more`: older ones exist), and what was sent from here that
+ * it does not show yet.
+ */
+export interface ChatView {
+  me: Me;
+  session: SessionSummary;
+  threads: ThreadView[];
+  turns: TurnRecord[];
+  thread: ThreadView | null;
+  messages: MessageView[];
+  more: boolean;
+  outbox: OutboxMessage[];
+  connect: ConnectView | null;
+  profile: ProfileView | null;
+  link: LinkView;
+}
 
 /** A step in flight; an ended one stays until the transcript entry that records it arrives. */
 export type ShownStep = LiveStep & { ended?: boolean };
 /** Where the turn stands with the model, since when. */
 export interface ShownPhase { phase: LivePhase; since: number }
-export interface LiveView { steps: ShownStep[]; phase: ShownPhase | null }
+/** A session as it runs: its transcript (all of it once `loaded`), the model's use, and the steps in flight. */
+export interface LiveView { loaded: boolean; timeline: TimelineEntry[]; usage: TranscriptUsage | null; steps: ShownStep[]; phase: ShownPhase | null }
 
 export function useChats(scope: string, mine: boolean): TopicState<ChatsView> {
   return useTopic<ChatsView>({ topic: "chats", scope, mine });
@@ -195,8 +217,10 @@ export function stationApi(t: StationCall) {
 
 export type Api = ReturnType<typeof stationApi>;
 
-/** The admin API of the station in context. */
-/** Sending in a chat: the message shows at once from the core's outbox; a failed one can be sent again or dropped. */
+/**
+ * A chat's calls. Sending: the message shows at once from the core's outbox; a failed one can be sent again
+ * or dropped. `older` loads the page before the messages shown; `read` records how far the viewer has read.
+ */
 export function useChatSend() {
   const call = useCall();
   const station = useStation().address;
@@ -204,9 +228,12 @@ export function useChatSend() {
     send: (key: string, text: string, attachments: Attachment[], quotes: Quote[]) => call("chat.send", { station, key, text, attachments, quotes }),
     retry: (key: string, id: string) => call("chat.retry", { station, key, id }),
     discard: (key: string, id: string) => call("chat.discard", { station, key, id }),
+    older: (key: string) => call("chat.older", { station, key }) as Promise<{ more: boolean }>,
+    read: (key: string, seq: number) => call("chat.read", { station, key, seq }),
   }), [call, station]);
 }
 
+/** The admin API of the station in context. */
 export function useApi(): Api {
   const call = useStationCall(useStation().address);
   return useMemo(() => stationApi(call), [call]);

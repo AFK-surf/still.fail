@@ -1,5 +1,5 @@
 // Turning ember's records into words people read.
-import type { AccessKind, ConnectMode, ConnectState, ConnectView, SessionDetail, ProcessState, ProfileCheck, RuntimeKind, SessionSummary, TurnSummary } from "./api.ts";
+import type { AccessKind, ConnectMode, ConnectState, ConnectView, ProcessState, ProfileCheck, RuntimeKind, SessionSummary, ThreadView, TurnSummary } from "./api.ts";
 import type { Presence, Tone } from "./ui.tsx";
 
 export type Status = "running" | "queued" | "final" | "block" | "failed" | "aborted" | "unexpected" | "idle";
@@ -133,6 +133,8 @@ export function connectionText(state: ConnectState): string {
 
 export interface SourcedMessage {
   user: string;
+  /** Who, as the prompt named them. */
+  name: string | null;
   ts: string;
   text: string;
   /** CHANNEL/THREAD_TS, when the prompt said. */
@@ -151,11 +153,12 @@ export function parsePrompt(text: string): { messages: SourcedMessage[]; note: s
     .replace(/<message ([^>]*)>\n?([\s\S]*?)\n?<\/message>/g, (_, attrs: string, body: string) => {
       const attr = (name: string) => new RegExp(`${name}="([^"]*)"`).exec(attrs)?.[1];
       const from = unescape(attr("from") ?? "");
-      messages.push({ user: /\(([^()\s]+)\)$/.exec(from)?.[1] ?? from, ts: attr("ts") ?? "", text: body, thread: attr("thread") ?? null });
+      const named = /^(.*) \(([^()\s]+)\)$/.exec(from);
+      messages.push({ user: named?.[2] ?? from, name: named?.[1] ?? null, ts: attr("ts") ?? "", text: body, thread: attr("thread") ?? null });
       return "";
     })
     .replace(/<slack user="([^"]*)"(?: bot)? ts="([^"]*)">\n?([\s\S]*?)\n?<\/slack>/g, (_, user: string, ts: string, body: string) => {
-      messages.push({ user, ts, text: body, thread: null });
+      messages.push({ user, name: null, ts, text: body, thread: null });
       return "";
     })
     .replace(/^\(Thread \S+ had messages before you were brought in;.*\)$/gm, "")
@@ -204,16 +207,14 @@ export function botUserIdOf(connect: ConnectView | undefined): string | null {
 }
 
 /** Names a thread for people: its channel (by name when known) and when it began. */
-export function threadNamer(detail: SessionDetail) {
+export function threadNamer(session: SessionSummary, threads: ThreadView[]) {
   return (channel: string, threadTs: string) => {
     const started = new Date(Number(threadTs) * 1000);
     const when = `${started.getMonth() + 1}月${started.getDate()}日 ${started.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
-    if (channel === "EMBER") {
-      const chat = detail.chats.find((c) => c.threadTs === threadTs);
-      // ember's own chat goes by its session's name.
-      return { where: chat?.title || sessionTitle(detail.session, ""), when };
-    }
-    const where = channel.startsWith("D") ? "私信" : `#${detail.channels[channel] ?? channel}`;
+    const thread = threads.find((t) => t.channel === channel && t.threadTs === threadTs);
+    // ember's own chat goes by its session's name.
+    if (channel === "EMBER") return { where: thread?.title || sessionTitle(session, ""), when };
+    const where = channel.startsWith("D") ? "私信" : `#${thread?.channelName ?? channel}`;
     return { where, when };
   };
 }

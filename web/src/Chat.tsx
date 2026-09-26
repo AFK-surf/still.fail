@@ -3,37 +3,42 @@
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatMessageRow, type OutboxMessage, type Quote, type SessionDetail, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
-import { absoluteTime, agentLabel, relativeTime, sessionStatus } from "./format.ts";
+import { agentLabel, sessionStatus } from "./format.ts";
+import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
 import { useStickToBottom } from "./scroll.ts";
 
-export function ChatPanel({ detail, chat, outbox = [], live = [], phase = null, onOpenHistory }: {
-  detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; outbox?: OutboxMessage[]; live?: ShownStep[]; phase?: ShownPhase | null; onOpenHistory(): void;
-}) {
+export function ChatPanel({ chat, live, onOpenHistory }: { chat: ChatView; live: LiveView | undefined; onOpenHistory(): void }) {
   const list = useRef<HTMLDivElement>(null);
   const floor = useRef<HTMLDivElement>(null);
   const sending = useChatSend();
-  const messages = chat?.messages ?? [];
+  const { session, outbox } = chat;
+  // Deleted messages keep their place for the station's cursors; here they are simply gone.
+  const messages = chat.messages.filter((m) => m.deletedAt === null);
+  const steps = live?.steps ?? [];
+  const phase = live?.phase ?? null;
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
   useStickToBottom(list, ".msg", floor);
+  useOlderOnScroll(list, chat, () => sending.older(session.key));
+  useMarkRead(floor, chat, (seq) => sending.read(session.key, seq));
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
   for (const o of outbox) sentHere.current.add(o.text);
-  // Messages there when the chat opened show at once; later ones ease in, except a reply that already streamed in place.
-  const firstCount = useRef<number | null>(null);
-  if (firstCount.current === null) firstCount.current = messages.length;
+  // Messages there when the chat opened (and older pages loaded later) show at once; newer ones ease in, except a reply that already streamed in place.
+  const firstSeq = useRef<number | null>(null);
+  if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
   const wasWriting = useRef(false);
   const heldReply = useRef<{ text: string; count: number } | null>(null);
   const streamedTs = useRef(new Set<string>());
-  const status = sessionStatus(detail.session);
+  const status = sessionStatus(session);
   // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
   const lastAgents = useRef<AgentAtWork[] | null>(null);
   const [, rerender] = useState(0);
@@ -51,18 +56,20 @@ export function ChatPanel({ detail, chat, outbox = [], live = [], phase = null, 
   }, [busy]);
   const member = usePerson();
   const isMine = useIsMine();
-  const name = (id: string) => member(id)?.name || detail.people[id] || (id === "local" ? "本机" : id);
-  // Your messages the runtime has not taken yet; after a second they show that they wait.
-  const pendingTs = new Set(detail.inbound.filter((i) => i.status === "pending").map((i) => i.ts));
+  const name = (m: MessageView) => member(m.author)?.name || m.authorName || (m.author === "local" ? "本机" : m.author);
+  // The session's messages the runtime has not taken yet are the last people wrote; after a second, yours show that they wait.
+  const people = messages.filter((m) => m.authorKind === "person");
+  const pending = new Set(session.pending > 0 ? people.slice(-session.pending).map((m) => m.seq) : []);
   const [, tick] = useState(0);
-  const youngest = messages.filter((m) => pendingTs.has(m.ts)).reduce((t, m) => Math.max(t, m.createdAt), 0);
+  const youngest = messages.filter((m) => pending.has(m.seq)).reduce((t, m) => Math.max(t, m.createdAt), 0);
   useEffect(() => {
     const wait = youngest + 1000 - Date.now();
     if (!youngest || wait <= 0) return;
     const timer = setTimeout(() => tick((n) => n + 1), wait + 20);
     return () => clearTimeout(timer);
   }, [youngest]);
-  const agent = agentLabel(detail.transcript?.usage?.model ?? detail.session.model, detail.session.effort);
+  const model = live?.usage?.model ?? session.model;
+  const agent = agentLabel(model, session.effort);
 
   // Selecting text inside one message offers to quote it.
   const onSelect = () => {
@@ -80,47 +87,49 @@ export function ChatPanel({ detail, chat, outbox = [], live = [], phase = null, 
   return (
     <section className="chat" aria-label="对话">
       <div className="chat-list" ref={list} onMouseUp={() => setTimeout(onSelect, 0)} onScroll={() => setPicked(null)}>
+        {chat.more && <div className="chat-older" aria-hidden="true"><span className="spinner" /></div>}
         {messages.length === 0 && (
           <div className="chat-empty">
             <p>在这里给这个会话发消息，agent 会在这里回复。</p>
-            <p className="muted">{detail.threads.some((t) => t.channel !== "EMBER") ? "它在 Slack 里的来往，在右边的执行历史里能看到。" : ""}</p>
+            <p className="muted">{chat.threads.some((t) => t.surface !== "ember") ? "它在 Slack 里的来往，在右边的执行历史里能看到。" : ""}</p>
           </div>
         )}
-        {messages.map((m, index) => {
-          if (index >= firstCount.current! && m.role === "agent" && wasWriting.current && !streamedTs.current.has(m.ts)) {
+        {messages.map((m) => {
+          const fresh = m.seq > firstSeq.current!;
+          if (fresh && m.authorKind === "agent" && wasWriting.current && !streamedTs.current.has(m.ts)) {
             streamedTs.current.add(m.ts);
             wasWriting.current = false;
           }
-          const mine = m.role === "person" && isMine({ id: m.user, email: m.user });
-          const enter = index >= firstCount.current! && !streamedTs.current.has(m.ts) && !(mine && sentHere.current.has(m.text)) ? true : undefined;
+          const mine = m.authorKind === "person" && isMine({ id: m.author, email: m.author });
+          const enter = fresh && !streamedTs.current.has(m.ts) && !(mine && sentHere.current.has(m.text)) ? true : undefined;
           if (mine) {
             return (
-              <div key={m.ts} className="msg msg-mine" data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
+              <div key={m.seq} className="msg msg-mine" data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
                 <Quotes quotes={m.quotes} />
                 {m.text && <div className="msg-bubble"><div className="msg-plain">{m.text}</div></div>}
-                <Files sessionKey={detail.session.key} files={m.attachments} />
-                {pendingTs.has(m.ts) && Date.now() - m.createdAt > 1000
+                <Files sessionKey={session.key} files={m.attachments} />
+                {pending.has(m.seq) && Date.now() - m.createdAt > 1000
                   ? <span className="msg-time msg-waiting"><span className="spinner" aria-hidden="true" />等待 agent 接收</span>
                   : <Time className="msg-time" at={m.createdAt} />}
               </div>
             );
           }
-          const who = m.role === "agent" ? agent : name(m.user);
+          const who = m.authorKind === "agent" ? agent : m.authorKind === "ember" ? "ember" : name(m);
           return (
-            <div key={m.ts} className="msg msg-row" data-author={who} data-ts={m.ts} data-role={m.role} data-enter={enter}>
+            <div key={m.seq} className="msg msg-row" data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"} data-enter={enter}>
               <div className="msg-main">
                 <div className="msg-head">
-                  <MessageAvatar message={m} name={who} runtime={detail.session.runtime} model={detail.transcript?.usage?.model ?? detail.session.model} />
-                  {m.role === "agent"
+                  <MessageAvatar message={m} name={who} runtime={session.runtime} model={model} />
+                  {m.authorKind === "agent"
                     ? <button type="button" className="msg-name msg-agent" onClick={onOpenHistory} title="打开或关闭执行历史">{who}</button>
                     : <span className="msg-name">{who}</span>}
                   <Time className="msg-time" at={m.createdAt} />
                 </div>
                 <Quotes quotes={m.quotes} />
-                {m.role === "agent"
-                  ? <div className="markdown"><Prose>{m.text}</Prose></div>
-                  : m.text && <div className="msg-plain">{m.text}</div>}
-                <Files sessionKey={detail.session.key} files={m.attachments} />
+                {m.authorKind === "person"
+                  ? m.text && <div className="msg-plain">{m.text}</div>
+                  : <div className="markdown"><Prose>{m.text}</Prose></div>}
+                <Files sessionKey={session.key} files={m.attachments} />
               </div>
             </div>
           );
@@ -129,18 +138,18 @@ export function ChatPanel({ detail, chat, outbox = [], live = [], phase = null, 
           <div key={o.id} className="msg msg-mine" data-author="你" data-role="person" data-enter>
             <Quotes quotes={o.quotes} />
             {o.text && <div className="msg-bubble"><div className="msg-plain">{o.text}</div></div>}
-            <Files sessionKey={detail.session.key} files={o.attachments} />
+            <Files sessionKey={session.key} files={o.attachments} />
             {o.state === "failed"
               ? <span className="msg-time msg-failed">发送失败{o.error ? `：${o.error}` : ""}
-                  <button type="button" className="inline-link" onClick={() => void sending.retry(detail.session.key, o.id).catch(() => {})}>重试</button>
-                  <button type="button" className="inline-link" onClick={() => void sending.discard(detail.session.key, o.id)}>删除</button>
+                  <button type="button" className="inline-link" onClick={() => void sending.retry(session.key, o.id).catch(() => {})}>重试</button>
+                  <button type="button" className="inline-link" onClick={() => void sending.discard(session.key, o.id)}>删除</button>
                 </span>
               : <span className="msg-time msg-waiting msg-sending"><span className="spinner" aria-hidden="true" />正在发送</span>}
           </div>
         ))}
         {(() => {
           // The agent writing to this chat right now: its chat_post, as far as it has streamed.
-          const writing = live.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && (partialString(s.input, "to") ?? "").startsWith("EMBER/"));
+          const writing = steps.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && (partialString(s.input, "to") ?? "").startsWith("EMBER/"));
           let text = writing ? partialString(writing.input, "text") : null;
           // Once written, the reply stays in place until the posted message arrives, so it never blinks out between the two.
           if (text) heldReply.current = { text, count: messages.length };
@@ -152,7 +161,7 @@ export function ChatPanel({ detail, chat, outbox = [], live = [], phase = null, 
             <div className="msg msg-row" data-author={agent}>
               <div className="msg-main">
                 <div className="msg-head">
-                  <span className="msg-avatar msg-avatar-agent"><ModelLogo model={detail.transcript?.usage?.model ?? detail.session.model} runtime={detail.session.runtime} size={12} /></span>
+                  <span className="msg-avatar msg-avatar-agent"><ModelLogo model={model} runtime={session.runtime} size={12} /></span>
                   <button type="button" className="msg-name msg-agent" onClick={onOpenHistory}>{agent}</button>
                   <span className="msg-time">正在输入</span>
                 </div>
@@ -162,8 +171,8 @@ export function ChatPanel({ detail, chat, outbox = [], live = [], phase = null, 
           ) : null;
           if (!busy && !lastAgents.current) return writingNow;
           const agents: AgentAtWork[] = busy ? [{
-              key: detail.session.key, who: agent, runtime: detail.session.runtime, model: detail.transcript?.usage?.model ?? detail.session.model,
-              timeline: detail.transcript?.timeline ?? [], live, phase, since: detail.turns.at(-1)?.endedAt == null ? detail.turns.at(-1)?.startedAt ?? null : null,
+              key: session.key, who: agent, runtime: session.runtime, model,
+              timeline: live?.timeline ?? [], live: steps, phase, since: chat.turns.at(-1)?.endedAt == null ? chat.turns.at(-1)?.startedAt ?? null : null,
             }] : lastAgents.current!;
           if (busy) lastAgents.current = agents;
           // The activity is always the last thing in the chat; the reply being written comes before it.
@@ -178,18 +187,78 @@ export function ChatPanel({ detail, chat, outbox = [], live = [], phase = null, 
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
-      <Composer sessionKey={detail.session.key} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
+      <Composer sessionKey={session.key} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
     </section>
   );
 }
 
-function MessageAvatar({ message, name, runtime, model }: { message: ChatMessageRow; name: string; runtime: SessionDetail["session"]["runtime"]; model: string | null }) {
+/**
+ * Loads the page of messages before those shown when the reader comes near
+ * the top (or when what is loaded does not fill the pane). What is on screen
+ * stays put: the pane keeps its distance from the bottom as content grows
+ * above (scroll.ts).
+ */
+function useOlderOnScroll(ref: RefObject<HTMLElement | null>, chat: ChatView, older: () => Promise<unknown>): void {
+  // The oldest message a page was asked before: one request per page.
+  const asked = useRef<number | undefined>(undefined);
+  const more = chat.more;
+  const first = chat.messages[0]?.seq;
+  const load = useRef(older);
+  load.current = older;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !more) return;
+    const check = () => {
+      if (asked.current === first || el.scrollTop > 300) return;
+      asked.current = first;
+      void load.current().catch(() => { asked.current = undefined; });
+    };
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    return () => el.removeEventListener("scroll", check);
+  }, [ref, more, first]);
+}
+
+/**
+ * Records how far the viewer has read: up to the newest message, whenever the
+ * chat's bottom is in view on a visible page.
+ */
+function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
+  const newest = chat.messages.at(-1)?.seq ?? 0;
+  const known = chat.thread?.read ?? 0;
+  const sent = useRef(0);
+  const record = useRef(read);
+  record.current = read;
+  useEffect(() => {
+    const el = floor.current;
+    if (!el || newest <= known) return;
+    let seen = false;
+    const mark = () => {
+      if (!seen || document.visibilityState !== "visible" || sent.current >= newest) return;
+      sent.current = newest;
+      void record.current(newest).catch(() => { sent.current = 0; });
+    };
+    const observer = new IntersectionObserver((entries) => {
+      seen = entries.some((e) => e.isIntersecting);
+      mark();
+    });
+    observer.observe(el);
+    document.addEventListener("visibilitychange", mark);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", mark);
+    };
+  }, [floor, newest, known]);
+}
+
+function MessageAvatar({ message, name, runtime, model }: { message: MessageView; name: string; runtime: SessionSummary["runtime"]; model: string | null }) {
   const member = usePerson();
-  if (message.role === "agent") return <span className="msg-avatar msg-avatar-agent"><ModelLogo model={model} runtime={runtime} size={12} /></span>;
-  const picture = member(message.user)?.picture;
+  if (message.authorKind === "agent") return <span className="msg-avatar msg-avatar-agent"><ModelLogo model={model} runtime={runtime} size={12} /></span>;
+  if (message.authorKind === "ember") return <span className="msg-avatar msg-avatar-agent"><Mark size={12} /></span>;
+  const picture = member(message.author)?.picture;
   return picture
     ? <img className="msg-avatar" src={picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />
-    : <span className="msg-avatar"><Avatar id={message.user} name={name} size={18} /></span>;
+    : <span className="msg-avatar"><Avatar id={message.author} name={name} size={18} /></span>;
 }
 
 /**
@@ -525,7 +594,7 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
 
 /** An agent in this chat that is at work: who it is, its execution history, and its running turn. */
 interface AgentAtWork {
-  key: string; who: string; runtime: SessionDetail["session"]["runtime"]; model: string | null;
+  key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null;
   timeline: TimelineEntry[]; live: ShownStep[]; phase: ShownPhase | null; since: number | null;
 }
 

@@ -3,7 +3,7 @@
 // the tool calls and thinking between two boundaries fold into one group.
 import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { ConnectView, SessionDetail, ShownPhase, ShownStep, TimelineEntry } from "./api.ts";
+import type { ConnectView, LiveView, SessionSummary, ShownPhase, ShownStep, ThreadView, TimelineEntry } from "./api.ts";
 import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, slackThreadUrl, splitThread, threadNamer } from "./format.ts";
 import { Avatar, ICON, Pill, SlackLogo } from "./ui.tsx";
 import { usePerson } from "./station.tsx";
@@ -122,13 +122,11 @@ function toItems(entries: TimelineEntry[]): Item[] {
  * stands (in the header line) and `actions` what can
  * be done to it right now (stop a turn, release the process).
  */
-export function History({ detail, connect, summary, actions, details, slackBase, onOpenChat, live = [], phase = null }: {
+export function History({ session, threads, connect, summary, actions, details, slackBase, onOpenChat, live }: {
   /** Who the agent is shows on the tab; the head carries a short summary (allowance, disk, cache) and `details` unfolds under it. */
-  detail: SessionDetail; connect: ConnectView | undefined; summary?: ReactNode; actions?: ReactNode; details?: ReactNode;
-  /** Steps the runtime is streaming right now, after the transcript's last entry. */
-  live?: ShownStep[];
-  /** Where the running turn stands with the model. */
-  phase?: ShownPhase | null;
+  session: SessionSummary; threads: ThreadView[]; connect: ConnectView | undefined; summary?: ReactNode; actions?: ReactNode; details?: ReactNode;
+  /** The transcript as it grows, the steps the runtime is streaming right now after its last entry, and where the running turn stands. */
+  live: LiveView | undefined;
   /** The Slack workspace URL, for links to threads. */
   slackBase?: string | null | undefined;
   /** Brings ember's own chat into view. */
@@ -136,7 +134,7 @@ export function History({ detail, connect, summary, actions, details, slackBase,
 }) {
   const botUserId = botUserIdOf(connect);
   const member = usePerson();
-  const threadName = threadNamer(detail);
+  const threadName = threadNamer(session, threads);
   // A thread address as a place: its platform's mark, its name, and a way there.
   const where = (address: string | null | undefined): ReactNode => {
     const t = address ? splitThread(address) : null;
@@ -159,12 +157,14 @@ export function History({ detail, connect, summary, actions, details, slackBase,
   const body = useRef<HTMLDivElement>(null);
   // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
   useStickToBottom(body, ".h-item, .live-tail, .h-text");
-  const { session, transcript } = detail;
-  const items = useMemo(() => toItems(transcript?.timeline ?? []), [transcript]);
+  const timeline = live?.timeline;
+  const items = useMemo(() => toItems(timeline ?? []), [timeline]);
   // What was there when the history opened shows at once; only what comes later animates.
   const firstCount = useRef(Number.POSITIVE_INFINITY);
-  if (firstCount.current === Number.POSITIVE_INFINITY && transcript) firstCount.current = items.length;
-  const usage = transcript?.usage;
+  if (firstCount.current === Number.POSITIVE_INFINITY && live?.loaded) firstCount.current = items.length;
+  const usage = live?.usage;
+  const steps = live?.steps ?? [];
+  const phase = live?.phase ?? null;
   const name = connect?.name ?? session.connect;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
 
@@ -192,7 +192,9 @@ export function History({ detail, connect, summary, actions, details, slackBase,
         </dl>
       )}
       <div className="history-body" ref={body}>
-        {!transcript ? (
+        {!live?.loaded && !items.length ? (
+          <p className="history-edge">正在读取执行历史…</p>
+        ) : !items.length && !steps.length && !phase ? (
           <p className="history-edge">{session.runtimeSessionId ? "找不到运行时记录，可能已归档。" : "运行时还没开始这个会话。"}</p>
         ) : (
           <>
@@ -200,12 +202,12 @@ export function History({ detail, connect, summary, actions, details, slackBase,
             {items.map((item, i) => (
               // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
               <div key={i} className="h-item" data-enter={i >= firstCount.current && item.type !== "text" ? true : undefined}>
-                <HistoryItem item={item} where={where} person={(id) => member(id)?.name || detail.people[id] || id}
-                  mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : detail.people[id] ?? id}`)} />
+                <HistoryItem item={item} where={where} person={(id, said) => member(id)?.name || said || id}
+                  mention={(text) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${id === botUserId ? name : member(id)?.name ?? id}`)} />
               </div>
             ))}
             {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}
-            {live.filter((s) => !s.subagent && s.step !== "tool").map((s) => <LiveStepView key={s.id} step={s} />)}
+            {steps.filter((s) => !s.subagent && s.step !== "tool").map((s) => <LiveStepView key={s.id} step={s} />)}
             {phase && <PhaseLine phase={phase} runtime={RUNTIME_LABEL[session.runtime]} />}
           </>
         )}
@@ -214,14 +216,19 @@ export function History({ detail, connect, summary, actions, details, slackBase,
   );
 }
 
-function HistoryItem({ item, mention, person, where }: { item: Item; mention(text: string): string; person(id: string): string; where(address: string | null | undefined): ReactNode }) {
+function HistoryItem({ item, mention, person, where }: {
+  item: Item; mention(text: string): string;
+  /** A person's name: as known here, else as the prompt said. */
+  person(id: string, said: string | null): string;
+  where(address: string | null | undefined): ReactNode;
+}) {
   switch (item.type) {
     case "received": {
       const { messages, note } = parsePrompt(item.entry.text);
       return (
         <>
           {note && <Received from="ember" text={note} />}
-          {messages.map((m) => <Received key={m.ts} from={person(m.user)} text={mention(m.text)} place={where(m.thread)} />)}
+          {messages.map((m) => <Received key={m.ts} from={person(m.user, m.name)} text={mention(m.text)} place={where(m.thread)} />)}
         </>
       );
     }

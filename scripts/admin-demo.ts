@@ -13,6 +13,7 @@ import type { Connections } from "../src/connections.ts";
 import type { Hub } from "../src/hub.ts";
 import { INTERNAL_CHANNEL, nextTs } from "../src/chat/internal.ts";
 import { LiveHub } from "../src/live.ts";
+import { transcriptPath } from "../src/transcript.ts";
 import { EMBER_SURFACE, type Attachment, type Quote } from "../src/store.ts";
 import { LoginManager } from "../src/login.ts";
 import { slackManifest } from "../src/admin/slack-manifest.ts";
@@ -96,7 +97,13 @@ const openChat = (key: string, user: string, title: string | null = null) => {
 };
 const hub = {
   processState: (key: string) => states.get(key) ?? "cold", stop: async () => {}, evict: async () => {},
-  live: new LiveHub(() => undefined),
+  // The seeded sessions' transcripts (real ones found on this machine) are what /sessions/:key/live serves.
+  live: new LiveHub((key) => {
+    const session = store.getSession(key);
+    const home = session?.profile === "claude-ocg" ? claudeHome : session?.profile === "codex-ocg" ? codexHome : undefined;
+    const path = session?.runtimeSessionId && home ? transcriptPath(session.runtime, home, session.runtimeSessionId) : undefined;
+    return path ? { runtime: session!.runtime, path } : undefined;
+  }),
   newSession: (o: { runtime: "claude" | "codex"; profile?: string; model?: string; effort?: string; createdBy: string }) => {
     const key = `ember:c-${Math.random().toString(16).slice(2, 12)}`;
     const now = Date.now();

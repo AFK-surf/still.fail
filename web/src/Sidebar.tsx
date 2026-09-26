@@ -89,14 +89,15 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
   );
 }
 
-/** A chat in the list. The station is its agent's, not the chat's: it shows with the agent, not here. */
+/** A chat in the list. The station is its agent's, not the chat's: it shows with the agent, not here. Unread messages make the title bold and show their count. */
 function SessionRow({ item }: { item: ChatItem }) {
   const { session: s, connect } = item;
   const name = connect?.name ?? s.connect;
   const { key } = useParams();
   const badge = statusBadge(sessionStatus(s));
   return (
-    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/sessions/${encodeURIComponent(s.key)}`} aria-current={key === s.key ? "page" : undefined}>
+    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/sessions/${encodeURIComponent(s.key)}`} aria-current={key === s.key ? "page" : undefined}
+      data-unread={item.unread > 0 || undefined}>
       <span className="nav-session-text">
         <span className="nav-session-title">{sessionTitle(s, name)}</span>
         <span className="nav-session-meta">
@@ -105,6 +106,7 @@ function SessionRow({ item }: { item: ChatItem }) {
             : <Tip label={connect ? `来自 ${connect.name}` : "来自连接"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
           <PeopleStack people={s.participants} />
           <Time className="nav-time" at={s.lastActiveAt} />
+          {item.unread > 0 && <span className="nav-unread" aria-label={`${item.unread} 条未读`}>{item.unread > 99 ? "99+" : item.unread}</span>}
         </span>
       </span>
       {badge && (

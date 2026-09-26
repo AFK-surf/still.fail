@@ -46,6 +46,8 @@
 .nav-session-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-session-meta { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; overflow: hidden; }
 .nav-time { margin-left: auto; flex: none; color: var(--subtle); font-variant-numeric: tabular-nums; }
+.nav-session[data-unread] .nav-session-title { font-weight: 600; color: var(--text); }
+.nav-unread { flex: none; min-width: 16px; padding: 0 5px; box-sizing: border-box; border-radius: 8px; background: var(--primary); color: var(--on-primary); font-size: 11px; font-weight: 600; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; }
 /* An agent: its model's maker on a tile; where it stands is a badge at the corner, as on the phone. Nothing blinks. */
 .agent-mark { --ring: var(--canvas); position: relative; display: inline-grid; place-items: center; flex: none; width: var(--mark); height: var(--mark); border-radius: calc(var(--mark) * .3 * var(--corner-scale)); background: var(--neutral-bg); corner-shape: var(--corner-shape); }
 .agent-mark[data-badge]::after { content: ""; position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--ring); }
@@ -751,6 +753,7 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .chat-list { gap: 14px; }
 /* Holds the space of whatever left the bottom (see scroll.ts); the negative margin takes back its gap. */
 .chat-floor { flex: none; margin-top: -14px; padding: 0; }
+.chat-older { display: flex; justify-content: center; padding: 4px 0 8px; color: var(--muted); }
 /* A message on its way says so only if it takes a moment. */
 .msg-sending { animation: msg-sending-show 0s 0.8s both; }
 @keyframes msg-sending-show { from { visibility: hidden; } to { visibility: visible; } }
