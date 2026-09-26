@@ -578,9 +578,6 @@ impl Views {
     }
 }
 
-fn chat_topic(station: &str, thread: u64) -> Topic {
-    Topic::Chat { station: station.to_string(), thread: Some(thread), session: None }
-}
 
 /// The session keys taking part in a thread.
 fn members(thread: &Value) -> Vec<String> {
@@ -1157,6 +1154,38 @@ mod tests {
     fn page(first: u64, texts: &[&str], kept: Value) -> Value {
         let entries: Vec<Value> = texts.iter().enumerate().map(|(i, t)| entry(first + i as u64, t)).collect();
         json!({"first": first, "last": first + texts.len() as u64 - 1, "entries": entries, "thread": kept})
+    }
+
+    fn chat_topic(station: &str, thread: u64) -> Topic {
+        Topic::Chat { station: station.to_string(), thread: Some(thread), session: None }
+    }
+
+    fn agent_page(station: &str, key: &str) -> Topic {
+        Topic::Chat { station: station.into(), thread: None, session: Some(key.into()) }
+    }
+
+    #[test]
+    fn an_items_page_is_its_agents_and_becomes_its_chat() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, agent_page("ws/a", "k"));
+            t.read(&mut ui, 1).await;
+            let now = t.host.now_ms();
+            t.set(sessions("ws/a"), json!([{"key": "k", "connect": "ember", "profile": "p1"}]));
+            t.set(rows("ws/a"), json!([{"id": "k", "session": "k", "thread": null, "title": "修构建", "agents": []}]));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().expect("the agent alone");
+            assert_eq!((v["thread"].clone(), v["messages"].clone(), v["title"].clone()), (Value::Null, json!([]), json!("修构建")));
+            // A chat is made for it (here or elsewhere): the same page is the chat now, at the same address.
+            t.set(rows("ws/a"), json!([{"id": "k", "session": "k", "thread": 7, "title": "修构建", "agents": []}]));
+            t.set(threads("ws/a"), json!([thread(7, &["k"], now)]));
+            t.set(page_of("ws/a", 7), page(1, &["开始吧"], Value::Null));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().unwrap();
+            assert_eq!(v["thread"]["id"], 7);
+            assert_eq!(v["messages"].as_array().unwrap().len(), 1);
+        });
     }
 
     #[test]
