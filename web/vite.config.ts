@@ -9,6 +9,8 @@ export default defineConfig(({ mode }) => ({
   root: fileURLToPath(new URL(".", import.meta.url)),
   base: mode === "cloud" ? "/" : "/admin/",
   plugins: [react()],
+  // The core's worker (src/core/worker.ts) is a module worker that loads its wasm.
+  worker: { format: "es" },
   build: {
     outDir: fileURLToPath(new URL(mode === "cloud" ? "../dist/cloud-app" : "../dist/admin", import.meta.url)),
     emptyOutDir: true,

@@ -1,0 +1,26 @@
+[package]
+name = "ember-core-wasm"
+description = "ember-core on the web: a Host over fetch and IndexedDB in a (Shared)Worker, exported with wasm-bindgen."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ember-core = { path = "../core" }
+# Must match the wasm-bindgen CLI that build.sh runs.
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+  "AbortController", "AbortSignal", "Crypto", "Headers", "Request", "RequestInit", "Response",
+  "ReadableStream", "ReadableStreamDefaultReader",
+  "IdbDatabase", "IdbFactory", "IdbObjectStore", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode",
+  "DomException",
+] }
+serde = "1"
+serde-wasm-bindgen = "0.6"
+futures = "0.3"
+console_error_panic_hook = "0.1"
