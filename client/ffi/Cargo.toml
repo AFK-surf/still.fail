@@ -1,0 +1,36 @@
+[package]
+name = "ember-core-ffi"
+description = "ember-core natively (Android, later iOS): a Host over reqwest and files on a core thread, exported with uniffi."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "ember_core_ffi"
+
+[[bin]]
+# Generates the Kotlin bindings from the built library (apps/android/build.py).
+name = "uniffi-bindgen"
+required-features = ["bindgen"]
+
+[features]
+bindgen = ["uniffi/cli"]
+
+[dependencies]
+ember-core = { path = "../core" }
+uniffi = "=0.31.0"
+tokio = { version = "1", features = ["rt", "time", "sync"] }
+futures = "0.3"
+serde_json = "1"
+thiserror = "2"
+# The crypto provider is iroh's (ring); roots are Mozilla's, as iroh's own TLS
+# uses, so nothing needs the platform verifier's JNI setup.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "stream"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
+getrandom = "0.3"
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
