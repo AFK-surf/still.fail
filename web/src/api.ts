@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useStation } from "./station.tsx";
 import type { Transport } from "./transport.ts";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
-import type { Attachment, ConnectInput, HostInfo, LiveMessage, LiveStep, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, Quote, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type { Attachment, ConnectInput, HostInfo, LiveMessage, LivePhase, LiveStep, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, Quote, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
 
 export type * from "../../src/admin/types.ts";
@@ -54,6 +54,8 @@ export function makeApi(t: Transport) {
   openChat: (key: string, title?: string) => request<{ threadTs: string }>("POST", `/sessions/${encodeURIComponent(key)}/chats`, title ? { title } : {}),
   sayToSession: (key: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []) =>
     request<{ threadTs: string }>("POST", `/sessions/${encodeURIComponent(key)}/messages`, { text, attachments, quotes }),
+  /** Starts the session's runtime ahead of a message. */
+  warm: (key: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/warm`),
   /** A file sent to the session, as a blob for previews. */
   file: async (key: string, name: string) => {
     const r = await t.bytes(`/sessions/${encodeURIComponent(key)}/files?name=${encodeURIComponent(name)}`);
@@ -165,15 +167,20 @@ export type ShownStep = LiveStep & { ended?: boolean };
  * cached session (no refetch), and the steps the runtime is streaming are
  * returned, growing delta by delta.
  */
-export function useLiveSession(key: string | undefined): ShownStep[] {
+/** Where the turn stands with the model, since when (this browser's clock). */
+export interface ShownPhase { phase: LivePhase; since: number }
+
+export function useLiveSession(key: string | undefined): { steps: ShownStep[]; phase: ShownPhase | null } {
   const client = useQueryClient();
   const station = useStation();
   const [steps, setSteps] = useState<ShownStep[]>([]);
+  const [phase, setPhase] = useState<ShownPhase | null>(null);
   const queryKey = useMemo(() => (key ? keys.session(station.id, key) : null), [station.id, key]);
   const known = useRef(0);
   useEffect(() => {
     if (!key || !queryKey || !station.online) return;
     setSteps([]);
+    setPhase(null);
     const length = () => client.getQueryData<SessionDetail>(queryKey)?.transcript?.timeline.length ?? 0;
     const stop = station.transport.stream(
       () => `/sessions/${encodeURIComponent(key)}/live?from=${(known.current = length())}`,
@@ -195,10 +202,16 @@ export function useLiveSession(key: string | undefined): ShownStep[] {
           if (message.entries.length) setSteps((all) => all.filter((s) => !s.ended));
         } else if (message.type === "steps") {
           setSteps(message.steps);
+          setPhase(message.phase ? { phase: message.phase.phase, since: Date.now() - message.phase.elapsedMs } : null);
         } else if (message.type === "clear") {
           setSteps([]);
+          setPhase(null);
         } else {
           const e = message.event;
+          if (e.kind === "phase") {
+            setPhase({ phase: e.phase, since: Date.now() });
+            return;
+          }
           setSteps((all) => {
             if (e.kind === "start") {
               return [...all.filter((s) => s.id !== e.id), {
@@ -215,5 +228,5 @@ export function useLiveSession(key: string | undefined): ShownStep[] {
     );
     return () => stop();
   }, [key, queryKey, station, client]);
-  return steps;
+  return { steps, phase };
 }

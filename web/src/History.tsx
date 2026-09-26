@@ -3,7 +3,7 @@
 // the tool calls and thinking between two boundaries fold into one group.
 import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { ConnectView, SessionDetail, ShownStep, TimelineEntry } from "./api.ts";
+import type { ConnectView, SessionDetail, ShownPhase, ShownStep, TimelineEntry } from "./api.ts";
 import { agentLabel, botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, slackThreadUrl, splitThread, threadNamer } from "./format.ts";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo } from "./ui.tsx";
 import { usePerson } from "./station.tsx";
@@ -120,10 +120,12 @@ function toItems(entries: TimelineEntry[]): Item[] {
  * stands (in the header line) and `actions` what can
  * be done to it right now (stop a turn, release the process).
  */
-export function History({ detail, connect, state, actions, details, slackBase, onOpenChat, live = [] }: {
+export function History({ detail, connect, state, actions, details, slackBase, onOpenChat, live = [], phase = null }: {
   detail: SessionDetail; connect: ConnectView | undefined; state?: ReactNode; actions?: ReactNode; details?: ReactNode;
   /** Steps the runtime is streaming right now, after the transcript's last entry. */
   live?: ShownStep[];
+  /** Where the running turn stands with the model. */
+  phase?: ShownPhase | null;
   /** The Slack workspace URL, for links to threads. */
   slackBase?: string | null | undefined;
   /** Brings ember's own chat into view. */
@@ -215,6 +217,7 @@ export function History({ detail, connect, state, actions, details, slackBase, o
             ))}
             {/* Only thinking and the reply stream here; a tool call shows once it is done, from the transcript. */}
             {live.filter((s) => !s.subagent && s.step !== "tool").map((s) => <LiveStepView key={s.id} step={s} />)}
+            {phase && phase.phase !== "working" && <PhaseLine phase={phase} runtime={RUNTIME_LABEL[session.runtime]} />}
           </>
         )}
       </div>
@@ -408,6 +411,24 @@ function Fold({ children, className }: { children: ReactNode; className?: string
     <div className="fold">
       <div ref={box} className={`fold-body${className ? ` ${className}` : ""}`} data-folded={long && !open ? true : undefined}>{children}</div>
       {long && <button type="button" className="text-toggle fold-toggle" onClick={() => setOpen(!open)}>{open ? "收起" : "展开"}</button>}
+    </div>
+  );
+}
+
+/** The turn's state with the model, with a running clock: starting up, waiting for the first token, or thinking. */
+function PhaseLine({ phase, runtime }: { phase: ShownPhase; runtime: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - phase.since) / 1000));
+  const text = phase.phase === "starting" ? `正在启动 ${runtime}` : phase.phase === "requesting" ? "已发送请求，等待模型响应" : "Thinking";
+  return (
+    <div className="h-phase" data-phase={phase.phase}>
+      <span className="activity-pulse inline" aria-hidden="true" />
+      <span>{text}</span>
+      <span className="h-phase-time">{seconds}s</span>
     </div>
   );
 }

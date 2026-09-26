@@ -5,14 +5,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownStep } from "./api.ts";
+import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownPhase, type ShownStep } from "./api.ts";
 import { partialString, toolName } from "./History.tsx";
 import { absoluteTime, agentLabel, relativeTime, sessionStatus } from "./format.ts";
 import { useIsMine, usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
 
-export function ChatPanel({ detail, chat, live = [], onOpenHistory }: { detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; live?: ShownStep[]; onOpenHistory(): void }) {
+export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory }: { detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; live?: ShownStep[]; phase?: ShownPhase | null; onOpenHistory(): void }) {
   const list = useRef<HTMLDivElement>(null);
   const messages = chat?.messages ?? [];
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
@@ -117,7 +117,9 @@ export function ChatPanel({ detail, chat, live = [], onOpenHistory }: { detail: 
           }
           if (!busy || messages.at(-1)?.role !== "person") return null;
           const doing = live.filter((s) => !s.ended && !s.subagent).at(-1);
-          const what = !doing ? "正在处理…" : doing.step === "thinking" ? "正在思考…" : doing.step === "tool" ? `正在运行 ${toolName(doing.tool)}…` : "正在写…";
+          const what = phase?.phase === "starting" ? "正在启动 agent…"
+            : phase?.phase === "requesting" ? "等待模型响应…"
+            : !doing ? "正在处理…" : doing.step === "thinking" ? "正在思考…" : doing.step === "tool" ? `正在运行 ${toolName(doing.tool)}…` : "正在写…";
           return <button type="button" className="chat-typing" onClick={onOpenHistory}><span className="activity-pulse inline" aria-hidden="true" />{what}</button>;
         })()}
       </div>
@@ -251,6 +253,13 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
   const input = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
+  // Typing starts the session's runtime, so a cold start overlaps the writing.
+  const warmed = useRef(0);
+  const warm = () => {
+    if (Date.now() - warmed.current < 60_000) return;
+    warmed.current = Date.now();
+    void api.warm(sessionKey).catch(() => {});
+  };
   const quoteInputs = useRef(new Map<string, HTMLInputElement>());
   useEffect(() => {
     if (!focusQuote) return;
@@ -314,7 +323,7 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
           </div>
         )}
         <textarea ref={input} className="composer-text" rows={1} value={text} placeholder="给这个会话发消息" aria-label="消息"
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); warm(); }}
           onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); add(e.clipboardData.files); } }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
         <div className="composer-toolbar">

@@ -898,3 +898,7 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 .h-post > .fold > .markdown, .h-post > .markdown { padding: 0; }
 .h-post[data-failed="true"] { border: 0; border-left: 2px solid var(--red); background: none; }
 .h-post[data-failed="true"] .h-post-head { background: none; color: var(--red); }
+
+.h-phase { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); }
+.h-phase[data-phase="responding"] { color: var(--text); }
+.h-phase-time { font-variant-numeric: tabular-nums; color: var(--subtle); }
