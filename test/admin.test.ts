@@ -795,7 +795,7 @@ test("the sidebar is one kind of item, an agent merged with its internal chat; a
 
     // Archived: its item goes.
     await t.call("POST", `/sessions/${encodeURIComponent(slackKey)}/archive`);
-    assert.deepEqual((await rows()).map((r) => r.id), [String(made.thread.id)]);
+    assert.deepEqual((await rows()).map((r) => r.id), [made.key]);
   } finally {
     t.close();
   }
