@@ -5,7 +5,7 @@ import { limited, nowSeconds, reply } from "./auth";
 // A bounded shared service budget, never a Mesh membership authority.
 import { LIMITS } from "./limits";
 export { LIMITS };
-type Quota = {
+export type Quota = {
   minute: number;
   connects: number;
   day: number;
@@ -23,7 +23,7 @@ const FLUSH_MS = 30_000;
 export class RelayBudget extends DurableObject<Env> {
   private connections = new Set<Connection>();
   /** The budget as counted; read once, written when a connection is admitted and within FLUSH_MS of traffic, never per frame. */
-  private quota: Quota | undefined;
+  protected quota: Quota | undefined;
   private flushing = false;
 
   /**

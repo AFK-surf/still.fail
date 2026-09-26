@@ -36,19 +36,20 @@ export class Account extends ProductionAccount {
 export class RelayBudget extends ProductionRelayBudget {
   exhaustBudget(kind: "bytes" | "frames" = "bytes") {
     const now = nowSeconds();
-    this.ctx.storage.kv.put("quota", {
+    // The budget is counted in memory and written now and then: exhausting it means both.
+    this.quota = {
       minute: Math.floor(now / 60),
       day: Math.floor(now / 86400),
       at: now,
-      requests: 0,
       connects: 0,
       bytes: kind === "bytes" ? 5 * 1024 * 1024 * 1024 : 0,
       frames: kind === "frames" ? 20_000_000 : 0,
       balance: 0,
-    });
+    };
+    this.ctx.storage.kv.put("quota", this.quota);
   }
   statistics() {
-    return this.ctx.storage.kv.get("quota");
+    return this.quota ?? this.ctx.storage.kv.get("quota");
   }
 }
 
