@@ -1426,7 +1426,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .run-picker-spent { font-size: var(--text-xs); color: var(--amber); }
 
 /* The buddy that holds the sidebar open: on its edge, pushing; closed, resting at the top left. */
-.sidebar-buddy { position: fixed; z-index: 40; top: 14px; left: calc(var(--sidebar-w, 240px) - 27px); width: 28px; height: 28px; padding: 0; border: 0; background: none; cursor: pointer; transition: left 380ms var(--ease-out); -webkit-app-region: no-drag; }
+.sidebar-buddy { position: fixed; z-index: 40; top: 14px; left: calc(var(--sidebar-w, 240px) - 28px); width: 28px; height: 28px; padding: 0; border: 0; background: none; cursor: pointer; transition: left 380ms var(--ease-out); -webkit-app-region: no-drag; }
 .sidebar-buddy img { display: block; width: 28px; height: 28px; }
 .sidebar-buddy[data-pose="hop"] img { animation: buddy-hop 380ms var(--ease-out); }
 @keyframes buddy-hop { 50% { transform: translateY(-9px); } }
