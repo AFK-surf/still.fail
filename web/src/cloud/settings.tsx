@@ -10,6 +10,7 @@ import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, checkTone, RUNTIME_LABEL, timeUntil } from "../format.ts";
 import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
 import { stationBase, type Station } from "../station.tsx";
+import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Loading, Menu, MobileBack, Pill, RuntimeLogo, Section, Select, StatusDot, Time } from "../ui.tsx";
 import { signOut, type Account } from "./accounts.ts";
@@ -61,13 +62,9 @@ function Page({ title, lead, back, children }: { title: string; lead?: string; b
 export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const account = entry.account;
   const toast = useToast();
-  // Where the account is signed in is no topic of the core: read when the page opens and after a revoke.
-  const [sessions, setSessions] = useState<{ data: LoginSession[] } | { error: Error } | null>(null);
-  const load = useCallback(() => {
-    cloud.loginSessions(account.sub).then((data) => setSessions({ data }), (error: Error) => setSessions({ error }));
-  }, [account.sub]);
-  useEffect(load, [load]);
-  const revoke = useAction((id: string) => cloud.revokeLoginSession(account.sub, id), () => { toast("已让那台设备退出"); load(); });
+  // Where the account is signed in: a topic of the core, read again after a revoke.
+  const devices = useTopic<LoginSession[]>({ topic: "loginSessions", account: account.sub });
+  const revoke = useAction((id: string) => cloud.revokeLoginSession(account.sub, id), () => toast("已让那台设备退出"));
   return (
     <div className="page page-narrow">
       <MobileBack to={`/w/${entry.id}/settings`} label="设置" />
@@ -82,9 +79,9 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
         <div className="appearance-setting"><AppearanceSetting /></div>
       </Section>
       <Section title="登录的地方" description="这个账号在哪些浏览器或设备上登录了 ember。认不出来的可以让它退出。">
-        {!sessions ? <Loading label="正在读取…" fill={false} /> : "error" in sessions ? <p className="field-error">读不到登录记录：{sessions.error.message}</p> : (
+        {!devices.value ? devices.error ? <p className="field-error">读不到登录记录：{devices.error.message}</p> : <Loading label="正在读取…" fill={false} /> : (
           <ul className="list">
-            {sessions.data.map((s) => (
+            {devices.value.map((s) => (
               <li key={s.id} className="list-row">
                 <span className="list-row-text">
                   <span className="list-row-title">{s.name || "未命名设备"}{s.current && <span className="choice-badge">这里</span>}</span>

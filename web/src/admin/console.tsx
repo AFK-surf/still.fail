@@ -3,6 +3,7 @@
 // the admin's account reaches it (ember cloud answers 404 to everyone else).
 // It is an operator's tool: each page reads when it opens and after each
 // action, nothing more.
+import { useTopic } from "../core/react.ts";
 import { Boxes, Copy, LogOut, Plus, Ticket, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation } from "react-router";
@@ -69,13 +70,10 @@ export function Console({ account }: { account: Account }) {
 }
 
 /** A read on open, again on `reload`; what was read stays in view while it reads again. */
-function useRead<T>(read: () => Promise<T>): { data: T | undefined; error: Error | null; reload(): void } {
-  const [state, setState] = useState<{ data: T | undefined; error: Error | null }>({ data: undefined, error: null });
-  const reload = useCallback(() => {
-    read().then((data) => setState({ data, error: null }), (error: Error) => setState((s) => ({ data: s.data, error })));
-  }, [read]);
-  useEffect(reload, [reload]);
-  return { ...state, reload };
+/** One of ember cloud's operator lists, as a topic of the core (read again after a write through it). */
+function useList<T>(account: string, list: "users" | "workspaces" | "invite-codes", pick: (value: Record<string, unknown>) => T): { data: T | undefined; error: Error | null } {
+  const topic = useTopic<Record<string, unknown>>({ topic: "admin", account, list });
+  return { data: topic.value ? pick(topic.value) : undefined, error: topic.error ? new Error(topic.error.message) : null };
 }
 
 function Page({ title, lead, children }: { title: string; lead?: string | undefined; children: React.ReactNode }) {
@@ -103,7 +101,7 @@ const ADMISSION: Record<Admission | "none", { label: string; tone: Tone }> = {
 };
 
 function UsersPage({ account }: { account: Account }) {
-  const users = useRead(useCallback(() => admin.users(account.sub), [account.sub]));
+  const users = useList(account.sub, "users", (v) => v.users as AdminUser[]);
   const list = users.data;
   return (
     <Page title="用户" lead={list && `${list.length} 人登录过 ember。「还没进来」的人登录了，但没有 workspace，也没有用过邀请码或接受过邀请。`}>
@@ -140,7 +138,7 @@ function UserItem({ user }: { user: AdminUser }) {
 // ── workspaces ──────────────────────────────────────────────────────────
 
 function WorkspacesPage({ account }: { account: Account }) {
-  const workspaces = useRead(useCallback(() => admin.workspaces(account.sub), [account.sub]));
+  const workspaces = useList(account.sub, "workspaces", (v) => v.workspaces as AdminWorkspace[]);
   const list = workspaces.data;
   const online = list?.reduce((n, w) => n + w.stations.filter((s) => s.online).length, 0) ?? 0;
   const stations = list?.reduce((n, w) => n + w.stations.length, 0) ?? 0;
@@ -210,10 +208,10 @@ function codeState(c: InviteCodeView): { label: string; tone: Tone } {
 
 function CodesPage({ account }: { account: Account }) {
   const toast = useToast();
-  const codes = useRead(useCallback(() => admin.codes(account.sub), [account.sub]));
+  const codes = useList(account.sub, "invite-codes", (v) => v.codes as (InviteCodeView & { url: string })[]);
   const [making, setMaking] = useState(false);
   const [revoking, setRevoking] = useState<InviteCodeView | null>(null);
-  const revoke = useAction((c: InviteCodeView) => admin.revokeCode(account.sub, c.code), () => { setRevoking(null); toast("已撤回邀请码"); codes.reload(); });
+  const revoke = useAction((c: InviteCodeView) => admin.revokeCode(account.sub, c.code), () => { setRevoking(null); toast("已撤回邀请码"); });
   const list = codes.data;
   const usable = list?.filter((c) => codeState(c).label === "可用").length ?? 0;
   const copy = (url: string) => void navigator.clipboard.writeText(url).then(() => toast("已复制注册链接"));
@@ -250,7 +248,7 @@ function CodesPage({ account }: { account: Account }) {
           </ul>
         )}
       </Section>
-      {making && <NewCodeDialog account={account} onMade={codes.reload} onClose={() => setMaking(false)} />}
+      {making && <NewCodeDialog account={account} onMade={() => {}} onClose={() => setMaking(false)} />}
       <Confirm open={revoking !== null} onClose={() => setRevoking(null)} busy={revoke.busy} onConfirm={() => revoking && revoke.run(revoking)}
         title={`撤回 ${revoking?.code ?? ""}？`} action="撤回邀请码"
         description={revoke.error?.message ?? "撤回后这个邀请码就不能再用来新建 workspace 了。已经发出去的注册链接也会失效。"} />

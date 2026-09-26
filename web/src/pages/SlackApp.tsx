@@ -5,7 +5,8 @@
 import { useStation } from "../station.tsx";
 import { ExternalLink, ImageUp, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useAction, useApi, useStationGet, type ConnectView, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
+import { useTopic } from "../core/react.ts";
+import { useAction, useApi, type ConnectView, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Field, ICON, Section, SwitchRow } from "../ui.tsx";
 
@@ -25,7 +26,9 @@ const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
 export function SlackAppSection({ connect }: { connect: ConnectView }) {
   const station = useStation();
   // Read from Slack through the station: no topic of the core, so it is read again after a change here.
-  const app = useStationGet<SlackAppView>(station.address, `/connects/${encodeURIComponent(connect.id)}/slack-app`);
+  // The core reads it, and again after a write to the connect: nothing here reloads it.
+  const app = useTopic<SlackAppView>({ topic: "slackApp", station: station.address, connect: connect.id });
+  const saved = () => {};
   const links = app.value?.links;
   return (
     <Section title="Slack app" description="在这里改 app 的名字、图标和权限，ember 会写进 Slack 的 app 配置。"
@@ -33,14 +36,14 @@ export function SlackAppSection({ connect }: { connect: ConnectView }) {
       {app.error ? <div className="card"><p className="field-error">{app.error.message}</p></div>
         : !app.value ? <div className="card"><p className="muted">正在读取 Slack 上的配置…</p></div>
         : app.value.state === "no_app" ? <div className="card"><p className="muted">{app.value.error ? `找不到这个连接的 Slack app（${app.value.error}）。换上有效的 token 后再来。` : "连上 Slack 之后，就可以在这里修改它的 app。"}</p></div>
-        : app.value.state === "no_config_token" ? <ConfigTokenCard onSaved={app.reload} />
+        : app.value.state === "no_config_token" ? <ConfigTokenCard onSaved={saved} />
         : app.value.state === "error" ? (
           <div className="card">
             <p className="field-error" role="alert">读不到 app 配置：{app.value.error}</p>
-            <ConfigTokenForm replacing onSaved={app.reload} />
+            <ConfigTokenForm replacing onSaved={saved} />
           </div>
         )
-        : <AppForm key={JSON.stringify(app.value.settings)} connect={connect} settings={app.value.settings} links={app.value.links} onSaved={app.reload} />}
+        : <AppForm key={JSON.stringify(app.value.settings)} connect={connect} settings={app.value.settings} links={app.value.links} onSaved={saved} />}
     </Section>
   );
 }

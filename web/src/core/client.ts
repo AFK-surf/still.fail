@@ -18,6 +18,9 @@ export type Topic =
   | { topic: "live"; station: string; key: string }
   | { topic: "host"; station: string }
   | { topic: "threads"; station: string }
+  | { topic: "slackApp"; station: string; connect: string }
+  | { topic: "loginSessions"; account: string }
+  | { topic: "admin"; account: string; list: "users" | "workspaces" | "invite-codes" }
   // Views: put together by the core from the topics above.
   | { topic: "chats"; scope: string; mine: boolean }
   | { topic: "stations"; scope: string }
