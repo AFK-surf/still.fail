@@ -2,8 +2,7 @@ import { Tooltip } from "radix-ui";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { NewChat } from "./NewChat.tsx";
 import { useRememberChat } from "./lastChat.ts";
-import { useStation } from "./station.tsx";
-import { ApiError, useLiveUpdates, useOverview } from "./api.ts";
+import { useOverview } from "./api.ts";
 import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
 import { ConnectsPage } from "./pages/Connects.tsx";
@@ -22,13 +21,12 @@ function useDetailOpen(): boolean {
 
 export function App() {
   useRememberChat("local", (p) => /^\/(new|sessions\/.+)$/.test(p));
-  const overview = useOverview();
+  const overview = useOverview("local");
   const detail = useDetailOpen();
-  useLiveUpdates(overview.isSuccess);
 
-  if (overview.isPending) return <div className="gate"><Loading label="正在连接 ember…" /></div>;
-  if (overview.isError) {
-    const denied = overview.error instanceof ApiError && overview.error.status === 403;
+  // Once read, the page stays up through a passing error; the core keeps retrying.
+  if (!overview.value && overview.error) {
+    const denied = overview.error.status === 403;
     return (
       <div className="gate">
         <Mark size={40} />
@@ -37,6 +35,7 @@ export function App() {
       </div>
     );
   }
+  if (!overview.value) return <div className="gate"><Loading label="正在连接 ember…" /></div>;
 
   return (
     <ToastProvider>
@@ -71,7 +70,6 @@ function LegacyBot() {
 
 /** A new chat on this station. */
 function LocalNewChat() {
-  const station = useStation();
   const navigate = useNavigate();
-  return <NewChat stations={[station]} onCreated={(_, key) => navigate(`/sessions/${encodeURIComponent(key)}`)} />;
+  return <NewChat scope="local" onCreated={(_, key) => navigate(`/sessions/${encodeURIComponent(key)}`)} />;
 }

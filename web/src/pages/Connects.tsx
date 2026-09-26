@@ -5,25 +5,29 @@ import { Plus } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useState } from "react";
 import { Link } from "react-router";
-import { useOverview, type ConnectView } from "../api.ts";
-import { MineFilter, OwnerLabel, useOnlyMine } from "../components.tsx";
+import { useConnects, useStations } from "../api.ts";
+import { MineFilter, OwnerLabel } from "../components.tsx";
 import { connectionText, modeText, presence, RUNTIME_LABEL } from "../format.ts";
-import { StationContext, useIsMine, useStation, type Station } from "../station.tsx";
+import { StationContext, stationBase, useOnlyMine, type Station } from "../station.tsx";
 import { Button, ConnectKindIcon, MobileBack, StatusDot } from "../ui.tsx";
 import { NewConnectDialog } from "./Connect.tsx";
 
-export interface ConnectItem { connect: ConnectView; station: Station }
-
-export function ConnectList({ items, stations, showStation, loading, back }: { items: ConnectItem[]; stations: Station[]; showStation: boolean; loading?: boolean; back: string }) {
+/** The connects of a scope (a workspace, or "local"), from the core's `connects` view; `settings` is where the scope's settings live. */
+export function ConnectList({ scope, settings }: { scope: string; settings: string }) {
   const [onlyMine] = useOnlyMine();
-  const isMine = useIsMine();
+  const connects = useConnects(scope, onlyMine);
+  const stations = useStations(scope);
   const [adding, setAdding] = useState<Station | null>(null);
-  const shown = items.filter((i) => !onlyMine || isMine(i.connect.createdBy ? { ...i.connect.createdBy, email: i.connect.createdBy.id } : null));
-  const targets = stations.filter((s) => s.online);
+  const shown = connects.value?.items ?? [];
+  const loading = !connects.value || connects.value.loading;
+  const showStation = scope !== "local";
+  const targets: Station[] = (stations.value ?? []).filter((s) => s.online).map((s) => ({
+    id: s.id, name: s.name, base: stationBase(s.station), address: s.station, online: true, settings,
+  }));
 
   return (
     <div className="page page-narrow">
-      <MobileBack to={back} label="设置" />
+      <MobileBack to={settings} label="设置" />
       <header className="page-head">
         <div>
           <h1>连接</h1>
@@ -44,19 +48,19 @@ export function ConnectList({ items, stations, showStation, loading, back }: { i
       <div>
       <MineFilter label="连接" />
       {shown.length === 0 ? (
-        <p className="muted">{loading ? "正在读取…" : onlyMine ? "没有你添加的连接。" : "还没有连接。"}</p>
+        <p className={connects.error ? "field-error" : "muted"}>{connects.error?.message ?? (loading ? "正在读取…" : onlyMine ? "没有你添加的连接。" : "还没有连接。")}</p>
       ) : (
         <ul className="list">
-          {shown.map(({ connect: c, station }) => (
-            <li key={`${station.id}/${c.id}`}>
-              <Link className="list-row" to={`${station.base}/connects/${c.id}`}>
+          {shown.map(({ connect: c, station, stationName }) => (
+            <li key={`${station}/${c.id}`}>
+              <Link className="list-row" to={`${stationBase(station)}/connects/${c.id}`}>
                 <ConnectKindIcon kind={c.kind} />
                 <span className="list-row-text">
                   <span className="list-row-title">{c.name}</span>
                   <span className="muted">{modeText(c.mode, c.requireMention)} · {RUNTIME_LABEL[c.bind.runtime]}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>
                 </span>
                 <span className="connect-facts">
-                  {showStation && <span className="station-tag">{station.name}</span>}
+                  {showStation && <span className="station-tag">{stationName}</span>}
                   <OwnerLabel owner={c.createdBy} />
                 </span>
                 <span className="nav-note">{connectionText(c.connection)}</span>
@@ -78,8 +82,6 @@ export function ConnectList({ items, stations, showStation, loading, back }: { i
 
 /** A station's own page: its connects. */
 export function ConnectsPage() {
-  const station = useStation();
-  const overview = useOverview();
-  return <ConnectList items={(overview.data?.connects ?? []).map((connect) => ({ connect, station }))} stations={[station]} showStation={false} loading={overview.isPending} back="/settings" />;
+  return <ConnectList scope="local" settings="/settings" />;
 }
 

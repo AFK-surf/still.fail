@@ -2,13 +2,12 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
+import { useAction, useApi, useIsMine, type Api, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
 import { absoluteTime, agentLabel, relativeTime, sessionStatus } from "./format.ts";
-import { useIsMine, usePerson, useStation } from "./station.tsx";
+import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
@@ -229,22 +228,42 @@ export function fileSize(bytes: number): string {
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i;
 const storedName = (a: Attachment) => a.path.split("/").at(-1)!;
 
+// Files sent never change: each is fetched once per page, and the most recent are kept for a chat opened again.
+const blobs = new Map<string, Promise<Blob>>();
+const KEEP_BLOBS = 100;
+
+function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment): Promise<Blob> {
+  const id = `${station}/${sessionKey}/${file.path}`;
+  let blob = blobs.get(id);
+  if (!blob) {
+    blob = api.file(sessionKey, storedName(file));
+    // A failure is not kept: the next look tries again.
+    blob.catch(() => blobs.delete(id));
+    blobs.set(id, blob);
+    if (blobs.size > KEEP_BLOBS) blobs.delete(blobs.keys().next().value!);
+  }
+  return blob;
+}
+
 /** A file as a blob URL, fetched from the station once and kept while shown. */
 function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean): string | null {
   const api = useApi();
   const station = useStation();
-  const blob = useQuery({
-    queryKey: ["file", station.id, sessionKey, file.path],
-    queryFn: () => api.file(sessionKey, storedName(file)),
-    enabled, staleTime: Infinity, gcTime: 10 * 60_000,
-  });
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
-    if (!blob.data) return;
-    const u = URL.createObjectURL(blob.data);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [blob.data]);
+    if (!enabled) return;
+    let u: string | null = null;
+    let current = true;
+    fetchFile(api, station.address, sessionKey, file).then((blob) => {
+      if (!current) return;
+      u = URL.createObjectURL(blob);
+      setUrl(u);
+    }, () => {});
+    return () => {
+      current = false;
+      if (u) URL.revokeObjectURL(u);
+    };
+  }, [api, station.address, sessionKey, file.path, enabled]);
   return url;
 }
 
@@ -350,8 +369,6 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
   roomy?: boolean;
 }) {
   const api = useApi();
-  const station = useStation();
-  const client = useQueryClient();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -372,19 +389,15 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
     onFocused();
   }, [focusQuote]);
   const keyFor = async () => sessionKey ?? (await ensureSession!());
-  const send = useMutation({
-    mutationFn: async (value: string) => {
-      const key = await keyFor();
-      await api.sayToSession(key, value, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ author, text: t, comment, ts, role }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}) })));
-      return key;
-    },
-    onSuccess: (key) => {
-      for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
-      setText(""); setFiles([]); setQuotes(() => []);
-      void client.invalidateQueries({ queryKey: keys.session(station.id, key) });
-      void client.invalidateQueries({ queryKey: keys.sessions(station.id) });
-      onSent?.(key);
-    },
+  // The message shows once the chat view has it: the core refetches the session after the write.
+  const send = useAction(async (value: string) => {
+    const key = await keyFor();
+    await api.sayToSession(key, value, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ author, text: t, comment, ts, role }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}) })));
+    return key;
+  }, (key) => {
+    for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
+    setText(""); setFiles([]); setQuotes(() => []);
+    onSent?.(key);
   });
   const add = (list: FileList | File[]) => {
     for (const file of Array.from(list)) {
@@ -412,9 +425,9 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [text]);
   const uploading = files.some((f) => !f.done && !f.error);
-  const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !send.isPending && !locked;
+  const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !send.busy && !locked;
   const submit = () => {
-    if (ready) send.mutate(text.trim());
+    if (ready) void send.run(text.trim());
   };
   return (
     <div className="composer-wrap">
@@ -464,8 +477,8 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
           </Tip>
           {toolbar && <div className="composer-choices" onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
           <Tip label={uploading ? "文件还在上传" : "发送"}>
-            <button type="submit" className="send-btn" disabled={!ready} aria-label="发送" aria-busy={send.isPending || undefined}>
-              {send.isPending ? <span className="spinner" aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
+            <button type="submit" className="send-btn" disabled={!ready} aria-label="发送" aria-busy={send.busy || undefined}>
+              {send.busy ? <span className="spinner" aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
             </button>
           </Tip>
         </div>

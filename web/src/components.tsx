@@ -1,18 +1,7 @@
 // Small pieces the station client and ember cloud share.
-import { useEffect, useState } from "react";
-import type { Creator, HostInfo, ProcessView, ProfileQuota } from "./api.ts";
-import { readOnlyMine, useIsMine, usePerson, writeOnlyMine } from "./station.tsx";
+import { useIsMine, type Creator, type HostInfo, type ProcessView, type ProfileQuota } from "./api.ts";
+import { useOnlyMine, usePerson } from "./station.tsx";
 import { Segmented } from "./ui.tsx";
-
-export function useOnlyMine(): [boolean, (value: boolean) => void] {
-  const [value, setValue] = useState(readOnlyMine);
-  useEffect(() => {
-    const update = () => setValue(readOnlyMine());
-    window.addEventListener("ember-filter", update);
-    return () => window.removeEventListener("ember-filter", update);
-  }, []);
-  return [value, writeOnlyMine];
-}
 
 /** 全部 / 我创建的 */
 export function MineFilter({ label = "筛选" }: { label?: string }) {
