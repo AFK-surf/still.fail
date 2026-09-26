@@ -202,10 +202,11 @@ fun reducedMotion(): Boolean {
 
 /**
  * A segmented choice: a track that tints whatever it sits on (the text colour
- * at 6%), and a light thumb that slides to the chosen option.
+ * at 6%), and a light thumb that slides to the chosen option. Without `track`
+ * what it sits in (a capsule) is its track.
  */
 @Composable
-fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, height: Dp = 30.dp, fill: Boolean = false, radius: Dp = 10.dp, inset: Dp = 2.dp) {
+fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, height: Dp = 30.dp, fill: Boolean = false, radius: Dp = 10.dp, inset: Dp = 2.dp, track: Boolean = true) {
     // Where each option sits in the track, in px: (x, width).
     val places = remember(options) { mutableStateListOf(*Array(options.size) { 0f to 0f }) }
     val x = remember { Animatable(0f) }
@@ -222,11 +223,11 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
     }
     val density = LocalDensity.current
     val thumb = if (C.dark) Color(0xFF3A3B40) else Color.White
-    Box(modifier.height(height).clip(RoundedCornerShape(radius)).background(C.ink.copy(alpha = 0.06f)).padding(inset)) {
+    Box(modifier.height(height).clip(RoundedCornerShape(radius)).let { if (track) it.background(C.ink.copy(alpha = 0.06f)) else it }.padding(inset)) {
         if (w.value > 0f) Box(
             Modifier.offset { IntOffset(x.value.roundToInt(), 0) }.width(with(density) { w.value.toDp() }).fillMaxHeight()
                 // A hairline all round, not an elevation shadow (which falls below and makes the thumb look low).
-                .background(thumb, RoundedCornerShape(radius - inset)).border(0.5.dp, C.line, RoundedCornerShape(radius - inset)),
+                .background(thumb, RoundedCornerShape((radius - inset).coerceAtLeast(0.dp))).border(0.5.dp, C.line, RoundedCornerShape((radius - inset).coerceAtLeast(0.dp))),
         )
         Row(Modifier.fillMaxHeight().let { if (fill) it.fillMaxWidth() else it }) {
             options.forEachIndexed { i, label ->

@@ -57,6 +57,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
@@ -258,22 +259,21 @@ private fun LastMessage(item: ChatItem) {
 
 @Composable
 private fun Toolbar(app: AppState, haze: HazeState, modifier: Modifier) {
+    // One capsule floating over the list: the switch fills it, the capsule being its track, and the new-chat button
+    // closes it at the right, a disc in the accent (no line between them: shape and colour tell them apart).
     Row(
         modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp)
+            .floating(haze, RoundedCornerShape(28.dp)).padding(6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Both float over the list: the switch as a capsule, the button as a disc.
         Seg(
             listOf("全部", "我参与的"), if (app.onlyMine) 1 else 0, { app.showOnlyMine(it == 1) },
-            Modifier.width(200.dp).floating(haze, RoundedCornerShape(22.dp)), height = 44.dp, fill = true, radius = 22.dp, inset = 4.dp,
+            Modifier.weight(1f), height = 44.dp, fill = true, radius = 22.dp, inset = 0.dp, track = false,
         )
-        // The switch keeps its own width (a weight would stretch it up to the button); the room left goes between them.
-        Spacer(Modifier.weight(1f).widthIn(min = 16.dp))
         Box(
-            // Ink on the paper in the light; in the dark a raised surface, not a white disc.
-            Modifier.size(48.dp).shadow(10.dp, CircleShape).clip(CircleShape).background(if (C.dark) C.surface2 else C.ink).clickable { app.push(Screen.NewChat) },
+            Modifier.size(44.dp).clip(CircleShape).background(C.accent).clickable { app.push(Screen.NewChat) },
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Pen, 20.dp, if (C.dark) C.ink else C.bg) }
+        ) { IconIn(Icons.Pen, 20.dp, Color.White) }
     }
 }

@@ -515,7 +515,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         // growing and goes the way it came.
         val scope = rememberCoroutineScope()
         AnimatedVisibility(
-            awayFromEnd(list), Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = bottom - 6.dp),
+            awayFromEnd(list), Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = (bottom - 6.dp).coerceAtLeast(0.dp)),
             enter = fadeIn(tween(180)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.6f) + slideInVertically(tween(220, easing = FastOutSlowInEasing)) { it / 2 },
             exit = fadeOut(tween(150)) + scaleOut(tween(180), targetScale = 0.6f) + slideOutVertically(tween(180)) { it / 2 },
         ) {
