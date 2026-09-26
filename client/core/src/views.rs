@@ -527,7 +527,16 @@ fn agent_row(me: &Value, mine: bool, station: &StationInfo, session: &Value, ori
         "unread": false,
         "lastActiveAt": field("lastActiveAt"),
         "connect": connect,
+        "origin": origin_of(origin),
     }))
+}
+
+/// The Slack thread an agent came from, as the row's tip names it: its channel and when it began.
+fn origin_of(origin: Option<&Value>) -> Value {
+    origin.map_or(Value::Null, |o| {
+        let pick = |name: &str| o.get(name).cloned().unwrap_or(Value::Null);
+        json!({ "channel": pick("channel"), "channelName": pick("channelName"), "threadTs": pick("threadTs") })
+    })
 }
 
 fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, origin: Option<&Value>, shown: &HashMap<&str, &Value>, connects: Option<&Value>) -> Option<Value> {
@@ -574,6 +583,7 @@ fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, origi
         "thread": pick(thread, &["id", "surface", "channel", "channelName", "threadTs", "title", "createdAt", "creator"]),
         "title": if has_words(thread) { chat_title(thread) } else { origin.map_or_else(|| chat_title(thread), chat_title) },
         "session": Value::Null,
+        "origin": origin_of(origin),
         "agents": agents,
         "people": people,
         "last": last,

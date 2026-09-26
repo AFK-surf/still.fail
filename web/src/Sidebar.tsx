@@ -106,7 +106,7 @@ function ChatRow({ item }: { item: ChatItem }) {
         <span className="nav-session-head">
           <span className="nav-session-title">{item.title}</span>
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
-          {connect && <Tip label={`来自 ${connect.kind === "slack" ? "Slack" : connect.kind} · 连接「${connect.name}」`} side="right"><span className="session-kind"><ConnectKindIcon kind={connect.kind} size={12} /></span></Tip>}
+          {connect && <Tip label={originLabel(item)} side="right"><span className="session-kind"><ConnectKindIcon kind={connect.kind} size={12} /></span></Tip>}
         </span>
         {/* People are in the chat itself; here only the last thing said and when. */}
         <span className="nav-session-meta">
@@ -120,6 +120,15 @@ function ChatRow({ item }: { item: ChatItem }) {
       </span>
     </NavLink>
   );
+}
+
+/** Where a chat's agent came from, for the connect icon's tip: the Slack workspace, then the thread's channel. */
+function originLabel(item: ChatItem): string {
+  const c = item.connect?.connection;
+  const team = c && (c.state === "connected" || c.state === "reconnecting") ? c.workspace?.team : null;
+  const o = item.origin;
+  const where = !o ? null : o.channelName ? `#${o.channelName}` : o.channel.startsWith("D") ? "私信" : null;
+  return ["Slack", team, where].filter(Boolean).join(" · ");
 }
 
 /** The last thing said in a chat, on one line: a small picture of who said it (name on hover), then what. */

@@ -39,6 +39,8 @@ export interface ChatItem {
   station: string; stationName: string;
   thread: Pick<ThreadView, "id" | "surface" | "channel" | "channelName" | "threadTs" | "title" | "createdAt" | "creator"> | null;
   session: string | null;
+  /** The Slack thread its agent came from, if it did. */
+  origin: { channel: string; channelName: string | null; threadTs: string } | null;
   title: string;
   agents: ChatAgent[];
   people: Creator[];
