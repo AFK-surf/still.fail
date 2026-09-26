@@ -75,7 +75,7 @@ impl Views {
         let id = format!("out-{}", self.sent.get());
         let mut entry = message;
         entry["id"] = json!(id);
-        entry["createdAt"] = json!(self.host.now_ms());
+        entry["createdAt"] = json!(self.host.now_ms().round() as i64);
         entry["state"] = json!("sending");
         self.outbox.borrow_mut().entry((station.to_string(), thread)).or_default().push(entry);
         self.outbox_changed(station, thread);

@@ -820,7 +820,7 @@ impl Inner {
                     return;
                 };
                 // Complete in itself: the station's presence changes in place, and it was last seen now.
-                let now = (self.host.now_ms() / 1000.0).floor();
+                let now = (self.host.now_ms() / 1000.0).floor() as i64;
                 self.center.update(&Topic::Workspace { workspace: workspace.to_string() }, &mut |view| {
                     for station in view.get_mut("stations").and_then(Value::as_array_mut).into_iter().flatten() {
                         if station.get("id").and_then(Value::as_str) == Some(id) {
