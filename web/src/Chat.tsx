@@ -15,7 +15,7 @@ import { useStickToBottom } from "./scroll.ts";
 import { track } from "./telemetry.ts";
 
 /** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
-interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null; session: SessionSummary; live: LiveView | undefined; turns: ChatView["agents"][number]["turns"] }
+interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null; session: SessionSummary; status: ChatView["agents"][number]["status"]; live: LiveView | undefined; turns: ChatView["agents"][number]["turns"] }
 
 /**
  * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
@@ -51,10 +51,10 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   // Messages there when the chat opened (and older pages loaded later) show at once; newer ones ease in, except a reply that already streamed in place.
   const firstSeq = useRef<number | null>(null);
   if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
-  const agents: ChatAgent[] = chat.agents.map(({ session, turns }) => {
+  const agents: ChatAgent[] = chat.agents.map(({ session, status, turns }) => {
     const live = lives.get(session.key);
     const model = live?.usage?.model ?? session.model;
-    return { key: session.key, who: agentLabel(model, session.effort), runtime: session.runtime, model, session, live, turns };
+    return { key: session.key, who: agentLabel(model, session.effort), runtime: session.runtime, model, session, status, live, turns };
   });
   const agentOf = (key: string) => agents.find((a) => a.key === key);
   // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
