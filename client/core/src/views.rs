@@ -753,13 +753,16 @@ fn attention(overview: Option<&Value>, session: &Value) -> Value {
     Value::Array(out)
 }
 
-/// The profiles a session can run on, those of its runtime: `{ id, name, current, spent, kind, runtime, quota }`
+/// The profiles a session can run on, those of its runtime with its model enabled: `{ id, name, current, spent, kind, runtime, quota }`
 /// (`spent`: a window of it is used up, and when it is back).
 fn runnable_on(overview: Option<&Value>, session: &Value) -> Value {
     let runtime = session.get("runtime").and_then(Value::as_str).unwrap_or("");
+    let model = session.get("model").and_then(Value::as_str);
     let current = session.get("profile").and_then(Value::as_str);
     Value::Array(overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
         .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
+        // With a model chosen, only those that have it enabled can run it.
+        .filter(|p| model.is_none_or(|m| p.get("models").and_then(Value::as_array).is_some_and(|ms| ms.iter().any(|x| x.as_str() == Some(m)))))
         .map(|p| {
             let id = p.get("id").and_then(Value::as_str).unwrap_or("");
             let spent = spent_until(p);
@@ -1006,11 +1009,13 @@ mod tests {
     #[test]
     fn an_agent_can_be_moved_to_the_profiles_of_its_runtime() {
         let overview = json!({"profiles": [
-            {"id": "a", "name": "A", "runtimes": ["claude", "codex"]},
-            {"id": "b", "name": "B", "runtimes": ["codex"], "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}},
-            {"id": "c", "name": "C", "runtimes": ["claude"]},
+            {"id": "a", "name": "A", "runtimes": ["claude", "codex"], "models": ["m"]},
+            {"id": "b", "name": "B", "runtimes": ["codex"], "models": ["m"], "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}},
+            {"id": "c", "name": "C", "runtimes": ["claude"], "models": ["m"]},
+            {"id": "d", "name": "D", "runtimes": ["codex"], "models": ["other"]},
         ]});
-        let session = json!({"runtime": "codex", "profile": "a"});
+        // Of its runtime, and with its model enabled.
+        let session = json!({"runtime": "codex", "profile": "a", "model": "m"});
         assert_eq!(runnable_on(Some(&overview), &session), json!([
             {"id": "a", "name": "A", "current": true, "spent": null, "kind": null, "runtime": null, "quota": null},
             {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0}, "kind": null, "runtime": null, "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}},

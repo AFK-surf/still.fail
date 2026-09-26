@@ -349,6 +349,8 @@ export class Hub {
       const next = this.#config.profiles.find((p) => p.id === change.profile);
       if (!next) throw new Error(`unknown profile ${change.profile}`);
       if (!next.runtimes.includes(row.runtime)) throw new Error(`「${next.name}」不能跑 ${runtimeName}`);
+      const runs = change.model === undefined ? row.model : change.model || null;
+      if (runs && !next.models.includes(runs)) throw new Error(`「${next.name}」没有启用 ${runs}：换一个模型，或先在它的 Profile 里启用`);
     }
     const model = change.model === undefined ? row.model : change.model || null;
     const effort = change.effort === undefined ? row.effort : change.effort || null;
