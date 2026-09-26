@@ -2,21 +2,20 @@
 // is reached through (who you are, where you are signed in), and the
 // workspace itself (its name, members, stations, connects and the stations'
 // runtime accounts).
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Copy, KeyRound, LogOut, Plug, Plus, Server, Settings2, Trash2, UserPlus, Users } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Check, KeyRound, LogOut, Plug, Plus, Server, Settings2, Trash2, UserPlus, Users } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
-import { keys, makeApi } from "../api.ts";
+import { useConnects, useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
-import { ACCESS, checkTone, relativeTime, RUNTIME_LABEL, timeUntil } from "../format.ts";
+import { ACCESS, checkTone, RUNTIME_LABEL, timeUntil } from "../format.ts";
 import { DeviceCard, QuotaBars } from "../components.tsx";
-import type { Station } from "../station.tsx";
+import { stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Loading, Menu, MobileBack, Pill, RuntimeLogo, Section, Select, StatusDot, Time } from "../ui.tsx";
-import { accessToken, signOut, type Account } from "./accounts.ts";
+import { signOut, type Account } from "./accounts.ts";
 import { lastChat } from "../lastChat.ts";
-import { cloud, type Role, type StationView, type WorkspaceView } from "./api.ts";
-import { Avatar, online } from "./gate.tsx";
+import { cloud, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
+import { Avatar } from "./gate.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", admin: "管理员", member: "成员" };
@@ -25,15 +24,6 @@ const ROLE_HINT: Record<Role, string> = {
   admin: "邀请成员、添加和移除 station",
   member: "使用 workspace 里的 station",
 };
-
-
-export function useWorkspaceView(entry: WorkspaceEntry) {
-  return useQuery({
-    queryKey: ["cloud", "workspace", entry.id, entry.account.sub],
-    queryFn: () => cloud.workspace(entry.account.sub, entry.id),
-    refetchInterval: 30_000,
-  });
-}
 
 /** The sidebar while in settings. */
 export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
@@ -67,29 +57,16 @@ function Page({ title, lead, back, children }: { title: string; lead?: string; b
 
 // ── account ─────────────────────────────────────────────────────────────
 
-interface LoginSession { id: string; name: string; created_at: number; expires_at: number; current: boolean }
-
 export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const account = entry.account;
-  const navigate = useNavigate();
   const toast = useToast();
-  const queries = useQueryClient();
-  const sessions = useQuery({
-    queryKey: ["cloud", "login-sessions", account.sub],
-    queryFn: async () => {
-      const r = await fetch("/v1/auth/sessions", { headers: { authorization: `Bearer ${await accessToken(account.sub)}` } });
-      if (!r.ok) throw new Error(`读不到登录记录（${r.status}）`);
-      return ((await r.json()) as { sessions: LoginSession[] }).sessions;
-    },
-  });
-  const revoke = useMutation({
-    mutationFn: async (id: string) => {
-      const r = await fetch(`/v1/auth/sessions/${id}`, { method: "DELETE", headers: { authorization: `Bearer ${await accessToken(account.sub)}` } });
-      if (!r.ok) throw new Error(`没能退出（${r.status}）`);
-    },
-    onSuccess: () => { toast("已让那台设备退出"); void queries.invalidateQueries({ queryKey: ["cloud", "login-sessions", account.sub] }); },
-  });
-  const [leaving, setLeaving] = useState(false);
+  // Where the account is signed in is no topic of the core: read when the page opens and after a revoke.
+  const [sessions, setSessions] = useState<{ data: LoginSession[] } | { error: Error } | null>(null);
+  const load = useCallback(() => {
+    cloud.loginSessions(account.sub).then((data) => setSessions({ data }), (error: Error) => setSessions({ error }));
+  }, [account.sub]);
+  useEffect(load, [load]);
+  const revoke = useAction((id: string) => cloud.revokeLoginSession(account.sub, id), () => { toast("已让那台设备退出"); load(); });
   return (
     <div className="page page-narrow">
       <MobileBack to={`/w/${entry.id}/settings`} label="设置" />
@@ -101,7 +78,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
         </div>
       </header>
       <Section title="登录的地方" description="这个账号在哪些浏览器或设备上登录了 ember。认不出来的可以让它退出。">
-        {sessions.isPending ? <Loading label="正在读取…" fill={false} /> : sessions.isError ? <p className="field-error">{sessions.error.message}</p> : (
+        {!sessions ? <Loading label="正在读取…" fill={false} /> : "error" in sessions ? <p className="field-error">读不到登录记录：{sessions.error.message}</p> : (
           <ul className="list">
             {sessions.data.map((s) => (
               <li key={s.id} className="list-row">
@@ -109,7 +86,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
                   <span className="list-row-title">{s.name || "未命名设备"}{s.current && <span className="choice-badge">这里</span>}</span>
                   <span className="muted"><Time at={s.created_at * 1000} />登录 · {timeUntil(s.expires_at * 1000)}过期</span>
                 </span>
-                {!s.current && <Button variant="ghost" busy={revoke.isPending && revoke.variables === s.id} onClick={() => revoke.mutate(s.id)}>退出</Button>}
+                {!s.current && <Button variant="ghost" busy={revoke.busy && revoke.arg === s.id} onClick={() => revoke.run(s.id)}>退出</Button>}
               </li>
             ))}
           </ul>
@@ -121,21 +98,18 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
 
 // ── workspace ───────────────────────────────────────────────────────────
 
-function useWorkspace(entry: WorkspaceEntry): { view: WorkspaceView | undefined; manager: boolean; pending: boolean; error: Error | null } {
-  const q = useWorkspaceView(entry);
-  return { view: q.data, manager: q.data?.role === "owner" || q.data?.role === "admin", pending: q.isPending, error: q.error };
+function useWorkspace(entry: WorkspaceEntry): { view: WorkspaceView | undefined; manager: boolean } {
+  const view = useWorkspaceTopic(entry.id).value;
+  return { view, manager: view?.role === "owner" || view?.role === "admin" };
 }
 
 export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
   const account = entry.account;
-  const queries = useQueryClient();
-  const navigate = useNavigate();
   const toast = useToast();
   const [name, setName] = useState("");
   useEffect(() => { if (view) setName(view.name); }, [view?.name]);
-  const refresh = () => void queries.invalidateQueries({ queryKey: ["cloud"] });
-  const rename = useMutation({ mutationFn: () => cloud.renameWorkspace(account.sub, entry.id, name), onSuccess: () => { refresh(); toast("已改名"); } });
+  const rename = useAction(() => cloud.renameWorkspace(account.sub, entry.id, name), () => toast("已改名"));
   if (!view) return <Loading label="正在读取 workspace…" />;
   return (
     <Page title="通用" back={`/w/${entry.id}/settings`}>
@@ -144,7 +118,7 @@ export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
           <Field label="Workspace 名字" htmlFor="ws-rename" hint={manager ? undefined : "只有 owner 和管理员能改名。"}>
             <div className="input-row">
               <input id="ws-rename" className="input" value={name} maxLength={80} disabled={!manager} onChange={(e) => setName(e.target.value)} />
-              {manager && <Button variant="primary" disabled={!name.trim() || name.trim() === view.name} busy={rename.isPending} onClick={() => rename.mutate()}>保存</Button>}
+              {manager && <Button variant="primary" disabled={!name.trim() || name.trim() === view.name} busy={rename.busy} onClick={() => rename.run()}>保存</Button>}
             </div>
           </Field>
           <p className="muted card-foot">你在这里是{ROLE_LABEL[view.role]}，通过 {account.email} 访问。</p>
@@ -158,15 +132,13 @@ export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
 export function LeaveSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view } = useWorkspace(entry);
   const account = entry.account;
-  const queries = useQueryClient();
   const navigate = useNavigate();
   const toast = useToast();
-  const refresh = () => void queries.invalidateQueries({ queryKey: ["cloud"] });
   const [signingOut, setSigningOut] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const leave = useMutation({ mutationFn: () => cloud.removeMember(account.sub, entry.id, account.sub), onSuccess: () => { refresh(); toast("已退出 workspace"); navigate("/"); } });
-  const remove = useMutation({ mutationFn: () => cloud.deleteWorkspace(account.sub, entry.id), onSuccess: () => { refresh(); toast("已删除 workspace"); navigate("/"); } });
+  const leave = useAction(() => cloud.removeMember(account.sub, entry.id, account.sub), () => { toast("已退出 workspace"); navigate("/"); });
+  const remove = useAction(() => cloud.deleteWorkspace(account.sub, entry.id), () => { toast("已删除 workspace"); navigate("/"); });
   if (!view) return <Loading label="正在读取 workspace…" />;
   return (
     <Page title="退出与删除" back={`/w/${entry.id}/settings`}>
@@ -188,9 +160,9 @@ export function LeaveSettings({ entry }: { entry: WorkspaceEntry }) {
           </div>
         )}
       </Section>
-      <Confirm open={leaving} onClose={() => setLeaving(false)} busy={leave.isPending} onConfirm={() => leave.mutate()}
+      <Confirm open={leaving} onClose={() => setLeaving(false)} busy={leave.busy} onConfirm={() => leave.run()}
         title={`退出「${view.name}」？`} action="退出" description={leave.error?.message ?? "退出后你就不能再访问里面的 station，需要重新被邀请才能回来。"} />
-      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.isPending} onConfirm={() => remove.mutate()}
+      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => remove.run()}
         title={`删除「${view.name}」？`} action="删除 workspace"
         description={remove.error?.message ?? `所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 ember cloud 的连接（station 本机上的数据不受影响）。`} />
       <Confirm open={signingOut} onClose={() => setSigningOut(false)} onConfirm={() => void signOut(account.sub).then(() => { toast(`已退出 ${account.email}`); navigate("/"); })}
@@ -209,35 +181,34 @@ export function MembersSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-export function StationsSettings({ entry, stations }: { entry: WorkspaceEntry; stations: Station[] }) {
+export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
-  if (!view) return <Loading label="正在读取 workspace…" />;
+  const stations = useStations(entry.id).value;
+  if (!view || !stations) return <Loading label="正在读取 workspace…" />;
   return (
     <Page title="Station" lead="每台 station 是一台运行 ember 的机器：它的连接、会话和 Profile 都在那台机器上。" back={`/w/${entry.id}/settings`}>
-      <Stations view={view} account={entry.account} manager={manager} live={stations} />
+      <Stations view={view} account={entry.account} manager={manager} stations={stations} />
     </Page>
   );
 }
 
 export function ConnectsSettings({ entry, stations }: { entry: WorkspaceEntry; stations: Station[] }) {
-  const live = stations.filter((s) => s.online);
-  const overviews = useQueries({ queries: live.map((s) => ({ queryKey: keys.overview(s.id), queryFn: () => makeApi(s.transport).overview(), refetchInterval: 10_000 })) });
-  const items = useMemo(() => live.flatMap((station, i) => (overviews[i]?.data?.connects ?? []).map((connect) => ({ connect, station }))), [live, overviews]);
-  return <ConnectList items={items} stations={stations} showStation loading={overviews.some((o) => o.isPending)} back={`/w/${entry.id}/settings`} />;
+  const connects = useConnects(entry.id);
+  return <ConnectList items={connects.value?.items ?? []} stations={stations} showStation loading={connects.value?.loading ?? connects.loading} back={`/w/${entry.id}/settings`} />;
 }
 
-export function RuntimeSettings({ entry, stations }: { entry: WorkspaceEntry; stations: Station[] }) {
-  const live = stations.filter((s) => s.online);
-  const overviews = useQueries({ queries: live.map((s) => ({ queryKey: keys.overview(s.id), queryFn: () => makeApi(s.transport).overview(), refetchInterval: 30_000 })) });
+export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
+  const stations = useStations(entry.id).value ?? [];
   return (
     <Page title="Profile" lead="每台 station 有自己的 Profile：用哪份订阅、或者接到哪个模型服务来运行 Claude Code 和 Codex。额度每几分钟更新一次。" back={`/w/${entry.id}/settings`}>
       {stations.length === 0 && <Empty><p>还没有 station。</p></Empty>}
       {stations.map((station) => {
-        const overview = station.online ? overviews[live.indexOf(station)]?.data : undefined;
+        const { overview } = station;
+        const base = stationBase(station.station);
         return (
           <Section key={station.id}
             title={<span className="station-heading"><StatusDot state={station.online ? "online" : "offline"} label={station.online ? "在线" : "离线"} />{station.name}</span>}
-            actions={station.online && <Link className="btn btn-secondary" to={`${station.base}/settings/accounts`}>管理</Link>}>
+            actions={station.online && <Link className="btn btn-secondary" to={`${base}/settings/accounts`}>管理</Link>}>
             {!station.online ? <div className="card"><p className="muted card-foot">离线，暂时看不到它的 Profile。</p></div>
               : !overview ? <div className="card"><Loading label={`正在连接 ${station.name}…`} fill={false} /></div>
               : overview.profiles.length === 0 ? <div className="card"><p className="muted card-foot">还没有 Profile。</p></div>
@@ -247,7 +218,7 @@ export function RuntimeSettings({ entry, stations }: { entry: WorkspaceEntry; st
                     const tone = checkTone(p.check);
                     return (
                       <li key={p.id}>
-                        <Link className="list-row" to={`${station.base}/settings/accounts/${p.id}`}>
+                        <Link className="list-row" to={`${base}/settings/accounts/${p.id}`}>
                           <span className="mark runtime-mark"><RuntimeLogo runtime={p.runtime} size={18} /></span>
                           <span className="list-row-text">
                             <span className="list-row-title">{p.name}</span>
@@ -268,89 +239,74 @@ export function RuntimeSettings({ entry, stations }: { entry: WorkspaceEntry; st
   );
 }
 
-function Stations({ view, account, manager, live }: { view: WorkspaceView; account: Account; manager: boolean; live: Station[] }) {
-  const reachable = live.filter((s) => s.online);
-  const hosts = useQueries({ queries: reachable.map((s) => ({ queryKey: keys.host(s.id), queryFn: () => makeApi(s.transport).host(), refetchInterval: 15_000 })) });
-  const overviews = useQueries({ queries: reachable.map((s) => ({ queryKey: keys.overview(s.id), queryFn: () => makeApi(s.transport).overview(), refetchInterval: 10_000 })) });
+function Stations({ view, account, manager, stations }: { view: WorkspaceView; account: Account; manager: boolean; stations: StationView[] }) {
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<StationView | null>(null);
-  const queries = useQueryClient();
-  const remove = useMutation({
-    mutationFn: (s: StationView) => cloud.removeStation(account.sub, view.id, s.id),
-    onSuccess: () => { setRemoving(null); void queries.invalidateQueries({ queryKey: ["cloud"] }); },
-  });
-  const rename = useMutation({ mutationFn: ({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name), onSuccess: () => void queries.invalidateQueries({ queryKey: ["cloud"] }) });
+  const remove = useAction((s: StationView) => cloud.removeStation(account.sub, view.id, s.id), () => setRemoving(null));
+  const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
   return (
-    <Section title={`${view.stations.length} 台`} actions={manager && <Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button>}>
-      {view.stations.length === 0 ? (
+    <Section title={`${stations.length} 台`} actions={manager && <Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button>}>
+      {stations.length === 0 ? (
         <div className="card"><p className="muted">{manager ? "还没有 station。点「添加 station」，在要运行 ember 的机器上执行一条命令即可加入。" : "还没有 station，等管理员添加。"}</p></div>
       ) : (
         <ul className="list">
-          {view.stations.map((s) => (
+          {stations.map((s) => (
             <li key={s.id} className="station-item"><div className="list-row station-row">
-              <StatusDot state={online(s) ? "online" : "offline"} label={online(s) ? "在线" : "离线"} />
+              <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
               <span className="list-row-text">
                 <span className="list-row-title">{s.name}</span>
                 <span className="muted">
-                  {online(s) ? "在线" : s.last_seen ? <><Time at={s.last_seen * 1000} />在线</> : "还没上线"}
+                  {s.online ? "在线" : s.lastSeen ? <><Time at={s.lastSeen * 1000} />在线</> : "还没上线"}
                   {s.version ? ` · ember-mesh ${s.version}` : ""} · <span className="mono">{s.id.slice(0, 12)}</span>
                 </span>
               </span>
-              <Link className="btn btn-ghost" to={`/w/${view.id}/s/${s.id}/settings/accounts`}>Profile</Link>
+              <Link className="btn btn-ghost" to={`${stationBase(s.station)}/settings/accounts`}>Profile</Link>
               {manager && <Menu items={[
-                { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.mutate({ id: s.id, name: n.trim() }); } },
+                { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.run({ id: s.id, name: n.trim() }); } },
                 { label: "从 workspace 移除", icon: Trash2, danger: true, onSelect: () => setRemoving(s) },
               ]} />}
             </div>
-              {online(s) && reachable.some((r) => r.id === s.id) && (
+              {s.online && (
                 <div className="station-device">
-                  <DeviceCard host={hosts[reachable.findIndex((r) => r.id === s.id)]?.data} processes={overviews[reachable.findIndex((r) => r.id === s.id)]?.data?.processes} />
+                  <DeviceCard host={s.host ?? undefined} processes={s.overview?.processes} />
                 </div>
               )}
             </li>
           ))}
         </ul>
       )}
-      {adding && <AddStationDialog view={view} account={account} onClose={() => setAdding(false)} />}
-      <Confirm open={removing !== null} onClose={() => setRemoving(null)} busy={remove.isPending} onConfirm={() => removing && remove.mutate(removing)}
+      {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
+      <Confirm open={removing !== null} onClose={() => setRemoving(null)} busy={remove.busy} onConfirm={() => removing && remove.run(removing)}
         title={`移除「${removing?.name ?? ""}」？`} action="移除 station"
         description="它会断开与 ember cloud 的连接，成员不能再从这里访问它。那台机器上的 ember 和数据不受影响，之后可以重新添加。" />
     </Section>
   );
 }
 
-function AddStationDialog({ view, account, onClose }: { view: WorkspaceView; account: Account; onClose(): void }) {
+function AddStationDialog({ view, account, stations, onClose }: { view: WorkspaceView; account: Account; stations: StationView[]; onClose(): void }) {
   const [name, setName] = useState("");
-  const known = useMemo(() => new Set(view.stations.map((s) => s.id)), [view.stations]);
-  const enroll = useMutation({ mutationFn: () => cloud.enroll(account.sub, view.id, name) });
-  // Watch for the station to show up once the command ran.
-  const watch = useQuery({
-    queryKey: ["cloud", "enroll-watch", view.id],
-    queryFn: () => cloud.workspace(account.sub, view.id),
-    enabled: enroll.isSuccess,
-    refetchInterval: 3000,
-  });
-  const joined = watch.data?.stations.find((s) => !known.has(s.id));
-  const queries = useQueryClient();
-  useEffect(() => { if (joined) void queries.invalidateQueries({ queryKey: ["cloud", "me"] }); }, [joined, queries]);
+  // The stations there before: the one that joins is the one not among them.
+  const [known] = useState(() => new Set(stations.map((s) => s.id)));
+  const enroll = useAction(() => cloud.enroll(account.sub, view.id, name));
+  const joined = enroll.result && stations.find((s) => !known.has(s.id));
   return (
     <Dialog open onClose={onClose} wide title="添加 station"
       description="station 是一台运行 ember 的机器。给它起个名字，然后在那台机器上执行生成的命令。"
       footer={joined ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
-        <Button variant="ghost" onClick={onClose}>{enroll.isSuccess ? "关闭" : "取消"}</Button>
-        {!enroll.isSuccess && <Button variant="primary" disabled={!name.trim()} busy={enroll.isPending} onClick={() => enroll.mutate()}>生成命令</Button>}
+        <Button variant="ghost" onClick={onClose}>{enroll.result ? "关闭" : "取消"}</Button>
+        {!enroll.result && <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>生成命令</Button>}
       </>}>
-      {!enroll.isSuccess ? (
+      {!enroll.result ? (
         <Field label="名字" htmlFor="station-name" hint="比如机器名：studio、mac-mini、gpu-box。">
           <input id="station-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} maxLength={80}
-            onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) enroll.mutate(); }} />
+            onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) enroll.run(); }} />
         </Field>
       ) : joined ? (
         <div className="callout" data-tone="green"><Check {...ICON} /><span>「{joined.name}」已加入，现在可以打开它了。</span></div>
       ) : (
         <>
           <ol className="steps">
-            <li><span>在要当 station 的机器上，进入 ember 的目录，执行：</span><CopyCommand text={`bin/${enroll.data.command}`} /></li>
+            <li><span>在要当 station 的机器上，进入 ember 的目录，执行：</span><CopyCommand text={`bin/${enroll.result.command}`} /></li>
             <li>ember 正在运行的话，几秒内就会连上；没有运行就启动它（<span className="mono">pnpm start</span>）。</li>
           </ol>
           <p className="muted dialog-note"><span className="activity-pulse inline" aria-hidden="true" />等待 station 加入… 命令 1 小时内有效，只能用一次。</p>
@@ -362,13 +318,11 @@ function AddStationDialog({ view, account, onClose }: { view: WorkspaceView; acc
 }
 
 function Members({ view, account, manager }: { view: WorkspaceView; account: Account; manager: boolean }) {
-  const queries = useQueryClient();
   const toast = useToast();
   const [inviting, setInviting] = useState(false);
-  const refresh = () => void queries.invalidateQueries({ queryKey: ["cloud"] });
-  const setRole = useMutation({ mutationFn: ({ sub, role }: { sub: string; role: Role }) => cloud.setRole(account.sub, view.id, sub, role), onSuccess: () => { refresh(); toast("已更改角色"); } });
-  const remove = useMutation({ mutationFn: (sub: string) => cloud.removeMember(account.sub, view.id, sub), onSuccess: () => { refresh(); toast("已移除成员"); } });
-  const revoke = useMutation({ mutationFn: (id: string) => cloud.revokeInvitation(account.sub, view.id, id), onSuccess: refresh });
+  const setRole = useAction(({ sub, role }: { sub: string; role: Role }) => cloud.setRole(account.sub, view.id, sub, role), () => toast("已更改角色"));
+  const remove = useAction((sub: string) => cloud.removeMember(account.sub, view.id, sub), () => toast("已移除成员"));
+  const revoke = useAction((id: string) => cloud.revokeInvitation(account.sub, view.id, id));
   return (
     <Section title={`${view.members.length} 人`} actions={manager && <Button icon={UserPlus} onClick={() => setInviting(true)}>邀请成员</Button>}>
       <ul className="list">
@@ -381,12 +335,12 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
             </span>
             {view.role === "owner" && m.sub !== account.sub ? (
               <div className="role-select">
-                <Select value={m.role} onChange={(role) => setRole.mutate({ sub: m.sub, role: role as Role })} label="角色"
+                <Select value={m.role} onChange={(role) => setRole.run({ sub: m.sub, role: role as Role })} label="角色"
                   options={(["owner", "admin", "member"] as Role[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
               </div>
             ) : <Pill>{ROLE_LABEL[m.role]}</Pill>}
             {manager && m.sub !== account.sub && (m.role !== "owner" || view.role === "owner") && (
-              <Menu items={[{ label: "移出 workspace", icon: Trash2, danger: true, onSelect: () => { if (window.confirm(`把 ${m.email} 移出「${view.name}」？`)) remove.mutate(m.sub); } }]} />
+              <Menu items={[{ label: "移出 workspace", icon: Trash2, danger: true, onSelect: () => { if (window.confirm(`把 ${m.email} 移出「${view.name}」？`)) remove.run(m.sub); } }]} />
             )}
           </li>
         ))}
@@ -402,7 +356,7 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
                   <span className="list-row-title">{i.email ?? "任何拿到链接的人"}</span>
                   <span className="muted">{ROLE_LABEL[i.role]} · {timeUntil(i.expires_at * 1000)}过期</span>
                 </span>
-                <Button variant="ghost" busy={revoke.isPending && revoke.variables === i.id} onClick={() => revoke.mutate(i.id)}>撤回</Button>
+                <Button variant="ghost" busy={revoke.busy && revoke.arg === i.id} onClick={() => revoke.run(i.id)}>撤回</Button>
               </li>
             ))}
           </ul>
@@ -414,23 +368,22 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
 }
 
 function InviteDialog({ view, account, onClose }: { view: WorkspaceView; account: Account; onClose(): void }) {
-  const queries = useQueryClient();
   const [role, setRole] = useState<Role>("member");
   const [email, setEmail] = useState("");
-  const invite = useMutation({ mutationFn: () => cloud.invite(account.sub, view.id, role, email.trim()), onSuccess: () => void queries.invalidateQueries({ queryKey: ["cloud", "workspace"] }) });
+  const invite = useAction(() => cloud.invite(account.sub, view.id, role, email.trim()));
   const roles: Role[] = view.role === "owner" ? ["member", "admin", "owner"] : ["member", "admin"];
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   return (
     <Dialog open onClose={onClose} title="邀请成员" description={`对方用这个邮箱登录 ember，就会看到加入「${view.name}」的邀请。邀请 7 天内有效。`}
-      footer={invite.isSuccess ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
+      footer={invite.result ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
         <Button variant="ghost" onClick={onClose}>取消</Button>
-        <Button variant="primary" disabled={!valid} busy={invite.isPending} onClick={() => invite.mutate()}>邀请</Button>
+        <Button variant="primary" disabled={!valid} busy={invite.busy} onClick={() => invite.run()}>邀请</Button>
       </>}>
-      {!invite.isSuccess ? (
+      {!invite.result ? (
         <>
           <Field label="邮箱" htmlFor="invite-email" hint="对方登录 ember 用的 Google 账号邮箱。">
             <input id="invite-email" className="input" type="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com"
-              onKeyDown={(e) => { if (e.key === "Enter" && valid) invite.mutate(); }} />
+              onKeyDown={(e) => { if (e.key === "Enter" && valid) invite.run(); }} />
           </Field>
           <Field label="角色" hint={ROLE_HINT[role]}>
             <Select value={role} onChange={(r) => setRole(r as Role)} label="角色" options={roles.map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
@@ -443,5 +396,3 @@ function InviteDialog({ view, account, onClose }: { view: WorkspaceView; account
     </Dialog>
   );
 }
-
-/** /invite#token: see what it leads to, pick which signed-in account accepts it. */

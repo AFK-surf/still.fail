@@ -1,39 +1,32 @@
 // ember cloud's pages: sign-in (several Google accounts at once), the
 // workspaces those accounts belong to, their members, invitations and
-// stations. Opening a station hands over to the station's own admin client
-// (StationFrame), which talks to it over iroh.
-import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronsUpDown, Copy, LogOut, Plus, Trash2, UserPlus } from "lucide-react";
-import { DropdownMenu, Tooltip } from "radix-ui";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router";
-import { relativeTime, timeUntil } from "../format.ts";
-import { ToastProvider, useToast } from "../toast.tsx";
-import { Button, Confirm, Loading, CopyCommand, Dialog, Empty, Field, ICON, Menu, MobileBack, Pill, Section, Select, StatusDot } from "../ui.tsx";
-import { completeSignIn, signIn, type Account } from "./accounts.ts";
-import { Avatar, online, SignInPage, useAccounts } from "./gate.tsx";
-import { useInvitations, useWorkspaces, WorkspaceShell } from "./workspace.tsx";
+// stations. Everything goes through the client core: accounts, ember cloud
+// and the links to stations live there, not on the page.
+import { Tooltip } from "radix-ui";
+import { useEffect, useMemo, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from "react-router";
+import { ToastProvider } from "../toast.tsx";
+import { Button, Loading, Select } from "../ui.tsx";
+import { completeSignIn, signIn, useAccounts } from "./accounts.ts";
+import { SignInPage } from "./gate.tsx";
+import { WorkspaceShell } from "./workspace.tsx";
 import { ROLE_LABEL } from "./settings.tsx";
-import { cloud, CloudError, type Role, type StationView, type WorkspaceView } from "./api.ts";
+import { cloud, useAction, useWorkspaces } from "./api.ts";
 import { Illustration } from "../brand.tsx";
-
-const client = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, retry: (n, e) => !(e instanceof CloudError && e.status < 500) && n < 2 } } });
 
 export function CloudApp() {
   return (
-    <QueryClientProvider client={client}>
-      <ToastProvider>
-        <Tooltip.Provider delayDuration={400}>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/auth/callback" element={<Callback />} />
-              <Route path="/invite" element={<Invite />} />
-              <Route path="*" element={<Home />} />
-            </Routes>
-          </BrowserRouter>
-        </Tooltip.Provider>
-      </ToastProvider>
-    </QueryClientProvider>
+    <ToastProvider>
+      <Tooltip.Provider delayDuration={400}>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/auth/callback" element={<Callback />} />
+            <Route path="/invite" element={<Invite />} />
+            <Route path="*" element={<Home />} />
+          </Routes>
+        </BrowserRouter>
+      </Tooltip.Provider>
+    </ToastProvider>
   );
 }
 
@@ -53,6 +46,7 @@ function Callback() {
 
 function Home() {
   const list = useAccounts();
+  if (!list) return <div className="gate"><Loading /></div>;
   if (list.length === 0) return <SignInPage />;
   return (
     <Routes>
@@ -65,24 +59,22 @@ function Home() {
 
 /** Straight into a workspace: the first one, or, for an account with none and no invitations, a new one of its own. */
 function Landing() {
-  const workspaces = useWorkspaces();
-  const invitations = useInvitations();
-  const list = useAccounts();
+  const workspaces = useWorkspaces().value;
+  const list = useAccounts() ?? [];
   const navigate = useNavigate();
-  const queries = useQueryClient();
-  const create = useMutation({
-    mutationFn: () => cloud.createWorkspace(list[0]!.sub, `${list[0]!.name || list[0]!.email.split("@")[0]} 的 workspace`),
-    onSuccess: (w) => { void queries.invalidateQueries({ queryKey: ["cloud"] }); navigate(`/w/${w.id}`, { replace: true }); },
-  });
-  const accept = useMutation({
-    mutationFn: (i: { sub: string; id: string }) => cloud.acceptInvitationById(i.sub, i.id),
-    onSuccess: (w) => { void queries.invalidateQueries({ queryKey: ["cloud"] }); navigate(`/w/${w.id}`, { replace: true }); },
-  });
-  const first = workspaces.data?.[0];
-  const pending = invitations.data ?? [];
-  const ready = !workspaces.isPending && !invitations.isPending;
+  const create = useAction(
+    () => cloud.createWorkspace(list[0]!.sub, `${list[0]!.name || list[0]!.email.split("@")[0]} 的 workspace`),
+    (w) => navigate(`/w/${w.id}`, { replace: true }),
+  );
+  const accept = useAction(
+    (i: { sub: string; id: string }) => cloud.acceptInvitationById(i.sub, i.id),
+    (w) => navigate(`/w/${w.id}`, { replace: true }),
+  );
+  const first = workspaces?.flatMap((a) => a.workspaces)[0];
+  const pending = workspaces?.flatMap((a) => a.invitations.map((i) => ({ ...i, account: a.account }))) ?? [];
+  const ready = workspaces !== undefined;
   useEffect(() => {
-    if (ready && !first && pending.length === 0 && !create.isPending && !create.isSuccess && !create.isError) create.mutate();
+    if (ready && !first && pending.length === 0 && !create.busy && !create.result && !create.error) create.run();
   }, [ready, first, pending.length]); // eslint-disable-line react-hooks/exhaustive-deps
   if (first) return <Navigate to={`/w/${first.id}`} replace />;
   if (ready && pending.length > 0) {
@@ -93,41 +85,56 @@ function Landing() {
         {pending.map((i) => (
           <div key={i.id} className="card card-row invite-card">
             <div className="card-row-text"><strong>{i.name}</strong><span className="muted">{i.inviter || "有人"}邀请 {i.account.email} 以{ROLE_LABEL[i.role]}身份加入</span></div>
-            <Button variant="primary" busy={accept.isPending && accept.variables?.id === i.id} onClick={() => accept.mutate({ sub: i.account.sub, id: i.id })}>加入</Button>
+            <Button variant="primary" busy={accept.busy && accept.arg?.id === i.id} onClick={() => accept.run({ sub: i.account.sub, id: i.id })}>加入</Button>
           </div>
         ))}
-        <Button variant="ghost" busy={create.isPending} onClick={() => create.mutate()}>不加入，建一个自己的 workspace</Button>
+        <Button variant="ghost" busy={create.busy} onClick={() => create.run()}>不加入，建一个自己的 workspace</Button>
       </div>
     );
   }
-  if (create.isError) return <div className="gate"><h1>没能建好 workspace</h1><p>{create.error.message}</p><Button onClick={() => create.mutate()}>重试</Button></div>;
-  return <div className="gate"><Loading label={workspaces.isPending || invitations.isPending ? "正在读取你的 workspace…" : "正在为你建一个 workspace…"} /></div>;
+  if (create.error) return <div className="gate"><h1>没能建好 workspace</h1><p>{create.error.message}</p><Button onClick={() => create.run()}>重试</Button></div>;
+  return <div className="gate"><Loading label={ready ? "正在为你建一个 workspace…" : "正在读取你的 workspace…"} /></div>;
 }
 
 /** A workspace by id, through whichever signed-in account belongs to it. */
 function WorkspaceRoute() {
   const { ws = "" } = useParams();
-  const workspaces = useWorkspaces();
-  if (workspaces.isPending) return <div className="gate"><Loading label="正在打开 workspace…" /></div>;
-  const entry = workspaces.data?.find((w) => w.id === ws);
-  if (!entry) return <div className="gate"><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className="btn btn-secondary" href="/">回到 ember</a></div>;
+  const workspaces = useWorkspaces().value;
+  if (!workspaces) return <div className="gate"><Loading label="正在打开 workspace…" /></div>;
+  const owner = workspaces.find((a) => a.workspaces.some((w) => w.id === ws));
+  const found = owner?.workspaces.find((w) => w.id === ws);
+  if (!owner || !found) return <div className="gate"><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className="btn btn-secondary" href="/">回到 ember</a></div>;
   return (
-    <WorkspaceShell key={`${entry.account.sub}/${ws}`} entry={entry} />
+    <WorkspaceShell key={`${owner.account.sub}/${ws}`} entry={{ id: ws, name: found.name, account: owner.account }} />
   );
 }
+
+type Preview = Awaited<ReturnType<typeof cloud.previewInvitation>>;
 
 function Invite() {
   const token = useMemo(() => location.hash.slice(1), []);
   const list = useAccounts();
-  const [chosen, setChosen] = useState(list[0]?.sub ?? "");
-  const sub = list.some((a) => a.sub === chosen) ? chosen : list[0]?.sub ?? "";
-  const preview = useQuery({ queryKey: ["cloud", "invite", sub], queryFn: () => cloud.previewInvitation(sub, token), enabled: Boolean(sub && token), retry: false });
-  const accept = useMutation({ mutationFn: () => cloud.acceptInvitation(sub, token), onSuccess: (w) => location.assign(`/w/${w.id}`) });
+  const [chosen, setChosen] = useState("");
+  const sub = list?.some((a) => a.sub === chosen) ? chosen : list?.[0]?.sub ?? "";
+  // Read once per account: what the link leads to depends on who looks.
+  const [preview, setPreview] = useState<{ data: Preview } | { error: Error } | null>(null);
+  useEffect(() => {
+    setPreview(null);
+    if (!sub || !token) return;
+    let current = true;
+    cloud.previewInvitation(sub, token).then(
+      (data) => { if (current) setPreview({ data }); },
+      (error: Error) => { if (current) setPreview({ error }); },
+    );
+    return () => { current = false; };
+  }, [sub, token]);
+  const accept = useAction(() => cloud.acceptInvitation(sub, token), (w) => location.assign(`/w/${w.id}`));
+  if (!list) return <div className="gate"><Loading /></div>;
   if (list.length === 0) return <SignInPage lead="你收到了一个 ember workspace 的邀请。先用 Google 账号登录，再决定是否加入。" />;
   return (
     <div className="gate invite-page">
       <Illustration name="sign-in" />
-      {preview.isPending ? <h1>正在读取邀请…</h1> : preview.isError ? (
+      {!preview ? <h1>正在读取邀请…</h1> : "error" in preview ? (
         <><h1>邀请不能用</h1><p>{preview.error.message}</p><a className="btn btn-secondary" href="/">回到 ember</a></>
       ) : (
         <>
@@ -138,7 +145,7 @@ function Invite() {
           )}
           <div className="invite-actions">
             <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
-            <Button variant="primary" busy={accept.isPending} onClick={() => accept.mutate()}>以 {list.find((a) => a.sub === sub)?.email} 加入</Button>
+            <Button variant="primary" busy={accept.busy} onClick={() => accept.run()}>以 {list.find((a) => a.sub === sub)?.email} 加入</Button>
           </div>
           {accept.error && <p className="field-error" role="alert">{accept.error.message}</p>}
         </>
@@ -146,4 +153,3 @@ function Invite() {
     </div>
   );
 }
-
