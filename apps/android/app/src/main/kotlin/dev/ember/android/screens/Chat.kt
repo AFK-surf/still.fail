@@ -764,7 +764,8 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
 /** A row's icon, by what kind of thing it does. */
 private fun activityIcon(kind: String) = when (kind) {
     "read" -> Icons.File; "search" -> Icons.Search; "edit" -> Icons.Pen; "command" -> Icons.Terminal; "web" -> Icons.Globe
-    "agent" -> Icons.Spark; "thread" -> Icons.Quote; "think" -> Icons.Spark; else -> Icons.Wrench
+    "agent" -> Icons.Spark; "thread" -> Icons.Quote; "think" -> Icons.Spark
+    "in" -> Icons.Received; "say" -> Icons.Said; "out" -> Icons.Send; else -> Icons.Wrench
 }
 
 // ── files ──────────────────────────────────────────────────────────────

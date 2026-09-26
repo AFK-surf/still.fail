@@ -117,7 +117,7 @@ export interface LiveView { loaded: boolean; timeline: TimelineEntry[]; usage: T
 /** What an agent at work is doing, as the core puts it together (client/core/src/activity.rs): a status line and this turn's rows. */
 export interface ActivityView {
   status: string;
-  rows: { key: string; kind: "read" | "search" | "edit" | "command" | "web" | "agent" | "thread" | "think" | "other"; text: string; live: boolean; entry: number | null }[];
+  rows: { key: string; kind: "read" | "search" | "edit" | "command" | "web" | "agent" | "thread" | "think" | "other" | "in" | "out" | "say"; text: string; live: boolean; entry: number | null }[];
 }
 
 export function useChats(scope: string, mine: boolean): TopicState<ChatsView> {

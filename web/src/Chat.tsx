@@ -2,7 +2,7 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { ArrowDown, ArrowUp, Bot, Brain, ChevronDown, ChevronUp, Download, FileText, Globe, MessagesSquare, Pencil, Plus, Quote as QuoteIcon, Search, Terminal, Wrench, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Bot, Brain, ChevronDown, ChevronUp, Download, FileText, Globe, MessagesSquare, Pencil, Plus, Quote as QuoteIcon, Search, Terminal, Wrench, X, ArrowDownLeft, MessageSquare, Send } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ActivityView } from "./api.ts";
 import { agentLabel, botUserIdOf, sessionStatus } from "./format.ts";
@@ -752,6 +752,8 @@ interface AgentAtWork {
 /** A row's icon, by what kind of thing it does. */
 const ACTIVITY_ICON: Record<ActivityView["rows"][number]["kind"], typeof Terminal> = {
   read: FileText, search: Search, edit: Pencil, command: Terminal, web: Globe, agent: Bot, thread: MessagesSquare, think: Brain, other: Wrench,
+  // What it received, said and posted.
+  in: ArrowDownLeft, say: MessageSquare, out: Send,
 };
 
 const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
