@@ -21,7 +21,14 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>): RefObject<
     const onLoad = (e: Event) => { if (e.target instanceof HTMLImageElement) toBottom(); };
     el.addEventListener("load", onLoad, true);
     toBottom();
+    // For a moment after opening, settle every frame: fonts, highlighting and late layout all move the bottom.
+    const until = Date.now() + 1500;
+    let frame = requestAnimationFrame(function settle() {
+      toBottom();
+      if (Date.now() < until) frame = requestAnimationFrame(settle);
+    });
     return () => {
+      cancelAnimationFrame(frame);
       el.removeEventListener("scroll", onScroll);
       el.removeEventListener("load", onLoad, true);
       resize.disconnect();

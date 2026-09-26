@@ -213,7 +213,11 @@ export class AdminApi {
       const attachments: Attachment[] = (Array.isArray(input.attachments) ? input.attachments : []).slice(0, 20).map((a: Record<string, unknown>) => {
         const path = resolve(String(a.path ?? ""));
         if (!path.startsWith(uploads) || !existsSync(path)) throw new HttpError(400, "附件不在这个会话的上传目录里");
-        return { name: String(a.name ?? path.slice(uploads.length)).slice(0, 200), path, size: Number(a.size) || 0 };
+        const w = Number(a.width), h = Number(a.height);
+        return {
+          name: String(a.name ?? path.slice(uploads.length)).slice(0, 200), path, size: Number(a.size) || 0,
+          ...(Number.isInteger(w) && Number.isInteger(h) && w > 0 && h > 0 && w < 100_000 && h < 100_000 ? { width: w, height: h } : {}),
+        };
       });
       const quotes: Quote[] = (Array.isArray(input.quotes) ? input.quotes : []).slice(0, 20).map((q: Record<string, unknown>) => ({
         author: String(q.author ?? "消息").slice(0, 100), text: String(q.text ?? "").slice(0, 4000), comment: String(q.comment ?? "").slice(0, 4000),

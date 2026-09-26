@@ -81,7 +81,11 @@ export interface ChatMessageRow {
 export interface Quote { author: string; text: string; comment: string }
 
 /** A file someone sent to a session; `path` is where the agent finds it on the station. */
-export interface Attachment { name: string; path: string; size: number }
+export interface Attachment {
+  name: string; path: string; size: number;
+  /** An image's pixel size, measured by the sender, so the page can hold its place before it loads. */
+  width?: number; height?: number;
+}
 
 function toChat(row: Row): ChatRow {
   return {

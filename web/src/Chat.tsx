@@ -29,7 +29,18 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
   const wasWriting = useRef(false);
   const streamedTs = useRef(new Set<string>());
   const status = sessionStatus(detail.session);
+  // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
+  const lastAgents = useRef<AgentAtWork[] | null>(null);
+  const [, rerender] = useState(0);
+  const wasBusy = useRef(false);
   const busy = status === "running" || status === "queued";
+  useEffect(() => {
+    if (busy) { wasBusy.current = true; return; }
+    if (!wasBusy.current) return;
+    wasBusy.current = false;
+    const timer = setTimeout(() => { lastAgents.current = null; rerender((n) => n + 1); }, 520);
+    return () => clearTimeout(timer);
+  }, [busy]);
   const member = usePerson();
   const isMine = useIsMine();
   const name = (id: string) => member(id)?.name || detail.people[id] || (id === "local" ? "本机" : id);
@@ -128,13 +139,13 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
               </div>
             );
           }
-          if (!busy) return null;
-          return (
-            <Activities onOpenHistory={onOpenHistory} agents={[{
+          if (!busy && !lastAgents.current) return null;
+          const agents: AgentAtWork[] = busy ? [{
               key: detail.session.key, who: agent, runtime: detail.session.runtime, model: detail.transcript?.usage?.model ?? detail.session.model,
               timeline: detail.transcript?.timeline ?? [], live, phase, since: detail.turns.at(-1)?.endedAt == null ? detail.turns.at(-1)?.startedAt ?? null : null,
-            }]} />
-          );
+            }] : lastAgents.current!;
+          if (busy) lastAgents.current = agents;
+          return <Activities onOpenHistory={onOpenHistory} agents={agents} leaving={!busy} />;
         })()}
       </div>
       {picked && (
@@ -217,7 +228,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string; file: Attachment }
   if (image) {
     return (
       <>
-        <button type="button" className="msg-image" onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`}>
+        <button type="button" className="msg-image" onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`} style={imageBox(file)}>
           {url ? <img src={url} alt={file.name} /> : <span className="msg-image-wait" />}
         </button>
         {url && <Lightbox open={open} onClose={() => setOpen(false)} url={url} file={file} />}
@@ -225,6 +236,17 @@ function FileItem({ sessionKey, file }: { sessionKey: string; file: Attachment }
     );
   }
   return <FileCard file={file} />;
+}
+
+/**
+ * The box an image takes in the chat, known before it loads: its own
+ * proportions (sent with it) within 360×300, or a fixed box for images sent
+ * before sizes were recorded.
+ */
+function imageBox(file: Attachment): { width: number; height: number } {
+  if (!file.width || !file.height) return { width: 240, height: 160 };
+  const scale = Math.min(1, 360 / file.width, 300 / file.height);
+  return { width: Math.max(40, Math.round(file.width * scale)), height: Math.max(40, Math.round(file.height * scale)) };
 }
 
 /** An image at full size over a dimmed page; Esc or a click outside closes it. */
@@ -425,27 +447,28 @@ const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
  * messages. A runtime's own sub-agents are not agents of the chat; their
  * work is one row of the agent's.
  */
-function Activities({ agents, onOpenHistory }: { agents: AgentAtWork[]; onOpenHistory(): void }) {
+function Activities({ agents, onOpenHistory, leaving = false }: { agents: AgentAtWork[]; onOpenHistory(): void; leaving?: boolean }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(ACTIVITY_COLLAPSED) === "1");
   const toggle = () => {
     localStorage.setItem(ACTIVITY_COLLAPSED, collapsed ? "0" : "1");
     setCollapsed(!collapsed);
   };
-  return <>{agents.map((a) => <Activity key={a.key} agent={a} collapsed={collapsed} onToggle={toggle} onOpen={onOpenHistory} />)}</>;
+  return <>{agents.map((a) => <Activity key={a.key} agent={a} collapsed={collapsed} onToggle={toggle} onOpen={onOpenHistory} leaving={leaving} />)}</>;
 }
 
 /**
  * An agent at work: its last three rows in three fixed lines (or the newest
  * in one). A new row comes in from below and pushes the oldest out above.
  */
-function Activity({ agent, collapsed, onToggle, onOpen }: { agent: AgentAtWork; collapsed: boolean; onToggle(): void; onOpen(): void }) {
+function Activity({ agent, collapsed, onToggle, onOpen, leaving }: { agent: AgentAtWork; collapsed: boolean; onToggle(): void; onOpen(): void; leaving: boolean }) {
   const rows = activityRows(agent.timeline, agent.live, agent.phase);
   const count = collapsed ? 1 : 3;
-  // One row more than fits, so the outgoing row is there to slide out.
+  // Rows fill from the top; once there are more than fit, one extra row is kept above so it can slide out as the rest move up.
   const shown = rows.slice(-(count + 1));
+  const overflowing = shown.length > count;
   const newest = shown.at(-1)?.key ?? "none";
   return (
-    <div className="msg msg-row agent-activity" data-collapsed={collapsed || undefined}>
+    <div className="msg msg-row agent-activity" data-collapsed={collapsed || undefined} data-leaving={leaving || undefined}>
       <div className="msg-main">
         <div className="msg-head">
           <span className="msg-avatar msg-avatar-agent"><ModelLogo model={agent.model} runtime={agent.runtime} size={12} /></span>
@@ -456,7 +479,7 @@ function Activity({ agent, collapsed, onToggle, onOpen }: { agent: AgentAtWork; 
           </button>
         </div>
         <div className="activity-window">
-          <div key={newest} className="activity-rows" data-shift={shown.length > count || undefined}>
+          <div key={overflowing ? newest : "fill"} className="activity-rows" data-shift={overflowing || undefined}>
             {shown.map((r) => (
               <span key={r.key} className="activity-row" data-live={r.live || undefined}>
                 <span className="activity-mark" aria-hidden="true">{r.live ? <span className="activity-pulse" /> : <span className="activity-done" />}</span>

@@ -63,8 +63,21 @@ export function makeApi(t: Transport) {
     return new Blob([r.data as Uint8Array<ArrayBuffer>], { type: r.type });
   },
   /** Puts a file in the session's workspace on the station; send the result with a message. */
-  uploadFile: async (key: string, file: File) =>
-    request<Attachment>("POST", `/sessions/${encodeURIComponent(key)}/files?name=${encodeURIComponent(file.name)}`, new Uint8Array(await file.arrayBuffer())),
+  uploadFile: async (key: string, file: File): Promise<Attachment> => {
+    const saved = await request<Attachment>("POST", `/sessions/${encodeURIComponent(key)}/files?name=${encodeURIComponent(file.name)}`, new Uint8Array(await file.arrayBuffer()));
+    // An image's size travels with it, so every page can hold its place before it loads.
+    if (file.type.startsWith("image/")) {
+      try {
+        const bitmap = await createImageBitmap(file);
+        const size = { width: bitmap.width, height: bitmap.height };
+        bitmap.close();
+        return { ...saved, ...size };
+      } catch {
+        // not decodable here; shown in a fixed box instead
+      }
+    }
+    return saved;
+  },
   sayInChat: (threadTs: string, text: string) => request<{ ok: true }>("POST", `/chats/${encodeURIComponent(threadTs)}/messages`, { text }),
   setTitle: (key: string, title: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/title`, { title }),
   startLogin: (profile: string) => request<{ job: LoginJob }>("POST", `/profiles/${encodeURIComponent(profile)}/login`),
