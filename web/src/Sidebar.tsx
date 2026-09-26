@@ -114,11 +114,10 @@ function ChatRow({ item }: { item: ChatItem }) {
           <Time className="nav-time" at={item.lastActiveAt} />
         </span>
       </span>
-      {badge && (
-        <Tip label={BADGE_LABEL[badge]} side="right">
-          <span className="state-dot" data-badge={badge} role="img" aria-label={BADGE_LABEL[badge]} />
-        </Tip>
-      )}
+      {/* The dot's place is kept on every row, so icons and times line up down the list. */}
+      {badge
+        ? <Tip label={BADGE_LABEL[badge]} side="right"><span className="state-dot" data-badge={badge} role="img" aria-label={BADGE_LABEL[badge]} /></Tip>
+        : <span className="state-dot" aria-hidden="true" />}
     </NavLink>
   );
 }
