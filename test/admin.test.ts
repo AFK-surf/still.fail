@@ -327,8 +327,8 @@ test("editing a connect keeps tokens that were left blank and writes config.json
     const { status } = await t.call("PUT", "/connects/ds", { bind: { model: "deepseek-flash" }, slack: { appToken: "", botToken: "" } });
     assert.equal(status, 200);
     const saved = JSON.parse(readFileSync(t.path, "utf8"));
-    // Known by its bot's name in its Slack workspace, kept through the edit.
-    assert.deepEqual([saved.connects[0].slack.team, saved.connects[0].slack.botName], [{ id: "T0", name: "Acme" }, "ember"]);
+    // Known by its bot's name in its Slack workspace, kept through the edit (and as Slack says once connected: T1).
+    assert.deepEqual([saved.connects[0].slack.team, saved.connects[0].slack.botName], [{ id: "T1", name: "Acme" }, "ember"]);
     const view = (await t.call("GET", "/overview")).body.connects[0];
     assert.deepEqual([view.name, view.team], ["ember", "Acme"]);
     assert.equal(saved.connects[0].slack.botToken, "xoxb-bbbbbbbbbbbb");
