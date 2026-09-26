@@ -591,7 +591,9 @@
 .quota-rings { display: inline-flex; gap: 6px; flex: none; }
 .quota-ring-cell { display: grid; justify-items: center; gap: 1px; }
 .quota-ring-letter { font-size: 9px; line-height: 1; font-weight: 600; color: var(--subtle); }
-.quota-ring { position: relative; display: inline-grid; place-items: center; flex: none; width: 26px; height: 26px; color: var(--green); }
+/* Blocks, not inline: a ring with no number inside would sit on its bottom edge instead of the others' text line. */
+.quota-ring-hit { display: block; }
+.quota-ring { position: relative; display: grid; place-items: center; flex: none; width: 26px; height: 26px; color: var(--green); }
 .quota-ring[data-level="amber"] { color: var(--amber); }
 .quota-ring[data-level="red"] { color: var(--red); }
 .quota-ring svg { position: absolute; inset: 0; }

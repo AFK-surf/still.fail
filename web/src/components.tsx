@@ -87,7 +87,7 @@ export function QuotaBars({ quota, compact }: { quota: ProfileQuota | null | und
         {windows.map((w) => (
           <span key={w.label} className="quota-ring-cell">
             <Tip label={<>{w.label}剩余 {100 - w.usedPercent}%{w.resetsAt !== null && <><br />{refillsIn(w.resetsAt)}</>}</>}>
-              <span><QuotaRing percent={w.usedPercent} /></span>
+              <span className="quota-ring-hit"><QuotaRing percent={w.usedPercent} /></span>
             </Tip>
             <span className="quota-ring-letter">{mark(w.label).text}</span>
           </span>
