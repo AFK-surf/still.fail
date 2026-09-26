@@ -147,8 +147,14 @@ fun placeName(threads: List<ThreadView>, channel: String, threadTs: String): Str
     return if (channel.startsWith("D")) "私信" else "#${thread?.channelName ?: channel}"
 }
 
-fun historyItems(entries: List<TimelineEntry>): List<HistoryItem> {
+/** `spans`, when given, gets each item's first and last transcript entry: an activity row opens its history there. */
+fun historyItems(entries: List<TimelineEntry>, spans: MutableList<IntRange>? = null): List<HistoryItem> {
     val items = mutableListOf<HistoryItem>()
+    fun cover(i: Int) {
+        if (spans == null || items.isEmpty()) return
+        while (spans.size < items.size) spans += i..i
+        spans[items.size - 1] = spans[items.size - 1].first..i
+    }
     val steps = HashMap<String, Step>()
     var group: MutableList<Step>? = null
     var thinking: MutableList<TimelineEntry>? = null
@@ -161,11 +167,12 @@ fun historyItems(entries: List<TimelineEntry>): List<HistoryItem> {
         }
     }
     val posts = mutableListOf<Pair<Int, Step>>()
-    for (e in entries) {
+    for ((i, e) in entries.withIndex()) {
         when (e.kind) {
             "tool_result" -> {
                 val step = e.callId?.let { steps[it] } ?: lastStep?.takeIf { it.result == null }
                 step?.result = e
+                cover(i)
             }
             "tool_call" -> {
                 val step = Step(e, null)
@@ -183,11 +190,13 @@ fun historyItems(entries: List<TimelineEntry>): List<HistoryItem> {
                 } else {
                     openGroup(); group!! += step
                 }
+                cover(i)
             }
-            "thinking" -> { openGroup(); thinking!! += e }
+            "thinking" -> { openGroup(); thinking!! += e; cover(i) }
             else -> {
                 group = null
                 items += if (e.kind == "user") parsePrompt(e.text) else HistoryItem.Text(e.text, e.subagent)
+                cover(i)
             }
         }
     }

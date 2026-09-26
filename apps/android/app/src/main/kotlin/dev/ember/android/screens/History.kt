@@ -98,16 +98,19 @@ import dev.ember.android.ui.SheetSpec
 import dev.ember.android.ui.SlackMark
 import dev.ember.android.ui.rememberFollow
 import dev.ember.core.CoreException
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.animation.core.tween
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Opens an agent's execution history, over the item's page it belongs to. */
-fun openHistory(app: AppState, station: String, of: ChatOf, key: String) {
-    app.sheet = SheetSpec(0.55f, draggable = true) { HistorySheet(station, of, key) }
+/** `entry`: the transcript entry to open at (an activity row's), else its newest. */
+fun openHistory(app: AppState, station: String, of: ChatOf, key: String, entry: Int? = null) {
+    app.sheet = SheetSpec(0.55f, draggable = true) { HistorySheet(station, of, key, entry) }
 }
 
 @Composable
-private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String) {
+private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String, entry: Int? = null) {
     val app = LocalApp.current
     val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
     val live by rememberTopic<LiveView>(app.core, Topics.live(station, key))
@@ -130,7 +133,7 @@ private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String) {
     }
     Summary(agent, live.value, host.value)
     Box(Modifier.weight(1f).fillMaxWidth()) {
-        if (tab == 0) Steps(station, of, agent, live.value) else Details(station, agent, live.value, host.value)
+        if (tab == 0) Steps(station, of, agent, live.value, entry) else Details(station, agent, live.value, host.value)
     }
 }
 
@@ -177,12 +180,13 @@ private sealed interface Line {
 }
 
 @Composable
-private fun Steps(station: String, of: ChatOf, agent: ChatAgentView, live: LiveView?) {
+private fun Steps(station: String, of: ChatOf, agent: ChatAgentView, live: LiveView?, entry: Int? = null) {
     val app = LocalApp.current
     val overview by rememberTopic<Overview>(app.core, Topics.overview(station))
     val person = rememberPeople(station)
     val timeline = live?.timeline
-    val items = remember(timeline) { historyItems(timeline ?: emptyList()) }
+    val spans = remember(timeline) { mutableListOf<IntRange>() }
+    val items = remember(timeline) { historyItems(timeline ?: emptyList(), spans) }
     val steps = live?.steps.orEmpty().filter { !it.subagent && it.step != "tool" }
     val phase = live?.phase
     if (live?.loaded != true && items.isEmpty()) return Edge("正在读取执行历史…")
@@ -193,15 +197,31 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgentView, live: LiveV
     val list = rememberLazyListState()
     val follow = rememberFollow(list)
     // It opens at its newest, and follows new steps while the reader stays there.
-    LaunchedEffect(Unit) { follow.toEnd(); follow.placed = true; follow.on = true }
+    val density = LocalDensity.current
+    // Opened at an entry (an activity row): that item, near the top, for a moment marked; else the newest, followed.
+    var marked by remember { mutableStateOf(-1) }
+    LaunchedEffect(Unit) {
+        val at = entry?.let { e -> spans.indexOfFirst { e in it } }?.takeIf { it >= 0 }
+        if (at != null) {
+            list.scrollToItem(at + 1, -with(density) { 24.dp.roundToPx() })
+            follow.placed = true; follow.on = false
+            marked = at
+            delay(1600); marked = -1
+        } else {
+            follow.toEnd(); follow.placed = true; follow.on = true
+        }
+    }
     val bot = agent.connect?.botUserId
     val mention = { text: String -> text.replace(Regex("<@([A-Z0-9]+)>")) { r -> val id = r.groupValues[1]; "@" + (if (id == bot) agent.connect?.name ?: id else person(id) ?: id) } }
     val bound = overview.value?.slackUsers.orEmpty()
     LazyColumn(Modifier.fillMaxWidth(), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item(key = "edge") { Edge("已到 Session 开始处") }
-        itemsIndexed(lines, key = { i, l -> if (l is Line.Live) "live/${l.step.id}" else if (l is Line.Phase) "phase" else "i$i" }) { _, line ->
+        itemsIndexed(lines, key = { i, l -> if (l is Line.Live) "live/${l.step.id}" else if (l is Line.Phase) "phase" else "i$i" }) { i, line ->
             when (line) {
-                is Line.Item -> Item(line.item, station, of, agent, mention, bound, person)
+                is Line.Item -> {
+                    val shade by androidx.compose.animation.animateColorAsState(if (i == marked) C.accent.copy(alpha = 0.10f) else androidx.compose.ui.graphics.Color.Transparent, tween(900), label = "marked")
+                    Box(Modifier.clip(RoundedCornerShape(8.dp)).background(shade)) { Item(line.item, station, of, agent, mention, bound, person) }
+                }
                 is Line.Live -> LiveStepView(line.step)
                 is Line.Phase -> PhaseLine(line.phase, RUNTIME_LABEL[agent.session.runtime] ?: agent.session.runtime)
             }

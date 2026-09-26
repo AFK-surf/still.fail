@@ -702,7 +702,7 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
             Column(Modifier.wrapContentHeight(if (overflowing) Alignment.Bottom else Alignment.Top, unbounded = true).graphicsLayer { translationY = shift.value * 22.dp.toPx() }) {
                 shown.forEach { r ->
                     Row(
-                        Modifier.height(22.dp).fillMaxWidth().clickable { openHistory(app, ctx.station, ctx.of, agent.key) },
+                        Modifier.height(22.dp).fillMaxWidth().clickable { openHistory(app, ctx.station, ctx.of, agent.key, r.entry) },
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
