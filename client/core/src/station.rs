@@ -41,6 +41,8 @@ use crate::trace::{Kind, Span, SpanContext, Tracer, route};
 
 /// How long a failed or ended stream waits before it is opened again.
 pub const RECONNECT_MS: u64 = 2_000;
+/// A topic whose first read failed in passing is read again after this, besides when the link comes back.
+pub const RETRY_MS: u64 = 3_000;
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone though nothing
 /// said so, and is read again (from where it was).
 pub const STREAM_IDLE_MS: u64 = 40_000;
@@ -742,8 +744,26 @@ impl Stations {
             }
             (_, Ok(value)) => self.sink.set(topic, Ok(value)),
             (_, Err(error)) => {
+                // What it had stays. With nothing yet: a station that answered no (4xx) says so; a failure that passes
+                // (the link down, a timeout, a 5xx) leaves it loading, read again once the link is back, and once shortly.
                 if self.sink.get(topic).is_none() {
-                    self.sink.set(topic, Err(error));
+                    if error.status.is_some_and(|s| (400..500).contains(&s)) {
+                        self.sink.set(topic, Err(error));
+                    } else {
+                        if let Some(station) = topic.station() {
+                            self.set_stale(station, true);
+                        }
+                        let (this, topic) = (self.rc(), topic.clone());
+                        // Boxed: this is inside reload.
+                        let again: LocalBoxFuture<'static, ()> = async move {
+                            this.host.sleep(RETRY_MS).await;
+                            if this.sink.get(&topic).is_none() {
+                                this.reload(&topic).await;
+                            }
+                        }
+                        .boxed_local();
+                        self.spawn_in(None, again);
+                    }
                 }
             }
         }
@@ -950,6 +970,8 @@ impl Stations {
     /// Holds the station's `/events` open while any of its topics is live; its events keep the topics current.
     async fn follow_events(self: Rc<Self>, station: String, addr: StationAddr, wants: EventsFor, generation: u64, mut parent: Option<SpanContext>) {
         let mut first = true;
+        // How the last stream ended and how long it lasted: on the reconnect's span, so a stream that keeps ending shows why.
+        let mut previous: Option<(String, f64)> = None;
         loop {
             // Replaced before it opened: its successor asks instead.
             if !self.is_current(&station, generation) {
@@ -958,6 +980,10 @@ impl Stations {
             let name = if std::mem::replace(&mut first, false) { "station.connect" } else { "station.reconnect" };
             let mut span = self.tracer.enter(parent.take(), || self.tracer.span(name, Kind::Internal));
             span.set("ember.station", station.clone());
+            if let Some((why, lasted)) = previous.take() {
+                span.set("ember.previous.end", why);
+                span.set("ember.previous.lasted_ms", lasted.round() as i64);
+            }
             // Asked anew each time: a session is followed from what its topic has by then.
             let path = self.events_path(&station, &wants);
             let opened = self.tracer.instrument(Some(span.context()), self.open_stream(&addr, &path)).await;
@@ -974,7 +1000,8 @@ impl Stations {
                         span.end();
                     }
                     let mut parser = SseParser::default();
-                    let mut why = "连接断开了".to_string();
+                    let opened_at = self.host.now_ms();
+                    let mut why = "ended".to_string();
                     while let Some(chunk) = body.next().await {
                         match chunk {
                             Ok(bytes) => {
@@ -991,12 +1018,14 @@ impl Stations {
                     if !self.is_current(&station, generation) {
                         return;
                     }
+                    previous = Some((why.clone(), self.host.now_ms() - opened_at));
                     self.set_stale(&station, true);
-                    self.set_link(&station, json!({ "state": "offline", "message": why }));
+                    self.set_link(&station, json!({ "state": "offline", "message": if why == "ended" { "连接断开了".to_string() } else { why } }));
                 }
                 Err(error) => {
                     failed(&mut span, &error);
                     span.end();
+                    previous = Some((format!("open failed: {}", error.message), 0.0));
                     self.set_stale(&station, true);
                     let state = if error.status.is_some() { "error" } else { "offline" };
                     self.set_link(&station, json!({ "state": state, "message": error.message }));
