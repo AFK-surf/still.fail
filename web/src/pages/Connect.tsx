@@ -12,7 +12,7 @@ import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, Pill, Section, Segmented, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, Pill, Section, Segmented, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
 
 export function ConnectPage() {
   const { id } = useParams();
@@ -60,7 +60,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
 
   return (
     <div className="page page-narrow">
-      <MobileBack to={`${station.settings}/connects`} label="连接" />
+      <BackLink to={`${station.settings}/connects`} label="连接" />
       <header className="identity">
         <ConnectKindIcon kind={connect.kind} size={22} tile />
         <div className="identity-text">

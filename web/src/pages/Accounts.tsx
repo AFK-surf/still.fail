@@ -6,7 +6,7 @@ import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Ov
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time } from "../ui.tsx";
 
 
 export function AccountsPage() {
@@ -163,7 +163,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
   const signingIn = profile.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(profile.login.state);
   return (
     <div className="page page-narrow">
-      <MobileBack to={link("/settings/accounts")} label="Profile" />
+      <BackLink to={link("/settings/accounts")} label="Profile" />
       {/* Who the account is and whether it works now: its provider, name, runtimes, and its last check. */}
       <header className="identity">
         <span className="mark runtime-mark" style={{ width: 48, height: 48 }}><ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={26} /></span>

@@ -7,7 +7,7 @@ import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
 } from "radix-ui";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { forwardRef, useEffect, useId, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type ReactNode } from "react";
 
 import { absoluteTime, BADGE_LABEL, relativeTime, type Badge } from "./format.ts";
@@ -268,6 +268,22 @@ export function CopyCommand({ text }: { text: string }) {
 /** A back link that only phones show, where an opened page hides the sidebar. */
 export function MobileBack({ to, label }: { to: string; label: string }) {
   return <Link className="mobile-back" to={to}><ChevronLeft {...ICON} />{label}</Link>;
+}
+
+/**
+ * A detail page's way back, on every screen: to the page it was opened from (a step back in history), or when it was
+ * opened directly, to `to`.
+ */
+export function BackLink({ to, label }: { to: string; label: string }) {
+  const navigate = useNavigate();
+  return (
+    // In a row of its own, which takes the page's column (the link alone would not line up with it).
+    <div className="page-back-row">
+      <Link className="page-back" to={to} onClick={(e) => {
+        if (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0) { e.preventDefault(); navigate(-1); }
+      }}><ChevronLeft {...ICON} />{label}</Link>
+    </div>
+  );
 }
 
 export function Empty({ children }: { children: ReactNode }) {

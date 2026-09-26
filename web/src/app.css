@@ -416,6 +416,10 @@
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
 .mobile-back { display: none; align-items: center; gap: 2px; color: var(--muted); font-size: var(--text-sm); }
+/* A detail page's way back, on every screen, above its header. */
+.page-back-row { margin-bottom: 14px; }
+.page-back { display: inline-flex; align-items: center; gap: 2px; margin-left: -4px; color: var(--muted); font-size: var(--text-sm); text-decoration: none; }
+.page-back:hover { color: var(--text); }
 
 /* ── narrow screens ────────────────────────────────────────────────── */
 
