@@ -103,7 +103,7 @@ for grants.
 | `link` | `station` | the station's events stream: `connecting` / `online` / `offline` / `error` + message |
 | `overview` | `station` | the admin API's `/overview` |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
-| `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, last message, the viewer's `read` and `unread`), latest message first |
+| `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, last message, the viewer's `read` and `unread`), latest message first |
 | `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns }` (no messages, no transcript) |
 | `thread` | `station`, `thread` (id) | `{ rev, messages, more }`: the thread's latest page of `MessageView`s by `seq`, older pages in front as `chat.older` loads them; `more`: older ones exist |
 | `live` | `station`, `key` | the session as it runs (below) |
@@ -175,9 +175,14 @@ online — connected to ember cloud right now, as the `workspace` topic says —
 and follows the workspace's station list as it changes. It has no value until
 the `workspace` topic has one; a failed `workspace` is the view's error, while
 a failing station only shows in that station's state. `chat` watches the
-session, the station's `overview` and `link`, and its chat's `thread`; it has
-no value until the session is read (and, when it has a chat on ember's page,
-that thread's latest page), and their errors are its error.
+station's `threads` and `sessions`, its thread's `thread` (messages),
+`overview` and `link` — all asked for at once when it starts, so a chat opens
+in one round of requests — and, once `threads` names them, the `session` of
+each of its agents. It has a value as soon as its thread is in `threads` and
+its latest page of messages is read; its agents fill in after (an agent whose
+`session` is not read yet is its summary from `sessions`, without turns or
+threads; one that fails is left out). A failed `threads` or `thread` is its
+error, and so is its thread missing from `threads` (404).
 
 While a `chats` view is live, a clock waits for the viewer's next local
 midnight and recomputes it then (`daysAgo` changes); that is the only timer of
@@ -188,10 +193,10 @@ itself (one station, addressed `"local"`).
 
 | View | Params | Value |
 | --- | --- | --- |
-| `chats` | `scope`, `mine` | the sidebar: `{ me, stations, loading, days }` |
+| `chats` | `scope`, `mine` | the sidebar: `{ me, stations, loading, days }`; a row is a chat (a thread) |
 | `stations` | `scope` | every station of the scope, each with its link, overview, host and usable models |
 | `connects` | `scope`, `mine` | every connect of every online station: `{ me, items: [{ station, stationName, connect }], loading }`; with `mine`, those whose `createdBy.id` is me |
-| `chat` | `station`, `key` | one chat: `{ me, session, threads, turns, thread, messages, more, outbox, connect, profile, link }` |
+| `chat` | `station`, `thread` (id) | one chat: `{ me, thread, title, people, agents, messages, more, outbox, link }` |
 
 `live` (above) stays its own topic: its steps change many times a second,
 while `chat` changes with messages.
@@ -204,17 +209,36 @@ while `chat` changes with messages.
   //   state: "online" | "connecting" | "offline" (not connected to ember cloud) | "error" (message says why)
   //   error: its sessions could not be read, or its link failed; connecting: sessions not read yet, or the link
   //   is reconnecting (sessions already read stay listed). The local station is named "".
-  "loading": false,                                // an online station has not answered yet
+  "loading": false,                                // an online station has not answered its sessions or threads yet
   "days": [{ "daysAgo": 0, "at": 1790000000000, "items": [{
     "station": "ws/st", "stationName": "studio",
-    "session": { … },                              // the station's SessionSummary
-    "connect": { … } | null,                       // the connect it belongs to, from that station's overview
-    "unread": 2                                    // the viewer's unread messages, summed over the threads the session takes part in (0 until `threads` is read)
+    "thread": { "id": 7, "surface": "slack:T1", "channel": "C1", "channelName": "ops", "threadTs": "1790000000.000100",
+                "title": null, "createdAt": 1790000000000, "creator": { … } | null },   // from the ThreadView
+    "title": "部署挂了",                              // see below
+    "agents": [{ "key": "…", "runtime": "claude", "model": "opus", "effort": null,
+                 "process": "cold", "pending": 0, "lastTurn": { … } | null }],   // its shown sessions, as SessionSummary has them
+    "people": [ … ],                               // Creator: everyone who wrote in it, earliest first
+    "last": { "seq": 42, "authorKind": "agent", "author": "…", "authorName": "…", "text": "…", "createdAt": 1790000000000, "deletedAt": null } | null,
+    //   the last message, its text cut to 200 characters
+    "unread": true,                                // something after the viewer's read position that is not their own
+    "lastActiveAt": 1790000000000,                 // the last message's time, else the thread's
+    "connect": { … } | null                        // a Slack thread's connect (its first session's that is not "ember"), from the overview
   }] }]
-  // days: most recent first, grouped by the viewer's local calendar day; items by lastActiveAt, newest first;
-  // with mine = true only sessions the viewer takes part in: the creator or a participant matches me (id, or email case-insensitively).
+  // days: most recent first, grouped by the viewer's local calendar day; items by lastActiveAt, newest first.
+  // Every thread of the station (Slack threads and chats on ember's page) with at least one shown session: one whose
+  // sessions are all archived is not listed, and a session in no thread is no chat. POST /sessions makes a session
+  // and its thread together, so a new chat is listed at once.
+  // with mine = true only chats the viewer takes part in: they started the thread or wrote in it (the creator or one of
+  // its people matches me: id, or email case-insensitively).
 }
+```
 
+A chat's `title` is the thread's title; else the first line of the first thing
+a person said in it (`firstText`, Slack mentions left out, spaces collapsed);
+else its Slack channel (`#name`), `私信` for a direct message, or
+`（还没有消息）`.
+
+```jsonc
 // stations
 [{
   "station": "ws/st", "id": "st", "name": "studio",
@@ -228,20 +252,31 @@ while `chat` changes with messages.
 // chat
 {
   "me": { … },                   // as in chats
-  "session": { … },              // SessionSummary
-  "threads": [ … ],              // ThreadView: every thread the session takes part in (Slack threads, chats on ember's page)
-  "turns": [ … ],                // TurnRecord, oldest first
-  "thread": { … } | null,        // its chat on ember's page (the first thread with surface "ember"); null until a message makes one
-  "messages": [ … ],             // that thread's MessageViews loaded so far, by seq (deleted ones included, with deletedAt)
+  "thread": { … },               // the ThreadView (with the viewer's `read` position and `unread`, `people`, `last`)
+  "title": "…",                  // as in chats
+  "people": [ … ],               // the thread's people
+  "agents": [{                   // its sessions, in the order they joined
+    "session": { … },            // SessionSummary
+    "connect": { … } | null,     // the connect that started the session, from the overview
+    "profile": { … } | null,     // the profile it runs on, from the overview
+    "turns": [ … ],              // TurnRecord, oldest first ([] until its session is read)
+    "threads": [ … ]             // ThreadView: every thread it takes part in ([] until read), to name the places in its history
+  }],
+  "messages": [ … ],             // the thread's MessageViews loaded so far, by seq (deleted ones included, with deletedAt)
   "more": true,                  // older messages exist: `chat.older` loads the page before them
   "outbox": [{ "id": "out-1", "text": "…", "attachments": [], "quotes": [], "createdAt": 1790000000000, "state": "sending", "error": null, "seq": 42 }],
   //   messages sent from this device that `messages` does not show yet; `seq` once the station has it. An entry leaves
   //   in the same emission that brings a message with that seq (or a later one) into `messages`.
-  "connect": { … } | null,
-  "profile": { … } | null,       // the profile the session runs on, from the overview
   "link": { "state": "online", "message": null }
 }
 ```
+
+A chat is any thread: a Slack thread shows all its messages too (the station
+records them), but it is written in Slack — the station takes messages only
+into chats on ember's page (`surface: "ember"`), so a client shows no composer
+for a Slack chat. Where the viewer had read up to when a chat opened is
+`thread.read` at that moment; a client keeps it for the visit (the web draws
+its "以下是新消息" line from it) while reading moves the position on.
 
 Grouping by day needs the viewer's time zone: `Host::utc_offset_min(at_ms)`
 gives it (web: `-new Date(at).getTimezoneOffset()`).
@@ -255,11 +290,11 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `auth.signOut` | `account` | — |
 | `cloud.request` | `account`, `method`, `path`, `body?` | the JSON answer (the core adds the token and refreshes it) |
 | `station.request` | `station`, `method`, `path`, `body?` | the JSON answer; the core then refreshes the topics this write can change |
-| `chat.send` | `station`, `key`, `text`, `attachments?`, `quotes?` | `{ seq }`, once the station has it and the chat's `thread` topic (when read) holds it. Posts into the session's chat on ember's page, opening one first (`POST /threads {session}`) when it has none. Meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
-| `chat.retry` / `chat.discard` | `station`, `key`, `id` | sends a failed outbox message again / drops it |
-| `chat.older` | `station`, `key` | `{ more }`: loads the page (50) before the chat's oldest loaded message into its `thread` topic, so `messages` grows in front |
-| `chat.read` | `station`, `key`, `seq` | — ; records that the viewer has read the chat up to `seq` (`PUT /threads/:id/read`); nothing is sent when it is read that far already. `unread` in `chats` follows |
-| `station.upload` | `station`, `key`, `name`, `bytes` | the attachment |
+| `chat.send` | `station`, `thread`, `text`, `attachments?`, `quotes?` | `{ seq }`, once the station has it and the chat's `thread` topic (when read) holds it. Only chats on ember's page take messages (the station refuses the rest). Meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
+| `chat.retry` / `chat.discard` | `station`, `thread`, `id` | sends a failed outbox message again / drops it |
+| `chat.older` | `station`, `thread` | `{ more }`: loads the page (50) before the chat's oldest loaded message into its `thread` topic, so `messages` grows in front |
+| `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to `seq` (`PUT /threads/:id/read`); nothing is sent when it is read that far already. `unread` in `chats` follows |
+| `station.upload` | `station`, `key`, `name`, `bytes` | the attachment (into that session's workspace; a message may carry uploads of any session in its chat) |
 | `station.file` | `station`, `key`, `name` | `{ type, bytes }` |
 | `migrate` | `accounts`, `device` | — (web only: what localStorage held before the core existed) |
 

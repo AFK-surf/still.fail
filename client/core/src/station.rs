@@ -360,11 +360,6 @@ fn seq_of(message: &Value) -> Option<u64> {
     message.get("seq").and_then(Value::as_u64)
 }
 
-/// The session's chat on ember's page among its threads: the first one made.
-pub fn ember_thread(threads: &Value) -> Option<&Value> {
-    threads.as_array()?.iter().filter(|t| t.get("surface").and_then(Value::as_str) == Some("ember")).min_by_key(|t| t.get("id").and_then(Value::as_u64))
-}
-
 /// Threads as the station lists them: the latest message first, then the newest thread.
 fn sort_threads(threads: &mut [Value]) {
     let key = |t: &Value| {
@@ -947,29 +942,7 @@ impl Stations {
         .await;
     }
 
-    // ── chats on ember's page ──
-
-    /// The session's chat on ember's page, from its topic when that has been read, else asked for.
-    pub async fn ember_thread(&self, station: &StationAddr, key: &str) -> Result<Option<Value>> {
-        let threads = match self.sink.get(&Topic::Session { station: station.to_string(), key: key.into() }) {
-            Some(detail) => detail.get("threads").cloned().unwrap_or(Value::Null),
-            None => self.json(station, "GET", &format!("/threads?session={}", encode(key)), None).await?,
-        };
-        Ok(ember_thread(&threads).cloned())
-    }
-
-    /// The id of the session's chat on ember's page, opening one when it has none.
-    pub async fn chat_thread(&self, station: &StationAddr, key: &str) -> Result<u64> {
-        let thread = match self.ember_thread(station, key).await? {
-            Some(thread) => thread,
-            None => {
-                let made = self.json(station, "POST", "/threads", Some(json!({ "session": key }))).await?;
-                self.put_thread(&station.to_string(), &made);
-                made
-            }
-        };
-        thread.get("id").and_then(Value::as_u64).ok_or_else(|| CoreError::new("bad_response", "station 的回复里没有对话"))
-    }
+    // ── chats ──
 
     /// A person's message into a thread. Answers its seq once the thread's topic, where live, holds it.
     pub async fn post(&self, station: &StationAddr, thread: u64, message: Value) -> Result<u64> {
@@ -1688,13 +1661,6 @@ mod tests {
             host.settle().await;
             assert_eq!(stations.post(&remote(), 7, json!({"text": "你好"})).await.unwrap(), 13);
             assert_eq!(texts(&sink, 7), vec!["d", "你好"]);
-            // A session without a chat on ember's page gets one.
-            wire.answer("GET /admin/api/threads?session=k", 200, json!([{"id": 3, "surface": "slack:T1"}]));
-            wire.answer("POST /admin/api/threads", 200, thread_view(8, &["k"], 0, 0, 0));
-            assert_eq!(stations.chat_thread(&remote(), "k").await.unwrap(), 8);
-            wire.answer("GET /admin/api/threads?session=k", 200, json!([{"id": 9, "surface": "ember"}, {"id": 8, "surface": "ember"}]));
-            assert_eq!(stations.chat_thread(&remote(), "k").await.unwrap(), 8, "the first one made");
-            assert_eq!(wire.count("POST", "/admin/api/threads"), 1);
             // Reading: sent once, not again for less.
             stations.start(&threads());
             wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 13, 0, 1)]));

@@ -185,6 +185,10 @@ export interface ThreadView {
   read: number;
   /** Messages after it, not deleted and not the viewer's own. */
   unread: number;
+  /** Everyone who wrote in it (Slack or ember's page), once each, earliest first. */
+  people: Creator[];
+  /** The first thing a person said in it (up to 300 characters), for a title. */
+  firstText: string | null;
 }
 
 /** GET /threads/:id/messages. */

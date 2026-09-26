@@ -18,15 +18,16 @@ use std::rc::{Rc, Weak};
 use futures::FutureExt;
 use serde_json::{Value, json};
 
-use crate::error::Result;
+use crate::error::{CoreError, Result};
 use crate::host::Host;
 use crate::protocol::Topic;
-use crate::station::ember_thread;
 use crate::store::{Store, Watch};
 
 /// The runtimes a chat can run on, in the order they are offered.
 const RUNTIMES: [&str; 2] = ["claude", "codex"];
 const DAY_MS: f64 = 86_400_000.0;
+/// How much of a chat's last message the sidebar gets.
+const LAST_CHARS: usize = 200;
 
 /// The email of the signed-in account that reaches a workspace.
 pub type EmailOf = Rc<dyn Fn(&str) -> Option<String>>;
@@ -38,8 +39,8 @@ pub struct Views {
     me: Weak<Views>,
     /// Per live view, the topics it watches.
     views: RefCell<HashMap<Topic, HashMap<Topic, Watch>>>,
-    /// Messages sent from here that the chat does not show yet, per (station, session key), oldest first.
-    outbox: RefCell<HashMap<(String, String), Vec<Value>>>,
+    /// Messages sent from here that the chat does not show yet, per (station, thread), oldest first.
+    outbox: RefCell<HashMap<(String, u64), Vec<Value>>>,
     sent: Cell<u64>,
     /// The midnight clock is running.
     clock: Cell<bool>,
@@ -70,47 +71,47 @@ impl Views {
     }
 
     /// A message on its way to a chat: shown in it at once, as `sending`. Answers its id.
-    pub fn outbox_add(&self, station: &str, key: &str, message: Value) -> String {
+    pub fn outbox_add(&self, station: &str, thread: u64, message: Value) -> String {
         self.sent.set(self.sent.get() + 1);
         let id = format!("out-{}", self.sent.get());
         let mut entry = message;
         entry["id"] = json!(id);
         entry["createdAt"] = json!(self.host.now_ms());
         entry["state"] = json!("sending");
-        self.outbox.borrow_mut().entry((station.to_string(), key.to_string())).or_default().push(entry);
-        self.outbox_changed(station, key);
+        self.outbox.borrow_mut().entry((station.to_string(), thread)).or_default().push(entry);
+        self.outbox_changed(station, thread);
         id
     }
 
-    pub fn outbox_get(&self, station: &str, key: &str, id: &str) -> Option<Value> {
-        self.outbox.borrow().get(&(station.to_string(), key.to_string()))?.iter().find(|m| m["id"] == id).cloned()
+    pub fn outbox_get(&self, station: &str, thread: u64, id: &str) -> Option<Value> {
+        self.outbox.borrow().get(&(station.to_string(), thread))?.iter().find(|m| m["id"] == id).cloned()
     }
 
     /// Marks an outgoing message `sending` again, or `failed` with the error's message.
-    pub fn outbox_state(&self, station: &str, key: &str, id: &str, failed: Option<&str>) {
-        if let Some(entry) = self.outbox.borrow_mut().get_mut(&(station.to_string(), key.to_string())).and_then(|list| list.iter_mut().find(|m| m["id"] == id)) {
+    pub fn outbox_state(&self, station: &str, thread: u64, id: &str, failed: Option<&str>) {
+        if let Some(entry) = self.outbox.borrow_mut().get_mut(&(station.to_string(), thread)).and_then(|list| list.iter_mut().find(|m| m["id"] == id)) {
             entry["state"] = json!(if failed.is_some() { "failed" } else { "sending" });
             entry["error"] = json!(failed);
         }
-        self.outbox_changed(station, key);
+        self.outbox_changed(station, thread);
     }
 
     /// The station has the message as `seq`: the entry stays until the chat's messages reach it (and leaves in
     /// that emission). Nobody looking at the chat: it goes now.
-    pub fn outbox_sent(&self, station: &str, key: &str, id: &str, seq: u64) {
-        if !self.views.borrow().contains_key(&Topic::Chat { station: station.to_string(), key: key.to_string() }) {
-            return self.outbox_remove(station, key, id);
+    pub fn outbox_sent(&self, station: &str, thread: u64, id: &str, seq: u64) {
+        if !self.views.borrow().contains_key(&Topic::Chat { station: station.to_string(), thread }) {
+            return self.outbox_remove(station, thread, id);
         }
-        if let Some(entry) = self.outbox.borrow_mut().get_mut(&(station.to_string(), key.to_string())).and_then(|list| list.iter_mut().find(|m| m["id"] == id)) {
+        if let Some(entry) = self.outbox.borrow_mut().get_mut(&(station.to_string(), thread)).and_then(|list| list.iter_mut().find(|m| m["id"] == id)) {
             entry["seq"] = json!(seq);
         }
-        self.outbox_changed(station, key);
+        self.outbox_changed(station, thread);
     }
 
     /// Given up.
-    pub fn outbox_remove(&self, station: &str, key: &str, id: &str) {
+    pub fn outbox_remove(&self, station: &str, thread: u64, id: &str) {
         let mut outbox = self.outbox.borrow_mut();
-        let at = (station.to_string(), key.to_string());
+        let at = (station.to_string(), thread);
         if let Some(list) = outbox.get_mut(&at) {
             list.retain(|m| m["id"] != id);
             if list.is_empty() {
@@ -118,11 +119,11 @@ impl Views {
             }
         }
         drop(outbox);
-        self.outbox_changed(station, key);
+        self.outbox_changed(station, thread);
     }
 
-    fn outbox_changed(&self, station: &str, key: &str) {
-        self.store.invalidate(&Topic::Chat { station: station.to_string(), key: key.to_string() });
+    fn outbox_changed(&self, station: &str, thread: u64) {
+        self.store.invalidate(&Topic::Chat { station: station.to_string(), thread });
     }
 
     pub fn start(&self, view: &Topic) {
@@ -176,7 +177,7 @@ impl Views {
             Topic::Chats { scope, mine } => self.chats(scope, *mine),
             Topic::Stations { scope } => self.stations_view(scope),
             Topic::Connects { scope, mine } => self.connects(scope, *mine),
-            Topic::Chat { station, key } => self.chat(station, key),
+            Topic::Chat { station, thread } => self.chat(station, *thread),
             _ => None,
         }
     }
@@ -212,13 +213,14 @@ impl Views {
             }),
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
             Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station }]),
-            Topic::Chat { station, key } => {
-                let session = Topic::Session { station: station.clone(), key: key.clone() };
-                // Its messages, once the session says which thread is its chat.
-                if let Some(id) = self.chat_thread(&session) {
-                    topics.insert(Topic::Thread { station: station.clone(), thread: id });
+            Topic::Chat { station, thread } => {
+                // Its agents, once the station's threads say who they are.
+                for key in self.thread_of(station, *thread).as_ref().map(members).unwrap_or_default() {
+                    topics.insert(Topic::Session { station: station.clone(), key });
                 }
-                topics.insert(session);
+                topics.insert(Topic::Threads { station: station.clone() });
+                topics.insert(Topic::Sessions { station: station.clone() });
+                topics.insert(Topic::Thread { station: station.clone(), thread: *thread });
                 topics.insert(Topic::Overview { station: station.clone() });
                 topics.insert(Topic::Link { station: station.clone() });
                 return topics;
@@ -271,9 +273,9 @@ impl Views {
         json!({ "id": email, "email": email })
     }
 
-    /// The id of the session's chat on ember's page, as its topic lists its threads.
-    fn chat_thread(&self, session: &Topic) -> Option<u64> {
-        ember_thread(self.ok(session.clone())?.get("threads")?)?.get("id")?.as_u64()
+    /// A thread as the station's `threads` topic has it.
+    fn thread_of(&self, station: &str, id: u64) -> Option<Value> {
+        self.ok(Topic::Threads { station: station.to_string() })?.as_array()?.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned()
     }
 
     fn ok(&self, topic: Topic) -> Option<Value> {
@@ -308,32 +310,28 @@ impl Views {
                 let link = self.link(&s.address, true);
                 let link_state = link["state"].as_str().unwrap_or("connecting");
                 let link_message = link["message"].clone();
-                match self.store.value(&Topic::Sessions { station: s.address.clone() }) {
-                    Some(Err(error)) => ("error", json!(error.message)),
-                    None => {
-                        loading = true;
-                        if link_state == "error" { ("error", link_message) } else { ("connecting", Value::Null) }
-                    }
-                    Some(Ok(sessions)) => {
+                let sessions = self.store.value(&Topic::Sessions { station: s.address.clone() });
+                let threads = self.store.value(&Topic::Threads { station: s.address.clone() });
+                match (sessions, threads) {
+                    (Some(Err(error)), _) | (_, Some(Err(error))) => ("error", json!(error.message)),
+                    (Some(Ok(sessions)), Some(Ok(threads))) => {
                         let connects = self.ok(Topic::Overview { station: s.address.clone() }).and_then(|o| o.get("connects").cloned());
-                        let unread = unread_by_session(self.ok(Topic::Threads { station: s.address.clone() }).as_ref());
-                        for session in sessions.as_array().into_iter().flatten() {
-                            // "Mine" for chats is where the viewer takes part: started it, or is among its participants.
-                            let takes_part = is_mine(&me, session.get("creator"))
-                                || session.get("participants").and_then(Value::as_array).is_some_and(|people| people.iter().any(|p| is_mine(&me, Some(p))));
-                            if mine && !takes_part {
-                                continue;
+                        let shown: HashMap<&str, &Value> = sessions.as_array().into_iter().flatten().filter_map(|summary| Some((summary.get("key")?.as_str()?, summary))).collect();
+                        for thread in threads.as_array().into_iter().flatten() {
+                            if let Some(row) = chat_row(&me, mine, s, thread, &shown, connects.as_ref()) {
+                                rows.push(row);
                             }
-                            let connect = find(connects.as_ref(), session.get("connect"));
-                            let count = session.get("key").and_then(Value::as_str).and_then(|k| unread.get(k)).copied().unwrap_or(0);
-                            rows.push(json!({ "station": s.address, "stationName": s.name, "session": session, "connect": connect, "unread": count }));
                         }
-                        // Sessions already read stay in view while the link comes back.
+                        // Chats already read stay in view while the link comes back.
                         match link_state {
                             "error" => ("error", link_message),
                             "offline" => ("connecting", link_message),
                             _ => ("online", Value::Null),
                         }
+                    }
+                    _ => {
+                        loading = true;
+                        if link_state == "error" { ("error", link_message) } else { ("connecting", Value::Null) }
                     }
                 }
             };
@@ -345,7 +343,7 @@ impl Views {
 
     /// Rows newest first, grouped by the viewer's local calendar day.
     fn days(&self, mut rows: Vec<Value>) -> Vec<Value> {
-        let at = |row: &Value| row["session"]["lastActiveAt"].as_f64().unwrap_or(0.0);
+        let at = |row: &Value| row["lastActiveAt"].as_f64().unwrap_or(0.0);
         rows.sort_by(|a, b| at(b).total_cmp(&at(a)));
         let day = |ms: f64| ((ms + self.host.utc_offset_min(ms) as f64 * 60_000.0) / DAY_MS).floor() as i64;
         let today = day(self.host.now_ms());
@@ -407,25 +405,47 @@ impl Views {
         Some(Ok(json!({ "me": me, "items": items, "loading": loading })))
     }
 
-    fn chat(&self, station: &str, key: &str) -> Option<Result<Value>> {
-        let session = Topic::Session { station: station.to_string(), key: key.to_string() };
-        let detail = match self.store.value(&session)? {
-            Ok(detail) => detail,
+    fn chat(&self, station: &str, id: u64) -> Option<Result<Value>> {
+        let threads = match self.store.value(&Topic::Threads { station: station.to_string() })? {
+            Ok(threads) => threads,
             Err(error) => return Some(Err(error)),
         };
-        let threads = detail.get("threads").cloned().unwrap_or_else(|| json!([]));
-        let thread = ember_thread(&threads).cloned();
-        // With a chat, nothing shows until its latest messages are read.
-        let (messages, more) = match thread.as_ref().and_then(|t| t.get("id")?.as_u64()) {
-            Some(id) => match self.store.value(&Topic::Thread { station: station.to_string(), thread: id })? {
-                Ok(page) => (page.get("messages").cloned().unwrap_or_else(|| json!([])), page.get("more").cloned().unwrap_or(json!(false))),
-                Err(error) => return Some(Err(error)),
-            },
-            None => (json!([]), json!(false)),
+        let Some(thread) = threads.as_array().into_iter().flatten().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned() else {
+            return Some(Err(CoreError::new("http_404", "没有这个对话").with_status(404)));
         };
+        // It shows as soon as its latest messages are read; its agents fill in as they are.
+        let page = match self.store.value(&Topic::Thread { station: station.to_string(), thread: id })? {
+            Ok(page) => page,
+            Err(error) => return Some(Err(error)),
+        };
+        let overview = self.ok(Topic::Overview { station: station.to_string() });
+        let of = |list: &str, id: Option<&Value>| find(overview.as_ref().and_then(|o| o.get(list)), id);
+        let summaries = self.ok(Topic::Sessions { station: station.to_string() });
+        let mut agents = Vec::new();
+        for key in members(&thread) {
+            // Until its detail is read, an agent is its summary from the station's list (no turns, no threads yet);
+            // one that cannot be read at all (removed meanwhile) is left out.
+            let detail = match self.store.value(&Topic::Session { station: station.to_string(), key: key.clone() }) {
+                Some(Ok(detail)) => detail,
+                Some(Err(_)) => continue,
+                None => match summaries.as_ref().and_then(Value::as_array).and_then(|list| list.iter().find(|s| s.get("key").and_then(Value::as_str) == Some(&key))) {
+                    Some(summary) => json!({ "session": summary }),
+                    None => continue,
+                },
+            };
+            let session = detail.get("session").cloned().unwrap_or(Value::Null);
+            agents.push(json!({
+                "session": session,
+                "connect": of("connects", session.get("connect")),
+                "profile": of("profiles", session.get("profile")),
+                "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
+                "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
+            }));
+        }
+        let messages = page.get("messages").cloned().unwrap_or_else(|| json!([]));
         // A sent message leaves the outbox as its own copy (or anything later) arrives.
         let newest = messages.as_array().and_then(|m| m.last()).and_then(|m| m.get("seq")?.as_u64());
-        let at = (station.to_string(), key.to_string());
+        let at = (station.to_string(), id);
         let outbox = {
             let mut all = self.outbox.borrow_mut();
             let list = all.entry(at.clone()).or_default();
@@ -436,39 +456,112 @@ impl Views {
             }
             shown
         };
-        let overview = self.ok(Topic::Overview { station: station.to_string() });
-        let of = |list: &str, id: &str| find(overview.as_ref().and_then(|o| o.get(list)), detail["session"].get(id));
         // The scope the station belongs to: "local", or its workspace.
         let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
         Some(Ok(json!({
             "me": self.me(scope),
-            "session": detail.get("session").cloned().unwrap_or(Value::Null),
-            "threads": threads,
-            "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
-            "thread": thread,
+            "title": chat_title(&thread),
+            "people": thread.get("people").cloned().unwrap_or_else(|| json!([])),
+            "agents": agents,
             "messages": messages,
-            "more": more,
+            "more": page.get("more").cloned().unwrap_or(json!(false)),
             "outbox": outbox,
-            "connect": of("connects", "connect"),
-            "profile": of("profiles", "profile"),
             "link": self.link(station, true),
+            "thread": thread,
         })))
     }
 }
 
-/// Unread messages per session key: the sum over its ember threads, the ones its chat page shows and reads.
-/// A Slack thread is read in Slack; counting it here would stay unread for good.
-fn unread_by_session(threads: Option<&Value>) -> HashMap<String, u64> {
-    let mut counts = HashMap::new();
-    for thread in threads.and_then(Value::as_array).into_iter().flatten().filter(|t| t.get("surface").and_then(Value::as_str) == Some("ember")) {
-        let unread = thread.get("unread").and_then(Value::as_u64).unwrap_or(0);
-        for member in thread.get("sessions").and_then(Value::as_array).into_iter().flatten() {
-            if let Some(key) = member.get("session").and_then(Value::as_str) {
-                *counts.entry(key.to_string()).or_default() += unread;
+/// The session keys taking part in a thread.
+fn members(thread: &Value) -> Vec<String> {
+    thread.get("sessions").and_then(Value::as_array).into_iter().flatten().filter_map(|m| Some(m.get("session")?.as_str()?.to_string())).collect()
+}
+
+/// A thread as a row of the sidebar; `None` when none of its agents is shown (all archived), or with `mine` when the
+/// viewer takes no part in it (started it or wrote in it).
+fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, shown: &HashMap<&str, &Value>, connects: Option<&Value>) -> Option<Value> {
+    let memberships: Vec<&Value> = thread.get("sessions").and_then(Value::as_array).into_iter().flatten().collect();
+    let agents: Vec<Value> = memberships
+        .iter()
+        .filter_map(|m| shown.get(m.get("session")?.as_str()?))
+        .map(|s| {
+            let field = |name: &str| s.get(name).cloned().unwrap_or(Value::Null);
+            json!({
+                "key": field("key"), "runtime": field("runtime"), "model": field("model"), "effort": field("effort"),
+                "process": field("process"), "pending": field("pending"), "lastTurn": field("lastTurn"),
+            })
+        })
+        .collect();
+    if agents.is_empty() {
+        return None;
+    }
+    let people = thread.get("people").cloned().unwrap_or_else(|| json!([]));
+    let takes_part = is_mine(me, thread.get("creator")) || people.as_array().is_some_and(|people| people.iter().any(|p| is_mine(me, Some(p))));
+    if mine && !takes_part {
+        return None;
+    }
+    let last = thread.get("last").filter(|l| l.is_object());
+    let created = thread.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0);
+    let last_active = last.and_then(|l| l.get("createdAt")?.as_f64()).map_or(created, |at| at.max(created));
+    // Where it came from: the connect of a Slack thread; ember's own chats have none.
+    let connect = memberships.iter().filter_map(|m| m.get("connect")).find(|c| c.as_str() != Some("ember")).map_or(Value::Null, |c| find(connects, Some(c)));
+    let pick = |from: &Value, names: &[&str]| Value::Object(names.iter().map(|n| (n.to_string(), from.get(*n).cloned().unwrap_or(Value::Null))).collect());
+    let last = last.map_or(Value::Null, |l| {
+        let mut short = pick(l, &["seq", "authorKind", "author", "authorName", "createdAt", "deletedAt"]);
+        short["text"] = json!(l.get("text").and_then(Value::as_str).unwrap_or("").chars().take(LAST_CHARS).collect::<String>());
+        short
+    });
+    Some(json!({
+        "station": station.address,
+        "stationName": station.name,
+        "thread": pick(thread, &["id", "surface", "channel", "channelName", "threadTs", "title", "createdAt", "creator"]),
+        "title": chat_title(thread),
+        "agents": agents,
+        "people": people,
+        "last": last,
+        "unread": thread.get("unread").and_then(Value::as_u64).unwrap_or(0) > 0,
+        "lastActiveAt": last_active,
+        "connect": connect,
+    }))
+}
+
+/// What a chat is called: its title, else the first line a person wrote in it (Slack mentions left out), else its
+/// Slack channel.
+pub fn chat_title(thread: &Value) -> String {
+    let text = |name: &str| thread.get(name).and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty());
+    if let Some(title) = text("title") {
+        return title.to_string();
+    }
+    let first = text("firstText").map(without_mentions).and_then(|t| t.lines().map(|l| l.split_whitespace().collect::<Vec<_>>().join(" ")).find(|l| !l.is_empty()));
+    if let Some(first) = first {
+        return first;
+    }
+    if let Some(channel) = text("channelName") {
+        return format!("#{channel}");
+    }
+    if thread.get("surface").and_then(Value::as_str) != Some("ember") && text("channel").is_some_and(|c| c.starts_with('D')) {
+        return "私信".to_string();
+    }
+    "（还没有消息）".to_string()
+}
+
+/// Text without Slack's `<@U123>` mentions.
+fn without_mentions(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("<@") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + 2..];
+        match after.find('>') {
+            Some(end) if end > 0 && after[..end].chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()) => rest = &after[end + 1..],
+            _ => {
+                out.push_str("<@");
+                rest = after;
             }
         }
     }
-    counts
+    out.push_str(rest);
+    out
 }
 
 fn invalidate(store: &Weak<Store>, view: &Topic) {
@@ -644,8 +737,26 @@ mod tests {
         ]})
     }
 
-    fn session(key: &str, at: f64, creator: Value) -> Value {
-        json!({"key": key, "connect": "c1", "profile": "p1", "lastActiveAt": at, "creator": creator})
+    fn session(key: &str) -> Value {
+        json!({"key": key, "connect": "c1", "profile": "p1", "runtime": "claude", "model": "opus", "effort": null, "process": "cold", "pending": 0, "lastTurn": null})
+    }
+
+    fn member(thread: u64, key: &str, connect: &str) -> Value {
+        json!({"thread": thread, "session": key, "connect": connect})
+    }
+
+    /// A chat on ember's page with these agents, last written in at `at`.
+    fn thread(id: u64, keys: &[&str], at: f64) -> Value {
+        json!({
+            "id": id, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": format!("{id}.0"), "title": null,
+            "createdAt": at - 10.0, "creator": null, "sessions": keys.iter().map(|k| member(id, k, "ember")).collect::<Vec<_>>(),
+            "last": {"seq": id * 10, "rev": id * 10, "authorKind": "agent", "author": keys.first().copied().unwrap_or(""), "authorName": null, "text": "好的", "createdAt": at, "deletedAt": null},
+            "rev": id * 10, "read": 0, "unread": 0, "people": [], "firstText": null,
+        })
+    }
+
+    fn ids(v: &Value) -> Vec<u64> {
+        v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i["thread"]["id"].as_u64().unwrap())).collect()
     }
 
     #[test]
@@ -674,26 +785,39 @@ mod tests {
             let now = t.host.now_ms();
             t.set(link("ws/a"), json!({"state": "online"}));
             t.set(overview("ws/a"), json!({"connects": [{"id": "c1", "name": "Slack"}]}));
-            t.set(sessions("ws/a"), json!([session("old", now - 2000.0, Value::Null), {"key": "new", "connect": "gone", "lastActiveAt": now - 1000.0}]));
+            t.set(sessions("ws/a"), json!([session("s1"), session("s2")]));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.as_ref().unwrap()["loading"], true, "its threads are not read yet");
+            let mut slack = thread(2, &["s1"], now - 2000.0);
+            slack["surface"] = json!("slack:T1");
+            slack["channel"] = json!("C1");
+            slack["channelName"] = json!("ops");
+            slack["sessions"] = json!([member(2, "s1", "c1")]);
+            t.set(threads("ws/a"), json!([thread(1, &["s2", "gone"], now - 1000.0), slack]));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             assert_eq!(v["loading"], false);
             assert_eq!(v["stations"][0]["state"], "online");
-            let items = &v["days"][0]["items"];
             assert_eq!(v["days"][0]["at"], json!(now - 1000.0));
-            assert_eq!(items[0]["session"]["key"], "new");
-            assert_eq!(items[0]["connect"], Value::Null);
-            assert_eq!(items[1]["session"]["key"], "old");
+            let items = &v["days"][0]["items"];
+            assert_eq!(ids(&v), vec![1, 2]);
+            assert_eq!(items[0]["connect"], Value::Null, "ember's own chat comes from no connect");
+            assert_eq!(items[0]["agents"], json!([{"key": "s2", "runtime": "claude", "model": "opus", "effort": null, "process": "cold", "pending": 0, "lastTurn": null}]), "only agents still shown");
+            assert_eq!(items[0]["title"], "（还没有消息）");
+            assert_eq!(items[0]["last"], json!({"seq": 10, "authorKind": "agent", "author": "s2", "authorName": null, "createdAt": now - 1000.0, "deletedAt": null, "text": "好的"}));
+            assert_eq!(items[0]["lastActiveAt"], json!(now - 1000.0));
             assert_eq!(items[1]["connect"], json!({"id": "c1", "name": "Slack"}));
-            assert_eq!(items[1]["unread"], 0, "no threads read yet: nothing unread");
+            assert_eq!(items[1]["title"], "#ops");
+            assert_eq!(items[1]["thread"]["surface"], "slack:T1");
+            assert_eq!(items[1]["unread"], false);
             assert_eq!((items[1]["station"].as_str(), items[1]["stationName"].as_str()), (Some("ws/a"), Some("alpha")));
 
             // One station failing shows as that station's state.
-            t.store.set(&sessions("ws/a"), Err(CoreError::new("http_500", "坏了")));
+            t.store.set(&threads("ws/a"), Err(CoreError::new("http_500", "坏了")));
             t.read(&mut ui, 1).await;
             assert_eq!(ui.value.as_ref().unwrap()["stations"][0], json!({"station": "ws/a", "id": "a", "name": "alpha", "state": "error", "message": "坏了"}));
-            // The link dropping, with sessions read: reconnecting.
-            t.set(sessions("ws/a"), json!([]));
+            // The link dropping, with threads read: reconnecting.
+            t.set(threads("ws/a"), json!([]));
             t.set(link("ws/a"), json!({"state": "offline", "message": "连接断开了"}));
             t.read(&mut ui, 1).await;
             assert_eq!(ui.value.as_ref().unwrap()["stations"][0]["state"], "connecting");
@@ -740,21 +864,27 @@ mod tests {
             let today = midnight + (now - midnight) / 2.0;
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
-            t.set(sessions("local"), json!([
-                session("yesterday-late", midnight - 1000.0, Value::Null),
-                session("three-days", midnight - 2.0 * DAY_MS - 1000.0, Value::Null),
-                session("today", today, Value::Null),
-                session("yesterday-early", midnight - DAY_MS + 1000.0, Value::Null),
+            t.set(sessions("local"), json!([session("a")]));
+            // A chat nobody has written in yet is as new as the chat itself.
+            let mut empty = thread(5, &["a"], 0.0);
+            empty["last"] = Value::Null;
+            empty["createdAt"] = json!(midnight - 3.0 * DAY_MS - 1000.0);
+            t.set(threads("local"), json!([
+                thread(1, &["a"], midnight - 1000.0),
+                thread(2, &["a"], midnight - 2.0 * DAY_MS - 1000.0),
+                thread(3, &["a"], today),
+                thread(4, &["a"], midnight - DAY_MS + 1000.0),
+                empty,
             ]));
             t.read(&mut ui, 1).await;
             let v = ui.value.unwrap();
-            let days: Vec<(i64, Vec<&str>)> = v["days"]
+            let days: Vec<(i64, Vec<u64>)> = v["days"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .map(|d| (d["daysAgo"].as_i64().unwrap(), d["items"].as_array().unwrap().iter().map(|i| i["session"]["key"].as_str().unwrap()).collect()))
+                .map(|d| (d["daysAgo"].as_i64().unwrap(), d["items"].as_array().unwrap().iter().map(|i| i["thread"]["id"].as_u64().unwrap()).collect()))
                 .collect();
-            assert_eq!(days, vec![(0, vec!["today"]), (1, vec!["yesterday-late", "yesterday-early"]), (3, vec!["three-days"])]);
+            assert_eq!(days, vec![(0, vec![3]), (1, vec![1, 4]), (3, vec![2]), (4, vec![5])]);
             assert_eq!(v["days"][1]["at"], json!(midnight - 1000.0));
             assert_eq!(v["me"], json!({"id": "local", "email": null}));
             assert_eq!(v["stations"], json!([{"station": "local", "id": "local", "name": "", "state": "online", "message": null}]));
@@ -762,7 +892,7 @@ mod tests {
     }
 
     #[test]
-    fn mine_keeps_the_viewers_sessions() {
+    fn mine_keeps_the_chats_the_viewer_takes_part_in() {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
@@ -770,16 +900,58 @@ mod tests {
             t.set(workspace(), stations(t.now_s(), true, false));
             t.read(&mut ui, 1).await;
             let now = t.host.now_ms();
-            t.set(sessions("ws/a"), json!([
-                session("by-id", now - 1.0, json!({"id": "Me@x.com", "name": "我"})),
-                session("by-email", now - 2.0, json!({"id": "U123", "email": "me@X.com"})),
-                session("other", now - 3.0, json!({"id": "U9", "email": "you@x.com"})),
-                session("slack", now - 4.0, json!({"id": "U8", "email": null})),
-                session("nobody", now - 5.0, Value::Null),
+            t.set(sessions("ws/a"), json!([session("a")]));
+            let with = |id: u64, creator: Value, people: Value| {
+                let mut t = thread(id, &["a"], now - id as f64);
+                t["creator"] = creator;
+                t["people"] = people;
+                t
+            };
+            t.set(threads("ws/a"), json!([
+                with(1, json!({"id": "Me@x.com", "name": "我"}), json!([])),
+                with(2, Value::Null, json!([{"id": "U9", "email": "you@x.com"}, {"id": "U123", "email": "me@X.com"}])),
+                with(3, json!({"id": "U9", "email": "you@x.com"}), json!([{"id": "U9", "email": "you@x.com"}])),
+                with(4, json!({"id": "U8", "email": null}), json!([{"id": "U8", "email": null}])),
+                with(5, Value::Null, json!([])),
             ]));
             t.read(&mut ui, 1).await;
-            let keys: Vec<&str> = ui.value.as_ref().unwrap()["days"][0]["items"].as_array().unwrap().iter().map(|i| i["session"]["key"].as_str().unwrap()).collect();
-            assert_eq!(keys, vec!["by-id", "by-email"]);
+            assert_eq!(ids(ui.value.as_ref().unwrap()), vec![1, 2]);
+        });
+    }
+
+    #[test]
+    fn a_chats_unread_is_a_mark_and_its_title_comes_from_what_was_said() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
+            let now = t.host.now_ms();
+            t.set(sessions("local"), json!([session("a"), session("b")]));
+            let mut named = thread(1, &["a"], now - 1.0);
+            named["title"] = json!(" 排查 ");
+            named["firstText"] = json!("不用这个");
+            named["unread"] = json!(2);
+            let mut said = thread(2, &["a", "b"], now - 2.0);
+            said["firstText"] = json!("\n <@U0BOT>  看看   这个\n第二行");
+            let mut dm = thread(3, &["b"], now - 3.0);
+            dm["surface"] = json!("slack:T1");
+            dm["channel"] = json!("D1");
+            dm["unread"] = json!(7);
+            let archived = thread(4, &["gone"], now - 4.0);
+            t.set(threads("local"), json!([named, said, dm, archived]));
+            t.read(&mut ui, 1).await;
+            let items = ui.value.clone().unwrap()["days"][0]["items"].clone();
+            let rows: Vec<(u64, &str, bool, usize)> = items
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|i| (i["thread"]["id"].as_u64().unwrap(), i["title"].as_str().unwrap(), i["unread"].as_bool().unwrap(), i["agents"].as_array().unwrap().len()))
+                .collect();
+            assert_eq!(rows, vec![(1, "排查", true, 1), (2, "看看 这个", false, 2), (3, "私信", true, 1)], "a chat whose agents are all hidden is not listed");
+            // Read: the mark follows the threads topic.
+            t.store.update(&threads("local"), &mut |list| list[0]["unread"] = json!(0));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.clone().unwrap()["days"][0]["items"][0]["unread"], false);
         });
     }
 
@@ -795,9 +967,10 @@ mod tests {
             for st in ["ws/a", "ws/b"] {
                 t.set(link(st), json!({"state": "online"}));
                 t.set(overview(st), json!({"connects": []}));
-                t.set(sessions(st), json!([session(st, t.host.now_ms(), Value::Null)]));
+                t.set(sessions(st), json!([session(st)]));
+                t.set(threads(st), json!([thread(1, &[st], t.host.now_ms())]));
             }
-            t.store.update(&sessions("ws/a"), &mut |v| v[0]["title"] = json!("改了"));
+            t.store.update(&threads("ws/a"), &mut |v| v[0]["title"] = json!("改了"));
             t.read(&mut ui, 1).await;
             assert_eq!(t.router.computed.get(), computed + 1);
             assert_eq!(ui.messages, messages + 1);
@@ -893,34 +1066,6 @@ mod tests {
         });
     }
 
-    fn member(thread: u64, key: &str) -> Value {
-        json!({"thread": thread, "session": key, "connect": "ember"})
-    }
-
-    #[test]
-    fn chats_counts_unread_per_session() {
-        run(async {
-            let t = setup();
-            let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chats { scope: "local".into(), mine: false });
-            let now = t.host.now_ms();
-            t.set(sessions("local"), json!([session("a", now - 1.0, Value::Null), session("b", now - 2.0, Value::Null)]));
-            t.set(threads("local"), json!([
-                {"id": 1, "surface": "ember", "sessions": [member(1, "a")], "unread": 2},
-                {"id": 2, "surface": "ember", "sessions": [member(2, "a"), member(2, "b")], "unread": 3},
-                {"id": 3, "surface": "ember", "sessions": [member(3, "gone")], "unread": 9},
-                {"id": 4, "surface": "slack:T1", "sessions": [member(4, "a")], "unread": 7},
-            ]));
-            t.read(&mut ui, 1).await;
-            let items = ui.value.clone().unwrap()["days"][0]["items"].clone();
-            assert_eq!((items[0]["unread"].clone(), items[1]["unread"].clone()), (json!(5), json!(3)));
-            // Read: the counts follow the threads topic.
-            t.store.update(&threads("local"), &mut |list| list[1]["unread"] = json!(0));
-            t.read(&mut ui, 1).await;
-            assert_eq!(ui.value.clone().unwrap()["days"][0]["items"][0]["unread"], 2);
-        });
-    }
-
     #[test]
     fn chats_turns_the_day_at_local_midnight() {
         run(async {
@@ -943,55 +1088,77 @@ mod tests {
         });
     }
 
+    fn chat_topic(st: &str, id: u64) -> Topic {
+        Topic::Chat { station: st.into(), thread: id }
+    }
+    fn session_of(st: &str, key: &str) -> Topic {
+        Topic::Session { station: st.into(), key: key.into() }
+    }
+    fn page_of(st: &str, id: u64) -> Topic {
+        Topic::Thread { station: st.into(), thread: id }
+    }
+
     #[test]
-    fn chat_is_the_session_its_chat_and_its_messages() {
+    fn chat_is_a_thread_its_messages_and_its_agents() {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            let session_topic = Topic::Session { station: "ws/a".into(), key: "k".into() };
-            let thread_topic = Topic::Thread { station: "ws/a".into(), thread: 7 };
-            t.subscribe(1, Topic::Chat { station: "ws/a".into(), key: "k".into() });
+            t.subscribe(1, chat_topic("ws/a", 7));
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![session_topic.clone(), overview("ws/a"), link("ws/a")]));
-            assert!(ui.value.is_none(), "nothing before the session is read");
+            // Its thread and its messages are asked for at once.
+            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), overview("ws/a"), link("ws/a")]));
+            assert!(ui.value.is_none(), "nothing before the thread is read");
 
-            let slack = json!({"id": 3, "surface": "slack:T1", "sessions": [member(3, "k")]});
-            let ember = json!({"id": 7, "surface": "ember", "sessions": [member(7, "k")]});
-            t.set(session_topic.clone(), json!({"session": {"key": "k", "connect": "c1", "profile": "p2"}, "threads": [slack, ember], "turns": [{"id": "t1"}]}));
+            let now = t.host.now_ms();
+            let mut chat = thread(7, &["k", "j"], now);
+            chat["title"] = json!("排查");
+            chat["people"] = json!([{"id": "local", "name": "本机管理页", "email": null, "via": "local"}]);
+            t.set(threads("ws/a"), json!([thread(3, &["k"], now), chat.clone()]));
             t.read(&mut ui, 1).await;
-            assert_eq!(t.started(), vec![thread_topic.clone()], "its chat's messages are read next");
-            assert!(ui.value.is_none(), "nothing before its messages are read");
-
+            assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), session_of("ws/a", "j")]), "its agents are read next");
             let page: Vec<Value> = (11..=40).map(|i| json!({"seq": i, "text": format!("第 {i} 条")})).collect();
-            t.set(thread_topic.clone(), json!({"rev": 40, "messages": page, "more": true}));
+            t.set(page_of("ws/a", 7), json!({"rev": 40, "messages": page, "more": true}));
+            t.read(&mut ui, 1).await;
+            // The messages do not wait for the agents: those not read yet are their summaries where the list has them.
+            let v = ui.value.clone().expect("shown once the thread and its messages are read");
+            assert_eq!(v["agents"], json!([]));
+            t.set(sessions("ws/a"), json!([{"key": "j", "connect": "ember", "profile": "p1"}]));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.clone().unwrap()["agents"], json!([{"session": {"key": "j", "connect": "ember", "profile": "p1"}, "connect": null, "profile": null, "turns": [], "threads": []}]));
+
+            t.set(session_of("ws/a", "k"), json!({"session": {"key": "k", "connect": "c1", "profile": "p2"}, "threads": [chat.clone()], "turns": [{"id": "t1"}]}));
+            t.store.set(&session_of("ws/a", "j"), Err(CoreError::new("http_404", "没有这个会话")));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
-            assert_eq!((v["connect"].clone(), v["profile"].clone()), (Value::Null, Value::Null));
-            assert_eq!(v["link"], json!({"state": "connecting", "message": null}));
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
-            assert_eq!(v["session"]["key"], "k");
-            assert_eq!(v["threads"].as_array().unwrap().len(), 2);
-            assert_eq!(v["turns"], json!([{"id": "t1"}]));
-            assert_eq!(v["thread"], ember);
+            assert_eq!(v["title"], "排查");
+            assert_eq!(v["thread"], chat);
+            assert_eq!(v["people"], chat["people"]);
+            assert_eq!(v["link"], json!({"state": "connecting", "message": null}));
             assert_eq!((v["messages"].as_array().unwrap().len(), v["more"].clone()), (30, json!(true)));
+            assert_eq!(v["agents"].as_array().unwrap().len(), 1, "an agent that cannot be read is left out");
+            assert_eq!(v["agents"][0]["session"]["key"], "k");
+            assert_eq!(v["agents"][0]["turns"], json!([{"id": "t1"}]));
+            assert_eq!(v["agents"][0]["threads"], json!([chat]));
+            assert_eq!((v["agents"][0]["connect"].clone(), v["agents"][0]["profile"].clone()), (Value::Null, Value::Null));
 
             t.set(overview("ws/a"), json!({"connects": [{"id": "c1", "name": "Slack"}], "profiles": [{"id": "p1"}, {"id": "p2", "name": "主力"}]}));
             t.set(link("ws/a"), json!({"state": "online"}));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
-            assert_eq!(v["connect"], json!({"id": "c1", "name": "Slack"}));
-            assert_eq!(v["profile"], json!({"id": "p2", "name": "主力"}));
+            assert_eq!(v["agents"][0]["connect"], json!({"id": "c1", "name": "Slack"}));
+            assert_eq!(v["agents"][0]["profile"], json!({"id": "p2", "name": "主力"}));
             assert_eq!(v["link"], json!({"state": "online", "message": null}));
 
             // A new message goes out as an append.
-            t.store.update(&thread_topic, &mut |p| p["messages"].as_array_mut().unwrap().push(json!({"seq": 41, "text": "新的"})));
+            t.store.update(&page_of("ws/a", 7), &mut |p| p["messages"].as_array_mut().unwrap().push(json!({"seq": 41, "text": "新的"})));
             t.host.settle().await;
             let sent = t.host.take_emitted();
             assert_eq!(sent.len(), 1);
             let CoreMessage::Delta { delta, .. } = &sent[0].1 else { panic!("{:?}", sent[0]) };
             assert_eq!(serde_json::to_value(delta).unwrap(), json!([{"path": ["messages"], "append": [{"seq": 41, "text": "新的"}]}]));
             // An older page, in front.
-            t.store.update(&thread_topic, &mut |p| {
+            t.store.update(&page_of("ws/a", 7), &mut |p| {
                 p["messages"].as_array_mut().unwrap().insert(0, json!({"seq": 10, "text": "旧的"}));
                 p["more"] = json!(false);
             });
@@ -999,22 +1166,42 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!((v["messages"][0]["seq"].clone(), v["messages"].as_array().unwrap().len(), v["more"].clone()), (json!(10), 32, json!(false)));
 
-            t.store.set(&session_topic, Err(CoreError::new("http_404", "没有这个会话")));
+            // Another agent joins: it is read, and shows once it is.
+            t.store.update(&threads("ws/a"), &mut |list| list[1]["sessions"].as_array_mut().unwrap().push(member(7, "n", "ember")));
             t.read(&mut ui, 1).await;
-            assert_eq!(ui.error.as_ref().unwrap().message, "没有这个会话");
+            assert_eq!(t.started(), vec![session_of("ws/a", "n")]);
+            t.set(session_of("ws/a", "n"), json!({"session": {"key": "n", "connect": "ember", "profile": "p1"}, "threads": [], "turns": []}));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.clone().unwrap()["agents"].as_array().unwrap().iter().map(|a| a["session"]["key"].as_str().unwrap()).collect::<Vec<_>>(), vec!["k", "n"]);
+
+            // The thread going (its last agent deleted) is the view's error.
+            t.set(threads("ws/a"), json!([thread(3, &["k"], now)]));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.error.as_ref().unwrap().status, Some(404));
         });
     }
 
     #[test]
-    fn a_chat_without_a_thread_has_no_messages() {
+    fn a_slack_chat_is_its_thread_like_any_other() {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            t.subscribe(1, Topic::Chat { station: "local".into(), key: "k".into() });
-            t.set(Topic::Session { station: "local".into(), key: "k".into() }, json!({"session": {"key": "k"}, "threads": [], "turns": []}));
+            t.subscribe(1, chat_topic("local", 3));
+            let mut slack = thread(3, &["k"], t.host.now_ms());
+            slack["surface"] = json!("slack:T1");
+            slack["channel"] = json!("C1");
+            slack["channelName"] = json!("ops");
+            slack["firstText"] = json!("<@U0BOT> 部署挂了");
+            slack["sessions"] = json!([member(3, "k", "c1")]);
+            t.set(threads("local"), json!([slack]));
+            t.set(page_of("local", 3), json!({"rev": 2, "messages": [{"seq": 1, "authorKind": "person", "text": "<@U0BOT> 部署挂了"}, {"seq": 2, "authorKind": "agent", "text": "在看"}], "more": false}));
+            t.read(&mut ui, 1).await;
+            t.set(session_of("local", "k"), json!({"session": {"key": "k", "connect": "c1"}, "threads": [], "turns": []}));
             t.read(&mut ui, 1).await;
             let v = ui.value.unwrap();
-            assert_eq!((v["thread"].clone(), v["messages"].clone(), v["more"].clone()), (Value::Null, json!([]), json!(false)));
+            assert_eq!(v["title"], "部署挂了");
+            assert_eq!(v["thread"]["surface"], "slack:T1");
+            assert_eq!(v["messages"].as_array().unwrap().len(), 2);
             assert_eq!(v["me"], json!({"id": "local", "email": null}));
         });
     }
@@ -1024,32 +1211,29 @@ mod tests {
         run(async {
             let t = setup();
             let mut ui = Ui::default();
-            let session_topic = Topic::Session { station: "ws/a".into(), key: "k".into() };
-            let thread_topic = Topic::Thread { station: "ws/a".into(), thread: 7 };
-            t.subscribe(1, Topic::Chat { station: "ws/a".into(), key: "k".into() });
-            t.set(session_topic.clone(), json!({"session": {"key": "k"}, "threads": [{"id": 7, "surface": "ember"}], "turns": []}));
-            t.read(&mut ui, 1).await;
-            t.set(thread_topic.clone(), json!({"rev": 5, "messages": [{"seq": 5, "text": "早"}], "more": false}));
+            t.subscribe(1, chat_topic("ws/a", 7));
+            t.set(threads("ws/a"), json!([thread(7, &[], t.host.now_ms())]));
+            t.set(page_of("ws/a", 7), json!({"rev": 5, "messages": [{"seq": 5, "text": "早"}], "more": false}));
             t.read(&mut ui, 1).await;
             assert_eq!(ui.value.clone().unwrap()["outbox"], json!([]));
 
             let views = t.router.views();
-            let id = views.outbox_add("ws/a", "k", json!({"text": "你好", "attachments": [], "quotes": []}));
+            let id = views.outbox_add("ws/a", 7, json!({"text": "你好", "attachments": [], "quotes": []}));
             t.read(&mut ui, 1).await;
             let out = ui.value.clone().unwrap()["outbox"].clone();
             assert_eq!((out[0]["id"].as_str(), out[0]["text"].as_str(), out[0]["state"].as_str()), (Some(id.as_str()), Some("你好"), Some("sending")));
 
-            views.outbox_state("ws/a", "k", &id, Some("连不上 station"));
+            views.outbox_state("ws/a", 7, &id, Some("连不上 station"));
             t.read(&mut ui, 1).await;
             let out = ui.value.clone().unwrap()["outbox"].clone();
             assert_eq!((out[0]["state"].as_str(), out[0]["error"].as_str()), (Some("failed"), Some("连不上 station")));
 
             // Sent as seq 6: it stays until the messages reach 6, and leaves in that same emission.
-            views.outbox_state("ws/a", "k", &id, None);
-            views.outbox_sent("ws/a", "k", &id, 6);
+            views.outbox_state("ws/a", 7, &id, None);
+            views.outbox_sent("ws/a", 7, &id, 6);
             t.read(&mut ui, 1).await;
             assert_eq!(ui.value.clone().unwrap()["outbox"][0]["seq"], 6);
-            t.store.update(&thread_topic, &mut |p| p["messages"].as_array_mut().unwrap().push(json!({"seq": 6, "text": "你好"})));
+            t.store.update(&page_of("ws/a", 7), &mut |p| p["messages"].as_array_mut().unwrap().push(json!({"seq": 6, "text": "你好"})));
             t.host.settle().await;
             let sent = t.host.take_emitted();
             assert_eq!(sent.len(), 1);
@@ -1058,9 +1242,9 @@ mod tests {
             assert!(ops.as_array().unwrap().iter().any(|op| op["path"] == json!(["messages"])), "{ops}");
             assert!(ops.as_array().unwrap().iter().any(|op| op["path"] == json!(["outbox"]) && op["set"] == json!([])), "{ops}");
             // Sent while nobody looks: gone at once.
-            let id = views.outbox_add("ws/b", "j", json!({"text": "x"}));
-            views.outbox_sent("ws/b", "j", &id, 1);
-            assert!(views.outbox_get("ws/b", "j", &id).is_none());
+            let id = views.outbox_add("ws/b", 1, json!({"text": "x"}));
+            views.outbox_sent("ws/b", 1, &id, 1);
+            assert!(views.outbox_get("ws/b", 1, &id).is_none());
         });
     }
 }

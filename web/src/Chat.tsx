@@ -6,29 +6,34 @@ import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as Quo
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
-import { agentLabel, sessionStatus } from "./format.ts";
+import { agentLabel, botUserIdOf, sessionStatus, slackThreadUrl, slackWorkspaceUrl } from "./format.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
-import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
+import { Avatar, ModelLogo, SlackLogo, Time, Tip } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
 import { useStickToBottom } from "./scroll.ts";
 
-export function ChatPanel({ chat, live, onOpenHistory }: { chat: ChatView; live: LiveView | undefined; onOpenHistory(): void }) {
+/** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
+interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime"]; model: string | null; session: SessionSummary; live: LiveView | undefined; turns: ChatView["agents"][number]["turns"] }
+
+export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; lives: ReadonlyMap<string, LiveView>; onOpenHistory(key: string): void }) {
   const list = useRef<HTMLDivElement>(null);
   const floor = useRef<HTMLDivElement>(null);
   const sending = useChatSend();
-  const { session, outbox } = chat;
+  const { thread, outbox } = chat;
   // Deleted messages keep their place for the station's cursors; here they are simply gone.
   const messages = chat.messages.filter((m) => m.deletedAt === null);
-  const steps = live?.steps ?? [];
-  const phase = live?.phase ?? null;
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
+  const member = usePerson();
+  const isMine = useIsMine();
+  const mineOf = (m: MessageView) => m.authorKind === "person" && isMine({ id: m.author, email: m.author });
   useStickToBottom(list, ".msg", floor);
-  useOlderOnScroll(list, chat, () => sending.older(session.key));
-  useMarkRead(floor, chat, (seq) => sending.read(session.key, seq));
+  useOlderOnScroll(list, chat, () => sending.older(thread.id));
+  useMarkRead(floor, chat, (seq) => sending.read(thread.id, seq));
+  const divider = useUnreadLine(list, chat, messages, mineOf, () => sending.older(thread.id));
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
   for (const o of outbox) sentHere.current.add(o.text);
@@ -36,15 +41,23 @@ export function ChatPanel({ chat, live, onOpenHistory }: { chat: ChatView; live:
   const firstSeq = useRef<number | null>(null);
   if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
   const wasWriting = useRef(false);
-  const heldReply = useRef<{ text: string; count: number } | null>(null);
+  const heldReply = useRef<{ agent: ChatAgent; text: string; count: number } | null>(null);
   const streamedTs = useRef(new Set<string>());
-  const status = sessionStatus(session);
+  const agents: ChatAgent[] = chat.agents.map(({ session, turns }) => {
+    const live = lives.get(session.key);
+    const model = live?.usage?.model ?? session.model;
+    return { key: session.key, who: agentLabel(model, session.effort), runtime: session.runtime, model, session, live, turns };
+  });
+  const agentOf = (key: string) => agents.find((a) => a.key === key);
   // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
   const lastAgents = useRef<AgentAtWork[] | null>(null);
   const [, rerender] = useState(0);
   const wasBusy = useRef(false);
-  // A message on its way already counts: the activity shows at once instead of after the station answers.
-  const busy = status === "running" || status === "queued" || outbox.some((o) => o.state === "sending");
+  const working = agents.filter((a) => ["running", "queued"].includes(sessionStatus(a.session)));
+  // A message on its way already counts: the activity shows at once (for every agent it goes to) instead of after the station answers.
+  const sendingNow = outbox.some((o) => o.state === "sending");
+  const busyAgents = working.length ? working : sendingNow ? agents : [];
+  const busy = busyAgents.length > 0;
   // A turn ending and the next starting leave a moment of "not running"; only a pause over a second ends the activity.
   const [leaving, setLeaving] = useState(false);
   useEffect(() => {
@@ -54,12 +67,14 @@ export function ChatPanel({ chat, live, onOpenHistory }: { chat: ChatView; live:
     const gone = setTimeout(() => { wasBusy.current = false; lastAgents.current = null; setLeaving(false); rerender((n) => n + 1); }, 1200 + 520);
     return () => { clearTimeout(fade); clearTimeout(gone); };
   }, [busy]);
-  const member = usePerson();
-  const isMine = useIsMine();
   const name = (m: MessageView) => member(m.author)?.name || m.authorName || (m.author === "local" ? "本机" : m.author);
-  // The session's messages the runtime has not taken yet are the last people wrote; after a second, yours show that they wait.
+  // Slack's <@U…> mentions by name: an agent's bot by its connect's, a person by theirs where known.
+  const bots = new Map(chat.agents.flatMap((a) => { const id = botUserIdOf(a.connect ?? undefined); return id && a.connect ? [[id, a.connect.name] as const] : []; }));
+  const mention = (text: string) => text.replace(/<@([A-Z0-9]+)>/g, (_, id: string) => `@${bots.get(id) ?? member(id)?.name ?? id}`);
+  // The messages the agents have not taken yet are the last people wrote; after a second, yours show that they wait.
   const people = messages.filter((m) => m.authorKind === "person");
-  const pending = new Set(session.pending > 0 ? people.slice(-session.pending).map((m) => m.seq) : []);
+  const waiting = Math.max(0, ...agents.map((a) => a.session.pending));
+  const pending = new Set(waiting > 0 ? people.slice(-waiting).map((m) => m.seq) : []);
   const [, tick] = useState(0);
   const youngest = messages.filter((m) => pending.has(m.seq)).reduce((t, m) => Math.max(t, m.createdAt), 0);
   useEffect(() => {
@@ -68,8 +83,11 @@ export function ChatPanel({ chat, live, onOpenHistory }: { chat: ChatView; live:
     const timer = setTimeout(() => tick((n) => n + 1), wait + 20);
     return () => clearTimeout(timer);
   }, [youngest]);
-  const model = live?.usage?.model ?? session.model;
-  const agent = agentLabel(model, session.effort);
+  // Where agents post to reach this chat.
+  const address = `${thread.channel}/${thread.threadTs}`;
+  // Files are kept in a session's workspace: what is sent here goes to the first agent's.
+  const keeper = agents[0]?.key ?? null;
+  const ownerOf = (file: Attachment) => agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.key ?? keeper;
 
   // Selecting text inside one message offers to quote it.
   const onSelect = () => {
@@ -90,8 +108,7 @@ export function ChatPanel({ chat, live, onOpenHistory }: { chat: ChatView; live:
         {chat.more && <div className="chat-older" aria-hidden="true"><span className="spinner" /></div>}
         {messages.length === 0 && (
           <div className="chat-empty">
-            <p>在这里给这个会话发消息，agent 会在这里回复。</p>
-            <p className="muted">{chat.threads.some((t) => t.surface !== "ember") ? "它在 Slack 里的来往，在右边的执行历史里能看到。" : ""}</p>
+            <p>{thread.surface === "ember" ? "在这里发消息，这个对话里的 agent 会在这里回复。" : "这个 thread 里还没有消息。"}</p>
           </div>
         )}
         {messages.map((m) => {
@@ -100,83 +117,94 @@ export function ChatPanel({ chat, live, onOpenHistory }: { chat: ChatView; live:
             streamedTs.current.add(m.ts);
             wasWriting.current = false;
           }
-          const mine = m.authorKind === "person" && isMine({ id: m.author, email: m.author });
+          const mine = mineOf(m);
           const enter = fresh && !streamedTs.current.has(m.ts) && !(mine && sentHere.current.has(m.text)) ? true : undefined;
+          const line = m.seq === divider ? <div key={`new-${m.seq}`} className="chat-unread-line" data-unread-line role="separator"><span>以下是新消息</span></div> : null;
           if (mine) {
-            return (
+            return [line, (
               <div key={m.seq} className="msg msg-mine" data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
                 <Quotes quotes={m.quotes} />
                 {m.text && <div className="msg-bubble"><div className="msg-plain">{m.text}</div></div>}
-                <Files sessionKey={session.key} files={m.attachments} />
+                <Files owner={ownerOf} files={m.attachments} />
                 {pending.has(m.seq) && Date.now() - m.createdAt > 1000
                   ? <span className="msg-time msg-waiting"><span className="spinner" aria-hidden="true" />等待 agent 接收</span>
                   : <Time className="msg-time" at={m.createdAt} />}
               </div>
-            );
+            )];
           }
-          const who = m.authorKind === "agent" ? agent : m.authorKind === "ember" ? "ember" : name(m);
-          return (
+          const agent = m.authorKind === "agent" ? agentOf(m.author) : undefined;
+          const who = m.authorKind === "agent" ? agent?.who ?? m.authorName ?? "agent" : m.authorKind === "ember" ? "ember" : name(m);
+          return [line, (
             <div key={m.seq} className="msg msg-row" data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"} data-enter={enter}>
               <div className="msg-main">
                 <div className="msg-head">
-                  <MessageAvatar message={m} name={who} runtime={session.runtime} model={model} />
-                  {m.authorKind === "agent"
-                    ? <button type="button" className="msg-name msg-agent" onClick={onOpenHistory} title="打开或关闭执行历史">{who}</button>
+                  <MessageAvatar message={m} name={who} agent={agent} />
+                  {agent
+                    ? <button type="button" className="msg-name msg-agent" onClick={() => onOpenHistory(agent.key)} title="打开或关闭执行历史">{who}</button>
                     : <span className="msg-name">{who}</span>}
                   <Time className="msg-time" at={m.createdAt} />
                 </div>
                 <Quotes quotes={m.quotes} />
                 {m.authorKind === "person"
-                  ? m.text && <div className="msg-plain">{m.text}</div>
+                  ? m.text && <div className="msg-plain">{mention(m.text)}</div>
                   : <div className="markdown"><Prose>{m.text}</Prose></div>}
-                <Files sessionKey={session.key} files={m.attachments} />
+                <Files owner={ownerOf} files={m.attachments} />
               </div>
             </div>
-          );
+          )];
         })}
         {outbox.map((o) => (
           <div key={o.id} className="msg msg-mine" data-author="你" data-role="person" data-enter>
             <Quotes quotes={o.quotes} />
             {o.text && <div className="msg-bubble"><div className="msg-plain">{o.text}</div></div>}
-            <Files sessionKey={session.key} files={o.attachments} />
+            <Files owner={ownerOf} files={o.attachments} />
             {o.state === "failed"
               ? <span className="msg-time msg-failed">发送失败{o.error ? `：${o.error}` : ""}
-                  <button type="button" className="inline-link" onClick={() => void sending.retry(session.key, o.id).catch(() => {})}>重试</button>
-                  <button type="button" className="inline-link" onClick={() => void sending.discard(session.key, o.id)}>删除</button>
+                  <button type="button" className="inline-link" onClick={() => void sending.retry(thread.id, o.id).catch(() => {})}>重试</button>
+                  <button type="button" className="inline-link" onClick={() => void sending.discard(thread.id, o.id)}>删除</button>
                 </span>
               : <span className="msg-time msg-waiting msg-sending"><span className="spinner" aria-hidden="true" />正在发送</span>}
           </div>
         ))}
         {(() => {
-          // The agent writing to this chat right now: its chat_post, as far as it has streamed.
-          const writing = steps.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && (partialString(s.input, "to") ?? "").startsWith("EMBER/"));
-          let text = writing ? partialString(writing.input, "text") : null;
+          // An agent writing to this chat right now: its chat_post, as far as it has streamed.
+          let writer: ChatAgent | undefined;
+          let text: string | null = null;
+          for (const a of agents) {
+            const step = a.live?.steps.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && partialString(s.input, "to") === address);
+            text = step ? partialString(step.input, "text") : null;
+            if (text) { writer = a; break; }
+          }
           // Once written, the reply stays in place until the posted message arrives, so it never blinks out between the two.
-          if (text) heldReply.current = { text, count: messages.length };
-          else if (heldReply.current && messages.length === heldReply.current.count) text = heldReply.current.text;
+          let reply: { agent: ChatAgent; text: string } | null = null;
+          if (text && writer) {
+            reply = { agent: writer, text };
+            heldReply.current = { ...reply, count: messages.length };
+          } else if (heldReply.current && messages.length === heldReply.current.count) reply = heldReply.current;
           else heldReply.current = null;
-          if (text) wasWriting.current = true;
+          if (reply) wasWriting.current = true;
           // The reply being written, under the activity (which stays while the agent works).
-          const writingNow = text ? (
-            <div className="msg msg-row" data-author={agent}>
+          const writingNow = reply ? (
+            <div className="msg msg-row" data-author={reply.agent.who}>
               <div className="msg-main">
                 <div className="msg-head">
-                  <span className="msg-avatar msg-avatar-agent"><ModelLogo model={model} runtime={session.runtime} size={12} /></span>
-                  <button type="button" className="msg-name msg-agent" onClick={onOpenHistory}>{agent}</button>
+                  <span className="msg-avatar msg-avatar-agent"><ModelLogo model={reply.agent.model} runtime={reply.agent.runtime} size={12} /></span>
+                  <button type="button" className="msg-name msg-agent" onClick={() => onOpenHistory(reply.agent.key)}>{reply.agent.who}</button>
                   <span className="msg-time">正在输入</span>
                 </div>
-                <div className="markdown h-live"><Prose>{text}</Prose></div>
+                <div className="markdown h-live"><Prose>{reply.text}</Prose></div>
               </div>
             </div>
           ) : null;
           if (!busy && !lastAgents.current) return writingNow;
-          const agents: AgentAtWork[] = busy ? [{
-              key: session.key, who: agent, runtime: session.runtime, model,
-              timeline: live?.timeline ?? [], live: steps, phase, since: chat.turns.at(-1)?.endedAt == null ? chat.turns.at(-1)?.startedAt ?? null : null,
-            }] : lastAgents.current!;
-          if (busy) lastAgents.current = agents;
+          const atWork: AgentAtWork[] = busy ? busyAgents.map((a) => ({
+            key: a.key, who: a.who, runtime: a.runtime, model: a.model,
+            timeline: a.live?.timeline ?? [], live: a.live?.steps ?? [], phase: a.live?.phase ?? null,
+            since: a.turns.at(-1)?.endedAt == null ? a.turns.at(-1)?.startedAt ?? null : null,
+          })) : lastAgents.current!;
+          if (busy) lastAgents.current = atWork;
           // The activity is always the last thing in the chat; the reply being written comes before it.
-          return <>{writingNow}<Activities onOpenHistory={onOpenHistory} agents={agents} leaving={leaving} /></>;
+          return <>{writingNow}<Activities onOpenHistory={onOpenHistory} agents={atWork} leaving={leaving} /></>;
         })()}
         <div ref={floor} className="chat-floor" aria-hidden="true" />
       </div>
@@ -187,9 +215,63 @@ export function ChatPanel({ chat, live, onOpenHistory }: { chat: ChatView; live:
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
-      <Composer sessionKey={session.key} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
+      {thread.surface === "ember"
+        ? <Composer thread={thread.id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
+        : <SlackReply chat={chat} />}
     </section>
   );
+}
+
+/** Where a Slack thread's composer would be: people answer it in Slack. */
+function SlackReply({ chat }: { chat: ChatView }) {
+  const connect = chat.agents.find((a) => a.connect?.kind === "slack")?.connect ?? null;
+  const url = slackThreadUrl(slackWorkspaceUrl(connect), chat.thread.channel, chat.thread.threadTs);
+  return (
+    <div className="composer-wrap">
+      <p className="chat-slack-reply">
+        {url
+          ? <a className="inline-link" href={url} target="_blank" rel="noopener"><SlackLogo size={13} />在 Slack 里回复</a>
+          : <span className="muted"><SlackLogo size={13} />在 Slack 里回复</span>}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The line over the first message the viewer had not read when the chat
+ * opened (not their own), and the jump to it: the read position is taken as
+ * the chat opens and does not move during the visit, so the line stays put as
+ * the chat is read. Older pages are loaded first when it lies above them.
+ * Nothing unread: no line, and the chat opens at its bottom. Answers the seq
+ * of the message the line goes over.
+ */
+function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: MessageView[], mine: (m: MessageView) => boolean, older: () => Promise<unknown>): number | null {
+  // What was unread when the chat opened: after the read position, up to the newest message then.
+  const [open] = useState(() => ({ read: chat.thread.read, newest: chat.thread.last?.seq ?? 0, unread: chat.thread.unread > 0 }));
+  const first = messages[0]?.seq;
+  // Those not loaded yet may hold it: the pages before are loaded first.
+  const above = open.unread && chat.more && first !== undefined && first > open.read;
+  const target = open.unread && !above ? messages.find((m) => m.seq > open.read && m.seq <= open.newest && !mine(m))?.seq ?? null : null;
+  const asked = useRef<number | undefined>(undefined);
+  const jumped = useRef(!open.unread);
+  const load = useRef(older);
+  load.current = older;
+  useEffect(() => {
+    if (!above || asked.current === first) return;
+    asked.current = first;
+    void load.current().catch(() => { asked.current = undefined; });
+  }, [above, first]);
+  useEffect(() => {
+    if (jumped.current || above) return;
+    jumped.current = true;
+    const pane = ref.current;
+    const line = pane?.querySelector<HTMLElement>("[data-unread-line]");
+    if (!pane || !line) return;
+    // A reader's move: the pane lets it take the position instead of holding its bottom.
+    pane.dispatchEvent(new WheelEvent("wheel"));
+    pane.scrollTop += line.getBoundingClientRect().top - pane.getBoundingClientRect().top - 12;
+  }, [ref, above, target]);
+  return target;
 }
 
 /**
@@ -225,7 +307,7 @@ function useOlderOnScroll(ref: RefObject<HTMLElement | null>, chat: ChatView, ol
  */
 function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
   const newest = chat.messages.at(-1)?.seq ?? 0;
-  const known = chat.thread?.read ?? 0;
+  const known = chat.thread.read;
   const sent = useRef(0);
   const record = useRef(read);
   record.current = read;
@@ -251,9 +333,9 @@ function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView, read:
   }, [floor, newest, known]);
 }
 
-function MessageAvatar({ message, name, runtime, model }: { message: MessageView; name: string; runtime: SessionSummary["runtime"]; model: string | null }) {
+function MessageAvatar({ message, name, agent }: { message: MessageView; name: string; agent: ChatAgent | undefined }) {
   const member = usePerson();
-  if (message.authorKind === "agent") return <span className="msg-avatar msg-avatar-agent"><ModelLogo model={model} runtime={runtime} size={12} /></span>;
+  if (message.authorKind === "agent") return <span className="msg-avatar msg-avatar-agent">{agent ? <ModelLogo model={agent.model} runtime={agent.runtime} size={12} /> : <Mark size={12} />}</span>;
   if (message.authorKind === "ember") return <span className="msg-avatar msg-avatar-agent"><Mark size={12} /></span>;
   const picture = member(message.author)?.picture;
   return picture
@@ -356,15 +438,16 @@ function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean): str
   return url;
 }
 
-function Files({ sessionKey, files }: { sessionKey: string; files: Attachment[] | undefined }) {
+/** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */
+function Files({ owner, files }: { owner: (file: Attachment) => string | null; files: Attachment[] | undefined }) {
   if (!files?.length) return null;
-  return <div className="msg-files">{files.map((f) => <FileItem key={f.path} sessionKey={sessionKey} file={f} />)}</div>;
+  return <div className="msg-files">{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} />)}</div>;
 }
 
 /** Images show themselves at their own proportions and open in a lightbox; other files are a card. */
-function FileItem({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
+function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
   const image = IMAGE.test(file.name);
-  const url = useFileUrl(sessionKey, file, image);
+  const url = useFileUrl(sessionKey ?? "", file, image && sessionKey !== null);
   const [open, setOpen] = useState(false);
   if (image) {
     return (
@@ -436,19 +519,21 @@ const MAX_FILE = 50 * 1024 * 1024;
 interface Pending { id: number; name: string; size: number; done: Attachment | null; error: string | null; preview?: string }
 
 /**
- * Where people write to the session; the first message makes its chat. Zork's
- * composer: a soft frame that grows with the text, a round send button, the
- * files and quotes waiting to go above it. Files (picked, pasted or dropped)
- * go to the session's workspace on the station as soon as they are added.
+ * Where people write to a chat; a new chat is made by the first message or
+ * file. Zork's composer: a soft frame that grows with the text, a round send
+ * button, the files and quotes waiting to go above it. Files (picked, pasted
+ * or dropped) go to the workspace of a session in the chat on the station as
+ * soon as they are added.
  */
-export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureSession, onSent, toolbar, placeholder = "给这个会话发消息", locked = false, roomy = false }: {
-  /** The session written to; null for a new chat, made by `ensureSession` on the first file or message. */
+export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, toolbar, placeholder = "发消息", locked = false, roomy = false }: {
+  /** The chat written to, and the session its files go to; both null for a new chat, made by `ensureChat` on the first file or message. */
+  thread: number | null;
   sessionKey: string | null;
   quotes?: DraftQuote[]; setQuotes?(update: (all: DraftQuote[]) => DraftQuote[]): void;
   /** A quote just added: its comment line takes the focus. */
   focusQuote?: string | null; onFocused?(): void;
-  ensureSession?: () => Promise<string>;
-  onSent?: (key: string) => void;
+  ensureChat?: () => Promise<{ key: string; thread: number }>;
+  onSent?: (thread: number) => void;
   /** Choices shown in the toolbar, between attach and send (a new chat's station, model and effort). */
   toolbar?: ReactNode;
   placeholder?: string;
@@ -477,20 +562,20 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
     quoteInputs.current.get(focusQuote)?.focus();
     onFocused();
   }, [focusQuote]);
-  const keyFor = async () => sessionKey ?? (await ensureSession!());
+  const target = async (): Promise<{ key: string | null; thread: number }> => (thread !== null ? { key: sessionKey, thread } : await ensureChat!());
   const chat = useChatSend();
   const [starting, setStarting] = useState(false);
   const [sendError, setSendError] = useState<Error | null>(null);
-  // The composer empties at once: the message lives in the chat's outbox until the session has it (a failure shows there too).
+  // The composer empties at once: the message lives in the chat's outbox until the station has it (a failure shows there too).
   const send = async (value: string) => {
     const kept = { text, files, quotes };
     const attachments = files.flatMap((f) => (f.done ? [f.done] : []));
     const sent = quotes.map(({ author, text: t, comment, ts, role }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}) }));
     setText(""); setFiles([]); setQuotes(() => []); setSendError(null);
-    let key: string;
+    let to: number;
     try {
-      setStarting(!sessionKey);
-      key = await keyFor();
+      setStarting(thread === null);
+      to = (await target()).thread;
     } catch (error) {
       // No chat to send into (a new one could not be made): the draft comes back.
       setText(kept.text); setFiles(kept.files); setQuotes(() => kept.quotes);
@@ -500,8 +585,8 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
       setStarting(false);
     }
     for (const f of kept.files) if (f.preview) URL.revokeObjectURL(f.preview);
-    void chat.send(key, value, attachments, sent).catch(() => {});
-    onSent?.(key);
+    void chat.send(to, value, attachments, sent).catch(() => {});
+    onSent?.(to);
   };
   const add = (list: FileList | File[]) => {
     for (const file of Array.from(list)) {
@@ -511,16 +596,19 @@ export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQ
       const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
       setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null, ...(preview ? { preview } : {}) }]);
       if (tooBig) continue;
-      keyFor().then((key) => api.uploadFile(key, file)).then(
+      target().then(({ key }) => {
+        if (!key) throw new Error("这个对话里没有 agent，文件无处可放");
+        return api.uploadFile(key, file);
+      }).then(
         (done) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, done } : f))),
         (error: unknown) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, error: error instanceof Error ? error.message : "上传失败" } : f))),
       );
     }
   };
-  // Switching to a session puts the cursor in its composer (not on touch screens, where it would raise the keyboard).
+  // Switching to a chat puts the cursor in its composer (not on touch screens, where it would raise the keyboard).
   useEffect(() => {
     if (window.matchMedia("(pointer: fine)").matches) input.current?.focus();
-  }, [sessionKey]);
+  }, [thread]);
   // Grow with the text up to the frame's limit; the frame is never resized by hand.
   useEffect(() => {
     const el = input.current;
@@ -643,13 +731,13 @@ const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
  * messages. A runtime's own sub-agents are not agents of the chat; their
  * work is one row of the agent's.
  */
-function Activities({ agents, onOpenHistory, leaving = false }: { agents: AgentAtWork[]; onOpenHistory(): void; leaving?: boolean }) {
+function Activities({ agents, onOpenHistory, leaving = false }: { agents: AgentAtWork[]; onOpenHistory(key: string): void; leaving?: boolean }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(ACTIVITY_COLLAPSED) === "1");
   const toggle = () => {
     localStorage.setItem(ACTIVITY_COLLAPSED, collapsed ? "0" : "1");
     setCollapsed(!collapsed);
   };
-  return <>{agents.map((a) => <Activity key={a.key} agent={a} collapsed={collapsed} onToggle={toggle} onOpen={onOpenHistory} leaving={leaving} />)}</>;
+  return <>{agents.map((a) => <Activity key={a.key} agent={a} collapsed={collapsed} onToggle={toggle} onOpen={() => onOpenHistory(a.key)} leaving={leaving} />)}</>;
 }
 
 /**

@@ -11,7 +11,7 @@ import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, usePa
 import { useStations } from "../api.ts";
 import { AccountPage, AccountsPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
-import { SessionPage } from "../pages/Session.tsx";
+import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList } from "../Sidebar.tsx";
 import { AccountSettings, ConnectsSettings, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
 import { PeopleContext, StationContext, stationBase, type Station } from "../station.tsx";
@@ -37,7 +37,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   })), [found.value, entry.id]);
   const path = useLocation().pathname;
   const navigate = useNavigate();
-  useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/sessions\/.+)$/.test(p));
+  useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/chats\/.+)$/.test(p));
   const detail = /\/(s\/[^/]+\/.+|settings|new$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
@@ -61,7 +61,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
             <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
             <Route path="s/:station/*" element={<StationPages stations={stations} />} />
-            <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, key) => navigate(`${stationBase(station)}/sessions/${encodeURIComponent(key)}`)} />} />
+            <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, thread) => navigate(`${stationBase(station)}/chats/${thread}`)} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
         </main>
@@ -78,11 +78,11 @@ function StationPages({ stations }: { stations: Station[] }) {
   return (
     <StationContext.Provider value={station}>
       <Routes>
-        <Route path="sessions/:key?" element={<SessionPage />} />
+        <Route path="chats/:thread?" element={<ChatPage />} />
         <Route path="connects/:id" element={<ConnectPage />} />
         <Route path="settings/accounts" element={<AccountsPage />} />
         <Route path="settings/accounts/:id" element={<AccountPage />} />
-        <Route path="*" element={<Navigate to="sessions" replace />} />
+        <Route path="*" element={<Navigate to="chats" replace />} />
       </Routes>
     </StationContext.Provider>
   );

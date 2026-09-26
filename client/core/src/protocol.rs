@@ -54,7 +54,8 @@ pub enum Topic {
     Chats { scope: String, #[serde(default)] mine: bool },
     Stations { scope: String },
     Connects { scope: String, #[serde(default)] mine: bool },
-    Chat { station: String, key: String },
+    /// One chat: a thread, its messages and its agents.
+    Chat { station: String, thread: u64 },
 }
 
 impl Topic {

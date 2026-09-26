@@ -3,12 +3,12 @@
 // `station.request` and the core refreshes whatever they touch. Types come
 // straight from the server code.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useCall, useTopic, type TopicState } from "./core/react.ts";
+import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
 import type {
-  Attachment, ConnectInput, ConnectView, HostInfo, LivePhase, LiveStep, LoginJob, MessageView, Overview, ProfileCheck, ProfileInput, ProfileQuota, ProfileView, Quote, RuntimeKind,
+  Attachment, ConnectInput, ConnectView, Creator, HostInfo, LivePhase, LiveStep, LoginJob, MessageView, Overview, ProfileCheck, ProfileInput, ProfileQuota, ProfileView, Quote, RuntimeKind,
   SessionSummary, ThreadView, TimelineEntry, TranscriptUsage, TurnRecord,
 } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
@@ -29,8 +29,24 @@ export type SlackAppView =
 /** A station's mesh link as the core holds it. */
 export interface LinkView { state: "connecting" | "online" | "offline" | "error"; message?: string | null }
 
-/** A chat in the sidebar: a session, where it runs, the connect it belongs to, and what the viewer has not read in its threads. */
-export interface ChatItem { station: string; stationName: string; session: SessionSummary; connect: ConnectView | null; unread: number }
+/** An agent of a chat as the sidebar has it: what it runs on and where its work stands (what `sessionStatus` reads). */
+export type ChatAgent = Pick<SessionSummary, "key" | "runtime" | "model" | "effort" | "process" | "pending" | "lastTurn">;
+/**
+ * A chat in the sidebar: a thread (a Slack thread or a chat on ember's page), what it is called, its agents and
+ * people, the last thing said, whether the viewer has read everything in it, and the connect a Slack thread came through.
+ */
+export interface ChatItem {
+  station: string; stationName: string;
+  thread: Pick<ThreadView, "id" | "surface" | "channel" | "channelName" | "threadTs" | "title" | "createdAt" | "creator">;
+  title: string;
+  agents: ChatAgent[];
+  people: Creator[];
+  /** Its text cut to 200 characters. */
+  last: Pick<MessageView, "seq" | "authorKind" | "author" | "authorName" | "text" | "createdAt" | "deletedAt"> | null;
+  unread: boolean;
+  lastActiveAt: number;
+  connect: ConnectView | null;
+}
 export interface ChatDay { daysAgo: number; at: number; items: ChatItem[] }
 export interface ChatsView {
   me: Me;
@@ -58,23 +74,23 @@ export interface OutboxMessage {
   state: "sending" | "failed"; error: string | null; seq?: number;
 }
 
+/** An agent taking part in a chat: its session, the connect that started it, its profile, its turns and every thread it is in. */
+export interface ChatAgentView { session: SessionSummary; connect: ConnectView | null; profile: ProfileView | null; turns: TurnRecord[]; threads: ThreadView[] }
+
 /**
- * One chat: the session (its row, threads and turns), its chat on ember's
- * page (`thread`, null until the first message makes one) with the messages
- * loaded so far (`more`: older ones exist), and what was sent from here that
- * it does not show yet.
+ * One chat: its thread (with the viewer's read position), what it is called,
+ * its people and agents, the messages loaded so far (`more`: older ones
+ * exist), and what was sent from here that it does not show yet.
  */
 export interface ChatView {
   me: Me;
-  session: SessionSummary;
-  threads: ThreadView[];
-  turns: TurnRecord[];
-  thread: ThreadView | null;
+  thread: ThreadView;
+  title: string;
+  people: Creator[];
+  agents: ChatAgentView[];
   messages: MessageView[];
   more: boolean;
   outbox: OutboxMessage[];
-  connect: ConnectView | null;
-  profile: ProfileView | null;
   link: LinkView;
 }
 
@@ -97,12 +113,18 @@ export function useConnects(scope: string, mine = false): TopicState<ConnectsVie
   return useTopic<ConnectsView>({ topic: "connects", scope, mine });
 }
 
-export function useChat(station: string, key: string): TopicState<ChatView> {
-  return useTopic<ChatView>({ topic: "chat", station, key });
+export function useChat(station: string, thread: number): TopicState<ChatView> {
+  return useTopic<ChatView>({ topic: "chat", station, thread });
 }
 
 export function useLive(station: string, key: string): TopicState<LiveView> {
   return useTopic<LiveView>({ topic: "live", station, key });
+}
+
+/** Each session's live topic, by key: the agents of a chat as they run. */
+export function useLives(station: string, keys: string[]): ReadonlyMap<string, LiveView> {
+  const states = useTopics<LiveView>(keys.map((key) => ({ topic: "live", station, key })));
+  return useMemo(() => new Map(keys.flatMap((key, i) => (states[i]?.value ? [[key, states[i]!.value!] as const] : []))), [states, keys.join("\n")]);
 }
 
 // One station's own topics, for its settings pages.
@@ -113,6 +135,11 @@ export function useOverview(station: string): TopicState<Overview> {
 
 export function useSessions(station: string): TopicState<SessionSummary[]> {
   return useTopic<SessionSummary[]>({ topic: "sessions", station });
+}
+
+/** Every thread of a station, latest message first. */
+export function useThreads(station: string): TopicState<ThreadView[]> {
+  return useTopic<ThreadView[]>({ topic: "threads", station });
 }
 
 export function useHost(station: string): TopicState<HostInfo> {
@@ -199,8 +226,8 @@ export function stationApi(t: StationCall) {
       request<{ session: string }>("POST", `/connects/${at(connect)}/session`, { session, ...(title ? { title } : {}) }),
     /** Starts the session's runtime ahead of a message. */
     warm: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/warm`),
-    /** A new chat's session, made before its first message so files can go into it. */
-    newSession: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => request<{ key: string }>("POST", "/sessions", input),
+    /** A new chat: its session and its thread, made before its first message so files can go into it. */
+    newChat: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => request<{ key: string; thread: ThreadView }>("POST", "/sessions", input),
     file: t.file,
     uploadFile: t.upload,
     startLogin: (profile: string) => request<{ job: LoginJob }>("POST", `/profiles/${at(profile)}/login`),
@@ -218,18 +245,18 @@ export function stationApi(t: StationCall) {
 export type Api = ReturnType<typeof stationApi>;
 
 /**
- * A chat's calls. Sending: the message shows at once from the core's outbox; a failed one can be sent again
- * or dropped. `older` loads the page before the messages shown; `read` records how far the viewer has read.
+ * A chat's calls, by its thread. Sending: the message shows at once from the core's outbox; a failed one can be
+ * sent again or dropped. `older` loads the page before the messages shown; `read` records how far the viewer has read.
  */
 export function useChatSend() {
   const call = useCall();
   const station = useStation().address;
   return useMemo(() => ({
-    send: (key: string, text: string, attachments: Attachment[], quotes: Quote[]) => call("chat.send", { station, key, text, attachments, quotes }),
-    retry: (key: string, id: string) => call("chat.retry", { station, key, id }),
-    discard: (key: string, id: string) => call("chat.discard", { station, key, id }),
-    older: (key: string) => call("chat.older", { station, key }) as Promise<{ more: boolean }>,
-    read: (key: string, seq: number) => call("chat.read", { station, key, seq }),
+    send: (thread: number, text: string, attachments: Attachment[], quotes: Quote[]) => call("chat.send", { station, thread, text, attachments, quotes }),
+    retry: (thread: number, id: string) => call("chat.retry", { station, thread, id }),
+    discard: (thread: number, id: string) => call("chat.discard", { station, thread, id }),
+    older: (thread: number) => call("chat.older", { station, thread }) as Promise<{ more: boolean }>,
+    read: (thread: number, seq: number) => call("chat.read", { station, thread, seq }),
   }), [call, station]);
 }
 

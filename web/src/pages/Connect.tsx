@@ -4,7 +4,7 @@ import { useStation, useLink } from "../station.tsx";
 import { MessageCircle, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, useSessions, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
+import { useAction, useApi, useOverview, useSessions, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
 import { agentLabel, connectionText, EFFORT_LABEL, EFFORTS, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, slug, STATUS_LABEL, statusTone } from "../format.ts";
 import { SlackAppSection } from "./SlackApp.tsx";
 import { OwnerLabel } from "../components.tsx";
@@ -239,23 +239,34 @@ function ModeDialog({ connect, onClose }: { connect: ConnectView; onClose(): voi
   );
 }
 
+/** Where a session was last talked to: the chat with the latest message it takes part in, or null. */
+function useLatestChat(): (key: string) => number | null {
+  const threads = useThreads(useStation().address).value ?? [];
+  return (key) => threads.find((t) => t.sessions.some((m) => m.session === key))?.id ?? null;
+}
+
 /** A single-session connect's session: the one its messages go into, which people can switch or start afresh. */
 function BoundSession({ connect }: { connect: ConnectView }) {
   const link = useLink();
   const sessions = useSessions(useStation().address).value ?? [];
+  const latest = useLatestChat();
   const [choosing, setChoosing] = useState(false);
   const bound = sessions.find((s) => s.key === connect.session);
+  const chat = bound ? latest(bound.key) : null;
+  const body = bound && (
+    <>
+      <div className="card-row-text">
+        <strong>{sessionTitle(bound, connect.name)}</strong>
+        <span className="muted">{RUNTIME_LABEL[bound.runtime]} · {bound.turns} 轮 · 最近活动 <Time at={bound.lastActiveAt} /></span>
+      </div>
+      <Pill tone={statusTone(sessionStatus(bound))}>{STATUS_LABEL[sessionStatus(bound)]}</Pill>
+    </>
+  );
   return (
     <Section title="当前会话" description="单会话模式下，消息都进这个会话。可以换成另一个会话，或者新开一个。"
       actions={<Button onClick={() => setChoosing(true)}>换一个会话</Button>}>
       {bound ? (
-        <Link className="card card-row card-link" to={link(`/sessions/${encodeURIComponent(bound.key)}`)}>
-          <div className="card-row-text">
-            <strong>{sessionTitle(bound, connect.name)}</strong>
-            <span className="muted">{RUNTIME_LABEL[bound.runtime]} · {bound.turns} 轮 · 最近活动 <Time at={bound.lastActiveAt} /></span>
-          </div>
-          <Pill tone={statusTone(sessionStatus(bound))}>{STATUS_LABEL[sessionStatus(bound)]}</Pill>
-        </Link>
+        chat !== null ? <Link className="card card-row card-link" to={link(`/chats/${chat}`)}>{body}</Link> : <div className="card card-row">{body}</div>
       ) : (
         <div className="card card-row"><span className="muted">还没有会话；下一条消息会开始一个新的。</span></div>
       )}
@@ -366,6 +377,7 @@ function BindSection({ connect, overview }: { connect: ConnectView; overview: Ov
 
 function ConnectSessions({ connect }: { connect: ConnectView }) {
   const link = useLink();
+  const latest = useLatestChat();
   const sessions = (useSessions(useStation().address).value ?? []).filter((s) => s.connect === connect.id).sort((a, b) => b.lastActiveAt - a.lastActiveAt).slice(0, 12);
   return (
     <Section title="最近的会话">
@@ -373,15 +385,15 @@ function ConnectSessions({ connect }: { connect: ConnectView }) {
         <ul className="list">
           {sessions.map((s) => {
             const status = sessionStatus(s);
-            return (
-              <li key={s.key}>
-                <Link className="list-row" to={link(`/sessions/${encodeURIComponent(s.key)}`)}>
-                  <span className="list-row-title">{sessionTitle(s, connect.name)}</span>
-                  <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
-                  <Time className="muted list-row-time" at={s.lastActiveAt} />
-                </Link>
-              </li>
+            const chat = latest(s.key);
+            const row = (
+              <>
+                <span className="list-row-title">{sessionTitle(s, connect.name)}</span>
+                <Pill tone={statusTone(status)}>{STATUS_LABEL[status]}</Pill>
+                <Time className="muted list-row-time" at={s.lastActiveAt} />
+              </>
             );
+            return <li key={s.key}>{chat !== null ? <Link className="list-row" to={link(`/chats/${chat}`)}>{row}</Link> : <div className="list-row">{row}</div>}</li>;
           })}
         </ul>
       )}

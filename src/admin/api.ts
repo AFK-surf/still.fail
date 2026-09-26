@@ -641,12 +641,13 @@ export class AdminApi {
 
   async #threadView(t: ThreadSummary): Promise<ThreadView> {
     const chat = this.#threadChat(t.id);
-    const [channelName, creator, last] = await Promise.all([
+    const [channelName, creator, last, people] = await Promise.all([
       t.surface === EMBER_SURFACE ? null : chat?.channelName?.(t.channel) ?? null,
       this.#creator(t.createdBy),
       t.last ? this.#messageViews(t.id, [t.last]).then(([m]) => m ?? null) : null,
+      this.#people(t.people),
     ]);
-    return { ...t, channelName, creator, last };
+    return { ...t, channelName, creator, last, people };
   }
 
   /**

@@ -1,6 +1,6 @@
 // React on the core: `useTopic` renders a topic's current value, `useCall`
 // makes calls. Components that want the same topic share one subscription.
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useRef, useSyncExternalStore } from "react";
 import { connectCore, type CoreClient, type CoreError, type Topic } from "./client.ts";
 import { migrateLegacy } from "./migrate.ts";
 
@@ -96,6 +96,27 @@ export function useTopic<T = unknown>(topic: Topic | null): TopicState<T> {
   const subscribe = useCallback((listener: () => void) => (topic && key ? listen(key, topic, listener) : () => undefined), [key]);
   const snapshot = useCallback(() => (key ? entry(key).state : IDLE), [key]);
   return useSyncExternalStore(subscribe, snapshot) as TopicState<T>;
+}
+
+/** Several topics at once (as many as there are, which may change): their states in the order given. */
+export function useTopics<T = unknown>(topics: Topic[]): TopicState<T>[] {
+  const keys = topics.map(topicKey);
+  const joined = keys.join("\n");
+  const given = useRef({ topics, keys });
+  given.current = { topics, keys };
+  const subscribe = useCallback((listener: () => void) => {
+    const { topics: now, keys: at } = given.current;
+    const offs = now.map((topic, i) => listen(at[i]!, topic, listener));
+    return () => { for (const off of offs) off(); };
+  }, [joined]);
+  // The same array while no state in it changed, as useSyncExternalStore needs.
+  const last = useRef<TopicState<unknown>[]>([]);
+  const snapshot = useCallback(() => {
+    const states = given.current.keys.map((key) => entry(key).state);
+    if (states.length !== last.current.length || states.some((s, i) => s !== last.current[i])) last.current = states;
+    return last.current;
+  }, [joined]);
+  return useSyncExternalStore(subscribe, snapshot) as TopicState<T>[];
 }
 
 /** `call(name, params)` on the page's core. */
