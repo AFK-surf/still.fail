@@ -234,7 +234,7 @@ function HistoryItem({ item, mention, person, where }: { item: Item; mention(tex
       );
     }
     case "text":
-      return <div className={`h-text markdown${item.entry.subagent ? " h-sub" : ""}`}><Prose>{item.entry.text}</Prose></div>;
+      return <Fold className={`h-text markdown${item.entry.subagent ? " h-sub" : ""}`}><Prose>{item.entry.text}</Prose></Fold>;
     case "post": {
       const args = parseArgs(item.step.call.text)!;
       const kind = typeof args.kind === "string" ? args.kind : null;
@@ -248,7 +248,7 @@ function HistoryItem({ item, mention, person, where }: { item: Item; mention(tex
             {kind === "block" && <Pill tone="blue">等你回复</Pill>}
             {failed && <Pill tone="red">发送失败</Pill>}
           </div>
-          <div className="markdown"><Prose>{String(args.text)}</Prose></div>
+          <Fold className="markdown"><Prose>{String(args.text)}</Prose></Fold>
         </div>
       );
     }
@@ -260,13 +260,10 @@ function HistoryItem({ item, mention, person, where }: { item: Item; mention(tex
 }
 
 function Received({ from, text, place }: { from: string; text: string; place?: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const long = text.length > 280 || text.split("\n").length > 5;
   return (
     <div className="h-received">
       <div className="h-label"><ArrowDownToLine {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "ember" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <> · {place}</>}</div>
-      <blockquote className="h-quote" data-clamped={long && !open}>{text}</blockquote>
-      {long && <button type="button" className="text-toggle" onClick={() => setOpen(!open)}>{open ? "收起" : "展开更多"}</button>}
+      <Fold className="h-quote">{text}</Fold>
     </div>
   );
 }
@@ -383,6 +380,34 @@ function LiveStepView({ step }: { step: ShownStep }) {
       </div>
       {said && <div className="markdown h-live-said"><Prose>{said}</Prose></div>}
       {step.output && <pre className="h-live-output">{lastLines(step.output, 12)}</pre>}
+    </div>
+  );
+}
+
+/**
+ * Long text in the history folds to five lines; a button unfolds it. Height
+ * is measured, so markdown (lists, code) folds the same way as plain text.
+ */
+function Fold({ children, className }: { children: ReactNode; className?: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [long, setLong] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const check = () => {
+      const line = parseFloat(getComputedStyle(el).lineHeight) || 21;
+      setLong(el.scrollHeight > line * 5 + 4);
+    };
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div className="fold">
+      <div ref={box} className={`fold-body${className ? ` ${className}` : ""}`} data-folded={long && !open ? true : undefined}>{children}</div>
+      {long && <button type="button" className="text-toggle fold-toggle" onClick={() => setOpen(!open)}>{open ? "收起" : "展开"}</button>}
     </div>
   );
 }

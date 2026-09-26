@@ -886,3 +886,15 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 .code-shiki pre.shiki code { font-family: var(--font-mono); padding: 0; background: none; }
 .msg-waiting { display: inline-flex; align-items: center; gap: 5px; }
 .msg-waiting .spinner { width: 10px; height: 10px; border-width: 1.5px; }
+
+/* Long history text folds to five lines. */
+.fold { display: grid; gap: 2px; min-width: 0; }
+.fold-body[data-folded] { max-height: calc(5lh + 2px); overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent); mask-image: linear-gradient(to bottom, #000 60%, transparent); }
+.fold-toggle { justify-self: start; }
+
+/* A message the agent sent: no frame of its own (its code blocks keep theirs), a rule in the accent down the side. */
+.h-post { gap: 6px; padding: 0 0 0 12px; border: 0; border-left: 2px solid var(--accent); border-radius: 0; background: none; }
+.h-post-head { padding: 0; border: 0; border-radius: 0; background: none; color: var(--muted); }
+.h-post > .fold > .markdown, .h-post > .markdown { padding: 0; }
+.h-post[data-failed="true"] { border: 0; border-left: 2px solid var(--red); background: none; }
+.h-post[data-failed="true"] .h-post-head { background: none; color: var(--red); }
