@@ -29,7 +29,8 @@ import kotlinx.serialization.Serializable
     /** final or block, when an agent's post ended its work with it. */
     val declared: String? = null,
     val createdAt: Long = 0,
-    val deletedAt: Long? = null,
+    /** When its latest edit came; null if never edited. */
+    val editedAt: Long? = null,
 )
 
 @Serializable data class Membership(val session: String, val connect: String = "")
@@ -46,8 +47,10 @@ import kotlinx.serialization.Serializable
     val creator: Creator? = null,
     val createdAt: Long = 0,
     val sessions: List<Membership> = emptyList(),
-    val last: MessageView? = null,
-    /** The viewer's read position (a seq), 0 if never read. */
+    /** Its last entry number, 0 before anything is said. */
+    val last: Long = 0,
+    val lastMessage: MessageView? = null,
+    /** The viewer's read position (an entry number), 0 if never read. */
     val read: Long = 0,
     /** Messages after it, not deleted and not the viewer's own. */
     val unread: Int = 0,
@@ -86,7 +89,7 @@ import kotlinx.serialization.Serializable
     val title: String = "",
     val people: List<Creator> = emptyList(),
     val agents: List<ChatAgentView> = emptyList(),
-    /** Loaded so far, oldest first (deleted ones included); `chat.older` brings earlier ones. */
+    /** Merged from the entries loaded so far, oldest first; `chat.older` brings earlier ones. */
     val messages: List<MessageView> = emptyList(),
     val more: Boolean = false,
     val outbox: List<OutboxItem> = emptyList(),

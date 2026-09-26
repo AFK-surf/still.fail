@@ -27,10 +27,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,7 +40,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -54,7 +51,6 @@ import dev.ember.android.AppState
 import dev.ember.android.LocalApp
 import dev.ember.android.R
 import dev.ember.android.Screen
-import dev.ember.android.data.AccountWorkspaces
 import dev.ember.android.data.ChatItem
 import dev.ember.android.data.ChatState
 import dev.ember.android.data.ChatsView
@@ -62,7 +58,6 @@ import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceEntry
 import dev.ember.android.data.cleanText
 import dev.ember.android.data.dayLabel
-import dev.ember.android.data.entries
 import dev.ember.android.data.isMe
 import dev.ember.android.data.originLabel
 import dev.ember.android.data.page
@@ -79,9 +74,6 @@ import dev.ember.android.ui.Mark
 import dev.ember.android.ui.NavButton
 import dev.ember.android.ui.SectionHeader
 import dev.ember.android.ui.Seg
-import dev.ember.android.ui.SheetGrab
-import dev.ember.android.ui.SheetHead
-import dev.ember.android.ui.SheetSpec
 import dev.ember.android.ui.SlackMark
 import dev.ember.android.ui.avatarColor
 import dev.ember.android.ui.initial
@@ -101,7 +93,8 @@ fun HomeScreen(current: WorkspaceEntry) {
                 Text(initial(current.account.name.ifEmpty { current.account.email }), color = androidx.compose.ui.graphics.Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { openWorkspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(current.workspace.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(current.workspace.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = "有邀请" })
                 IconIn(Icons.ChevronDown, 16.dp, C.muted)
             }
             NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
@@ -223,7 +216,7 @@ private fun LastMessage(item: ChatItem, view: ChatsView) {
         mine -> "你"
         else -> last.authorName ?: last.author
     }
-    val text = if (last.deletedAt != null) "（已删除）" else cleanText(last.text).ifEmpty { "（文件）" }
+    val text = cleanText(last.text).ifEmpty { "（文件）" }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "$name：$text" }) {
         when (last.authorKind) {
             "ember" -> Mark(13.dp)
@@ -247,26 +240,5 @@ private fun Toolbar(app: AppState, modifier: Modifier) {
             Modifier.size(48.dp).shadow(10.dp, CircleShape).clip(CircleShape).background(C.ink).clickable { app.push(Screen.NewChat) },
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Pen, 20.dp, C.bg) }
-    }
-}
-
-private fun openWorkspaces(app: AppState) {
-    app.sheet = SheetSpec(0.6f) { WorkspacesSheet(app) }
-}
-
-@Composable
-private fun androidx.compose.foundation.layout.ColumnScope.WorkspacesSheet(app: AppState) {
-    val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
-    val context = LocalContext.current
-    SheetGrab()
-    SheetHead("切换 workspace")
-    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        all.value?.entries()?.forEach { e ->
-            // Workspaces are their names; which account reaches one is said only here.
-            PickRow(e.workspace.name, "${e.account.email} · ${e.workspace.stations} 台 station", checked = e.workspace.id == app.workspace) {
-                app.pickWorkspace(e.workspace.id); app.sheet = null
-            }
-        }
-        PickRow("＋ 新建 workspace", "在电脑上打开", color = C.accent) { openUrl(context, app.web("/")) }
     }
 }

@@ -40,6 +40,7 @@ import dev.ember.android.data.entries
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.screens.ChatScreen
 import dev.ember.android.screens.HomeScreen
+import dev.ember.android.screens.Landing
 import dev.ember.android.screens.MeScreen
 import dev.ember.android.screens.NewChatScreen
 import dev.ember.android.screens.SignInScreen
@@ -81,9 +82,9 @@ class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cl
     var workspace by mutableStateOf(prefs.getString("workspace", null)); private set
     fun pickWorkspace(id: String) { workspace = id; prefs.edit().putString("workspace", id).apply() }
 
-    /** null follows the system. */
-    var dark by mutableStateOf(if (prefs.contains("dark")) prefs.getBoolean("dark", false) else null); private set
-    fun useDark(on: Boolean) { dark = on; prefs.edit().putBoolean("dark", on).apply() }
+    /** 外观: "system" (the default), "light" or "dark", kept on the device. */
+    var theme by mutableStateOf(prefs.getString("theme", null) ?: "system"); private set
+    fun useTheme(value: String) { theme = value; prefs.edit().putString("theme", value).apply() }
 
     var onlyMine by mutableStateOf(prefs.getBoolean("onlyMine", false)); private set
     fun showOnlyMine(on: Boolean) { onlyMine = on; prefs.edit().putBoolean("onlyMine", on).apply() }
@@ -105,7 +106,6 @@ class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cl
 
     /** Where each chat was left: the message at the top of the list and how far below the top it sat. */
     val places = HashMap<String, Pair<String, Int>>()
-    fun web(path: String) = cloudOrigin.trimEnd('/') + path
 }
 
 val LocalApp = staticCompositionLocalOf<AppState> { error("no app") }
@@ -126,7 +126,8 @@ fun EmberApp(app: AppState) {
                 val current = entries?.firstOrNull { it.workspace.id == app.workspace } ?: entries?.firstOrNull()
                 LaunchedEffect(current?.workspace?.id) { current?.let { if (it.workspace.id != app.workspace) app.pickWorkspace(it.workspace.id) } }
                 if (current == null) {
-                    Loading(workspaces.error?.message ?: if (entries == null) "正在读取 workspace…" else "你还没有加入任何 workspace。在电脑上打开 ember 创建一个。")
+                    if (entries == null) Loading(workspaces.error?.message ?: "正在读取你的 workspace…")
+                    else Landing(signedIn, workspaces.value.orEmpty())
                 } else {
                     Pages(app, current)
                 }

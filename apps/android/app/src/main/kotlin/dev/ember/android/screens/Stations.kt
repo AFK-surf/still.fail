@@ -1,6 +1,6 @@
 // The workspace's stations: each with the buddy's face for its state and its
 // load as rings; one station's profiles (which models may be used) and
-// connections. Deeper settings are left to the computer.
+// connections.
 package dev.ember.android.screens
 
 import androidx.compose.foundation.Image
@@ -125,7 +125,6 @@ fun StationsScreen(current: WorkspaceEntry) {
                 }
             }
         }
-        OnComputer("添加 station、管理成员", app.web("/w/${ws.id}/settings"))
         Spacer(Modifier.height(30.dp))
     }
 }
@@ -178,8 +177,6 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                     }
                 }
             }
-            val (ws, st) = address.split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-            OnComputer("Profile 和连接的详细设置", app.web("/w/$ws/s/$st/settings/accounts"))
             Spacer(Modifier.height(30.dp))
         }
     }

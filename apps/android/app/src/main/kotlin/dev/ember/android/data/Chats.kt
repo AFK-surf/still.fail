@@ -57,7 +57,6 @@ import kotlinx.serialization.Serializable
     val authorName: String? = null,
     val text: String = "",
     val createdAt: Long = 0,
-    val deletedAt: Long? = null,
 )
 
 /** The Slack thread a row's agent came from. */

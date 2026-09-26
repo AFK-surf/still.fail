@@ -90,7 +90,6 @@ fun NewChatScreen(scope: String) {
                 Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 240.dp)
                 Text("没有在线的 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                 Text("在一台机器上打开 ember，它就会连上这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
-                OnComputer("添加 station", app.web("/w/$scope/settings"))
             }
             else -> {
                 val remembered = app.strings("newChat.last").firstOrNull()
