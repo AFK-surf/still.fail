@@ -234,6 +234,11 @@ async fn run(data: &Path, admin: String, secret: String, traces: bool) -> Result
     info!(station = %endpoint.id(), workspace = %state.workspace_name, "ember-mesh listening");
     let telemetry = Telemetry::new(traces);
     let station = Arc::new(Station { data: data.to_path_buf(), state: Mutex::new(state), admin, secret, removed: Mutex::new(false), telemetry: telemetry.clone() });
+    // Online at ember cloud only once the relay can reach us: a device that saw "online" and connected before
+    // our relay link was up had its first packets dropped and waited out QUIC's retransmits (~3 s).
+    if tokio::time::timeout(std::time::Duration::from_secs(15), endpoint.online()).await.is_err() {
+        warn!("no relay link after 15 s; going online at ember cloud anyway");
+    }
     tokio::spawn(presence(station.clone(), endpoint.secret_key().clone()));
     if traces {
         tokio::spawn(telemetry.clone().read_station_spans());
