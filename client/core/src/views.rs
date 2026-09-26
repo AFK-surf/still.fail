@@ -1308,7 +1308,8 @@ mod tests {
             t.subscribe(1, chat_topic("ws/a", 7));
             t.read(&mut ui, 1).await;
             // Its thread and its messages are asked for at once.
-            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a")]));
+            // And its workspace, which says whether the station is online.
+            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), workspace()]));
             assert!(ui.value.is_none(), "nothing before the thread is read");
 
             let now = t.host.now_ms();
@@ -1440,7 +1441,7 @@ mod tests {
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Chat { station: "ws/a".into(), thread: None, session: Some("k".into()) });
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), rows("ws/a"), sessions("ws/a"), overview("ws/a"), link("ws/a")]));
+            assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), rows("ws/a"), sessions("ws/a"), overview("ws/a"), link("ws/a"), workspace()]));
             t.set(session_of("ws/a", "k"), json!({"session": {"key": "k", "connect": "c1", "profile": "p1"}, "threads": [{"id": 3, "surface": "slack:T1"}], "turns": [{"id": "t1"}]}));
             t.read(&mut ui, 1).await;
             assert!(ui.value.is_none(), "its title is the station's: it waits for the items");
