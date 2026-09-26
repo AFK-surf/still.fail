@@ -35,11 +35,21 @@ export function CloudApp() {
 
 function Home() {
   const list = useAccounts();
+  const navigate = useNavigate();
+  // In the desktop app: an item's link opened from outside (ember://o/…) comes here, and the page goes there.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin === location.origin && typeof event.data?.emberNavigate === "string") navigate(event.data.emberNavigate);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [navigate]);
   if (!list) return <div className="gate"><Loading /></div>;
   if (list.length === 0) return <SignInPage lead={inviteCode() ? "你拿到了 ember 的邀请码。用 Google 账号登录，就能建一个自己的 workspace。" : undefined} />;
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/o/:ws/:station/:session" element={<OpenItem />} />
       <Route path="/w/:ws/*" element={<WorkspaceRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -179,6 +189,35 @@ function Invite() {
           {accept.error && <p className="field-error" role="alert">{accept.error.message}</p>}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * An item's link from outside (a session's link in Slack): /o/<workspace>/<station>/<session>. On a computer the
+ * desktop app is asked to open it (ember://o/…); when nothing takes it within a moment, or on a phone (where the
+ * Android app takes these links itself), or inside the desktop app, it opens here.
+ */
+function OpenItem() {
+  const { ws = "", station = "", session = "" } = useParams();
+  const target = `/w/${ws}/s/${station}/chats/${encodeURIComponent(session)}`;
+  const inDesktop = "emberDesktop" in window;
+  const phone = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  const [here, setHere] = useState(inDesktop || phone);
+  useEffect(() => {
+    if (here) return;
+    const timer = setTimeout(() => setHere(true), 1200);
+    // If the desktop app takes it, this page loses focus: it stays as it is, for a second look.
+    const away = () => clearTimeout(timer);
+    window.addEventListener("blur", away, { once: true });
+    window.location.href = `ember://o/${ws}/${station}/${encodeURIComponent(session)}`;
+    return () => { clearTimeout(timer); window.removeEventListener("blur", away); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (here) return <Navigate to={target} replace />;
+  return (
+    <div className="gate">
+      <Loading label="正在用 ember 打开…" />
+      <Button variant="ghost" onClick={() => setHere(true)}>在网页里打开</Button>
     </div>
   );
 }

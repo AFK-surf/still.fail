@@ -68,8 +68,8 @@ const hub: Hub = new Hub({
   // A session's /o/ link on ember cloud (it opens the app where there is one, else the web), once this station is in
   // a workspace.
   link: (session) => {
-    const { origin, station } = mesh.status();
-    return origin && station ? `${origin}/o/${station}/${encodeURIComponent(session)}` : null;
+    const { origin, station, workspaceId } = mesh.status();
+    return origin && station && workspaceId ? `${origin}/o/${workspaceId}/${station}/${encodeURIComponent(session)}` : null;
   },
 });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());

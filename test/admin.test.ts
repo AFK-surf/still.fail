@@ -147,7 +147,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string }; st
     settings, store, hub, connections: conns, logins, names: new Map(), slackApps: slackApps as unknown as SlackApps,
     checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks),
     ...(options.quota ? { quota: async () => { options.quota!(); return { state: "ok" as const, windows: [{ label: "5 小时", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: Date.now() }; } } : {}),
-    ...(options.spans ? { mesh: { secret: () => null, status: () => ({ state: "off" as const, origin: null, station: null, workspace: null, name: null }), span: (span: object) => options.spans!.push(span) } } : {}),
+    ...(options.spans ? { mesh: { secret: () => null, status: () => ({ state: "off" as const, origin: null, station: null, workspace: null, workspaceId: null, name: null }), span: (span: object) => options.spans!.push(span) } } : {}),
   });
   const server = createServer((req, res) => void api.handle(req, res));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

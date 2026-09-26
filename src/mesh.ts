@@ -20,7 +20,9 @@ export interface MeshStatus {
   state: "off" | "missing" | "running" | "restarting";
   origin: string | null;
   station: string | null;
+  /** The workspace's name, as it was when the station joined. */
   workspace: string | null;
+  workspaceId: string | null;
   name: string | null;
 }
 
@@ -69,11 +71,11 @@ export class MeshSupervisor {
     try {
       state = JSON.parse(readFileSync(this.#statePath, "utf8")) as Record<string, string>;
     } catch {
-      return { state: "off", origin: null, station: null, workspace: null, name: null };
+      return { state: "off", origin: null, station: null, workspace: null, workspaceId: null, name: null };
     }
     return {
       state: this.#child ? "running" : existsSync(this.#binary) ? "restarting" : "missing",
-      origin: state.origin ?? null, station: state.station ?? null, workspace: state.workspace_name ?? null, name: state.name ?? null,
+      origin: state.origin ?? null, station: state.station ?? null, workspace: state.workspace_name ?? null, workspaceId: state.workspace ?? null, name: state.name ?? null,
     };
   }
 

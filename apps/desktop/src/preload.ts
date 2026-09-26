@@ -9,3 +9,5 @@ contextBridge.exposeInMainWorld("emberDesktop", {
 
 ipcRenderer.on("core:port", (event, id: number) => window.postMessage({ emberCore: "port", id }, location.origin, event.ports));
 ipcRenderer.on("core:exit", (_event, reason: string) => window.postMessage({ emberCore: "exit", reason }, location.origin));
+// An item's link opened from outside: the page goes there itself.
+ipcRenderer.on("app:navigate", (_event, path: string) => window.postMessage({ emberNavigate: path }, location.origin));

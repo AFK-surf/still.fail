@@ -33,7 +33,7 @@ function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinu
   const claude = new FakeDriver("claude");
   const codex = new FakeDriver("codex");
   const hub = new Hub({ config: () => config, store, chats: new Map([["cl", chat], ["gpt", gptChat], ["team", teamChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp", internal: new InternalChat(),
-    ...(link ? { link: (key: string) => `https://ember.test/o/st/${encodeURIComponent(key)}` } : {}) });
+    ...(link ? { link: (key: string) => `https://ember.test/o/ws/st/${encodeURIComponent(key)}` } : {}) });
   const tools = Object.fromEntries(hub.tools().map((t) => [t.name, t]));
   const call = (key: string, name: string, args: Record<string, unknown>) => tools[name]!.run(key, args);
   const accept = (m: ReturnType<typeof message>, connect = "cl") => hub.accept(connect, m);
@@ -46,7 +46,7 @@ test("a new session first says where it can be followed (multi-session connects 
   await accept(m);
   await settle();
   assert.equal(chat.posts.length, 1);
-  assert.match(chat.posts[0]!.text, /^\[在 ember 里查看这个会话\]\(https:\/\/ember\.test\/o\/st\/cl%3AC1%3A[\d.]+\)$/);
+  assert.match(chat.posts[0]!.text, /^\[在 ember 里查看这个会话\]\(https:\/\/ember\.test\/o\/ws\/st\/cl%3AC1%3A[\d.]+\)$/);
   assert.deepEqual(chat.posts[0]!.thread, { channel: "C1", threadTs: m.threadTs });
   // Its next message is the same session: nothing more.
   await accept(message({ text: "<@UBOT> and the tests", threadTs: m.threadTs }));

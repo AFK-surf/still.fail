@@ -80,15 +80,21 @@ function open(path = "/"): BrowserWindow {
 }
 
 /** The system browser finished a sign-in: the page's own /auth/callback completes it (web/src/cloud/gate.tsx). */
-function signedIn(url: string): void {
-  if (!url.startsWith(AUTH_CALLBACK)) return;
-  const path = `/auth/callback${new URL(url).search}`;
+/**
+ * An ember:// URL handed to the app: the sign-in coming back (ember://auth/callback, loaded as the page), or an
+ * item's link (ember://o/<workspace>/<station>/<session>, from the web's /o/ page), which the page opens in place.
+ */
+function arrived(url: string): void {
+  const item = /^ember:\/\/o\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)/.exec(url);
+  if (!url.startsWith(AUTH_CALLBACK) && !item) return;
+  const path = item ? `/o/${item[1]}/${item[2]}/${item[3]}` : `/auth/callback${new URL(url).search}`;
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   if (!window) {
     open(path);
     return;
   }
-  void window.loadURL(`${APP_ORIGIN}${path}`);
+  if (item) window.webContents.send("app:navigate", path);
+  else void window.loadURL(`${APP_ORIGIN}${path}`);
   if (window.isMinimized()) window.restore();
   window.focus();
 }
@@ -100,11 +106,11 @@ if (!app.requestSingleInstanceLock()) {
   // macOS hands the app its URLs here (possibly before it is ready); elsewhere they start a second instance.
   app.on("open-url", (event, url) => {
     event.preventDefault();
-    void app.whenReady().then(() => signedIn(url));
+    void app.whenReady().then(() => arrived(url));
   });
   app.on("second-instance", (_event, argv) => {
-    const url = argv.find((arg) => arg.startsWith(AUTH_CALLBACK));
-    if (url) signedIn(url);
+    const url = argv.find((arg) => arg.startsWith("ember://"));
+    if (url) arrived(url);
     else BrowserWindow.getAllWindows()[0]?.focus();
   });
   void app.whenReady().then(() => {
