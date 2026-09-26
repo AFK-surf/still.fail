@@ -7,7 +7,7 @@ import { AdminApi } from "./admin/api.ts";
 import { linkAgentHome, linkTranscripts } from "./agent-home.ts";
 import { Connections } from "./connections.ts";
 import { NameBook } from "./chat/names.ts";
-import { SlackSurface, slackTeamOf } from "./chat/slack.ts";
+import { SlackSurface } from "./chat/slack.ts";
 import { Hub } from "./hub.ts";
 import { log } from "./log.ts";
 import { LoginManager } from "./login.ts";
@@ -31,15 +31,7 @@ const reports = new ErrorReports({ key: builtKey(UI_DIR), enabled: () => setting
 /** Display names of people who reached this station through ember cloud, by email. */
 const names = new Map<string, string>();
 const dbPath = join(settings.dataDir, "ember.db");
-// Moving older data into threads names Slack threads by team; ask Slack once, before the store opens.
-const teams = new Map<string, string>();
-if (Store.needsTeams(dbPath)) {
-  await Promise.all(settings.config.connects.filter((c) => c.slack.botToken).map(async (c) => {
-    const team = await slackTeamOf(c.slack.botToken);
-    if (team) teams.set(c.id, team);
-  }));
-}
-const store = new Store(dbPath, { teams });
+const store = new Store(dbPath);
 linkAgentHome(settings.config.agentHome, settings.config.profiles);
 linkTranscripts(settings.config.dataDir, settings.config.profiles);
 

@@ -119,18 +119,6 @@ export interface RawConnect {
   bind: { runtime: RuntimeKind; model?: string; effort?: string };
 }
 
-/** The previous config shape: one Slack app per bot, always multi-session. */
-interface LegacyBot {
-  id: string;
-  name?: string;
-  enabled?: boolean;
-  slack?: { appToken?: string; botToken?: string };
-  runtime: RuntimeKind;
-  profiles?: string[];
-  profile?: string;
-  model?: string;
-}
-
 export interface RawProfile {
   id: string;
   name?: string;
@@ -150,29 +138,11 @@ export interface RawConfig {
   http?: { host?: string; port?: number };
   connects?: RawConnect[];
   slackConfigToken?: ConfigToken;
-  /** Legacy; read as multi-session Slack connects and rewritten by upgradeRawConfig. */
-  bots?: LegacyBot[];
   profiles?: RawProfile[];
   maxNudges?: number;
   warmMinutes?: number;
   maxWarmClaude?: number;
   telemetry?: { errors?: boolean; traces?: boolean };
-}
-
-/** Rewrites older config shapes into the current one. Returns the input when already current. */
-export function upgradeRawConfig(raw: RawConfig): RawConfig {
-  if (!raw.bots) return raw;
-  const { bots, ...rest } = raw;
-  const converted = bots.map((b): RawConnect => ({
-    id: b.id,
-    ...(b.name ? { name: b.name } : {}),
-    ...(b.enabled === undefined ? {} : { enabled: b.enabled }),
-    kind: "slack",
-    mode: "multi-session",
-    ...(b.slack ? { slack: b.slack } : {}),
-    bind: { runtime: b.runtime, ...(b.model ? { model: b.model } : {}) },
-  }));
-  return { ...rest, connects: [...(raw.connects ?? []), ...converted] };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -203,7 +173,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
   });
   unique("profile", profiles.map((p) => p.id));
 
-  const connects = (upgradeRawConfig(raw).connects ?? []).map((c): Connect => {
+  const connects = (raw.connects ?? []).map((c): Connect => {
     if (typeof c.id !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(c.id)) throw new Error(`connect id ${JSON.stringify(c.id)}: use lowercase letters, digits and dashes`);
     const kind = c.kind ?? "slack";
     if (!CONNECT_KINDS.includes(kind)) throw new Error(`connect ${c.id}: unknown kind ${String(kind)}`);

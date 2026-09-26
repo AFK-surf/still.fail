@@ -45,12 +45,6 @@ export async function verifySlackTokens(tokens: { appToken: string; botToken: st
   return { identity, errors };
 }
 
-/** The Slack team a bot token belongs to, or null when Slack cannot be asked (within ten seconds). */
-export async function slackTeamOf(botToken: string): Promise<string | null> {
-  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000).unref());
-  const asked = slackApi("auth.test", {}, botToken).then((auth) => identityOf(auth).teamId || null, () => null);
-  return Promise.race([asked, timeout]);
-}
 
 function identityOf(auth: Record<string, any>): SlackIdentity {
   return { team: String(auth.team ?? ""), teamId: String(auth.team_id ?? ""), url: String(auth.url ?? ""), botUserId: String(auth.user_id ?? ""), botName: String(auth.user ?? "") };

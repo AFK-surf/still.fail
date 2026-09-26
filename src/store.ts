@@ -180,177 +180,15 @@ export type TurnKind = "input" | "nudge" | "resume";
 export const EMBER_SURFACE = "ember";
 
 /**
- * Bump on schema changes and add a step to MIGRATIONS that brings the
- * previous version up. Versions without a migration path are refused.
+ * Bump on schema changes. A database of another version is refused: there is one station, and its data is moved by
+ * hand when the schema changes (no migrations are kept in the code).
  */
 const SCHEMA_VERSION = 11;
-
-interface MigrationContext {
-  /** The Slack team of each connect, where known; threads are named by team. */
-  teams: ReadonlyMap<string, string>;
-}
-
-const MIGRATIONS: Record<number, (db: DatabaseSync, context: MigrationContext) => void> = {
-  // v9 → v10: chats, chat_messages and inbound become threads, messages and deliveries.
-  9: (db, { teams }) => {
-    db.exec(V10_TABLES);
-    db.function("surface_of", (connect) => (connect === "ember" ? EMBER_SURFACE : slackSurface(String(connect), teams.get(String(connect)))));
-    db.exec(`
-      INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at)
-        SELECT 'ember', 'EMBER', thread_ts, title, created_by, created_at FROM chats;
-      INSERT OR IGNORE INTO threads (surface, channel, thread_ts, created_by, created_at)
-        SELECT surface_of(connect), channel, thread_ts, CASE connect WHEN 'ember' THEN user ELSE 'slack:' || connect || ':' || user END, MIN(received_at)
-        FROM inbound GROUP BY surface_of(connect), channel, thread_ts;
-      -- A session made before any message remembers the thread it was made for, if any.
-      INSERT OR IGNORE INTO threads (surface, channel, thread_ts, created_by, created_at)
-        SELECT surface_of(connect), channel, thread_ts, created_by, created_at FROM sessions s
-        WHERE channel != '' AND NOT EXISTS (SELECT 1 FROM inbound i WHERE i.session_key = s.key);
-
-      INSERT OR IGNORE INTO thread_sessions (thread, session, connect, joined_at)
-        SELECT t.id, c.session_key, 'ember', c.created_at FROM chats c JOIN threads t ON t.surface = 'ember' AND t.channel = 'EMBER' AND t.thread_ts = c.thread_ts;
-      INSERT OR IGNORE INTO thread_sessions (thread, session, connect, joined_at)
-        SELECT t.id, i.session_key, i.connect, MIN(i.received_at) FROM inbound i
-        JOIN threads t ON t.surface = surface_of(i.connect) AND t.channel = i.channel AND t.thread_ts = i.thread_ts
-        GROUP BY t.id, i.session_key;
-      INSERT OR IGNORE INTO thread_sessions (thread, session, connect, joined_at)
-        SELECT t.id, s.key, s.connect, s.created_at FROM sessions s
-        JOIN threads t ON t.surface = surface_of(s.connect) AND t.channel = s.channel AND t.thread_ts = s.thread_ts
-        WHERE NOT EXISTS (SELECT 1 FROM inbound i WHERE i.session_key = s.key);
-
-      -- Everything said, oldest first so seq keeps the order. A message typed on the page is in
-      -- both old tables; the chat_messages row keeps its words, files and quotes as the person wrote them.
-      CREATE TEMP TABLE said AS
-        SELECT t.id AS thread, m.ts, CASE m.role WHEN 'agent' THEN 'agent' ELSE 'person' END AS author_kind,
-          CASE m.role WHEN 'agent' THEN c.session_key ELSE m.user END AS author, m.text, m.attachments, m.quotes, m.created_at
-        FROM chat_messages m JOIN chats c ON c.thread_ts = m.thread_ts
-        JOIN threads t ON t.surface = 'ember' AND t.channel = 'EMBER' AND t.thread_ts = m.thread_ts;
-      INSERT INTO said
-        SELECT t.id, i.ts, 'person', i.user, i.text, NULL, NULL, MIN(i.received_at) FROM inbound i
-        JOIN threads t ON t.surface = surface_of(i.connect) AND t.channel = i.channel AND t.thread_ts = i.thread_ts
-        WHERE NOT EXISTS (SELECT 1 FROM said s WHERE s.thread = t.id AND s.ts = i.ts)
-        GROUP BY t.id, i.ts;
-      INSERT INTO messages (rev, thread, ts, author_kind, author, text, attachments, quotes, created_at)
-        SELECT ROW_NUMBER() OVER (ORDER BY created_at, CAST(ts AS REAL)), thread, ts, author_kind, author, text, attachments, quotes, created_at
-        FROM said ORDER BY created_at, CAST(ts AS REAL);
-      DROP TABLE said;
-
-      INSERT OR IGNORE INTO deliveries (message, session, delivered_at)
-        SELECT m.seq, i.session_key, CASE i.status WHEN 'delivered' THEN i.received_at END FROM inbound i
-        JOIN threads t ON t.surface = surface_of(i.connect) AND t.channel = i.channel AND t.thread_ts = i.thread_ts
-        JOIN messages m ON m.thread = t.id AND m.ts = i.ts;
-
-      DROP TABLE inbound;
-      DROP TABLE chat_messages;
-      DROP TABLE chats;
-      ALTER TABLE sessions DROP COLUMN channel;
-      ALTER TABLE sessions DROP COLUMN thread_ts;
-      ALTER TABLE sessions ADD COLUMN archived_at INTEGER;
-    `);
-  },
-  // v10 → v11: messages become thread logs of entries; deliveries and reads point at (thread, n).
-  10: (db) => {
-    db.exec(`
-      -- Thread ids are never used again, so what a client keeps of a thread stays true.
-      ALTER TABLE threads RENAME TO threads_v10;
-      ${THREADS}
-      INSERT INTO threads (id, surface, channel, thread_ts, title, created_by, created_at)
-        SELECT id, surface, channel, thread_ts, title, created_by, created_at FROM threads_v10;
-      DROP TABLE threads_v10;
-      ${ENTRIES}
-
-      -- Each message in thread order. An edited one keeps the edited words (the older ones are gone);
-      -- a deleted one is left out: ember takes nothing back, and its words were cleared already.
-      CREATE TEMP TABLE numbered AS
-        SELECT seq, thread, ROW_NUMBER() OVER (PARTITION BY thread ORDER BY seq) AS n
-        FROM messages WHERE deleted_at IS NULL;
-      INSERT INTO entries (thread, n, kind, ts, author_kind, author, text, attachments, quotes, declared, at)
-        SELECT m.thread, x.n, 'message', m.ts, m.author_kind, m.author, m.text, m.attachments, m.quotes, m.declared, m.created_at
-        FROM messages m JOIN numbered x ON x.seq = m.seq;
-
-      ALTER TABLE deliveries RENAME TO deliveries_v10;
-      ${DELIVERIES}
-      INSERT INTO deliveries (thread, n, session, delivered_at)
-        SELECT x.thread, x.n, d.session, d.delivered_at FROM deliveries_v10 d JOIN numbered x ON x.seq = d.message ORDER BY d.message;
-      DROP TABLE deliveries_v10;
-
-      -- A read position was a seq: it becomes the last entry of the messages it covered. Deliveries of
-      -- messages left out go with them.
-      ALTER TABLE reads RENAME TO reads_v10;
-      ${READS}
-      INSERT INTO reads (viewer, thread, n, at)
-        SELECT r.viewer, r.thread, COALESCE((SELECT MAX(x.n) FROM numbered x WHERE x.thread = r.thread AND x.seq <= r.seq), 0), r.at
-        FROM reads_v10 r;
-      DROP TABLE reads_v10;
-
-      DROP TABLE numbered;
-      DROP TABLE messages;
-    `);
-  },
-};
 
 /** Where a Slack connect's threads live: its team, or the connect itself while the team is unknown. */
 export function slackSurface(connect: string, teamId: string | null | undefined): string {
   return teamId ? `slack:${teamId}` : `slack:${connect}`;
 }
-
-/** v10's tables, which the v9 step fills. */
-const V10_TABLES = `
-CREATE TABLE IF NOT EXISTS threads (
-  id INTEGER PRIMARY KEY,
-  surface TEXT NOT NULL,
-  channel TEXT NOT NULL,
-  thread_ts TEXT NOT NULL,
-  title TEXT,
-  created_by TEXT,
-  created_at INTEGER NOT NULL,
-  UNIQUE (surface, channel, thread_ts)
-);
-CREATE TABLE IF NOT EXISTS thread_sessions (
-  thread INTEGER NOT NULL,
-  session TEXT NOT NULL,
-  connect TEXT NOT NULL,
-  joined_at INTEGER NOT NULL,
-  PRIMARY KEY (thread, session)
-);
-CREATE INDEX IF NOT EXISTS thread_sessions_session ON thread_sessions (session);
-CREATE TABLE IF NOT EXISTS messages (
-  seq INTEGER PRIMARY KEY AUTOINCREMENT,
-  rev INTEGER NOT NULL UNIQUE,
-  thread INTEGER NOT NULL,
-  ts TEXT NOT NULL,
-  author_kind TEXT NOT NULL,
-  author TEXT NOT NULL,
-  text TEXT NOT NULL,
-  attachments TEXT,
-  quotes TEXT,
-  declared TEXT,
-  created_at INTEGER NOT NULL,
-  edited_at INTEGER,
-  deleted_at INTEGER,
-  UNIQUE (thread, ts)
-);
-CREATE INDEX IF NOT EXISTS messages_thread_rev ON messages (thread, rev);
-CREATE TABLE IF NOT EXISTS deliveries (
-  message INTEGER NOT NULL,
-  session TEXT NOT NULL,
-  delivered_at INTEGER,
-  PRIMARY KEY (message, session)
-);
-CREATE INDEX IF NOT EXISTS deliveries_pending ON deliveries (session) WHERE delivered_at IS NULL;
-CREATE INDEX IF NOT EXISTS deliveries_session ON deliveries (session, message);
-CREATE TABLE IF NOT EXISTS reads (
-  viewer TEXT NOT NULL,
-  thread INTEGER NOT NULL,
-  seq INTEGER NOT NULL,
-  at INTEGER NOT NULL,
-  PRIMARY KEY (viewer, thread)
-);
-CREATE TABLE IF NOT EXISTS profile_status (
-  profile TEXT PRIMARY KEY,
-  check_json TEXT, checked_at INTEGER,
-  quota_json TEXT, quota_at INTEGER
-);
-`;
 
 const THREADS = `
 CREATE TABLE IF NOT EXISTS threads (
@@ -579,42 +417,18 @@ export class Store {
   /** Entries of archived threads read lately (they never change), the most recent last. */
   readonly #archived = new Map<number, EntryRow[]>();
 
-  /**
-   * `teams` names the Slack team of each connect, for moving older data into threads (see MIGRATIONS).
-   * `archive` is where archived threads go: `archive/` beside the database unless given.
-   */
-  constructor(path: string, options: { teams?: ReadonlyMap<string, string>; archive?: string } = {}) {
+  /** `archive` is where archived threads go: `archive/` beside the database unless given. */
+  constructor(path: string, options: { archive?: string } = {}) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
     this.#archiveDir = options.archive ?? (path === ":memory:" ? undefined : join(dirname(path), "archive"));
     this.#db = new DatabaseSync(path);
     this.#db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
-    let version = Store.#version(this.#db);
-    if (version !== null) {
-      while (version < SCHEMA_VERSION) {
-        const step = MIGRATIONS[version];
-        if (step === undefined) throw new Error(`${path} has schema version ${version}, which ember ${SCHEMA_VERSION} cannot migrate; move it aside`);
-        this.#transaction(() => {
-          step(this.#db, { teams: options.teams ?? new Map() });
-          this.#db.exec(`PRAGMA user_version = ${version! + 1}`);
-        });
-        version++;
-      }
-      if (version > SCHEMA_VERSION) throw new Error(`${path} was written by a newer ember (schema ${version})`);
+    const version = Store.#version(this.#db);
+    if (version !== null && version !== SCHEMA_VERSION) {
+      throw new Error(`${path} has schema version ${version}; this ember uses ${SCHEMA_VERSION}. Move its data by hand, or move it aside.`);
     }
     this.#db.exec(SCHEMA);
     this.#db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-  }
-
-  /** Whether opening `path` will move data into threads, which wants the connects' Slack teams. */
-  static needsTeams(path: string): boolean {
-    if (path === ":memory:" || !existsSync(path)) return false;
-    const db = new DatabaseSync(path);
-    try {
-      const version = Store.#version(db);
-      return version !== null && version < 10;
-    } finally {
-      db.close();
-    }
   }
 
   /** The schema version of a database with ember's tables, or null for an empty one. */
