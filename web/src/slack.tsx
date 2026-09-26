@@ -36,7 +36,7 @@ export const emptyTokens: TokenState = { appToken: "", botToken: "", verified: n
  * (`install`, its state) has its bot token on the station already: only the app-level token is asked for.
  */
 export function TokenFields({ value, onChange, connect, masked, install }: {
-  value: TokenState; onChange(value: TokenState): void; connect?: string; masked?: { appToken: string; botToken: string }; install?: string;
+  value: TokenState; onChange(value: TokenState): void; connect?: string; masked?: { appToken: string; botToken: string }; install?: string | undefined;
 }) {
   const api = useApi();
   const [errors, setErrors] = useState<string[]>([]);
