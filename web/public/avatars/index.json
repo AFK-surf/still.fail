@@ -1,5 +1,25 @@
 [
   {
+    "id": "backend",
+    "label": "后端接口",
+    "bg": "#B582EB"
+  },
+  {
+    "id": "mobile",
+    "label": "移动应用",
+    "bg": "#B9D84A"
+  },
+  {
+    "id": "documentation",
+    "label": "写文档",
+    "bg": "#F3CA43"
+  },
+  {
+    "id": "support",
+    "label": "客户支持",
+    "bg": "#EF83B3"
+  },
+  {
     "id": "code-review",
     "label": "代码审查",
     "bg": "#DDEFEA"
