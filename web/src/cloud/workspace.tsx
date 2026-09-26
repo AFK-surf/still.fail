@@ -45,15 +45,16 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
   const people = useMemo(() => new Map((view?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view]);
   useEffect(() => identify(entry.account), [entry.account]);
-  // Everything the workspace's pages and settings show, subscribed from the start and kept current while it is open:
-  // a page opened the first time draws at once, with no frame waiting for the core's first answer.
+  // The views the workspace's pages and settings show, subscribed from the start: a page opened the first time draws at
+  // once, with no frame waiting for the core's first answer. What the core keeps in sync is its own call (sync.rs);
+  // these only read it.
   useTopics<unknown>([
     { topic: "connects", scope: entry.id, mine: false },
     { topic: "connects", scope: entry.id, mine: true },
     { topic: "chats", scope: entry.id, mine: false },
     { topic: "chats", scope: entry.id, mine: true },
     { topic: "loginSessions", account: entry.account.sub },
-    ...(found.value ?? []).filter((s) => s.online).flatMap((s): Topic[] => [{ topic: "overview", station: s.station }, { topic: "host", station: s.station }]),
+    ...(found.value ?? []).map((s): Topic => ({ topic: "overview", station: s.station })),
   ]);
 
   return (
