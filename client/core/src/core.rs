@@ -156,6 +156,9 @@ impl Core {
                 sockets: RefCell::default(),
             }
         });
+        // Whom each account reaches, as the data center has it from the last run: views put together before the
+        // first `/v1/me` answers know whose workspace is whose.
+        inner.recompute_owners();
         let me = Rc::downgrade(&inner);
         tracer.set_export(Rc::new(move |body: Vec<u8>| {
             let me = me.clone();
@@ -1233,12 +1236,15 @@ mod tests {
             let mut values = HashMap::new();
             core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
             core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Workspace { workspace: "ws".into() } });
+            core.receive(ui, ClientMessage::Subscribe { id: 3, subscribe: Topic::Chats { scope: "ws".into(), mine: false } });
             host.settle().await;
             apply(&host, &mut values);
             assert_eq!(values[&1][0]["workspaces"][0]["id"], "ws");
             // Kept, not confirmed: a UI does not take it for "no workspace yet".
             assert_eq!(values[&1][0]["loaded"], false);
             assert_eq!(values[&2]["stations"][0]["id"], "st");
+            // Whose workspace it is is known from what was kept, before any answer.
+            assert_eq!(values[&3]["me"]["email"], "a@x.com");
         });
     }
 
