@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,6 +66,7 @@ import dev.ember.android.data.relativeTime
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.data.state
 import dev.ember.android.ui.Avatar
+import dev.ember.android.ui.Badge
 import dev.ember.android.ui.C
 import dev.ember.android.ui.IconIn
 import dev.ember.android.ui.Icons
@@ -194,9 +196,11 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
                 }
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item, view) } }
+                // The state rides on the agent's picture when the agent said the last thing; else it is a dot at the end.
+                val onPicture = item.last?.authorKind == "agent" && item.agents.any { it.key == item.last.author }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item, view, if (onPicture) item.state() else null) } }
                 if (held) Text(relativeTime(item.lastActiveAt), fontSize = 12.sp, color = C.subtle, maxLines = 1)
-                Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) { StateDot(item.state()) }
+                Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) { if (!onPicture) StateDot(item.state()) }
             }
         }
     }
@@ -204,7 +208,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
 
 /** The last thing said, on one line: a small picture of who said it, then what, in the secondary colour. */
 @Composable
-private fun LastMessage(item: ChatItem, view: ChatsView) {
+private fun LastMessage(item: ChatItem, view: ChatsView, state: ChatState?) {
     val last = item.last!!
     val agent = if (last.authorKind == "agent") item.agents.firstOrNull { it.key == last.author } else null
     val mine = last.authorKind == "person" && view.me.isMe(last.author)
@@ -218,7 +222,10 @@ private fun LastMessage(item: ChatItem, view: ChatsView) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "$name：$text" }) {
         when (last.authorKind) {
             "ember" -> Mark(13.dp)
-            "agent" -> MakerIcon(agent?.model, agent?.runtime ?: "claude", 13.dp)
+            "agent" -> Box {
+                MakerIcon(agent?.model, agent?.runtime ?: "claude", 13.dp)
+                if (state != null && state != ChatState.Done) Box(Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp)) { Badge(state, 8.dp, 1.5.dp, C.bg) }
+            }
             else -> Avatar(last.author, name, 13.dp)
         }
         // The line's own height, its glyphs centred in it: level with the picture and the state's dot.

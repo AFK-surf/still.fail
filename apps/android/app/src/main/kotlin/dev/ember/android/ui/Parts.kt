@@ -85,7 +85,7 @@ fun MakerIcon(model: String?, runtime: String, size: Dp, modifier: Modifier = Mo
 
 /** A state badge: solid orange = block, a still hollow orange ring = at work, red = failed; done has none. Nothing blinks. */
 @Composable
-private fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier: Modifier = Modifier) {
+internal fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier: Modifier = Modifier) {
     val c = C
     Canvas(modifier.size(size)) {
         val r = this.size.minDimension / 2
