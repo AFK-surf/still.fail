@@ -12,6 +12,8 @@ export interface Station {
   name: string;
   /** Path prefix of this station's pages: "" locally, /w/<ws>/s/<id> in ember cloud. */
   base: string;
+  /** How the client core names it: "local", or "<workspace>/<station>". */
+  address: string;
   transport: Transport;
   /** False when ember cloud has not heard from it lately; its data is not requested. */
   online: boolean;
@@ -20,7 +22,7 @@ export interface Station {
 }
 
 export const LOCAL_STATION: Station = {
-  id: "local", name: "", base: "", online: true, settings: "/settings",
+  id: "local", name: "", base: "", address: "local", online: true, settings: "/settings",
   // Resolved on each call, so a transport set at startup applies.
   transport: { request: (...a) => transport().request(...a), bytes: (...a) => transport().bytes(...a), events: (...a) => transport().events(...a), stream: (...a) => transport().stream(...a) },
 };

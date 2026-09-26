@@ -77,6 +77,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const stations = useMemo<Station[]>(() => (view.data?.stations ?? []).map((s) => ({
     id: s.id, name: s.name, online: online(s),
     base: `/w/${entry.id}/s/${s.id}`, settings: `/w/${entry.id}/settings`,
+    address: `${entry.id}/${s.id}`,
     transport: transportFor(entry.account.sub, entry.id, s.id, entry.relay),
   })), [view.data, entry]);
   const path = useLocation().pathname;

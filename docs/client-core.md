@@ -93,6 +93,65 @@ messages into the `session` value, and `overview` / `host` refresh on a timer
 (10 s / 15 s) while subscribed. A topic nobody subscribes to is dropped after
 a minute.
 
+### Views
+
+The UI does no joining, filtering or grouping of data: every screen subscribes
+to one **view** topic that the core has already put together from the
+topics above (and keeps current as they change). A view keeps the topics it is
+built from subscribed inside the core; its value is recomputed at most once
+per coalescing window, however many of them changed.
+
+`scope` is a workspace id, or `"local"` for the page served by a station
+itself (one station, addressed `"local"`).
+
+| View | Params | Value |
+| --- | --- | --- |
+| `chats` | `scope`, `mine` | the sidebar: `{ me, stations, loading, days }` |
+| `stations` | `scope` | every station of the scope, each with its link, overview, host and usable models |
+| `connects` | `scope` | every connect of every online station: `{ items: [{ station, stationName, connect }], loading }` |
+| `chat` | `station`, `key` | one chat: `{ detail, connect, profile, link }` |
+
+`live` (above) stays its own topic: its steps change many times a second and
+are small, while `chat` carries the whole transcript.
+
+```jsonc
+// chats
+{
+  "me": { "id": "a@b.c", "email": "a@b.c" },     // "local" on a station's own page
+  "stations": [{ "station": "ws/st", "id": "st", "name": "studio", "state": "online", "message": null }],
+  //   state: "online" | "connecting" | "offline" (the cloud has not seen it) | "error" (message says why)
+  "loading": false,                                // an online station has not answered yet
+  "days": [{ "daysAgo": 0, "at": 1790000000000, "items": [{
+    "station": "ws/st", "stationName": "studio",
+    "session": { … },                              // the station's SessionSummary
+    "connect": { … } | null                        // the connect it belongs to, from that station's overview
+  }] }]
+  // days: most recent first, grouped by the viewer's local calendar day; items by lastActiveAt, newest first;
+  // with mine = true only sessions the viewer created (creator id or email matches me).
+}
+
+// stations
+[{
+  "station": "ws/st", "id": "st", "name": "studio",
+  "online": true, "lastSeen": 1790000000, "version": "0.4.0",   // from the workspace (local: always online)
+  "link": { "state": "online", "message": null },
+  "overview": { … } | null,                                      // null while offline or not yet read
+  "host": { … } | null,
+  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // runtimes with an enabled model, and those models
+}]
+
+// chat
+{
+  "detail": { … },               // the session topic's value (SessionDetail), timeline kept current
+  "connect": { … } | null,
+  "profile": { … } | null,       // the profile the session runs on, from the overview
+  "link": { "state": "online", "message": null }
+}
+```
+
+Grouping by day needs the viewer's time zone: `Host::utc_offset_min(at_ms)`
+gives it (web: `-new Date(at).getTimezoneOffset()`).
+
 ### Calls
 
 | Call | Params | Result |

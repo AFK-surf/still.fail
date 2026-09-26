@@ -102,3 +102,4 @@ export function useTopic<T = unknown>(topic: Topic | null): TopicState<T> {
 export function useCall(): (name: string, params?: unknown) => Promise<unknown> {
   return useCallback((name: string, params?: unknown) => core().call(name, params), []);
 }
+
