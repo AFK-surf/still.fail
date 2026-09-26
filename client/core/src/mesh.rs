@@ -643,8 +643,9 @@ mod tests {
             let error = link.request(head("/admin/api/sessions"), Vec::new()).await.err().unwrap();
             assert_eq!(error.code, "grant_refused");
             assert!(error.message.contains("station 拒绝了授权"), "{}", error.message);
-            // A failed opening is not kept: the next call tries again.
-            assert!(mesh.link(&station.id(), grants("bad", count.clone())).await.is_err());
+            // A refused link is not kept: the next call opens another, with a fresh grant.
+            let again = mesh.link(&station.id(), grants("bad", count.clone())).await.unwrap();
+            assert!(!Rc::ptr_eq(&link, &again));
             assert_eq!(count.get(), 2);
         });
     }
