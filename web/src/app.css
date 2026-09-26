@@ -588,6 +588,13 @@
 .quota-fill[data-level="red"] { background: var(--red); }
 .quota-compact { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .quota-compact .quota-track { width: 48px; }
+.quota-ring { position: relative; display: inline-grid; place-items: center; flex: none; width: 26px; height: 26px; color: var(--green); }
+.quota-ring[data-level="amber"] { color: var(--amber); }
+.quota-ring[data-level="red"] { color: var(--red); }
+.quota-ring svg { position: absolute; inset: 0; }
+.quota-ring-track { fill: none; stroke: var(--neutral-bg); stroke-width: 3; }
+.quota-ring-fill { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
+.quota-ring-number { position: relative; font-size: 9.5px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .quota-note { margin: 0; font-size: var(--text-sm); }
 .station-tag.small { padding: 0 5px; font-size: 10.5px; border-radius: calc(5px * var(--corner-scale)); flex: none; corner-shape: var(--corner-shape); }
 .people-stack { display: inline-flex; align-items: center; flex: none; }
