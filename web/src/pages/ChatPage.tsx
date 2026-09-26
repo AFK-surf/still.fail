@@ -357,31 +357,8 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
   const name = current?.name ?? profile?.name ?? session.profile;
   return (
     <div className="session-details">
-      {/* The account: what it runs on, whether the station picks it, and how much of it is left. */}
-      <Chooser className="run-account" title="换一个 Profile，或交给 station 自动分配"
-        label={(
-          <>
-            <span className="mark run-account-mark"><ProviderLogo runtime={session.runtime} kind={current?.kind ?? profile?.access.kind ?? "env"} size={18} /></span>
-            <span className="run-account-text">
-              <strong>{name}</strong>
-              <span className="muted">{session.profilePinned ? "手动指定" : "自动分配 · station 按额度和负载挑"}</span>
-            </span>
-            <QuotaBars quota={current?.quota ?? profile?.quota} compact />
-          </>
-        )}>
-        <ChooserItem checked={!session.profilePinned} onSelect={() => void change.run({ profile: null })}>
-          <span className="run-option-text"><strong>自动分配</strong><span className="muted">能用就留在当前账号；额度用完或登录失效时，换一个还有额度的</span></span>
-        </ChooserItem>
-        <DropdownMenu.Separator className="menu-separator" />
-        {agent.profiles.map((p) => (
-          <ChooserItem key={p.id} checked={session.profilePinned && p.current} onSelect={() => void change.run({ profile: p.id })}>
-            <ProviderLogo runtime={p.runtime ?? session.runtime} kind={p.kind ?? "env"} size={15} />
-            <span className="run-option-text"><span>{p.name}</span>{p.current && !session.profilePinned && <span className="muted">当前</span>}</span>
-            <QuotaBars quota={p.quota} compact />
-          </ChooserItem>
-        ))}
-      </Chooser>
-      {/* The model and how hard it thinks: second. */}
+      {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota), each a
+          menu. The account is the station's pick unless kept to one here. */}
       <div className="run-model">
         <Chooser className="chooser run-chip" title="换模型" label={<><ModelLogo model={session.model} runtime={session.runtime} size={13} />{session.model ?? "运行时默认"}</>}>
           <ChooserItem checked={!session.model} onSelect={() => void change.run({ model: null })}>运行时默认</ChooserItem>
@@ -393,7 +370,26 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
           <ChooserItem checked={!session.effort} onSelect={() => void change.run({ effort: null })}>运行时默认</ChooserItem>
           {EFFORTS[session.runtime].map((e) => <ChooserItem key={e} checked={session.effort === e} onSelect={() => void change.run({ effort: e })}>{EFFORT_LABEL[e] ?? e}（{e}）</ChooserItem>)}
         </Chooser>
-        <span className="muted run-runtime"><RuntimeLogo runtime={session.runtime} size={12} />{RUNTIME_LABEL[session.runtime]}</span>
+        <Chooser className="chooser run-chip" title={session.profilePinned ? "手动指定的 Profile" : "station 自动分配的 Profile"}
+          label={(
+            <>
+              <ProviderLogo runtime={session.runtime} kind={current?.kind ?? profile?.access.kind ?? "env"} size={13} />
+              {session.profilePinned ? name : `自动 · ${name}`}
+              <QuotaBars quota={current?.quota ?? profile?.quota} compact />
+            </>
+          )}>
+          <ChooserItem checked={!session.profilePinned} onSelect={() => void change.run({ profile: null })}>
+            <span className="run-option-text"><strong>自动分配</strong><span className="muted">能用就留在当前账号；额度用完或登录失效时，换一个还有额度的</span></span>
+          </ChooserItem>
+          <DropdownMenu.Separator className="menu-separator" />
+          {agent.profiles.map((p) => (
+            <ChooserItem key={p.id} checked={session.profilePinned && p.current} onSelect={() => void change.run({ profile: p.id })}>
+              <ProviderLogo runtime={p.runtime ?? session.runtime} kind={p.kind ?? "env"} size={15} />
+              <span className="run-option-text"><span>{p.name}</span>{p.current && !session.profilePinned && <span className="muted">当前</span>}</span>
+              <QuotaBars quota={p.quota} compact />
+            </ChooserItem>
+          ))}
+        </Chooser>
       </div>
       {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
       {/* What it used: a line, quiet. */}
