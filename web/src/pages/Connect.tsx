@@ -5,14 +5,15 @@ import { CheckCircle2, Plus, ExternalLink, Power, RefreshCw, Trash2, UserRound }
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
-import { agentLabel, connectionText, EFFORT_LABEL, EFFORTS, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, STATUS_LABEL, statusTone } from "../format.ts";
+import { agentLabel, connectionText, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, STATUS_LABEL, statusTone } from "../format.ts";
 import { AppFields, ConfigTokenForm, NEW_APP, SlackAppSection } from "./SlackApp.tsx";
+import { ModelTriple } from "../ModelTriple.tsx";
 import { OwnerLabel } from "../components.tsx";
 import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, Section, Segmented, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, Section, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
 
 export function ConnectPage() {
   const { id } = useParams();
@@ -37,11 +38,6 @@ export function connectSubtitle(c: ConnectView): string {
 function useStationView() {
   const station = useStation();
   return useStations(scopeOf(station.address)).value?.find((s) => s.station === station.address);
-}
-
-/** The models the station's profiles of a runtime have enabled, as the core puts them together (the station's `runtimes`). */
-function useRuntimeModels(runtime: RuntimeKind): string[] {
-  return useStationView()?.runtimes.find((r) => r.runtime === runtime)?.models ?? [];
 }
 
 /** The models the station can run, each with the runtimes it runs on (the core's). */
@@ -317,42 +313,19 @@ function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClo
   );
 }
 
-/** Model choice: the models the runtime's profiles have enabled; the session's profile is picked among those that have it. */
-export function ModelPicker({ id, runtime, value, onChange }: { id: string; runtime: RuntimeKind; value: string; onChange(value: string): void }) {
-  const station = useStation();
-  const models = useRuntimeModels(runtime);
-  if (models.length === 0) {
-    // Nothing to choose from: the field leads to where profiles' models are enabled.
-    return <Link id={id} className="input input-link" to={profilesPage(station)}>{RUNTIME_LABEL[runtime]} 的 Profile 还没有启用模型 · 去勾选</Link>;
-  }
-  const options = [{ value: "", label: "运行时默认" }, ...[...new Set([...(value ? [value] : []), ...models])].map((m) => ({ value: m, label: m }))];
-  return <Select id={id} value={value} onChange={onChange} options={options} label="模型" />;
-}
-
 function BindSection({ connect }: { connect: ConnectView }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
-  const [model, setModel] = useState(connect.bind.model ?? "");
-  const [effort, setEffort] = useState(connect.bind.effort ?? "");
-  const dirty = model.trim() !== (connect.bind.model ?? "") || effort !== (connect.bind.effort ?? "");
-  const reset = () => { setModel(connect.bind.model ?? ""); setEffort(connect.bind.effort ?? ""); };
+  const station = useStation();
+  // Its runtime is its own for good: the models that run on it.
+  const models = useStationModels().filter((m) => m.runtimes.includes(connect.bind.runtime)).map((m) => ({ ...m, runtimes: [connect.bind.runtime] }));
   return (
     <Section title="模型" description="新会话用这里的设置，在启用了这个模型的 Profile 里自动挑一个来跑；进行中的会话继续用开始时的。">
       <div className="card">
-        <div className="field-grid">
-          <Field label="模型" htmlFor="bind-model">
-            <ModelPicker id="bind-model" runtime={connect.bind.runtime} value={model} onChange={setModel} />
-          </Field>
-          <Field label="思考深度" htmlFor="bind-effort">
-            <EffortPicker id="bind-effort" runtime={connect.bind.runtime} value={effort} onChange={setEffort} />
-          </Field>
-        </div>
-        {dirty && (
-          <div className="card-actions">
-            <Button variant="ghost" onClick={reset}>还原</Button>
-            <Button variant="primary" busy={save.busy} onClick={() => save.put({ bind: { model: model.trim(), effort } }, () => toast("已保存，新会话会用新的模型"))}>保存</Button>
-          </div>
-        )}
+        {models.length === 0
+          ? <Link className="input input-link" to={profilesPage(station)}>{RUNTIME_LABEL[connect.bind.runtime]} 的 Profile 还没有启用模型 · 去勾选</Link>
+          : <ModelTriple title="换模型和思考深度" options={models} value={{ model: connect.bind.model ?? "", runtime: connect.bind.runtime, effort: connect.bind.effort }}
+              onPick={(p) => save.put({ bind: { model: p.model, effort: p.effort ?? "" } }, () => toast("已保存，新会话会用新的模型"))} />}
         <p className="card-foot muted">运行时：{RUNTIME_LABEL[connect.bind.runtime]}。创建后不能换；要用另一种运行时，新建一个连接。</p>
       </div>
     </Section>
@@ -534,23 +507,12 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
       )}
       {step === "bind" && (
         <>
-          <div className="field-grid">
-            <Field label="模型" htmlFor="new-connect-model">
-              {models.length === 0
-                ? <Link id="new-connect-model" className="input input-link" to={profilesPage(station)}>Profile 还没有启用模型 · 去勾选</Link>
-                : <Select id="new-connect-model" value={entry?.model ?? ""} onChange={(m) => { setModel(m); setEffort(""); }} label="模型"
-                    options={models.map((m) => ({ value: m.model, label: m.model }))} />}
-            </Field>
-            <Field label="思考深度" htmlFor="new-connect-effort">
-              <EffortPicker id="new-connect-effort" runtime={runtime} value={effort} onChange={setEffort} />
-            </Field>
-          </div>
-          {entry && entry.runtimes.length > 1 && (
-            <Field label="运行时" hint="这个模型两个运行时都能跑。创建后不能换。">
-              <Segmented label="运行时" value={runtime} onChange={(r) => { setPicked(r); setEffort(""); }}
-                options={entry.runtimes.map((r) => ({ value: r, label: RUNTIME_LABEL[r] }))} />
-            </Field>
-          )}
+          <Field label="模型" hint={entry && entry.runtimes.length > 1 ? "这个模型两个运行时都能跑；运行时创建后不能换。" : undefined}>
+            {models.length === 0
+              ? <Link className="input input-link" to={profilesPage(station)}>Profile 还没有启用模型 · 去勾选</Link>
+              : <ModelTriple title="用哪个模型、运行时和思考深度" options={models} value={{ model: entry?.model ?? "", runtime, effort: effort || null }}
+                  onPick={(p) => { setModel(p.model); setPicked(p.runtime); setEffort(p.effort ?? ""); }} />}
+          </Field>
           <Field label="会话方式">
             <ModeChoices mode={mode.mode} requireMention={mode.requireMention} onChange={setMode} />
           </Field>
@@ -620,10 +582,4 @@ function OwnerDialog({ connect, onClose }: { connect: ConnectView; onClose(): vo
       {save.error && <p className="field-error" role="alert">{save.error.message}</p>}
     </Dialog>
   );
-}
-
-/** Reasoning effort in the runtime's own levels; empty for its default. */
-export function EffortPicker({ id, runtime, value, onChange }: { id: string; runtime: RuntimeKind; value: string; onChange(value: string): void }) {
-  return <Select id={id} value={value} onChange={onChange} label="思考深度"
-    options={[{ value: "", label: "运行时默认" }, ...EFFORTS[runtime].map((e) => ({ value: e, label: `${EFFORT_LABEL[e] ?? e}（${e}）` }))]} />;
 }

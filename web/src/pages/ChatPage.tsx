@@ -3,21 +3,22 @@
 // be opened beside them, one tab per agent.
 import { StationPreview } from "../Preview.tsx";
 import { useLink, useStation } from "../station.tsx";
-import { CreatorText, PeopleStack, QuotaBars, QuotaRing, Ring, mark, refillsIn } from "../components.tsx";
-import { ChevronDown, Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
+import { CreatorText, PeopleStack, QuotaRing, Ring, mark, refillsIn } from "../components.tsx";
+import { Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
 import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type SessionSummary, type ThreadView } from "../api.ts";
 import { History } from "../History.tsx";
+import { ModelTriple } from "../ModelTriple.tsx";
 import { ChatPanel } from "../Chat.tsx";
 import {
-  BADGE_LABEL, EFFORTS, PROCESS_LABEL, RUNTIME_LABEL, agentLabel, compactNumber, slackThreadUrl, slackWorkspaceUrl, type Status,
+  BADGE_LABEL, PROCESS_LABEL, RUNTIME_LABEL, agentLabel, compactNumber, slackThreadUrl, slackWorkspaceUrl, type Status,
 } from "../format.ts";
 import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
-import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ProviderLogo, ResizeHandle, RuntimeLogo, SlackLogo, Time, Tip } from "../ui.tsx";
+import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
 
 /**
  * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
@@ -354,7 +355,14 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
   return (
     <div className="session-details">
       {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota). */}
-      <RunPicker agent={agent} onPick={(input) => void change.run(input)} />
+      <ModelTriple title="换模型、思考深度和账号"
+        options={agent.choices.map((c) => ({ model: c.model, runtimes: [session.runtime], profiles: c.profiles }))}
+        value={{ model: session.model ?? "", runtime: session.runtime, effort: session.effort }}
+        account={{ pinned: session.profilePinned, profile: session.profile, current: (() => {
+          const current = agent.profiles.find((p) => p.current);
+          return { name: current?.name ?? agent.profile?.name ?? session.profile, kind: current?.kind ?? agent.profile?.access.kind ?? null, quota: current?.quota ?? agent.profile?.quota ?? null };
+        })() }}
+        onPick={({ model, effort, profile }) => void change.run({ model, effort, profile: profile ?? null })} />
       {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
       {/* What it used: a line, quiet. */}
       <p className="run-usage muted">
@@ -374,78 +382,6 @@ function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView 
         )}
       </div>
     </div>
-  );
-}
-
-/**
- * How a session runs, picked in one panel: a model, how hard it thinks, and who runs it, in that order. A model only
- * marks a pick. How hard it thinks makes it when the account it is on runs that model too (it stays on it); when not,
- * who runs it is to be picked, which makes it. A panel left halfway leaves it as it was.
- */
-function RunPicker({ agent, onPick }: { agent: ChatAgentView; onPick(input: { model: string; effort: string | null; profile: string | null }): void }) {
-  const { session, profile } = agent;
-  const [open, setOpen] = useState(false);
-  const [model, setModel] = useState(session.model);
-  const [effort, setEffort] = useState(session.effort);
-  const current = agent.profiles.find((p) => p.current);
-  const name = current?.name ?? profile?.name ?? session.profile;
-  const choice = agent.choices.find((c) => c.model === model);
-  // Where it is now: a pick of it marks what it has.
-  const same = model === session.model && effort === session.effort;
-  // The account it is on runs the model marked: it stays there, as it was kept (by hand, or by the station).
-  const stays = choice?.profiles.some((p) => p.current) ?? false;
-  return (
-    <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (next) { setModel(session.model); setEffort(session.effort); } }}>
-      <Popover.Trigger className="run-model" title="换模型、思考深度和账号">
-        <span className="run-chip"><ModelLogo model={session.model} runtime={session.runtime} size={13} />{session.model ?? "运行时默认"}</span>
-        <span className="run-chip">{session.effort ?? "默认深度"}</span>
-        <span className="run-chip">
-          <ProviderLogo runtime={session.runtime} kind={current?.kind ?? profile?.access.kind ?? "env"} size={13} />
-          {session.profilePinned ? name : `自动 · ${name}`}
-          <QuotaBars quota={current?.quota ?? profile?.quota} compact />
-        </span>
-        <ChevronDown size={12} className="chooser-chevron" />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content className="popover run-picker" align="start" sideOffset={6} collisionPadding={8}>
-          <div className="run-picker-column">
-            <h4>模型</h4>
-            {agent.choices.map((c) => (
-              <button key={c.model} type="button" className="run-picker-option" aria-pressed={model === c.model} onClick={() => setModel(c.model)}>
-                <ModelLogo model={c.model} runtime={session.runtime} size={13} />{c.model}
-              </button>
-            ))}
-          </div>
-          <div className="run-picker-column">
-            <h4>思考深度</h4>
-            {[null, ...EFFORTS[session.runtime]].map((e) => (
-              <button key={e ?? ""} type="button" className="run-picker-option" aria-pressed={effort === e} onClick={() => {
-                setEffort(e);
-                if (choice && stays) { setOpen(false); onPick({ model: choice.model, effort: e, profile: session.profilePinned ? session.profile : null }); }
-              }}>{e ?? "默认"}</button>
-            ))}
-          </div>
-          <div className="run-picker-column run-picker-accounts">
-            <h4>账号</h4>
-            {!choice ? <p className="muted">先选一个模型</p> : (
-              <>
-                {!stays && <p className="run-picker-note">现在的账号没有启用 {choice.model}，选一个</p>}
-                <button type="button" className="run-picker-option" aria-pressed={same && !session.profilePinned} onClick={() => { setOpen(false); onPick({ model: choice.model, effort, profile: null }); }}>
-                  <span className="run-option-text"><strong>自动分配</strong><span className="muted">额度用完或登录失效时换一个</span></span>
-                </button>
-                {choice.profiles.map((p) => (
-                  <button key={p.id} type="button" className="run-picker-option" aria-pressed={same && session.profilePinned && p.current} onClick={() => { setOpen(false); onPick({ model: choice.model, effort, profile: p.id }); }}>
-                    <ProviderLogo runtime={p.runtime ?? session.runtime} kind={p.kind ?? "env"} size={15} />
-                    <span className="run-option-text"><span>{p.name}</span>{same && p.current && !session.profilePinned && <span className="muted">当前</span>}</span>
-                    <QuotaBars quota={p.quota} compact />
-                  </button>
-                ))}
-              </>
-            )}
-          </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
   );
 }
 

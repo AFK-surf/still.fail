@@ -1394,3 +1394,14 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
   .app-avatar { width: 96px; height: 96px; }
   .avatar-picker { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); }
 }
+
+.model-triple { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: calc(9px * var(--corner-scale)); corner-shape: var(--corner-shape); background: none; color: var(--text); font: inherit; font-size: var(--text-sm); cursor: pointer; white-space: nowrap; overflow: hidden; }
+.model-triple:hover, .model-triple[data-state="open"] { background: var(--hover); }
+.model-triple:disabled { color: var(--muted); cursor: default; }
+.model-triple .triple-dot { color: var(--muted); }
+.model-triple .triple-account { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.model-triple .quota-rings { margin-left: 2px; }
+.model-triple .quota-ring-letter { display: none; }
+.model-triple .chooser-chevron { color: var(--muted); flex: none; }
+.composer .model-triple, .new-chat .model-triple { border-color: transparent; height: 28px; font-size: var(--text-xs); }
+.run-picker-spent { font-size: var(--text-xs); color: var(--amber); }

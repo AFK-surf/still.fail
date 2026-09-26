@@ -1,15 +1,15 @@
 // A new chat, after Zork's: say what to do, having picked where it runs
 // (station), on what (runtime and model) and how hard it thinks. The first
 // message (or file) makes the chat and its agent's session on that station.
-import { Check, ChevronDown, Server } from "lucide-react";
-import { DropdownMenu } from "radix-ui";
+import { Server } from "lucide-react";
 import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useStations, type RuntimeKind, type StationView } from "./api.ts";
 import { Composer } from "./Chat.tsx";
-import { EFFORTS, EFFORT_LABEL, RUNTIME_LABEL, timeUntil } from "./format.ts";
+import { timeUntil } from "./format.ts";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
-import { ModelLogo, RuntimeLogo, Chooser, ChooserItem as Item } from "./ui.tsx";
+import { Chooser, ChooserItem as Item } from "./ui.tsx";
+import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
 
@@ -103,8 +103,6 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
     })().catch((error: unknown) => { made.current = null; setMaking(false); throw error; });
     return made.current;
   };
-  const efforts = runtime ? EFFORTS[runtime] : [];
-  const modelLabel = model || "没有可用模型";
   const toolbar = useMemo(() => (
     <>
       {station.name && (
@@ -116,29 +114,12 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         // Nothing to choose from: the chooser leads to where models are enabled.
         <Link className="chooser" to={profilesPage(station)} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
       ) : (
-      <Chooser side="top" label={<><ModelLogo model={model} runtime={runtime} size={13} />{modelLabel}</>} title="用哪个模型">
-        {view.models.map((m) => (
-          <Item key={m.model} checked={model === m.model} onSelect={() => pick({ model: m.model, ...(m.runtimes.includes(runtime!) ? {} : { runtime: m.runtimes[0], effort: "" }) })}>
-            <ModelLogo model={m.model} runtime={m.runtimes[0]!} size={12} />{m.model}
-            {m.spent && <span className="chooser-note">额度用完{m.spent.until ? ` · ${timeUntil(m.spent.until)}恢复` : ""}</span>}
-          </Item>
-        ))}
-      </Chooser>
-      )}
-      {/* The runtime only when the model runs on more than one. */}
-      {runtime && runtimes.length > 1 && (
-        <Chooser side="top" label={<><RuntimeLogo runtime={runtime} size={12} />{RUNTIME_LABEL[runtime]}</>} title="用哪个运行时">
-          {runtimes.map((rt) => <Item key={rt} checked={rt === runtime} onSelect={() => pick({ runtime: rt, effort: "" })}><RuntimeLogo runtime={rt} size={12} />{RUNTIME_LABEL[rt]}</Item>)}
-        </Chooser>
-      )}
-      {runtime && (
-        <Chooser side="top" label={<>思考 {choice.effort ? EFFORT_LABEL[choice.effort] ?? choice.effort : "默认"}</>} title="思考深度">
-          <Item checked={!choice.effort} onSelect={() => pick({ effort: "" })}>运行时默认</Item>
-          {efforts.map((e) => <Item key={e} checked={choice.effort === e} onSelect={() => pick({ effort: e })}>{EFFORT_LABEL[e] ?? e}（{e}）</Item>)}
-        </Chooser>
+        <ModelTriple side="top" title="用哪个模型、运行时和思考深度" options={view.models}
+          value={{ model, runtime, effort: choice.effort || null }}
+          onPick={(p) => pick({ model: p.model, runtime: p.runtime, effort: p.effort ?? "" })} />
       )}
     </>
-  ), [stations, station, view, runtime, runtimes, choice, model, modelLabel, efforts]);
+  ), [stations, station, view, runtime, choice, model]);
 
   return (
     <div className="new-chat">
