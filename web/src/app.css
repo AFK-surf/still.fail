@@ -674,7 +674,7 @@
 .run-option-text { display: grid; gap: 1px; flex: 1; min-width: 0; }
 .run-option-text .muted { font-size: var(--text-xs); white-space: normal; max-width: 260px; }
 .chooser-item .quota-rings { margin-left: 12px; }
-.run-model { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.run-model { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-left: -8px; }
 .run-chip { color: var(--text); font-size: var(--text-sm); }
 .run-chip .quota-rings { margin-left: 4px; }
 .run-chip .quota-ring-letter { display: none; }
