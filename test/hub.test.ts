@@ -534,7 +534,6 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
   config.profiles.push({ ...config.profiles[0]!, id: "cc2", name: "another" });
-  console.error("DEBUG state", hub.processState(key), store.getSession(key)?.profile, store.getSession(key)?.model);
   await assert.rejects(hub.configure(key, { profile: "cc2" }), /正在跑/, "not while a turn runs");
   await call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
   claude.last.end();

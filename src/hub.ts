@@ -351,10 +351,11 @@ export class Hub {
     }
     const model = change.model === undefined ? row.model : change.model || null;
     const effort = change.effort === undefined ? row.effort : change.effort || null;
-    if (model && !this.#config.profiles.some((p) => p.runtimes.includes(row.runtime) && p.models.includes(model))) {
+    // What changes is checked; what stays is as it was.
+    if (change.model && model && !this.#config.profiles.some((p) => p.runtimes.includes(row.runtime) && p.models.includes(model))) {
       throw new Error(`没有能跑 ${model} 的 ${runtimeName} Profile：先在一个 Profile 上启用它`);
     }
-    if (effort && !EFFORTS[row.runtime].includes(effort)) throw new Error(`${runtimeName} 的思考深度只有 ${EFFORTS[row.runtime].join("、")}`);
+    if (change.effort && effort && !EFFORTS[row.runtime].includes(effort)) throw new Error(`${runtimeName} 的思考深度只有 ${EFFORTS[row.runtime].join("、")}`);
     if (this.processState(key) === "running") throw new Error("这个会话正在跑，等这一轮结束再改");
     await this.evict(key);
     if (change.profile !== undefined && change.profile !== row.profile) this.#store.setSessionProfile(key, change.profile);
