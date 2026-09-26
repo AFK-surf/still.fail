@@ -9,8 +9,9 @@ test("profile homes link to the shared memory and skills under their runtime's n
   const root = mkdtempSync(join(tmpdir(), "ember-agent-"));
   const agent = join(root, "agent");
   const profiles = [
-    { id: "cc", runtime: "claude" as const, home: join(root, "cc"), env: {} },
-    { id: "cx", runtime: "codex" as const, home: join(root, "cx"), env: {} },
+    { id: "cc", runtimes: ["claude" as const], home: join(root, "cc") },
+    { id: "cx", runtimes: ["codex" as const], home: join(root, "cx") },
+    { id: "both", runtimes: ["claude" as const, "codex" as const], home: join(root, "both") },
   ];
   linkAgentHome(agent, profiles);
   linkAgentHome(agent, profiles); // idempotent
@@ -18,12 +19,15 @@ test("profile homes link to the shared memory and skills under their runtime's n
   assert.equal(readlinkSync(join(root, "cc", "skills")), join(agent, "skills"));
   assert.equal(readlinkSync(join(root, "cx", "AGENTS.md")), join(agent, "MEMORY.md"));
   assert.equal(readlinkSync(join(root, "cx", "skills")), join(agent, "skills"));
+  // An account run on both reads the memory under both names.
+  assert.equal(readlinkSync(join(root, "both", "CLAUDE.md")), join(agent, "MEMORY.md"));
+  assert.equal(readlinkSync(join(root, "both", "AGENTS.md")), join(agent, "MEMORY.md"));
 });
 
 test("a hand-written file in a profile home is left alone", () => {
   const root = mkdtempSync(join(tmpdir(), "ember-agent-"));
   mkdirSync(join(root, "cc"));
   writeFileSync(join(root, "cc", "CLAUDE.md"), "mine");
-  linkAgentHome(join(root, "agent"), [{ runtime: "claude", home: join(root, "cc") }]);
+  linkAgentHome(join(root, "agent"), [{ runtimes: ["claude"], home: join(root, "cc") }]);
   assert.equal(readFileSync(join(root, "cc", "CLAUDE.md"), "utf8"), "mine");
 });

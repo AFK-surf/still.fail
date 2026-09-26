@@ -329,7 +329,7 @@ test("profile env: strings set, null removes, omitted keys stay", async () => {
   const t = await setup();
   try {
     await t.call("PUT", "/profiles/cc", { env: { ANTHROPIC_BASE_URL: null, EXTRA: "1" } });
-    assert.deepEqual(t.settings.config.profiles[0]!.env, { ANTHROPIC_API_KEY: "sk-very-secret-value", EXTRA: "1" });
+    assert.deepEqual(t.settings.config.profiles[0]!.envs.claude, { ANTHROPIC_API_KEY: "sk-very-secret-value", EXTRA: "1" });
     assert.equal((await t.call("PUT", "/profiles/cc", { env: { "BAD NAME": "x" } })).status, 400);
     await t.call("PUT", "/profiles/new-one", { runtime: "codex" });
     assert.equal(t.settings.config.profiles.at(-1)!.home, join(t.dataDir, "homes/new-one"));
@@ -342,7 +342,7 @@ test("editing a profile's access keeps a blank key but never carries it to anoth
   const t = await setup();
   try {
     assert.equal((await t.call("PUT", "/profiles/cx", { access: { kind: "opencode-go", key: "ocg-key-123456" } })).status, 200);
-    assert.equal(t.settings.config.profiles.find((p) => p.id === "cx")!.env.OPENCODE_GO_KEY, "ocg-key-123456");
+    assert.equal(t.settings.config.profiles.find((p) => p.id === "cx")!.envs.codex!.OPENCODE_GO_KEY, "ocg-key-123456");
     await t.call("PUT", "/profiles/cx", { name: "Codex OCG", access: { kind: "opencode-go", key: "" } });
     const cx = t.settings.config.profiles.find((p) => p.id === "cx")!;
     assert.equal(cx.access.key, "ocg-key-123456");

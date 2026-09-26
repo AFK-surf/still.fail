@@ -13,7 +13,7 @@ const QUESTION = "Answer only from what you were given at startup, without runni
 const config = loadConfig();
 const cwd = mkdtempSync(join(tmpdir(), "ember-check-"));
 for (const profile of config.profiles) {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...expandRoute(profile.env, `check-${profile.id}`) };
+  const env: NodeJS.ProcessEnv = { ...process.env, ...expandRoute(profile.envs[profile.runtime] ?? {}, `check-${profile.id}`) };
   let answer: string;
   try {
     if (profile.runtime === "claude") {

@@ -16,26 +16,30 @@ const readUsage = (runtime: RuntimeKind, path: string) => {
 
 const parse = (profiles: unknown[]) => parseConfig({ profiles: profiles as never }, "/data");
 
-test("an access kind derives the environment; hand-set variables win", () => {
-  const [claude, codex] = parse([
-    { id: "a", runtime: "claude", home: "h/a", access: { kind: "opencode-go", key: "k1" }, env: { ANTHROPIC_SMALL_FAST_MODEL: "mine" } },
-    { id: "b", runtime: "codex", home: "h/b", access: { kind: "opencode-go", key: "k2" } },
+test("an account runs every runtime it can, each with the environment it needs; hand-set variables win", () => {
+  const [ocg, anthropic, sub] = parse([
+    { id: "a", home: "h/a", access: { kind: "opencode-go", key: "k1" }, env: { ANTHROPIC_SMALL_FAST_MODEL: "mine" } },
+    { id: "b", home: "h/b", access: { kind: "anthropic-api", key: "k2" } },
+    { id: "c", runtime: "codex", home: "h/c", access: { kind: "subscription" } },
   ]).profiles;
-  assert.equal(claude!.env.ANTHROPIC_API_KEY, "k1");
-  assert.equal(claude!.env.ANTHROPIC_BASE_URL, "https://opencode.ai/zen/go");
-  assert.equal(claude!.env.ANTHROPIC_SMALL_FAST_MODEL, "mine");
-  assert.deepEqual(claude!.customEnv, { ANTHROPIC_SMALL_FAST_MODEL: "mine" });
-  assert.deepEqual(codex!.env, { OPENCODE_GO_KEY: "k2", OPENCODE_SESSION: "ember-{route}" });
+  assert.deepEqual(ocg!.runtimes, ["claude", "codex"]);
+  assert.equal(ocg!.envs.claude!.ANTHROPIC_API_KEY, "k1");
+  assert.equal(ocg!.envs.claude!.ANTHROPIC_BASE_URL, "https://opencode.ai/zen/go");
+  assert.equal(ocg!.envs.claude!.ANTHROPIC_SMALL_FAST_MODEL, "mine");
+  assert.deepEqual(ocg!.customEnv, { ANTHROPIC_SMALL_FAST_MODEL: "mine" });
+  assert.deepEqual(ocg!.envs.codex, { OPENCODE_GO_KEY: "k1", OPENCODE_SESSION: "ember-{route}", ANTHROPIC_SMALL_FAST_MODEL: "mine" });
+  assert.deepEqual(anthropic!.runtimes, ["claude"]);
+  assert.deepEqual(sub!.runtimes, ["codex"]);
 });
 
 test("profiles without access keep their raw environment", () => {
   const [p] = parse([{ id: "a", runtime: "claude", home: "h", env: { X: "1" } }]).profiles;
   assert.deepEqual(p!.access, { kind: "env", key: "" });
-  assert.deepEqual(p!.env, { X: "1" });
+  assert.deepEqual(p!.envs.claude, { X: "1" });
 });
 
 test("access kinds are checked against the runtime and need their key", () => {
-  assert.throws(() => parse([{ id: "a", runtime: "codex", home: "h", access: { kind: "anthropic-api", key: "k" } }]), /cannot use access anthropic-api/);
+  assert.throws(() => parse([{ id: "a", home: "h", access: { kind: "subscription" } }]), /needs a runtime/);
   assert.throws(() => parse([{ id: "a", runtime: "claude", home: "h", access: { kind: "opencode-go" } }]), /needs a key/);
 });
 
