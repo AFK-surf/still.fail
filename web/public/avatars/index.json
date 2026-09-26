@@ -1,6 +1,182 @@
 [
-  { "id": "buddy-idle", "label": "平常", "bg": "#F3E3D3" },
-  { "id": "buddy-working", "label": "干活", "bg": "#FFE3C2" },
-  { "id": "buddy-done", "label": "完成", "bg": "#DDEFE0" },
-  { "id": "buddy-blocked", "label": "卡住", "bg": "#FBDCD6" }
+  {
+    "id": "happy",
+    "label": "开心",
+    "bg": "#F5DECA"
+  },
+  {
+    "id": "wink",
+    "label": "眨眼",
+    "bg": "#E5EBCF"
+  },
+  {
+    "id": "sleepy",
+    "label": "困困",
+    "bg": "#DDE2F0"
+  },
+  {
+    "id": "surprised",
+    "label": "惊喜",
+    "bg": "#F6E9BF"
+  },
+  {
+    "id": "focused",
+    "label": "专注",
+    "bg": "#D9E8E7"
+  },
+  {
+    "id": "laughing",
+    "label": "大笑",
+    "bg": "#EEDBE4"
+  },
+  {
+    "id": "cool",
+    "label": "酷酷",
+    "bg": "#B8CED7"
+  },
+  {
+    "id": "love",
+    "label": "心动",
+    "bg": "#F2D1D1"
+  },
+  {
+    "id": "headphones",
+    "label": "听歌",
+    "bg": "#D8E4ED"
+  },
+  {
+    "id": "glasses",
+    "label": "博学",
+    "bg": "#ECE4D6"
+  },
+  {
+    "id": "hard-hat",
+    "label": "工程师",
+    "bg": "#DBE6E2"
+  },
+  {
+    "id": "chef-hat",
+    "label": "小厨师",
+    "bg": "#EAD2BE"
+  },
+  {
+    "id": "wizard-hat",
+    "label": "魔法师",
+    "bg": "#DDD9ED"
+  },
+  {
+    "id": "crown",
+    "label": "小国王",
+    "bg": "#D3E6E1"
+  },
+  {
+    "id": "beanie",
+    "label": "暖暖",
+    "bg": "#EEDDD4"
+  },
+  {
+    "id": "graduation-cap",
+    "label": "毕业啦",
+    "bg": "#E4E7D1"
+  },
+  {
+    "id": "party-hat",
+    "label": "庆祝",
+    "bg": "#EBD8E6"
+  },
+  {
+    "id": "wrench",
+    "label": "修理工",
+    "bg": "#DCE5EA"
+  },
+  {
+    "id": "coffee",
+    "label": "咖啡时间",
+    "bg": "#EDDCC8"
+  },
+  {
+    "id": "laptop",
+    "label": "开发者",
+    "bg": "#E2E5D7"
+  },
+  {
+    "id": "magnifier",
+    "label": "观察员",
+    "bg": "#E8DDEB"
+  },
+  {
+    "id": "pencil",
+    "label": "记录员",
+    "bg": "#D5E5E9"
+  },
+  {
+    "id": "book",
+    "label": "阅读",
+    "bg": "#EEE0CA"
+  },
+  {
+    "id": "rocket",
+    "label": "起飞",
+    "bg": "#C8D7E9"
+  },
+  {
+    "id": "lightbulb",
+    "label": "灵感",
+    "bg": "#D9DCEF"
+  },
+  {
+    "id": "shield",
+    "label": "守护者",
+    "bg": "#E6DDD0"
+  },
+  {
+    "id": "terminal",
+    "label": "终端",
+    "bg": "#C9DDD5"
+  },
+  {
+    "id": "blue-visor",
+    "label": "蓝蓝",
+    "bg": "#DDEAF2"
+  },
+  {
+    "id": "green-visor",
+    "label": "青芽",
+    "bg": "#203E39"
+  },
+  {
+    "id": "purple-visor",
+    "label": "紫星",
+    "bg": "#E6DCEF"
+  },
+  {
+    "id": "teal-visor",
+    "label": "海风",
+    "bg": "#253E51"
+  },
+  {
+    "id": "yellow-visor",
+    "label": "暖阳",
+    "bg": "#45394C"
+  },
+  {
+    "id": "wave",
+    "label": "招招手",
+    "bg": "#E9E4CE"
+  },
+  {
+    "id": "gardener",
+    "label": "园丁",
+    "bg": "#DCE7D5"
+  },
+  {
+    "id": "artist",
+    "label": "画家",
+    "bg": "#E9D8CE"
+  },
+  {
+    "id": "mail",
+    "label": "信使",
+    "bg": "#D9E3EB"
+  }
 ]
