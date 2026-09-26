@@ -725,7 +725,10 @@
 .msg-agent:hover { text-decoration: underline; }
 
 /* Composer: one line sits on the frame's centre line; files ride above the text. */
-.composer-box:not([data-multiline]) { align-items: center; }
+.composer-box:not([data-multiline]) { align-items: center; padding-left: 6px; }
+/* On one line, the attach button is before the text, next to where it is typed (as on the phone). */
+.composer-box:not([data-multiline]) .composer-toolbar { display: contents; }
+.composer-box:not([data-multiline]) .attach-btn { order: -1; }
 .composer-box:not([data-multiline]) .composer-text { padding: 5px 8px; }
 .composer-box[data-multiline] .composer-toolbar { justify-content: space-between; }
 .composer-box[data-dragging] { border-color: var(--field-focus); background: color-mix(in oklch, var(--field-focus) 6%, var(--canvas)); }

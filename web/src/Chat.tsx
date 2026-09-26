@@ -738,7 +738,13 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
         <textarea ref={input} className="composer-text" rows={1} value={text} placeholder={placeholder} aria-label="消息"
           onChange={(e) => { setText(e.target.value); warm(); }}
           onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); add(e.clipboardData.files); } }}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); return; }
+            // Nothing typed: ↑ / ↓ go to the chat above or below, as the sidebar lists them now.
+            if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !text && !e.nativeEvent.isComposing && !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+              if (goToNeighbour(e.key === "ArrowUp" ? -1 : 1)) e.preventDefault();
+            }
+          }} />
         <div className="composer-toolbar">
           <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
           <Tip label="发送文件">
@@ -907,4 +913,15 @@ function flashRange(range: Range): void {
   setTimeout(() => {
     if (document.documentElement.dataset.quoteFlash === "fading") { highlights.delete("quote-flash"); delete document.documentElement.dataset.quoteFlash; }
   }, 2600);
+}
+
+/** Opens the chat `step` rows above (-1) or below (1) the open one in the sidebar; false when there is none. */
+function goToNeighbour(step: -1 | 1): boolean {
+  const rows = [...document.querySelectorAll<HTMLAnchorElement>(".sidebar a.nav-session")];
+  const at = rows.findIndex((row) => row.getAttribute("aria-current") === "page");
+  const next = at < 0 ? null : rows[at + step];
+  if (!next) return false;
+  next.click();
+  next.scrollIntoView({ block: "nearest" });
+  return true;
 }

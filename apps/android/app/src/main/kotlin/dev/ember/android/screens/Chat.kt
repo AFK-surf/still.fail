@@ -100,6 +100,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -964,18 +966,26 @@ fun DraftExtras(draft: Draft) {
 /** The bar: ＋, a field that grows with the text, and a round send button (a spinner while a new chat is made). */
 @Composable
 fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit) {
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
+    val style = TextStyle(color = C.ink, fontSize = 15.sp, lineHeight = 21.sp)
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(Modifier.size(36.dp).clip(CircleShape).background(C.chip).clickable(onClick = onPlus), contentAlignment = Alignment.Center) { IconIn(Icons.Plus, 18.dp) }
+        // The attach sheet comes up in the keyboard's place: the keyboard goes first.
+        Box(
+            Modifier.size(36.dp).clip(CircleShape).background(C.chip).clickable { focusManager.clearFocus(); keyboard?.hide(); onPlus() },
+            contentAlignment = Alignment.Center,
+        ) { IconIn(Icons.Plus, 18.dp) }
         Box(
             Modifier.weight(1f).heightIn(min = 36.dp).clip(RoundedCornerShape(18.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(18.dp))
                 .padding(horizontal = 14.dp, vertical = 7.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            if (draft.text.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp)
+            if (draft.text.isEmpty()) Text(placeholder, style = style.copy(color = C.subtle))
             val focus = remember { FocusRequester() }
             LaunchedEffect(draft.focus) { if (draft.focus > 0) focus.requestFocus() }
             BasicTextField(
-                draft.text, { draft.text = it; onType() }, textStyle = TextStyle(color = C.ink, fontSize = 15.sp, lineHeight = 21.sp),
+                draft.text, { draft.text = it; onType() }, textStyle = style,
                 cursorBrush = SolidColor(C.accent), maxLines = 6, modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         }
