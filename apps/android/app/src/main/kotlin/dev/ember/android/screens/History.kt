@@ -122,7 +122,7 @@ private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String) {
     val s = agent.session
     val model = live.value?.usage?.model ?: s.model
     Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ModelMark(model, s.runtime, 20.dp, s.state())
+        ModelMark(model, s.runtime, 20.dp, agent.state)
         // The sheet is the agent's history; its head is the agent, with the room its name needs.
         Text(agentLabel(model, s.effort), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Actions(station, agent)
@@ -140,7 +140,7 @@ private fun Actions(station: String, agent: ChatAgentView) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val s = agent.session
-    val st = status(s)
+    val st = agent.status
     @Composable
     fun act(icon: androidx.compose.ui.graphics.vector.ImageVector, done: String, call: suspend () -> Unit) {
         var busy by remember { mutableStateOf(false) }
@@ -154,7 +154,7 @@ private fun Actions(station: String, agent: ChatAgentView) {
             contentAlignment = Alignment.Center,
         ) { IconIn(icon, 14.dp, if (busy) C.subtle else C.ink) }
     }
-    if (st == Status.Running || st == Status.Queued) act(Icons.Stop, "已请求停止") { app.api(station).stop(s.key) }
+    if (st == "running" || st == "queued") act(Icons.Stop, "已请求停止") { app.api(station).stop(s.key) }
     if (s.process == "warm") act(Icons.Unplug, "已释放进程") { app.api(station).evict(s.key) }
 }
 

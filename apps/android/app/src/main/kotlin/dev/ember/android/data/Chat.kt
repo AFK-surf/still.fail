@@ -28,6 +28,8 @@ import kotlinx.serialization.Serializable
     val quotes: List<Quote> = emptyList(),
     /** final or block, when an agent's post ended its work with it. */
     val declared: String? = null,
+    /** Whether it is the viewer's (their bubble), as the core decides. */
+    val mine: Boolean = false,
     val createdAt: Long = 0,
     /** When its latest edit came; null if never edited. */
     val editedAt: Long? = null,
@@ -76,6 +78,9 @@ import kotlinx.serialization.Serializable
 /** An agent taking part in a chat: its session, the connect that started it, its profile, its turns and every thread it is in. */
 @Serializable data class ChatAgentView(
     val session: SessionSummary,
+    /** Where it stands (running, queued, final, block, failed, aborted, unexpected, idle) and its mark, as the core decides. */
+    val status: String = "idle",
+    val badge: String? = null,
     val connect: ConnectView? = null,
     val profile: ProfileView? = null,
     val turns: List<TurnRecord> = emptyList(),
@@ -139,3 +144,6 @@ import kotlinx.serialization.Serializable
 
 /** One row: what kind of thing (its icon), in words, whether it runs now, and its transcript entry (for its history). */
 @Serializable data class ActivityRowView(val key: String, val kind: String = "other", val text: String = "", val live: Boolean = false, val entry: Int? = null)
+
+/** An agent's mark as the app draws it: the core's badge, in the app's terms (nothing decided here). */
+val ChatAgentView.state: ChatState get() = badgeState(badge) ?: ChatState.Done

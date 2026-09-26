@@ -195,7 +195,7 @@ class ChatAgent(val view: ChatAgentView, val live: LiveView?) {
     val runtime get() = view.session.runtime
     val model get() = live?.usage?.model ?: view.session.model
     val who get() = agentLabel(model, view.session.effort)
-    val state get() = view.session.state()
+    val state get() = view.state
 }
 
 @Composable
@@ -294,7 +294,7 @@ class AgentAtWork(val key: String, val who: String, val runtime: String, val mod
 private class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<ChatAgent>, val person: (String) -> String?) {
     val mentions: Map<String, String> = view.agents.mapNotNull { a -> a.connect?.let { c -> c.botUserId?.let { it to c.name } } }.toMap()
     fun agent(key: String) = agents.firstOrNull { it.key == key }
-    fun mine(m: MessageView) = m.authorKind == "person" && view.me.isMe(m.author)
+    fun mine(m: MessageView) = m.mine
     fun name(m: MessageView) = person(m.author) ?: m.authorName ?: if (m.author == "local") "本机" else m.author
     /** Slack's <@U…> mentions by name: an agent's bot by its connect's, a person by theirs where known. */
     fun mention(text: String) = text.replace(Regex("<@([A-Z0-9]+)>")) { r -> "@" + (mentions[r.groupValues[1]] ?: person(r.groupValues[1]) ?: r.groupValues[1]) }
@@ -1084,7 +1084,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ThreadView)
                         // The model is the one actually running, as everywhere.
                         val model = key(s.key) { rememberTopic<LiveView>(app.core, Topics.live(station, s.key)).value.value?.usage?.model } ?: s.model
                         InfoRow(onClick = { openHistory(app, station, of, s.key) }) {
-                            ModelMark(model, s.runtime, 36.dp, s.state(), around = C.surface2)
+                            ModelMark(model, s.runtime, 36.dp, a.state, around = C.surface2)
                             Column(Modifier.weight(1f)) {
                                 Text(agentLabel(model, s.effort), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 // One line: it gives way with an ellipsis rather than wrapping.
