@@ -17,6 +17,9 @@ const CLOUD_ORIGIN = (process.env.EMBER_CLOUD_ORIGIN ?? "https://ember.3720.org"
  */
 const DEV_URL = process.argv.find((arg) => arg.startsWith("--dev-url="))?.slice("--dev-url=".length).replace(/\/+$/, "") ?? null;
 const APP_ORIGIN = DEV_URL ? new URL(DEV_URL).origin : "app://ember";
+// The dev server is plain http on the LAN: taken as secure, as app://ember is, so the page has what a secure page has
+// (the clipboard among it) and behaves as the packed one does.
+if (DEV_URL) app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-secure", APP_ORIGIN);
 /** Where ember cloud sends a native sign-in back to (cloud/src/auth.ts, APP_REDIRECT). */
 const AUTH_CALLBACK = "ember://auth/callback";
 /** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/ and ember_core.node. */
