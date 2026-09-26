@@ -3,7 +3,7 @@
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArrowDown, ArrowUp, Bot, Brain, ChevronDown, ChevronUp, Download, FileText, Globe, MessagesSquare, Pencil, Plus, Quote as QuoteIcon, Search, Terminal, Wrench, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type MessageView, type Quote, type SessionSummary, type ActivityView } from "./api.ts";
 import { agentLabel, botUserIdOf, sessionStatus } from "./format.ts";
 import { Mark } from "./brand.tsx";
@@ -646,8 +646,9 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
       );
     }
   };
-  // Switching to a chat puts the cursor in its composer (not on touch screens, where it would raise the keyboard).
-  useEffect(() => {
+  // Switching to a chat puts the cursor in its composer (not on touch screens, where it would raise the keyboard),
+  // before it is first drawn: it never shows unfocused first.
+  useLayoutEffect(() => {
     if (window.matchMedia("(pointer: fine)").matches) input.current?.focus();
   }, [thread]);
   // Grow with the text up to the frame's limit; the frame is never resized by hand.

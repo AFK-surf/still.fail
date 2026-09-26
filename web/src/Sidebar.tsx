@@ -112,7 +112,9 @@ function ChatPane({ chats, scope, onlyMine, newChat, settings, hidden }: { chats
 function ChatRow({ item }: { item: ChatItem }) {
   const { connect } = item;
   return (
-    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`} data-unread={item.unread || undefined} onClick={chatClicked}>
+    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`} data-unread={item.unread || undefined} onClick={chatClicked}
+      // Pressing a chat does not take the focus from the composer: it stays there, focused, into the next chat.
+      onMouseDown={(e) => e.preventDefault()}>
       {item.unread && <span className="unread-dot" role="img" aria-label="有未读消息" />}
       <span className="nav-session-text">
         {/* Where the chat happens sits at the title's end, top right. */}
