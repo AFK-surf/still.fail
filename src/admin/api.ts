@@ -759,7 +759,8 @@ export class AdminApi {
         Promise.all(agents.map((a) => this.#creator(shown.get(a.key)?.createdBy ?? null))),
       ]);
       return {
-        id: String(t.id), session: agents[0]!.key, thread: t.id,
+        // An item is its agent's, from its first moment to its last: the session key is its id, chat or no chat.
+        id: agents[0]!.key, session: agents[0]!.key, thread: t.id,
         title: hasWords(t) || !from ? chatTitle({ ...t, channelName: null }) : chatTitle({ ...from, channelName: origin!.channelName }),
         agents,
         last: last && {

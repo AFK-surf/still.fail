@@ -98,7 +98,7 @@ impl Views {
     /// The station has the message as entry `seq`: it stays until the chat's entries reach it (and leaves in that
     /// emission). Nobody looking at the chat: it goes now.
     pub fn outbox_sent(&self, station: &str, thread: u64, id: &str, seq: u64) {
-        if !self.views.borrow().contains_key(&chat_topic(station, thread)) {
+        if self.chat_views(station, thread).is_empty() {
             return self.outbox_remove(station, thread, id);
         }
         if let Some(entry) = self.outbox.borrow_mut().get_mut(&(station.to_string(), thread)).and_then(|list| list.iter_mut().find(|m| m["id"] == id)) {
@@ -122,7 +122,22 @@ impl Views {
     }
 
     fn outbox_changed(&self, station: &str, thread: u64) {
-        self.store.invalidate(&chat_topic(station, thread));
+        for view in self.chat_views(station, thread) {
+            self.store.invalidate(&view);
+        }
+    }
+
+    /// The live pages showing a chat: by its thread, or by its agent once the chat is the agent's.
+    fn chat_views(&self, station: &str, thread: u64) -> Vec<Topic> {
+        let views: Vec<Topic> = self.views.borrow().keys().cloned().collect();
+        views
+            .into_iter()
+            .filter(|view| match view {
+                Topic::Chat { station: s, thread: Some(t), .. } => s == station && *t == thread,
+                Topic::Chat { station: s, thread: None, session: Some(key) } => s == station && self.bound_thread(s, key) == Some(thread),
+                _ => false,
+            })
+            .collect()
     }
 
     pub fn start(&self, view: &Topic) {
@@ -177,7 +192,11 @@ impl Views {
             Topic::Stations { scope } => self.stations_view(scope),
             Topic::Connects { scope, mine } => self.connects(scope, *mine),
             Topic::Chat { station, thread: Some(thread), .. } => self.chat(station, *thread),
-            Topic::Chat { station, thread: None, session: Some(key) } => self.unchatted(station, key),
+            // An item's page by its agent: its chat once it has one (made here or elsewhere), else the agent alone.
+            Topic::Chat { station, thread: None, session: Some(key) } => match self.bound_thread(station, key) {
+                Some(thread) => self.chat(station, thread),
+                None => self.unchatted(station, key),
+            },
             Topic::Chat { .. } => Some(Err(CoreError::invalid("chat 要有 thread 或 session"))),
             _ => None,
         }
@@ -212,6 +231,10 @@ impl Views {
             Topic::Chats { scope, .. } => (scope.as_str(), |station| vec![Topic::ChatRows { station: station.clone() }, Topic::Link { station }]),
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
             Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station }]),
+            Topic::Chat { station, thread: None, session: Some(key) } if self.bound_thread(station, key).is_some() => {
+                let thread = self.bound_thread(station, key);
+                return self.sources(&Topic::Chat { station: station.clone(), thread, session: None });
+            }
             Topic::Chat { station, thread: None, session } => {
                 // An agent with no chat yet: itself, and its title as the station's items have it.
                 if let Some(key) = session {
@@ -286,6 +309,19 @@ impl Views {
     }
 
     /// A thread as the station's `threads` topic has it.
+    /// The chat an agent's item has: the ember chat bound to it (its first session), as the station's items say, or
+    /// its threads do.
+    fn bound_thread(&self, station: &str, key: &str) -> Option<u64> {
+        let from_rows = self.ok(Topic::ChatRows { station: station.to_string() }).and_then(|rows| {
+            rows.as_array()?.iter().find(|r| r.get("session").and_then(Value::as_str) == Some(key))?.get("thread")?.as_u64()
+        });
+        from_rows.or_else(|| {
+            self.ok(Topic::Threads { station: station.to_string() })?.as_array()?.iter().find(|t| {
+                t.get("surface").and_then(Value::as_str) == Some("ember") && members(t).first().map(String::as_str) == Some(key)
+            })?.get("id")?.as_u64()
+        })
+    }
+
     fn thread_of(&self, station: &str, id: u64) -> Option<Value> {
         self.ok(Topic::Threads { station: station.to_string() })?.as_array()?.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned()
     }
