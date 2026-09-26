@@ -2,181 +2,66 @@
   {
     "id": "code-review",
     "label": "代码审查",
-    "bg": "#DFEAF2"
+    "bg": "#DDEFEA"
   },
   {
     "id": "bug-fixing",
-    "label": "修复缺陷",
-    "bg": "#F3E6C9"
+    "label": "修 Bug",
+    "bg": "#DDEFEA"
   },
   {
     "id": "refactoring",
     "label": "代码重构",
-    "bg": "#DFEAF2"
+    "bg": "#DDEFEA"
   },
   {
     "id": "writing-tests",
-    "label": "编写测试",
-    "bg": "#F3E6C9"
+    "label": "写测试",
+    "bg": "#DDEFEA"
   },
   {
     "id": "ci-builds",
     "label": "持续构建",
-    "bg": "#DDEBE3"
+    "bg": "#E1EAF7"
   },
   {
     "id": "deploy-release",
     "label": "部署发布",
-    "bg": "#DDEBE3"
+    "bg": "#E1EAF7"
   },
   {
-    "id": "on-call-incidents",
+    "id": "on-call",
     "label": "故障值守",
-    "bg": "#DDEBE3"
+    "bg": "#F9E3DE"
   },
   {
-    "id": "monitoring-alerts",
+    "id": "monitoring",
     "label": "监控告警",
-    "bg": "#DDEBE3"
+    "bg": "#F9E3DE"
   },
   {
-    "id": "security-audit",
+    "id": "security",
     "label": "安全审计",
-    "bg": "#34483F"
+    "bg": "#E2E8F5"
   },
   {
     "id": "performance",
     "label": "性能优化",
-    "bg": "#F3E6C9"
+    "bg": "#F9ECD1"
   },
   {
     "id": "database",
     "label": "数据库",
-    "bg": "#E8E0F2"
+    "bg": "#E2E8F5"
   },
   {
     "id": "data-analysis",
     "label": "数据分析",
-    "bg": "#E8E0F2"
+    "bg": "#E2E8F5"
   },
   {
-    "id": "frontend-ui",
+    "id": "frontend",
     "label": "前端界面",
-    "bg": "#DFEAF2"
-  },
-  {
-    "id": "backend-api",
-    "label": "后端接口",
-    "bg": "#DFEAF2"
-  },
-  {
-    "id": "mobile-apps",
-    "label": "移动应用",
-    "bg": "#DFEAF2"
-  },
-  {
-    "id": "infrastructure-cloud",
-    "label": "云端基建",
-    "bg": "#DDEBE3"
-  },
-  {
-    "id": "devops-scripts",
-    "label": "运维脚本",
-    "bg": "#DDEBE3"
-  },
-  {
-    "id": "dependency-upgrades",
-    "label": "依赖升级",
-    "bg": "#DFEAF2"
-  },
-  {
-    "id": "documentation",
-    "label": "编写文档",
-    "bg": "#F3E0D6"
-  },
-  {
-    "id": "translation",
-    "label": "翻译",
-    "bg": "#F3E0D6"
-  },
-  {
-    "id": "research",
-    "label": "论文研究",
-    "bg": "#E8E0F2"
-  },
-  {
-    "id": "product-planning",
-    "label": "产品规划",
-    "bg": "#F3E0D6"
-  },
-  {
-    "id": "project-management",
-    "label": "任务管理",
-    "bg": "#F3E0D6"
-  },
-  {
-    "id": "design-visuals",
-    "label": "视觉设计",
-    "bg": "#F3E0D6"
-  },
-  {
-    "id": "customer-support",
-    "label": "客户支持",
-    "bg": "#F3E0D6"
-  },
-  {
-    "id": "knowledge-base",
-    "label": "知识问答",
-    "bg": "#F3E0D6"
-  },
-  {
-    "id": "meeting-notes",
-    "label": "会议纪要",
-    "bg": "#F3E0D6"
-  },
-  {
-    "id": "code-migration",
-    "label": "代码迁移",
-    "bg": "#DFEAF2"
-  },
-  {
-    "id": "git-merges",
-    "label": "分支合并",
-    "bg": "#DFEAF2"
-  },
-  {
-    "id": "automation-cron",
-    "label": "定时自动化",
-    "bg": "#DDEBE3"
-  },
-  {
-    "id": "machine-learning",
-    "label": "机器学习",
-    "bg": "#3E3652"
-  },
-  {
-    "id": "game-development",
-    "label": "游戏开发",
-    "bg": "#DFEAF2"
-  },
-  {
-    "id": "command-line",
-    "label": "命令终端",
-    "bg": "#29465A"
-  },
-  {
-    "id": "teaching-onboarding",
-    "label": "教学入门",
-    "bg": "#F3E0D6"
-  },
-  {
-    "id": "general-helper",
-    "label": "通用助手",
-    "bg": "#EEE8D9"
-  },
-  {
-    "id": "personal-assistant",
-    "label": "私人助理",
-    "bg": "#EEE8D9"
+    "bg": "#E6E6F8"
   }
 ]

@@ -116,8 +116,11 @@ async function toIcon(file: File): Promise<string> {
   }
 }
 
-/** An avatar to start from: a drawing on a background colour of its own (a mono mark is drawn white). */
-interface Avatar { id: string; label: string; src: string; bg: string; mono?: boolean }
+/**
+ * An avatar to start from: a drawing on a background colour of its own (a mono mark is drawn white). `thumb`: a small
+ * copy for the picker, when the drawing is a large picture.
+ */
+interface Avatar { id: string; label: string; src: string; thumb?: string; bg: string; mono?: boolean }
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -134,11 +137,14 @@ const MAKERS: Avatar[] = [
   { id: "xai", label: "xAI", src: `${BASE}models/xai.svg`, bg: "#0D0D0D", mono: true },
 ];
 
-/** ember's buddy at the jobs a bot is made for, so people tell bots apart by what they do (web/public/avatars/index.json). */
+/**
+ * ember's buddy at the jobs a bot is made for, so people tell bots apart by what they do (web/public/avatars/:
+ * index.json, and each as <id>.png with a small <id>.thumb.png).
+ */
 let buddies: Promise<Avatar[]> | null = null;
 function loadBuddies(): Promise<Avatar[]> {
   buddies ??= fetch(`${BASE}avatars/index.json`).then((r) => r.json() as Promise<{ id: string; label: string; bg: string }[]>)
-    .then((list) => list.map((a) => ({ ...a, src: `${BASE}avatars/${a.id}.svg` })), () => []);
+    .then((list) => list.map((a) => ({ ...a, src: `${BASE}avatars/${a.id}.png`, thumb: `${BASE}avatars/${a.id}.thumb.png` })), () => []);
   return buddies;
 }
 function useBuddies(): Avatar[] | null {
@@ -247,7 +253,7 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
   const tile = (a: Avatar, maker: boolean) => (
     <button key={a.id} type="button" className="avatar-tile" data-picked={isPicked(a) || undefined} title={a.label} aria-label={a.label}
       style={{ background: a.bg }} onClick={() => pick(a, maker)}>
-      <img src={a.src} alt="" data-mono={a.mono || undefined} data-maker={maker || undefined} />
+      <img src={a.thumb ?? a.src} alt="" loading="lazy" data-mono={a.mono || undefined} data-maker={maker || undefined} />
     </button>
   );
   return (
