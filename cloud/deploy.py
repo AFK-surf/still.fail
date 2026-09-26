@@ -11,6 +11,8 @@ Inputs (none of them in the repository):
   keys      ~/ember-deploy/keys.json, created on first run: session signing key, admin token and
             the Ed25519 key that signs station grants. Keep it; losing it logs everyone out and makes
             stations distrust new grants until they re-enroll.
+  posthog   ~/ember-deploy/posthog.json, {host, key}: PostHog's project key, built into the web app
+            (docs/telemetry.md). Without it the web app is built without analytics.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
 import argparse
@@ -29,6 +31,7 @@ ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
 DEPLOY = Path.home() / "ember-deploy"
 KEYS = DEPLOY / "keys.json"
+POSTHOG = DEPLOY / "posthog.json"
 
 
 def write_private(path: Path, value) -> None:
@@ -112,6 +115,7 @@ def main() -> None:
     if args.check:
         print("account", account_id())
         print("keys", "present" if KEYS.exists() else "will be created")
+        print("posthog", "present" if POSTHOG.exists() else "missing: the web app will have no analytics")
         return
 
     config = {**template, "account_id": account_id(), "vars": {**template["vars"], "GOOGLE_CLIENT_ID": web["client_id"]}}
@@ -119,7 +123,11 @@ def main() -> None:
     local.write_text(json.dumps(config, indent=2) + "\n")
 
     if not args.skip_build:
-        subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, check=True)
+        # web/vite.config.ts reads the key from the file EMBER_POSTHOG names.
+        if not POSTHOG.exists():
+            print(f"note: no {POSTHOG}; building the web app without analytics")
+        env = {**os.environ, "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else None
+        subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
     values = {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"]}
     with docker_env() as env:
         wrangler("deploy", "--config", str(local), "--containers-rollout", "immediate", env=env)

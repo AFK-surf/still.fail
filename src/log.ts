@@ -11,6 +11,14 @@ function write(level: Level, msg: string, fields?: Record<string, unknown>): voi
     if (value instanceof Error) line[key] = { message: value.message, stack: value.stack };
   }
   process.stdout.write(`${JSON.stringify(line)}\n`);
+  if (level === "error") errorSink?.(msg, fields);
+}
+
+let errorSink: ((msg: string, fields?: Record<string, unknown>) => void) | null = null;
+
+/** Where error lines go as well (telemetry.ts); null for nowhere. */
+export function sendErrorsTo(sink: typeof errorSink): void {
+  errorSink = sink;
 }
 
 export const log = {

@@ -7,6 +7,7 @@ import { MeContext, useChats, useIsMine, type ChatItem } from "./api.ts";
 import { BADGE_LABEL, chatBadge, cleanText, dayLabel } from "./format.ts";
 import { Avatar, ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { Lockup, Mark } from "./brand.tsx";
+import { chatClicked } from "./telemetry.ts";
 
 export function Sidebar() {
   const path = useLocation().pathname;
@@ -98,7 +99,7 @@ function ChatRow({ item }: { item: ChatItem }) {
   const { thread, connect } = item;
   const badge = chatBadge(item.agents);
   return (
-    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${thread.id}`} data-unread={item.unread || undefined}>
+    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${thread.id}`} data-unread={item.unread || undefined} onClick={chatClicked}>
       <span className="nav-session-text">
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className="nav-session-head">

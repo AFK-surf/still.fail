@@ -14,12 +14,14 @@ import { WorkspaceShell } from "./workspace.tsx";
 import { ROLE_LABEL } from "./settings.tsx";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspaces } from "./api.ts";
 import { Illustration } from "../brand.tsx";
+import { PageViews, track } from "../telemetry.ts";
 
 export function CloudApp() {
   return (
     <ToastProvider>
       <Tooltip.Provider delayDuration={400}>
         <BrowserRouter>
+          <PageViews />
           <Routes>
             <Route path="/auth/callback" element={<Callback />} />
             <Route path="/invite" element={<Invite />} />
@@ -55,7 +57,7 @@ function Landing() {
   const navigate = useNavigate();
   const create = useAction(
     (code: string) => cloud.createWorkspace(list[0]!.sub, `${list[0]!.name || list[0]!.email.split("@")[0]} 的 workspace`, code),
-    (w) => { forgetInviteCode(); navigate(`/w/${w.id}`, { replace: true }); },
+    (w) => { track("workspace_created", { first: true }); forgetInviteCode(); navigate(`/w/${w.id}`, { replace: true }); },
   );
   const accept = useAction(
     (i: { sub: string; id: string }) => cloud.acceptInvitationById(i.sub, i.id),

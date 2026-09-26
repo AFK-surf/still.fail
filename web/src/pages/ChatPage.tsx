@@ -5,7 +5,7 @@ import { useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, Ring } from "../components.tsx";
 import { Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
 import { Popover, Tabs } from "radix-ui";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
 import { useAction, useApi, useChat, useHost, useLives, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type SessionSummary } from "../api.ts";
@@ -14,6 +14,7 @@ import { ChatPanel } from "../Chat.tsx";
 import {
   BADGE_LABEL, PROCESS_LABEL, RUNTIME_LABEL, absoluteTime, agentLabel, compactNumber, sessionStatus, slackThreadUrl, slackWorkspaceUrl, statusBadge,
 } from "../format.ts";
+import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
 import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, RuntimeLogo, SlackLogo, Time, Tip } from "../ui.tsx";
 
@@ -26,6 +27,19 @@ export function ChatPage() {
   return <ChatScreen key={id} thread={id} />;
 }
 
+/** Reports how long the chat took to show its messages, once, when they first do. */
+function useChatOpened(chat: ChatView | undefined): void {
+  const [opening] = useState(chatOpening);
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!chat || reported.current) return;
+    reported.current = true;
+    const surface = chat.thread.surface === "ember" ? "ember" : "slack";
+    // The frame after the commit: when the messages are on screen.
+    requestAnimationFrame(() => track("chat_opened", { surface, open: opening.cold ? "cold" : "warm", ms: Math.round(performance.now() - opening.at) }));
+  }, [chat, opening]);
+}
+
 /** Whether the side panel was open, remembered across chats. */
 const PANEL = "ember.sidePanel";
 
@@ -33,6 +47,7 @@ function ChatScreen({ thread }: { thread: number }) {
   const station = useStation();
   const link = useLink();
   const chatView = useChat(station.address, thread);
+  useChatOpened(chatView.value);
   const agents = chatView.value?.agents ?? [];
   const lives = useLives(station.address, agents.map((a) => a.session.key));
   // One history tab per agent, by session key; each can be closed, and with none open the panel goes away.

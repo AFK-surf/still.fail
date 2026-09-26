@@ -75,6 +75,6 @@ relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，�
 
 ## 部署
 
-`cloud/deploy.py`（在 studio 上运行，需要 `wrangler login` 和 OrbStack 的 docker）：构建网页版（含 wasm）、部署 Worker 和 relay 容器、写入密钥、检查 `/healthz`。线上地址 `https://ember.3720.org`，和 zork 同一个 Cloudflare 账号，Google 登录用单独的 OAuth 客户端（`524783491799-bm55…`，和 zork 同一个 Google Cloud 项目），客户端 JSON 在 studio 的 `~/ember-deploy/google-oauth.json`。密钥在 studio 的 `~/ember-deploy/keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。
+`cloud/deploy.py`（在 studio 上运行，需要 `wrangler login` 和 OrbStack 的 docker）：构建网页版（含 wasm）、部署 Worker 和 relay 容器、写入密钥、检查 `/healthz`。线上地址 `https://ember.3720.org`，和 zork 同一个 Cloudflare 账号，Google 登录用单独的 OAuth 客户端（`524783491799-bm55…`，和 zork 同一个 Google Cloud 项目），客户端 JSON 在 studio 的 `~/ember-deploy/google-oauth.json`。密钥在 studio 的 `~/ember-deploy/keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。PostHog 的项目 key 在 `~/ember-deploy/posthog.json`，deploy.py 构建时带进网页版（见 [telemetry.md](telemetry.md)）。
 
 本地联调（不需要 Cloudflare）：`cloud/test/dev.ts` 起一个本地控制面（Google 用模拟），配合 `iroh-relay --dev`；`/tmp/mesh-e2e.sh`（studio）把 relay、控制面、`ember-mesh`、管理 API 和无头浏览器串起来跑一遍。

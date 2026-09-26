@@ -3,6 +3,7 @@
 // worker being replaced. The worker is a SharedWorker so every tab shares one
 // core; a dedicated Worker per tab where SharedWorker is missing (Chrome on
 // Android).
+import { captureException } from "../telemetry.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core/src/protocol.rs). */
 export type Topic =
@@ -39,6 +40,13 @@ export class CoreError extends Error {
     this.code = body.code;
     this.status = body.status;
   }
+}
+
+/** An error the worker caught in its own tasks (worker.ts), sent to one page to report. */
+export interface WorkerFault {
+  name: string;
+  message: string;
+  stack?: string;
 }
 
 /** One open channel to a worker. */
@@ -104,6 +112,8 @@ function applyOp(node: unknown, op: DeltaOp, depth: number): unknown {
 export interface ClientOptions {
   /** Waits before reopening a failed worker; tests pass their own. */
   schedule?: (ms: number, run: () => void) => void;
+  /** Errors in the worker (it reports them; the page cannot see them) and the worker failing, for error tracking. */
+  onFault?: (error: Error) => void;
 }
 
 // A worker that keeps failing (a broken build, a panic on start) is retried
@@ -113,6 +123,7 @@ const RETRY_MS = [0, 1000, 2000, 5000, 10_000, 30_000];
 export class CoreClient {
   readonly #open: Opener;
   readonly #schedule: (ms: number, run: () => void) => void;
+  readonly #onFault: (error: Error) => void;
   #channel: Channel | null = null;
   #nextId = 1;
   readonly #calls = new Map<number, Pending>();
@@ -125,6 +136,7 @@ export class CoreClient {
   constructor(open: Opener, options: ClientOptions = {}) {
     this.#open = open;
     this.#schedule = options.schedule ?? ((ms, run) => void setTimeout(run, ms));
+    this.#onFault = options.onFault ?? (() => undefined);
     this.#connect();
   }
 
@@ -195,6 +207,7 @@ export class CoreClient {
 
   #restart(reason: string): void {
     console.error("ember core: worker failed:", reason);
+    this.#onFault(Object.assign(new Error(reason), { name: "CoreFailed" }));
     this.#channel?.close();
     this.#channel = null;
     // Whether they ran is unknown: the caller decides whether to try again.
@@ -238,9 +251,14 @@ export class CoreClient {
 
   #receive(data: unknown): void {
     if (typeof data !== "object" || data === null) return;
-    const message = data as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string };
+    const message = data as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault };
     if (message.fatal !== undefined) {
       this.#restart(message.fatal);
+      return;
+    }
+    if (message.fault) {
+      const { name, message: text, stack } = message.fault;
+      this.#onFault(Object.assign(new Error(text), { name, ...(stack ? { stack } : {}) }));
       return;
     }
     // A healthy answer: the worker is up again.
@@ -291,7 +309,7 @@ export function workerOpener(): Opener {
 
 /** Starts (or joins) the core and keeps the page's client in step with the page's lifecycle. */
 export function connectCore(): CoreClient {
-  const client = new CoreClient(workerOpener());
+  const client = new CoreClient(workerOpener(), { onFault: (error) => captureException(error, { source: "core" }) });
   addEventListener("pagehide", () => client.suspend());
   addEventListener("pageshow", (event) => { if (event.persisted) client.resume(); });
   return client;

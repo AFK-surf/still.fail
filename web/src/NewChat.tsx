@@ -11,6 +11,7 @@ import { EFFORTS, EFFORT_LABEL, RUNTIME_LABEL } from "./format.ts";
 import { StationContext, stationBase, type Station } from "./station.tsx";
 import { ModelLogo, RuntimeLogo } from "./ui.tsx";
 import { Illustration } from "./brand.tsx";
+import { track } from "./telemetry.ts";
 
 interface Choice { runtime: RuntimeKind | ""; model: string; effort: string }
 const LAST = "ember.newChat";
@@ -91,10 +92,12 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
     if (!runtime || !model) return Promise.reject(new Error("先在 Profile 里启用模型"));
     made.current ??= (async () => {
       setMaking(true);
+      const at = performance.now();
       const { key, thread } = await api.newChat({
         runtime, model,
         ...(choice.effort ? { effort: choice.effort } : {}),
       });
+      track("chat_created", { runtime, model, ...(choice.effort ? { effort: choice.effort } : {}), ms: Math.round(performance.now() - at) });
       return { key, thread: thread.id };
     })().catch((error: unknown) => { made.current = null; setMaking(false); throw error; });
     return made.current;
