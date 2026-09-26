@@ -34,12 +34,14 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
   const [, rerender] = useState(0);
   const wasBusy = useRef(false);
   const busy = status === "running" || status === "queued";
+  // A turn ending and the next starting leave a moment of "not running"; only a pause over a second ends the activity.
+  const [leaving, setLeaving] = useState(false);
   useEffect(() => {
-    if (busy) { wasBusy.current = true; return; }
+    if (busy) { wasBusy.current = true; setLeaving(false); return; }
     if (!wasBusy.current) return;
-    wasBusy.current = false;
-    const timer = setTimeout(() => { lastAgents.current = null; rerender((n) => n + 1); }, 520);
-    return () => clearTimeout(timer);
+    const fade = setTimeout(() => setLeaving(true), 1200);
+    const gone = setTimeout(() => { wasBusy.current = false; lastAgents.current = null; setLeaving(false); rerender((n) => n + 1); }, 1200 + 520);
+    return () => { clearTimeout(fade); clearTimeout(gone); };
   }, [busy]);
   const member = usePerson();
   const isMine = useIsMine();
@@ -145,7 +147,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
               timeline: detail.transcript?.timeline ?? [], live, phase, since: detail.turns.at(-1)?.endedAt == null ? detail.turns.at(-1)?.startedAt ?? null : null,
             }] : lastAgents.current!;
           if (busy) lastAgents.current = agents;
-          return <Activities onOpenHistory={onOpenHistory} agents={agents} leaving={!busy} />;
+          return <Activities onOpenHistory={onOpenHistory} agents={agents} leaving={leaving} />;
         })()}
       </div>
       {picked && (
@@ -464,6 +466,7 @@ function Activity({ agent, collapsed, onToggle, onOpen, leaving }: { agent: Agen
   const rows = activityRows(agent.timeline, agent.live, agent.phase);
   const count = collapsed ? 1 : 3;
   // Rows fill from the top; once there are more than fit, one extra row is kept above so it can slide out as the rest move up.
+  if (!rows.length) rows.push({ key: "idle", text: "正在处理", live: true });
   const shown = rows.slice(-(count + 1));
   const overflowing = shown.length > count;
   const newest = shown.at(-1)?.key ?? "none";

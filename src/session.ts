@@ -185,7 +185,8 @@ export class SessionActor {
    */
   async #startTurn(kind: TurnKind, text: string): Promise<void> {
     try {
-      if (!this.#agent) this.#deps.live?.event(this.key, { kind: "phase", phase: "starting" });
+      // Until the runtime says it has sent its request, the turn is starting (a warm process can still take a while to take input).
+      this.#deps.live?.event(this.key, { kind: "phase", phase: "starting" });
       let agent = await this.#ensureAgent();
       const prompt = this.#resumeLost ? `${RESUME_LOST}\n\n${text}` : text;
       this.#resumeLost = false;
