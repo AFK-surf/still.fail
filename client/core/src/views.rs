@@ -18,6 +18,7 @@ use std::rc::{Rc, Weak};
 use futures::FutureExt;
 use serde_json::{Value, json};
 
+use crate::entries::merge;
 use crate::error::{CoreError, Result};
 use crate::host::Host;
 use crate::protocol::Topic;
@@ -96,8 +97,8 @@ impl Views {
         self.outbox_changed(station, thread);
     }
 
-    /// The station has the message as `seq`: the entry stays until the chat's messages reach it (and leaves in
-    /// that emission). Nobody looking at the chat: it goes now.
+    /// The station has the message as entry `seq`: it stays until the chat's entries reach it (and leaves in that
+    /// emission). Nobody looking at the chat: it goes now.
     pub fn outbox_sent(&self, station: &str, thread: u64, id: &str, seq: u64) {
         if !self.views.borrow().contains_key(&Topic::Chat { station: station.to_string(), thread }) {
             return self.outbox_remove(station, thread, id);
@@ -214,8 +215,9 @@ impl Views {
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
             Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station }]),
             Topic::Chat { station, thread } => {
-                // Its agents, once the station's threads say who they are.
-                for key in self.thread_of(station, *thread).as_ref().map(members).unwrap_or_default() {
+                // Its agents, once the station's threads (or the thread as kept) say who they are.
+                let kept = || self.ok(Topic::Thread { station: station.clone(), thread: *thread })?.get("thread").filter(|t| t.is_object()).cloned();
+                for key in self.thread_of(station, *thread).or_else(kept).as_ref().map(members).unwrap_or_default() {
                     topics.insert(Topic::Session { station: station.clone(), key });
                 }
                 topics.insert(Topic::Threads { station: station.clone() });
@@ -430,17 +432,19 @@ impl Views {
     }
 
     fn chat(&self, station: &str, id: u64) -> Option<Result<Value>> {
-        let threads = match self.store.value(&Topic::Threads { station: station.to_string() })? {
-            Ok(threads) => threads,
-            Err(error) => return Some(Err(error)),
-        };
-        let Some(thread) = threads.as_array().into_iter().flatten().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned() else {
-            return Some(Err(CoreError::new("http_404", "没有这个对话").with_status(404)));
-        };
-        // It shows as soon as its latest messages are read; its agents fill in as they are.
+        // It shows as soon as its latest entries are there (kept on the device, or read); its agents fill in as they are.
         let page = match self.store.value(&Topic::Thread { station: station.to_string(), thread: id })? {
             Ok(page) => page,
             Err(error) => return Some(Err(error)),
+        };
+        let thread = match self.store.value(&Topic::Threads { station: station.to_string() }) {
+            Some(Ok(threads)) => match threads.as_array().into_iter().flatten().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)) {
+                Some(thread) => thread.clone(),
+                None => return Some(Err(CoreError::new("http_404", "没有这个对话").with_status(404))),
+            },
+            Some(Err(error)) => return Some(Err(error)),
+            // Not read yet: the thread as it was kept with its entries.
+            None => page.get("thread").filter(|t| t.is_object())?.clone(),
         };
         let overview = self.ok(Topic::Overview { station: station.to_string() });
         let of = |list: &str, id: Option<&Value>| find(overview.as_ref().and_then(|o| o.get(list)), id);
@@ -466,9 +470,9 @@ impl Views {
                 "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
             }));
         }
-        let messages = page.get("messages").cloned().unwrap_or_else(|| json!([]));
-        // A sent message leaves the outbox as its own copy (or anything later) arrives.
-        let newest = messages.as_array().and_then(|m| m.last()).and_then(|m| m.get("seq")?.as_u64());
+        let messages = merge(page.get("entries").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default());
+        // A sent message leaves the outbox as its own entry (or anything later) arrives.
+        let newest = page.get("last").and_then(Value::as_u64);
         let at = (station.to_string(), id);
         let outbox = {
             let mut all = self.outbox.borrow_mut();
@@ -488,7 +492,8 @@ impl Views {
             "people": thread.get("people").cloned().unwrap_or_else(|| json!([])),
             "agents": agents,
             "messages": messages,
-            "more": page.get("more").cloned().unwrap_or(json!(false)),
+            // Entries before those loaded (the thread counts from 1).
+            "more": page.get("first").and_then(Value::as_u64).is_some_and(|first| first > 1),
             "outbox": outbox,
             "link": self.link(station, true),
             "thread": thread,
@@ -564,7 +569,7 @@ fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, origi
     if mine && !takes_part {
         return None;
     }
-    let last = thread.get("last").filter(|l| l.is_object());
+    let last = thread.get("lastMessage").filter(|l| l.is_object());
     let created = thread.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0);
     let last_active = last.and_then(|l| l.get("createdAt")?.as_f64()).map_or(created, |at| at.max(created));
     // Where its agent came from: the connect of its session's Slack thread; an agent made on ember has none.
@@ -573,7 +578,7 @@ fn chat_row(me: &Value, mine: bool, station: &StationInfo, thread: &Value, origi
         .map_or(Value::Null, |c| find(connects, Some(c)));
     let pick = |from: &Value, names: &[&str]| Value::Object(names.iter().map(|n| (n.to_string(), from.get(*n).cloned().unwrap_or(Value::Null))).collect());
     let last = last.map_or(Value::Null, |l| {
-        let mut short = pick(l, &["seq", "authorKind", "author", "authorName", "createdAt", "deletedAt"]);
+        let mut short = pick(l, &["seq", "authorKind", "author", "authorName", "createdAt"]);
         short["text"] = json!(l.get("text").and_then(Value::as_str).unwrap_or("").chars().take(LAST_CHARS).collect::<String>());
         short
     });
@@ -823,8 +828,9 @@ mod tests {
         json!({
             "id": id, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": format!("{id}.0"), "title": null,
             "createdAt": at - 10.0, "creator": null, "sessions": keys.iter().map(|k| member(id, k, "ember")).collect::<Vec<_>>(),
-            "last": {"seq": id * 10, "rev": id * 10, "authorKind": "agent", "author": keys.first().copied().unwrap_or(""), "authorName": null, "text": "好的", "createdAt": at, "deletedAt": null},
-            "rev": id * 10, "read": 0, "unread": 0, "people": [], "firstText": null,
+            "last": id * 10,
+            "lastMessage": {"seq": id * 10, "authorKind": "agent", "author": keys.first().copied().unwrap_or(""), "authorName": null, "text": "好的", "createdAt": at},
+            "read": 0, "unread": 0, "people": [], "firstText": null,
         })
     }
 
@@ -877,7 +883,7 @@ mod tests {
             assert_eq!(items[0]["connect"], Value::Null, "ember's own chat comes from no connect");
             assert_eq!(items[0]["agents"], json!([{"key": "s2", "runtime": "claude", "model": "opus", "effort": null, "process": "cold", "pending": 0, "lastTurn": null}]), "only agents still shown");
             assert_eq!(items[0]["title"], "（还没有消息）");
-            assert_eq!(items[0]["last"], json!({"seq": 10, "authorKind": "agent", "author": "s2", "authorName": null, "createdAt": now - 1000.0, "deletedAt": null, "text": "好的"}));
+            assert_eq!(items[0]["last"], json!({"seq": 10, "authorKind": "agent", "author": "s2", "authorName": null, "createdAt": now - 1000.0, "text": "好的"}));
             assert_eq!(items[0]["lastActiveAt"], json!(now - 1000.0));
             assert_eq!(items[1]["connect"], json!({"id": "c1", "name": "Slack"}));
             assert_eq!(items[1]["title"], "#ops");
@@ -940,7 +946,8 @@ mod tests {
             t.set(sessions("local"), json!([session("a")]));
             // A chat nobody has written in yet is as new as the chat itself.
             let mut empty = thread(5, &["a"], 0.0);
-            empty["last"] = Value::Null;
+            empty["last"] = json!(0);
+            empty["lastMessage"] = Value::Null;
             empty["createdAt"] = json!(midnight - 3.0 * DAY_MS - 1000.0);
             t.set(threads("local"), json!([
                 thread(1, &["a"], midnight - 1000.0),
@@ -1170,6 +1177,14 @@ mod tests {
     fn page_of(st: &str, id: u64) -> Topic {
         Topic::Thread { station: st.into(), thread: id }
     }
+    fn entry(n: u64, text: &str) -> Value {
+        json!({"thread": 7, "n": n, "kind": "message", "ts": format!("{n}.0"), "authorKind": "person", "author": "a@x.com", "authorName": null, "text": text, "at": n})
+    }
+    /// A thread topic's value: entries `first ..= last` (their texts), and the summary kept with them.
+    fn page(first: u64, texts: &[&str], kept: Value) -> Value {
+        let entries: Vec<Value> = texts.iter().enumerate().map(|(i, t)| entry(first + i as u64, t)).collect();
+        json!({"first": first, "last": first + texts.len() as u64 - 1, "entries": entries, "thread": kept})
+    }
 
     #[test]
     fn chat_is_a_thread_its_messages_and_its_agents() {
@@ -1186,14 +1201,22 @@ mod tests {
             let mut chat = thread(7, &["k", "j"], now);
             chat["title"] = json!("排查");
             chat["people"] = json!([{"id": "local", "name": "本机管理页", "email": null, "via": "local"}]);
+            // What is kept on the device shows before the station's threads are read.
+            let mut kept = chat.clone();
+            kept["title"] = json!("排查（上次）");
+            t.set(page_of("ws/a", 7), page(39, &["第 39 条", "第 40 条"], kept));
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().expect("shown from what is kept");
+            assert_eq!((v["title"].clone(), v["messages"].as_array().unwrap().len(), v["more"].clone()), (json!("排查（上次）"), 2, json!(true)));
+            assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), session_of("ws/a", "j")]), "its agents are read as the kept thread names them");
             t.set(threads("ws/a"), json!([thread(3, &["k"], now), chat.clone()]));
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), session_of("ws/a", "j")]), "its agents are read next");
-            let page: Vec<Value> = (11..=40).map(|i| json!({"seq": i, "text": format!("第 {i} 条")})).collect();
-            t.set(page_of("ws/a", 7), json!({"rev": 40, "messages": page, "more": true}));
+            assert_eq!(ui.value.clone().unwrap()["title"], "排查", "the station's threads, once read");
+            let texts: Vec<String> = (11..=40).map(|i| format!("第 {i} 条")).collect();
+            t.set(page_of("ws/a", 7), page(11, &texts.iter().map(String::as_str).collect::<Vec<_>>(), Value::Null));
             t.read(&mut ui, 1).await;
             // The messages do not wait for the agents: those not read yet are their summaries where the list has them.
-            let v = ui.value.clone().expect("shown once the thread and its messages are read");
+            let v = ui.value.clone().unwrap();
             assert_eq!(v["agents"], json!([]));
             t.set(sessions("ws/a"), json!([{"key": "j", "connect": "ember", "profile": "p1"}]));
             t.read(&mut ui, 1).await;
@@ -1224,20 +1247,35 @@ mod tests {
             assert_eq!(v["link"], json!({"state": "online", "message": null}));
 
             // A new message goes out as an append.
-            t.store.update(&page_of("ws/a", 7), &mut |p| p["messages"].as_array_mut().unwrap().push(json!({"seq": 41, "text": "新的"})));
+            t.store.update(&page_of("ws/a", 7), &mut |p| {
+                p["entries"].as_array_mut().unwrap().push(entry(41, "新的"));
+                p["last"] = json!(41);
+            });
             t.host.settle().await;
             let sent = t.host.take_emitted();
             assert_eq!(sent.len(), 1);
             let CoreMessage::Delta { delta, .. } = &sent[0].1 else { panic!("{:?}", sent[0]) };
-            assert_eq!(serde_json::to_value(delta).unwrap(), json!([{"path": ["messages"], "append": [{"seq": 41, "text": "新的"}]}]));
-            // An older page, in front.
+            assert_eq!(serde_json::to_value(delta).unwrap(), json!([{"path": ["messages"], "append": merge(&[entry(41, "新的")])}]));
+            // An edit shows in its message, a delete takes it away: merged here, not by the page.
             t.store.update(&page_of("ws/a", 7), &mut |p| {
-                p["messages"].as_array_mut().unwrap().insert(0, json!({"seq": 10, "text": "旧的"}));
-                p["more"] = json!(false);
+                p["entries"].as_array_mut().unwrap().extend([
+                    json!({"n": 42, "kind": "edit", "target": 41, "text": "新的（改）", "attachments": [], "quotes": [], "at": 42}),
+                    json!({"n": 43, "kind": "delete", "target": 40, "at": 43}),
+                ]);
+                p["last"] = json!(43);
             });
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
-            assert_eq!((v["messages"][0]["seq"].clone(), v["messages"].as_array().unwrap().len(), v["more"].clone()), (json!(10), 32, json!(false)));
+            let last: Vec<(Value, Value)> = v["messages"].as_array().unwrap().iter().rev().take(2).map(|m| (m["text"].clone(), m["editedAt"].clone())).collect();
+            assert_eq!(last, vec![(json!("新的（改）"), json!(42)), (json!("第 39 条"), Value::Null)]);
+            // An older page, in front.
+            t.store.update(&page_of("ws/a", 7), &mut |p| {
+                p["entries"].as_array_mut().unwrap().splice(0..0, (1..=10).map(|n| entry(n, "旧的")));
+                p["first"] = json!(1);
+            });
+            t.read(&mut ui, 1).await;
+            let v = ui.value.clone().unwrap();
+            assert_eq!((v["messages"][0]["seq"].clone(), v["messages"].as_array().unwrap().len(), v["more"].clone()), (json!(1), 40, json!(false)));
 
             // Another agent joins: it is read, and shows once it is.
             t.store.update(&threads("ws/a"), &mut |list| list[1]["sessions"].as_array_mut().unwrap().push(member(7, "n", "ember")));
@@ -1267,7 +1305,7 @@ mod tests {
             slack["firstText"] = json!("<@U0BOT> 部署挂了");
             slack["sessions"] = json!([member(3, "k", "c1")]);
             t.set(threads("local"), json!([slack]));
-            t.set(page_of("local", 3), json!({"rev": 2, "messages": [{"seq": 1, "authorKind": "person", "text": "<@U0BOT> 部署挂了"}, {"seq": 2, "authorKind": "agent", "text": "在看"}], "more": false}));
+            t.set(page_of("local", 3), page(1, &["<@U0BOT> 部署挂了", "在看"], Value::Null));
             t.read(&mut ui, 1).await;
             t.set(session_of("local", "k"), json!({"session": {"key": "k", "connect": "c1"}, "threads": [], "turns": []}));
             t.read(&mut ui, 1).await;
@@ -1286,7 +1324,7 @@ mod tests {
             let mut ui = Ui::default();
             t.subscribe(1, chat_topic("ws/a", 7));
             t.set(threads("ws/a"), json!([thread(7, &[], t.host.now_ms())]));
-            t.set(page_of("ws/a", 7), json!({"rev": 5, "messages": [{"seq": 5, "text": "早"}], "more": false}));
+            t.set(page_of("ws/a", 7), page(5, &["早"], Value::Null));
             t.read(&mut ui, 1).await;
             assert_eq!(ui.value.clone().unwrap()["outbox"], json!([]));
 
@@ -1301,12 +1339,15 @@ mod tests {
             let out = ui.value.clone().unwrap()["outbox"].clone();
             assert_eq!((out[0]["state"].as_str(), out[0]["error"].as_str()), (Some("failed"), Some("连不上 station")));
 
-            // Sent as seq 6: it stays until the messages reach 6, and leaves in that same emission.
+            // Sent as entry 6: it stays until the entries reach 6, and leaves in that same emission.
             views.outbox_state("ws/a", 7, &id, None);
             views.outbox_sent("ws/a", 7, &id, 6);
             t.read(&mut ui, 1).await;
             assert_eq!(ui.value.clone().unwrap()["outbox"][0]["seq"], 6);
-            t.store.update(&page_of("ws/a", 7), &mut |p| p["messages"].as_array_mut().unwrap().push(json!({"seq": 6, "text": "你好"})));
+            t.store.update(&page_of("ws/a", 7), &mut |p| {
+                p["entries"].as_array_mut().unwrap().push(entry(6, "你好"));
+                p["last"] = json!(6);
+            });
             t.host.settle().await;
             let sent = t.host.take_emitted();
             assert_eq!(sent.len(), 1);
