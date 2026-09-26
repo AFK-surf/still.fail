@@ -13,6 +13,8 @@ export interface Env {
   DIRECTORY: DurableObjectNamespace<Directory>;
   /** The web app's static files; absent in tests. */
   ASSETS?: Fetcher;
+  /** ember station's releases (scripts/release.sh). */
+  RELEASES?: R2Bucket;
   LOGINS: DurableObjectNamespace<LoginAttempt>;
   LOGIN_LIMITS: DurableObjectNamespace<LoginLimiter>;
   TELEMETRY_LIMITS: DurableObjectNamespace<TelemetryLimiter>;

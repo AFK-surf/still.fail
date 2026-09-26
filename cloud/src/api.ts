@@ -159,7 +159,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (kind === "enrollments" && !target && method === "POST") {
     return directory(async () => {
       const made = await dir.createEnrollment(sub, ws, text("name"));
-      return { ...made, command: `ember station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
+      // A machine without ember installs it and joins at once; one with ember joins.
+      return { ...made, install: `curl -fsSL ${env.PUBLIC_ORIGIN}/install.sh | sh -s -- ${made.token}`, command: `ember station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
     });
   }
   if (kind === "stations" && target && validKeyHex(target)) {

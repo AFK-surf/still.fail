@@ -1,13 +1,20 @@
 #!/bin/sh
-# ember command line. So far: joining a workspace in ember cloud.
-#   ember station enroll <ember-cloud-origin> <token>
+# ember's command line, from a clone or from an installed release (~/.ember/app, see cloud/src/install.ts).
+#   ember start                                        runs the station (the release's service does this)
+#   ember station enroll <ember-cloud-origin> <token>  joins a workspace in ember cloud
 #   ember station id
 set -eu
-here=$(cd "$(dirname "$0")/.." && pwd)
+# Called through a link (~/.local/bin/ember): the app is where the link points.
+self=$(readlink -f "$0" 2>/dev/null || echo "$0")
+here=$(cd "$(dirname "$self")/.." && pwd)
 data=${EMBER_DATA:-$HOME/.ember}
 mesh=${EMBER_MESH_BIN:-$here/mesh/target/release/ember-mesh}
+# A release brings its own Node.
+node=node
+[ -x "$here/node/bin/node" ] && node="$here/node/bin/node"
 case "${1:-} ${2:-}" in
+  "start "*) cd "$here" && exec "$node" src/main.ts ;;
   "station enroll") shift 2; exec "$mesh" enroll "$@" --data "$data" ;;
   "station id") exec "$mesh" id --data "$data" ;;
-  *) echo "usage: ember station enroll <ember-cloud-origin> <token> | ember station id" >&2; exit 2 ;;
+  *) echo "usage: ember start | ember station enroll <ember-cloud-origin> <token> | ember station id" >&2; exit 2 ;;
 esac

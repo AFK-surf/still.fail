@@ -309,7 +309,7 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
   useEffect(() => { if (joined) track("station_added", { ms: Math.round(performance.now() - shown.current) }); }, [Boolean(joined)]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Dialog open onClose={onClose} wide title="添加 station"
-      description="station 是一台运行 ember 的机器。给它起个名字，然后在那台机器上执行生成的命令。"
+      description="station 是一台运行 ember 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 ember 并加入。"
       footer={joined ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
         <Button variant="ghost" onClick={onClose}>{enroll.result ? "关闭" : "取消"}</Button>
         {!enroll.result && <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>生成命令</Button>}
@@ -324,9 +324,14 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
       ) : (
         <>
           <ol className="steps">
-            <li><span>在要当 station 的机器上，进入 ember 的目录，执行：</span><CopyCommand text={`bin/${enroll.result.command}`} /></li>
-            <li>ember 正在运行的话，几秒内就会连上；没有运行就启动它（<span className="mono">pnpm start</span>）。</li>
+            <li><span>在要当 station 的机器（macOS，Apple 芯片）上打开「终端」，执行：</span><CopyCommand text={enroll.result.install} /></li>
+            <li>它会装好 ember、加入这个 workspace，并在后台一直运行（开机自动启动）。几秒后这台机器就会出现在这里。</li>
+            <li>之后在「设置 → Profile」里登录 Claude Code 或 Codex 的账号；那台机器上还没装它们的话，安装结束时会告诉你怎么装。</li>
           </ol>
+          <details className="manual-app">
+            <summary>这台机器上已经有 ember 了</summary>
+            <p className="muted">在 ember 的目录里执行 <CopyCommand text={`bin/${enroll.result.command}`} />，然后重启 ember。</p>
+          </details>
           <p className="muted dialog-note"><span className="activity-pulse inline" aria-hidden="true" />等待 station 加入… 命令 1 小时内有效，只能用一次。</p>
         </>
       )}

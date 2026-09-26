@@ -1,3 +1,4 @@
+import { installScript, RELEASE_FILE } from "./install.ts";
 import { Container } from "@cloudflare/containers";
 import { previewSite } from "./preview.ts";
 import { DurableObject } from "cloudflare:workers";
@@ -104,6 +105,16 @@ async function handle(request: Request, env: Env): Promise<Response> {
     });
   }
   if (url.origin === env.PREVIEW_ORIGIN) return previewSite(url);
+  // Installing a station: the installer, and the releases it gets.
+  if (url.origin === env.PUBLIC_ORIGIN && request.method === "GET") {
+    if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
+    const release = /^\/releases\/(.+)$/.exec(path)?.[1];
+    if (release && RELEASE_FILE.test(release)) {
+      const object = await env.RELEASES?.get(release);
+      if (!object) return reply({ error: "release_not_found" }, 404);
+      return new Response(object.body, { headers: { "content-type": "application/gzip", "content-length": String(object.size), "cache-control": "no-store" } });
+    }
+  }
   if (path === "/relay") {
     if (url.origin !== env.PUBLIC_ORIGIN) return reply({ error: "invalid_origin" }, 421);
     if (request.method !== "GET") return reply({ error: "method_not_allowed" }, 405);
