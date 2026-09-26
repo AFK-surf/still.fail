@@ -1411,7 +1411,9 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .model-triple .triple-part { display: inline-flex; align-items: center; gap: 5px; flex: none; }
 .model-triple .triple-part::before { content: "·"; color: var(--muted); margin-right: 1px; }
 .model-triple .triple-account-short { display: none; }
-.model-triple .quota-rings { margin-left: 2px; }
+.model-triple .quota-rings { margin-left: 2px; align-items: center; }
+.model-triple .quota-ring-letter { display: none; }
+.model-triple .quota-ring-cell { display: flex; align-items: center; }
 .model-triple[data-drop~="name"] .triple-account-name { display: none; }
 .model-triple[data-drop~="name"] .triple-account-short { display: inline; }
 .model-triple[data-drop~="account"] .triple-account { display: none; }
