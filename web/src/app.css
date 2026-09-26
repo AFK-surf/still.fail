@@ -939,16 +939,17 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 
 .h-step-said { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 
-/* Activity: one line per agent at work, up to three; collapses to one. */
-.activity { display: flex; align-items: flex-start; gap: 6px; }
-.activity-lines { display: grid; gap: 3px; min-width: 0; padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
-.activity-line { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--text-xs); color: var(--muted); animation: fade-in 180ms var(--ease-out); }
-.activity-who { flex: none; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 500; }
-.activity-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.activity-toggle { display: grid; place-items: center; min-width: 22px; height: 18px; padding: 0 4px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 11px; cursor: pointer; }
+/* Activities: one block per agent at work; each shows its last three steps in three fixed rows, or the newest in one. */
+.activities { display: grid; gap: 10px; }
+.activity { display: grid; gap: 4px; padding-left: 10px; border-left: 2px solid var(--line-strong); }
+.activity-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.activity-who { min-width: 0; max-width: 320px; padding: 0; border: 0; background: none; font: inherit; font-size: var(--text-xs); font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; text-align: left; }
+.activity-toggle { display: grid; place-items: center; width: 20px; height: 18px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
 .activity-toggle:hover { background: var(--hover); color: var(--text); }
-@media (prefers-reduced-motion: reduce) { .activity-line { animation: none; } }
-/* Three rows or one, always: agents starting and finishing never change the height. */
-.activity-lines { grid-template-rows: repeat(3, 18px); height: calc(3 * 18px + 2 * 3px); align-content: start; }
-.activity[data-collapsed] .activity-lines { grid-template-rows: 18px; height: 18px; }
-.activity-line { height: 18px; }
+.activity-rows { display: grid; grid-template-rows: repeat(3, 18px); height: calc(3 * 18px + 2 * 2px); gap: 2px; align-content: end; }
+.activity[data-collapsed] .activity-rows { grid-template-rows: 18px; height: 18px; }
+.activity-row { display: flex; align-items: center; gap: 6px; height: 18px; min-width: 0; font-size: var(--text-xs); color: var(--subtle); animation: fade-in 180ms var(--ease-out); }
+.activity-row[data-live] { color: var(--muted); }
+.activity-done { width: 6px; height: 6px; margin: 0 1px; border-radius: 50%; background: var(--line-strong); flex: none; }
+.activity-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .activity-row { animation: none; } }

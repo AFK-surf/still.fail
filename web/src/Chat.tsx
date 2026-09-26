@@ -12,7 +12,11 @@ import { useIsMine, usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
 
-export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory }: { detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; live?: ShownStep[]; phase?: ShownPhase | null; onOpenHistory(): void }) {
+export function ChatPanel({ detail, chat, live = [], phase = null, trail = [], onOpenHistory }: {
+  detail: SessionDetail; chat: SessionDetail["chats"][number] | undefined; live?: ShownStep[]; phase?: ShownPhase | null;
+  /** The running turn's steps so far, for the activity. */
+  trail?: ShownStep[]; onOpenHistory(): void;
+}) {
   const list = useRef<HTMLDivElement>(null);
   const messages = chat?.messages ?? [];
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
@@ -127,7 +131,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
             );
           }
           if (!busy) return null;
-          return <Activity steps={live} phase={phase} agent={agent} onOpenHistory={onOpenHistory} />;
+          return <Activities trail={trail} phase={phase} agent={agent} onOpenHistory={onOpenHistory} />;
         })()}
       </div>
       {picked && (
@@ -358,47 +362,62 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
 
 const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
 
-/**
- * Who is doing what right now: the agent and each sub-agent it started, one
- * line each, three at most. Collapses to one line; the choice is remembered.
- */
-function Activity({ steps, phase, agent, onOpenHistory }: { steps: ShownStep[]; phase: ShownPhase | null; agent: string; onOpenHistory(): void }) {
+/** One line of what a step did or is doing. */
+function stepText(s: ShownStep): string {
+  return s.step === "thinking" ? "思考" : s.step === "text" ? "写回复" : activityText(s.tool, s.input);
+}
+
+/** One activity per agent at work: the agent, then each sub-agent it started. */
+function Activities({ trail, phase, agent, onOpenHistory }: { trail: ShownStep[]; phase: ShownPhase | null; agent: string; onOpenHistory(): void }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(ACTIVITY_COLLAPSED) === "1");
-  const open = steps.filter((s) => !s.ended);
-  const doing = (s: ShownStep | undefined, fallback: string) =>
-    !s ? fallback : s.step === "thinking" ? "正在思考" : s.step === "text" ? "正在写" : activityText(s.tool, s.input);
-  const main = open.filter((s) => !s.parent);
-  const mainText = phase?.phase === "starting" ? "正在启动"
-    : phase?.phase === "requesting" && !main.length ? "等待模型响应"
-    : doing(main.at(-1), "正在处理");
-  const lines: { who: string; what: string }[] = [{ who: agent, what: mainText }];
-  // Sub-agents, by the call that started them; named by what that call was asked to do.
-  const parents = [...new Set(open.filter((s) => s.parent).map((s) => s.parent!))];
-  for (const parent of parents) {
-    const call = steps.find((s) => s.id === parent);
-    const name = (call && partialString(call.input, "description")) || "子 agent";
-    lines.push({ who: name, what: doing(open.filter((s) => s.parent === parent).at(-1), "正在处理") });
-  }
-  const shown = collapsed ? lines.slice(0, 1) : lines.slice(0, 3);
-  const more = lines.length - shown.length;
   const toggle = () => {
     localStorage.setItem(ACTIVITY_COLLAPSED, collapsed ? "0" : "1");
     setCollapsed(!collapsed);
   };
+  const main = trail.filter((s) => !s.parent);
+  // A sub-agent is at work while the call that started it has not ended.
+  const parents = [...new Set(trail.filter((s) => s.parent).map((s) => s.parent!))]
+    .filter((id) => !trail.find((s) => s.id === id)?.ended);
+  const waiting = phase?.phase === "starting" ? "正在启动" : phase?.phase === "requesting" ? "等待模型响应" : null;
+  return (
+    <div className="activities">
+      <Activity who={agent} steps={main} waiting={waiting} collapsed={collapsed} onToggle={toggle} onOpen={onOpenHistory} />
+      {parents.map((id) => {
+        const call = trail.find((s) => s.id === id);
+        return <Activity key={id} who={(call && partialString(call.input, "description")) || "子 agent"} steps={trail.filter((s) => s.parent === id)} waiting={null}
+          collapsed={collapsed} onToggle={toggle} onOpen={onOpenHistory} />;
+      })}
+    </div>
+  );
+}
+
+/**
+ * One agent at work: its latest three steps, newest last, in three fixed rows
+ * (or the newest alone in one), so steps coming and going never move the page.
+ */
+function Activity({ who, steps, waiting, collapsed, onToggle, onOpen }: {
+  who: string; steps: ShownStep[]; waiting: string | null; collapsed: boolean; onToggle(): void; onOpen(): void;
+}) {
+  const rows: { text: string; live: boolean; key: string }[] = steps.slice(-3).map((s) => ({ text: stepText(s), live: !s.ended, key: s.id }));
+  if (waiting && !rows.some((r) => r.live)) rows.push({ text: waiting, live: true, key: "waiting" });
+  const shown = collapsed ? rows.slice(-1) : rows.slice(-3);
+  if (!shown.length) shown.push({ text: "正在处理", live: true, key: "idle" });
   return (
     <div className="activity" data-collapsed={collapsed || undefined}>
-      <button type="button" className="activity-lines" onClick={onOpenHistory} title="打开执行历史">
-        {shown.map((l, i) => (
-          <span key={i} className="activity-line">
-            <span className="activity-pulse inline" aria-hidden="true" />
-            <span className="activity-who">{l.who}</span>
-            <span className="activity-what">{l.what}…</span>
+      <div className="activity-head">
+        <button type="button" className="activity-who" onClick={onOpen} title="打开执行历史">{who}</button>
+        <button type="button" className="activity-toggle" onClick={onToggle} aria-label={collapsed ? "展开为三行" : "收起为一行"}>
+          {collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+        </button>
+      </div>
+      <div className="activity-rows">
+        {shown.map((r) => (
+          <span key={r.key} className="activity-row" data-live={r.live || undefined}>
+            {r.live ? <span className="activity-pulse inline" aria-hidden="true" /> : <span className="activity-done" aria-hidden="true" />}
+            <span className="activity-what">{r.text}{r.live ? "…" : ""}</span>
           </span>
         ))}
-      </button>
-      <button type="button" className="activity-toggle" onClick={toggle} aria-label={collapsed ? "展开活动" : "收起为一行"}>
-        {collapsed ? (more > 0 ? `+${more}` : <ChevronDown size={13} />) : <ChevronUp size={13} />}
-      </button>
+      </div>
     </div>
   );
 }
