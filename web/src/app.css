@@ -1373,7 +1373,6 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .app-avatar-empty { display: grid; place-items: center; gap: 4px; height: 100%; font-size: var(--text-xs); color: var(--muted); align-content: center; }
 .app-look-main { flex: 1; min-width: 0; display: grid; gap: 8px; }
 .app-name-input { height: 44px; font-size: var(--text-md); font-weight: 600; }
-.app-look-link { margin-left: auto; font-size: var(--text-xs); color: var(--muted); }
 .app-colour { display: flex; align-items: center; gap: 8px; font-size: var(--text-xs); }
 .app-colour .color-swatch { width: 28px; height: 28px; }
 .app-colour-hex { width: 96px; height: 28px; font-size: var(--text-xs); }

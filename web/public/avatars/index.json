@@ -1,182 +1,182 @@
 [
   {
-    "id": "happy",
-    "label": "开心",
-    "bg": "#F5DECA"
+    "id": "code-review",
+    "label": "代码审查",
+    "bg": "#DFEAF2"
   },
   {
-    "id": "wink",
-    "label": "眨眼",
-    "bg": "#E5EBCF"
+    "id": "bug-fixing",
+    "label": "修复缺陷",
+    "bg": "#F3E6C9"
   },
   {
-    "id": "sleepy",
-    "label": "困困",
-    "bg": "#DDE2F0"
+    "id": "refactoring",
+    "label": "代码重构",
+    "bg": "#DFEAF2"
   },
   {
-    "id": "surprised",
-    "label": "惊喜",
-    "bg": "#F6E9BF"
+    "id": "writing-tests",
+    "label": "编写测试",
+    "bg": "#F3E6C9"
   },
   {
-    "id": "focused",
-    "label": "专注",
-    "bg": "#D9E8E7"
+    "id": "ci-builds",
+    "label": "持续构建",
+    "bg": "#DDEBE3"
   },
   {
-    "id": "laughing",
-    "label": "大笑",
-    "bg": "#EEDBE4"
+    "id": "deploy-release",
+    "label": "部署发布",
+    "bg": "#DDEBE3"
   },
   {
-    "id": "cool",
-    "label": "酷酷",
-    "bg": "#B8CED7"
+    "id": "on-call-incidents",
+    "label": "故障值守",
+    "bg": "#DDEBE3"
   },
   {
-    "id": "love",
-    "label": "心动",
-    "bg": "#F2D1D1"
+    "id": "monitoring-alerts",
+    "label": "监控告警",
+    "bg": "#DDEBE3"
   },
   {
-    "id": "headphones",
-    "label": "听歌",
-    "bg": "#D8E4ED"
+    "id": "security-audit",
+    "label": "安全审计",
+    "bg": "#34483F"
   },
   {
-    "id": "glasses",
-    "label": "博学",
-    "bg": "#ECE4D6"
+    "id": "performance",
+    "label": "性能优化",
+    "bg": "#F3E6C9"
   },
   {
-    "id": "hard-hat",
-    "label": "工程师",
-    "bg": "#DBE6E2"
+    "id": "database",
+    "label": "数据库",
+    "bg": "#E8E0F2"
   },
   {
-    "id": "chef-hat",
-    "label": "小厨师",
-    "bg": "#EAD2BE"
+    "id": "data-analysis",
+    "label": "数据分析",
+    "bg": "#E8E0F2"
   },
   {
-    "id": "wizard-hat",
-    "label": "魔法师",
-    "bg": "#DDD9ED"
+    "id": "frontend-ui",
+    "label": "前端界面",
+    "bg": "#DFEAF2"
   },
   {
-    "id": "crown",
-    "label": "小国王",
-    "bg": "#D3E6E1"
+    "id": "backend-api",
+    "label": "后端接口",
+    "bg": "#DFEAF2"
   },
   {
-    "id": "beanie",
-    "label": "暖暖",
-    "bg": "#EEDDD4"
+    "id": "mobile-apps",
+    "label": "移动应用",
+    "bg": "#DFEAF2"
   },
   {
-    "id": "graduation-cap",
-    "label": "毕业啦",
-    "bg": "#E4E7D1"
+    "id": "infrastructure-cloud",
+    "label": "云端基建",
+    "bg": "#DDEBE3"
   },
   {
-    "id": "party-hat",
-    "label": "庆祝",
-    "bg": "#EBD8E6"
+    "id": "devops-scripts",
+    "label": "运维脚本",
+    "bg": "#DDEBE3"
   },
   {
-    "id": "wrench",
-    "label": "修理工",
-    "bg": "#DCE5EA"
+    "id": "dependency-upgrades",
+    "label": "依赖升级",
+    "bg": "#DFEAF2"
   },
   {
-    "id": "coffee",
-    "label": "咖啡时间",
-    "bg": "#EDDCC8"
+    "id": "documentation",
+    "label": "编写文档",
+    "bg": "#F3E0D6"
   },
   {
-    "id": "laptop",
-    "label": "开发者",
-    "bg": "#E2E5D7"
+    "id": "translation",
+    "label": "翻译",
+    "bg": "#F3E0D6"
   },
   {
-    "id": "magnifier",
-    "label": "观察员",
-    "bg": "#E8DDEB"
+    "id": "research",
+    "label": "论文研究",
+    "bg": "#E8E0F2"
   },
   {
-    "id": "pencil",
-    "label": "记录员",
-    "bg": "#D5E5E9"
+    "id": "product-planning",
+    "label": "产品规划",
+    "bg": "#F3E0D6"
   },
   {
-    "id": "book",
-    "label": "阅读",
-    "bg": "#EEE0CA"
+    "id": "project-management",
+    "label": "任务管理",
+    "bg": "#F3E0D6"
   },
   {
-    "id": "rocket",
-    "label": "起飞",
-    "bg": "#C8D7E9"
+    "id": "design-visuals",
+    "label": "视觉设计",
+    "bg": "#F3E0D6"
   },
   {
-    "id": "lightbulb",
-    "label": "灵感",
-    "bg": "#D9DCEF"
+    "id": "customer-support",
+    "label": "客户支持",
+    "bg": "#F3E0D6"
   },
   {
-    "id": "shield",
-    "label": "守护者",
-    "bg": "#E6DDD0"
+    "id": "knowledge-base",
+    "label": "知识问答",
+    "bg": "#F3E0D6"
   },
   {
-    "id": "terminal",
-    "label": "终端",
-    "bg": "#C9DDD5"
+    "id": "meeting-notes",
+    "label": "会议纪要",
+    "bg": "#F3E0D6"
   },
   {
-    "id": "blue-visor",
-    "label": "蓝蓝",
-    "bg": "#DDEAF2"
+    "id": "code-migration",
+    "label": "代码迁移",
+    "bg": "#DFEAF2"
   },
   {
-    "id": "green-visor",
-    "label": "青芽",
-    "bg": "#203E39"
+    "id": "git-merges",
+    "label": "分支合并",
+    "bg": "#DFEAF2"
   },
   {
-    "id": "purple-visor",
-    "label": "紫星",
-    "bg": "#E6DCEF"
+    "id": "automation-cron",
+    "label": "定时自动化",
+    "bg": "#DDEBE3"
   },
   {
-    "id": "teal-visor",
-    "label": "海风",
-    "bg": "#253E51"
+    "id": "machine-learning",
+    "label": "机器学习",
+    "bg": "#3E3652"
   },
   {
-    "id": "yellow-visor",
-    "label": "暖阳",
-    "bg": "#45394C"
+    "id": "game-development",
+    "label": "游戏开发",
+    "bg": "#DFEAF2"
   },
   {
-    "id": "wave",
-    "label": "招招手",
-    "bg": "#E9E4CE"
+    "id": "command-line",
+    "label": "命令终端",
+    "bg": "#29465A"
   },
   {
-    "id": "gardener",
-    "label": "园丁",
-    "bg": "#DCE7D5"
+    "id": "teaching-onboarding",
+    "label": "教学入门",
+    "bg": "#F3E0D6"
   },
   {
-    "id": "artist",
-    "label": "画家",
-    "bg": "#E9D8CE"
+    "id": "general-helper",
+    "label": "通用助手",
+    "bg": "#EEE8D9"
   },
   {
-    "id": "mail",
-    "label": "信使",
-    "bg": "#D9E3EB"
+    "id": "personal-assistant",
+    "label": "私人助理",
+    "bg": "#EEE8D9"
   }
 ]

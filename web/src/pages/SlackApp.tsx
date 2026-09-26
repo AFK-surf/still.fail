@@ -134,7 +134,7 @@ const MAKERS: Avatar[] = [
   { id: "xai", label: "xAI", src: `${BASE}models/xai.svg`, bg: "#0D0D0D", mono: true },
 ];
 
-/** ember's buddy in its many moods (web/public/avatars/index.json). */
+/** ember's buddy at the jobs a bot is made for, so people tell bots apart by what they do (web/public/avatars/index.json). */
 let buddies: Promise<Avatar[]> | null = null;
 function loadBuddies(): Promise<Avatar[]> {
   buddies ??= fetch(`${BASE}avatars/index.json`).then((r) => r.json() as Promise<{ id: string; label: string; bg: string }[]>)
@@ -197,7 +197,7 @@ function edgeColour(dataUrl: string): Promise<string> {
   });
 }
 
-/** What a new app starts as: every permission on; its colour and icon come from the first buddy. */
+/** What a new app starts as: every permission on; its colour and icon come from its first avatar. */
 export const NEW_APP: SlackAppSettings = {
   name: "ember", displayName: "ember", description: "Coding agent in your threads (ember)", longDescription: "", backgroundColor: "#F3E3D3",
   groups: Object.fromEntries((Object.keys(GROUPS) as SlackGroup[]).map((g) => [g, true])) as Record<SlackGroup, boolean>,
@@ -206,19 +206,19 @@ export const NEW_APP: SlackAppSettings = {
 /**
  * An app's look and permissions, by how often each is changed: its avatar and name up front (an avatar picked from
  * ember's buddies or the model makers, or uploaded), then its colour, which follows the avatar until it is set by
- * hand (and can go back); the description on a line; permissions folded. One name: the name in messages follows it,
- * unless set apart on purpose. `fresh`: a new app, which starts from the first buddy.
+ * hand (and can go back); the description on a line; permissions folded. One name, which is the name in messages too.
+ * `fresh`: a new app, which starts as the general helper.
  */
 export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
   settings: SlackAppSettings; onChange(settings: SlackAppSettings): void; icon: string | null; onIcon(icon: string | null, error: string | null): void; fresh?: boolean;
 }) {
   const file = useRef<HTMLInputElement>(null);
   const buddyList = useBuddies();
-  const [apart, setApart] = useState(settings.displayName !== settings.name);
   const [picked, setPicked] = useState<{ avatar: Avatar; maker: boolean } | { upload: true; bg: string } | null>(null);
   const [colourSet, setColourSet] = useState(!fresh);
   const set = <K extends keyof SlackAppSettings>(key: K, value: SlackAppSettings[K]) => onChange({ ...settings, [key]: value });
-  const setName = (name: string) => onChange({ ...settings, name, ...(apart ? {} : { displayName: name }) });
+  // The name in messages is the app's name (setting it apart is for Slack's own settings).
+  const setName = (name: string) => onChange({ ...settings, name, displayName: name });
   const recommended = picked ? ("upload" in picked ? picked.bg : picked.avatar.bg) : null;
   const draw = (p: typeof picked, bg: string) => {
     if (p && !("upload" in p)) void renderAvatar(p.avatar, bg, p.maker).then((i) => onIcon(i, null), () => onIcon(null, "画不出这个头像"));
@@ -235,12 +235,12 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
     set("backgroundColor", bg);
     if (/^#[0-9a-fA-F]{6}$/.test(bg)) draw(picked, bg);
   };
-  // A new app starts from the first buddy, on its colour.
+  // A new app starts as the general helper (else the first avatar), on its colour.
   const started = useRef(false);
   useEffect(() => {
     if (!fresh || started.current || icon || !buddyList?.length) return;
     started.current = true;
-    pick(buddyList[0]!, false);
+    pick(buddyList.find((a) => a.id === "general-helper") ?? buddyList[0]!, false);
   });
   const on = (Object.keys(GROUPS) as SlackGroup[]).filter((g) => settings.groups[g]).length;
   const isPicked = (a: Avatar) => picked !== null && !("upload" in picked) && picked.avatar.id === a.id;
@@ -268,9 +268,6 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
         }} />
         <div className="app-look-main">
           <input id="app-name" className="input app-name-input" aria-label="名字" placeholder="名字" value={settings.name} onChange={(e) => setName(e.target.value)} />
-          {apart && (
-            <input id="app-display" className="input" aria-label="在消息里显示的名字" placeholder="在消息里显示的名字" value={settings.displayName} onChange={(e) => set("displayName", e.target.value)} />
-          )}
           <input id="app-desc" className="input app-desc" aria-label="简介" maxLength={140} placeholder="简介，显示在 app 资料卡上" value={settings.description} onChange={(e) => set("description", e.target.value)} />
           <div className="app-colour">
             <input type="color" className="color-swatch" aria-label="底色" value={/^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor) ? settings.backgroundColor : "#7a2e0e"}
@@ -279,7 +276,6 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
             {recommended && colourSet && recommended.toLowerCase() !== settings.backgroundColor.toLowerCase() && (
               <button type="button" className="text-button" onClick={() => colour(recommended, false)}>用推荐色</button>
             )}
-            {!apart && <button type="button" className="text-button app-look-link" onClick={() => setApart(true)}>消息里用别的名字</button>}
           </div>
         </div>
       </div>
