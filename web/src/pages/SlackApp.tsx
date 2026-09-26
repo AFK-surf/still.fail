@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTopic } from "../core/react.ts";
 import { useAction, useApi, type ConnectView, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Field, ICON, Section, SwitchRow } from "../ui.tsx";
+import { Button, Dialog, Field, ICON, Section, SwitchRow } from "../ui.tsx";
 
 /** Permission groups in plain words; mirrors SLACK_GROUPS on the server. */
 const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
@@ -23,37 +23,46 @@ const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
   extras: { label: "链接预览、提醒和状态", description: "展开链接、设置提醒、读取勿扰和通话状态。" },
 };
 
+/**
+ * The connect's Slack app, folded (it is changed now and then): its name, icon and permissions, edited here and written
+ * into the app's manifest with the viewer's configuration token; without one, a way to add it, in a dialog.
+ */
 export function SlackAppSection({ connect }: { connect: ConnectView }) {
   const station = useStation();
-  // Read from Slack through the station: no topic of the core, so it is read again after a change here.
-  // The core reads it, and again after a write to the connect: nothing here reloads it.
+  // Read from Slack through the station; the core reads it again after a write to the connect.
   const app = useTopic<SlackAppView>({ topic: "slackApp", station: station.address, connect: connect.id });
+  const [adding, setAdding] = useState(false);
   const saved = () => {};
   const links = app.value?.links;
   return (
-    <Section title="Slack app" description="在这里改 app 的名字、图标和权限，ember 会写进 Slack 的 app 配置。"
-      actions={links && <a className="btn btn-ghost" href={links.settings} target="_blank" rel="noopener"><ExternalLink {...ICON} />在 Slack 打开</a>}>
-      {app.error ? <div className="card"><p className="field-error">{app.error.message}</p></div>
-        : !app.value ? <div className="card"><p className="muted">正在读取 Slack 上的配置…</p></div>
-        : app.value.state === "no_app" ? <div className="card"><p className="muted">{app.value.error ? `找不到这个连接的 Slack app（${app.value.error}）。换上有效的 token 后再来。` : "连上 Slack 之后，就可以在这里修改它的 app。"}</p></div>
-        : app.value.state === "no_config_token" ? <ConfigTokenCard onSaved={saved} />
-        : app.value.state === "error" ? (
-          <div className="card">
-            <p className="field-error" role="alert">读不到 app 配置：{app.value.error}</p>
-            <ConfigTokenForm replacing onSaved={saved} />
-          </div>
-        )
-        : <AppForm key={JSON.stringify(app.value.settings)} connect={connect} settings={app.value.settings} links={app.value.links} onSaved={saved} />}
-    </Section>
-  );
-}
-
-function ConfigTokenCard({ onSaved }: { onSaved(): void }) {
-  return (
-    <div className="card">
-      <p className="card-lead">修改 app 需要你在这个 Slack 工作区的 App 配置 token。token 只归你用，这台 station 上的其他人看不到。</p>
-      <ConfigTokenForm onSaved={onSaved} />
-    </div>
+    <details className="app-fold">
+      <summary>
+        <span className="app-fold-title">Slack app</span>
+        <span className="muted">名字、头像和权限</span>
+      </summary>
+      <div className="app-fold-body">
+        {app.error ? <p className="field-error">{app.error.message}</p>
+          : !app.value ? <p className="muted">正在读取 Slack 上的配置…</p>
+          : app.value.state === "no_app" ? <p className="muted">{app.value.error ? `找不到这个连接的 Slack app（${app.value.error}）。换上有效的 token 后再来。` : "连上 Slack 之后，就可以在这里修改它的 app。"}</p>
+          : app.value.state === "no_config_token" ? (
+            <div className="card card-row">
+              <span className="card-row-text"><span>要在这里改 app，需要你在这个 Slack 工作区的 App 配置 token。</span><span className="muted">它只归你用，这台 station 上的其他人看不到。</span></span>
+              <Button onClick={() => setAdding(true)}>添加配置 token</Button>
+            </div>
+          )
+          : app.value.state === "error" ? (
+            <div className="card card-row">
+              <span className="card-row-text field-error">读不到 app 配置：{app.value.error}</span>
+              <Button onClick={() => setAdding(true)}>换一个配置 token</Button>
+            </div>
+          )
+          : <AppForm key={JSON.stringify(app.value.settings)} connect={connect} settings={app.value.settings} links={app.value.links} onSaved={saved} />}
+        {links && <a className="text-button app-fold-link" href={links.settings} target="_blank" rel="noopener">在 Slack 打开这个 app</a>}
+      </div>
+      <Dialog open={adding} onClose={() => setAdding(false)} wide title="添加 Slack 配置 token">
+        <ConfigTokenForm onSaved={() => setAdding(false)} />
+      </Dialog>
+    </details>
   );
 }
 

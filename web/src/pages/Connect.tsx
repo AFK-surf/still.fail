@@ -1,7 +1,7 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
-import { CheckCircle2, Plus, ExternalLink, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { CheckCircle2, ExternalLink, KeyRound, Plus, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
@@ -48,35 +48,40 @@ function useStationModels(): { model: string; runtimes: RuntimeKind[] }[] {
 function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: Overview }) {
   const api = useApi();
   const station = useStation();
-  const link = useLink();
   const navigate = useNavigate();
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const [deleting, setDeleting] = useState(false);
   const [owning, setOwning] = useState(false);
+  const [replacing, setReplacing] = useState(false);
   const remove = useAction(() => api.deleteConnect(connect.id), () => { toast("已删除连接"); navigate(`${station.settings}/connects`); });
+  const reconnect = useAction(() => api.reconnect(connect.id), () => toast("已重新连接"));
+  const c = connect.connection;
+  const workspace = c.state === "connected" || c.state === "reconnecting" ? c.workspace : null;
 
   return (
     <div className="page page-narrow">
       <BackLink to={`${station.settings}/connects`} label="连接" />
+      {/* Who it is and whether it is up; what is done to it less often is in the menu. */}
       <header className="identity">
         <ConnectKindIcon kind={connect.kind} size={22} tile />
         <div className="identity-text">
-          {/* Known by its bot's name in its Slack workspace; the name is the Slack app's, changed below. */}
           <h1 className="identity-name">{connect.name}</h1>
           <p className="identity-sub">
+            <span className="connect-status"><StatusDot state={presence(c)} />{connectionText(c)}</span>
             <span className="kind-tag"><SlackLogo size={13} />{connect.team ?? "Slack"}</span>
             {station.name && <span className="station-tag">{station.name}</span>}
-            <span>{modeText(connect.mode, connect.requireMention)}</span>
-            <span>{connectSubtitle(connect)}</span>
             <span className="owner-line">所属 <OwnerLabel owner={connect.createdBy} /></span>
           </p>
         </div>
         <Menu items={[
+          { label: "重新连接", icon: RefreshCw, onSelect: () => void reconnect.run() },
+          { label: "更换 token", icon: KeyRound, onSelect: () => setReplacing(true) },
+          ...(workspace?.url ? [{ label: "打开 Slack", icon: ExternalLink, onSelect: () => window.open(workspace.url, "_blank", "noopener") }] : []),
+          "separator",
           connect.enabled
             ? { label: "停用", icon: Power, onSelect: () => save.put({ enabled: false }, () => toast("已停用，Slack 连接已断开")) }
             : { label: "启用", icon: Power, onSelect: () => save.put({ enabled: true }, () => toast("已启用")) },
-          "separator",
           { label: "更改所属用户", icon: UserRound, onSelect: () => setOwning(true) },
           "separator",
           { label: "删除连接", icon: Trash2, danger: true, onSelect: () => setDeleting(true) },
@@ -85,12 +90,11 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
       {save.error && <p className="field-error page-error" role="alert">{save.error.message}</p>}
 
       <SlackSection connect={connect} />
-      <ModeSection connect={connect} />
-      {connect.mode === "single-session" && <BoundSession connect={connect} />}
-      <BindSection connect={connect} />
-      <SlackAppSection connect={connect} />
+      <RunSection connect={connect} />
       <ConnectSessions connect={connect} />
+      <SlackAppSection connect={connect} />
 
+      {replacing && <TokenDialog connect={connect} onClose={() => setReplacing(false)} />}
       {owning && <OwnerDialog connect={connect} onClose={() => setOwning(false)} />}
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
         title={`删除「${connect.name}」？`} action="删除连接"
@@ -99,58 +103,47 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
   );
 }
 
+/** The Slack link, when it needs something: tokens to connect with, or an error. Up and running, the header says so. */
 function SlackSection({ connect }: { connect: ConnectView }) {
-  const api = useApi();
   const toast = useToast();
   const save = useSaveConnect(connect.id);
-  const [replacing, setReplacing] = useState(false);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
-  const reconnect = useAction(() => api.reconnect(connect.id), () => toast("已重新连接"));
-  const saveTokens = () => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => {
-    setReplacing(false); setTokens(emptyTokens); toast("已保存 token，正在重新连接");
-  });
   const c = connect.connection;
-  const workspace = c.state === "connected" || c.state === "reconnecting" ? c.workspace : null;
-  const close = () => { setReplacing(false); setTokens(emptyTokens); };
-
   if (c.state === "no_tokens") {
     return (
-      <Section title="Slack" description="这个连接还没接上 Slack。">
+      <Section title="接上 Slack" description="这个连接还没接上 Slack。">
         <div className="card">
           <CreateAppSteps name={connect.name} />
           <TokenFields value={tokens} onChange={setTokens} />
           <div className="card-actions">
-            <Button variant="primary" disabled={!tokens.verified} busy={save.busy} onClick={saveTokens}>保存并连接</Button>
+            <Button variant="primary" disabled={!tokens.verified} busy={save.busy}
+              onClick={() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { setTokens(emptyTokens); toast("已保存 token，正在连接"); })}>保存并连接</Button>
           </div>
         </div>
       </Section>
     );
   }
+  if (c.state === "error" || (c.state === "reconnecting" && c.lastError)) {
+    return <div className="callout" data-tone="amber" role="status"><span>{c.state === "error" ? c.error : `正在重连：${c.lastError}`}</span></div>;
+  }
+  return null;
+}
+
+/** Replaces the connect's Slack tokens (either one; the other kept), verified before they are saved. */
+function TokenDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
+  const toast = useToast();
+  const save = useSaveConnect(connect.id);
+  const [tokens, setTokens] = useState<TokenState>(emptyTokens);
   return (
-    <Section title="Slack" actions={<>
-      <Button icon={RefreshCw} onClick={() => void reconnect.run()} busy={reconnect.busy} disabled={!connect.enabled}>重新连接</Button>
-      <Button onClick={() => setReplacing(true)}>更换 token</Button>
-    </>}>
-      <div className="card card-row">
-        <StatusDot state={presence(c)} />
-        <div className="card-row-text">
-          <strong>{connectionText(c)}{workspace ? ` · ${workspace.team}` : ""}</strong>
-          <span className="muted">
-            {workspace ? `在 Slack 里是 @${workspace.botName}` : c.state === "error" ? c.error : c.state === "disabled" ? "停用后不接收新消息，已有会话保留。" : ""}
-            {c.state === "reconnecting" && c.lastError ? `（${c.lastError}）` : ""}
-          </span>
-        </div>
-        {workspace?.url && <a className="btn btn-ghost" href={workspace.url} target="_blank" rel="noopener">打开 Slack</a>}
-      </div>
-      <Dialog open={replacing} onClose={close} title="更换 Slack token" description="只换其中一个也可以，另一个留空会沿用已保存的。保存前先验证。"
-        footer={<>
-          <Button variant="ghost" onClick={close}>取消</Button>
-          <Button variant="primary" disabled={!tokens.verified} busy={save.busy} onClick={saveTokens}>保存并重新连接</Button>
-        </>}>
-        <TokenFields value={tokens} onChange={setTokens} connect={connect.id} masked={connect.slack} />
-        {save.error && <p className="field-error" role="alert">{save.error.message}</p>}
-      </Dialog>
-    </Section>
+    <Dialog open onClose={onClose} title="更换 Slack token" description="只换其中一个也可以，另一个留空会沿用已保存的。保存前先验证。"
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>取消</Button>
+        <Button variant="primary" disabled={!tokens.verified} busy={save.busy}
+          onClick={() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { toast("已保存 token，正在重新连接"); onClose(); })}>保存并重新连接</Button>
+      </>}>
+      <TokenFields value={tokens} onChange={setTokens} connect={connect.id} masked={connect.slack} />
+      {save.error && <p className="field-error" role="alert">{save.error.message}</p>}
+    </Dialog>
   );
 }
 
@@ -170,20 +163,56 @@ export function ModeChoices({ mode, requireMention, onChange, disabled }:
   );
 }
 
-function ModeSection({ connect }: { connect: ConnectView }) {
-  const [changing, setChanging] = useState(false);
+/**
+ * How it runs, in one card: the model it runs (and who runs it), how its conversations become sessions, and in
+ * single-session mode the session they go into. The runtime is its own for good: a line under them.
+ */
+function RunSection({ connect }: { connect: ConnectView }) {
+  const toast = useToast();
+  const save = useSaveConnect(connect.id);
+  const station = useStation();
+  const link = useLink();
+  const overview = useOverview(station.address).value;
+  const sessions = useSessions(station.address).value ?? [];
+  const [changingMode, setChangingMode] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const models = useStationModels().filter((m) => m.runtimes.includes(connect.bind.runtime)).map((m) => ({ ...m, runtimes: [connect.bind.runtime] }));
+  const bound = sessions.find((s) => s.key === connect.session);
   return (
-    <Section title="会话方式" actions={<Button onClick={() => setChanging(true)}>更改会话方式</Button>}>
-      <div className="card card-row">
-        <div className="card-row-text">
-          <strong>{MODE[connect.mode].label}</strong>
-          <span className="muted">
-            {MODE[connect.mode].description}
-            {connect.mode === "single-session" && (connect.requireMention ? "只在被 @ 时唤醒。" : "它能看到的每条消息都会送进会话。")}
-          </span>
+    <Section title="怎么跑">
+      <div className="card run-card">
+        <div className="run-card-row">
+          <span className="run-card-label">模型</span>
+          {models.length === 0
+            ? <Link className="inline-link" to={profilesPage(station)}>{RUNTIME_LABEL[connect.bind.runtime]} 的 Profile 还没有启用模型 · 去勾选</Link>
+            : <ModelTriple title="换模型、思考深度和账号" runtimeFixed options={models} profilesFor={profilesFrom(overview?.profiles ?? [])}
+                value={{ model: connect.bind.model ?? "", runtime: connect.bind.runtime, effort: connect.bind.effort, profile: connect.bind.profile }}
+                onPick={(p) => save.put({ bind: { model: p.model, effort: p.effort ?? "", profile: p.profile } }, () => toast("已保存，新会话会用新的设置"))} />}
         </div>
+        <div className="run-card-row">
+          <span className="run-card-label">会话</span>
+          <span className="run-card-text">
+            <strong>{MODE[connect.mode].label}</strong>
+            <span className="muted">{MODE[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? "只在被 @ 时唤醒。" : "它能看到的每条消息都会送进会话。")}</span>
+          </span>
+          <button type="button" className="text-button" onClick={() => setChangingMode(true)}>更改</button>
+        </div>
+        {connect.mode === "single-session" && (
+          <div className="run-card-row">
+            <span className="run-card-label">当前</span>
+            <span className="run-card-text">
+              {bound
+                ? <Link className="inline-link" to={link(`/chats/${encodeURIComponent(bound.key)}`)}>{sessionTitle(bound, connect.name)}</Link>
+                : <span className="muted">还没有会话；下一条消息会开始一个新的。</span>}
+            </span>
+            <button type="button" className="text-button" onClick={() => setChoosing(true)}>换一个</button>
+          </div>
+        )}
+        {save.error && <p className="field-error" role="alert">{save.error.message}</p>}
+        <p className="card-foot muted">跑在 {RUNTIME_LABEL[connect.bind.runtime]} 上，创建后不能换；要用另一种运行时，新建一个连接。进行中的会话继续用开始时的设置。</p>
       </div>
-      {changing && <ModeDialog connect={connect} onClose={() => setChanging(false)} />}
+      {changingMode && <ModeDialog connect={connect} onClose={() => setChangingMode(false)} />}
+      {choosing && <ChooseSessionDialog connect={connect} onClose={() => setChoosing(false)} />}
     </Section>
   );
 }
@@ -245,34 +274,6 @@ function useLatestChat(): (key: string) => number | null {
 }
 
 /** A single-session connect's session: the one its messages go into, which people can switch or start afresh. */
-function BoundSession({ connect }: { connect: ConnectView }) {
-  const link = useLink();
-  const sessions = useSessions(useStation().address).value ?? [];
-  const latest = useLatestChat();
-  const [choosing, setChoosing] = useState(false);
-  const bound = sessions.find((s) => s.key === connect.session);
-  const body = bound && (
-    <>
-      <div className="card-row-text">
-        <strong>{sessionTitle(bound, connect.name)}</strong>
-        <span className="muted">{RUNTIME_LABEL[bound.runtime]} · {bound.turns} 轮 · 最近活动 <Time at={bound.lastActiveAt} /></span>
-      </div>
-      <Pill tone={statusTone(sessionStatus(bound))}>{STATUS_LABEL[sessionStatus(bound)]}</Pill>
-    </>
-  );
-  return (
-    <Section title="当前会话" description="单会话模式下，消息都进这个会话。可以换成另一个会话，或者新开一个。"
-      actions={<Button onClick={() => setChoosing(true)}>换一个会话</Button>}>
-      {bound ? (
-        <Link className="card card-row card-link" to={link(`/chats/${encodeURIComponent(bound.key)}`)}>{body}</Link>
-      ) : (
-        <div className="card card-row"><span className="muted">还没有会话；下一条消息会开始一个新的。</span></div>
-      )}
-      {choosing && <ChooseSessionDialog connect={connect} onClose={() => setChoosing(false)} />}
-    </Section>
-  );
-}
-
 function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
   const api = useApi();
   const toast = useToast();
@@ -310,27 +311,6 @@ function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClo
       </div>
       {bind.error && <p className="field-error" role="alert">{bind.error.message}</p>}
     </Dialog>
-  );
-}
-
-function BindSection({ connect }: { connect: ConnectView }) {
-  const toast = useToast();
-  const save = useSaveConnect(connect.id);
-  const station = useStation();
-  const overview = useOverview(station.address).value;
-  // Its runtime is its own for good: the models that run on it.
-  const models = useStationModels().filter((m) => m.runtimes.includes(connect.bind.runtime)).map((m) => ({ ...m, runtimes: [connect.bind.runtime] }));
-  return (
-    <Section title="模型" description="新会话用这里的设置：账号自动分配时，在启用了这个模型的 Profile 里挑一个来跑。进行中的会话继续用开始时的。">
-      <div className="card">
-        {models.length === 0
-          ? <Link className="input input-link" to={profilesPage(station)}>{RUNTIME_LABEL[connect.bind.runtime]} 的 Profile 还没有启用模型 · 去勾选</Link>
-          : <ModelTriple title="换模型、思考深度和账号" runtimeFixed options={models} profilesFor={profilesFrom(overview?.profiles ?? [])}
-              value={{ model: connect.bind.model ?? "", runtime: connect.bind.runtime, effort: connect.bind.effort, profile: connect.bind.profile }}
-              onPick={(p) => save.put({ bind: { model: p.model, effort: p.effort ?? "", profile: p.profile } }, () => toast("已保存，新会话会用新的设置"))} />}
-        <p className="card-foot muted">运行时：{RUNTIME_LABEL[connect.bind.runtime]}。创建后不能换；要用另一种运行时，新建一个连接。</p>
-      </div>
-    </Section>
   );
 }
 
