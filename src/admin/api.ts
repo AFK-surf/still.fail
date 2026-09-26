@@ -6,7 +6,7 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import type { EventEmitter } from "node:events";
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, statfsSync } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, extname, join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -807,6 +807,8 @@ export class AdminApi {
       slackUsers: this.#deps.store.slackIdentities(viewerId(viewer)),
       // Whether ember can make and edit Slack apps itself (the workspace's app configuration token).
       slackConfig: this.#configTokenView(),
+      // The data disk's room, read as the overview is: what clients warn of when it runs low.
+      disk: diskRoom(config.dataDir),
       // Sign-ins that will make a profile when they succeed (POST /logins), with the profile they made once they did.
       logins: [...this.#pending].map(([id, p]) => ({ id, runtime: p.runtime, job: this.#deps.logins.get(id), created: p.created })),
     };
@@ -1409,6 +1411,16 @@ export class AdminApi {
       for (const r of runtimesOf(profile.access?.kind ?? "env", profile.runtime)) lastOfRuntime(raw, r, id);
       return { ...raw, profiles: (raw.profiles ?? []).filter((p) => p.id !== id) };
     });
+  }
+}
+
+/** How much room the disk holding `path` has: `{ freeBytes, totalBytes }`, or null when it cannot be read. */
+function diskRoom(path: string): { freeBytes: number; totalBytes: number } | null {
+  try {
+    const stat = statfsSync(path);
+    return { freeBytes: stat.bavail * stat.bsize, totalBytes: stat.blocks * stat.bsize };
+  } catch {
+    return null;
   }
 }
 

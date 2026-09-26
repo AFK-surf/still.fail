@@ -582,6 +582,8 @@ impl Views {
             "profile": of("profiles", session.get("profile")),
             // Whom it can be moved to: the profiles that run its runtime (its transcripts are shared by them all).
             "profiles": runnable_on(overview.as_ref(), &session),
+            // What is worth a look about it now (a quota running out, the disk filling up): its history's summary.
+            "attention": attention(overview.as_ref(), &session),
             "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
             "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
         }))
@@ -714,6 +716,41 @@ fn runtimes(overview: Option<&Value>) -> Value {
         (!models.is_empty()).then(|| json!({ "runtime": runtime, "models": models }))
     });
     Value::Array(list.collect())
+}
+
+/// A quota window, or the disk, is worth a look when this little is left (percent).
+const LOW_LEFT: f64 = 20.0;
+const LOW_DISK: f64 = 10.0;
+const LOW_DISK_BYTES: f64 = 10.0 * 1024.0 * 1024.0 * 1024.0;
+
+/// What is worth a look about a session now, most pressing first; empty when nothing is:
+/// `{ kind: "account", state, name, detail }` (its account cannot run: signed out, key refused),
+/// `{ kind: "quota", label, left, until }` (a window of its account running out),
+/// `{ kind: "disk", freeBytes, totalBytes }` (the station's disk filling up).
+fn attention(overview: Option<&Value>, session: &Value) -> Value {
+    let mut out = Vec::new();
+    let profile = find(overview.and_then(|o| o.get("profiles")), session.get("profile"));
+    if let Some(p) = profile.as_ref().filter(|p| p.is_object()) {
+        let check = p.get("check");
+        if let Some(state @ ("login" | "failed")) = check.and_then(|c| c.get("state")).and_then(Value::as_str) {
+            out.push(json!({ "kind": "account", "state": state, "name": p.get("name"), "detail": check.and_then(|c| c.get("detail")) }));
+        }
+        if p.get("quota").and_then(|q| q.get("state")).and_then(Value::as_str) == Some("ok") {
+            for w in p.get("quota").and_then(|q| q.get("windows")).and_then(Value::as_array).into_iter().flatten() {
+                let left = 100.0 - w.get("usedPercent").and_then(Value::as_f64).unwrap_or(0.0);
+                if left <= LOW_LEFT {
+                    out.push(json!({ "kind": "quota", "label": w.get("label"), "left": left.max(0.0).round(), "until": w.get("resetsAt") }));
+                }
+            }
+        }
+    }
+    if let Some(disk) = overview.and_then(|o| o.get("disk")).filter(|d| d.is_object()) {
+        let (free, total) = (disk.get("freeBytes").and_then(Value::as_f64).unwrap_or(0.0), disk.get("totalBytes").and_then(Value::as_f64).unwrap_or(0.0));
+        if total > 0.0 && (free / total * 100.0 <= LOW_DISK || free <= LOW_DISK_BYTES) {
+            out.push(json!({ "kind": "disk", "freeBytes": free, "totalBytes": total }));
+        }
+    }
+    Value::Array(out)
 }
 
 /// The profiles a session can run on, those of its runtime: `{ id, name, current, spent }` (`spent`: a window of it is
@@ -942,6 +979,24 @@ mod tests {
 
     fn ids(v: &Value) -> Vec<String> {
         v["days"].as_array().unwrap().iter().flat_map(|d| d["items"].as_array().unwrap().iter().map(|i| i["id"].as_str().unwrap().to_string())).collect()
+    }
+
+    #[test]
+    fn what_is_worth_a_look_about_a_session_is_its_account_its_quota_running_out_and_the_disk_filling_up() {
+        let overview = |check: &str, week: f64, free: f64| json!({
+            "profiles": [{"id": "a", "name": "A", "check": {"state": check, "detail": "d"}, "quota": {"state": "ok", "windows": [
+                {"label": "5 小时", "usedPercent": 10, "resetsAt": 1},
+                {"label": "每周", "usedPercent": week, "resetsAt": 2},
+            ]}}],
+            "disk": {"freeBytes": free, "totalBytes": 1000e9},
+        });
+        let session = json!({"profile": "a"});
+        assert_eq!(attention(Some(&overview("ok", 50.0, 500e9)), &session), json!([]), "nothing when all is well");
+        assert_eq!(attention(Some(&overview("login", 92.0, 5e9)), &session), json!([
+            {"kind": "account", "state": "login", "name": "A", "detail": "d"},
+            {"kind": "quota", "label": "每周", "left": 8.0, "until": 2},
+            {"kind": "disk", "freeBytes": 5e9, "totalBytes": 1000e9},
+        ]));
     }
 
     #[test]
@@ -1370,7 +1425,7 @@ mod tests {
             assert_eq!(v["agents"], json!([]));
             t.set(sessions("ws/a"), json!([{"key": "j", "connect": "ember", "profile": "p1"}]));
             t.read(&mut ui, 1).await;
-            assert_eq!(ui.value.clone().unwrap()["agents"], json!([{"status": "idle", "badge": null, "session": {"key": "j", "connect": "ember", "profile": "p1"}, "connect": null, "profile": null, "profiles": [], "turns": [], "threads": []}]));
+            assert_eq!(ui.value.clone().unwrap()["agents"], json!([{"status": "idle", "badge": null, "session": {"key": "j", "connect": "ember", "profile": "p1"}, "connect": null, "profile": null, "profiles": [], "attention": [], "turns": [], "threads": []}]));
 
             t.set(session_of("ws/a", "k"), json!({"session": {"key": "k", "connect": "c1", "profile": "p2"}, "threads": [chat.clone()], "turns": [{"id": "t1"}]}));
             t.store.set(&session_of("ws/a", "j"), Err(CoreError::new("http_404", "没有这个会话")));
@@ -1487,7 +1542,7 @@ mod tests {
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             assert_eq!((v["thread"].clone(), v["title"].clone(), v["messages"].clone(), v["outbox"].clone(), v["more"].clone()), (Value::Null, json!("部署挂了"), json!([]), json!([]), json!(false)));
-            assert_eq!(v["agents"], json!([{"status": "idle", "badge": null, "session": {"key": "k", "connect": "c1", "profile": "p1"}, "connect": {"id": "c1", "name": "Slack"}, "profile": null, "profiles": [],
+            assert_eq!(v["agents"], json!([{"status": "idle", "badge": null, "session": {"key": "k", "connect": "c1", "profile": "p1"}, "connect": {"id": "c1", "name": "Slack"}, "profile": null, "profiles": [], "attention": [],
                 "turns": [{"id": "t1"}], "threads": [{"id": 3, "surface": "slack:T1"}]}]));
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             // Deleted: the page says so.
