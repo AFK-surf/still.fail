@@ -1423,6 +1423,8 @@ impl Stations {
                     });
                 }
                 "clear" => *view = LiveView::default(),
+                // How fast the model writes now; the rest of the view is as it was.
+                "rate" => {}
                 "step" => {
                     let Some(event) = message.get("event") else { return true };
                     apply_step(view, event, now);
@@ -1431,9 +1433,18 @@ impl Stations {
             }
             view.clone()
         };
+        let rate = message.get("tokensPerSecond").and_then(Value::as_u64);
         self.sink.update(&topic, &mut |live| {
             live["steps"] = json!(view.steps);
             live["phase"] = json!(view.phase);
+            match kind {
+                "rate" => live["rate"] = json!(rate.unwrap_or(0)),
+                // Writing stops with the step or the turn; the rate comes again with more output.
+                "clear" => live["rate"] = json!(0),
+                _ => {}
+            }
+            // What the chat shows of it (activity.rs), from all of the above.
+            live["activity"] = crate::activity::present(live);
             // The stream sends the steps right after the entries it has: the transcript is all here.
             if kind == "steps" {
                 live["loaded"] = json!(true);

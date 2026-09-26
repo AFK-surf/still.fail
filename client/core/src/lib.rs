@@ -4,6 +4,7 @@
 //! `Rc<RefCell<…>>`. The platform comes in through [`host::Host`].
 
 pub mod accounts;
+pub mod activity;
 pub mod cloud;
 pub mod data;
 pub mod core;
