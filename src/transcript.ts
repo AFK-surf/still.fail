@@ -90,6 +90,8 @@ function claudeTimeline(records: Record<string, any>[]): TimelineEntry[] {
 const INJECTED = /^\s*<(environment_context|user_instructions|permissions|skills_instructions|collaboration_mode)\b/;
 
 function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
+  // Calls taken out of a script that does more than call them: they are done when the script is.
+  const inner = new Map<string, number>();
   const out: TimelineEntry[] = [];
   for (const r of records) {
     if (r.type !== "response_item") continue;
@@ -108,6 +110,7 @@ function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
       const script = String(p.input ?? "");
       const { calls, only } = scriptCalls(script);
       if (!only) out.push({ at, kind: "tool_call", tool: "exec", text: clip(script), ...(p.call_id ? { callId: String(p.call_id) } : {}) });
+      if (!only && p.call_id && calls.length) inner.set(String(p.call_id), calls.length);
       calls.forEach((c, i) => out.push({
         at, kind: "tool_call", tool: c.tool, text: clip(JSON.stringify(c.args, null, 2)),
         // The script's output answers its first call when the script is nothing but calls.
@@ -125,6 +128,8 @@ function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
       const text = toText(p.output);
       const failed = /Process exited with code [1-9]/.test(text);
       out.push({ at, kind: "tool_result", ok: !failed, text: clip(text), ...(p.call_id ? { callId: String(p.call_id) } : {}) });
+      const count = p.call_id ? inner.get(String(p.call_id)) : undefined;
+      for (let i = 0; i < (count ?? 0); i++) out.push({ at, kind: "tool_result", ok: !failed, text: "（结果在脚本的输出里）", callId: `${String(p.call_id)}#${i}` });
     }
   }
   return out;
