@@ -1242,7 +1242,7 @@ mod tests {
         run(async {
             let (host, core) = local_core(1.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: 7 } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
             host.settle().await;
             assert!(host.take_emitted().iter().any(|(_, m)| matches!(m, CoreMessage::Value { id: 1, .. })));
             let admin: Vec<_> = host.requests.borrow().iter().filter(|r| r.url.contains("/admin/api/")).cloned().collect();
@@ -1297,7 +1297,7 @@ mod tests {
 
             let (host, core) = local_core(0.0).await;
             let ui = core.connect();
-            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: 7 } });
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Chat { station: "local".into(), thread: Some(7), session: None } });
             core.receive(ui, ClientMessage::Call { id: 2, call: "station.request".into(), params: json!({ "station": "local", "method": "GET", "path": "/overview" }) });
             host.settle().await;
             pass(SPEEDUP * (trace::EXPORT_MS + 100)).await;
