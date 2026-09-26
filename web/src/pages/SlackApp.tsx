@@ -3,10 +3,9 @@
 // configuration token. When permissions change, Slack asks a person to approve
 // them; that is the only step left in Slack.
 import { useStation } from "../station.tsx";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, ImageUp, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useApi, keys, type ConnectView, type SlackAppLinks, type SlackAppSettings, type SlackGroup } from "../api.ts";
+import { useAction, useApi, useStationGet, type ConnectView, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Field, ICON, Section, SwitchRow } from "../ui.tsx";
 
@@ -24,46 +23,42 @@ const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
 };
 
 export function SlackAppSection({ connect }: { connect: ConnectView }) {
-  const api = useApi();
   const station = useStation();
-  const app = useQuery({ queryKey: keys.slackApp(station.id, connect.id), queryFn: () => api.slackApp(connect.id), staleTime: 60_000 });
-  const links = app.data?.links;
+  // Read from Slack through the station: no topic of the core, so it is read again after a change here.
+  const app = useStationGet<SlackAppView>(station.address, `/connects/${encodeURIComponent(connect.id)}/slack-app`);
+  const links = app.value?.links;
   return (
     <Section title="Slack app" description="在这里改 app 的名字、图标和权限，ember 会写进 Slack 的 app 配置。"
       actions={links && <a className="btn btn-ghost" href={links.settings} target="_blank" rel="noopener"><ExternalLink {...ICON} />在 Slack 打开</a>}>
-      {app.isPending ? <div className="card"><p className="muted">正在读取 Slack 上的配置…</p></div>
-        : app.isError ? <div className="card"><p className="field-error">{app.error.message}</p></div>
-        : app.data.state === "no_app" ? <div className="card"><p className="muted">{app.data.error ? `找不到这个连接的 Slack app（${app.data.error}）。换上有效的 token 后再来。` : "连上 Slack 之后，就可以在这里修改它的 app。"}</p></div>
-        : app.data.state === "no_config_token" ? <ConfigTokenCard />
-        : app.data.state === "error" ? (
+      {app.error ? <div className="card"><p className="field-error">{app.error.message}</p></div>
+        : !app.value ? <div className="card"><p className="muted">正在读取 Slack 上的配置…</p></div>
+        : app.value.state === "no_app" ? <div className="card"><p className="muted">{app.value.error ? `找不到这个连接的 Slack app（${app.value.error}）。换上有效的 token 后再来。` : "连上 Slack 之后，就可以在这里修改它的 app。"}</p></div>
+        : app.value.state === "no_config_token" ? <ConfigTokenCard onSaved={app.reload} />
+        : app.value.state === "error" ? (
           <div className="card">
-            <p className="field-error" role="alert">读不到 app 配置：{app.data.error}</p>
-            <ConfigTokenForm replacing />
+            <p className="field-error" role="alert">读不到 app 配置：{app.value.error}</p>
+            <ConfigTokenForm replacing onSaved={app.reload} />
           </div>
         )
-        : <AppForm key={JSON.stringify(app.data.settings)} connect={connect} settings={app.data.settings} links={app.data.links} />}
+        : <AppForm key={JSON.stringify(app.value.settings)} connect={connect} settings={app.value.settings} links={app.value.links} onSaved={app.reload} />}
     </Section>
   );
 }
 
-function ConfigTokenCard() {
+function ConfigTokenCard({ onSaved }: { onSaved(): void }) {
   return (
     <div className="card">
       <p className="card-lead">修改 app 需要一个 Slack 的 App 配置 token。每个工作区设置一次，所有连接共用。</p>
-      <ConfigTokenForm />
+      <ConfigTokenForm onSaved={onSaved} />
     </div>
   );
 }
 
-function ConfigTokenForm({ replacing }: { replacing?: boolean }) {
+function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; onSaved(): void }) {
   const api = useApi();
-  const client = useQueryClient();
   const toast = useToast();
   const [token, setToken] = useState("");
-  const save = useMutation({
-    mutationFn: () => api.putConfigToken(token),
-    onSuccess: () => { setToken(""); toast("已保存配置 token"); void client.invalidateQueries({ queryKey: ["slack-app"] }); },
-  });
+  const save = useAction(() => api.putConfigToken(token), () => { setToken(""); toast("已保存配置 token"); onSaved(); });
   return (
     <>
       <ol className="steps">
@@ -77,7 +72,7 @@ function ConfigTokenForm({ replacing }: { replacing?: boolean }) {
         <div className="input-row">
           <input id="config-refresh" className="input mono" type="password" autoComplete="off" spellCheck={false} value={token}
             onChange={(e) => setToken(e.target.value.trim())} placeholder="xoxe-1-…" />
-          <Button variant="primary" disabled={!token} busy={save.isPending} onClick={() => save.mutate()}>{replacing ? "换成这个" : "保存"}</Button>
+          <Button variant="primary" disabled={!token} busy={save.busy} onClick={() => void save.run()}>{replacing ? "换成这个" : "保存"}</Button>
         </div>
       </Field>
     </>
@@ -101,11 +96,9 @@ async function toIcon(file: File): Promise<string> {
   }
 }
 
-function AppForm({ connect, settings, links }: { connect: ConnectView; settings: SlackAppSettings; links: SlackAppLinks }) {
+function AppForm({ connect, settings, links, onSaved }: { connect: ConnectView; settings: SlackAppSettings; links: SlackAppLinks; onSaved(): void }) {
   const api = useApi();
-  const station = useStation();
   const toast = useToast();
-  const client = useQueryClient();
   const [draft, setDraft] = useState(settings);
   const [icon, setIcon] = useState<string | null>(null);
   const [iconError, setIconError] = useState<string | null>(null);
@@ -115,18 +108,15 @@ function AppForm({ connect, settings, links }: { connect: ConnectView; settings:
 
   const changed = (Object.keys(settings) as (keyof SlackAppSettings)[]).filter((k) => JSON.stringify(settings[k]) !== JSON.stringify(draft[k]));
   const dirty = changed.length > 0 || icon !== null;
-  const apply = useMutation({
-    mutationFn: () => api.putSlackApp(connect.id, {
-      ...Object.fromEntries(changed.map((k) => [k, draft[k]])),
-      ...(icon ? { icon } : {}),
-    }),
-    onSuccess: (result) => {
-      setIcon(null);
-      setIconError(result.iconError);
-      setApprove(result.permissionsUpdated);
-      toast(result.permissionsUpdated ? "已更新，还需要在 Slack 同意新权限" : "已更新 Slack app");
-      void client.invalidateQueries({ queryKey: keys.slackApp(station.id, connect.id) });
-    },
+  const apply = useAction(() => api.putSlackApp(connect.id, {
+    ...Object.fromEntries(changed.map((k) => [k, draft[k]])),
+    ...(icon ? { icon } : {}),
+  }), (result) => {
+    setIcon(null);
+    setIconError(result.iconError);
+    setApprove(result.permissionsUpdated);
+    toast(result.permissionsUpdated ? "已更新，还需要在 Slack 同意新权限" : "已更新 Slack app");
+    onSaved();
   });
   const set = <K extends keyof SlackAppSettings>(key: K, value: SlackAppSettings[K]) => setDraft({ ...draft, [key]: value });
 
@@ -181,7 +171,7 @@ function AppForm({ connect, settings, links }: { connect: ConnectView; settings:
       {apply.error && <p className="field-error" role="alert">{apply.error.message}</p>}
       <div className="card-actions">
         {dirty && <Button variant="ghost" onClick={() => { setDraft(settings); setIcon(null); }}>还原</Button>}
-        <Button variant="primary" disabled={!dirty} busy={apply.isPending} onClick={() => apply.mutate()}>应用到 Slack</Button>
+        <Button variant="primary" disabled={!dirty} busy={apply.busy} onClick={() => void apply.run()}>应用到 Slack</Button>
       </div>
     </div>
   );

@@ -1,15 +1,14 @@
 // A session: its execution history is the page; what can be done to it sits
 // with the history. A chat can be opened beside it: ember's own chat, which
 // reaches the agent the way a Slack thread does.
-import { useIsMine, useLink, usePerson, useStation } from "../station.tsx";
+import { useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, Ring } from "../components.tsx";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, FileText, Paperclip, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
 import { DropdownMenu, Tabs } from "radix-ui";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
-import { useApi, keys, useHost, useLiveSession, useOverview, useSession, useSessions, type Attachment, type ConnectView, type SessionDetail } from "../api.ts";
+import { useAction, useApi, useChat, useHost, useLive, type ConnectView, type ProfileView, type SessionDetail } from "../api.ts";
 import { History } from "../History.tsx";
 import { ChatPanel } from "../Chat.tsx";
 import {
@@ -26,7 +25,7 @@ export function SessionPage() {
   return <SessionView key={key} sessionKey={key} />;
 }
 
-function workspaceUrl(connect: ConnectView | undefined): string | null {
+function workspaceUrl(connect: ConnectView | null): string | null {
   const c = connect?.connection;
   return c && (c.state === "connected" || c.state === "reconnecting") ? c.workspace?.url ?? null : null;
 }
@@ -37,9 +36,10 @@ const TAB_LABEL: Record<string, string> = { history: "执行历史" };
 function SessionView({ sessionKey }: { sessionKey: string }) {
   const station = useStation();
   const link = useLink();
-  const detail = useSession(sessionKey);
-  const { steps: live, phase } = useLiveSession(sessionKey);
-  const overview = useOverview();
+  const chatView = useChat(station.address, sessionKey);
+  const liveView = useLive(station.address, sessionKey).value;
+  const live = liveView?.steps ?? [];
+  const phase = liveView?.phase ?? null;
   // Open tabs on the right; each can be closed, and with none open the panel goes away.
   // On narrow screens nothing opens by itself, since the panel would cover the chat.
   const [tabs, setTabs] = useState<string[]>(() => {
@@ -65,10 +65,12 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
     if (active === tab && next.length) setActive(next.at(-1)!);
   };
   const panel = tabs.length > 0;
-  if (detail.isPending) return <Loading label={station.name ? `正在从 ${station.name} 读取会话…` : "正在读取会话…"} />;
-  if (detail.isError) return <Empty><p>读不到这个会话：{detail.error.message}</p></Empty>;
-  const { session, threads, chats } = detail.data;
-  const connect = overview.data?.connects.find((c) => c.id === session.connect);
+  if (!chatView.value) {
+    if (chatView.error) return <Empty><p>读不到这个会话：{chatView.error.message}</p></Empty>;
+    return <Loading label={station.name ? `正在从 ${station.name} 读取会话…` : "正在读取会话…"} />;
+  }
+  const { detail, connect, profile } = chatView.value;
+  const { session, threads, chats } = detail;
   const name = connect?.name ?? session.connect;
   const base = workspaceUrl(connect);
   const slackThreads = threads.filter((t) => t.channel !== "EMBER");
@@ -89,7 +91,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
         </div>
         <div className="page-bar-actions">
           {slackThreads.length > 1
-            ? <ThreadMenu detail={detail.data} base={base} />
+            ? <ThreadMenu detail={detail} base={base} />
             : singleUrl && (
               <Tip label="在 Slack 中打开">
                 <a className="icon-btn" href={singleUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
@@ -99,7 +101,7 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
         </div>
       </header>
       {/* The chat is the page; the session's history sits in a tab set that takes the whole right side. */}
-      <ChatPanel detail={detail.data} chat={chat} live={live} phase={phase} onOpenHistory={() => (tabs.includes("history") && active === "history" ? closeTab("history") : openTab("history"))} />
+      <ChatPanel detail={detail} chat={chat} live={live} phase={phase} onOpenHistory={() => (tabs.includes("history") && active === "history" ? closeTab("history") : openTab("history"))} />
       </div>
         {panel && (
           <Tabs.Root className="side-panel" value={tabs.includes(active) ? active : tabs[0]!} onValueChange={setActive}>
@@ -117,9 +119,9 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
               <IconButton label="收起侧栏" icon={PanelRightClose} onClick={() => saveTabs([])} />
             </div>
             <Tabs.Content className="side-content" value="history">
-              <History detail={detail.data} connect={connect} live={live} phase={phase} actions={<SessionActions detail={detail.data} />} slackBase={base}
+              <History detail={detail} connect={connect ?? undefined} live={live} phase={phase} actions={<SessionActions detail={detail} />} slackBase={base}
                 onOpenChat={() => (document.querySelector(".composer-text") as HTMLTextAreaElement | null)?.focus()}
-                details={<SessionDetails detail={detail.data} connect={connect} base={base} />} />
+                details={<SessionDetails detail={detail} connect={connect} profile={profile} base={base} />} />
             </Tabs.Content>
           </Tabs.Root>
         )}
@@ -128,17 +130,15 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
 }
 
 /** What a session is: where it runs, what runs it, who is in it, where it is talked about. */
-function SessionDetails({ detail, connect, base }: { detail: SessionDetail; connect: ConnectView | undefined; base: string | null }) {
+function SessionDetails({ detail, connect, profile, base }: { detail: SessionDetail; connect: ConnectView | null; profile: ProfileView | null; base: string | null }) {
   const { session } = detail;
   const station = useStation();
   const link = useLink();
-  const overview = useOverview();
-  const host = useHost().data;
+  const host = useHost(station.address).value;
   const name = threadNamer(detail);
   const threads = detail.threads.filter((t) => t.channel !== "EMBER");
   const usage = detail.transcript?.usage;
   const model = usage?.model ?? session.model;
-  const profile = overview.data?.profiles.find((p) => p.id === session.profile);
   const quota = profile?.quota;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
   const gb = (bytes: number) => `${Math.round(bytes / 1024 ** 3)} GB`;
@@ -236,13 +236,13 @@ function SessionActions({ detail }: { detail: SessionDetail }) {
   const api = useApi();
   const toast = useToast();
   const { session } = detail;
-  const stop = useMutation({ mutationFn: () => api.stop(session.key), onSuccess: () => toast("已请求停止") });
-  const evict = useMutation({ mutationFn: () => api.evict(session.key), onSuccess: () => toast("已释放进程") });
+  const stop = useAction(() => api.stop(session.key), () => toast("已请求停止"));
+  const evict = useAction(() => api.evict(session.key), () => toast("已释放进程"));
   const status = sessionStatus(session);
   return (
     <>
-      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Square} onClick={() => stop.mutate()} disabled={stop.isPending} />}
-      {session.process === "warm" && <IconButton label="释放进程" icon={Unplug} onClick={() => evict.mutate()} disabled={evict.isPending} />}
+      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Square} onClick={() => void stop.run()} disabled={stop.busy} />}
+      {session.process === "warm" && <IconButton label="释放进程" icon={Unplug} onClick={() => void evict.run()} disabled={evict.busy} />}
     </>
   );
 }

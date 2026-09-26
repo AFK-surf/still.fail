@@ -1,11 +1,10 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { useStation, useLink } from "../station.tsx";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { MessageCircle, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useApi, keys, useOverview, useSessions, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
+import { useAction, useApi, useOverview, useSessions, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type ProfileView, type RuntimeKind } from "../api.ts";
 import { agentLabel, connectionText, EFFORT_LABEL, EFFORTS, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, slug, STATUS_LABEL, statusTone } from "../format.ts";
 import { SlackAppSection } from "./SlackApp.tsx";
 import { OwnerLabel } from "../components.tsx";
@@ -17,21 +16,18 @@ import { Button, Choices, Confirm, ConnectKindIcon, Dialog, Empty, Field, ICON, 
 
 export function ConnectPage() {
   const { id } = useParams();
-  const overview = useOverview();
-  const connect = overview.data?.connects.find((c) => c.id === id);
-  if (!overview.data) return <Loading label="正在读取连接…" />;
+  const overview = useOverview(useStation().address);
+  const connect = overview.value?.connects.find((c) => c.id === id);
+  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <Loading label="正在读取连接…" />;
   if (!connect) return <Empty><p>没有 ID 为 {id} 的连接。</p></Empty>;
-  return <ConnectDetail key={connect.id} connect={connect} overview={overview.data} />;
+  return <ConnectDetail key={connect.id} connect={connect} overview={overview.value} />;
 }
 
+/** Saving a connect's settings; `put(input, done)` runs `done` once saved. */
 function useSaveConnect(id: string) {
   const api = useApi();
-  const station = useStation();
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (input: ConnectInput) => api.putConnect(id, input),
-    onSuccess: (data: Overview) => client.setQueryData(keys.overview(station.id), data),
-  });
+  const save = useAction((input: ConnectInput) => api.putConnect(id, input));
+  return { ...save, put: (input: ConnectInput, done?: () => void) => void save.run(input).then((saved) => { if (saved) done?.(); }) };
 }
 
 export function connectSubtitle(c: ConnectView, profiles: ProfileView[]): string {
@@ -45,19 +41,15 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
   const link = useLink();
   const navigate = useNavigate();
   const toast = useToast();
-  const client = useQueryClient();
   const save = useSaveConnect(connect.id);
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(connect.name);
   const [deleting, setDeleting] = useState(false);
   const [owning, setOwning] = useState(false);
-  const remove = useMutation({
-    mutationFn: () => api.deleteConnect(connect.id),
-    onSuccess: (data) => { client.setQueryData(keys.overview(station.id), data); toast("已删除连接"); navigate(`${station.settings}/connects`); },
-  });
+  const remove = useAction(() => api.deleteConnect(connect.id), () => { toast("已删除连接"); navigate(`${station.settings}/connects`); });
   const rename = () => {
     setEditingName(false);
-    if (name.trim() && name.trim() !== connect.name) save.mutate({ name: name.trim() }, { onSuccess: () => toast("已改名") });
+    if (name.trim() && name.trim() !== connect.name) save.put({ name: name.trim() }, () => toast("已改名"));
   };
 
   return (
@@ -83,8 +75,8 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
         </div>
         <Menu items={[
           connect.enabled
-            ? { label: "停用", icon: Power, onSelect: () => save.mutate({ enabled: false }, { onSuccess: () => toast("已停用，Slack 连接已断开") }) }
-            : { label: "启用", icon: Power, onSelect: () => save.mutate({ enabled: true }, { onSuccess: () => toast("已启用") }) },
+            ? { label: "停用", icon: Power, onSelect: () => save.put({ enabled: false }, () => toast("已停用，Slack 连接已断开")) }
+            : { label: "启用", icon: Power, onSelect: () => save.put({ enabled: true }, () => toast("已启用")) },
           "separator",
           { label: "更改所属用户", icon: UserRound, onSelect: () => setOwning(true) },
           "separator",
@@ -101,7 +93,7 @@ function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: 
       <ConnectSessions connect={connect} />
 
       {owning && <OwnerDialog connect={connect} onClose={() => setOwning(false)} />}
-      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.isPending} onConfirm={() => remove.mutate()}
+      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
         title={`删除「${connect.name}」？`} action="删除连接"
         description={`Slack 连接会断开${connect.sessions ? `；它的 ${connect.sessions} 个会话的记录会保留，但不再接收消息` : ""}。Slack 里的 app 需要你自己去删除。`} />
     </div>
@@ -114,9 +106,9 @@ function SlackSection({ connect }: { connect: ConnectView }) {
   const save = useSaveConnect(connect.id);
   const [replacing, setReplacing] = useState(false);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
-  const reconnect = useMutation({ mutationFn: () => api.reconnect(connect.id), onSuccess: () => toast("已重新连接") });
-  const saveTokens = () => save.mutate({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, {
-    onSuccess: () => { setReplacing(false); setTokens(emptyTokens); toast("已保存 token，正在重新连接"); },
+  const reconnect = useAction(() => api.reconnect(connect.id), () => toast("已重新连接"));
+  const saveTokens = () => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => {
+    setReplacing(false); setTokens(emptyTokens); toast("已保存 token，正在重新连接");
   });
   const c = connect.connection;
   const workspace = c.state === "connected" || c.state === "reconnecting" ? c.workspace : null;
@@ -129,7 +121,7 @@ function SlackSection({ connect }: { connect: ConnectView }) {
           <CreateAppSteps name={connect.name} />
           <TokenFields value={tokens} onChange={setTokens} />
           <div className="card-actions">
-            <Button variant="primary" disabled={!tokens.verified} busy={save.isPending} onClick={saveTokens}>保存并连接</Button>
+            <Button variant="primary" disabled={!tokens.verified} busy={save.busy} onClick={saveTokens}>保存并连接</Button>
           </div>
         </div>
       </Section>
@@ -137,7 +129,7 @@ function SlackSection({ connect }: { connect: ConnectView }) {
   }
   return (
     <Section title="Slack" actions={<>
-      <Button icon={RefreshCw} onClick={() => reconnect.mutate()} busy={reconnect.isPending} disabled={!connect.enabled}>重新连接</Button>
+      <Button icon={RefreshCw} onClick={() => void reconnect.run()} busy={reconnect.busy} disabled={!connect.enabled}>重新连接</Button>
       <Button onClick={() => setReplacing(true)}>更换 token</Button>
     </>}>
       <div className="card card-row">
@@ -154,7 +146,7 @@ function SlackSection({ connect }: { connect: ConnectView }) {
       <Dialog open={replacing} onClose={close} title="更换 Slack token" description="只换其中一个也可以，另一个留空会沿用已保存的。保存前先验证。"
         footer={<>
           <Button variant="ghost" onClick={close}>取消</Button>
-          <Button variant="primary" disabled={!tokens.verified} busy={save.isPending} onClick={saveTokens}>保存并重新连接</Button>
+          <Button variant="primary" disabled={!tokens.verified} busy={save.busy} onClick={saveTokens}>保存并重新连接</Button>
         </>}>
         <TokenFields value={tokens} onChange={setTokens} connect={connect.id} masked={connect.slack} />
         {save.error && <p className="field-error" role="alert">{save.error.message}</p>}
@@ -220,7 +212,7 @@ function consequences(connect: ConnectView, next: { mode: ConnectMode; requireMe
 function ModeDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
-  const sessions = useSessions().data ?? [];
+  const sessions = useSessions(useStation().address).value ?? [];
   const [next, setNext] = useState({ mode: connect.mode, requireMention: connect.requireMention });
   const changed = next.mode !== connect.mode || (next.mode === "single-session" && next.requireMention !== connect.requireMention);
   const running = sessions.filter((s) => (s.connect === connect.id || s.boundTo.includes(connect.id)) && s.process === "running").length;
@@ -230,8 +222,8 @@ function ModeDialog({ connect, onClose }: { connect: ConnectView; onClose(): voi
       description="这会改变之后每条消息进哪个会话。已经开始的对话可能因此断开，请看清下面的影响再确认。"
       footer={<>
         <Button variant="ghost" onClick={onClose}>取消</Button>
-        <Button variant="primary" disabled={!changed} busy={save.isPending}
-          onClick={() => save.mutate(next, { onSuccess: () => { toast("已更改会话方式"); onClose(); } })}>
+        <Button variant="primary" disabled={!changed} busy={save.busy}
+          onClick={() => save.put(next, () => { toast("已更改会话方式"); onClose(); })}>
           {next.mode === connect.mode ? "确认更改" : `改为${next.mode === "single-session" ? "单会话" : "多会话"}`}
         </Button>
       </>}>
@@ -250,7 +242,7 @@ function ModeDialog({ connect, onClose }: { connect: ConnectView; onClose(): voi
 /** A single-session connect's session: the one its messages go into, which people can switch or start afresh. */
 function BoundSession({ connect }: { connect: ConnectView }) {
   const link = useLink();
-  const sessions = useSessions().data ?? [];
+  const sessions = useSessions(useStation().address).value ?? [];
   const [choosing, setChoosing] = useState(false);
   const bound = sessions.find((s) => s.key === connect.session);
   return (
@@ -275,19 +267,15 @@ function BoundSession({ connect }: { connect: ConnectView }) {
 function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClose(): void }) {
   const api = useApi();
   const toast = useToast();
-  const client = useQueryClient();
-  const all = useSessions().data ?? [];
-  const overview = useOverview().data;
+  const station = useStation();
+  const all = useSessions(station.address).value ?? [];
+  const overview = useOverview(station.address).value;
   const candidates = all.filter((s) => s.runtime === connect.bind.runtime).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
   const [choice, setChoice] = useState<string>(connect.session ?? "new");
   const [title, setTitle] = useState("");
-  const bind = useMutation({
-    mutationFn: () => api.bindSession(connect.id, choice === "new" ? null : choice, title),
-    onSuccess: () => {
-      void client.invalidateQueries();
-      toast(choice === "new" ? "已新建会话" : "已换成这个会话");
-      onClose();
-    },
+  const bind = useAction(() => api.bindSession(connect.id, choice === "new" ? null : choice, title), () => {
+    toast(choice === "new" ? "已新建会话" : "已换成这个会话");
+    onClose();
   });
   const nameOf = (id: string) => overview?.connects.find((c) => c.id === id)?.name ?? id;
   return (
@@ -295,8 +283,8 @@ function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClo
       description={`之后「${connect.name}」收到的消息都进选中的会话。原来的会话保留，但不再收到这个连接的新消息。`}
       footer={<>
         <Button variant="ghost" onClick={onClose}>取消</Button>
-        <Button variant="primary" busy={bind.isPending} disabled={choice === connect.session}
-          onClick={() => bind.mutate()}>{choice === "new" ? "新建并使用" : "使用这个会话"}</Button>
+        <Button variant="primary" busy={bind.busy} disabled={choice === connect.session}
+          onClick={() => void bind.run()}>{choice === "new" ? "新建并使用" : "使用这个会话"}</Button>
       </>}>
       <div className="session-choices">
         <Choices label="会话" value={choice} onChange={setChoice} options={[
@@ -364,9 +352,9 @@ function BindSection({ connect, overview }: { connect: ConnectView; overview: Ov
         {dirty && (
           <div className="card-actions">
             <Button variant="ghost" onClick={reset}>还原</Button>
-            <Button variant="primary" busy={save.isPending} onClick={() => save.mutate(
+            <Button variant="primary" busy={save.busy} onClick={() => save.put(
               { bind: { profiles: [account, ...connect.bind.profiles.filter((p) => p !== account)], model: model.trim(), effort } },
-              { onSuccess: () => toast("已保存，新会话会用新的模型") },
+              () => toast("已保存，新会话会用新的模型"),
             )}>保存</Button>
           </div>
         )}
@@ -378,7 +366,7 @@ function BindSection({ connect, overview }: { connect: ConnectView; overview: Ov
 
 function ConnectSessions({ connect }: { connect: ConnectView }) {
   const link = useLink();
-  const sessions = (useSessions().data ?? []).filter((s) => s.connect === connect.id).sort((a, b) => b.lastActiveAt - a.lastActiveAt).slice(0, 12);
+  const sessions = (useSessions(useStation().address).value ?? []).filter((s) => s.connect === connect.id).sort((a, b) => b.lastActiveAt - a.lastActiveAt).slice(0, 12);
   return (
     <Section title="最近的会话">
       {sessions.length === 0 ? <p className="muted">还没有会话。在 Slack 里 @{connect.name} 就会开始。</p> : (
@@ -410,8 +398,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const api = useApi();
   const station = useStation();
   const link = useLink();
-  const overview = useOverview();
-  const client = useQueryClient();
+  const overview = useOverview(station.address);
   const navigate = useNavigate();
   const toast = useToast();
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -425,10 +412,10 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const [mode, setMode] = useState<{ mode: ConnectMode; requireMention: boolean }>({ mode: "multi-session", requireMention: true });
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
 
-  const accounts = (overview.data?.profiles ?? []).filter((p) => p.runtime === runtime);
+  const accounts = (overview.value?.profiles ?? []).filter((p) => p.runtime === runtime);
   const chosen = accounts.find((p) => p.id === account) ?? accounts[0];
   const connectId = idTouched ? id : slug(name);
-  const taken = overview.data?.connects.some((c) => c.id === connectId) ?? false;
+  const taken = overview.value?.connects.some((c) => c.id === connectId) ?? false;
   const idValid = /^[a-z0-9][a-z0-9-]*$/.test(connectId) && !taken;
 
   const close = () => {
@@ -436,18 +423,14 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
     setMode({ mode: "multi-session", requireMention: true });
     onClose();
   };
-  const create = useMutation({
-    mutationFn: (withTokens: boolean) => api.putConnect(connectId, {
-      name: name.trim(), kind: "slack", ...mode,
-      bind: { runtime, profiles: chosen ? [chosen.id] : [], model: model.trim(), effort },
-      ...(withTokens ? { slack: { appToken: tokens.appToken, botToken: tokens.botToken } } : {}),
-    }),
-    onSuccess: (data, withTokens) => {
-      client.setQueryData(keys.overview(station.id), data);
-      toast(withTokens ? "已添加连接，正在连接 Slack" : "已添加连接");
-      close();
-      navigate(link(`/connects/${connectId}`));
-    },
+  const create = useAction((withTokens: boolean) => api.putConnect(connectId, {
+    name: name.trim(), kind: "slack", ...mode,
+    bind: { runtime, profiles: chosen ? [chosen.id] : [], model: model.trim(), effort },
+    ...(withTokens ? { slack: { appToken: tokens.appToken, botToken: tokens.botToken } } : {}),
+  }), (_, withTokens) => {
+    toast(withTokens ? "已添加连接，正在连接 Slack" : "已添加连接");
+    close();
+    navigate(link(`/connects/${connectId}`));
   });
 
   const titles = { 1: "添加连接", 2: "绑定模型", 3: "连接 Slack" } as const;
@@ -464,8 +447,8 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   ) : (
     <>
       <Button variant="ghost" onClick={() => setStep(2)}>上一步</Button>
-      <Button onClick={() => create.mutate(false)} busy={create.isPending && create.variables === false}>稍后连接</Button>
-      <Button variant="primary" disabled={!tokens.verified} busy={create.isPending && create.variables === true} onClick={() => create.mutate(true)}>添加并连接</Button>
+      <Button onClick={() => void create.run(false)} busy={create.busy && create.args?.[0] === false}>稍后连接</Button>
+      <Button variant="primary" disabled={!tokens.verified} busy={create.busy && create.args?.[0] === true} onClick={() => void create.run(true)}>添加并连接</Button>
     </>
   );
 
@@ -533,8 +516,8 @@ function OwnerDialog({ connect, onClose }: { connect: ConnectView; onClose(): vo
     <Dialog open onClose={onClose} title="更改所属用户" description="连接属于谁，决定它出现在谁的「我创建的」里。只有 owner、管理员和当前所属用户能改。"
       footer={<>
         <Button variant="ghost" onClick={onClose}>取消</Button>
-        <Button variant="primary" disabled={!owner.trim() || owner === connect.createdBy?.id} busy={save.isPending}
-          onClick={() => save.mutate({ owner: { id: owner.trim(), name: chosen?.name ?? owner.trim() } }, { onSuccess: () => { toast("已更改所属用户"); onClose(); } })}>保存</Button>
+        <Button variant="primary" disabled={!owner.trim() || owner === connect.createdBy?.id} busy={save.busy}
+          onClick={() => save.put({ owner: { id: owner.trim(), name: chosen?.name ?? owner.trim() } }, () => { toast("已更改所属用户"); onClose(); })}>保存</Button>
       </>}>
       {people.length > 0 ? (
         <Field label="所属用户">

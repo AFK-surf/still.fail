@@ -14,7 +14,12 @@ export type Topic =
   | { topic: "sessions"; station: string }
   | { topic: "session"; station: string; key: string }
   | { topic: "live"; station: string; key: string }
-  | { topic: "host"; station: string };
+  | { topic: "host"; station: string }
+  // Views: put together by the core from the topics above.
+  | { topic: "chats"; scope: string; mine: boolean }
+  | { topic: "stations"; scope: string }
+  | { topic: "connects"; scope: string; mine: boolean }
+  | { topic: "chat"; station: string; key: string };
 
 export interface ErrorBody {
   code: string;

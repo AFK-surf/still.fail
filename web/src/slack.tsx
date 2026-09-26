@@ -1,22 +1,18 @@
 // Connecting a Slack connect: create the app from ember's manifest, paste the two
 // tokens, and see who they belong to before anything is saved.
-import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, ExternalLink } from "lucide-react";
 import { useState } from "react";
-import { useApi, type SlackIdentity } from "./api.ts";
+import { useAction, useApi, type SlackIdentity } from "./api.ts";
 import { Button, Field, ICON } from "./ui.tsx";
 
 export function CreateAppSteps({ name }: { name: string }) {
   const api = useApi();
-  const open = useMutation({
-    mutationFn: () => api.createAppUrl(name.trim() || "ember"),
-    onSuccess: ({ url }) => window.open(url, "_blank", "noopener"),
-  });
+  const open = useAction(() => api.createAppUrl(name.trim() || "ember"), ({ url }) => window.open(url, "_blank", "noopener"));
   return (
     <ol className="steps">
       <li>
         <span>用 ember 的配置在 Slack 新建一个 app，名字是「{name.trim() || "ember"}」。</span>
-        <Button icon={ExternalLink} onClick={() => open.mutate()} busy={open.isPending}>在 Slack 创建 app</Button>
+        <Button icon={ExternalLink} onClick={() => void open.run()} busy={open.busy}>在 Slack 创建 app</Button>
       </li>
       <li>在 app 的 Basic Information 页生成 App-Level Token，勾选 connections:write。</li>
       <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
@@ -43,12 +39,9 @@ export function TokenFields({ value, onChange, connect, masked }: {
 }) {
   const api = useApi();
   const [errors, setErrors] = useState<string[]>([]);
-  const verify = useMutation({
-    mutationFn: () => api.verifySlack({ ...(connect ? { connect } : {}), appToken: value.appToken, botToken: value.botToken }),
-    onSuccess: (result) => {
-      setErrors(result.errors);
-      onChange({ ...value, verified: result.errors.length === 0 ? result.identity : null });
-    },
+  const verify = useAction(() => api.verifySlack({ ...(connect ? { connect } : {}), appToken: value.appToken, botToken: value.botToken }), (result) => {
+    setErrors(result.errors);
+    onChange({ ...value, verified: result.errors.length === 0 ? result.identity : null });
   });
   const edit = (patch: Partial<TokenState>) => {
     setErrors([]);
@@ -68,7 +61,7 @@ export function TokenFields({ value, onChange, connect, masked }: {
           placeholder={masked?.botToken ? `已保存 ${masked.botToken}，留空保持不变` : "xoxb-…"} />
       </Field>
       <div className="verify-row">
-        <Button onClick={() => verify.mutate()} busy={verify.isPending} disabled={!hasInput}>验证 token</Button>
+        <Button onClick={() => void verify.run()} busy={verify.busy} disabled={!hasInput}>验证 token</Button>
         {value.verified && (
           <span className="verify-ok"><CheckCircle2 {...ICON} />连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>
         )}

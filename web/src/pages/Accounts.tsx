@@ -1,10 +1,9 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useStation, useLink } from "../station.tsx";
 import { ChevronDown, ChevronRight, ExternalLink, KeyRound, LogIn, Pencil, Plus, RefreshCw, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
 import { Collapsible } from "radix-ui";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useApi, keys, useOverview, type AccessKind, type Overview, type ProfileInput, type ProfileView, type RuntimeKind } from "../api.ts";
+import { useAction, useApi, useOverview, type AccessKind, type Overview, type ProfileInput, type ProfileView, type RuntimeKind } from "../api.ts";
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
@@ -31,17 +30,11 @@ function AccessMark({ kind, size = 32 }: { kind: AccessKind; size?: number }) {
   return <span className="mark" style={{ width: size, height: size }}><Icon {...ICON} size={Math.round(size * .55)} /></span>;
 }
 
-function useApply() {
-  const station = useStation();
-  const client = useQueryClient();
-  return (data: Overview) => client.setQueryData(keys.overview(station.id), data);
-}
-
 export function AccountsPage() {
   const link = useLink();
-  const overview = useOverview();
+  const overview = useOverview(useStation().address);
   const [adding, setAdding] = useState(false);
-  const profiles = overview.data?.profiles ?? [];
+  const profiles = overview.value?.profiles ?? [];
   const groups = (["claude", "codex"] as RuntimeKind[]).map((runtime) => ({ runtime, items: profiles.filter((p) => p.runtime === runtime) }));
   return (
     <div className="page page-narrow">
@@ -66,7 +59,7 @@ export function AccountsPage() {
                     <span className="mark runtime-mark"><RuntimeLogo runtime={p.runtime} size={18} /></span>
                     <span className="list-row-text">
                       <span className="list-row-title">{p.name}</span>
-                      <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.data!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
+                      <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.value!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
                     </span>
                     <QuotaBars quota={p.quota} compact />
                     <Pill tone={tone.tone}>{tone.label}</Pill>
@@ -86,26 +79,25 @@ export function AccountsPage() {
 function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const api = useApi();
   const link = useLink();
-  const overview = useOverview();
+  const overview = useOverview(useStation().address);
   const navigate = useNavigate();
-  const apply = useApply();
   const toast = useToast();
   const [runtime, setRuntime] = useState<RuntimeKind>("claude");
   const [kind, setKind] = useState<AccessKind>("subscription");
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
   const id = slug(name) || `${runtime}-${kind}`;
-  const taken = overview.data?.profiles.some((p) => p.id === id) ?? false;
+  const taken = overview.value?.profiles.some((p) => p.id === id) ?? false;
   const close = () => { setName(""); setKey(""); setKind("subscription"); onClose(); };
-  const add = useMutation({
-    mutationFn: () => api.putProfile(id, { name: name.trim() || `${RUNTIME_LABEL[runtime]} · ${ACCESS[kind].label}`, runtime, access: { kind, key } }),
-    onSuccess: (data) => { apply(data); toast("已添加 Profile，正在检查"); close(); navigate(link(`/settings/accounts/${id}`)); },
-  });
+  const add = useAction(
+    () => api.putProfile(id, { name: name.trim() || `${RUNTIME_LABEL[runtime]} · ${ACCESS[kind].label}`, runtime, access: { kind, key } }),
+    () => { toast("已添加 Profile，正在检查"); close(); navigate(link(`/settings/accounts/${id}`)); },
+  );
   return (
     <Dialog open={open} onClose={close} title="添加 Profile"
       footer={<>
         <Button variant="ghost" onClick={close}>取消</Button>
-        <Button variant="primary" disabled={taken || (KEYED.has(kind) && !key.trim())} busy={add.isPending} onClick={() => add.mutate()}>添加</Button>
+        <Button variant="primary" disabled={taken || (KEYED.has(kind) && !key.trim())} busy={add.busy} onClick={() => void add.run()}>添加</Button>
       </>}>
       <Field label="运行时">
         <Segmented label="运行时" value={runtime} onChange={(r) => { setRuntime(r); if (!ACCESS_KINDS[r].includes(kind)) setKind("subscription"); }}
@@ -134,30 +126,27 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
 
 export function AccountPage() {
   const { id } = useParams();
-  const overview = useOverview();
-  const profile = overview.data?.profiles.find((p) => p.id === id);
-  if (!overview.data) return <Loading label="正在读取 Profile…" />;
+  const overview = useOverview(useStation().address);
+  const profile = overview.value?.profiles.find((p) => p.id === id);
+  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <Loading label="正在读取 Profile…" />;
   if (!profile) return <Empty><p>没有 ID 为 {id} 的 Profile。</p></Empty>;
-  return <AccountView key={profile.id} profile={profile} overview={overview.data} />;
+  return <AccountView key={profile.id} profile={profile} overview={overview.value} />;
 }
 
 function AccountView({ profile, overview }: { profile: ProfileView; overview: Overview }) {
   const api = useApi();
   const link = useLink();
   const navigate = useNavigate();
-  const apply = useApply();
   const toast = useToast();
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(profile.name);
-  const save = useMutation({ mutationFn: (input: ProfileInput) => api.putProfile(profile.id, input), onSuccess: apply });
-  const remove = useMutation({
-    mutationFn: () => api.deleteProfile(profile.id),
-    onSuccess: (data) => { apply(data); toast("已删除 Profile"); navigate(link("/settings/accounts")); },
-  });
-  const check = useMutation({ mutationFn: () => api.checkProfile(profile.id) });
+  const save = useAction((input: ProfileInput) => api.putProfile(profile.id, input));
+  const remove = useAction(() => api.deleteProfile(profile.id), () => { toast("已删除 Profile"); navigate(link("/settings/accounts")); });
+  const check = useAction(() => api.checkProfile(profile.id));
+  const saveThen = (input: ProfileInput, done: () => void) => void save.run(input).then((ok) => { if (ok) done(); });
   const rename = () => {
     setEditingName(false);
-    if (name.trim() && name.trim() !== profile.name) save.mutate({ name: name.trim() }, { onSuccess: () => toast("已改名") });
+    if (name.trim() && name.trim() !== profile.name) saveThen({ name: name.trim() }, () => toast("已改名"));
   };
   // The server checks again after a sign-in; take whichever check is newer.
   const latest = check.data && (!profile.check || check.data.checkedAt >= profile.check.checkedAt) ? check.data : profile.check;
@@ -186,7 +175,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
       <section className="section" aria-labelledby="state-heading">
         <div className="section-head">
           <h2 id="state-heading">状态</h2>
-          <Button icon={RefreshCw} busy={check.isPending} onClick={() => check.mutate()}>重新检查</Button>
+          <Button icon={RefreshCw} busy={check.busy} onClick={() => void check.run()}>重新检查</Button>
         </div>
         <div className="card card-row">
           <Pill tone={tone.tone}>{tone.label}</Pill>
@@ -200,9 +189,9 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
 
       <QuotaSection profile={profile} />
 
-      <AccessSection profile={profile} onSave={(input, done) => save.mutate(input, { onSuccess: () => { toast("已保存，正在检查"); done(); } })} busy={save.isPending} />
+      <AccessSection profile={profile} onSave={(input, done) => saveThen(input, () => { toast("已保存，正在检查"); done(); })} busy={save.busy} />
 
-      <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => save.mutate({ models })} />
+      <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => void save.run({ models })} />
 
       <Section title="使用它的连接">
         {users.length === 0 ? <p className="muted">还没有连接使用这个 Profile。</p> : (
@@ -214,8 +203,8 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
         )}
       </Section>
 
-      <Advanced profile={profile} onSave={(input) => save.mutate(input, { onSuccess: () => toast("已保存") })} busy={save.isPending} />
-      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.isPending} onConfirm={() => remove.mutate()}
+      <Advanced profile={profile} onSave={(input) => saveThen(input, () => toast("已保存"))} busy={save.busy} />
+      <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
         title={`删除「${profile.name}」？`} action="删除 Profile" description="只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。" />
     </div>
   );
@@ -315,16 +304,13 @@ function Advanced({ profile, onSave, busy }: { profile: ProfileView; onSave(inpu
  */
 function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) {
   const api = useApi();
-  const station = useStation();
-  const client = useQueryClient();
   const toast = useToast();
   const [code, setCode] = useState("");
   const [manual, setManual] = useState(false);
   const job = profile.login;
-  const refresh = () => void client.invalidateQueries({ queryKey: keys.overview(station.id) });
-  const start = useMutation({ mutationFn: () => api.startLogin(profile.id), onSuccess: refresh });
-  const cancel = useMutation({ mutationFn: () => api.cancelLogin(profile.id), onSuccess: refresh });
-  const send = useMutation({ mutationFn: () => api.loginCode(profile.id, code), onSuccess: () => { setCode(""); refresh(); } });
+  const start = useAction(() => api.startLogin(profile.id));
+  const cancel = useAction(() => api.cancelLogin(profile.id));
+  const send = useAction(() => api.loginCode(profile.id, code), () => setCode(""));
   const active = job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
   const provider = profile.runtime === "claude" ? "Claude" : "ChatGPT";
   // Announce a sign-in finishing while the page is open, not one that finished earlier.
@@ -344,7 +330,7 @@ function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) 
               {job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : "登录在运行 ember 的机器上完成，你只需要在浏览器里授权。"}
             </span>
           </div>
-          <Button variant={needed ? "primary" : "secondary"} icon={LogIn} busy={start.isPending} onClick={() => start.mutate()}>
+          <Button variant={needed ? "primary" : "secondary"} icon={LogIn} busy={start.busy} onClick={() => void start.run()}>
             {job?.state === "done" || !needed ? "重新登录" : "登录"}
           </Button>
         </div>
@@ -359,7 +345,7 @@ function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) 
     <div className="card sign-in" aria-live="polite">
       <div className="card-row">
         <div className="card-row-text"><strong>正在登录 {provider}</strong><span className="muted">15 分钟内完成，过期会自动取消。</span></div>
-        <Button variant="ghost" busy={cancel.isPending} onClick={() => cancel.mutate()}>取消</Button>
+        <Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>取消</Button>
       </div>
       {job.state === "starting" && <p className="muted"><span className="activity-pulse inline" aria-hidden="true" />正在生成登录链接…</p>}
       {job.state === "needs_code" && job.url && (
@@ -372,8 +358,8 @@ function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) 
             <span>同意后页面上会显示一段授权码，复制过来：</span>
             <div className="input-row">
               <input className="input mono" spellCheck={false} autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder="粘贴授权码" aria-label="授权码"
-                onKeyDown={(e) => { if (e.key === "Enter" && code.trim()) send.mutate(); }} />
-              <Button variant="primary" disabled={!code.trim()} busy={send.isPending} onClick={() => send.mutate()}>完成登录</Button>
+                onKeyDown={(e) => { if (e.key === "Enter" && code.trim()) void send.run(); }} />
+              <Button variant="primary" disabled={!code.trim()} busy={send.busy} onClick={() => void send.run()}>完成登录</Button>
             </div>
             {send.error && <p className="field-error" role="alert">{send.error.message}</p>}
           </li>
@@ -399,11 +385,11 @@ function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) 
 
 function QuotaSection({ profile }: { profile: ProfileView }) {
   const api = useApi();
-  const refresh = useMutation({ mutationFn: () => api.refreshQuota(profile.id) });
+  const refresh = useAction(() => api.refreshQuota(profile.id));
   const quota = refresh.data ?? profile.quota;
   return (
     <Section title="额度" description={quota?.checkedAt ? <><Time at={quota.checkedAt} />查询；每几分钟自动更新。</> : undefined}
-      actions={<Button icon={RefreshCw} busy={refresh.isPending} onClick={() => refresh.mutate()}>刷新</Button>}>
+      actions={<Button icon={RefreshCw} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
       <div className="card"><QuotaBars quota={quota} /></div>
     </Section>
   );
