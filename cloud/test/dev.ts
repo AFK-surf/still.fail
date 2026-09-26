@@ -3,6 +3,7 @@
 // that also serves the web app from dist/cloud-app. WebSockets (/v1/events,
 // station presence) are piped to miniflare itself, listening on PORT + 1.
 //   RELAY=http://127.0.0.1:3340 pnpm exec tsx test/dev.ts
+// The console's admin is alice (ADMIN_EMAIL=bob@example.test makes it bob).
 // Development-only routes (never in the Worker):
 //   /__dev/login?user=alice  signs that account into the browser and goes to /
 //   /__dev/account?user=alice  that account as JSON, for the core's `migrate` (native apps)
@@ -15,7 +16,7 @@ import { harness } from "./harness.ts";
 
 const port = Number(process.env.PORT ?? 8787);
 const origin = `http://127.0.0.1:${port}`;
-const h = await harness({ origin, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340" });
+const h = await harness({ origin, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test" });
 const app = join(import.meta.dirname, "..", "..", "dist", "cloud-app");
 const alice = h.as(await h.login("alice"));
 const workspace = await (await alice("POST", "/v1/workspaces", { name: "Dev" })).json() as { id: string };

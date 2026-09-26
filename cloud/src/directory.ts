@@ -9,10 +9,11 @@
 // station's presence socket, tagged `station:<id>` — open is online.
 import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
+import { CODE_TTL_DAYS, isAdmin, newCode, normalizeCode } from "./admin";
 import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
-import type { AccountEvent, InvitationView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -53,14 +54,20 @@ export class Directory extends DurableObject<Env> {
     super(ctx, env);
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
     ctx.storage.sql.exec(`
-      CREATE TABLE IF NOT EXISTS users (sub TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', picture TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS users (sub TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', picture TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, last_seen INTEGER, admitted TEXT);
       CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_by TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS members (workspace TEXT NOT NULL, sub TEXT NOT NULL, role TEXT NOT NULL, added_at INTEGER NOT NULL, PRIMARY KEY (workspace, sub));
       CREATE INDEX IF NOT EXISTS members_by_user ON members (sub);
       CREATE TABLE IF NOT EXISTS invitations (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, role TEXT NOT NULL, email TEXT, created_by TEXT NOT NULL, expires_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS stations (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, name TEXT NOT NULL, enrolled_at INTEGER NOT NULL, enrolled_by TEXT NOT NULL, last_seen INTEGER, version TEXT);
       CREATE TABLE IF NOT EXISTS enrollments (token_hash TEXT PRIMARY KEY, workspace TEXT NOT NULL, name TEXT NOT NULL, created_by TEXT NOT NULL, expires_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS invite_codes (code TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER, used_by TEXT, used_at INTEGER, workspace TEXT);
     `);
+    // users had neither column before invite codes; the table in production gains them here.
+    const columns = new Set(this.#rows("PRAGMA table_info(users)").map((r) => r.name as string));
+    for (const column of ["last_seen INTEGER", "admitted TEXT"]) {
+      if (!columns.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE users ADD COLUMN ${column}`);
+    }
   }
 
   #rows(query: string, ...args: SqlStorageValue[]): Row[] {
@@ -126,9 +133,9 @@ export class Directory extends DurableObject<Env> {
   upsertUser(identity: Identity): void {
     const old = this.#one("SELECT email, name, picture FROM users WHERE sub = ?", identity.sub);
     this.#run(
-      `INSERT INTO users (sub, email, name, picture, created_at) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT (sub) DO UPDATE SET email = excluded.email, name = excluded.name, picture = excluded.picture`,
-      identity.sub, identity.email, identity.name, identity.picture, nowSeconds(),
+      `INSERT INTO users (sub, email, name, picture, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (sub) DO UPDATE SET email = excluded.email, name = excluded.name, picture = excluded.picture, last_seen = excluded.last_seen`,
+      identity.sub, identity.email, identity.name, identity.picture, nowSeconds(), nowSeconds(),
     );
     if (!old || (old.email === identity.email && old.name === identity.name && old.picture === identity.picture)) return;
     // Members lists show them; invitations they sent show their name; a new email has other invitations.
@@ -147,18 +154,45 @@ export class Directory extends DurableObject<Env> {
     return { user: user ?? null, workspaces };
   }
 
-  createWorkspace(sub: string, name: string): WorkspaceView {
+  /**
+   * ember is invite-only: the admin may create workspaces, and so may anyone
+   * let in before — through an invitation they accepted or a code they
+   * redeemed (or, from before codes existed, by being a member somewhere).
+   * Anyone else redeems a code, which is used up by this workspace. Nothing
+   * here awaits, so two creations with one code cannot both see it unused.
+   */
+  createWorkspace(sub: string, name: string, admin: boolean, code: unknown): WorkspaceView {
     const clean = cleanName(name) ?? fail(400, "invalid_name");
     const owned = this.#one("SELECT COUNT(*) AS n FROM members WHERE sub = ? AND role = 'owner'", sub)!.n as number;
     if (owned >= LIMITS.workspacesPerUser) fail(429, "too_many_workspaces");
+    const redeem = admin || this.#admitted(sub) ? null : this.#redeemable(code);
     const id = ulid();
     const now = nowSeconds();
     this.ctx.storage.transactionSync(() => {
       this.#run("INSERT INTO workspaces (id, name, created_by, created_at) VALUES (?, ?, ?, ?)", id, clean, sub, now);
       this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, 'owner', ?)", id, sub, now);
+      if (redeem) {
+        this.#run("UPDATE invite_codes SET used_by = ?, used_at = ?, workspace = ? WHERE code = ?", sub, now, id, redeem);
+        this.#run("UPDATE users SET admitted = 'code' WHERE sub = ? AND admitted IS NULL", sub);
+      }
     });
     this.#tell([sub], LIST);
     return this.workspace(sub, id);
+  }
+
+  #admitted(sub: string): boolean {
+    return Boolean(this.#one("SELECT 1 AS x FROM users WHERE sub = ? AND admitted IS NOT NULL UNION ALL SELECT 1 FROM members WHERE sub = ? LIMIT 1", sub, sub));
+  }
+
+  /** The stored form of a code that may be redeemed now; fails with why not. */
+  #redeemable(value: unknown): string {
+    if (typeof value !== "string" || !value.trim()) fail(403, "invite_code_required");
+    const code = normalizeCode(value) ?? fail(404, "invite_code_invalid");
+    const row = this.#one("SELECT expires_at, revoked_at, used_by FROM invite_codes WHERE code = ?", code);
+    if (!row || row.revoked_at !== null) fail(404, "invite_code_invalid");
+    if (row!.used_by !== null) fail(409, "invite_code_used");
+    if ((row!.expires_at as number) <= nowSeconds()) fail(410, "invite_code_expired");
+    return code;
   }
 
   workspace(sub: string, id: string): WorkspaceView {
@@ -237,6 +271,7 @@ export class Directory extends DurableObject<Env> {
     this.ctx.storage.transactionSync(() => {
       this.#run("DELETE FROM invitations WHERE id = ?", row!.id);
       // Accepting never lowers a role someone already has.
+      this.#run("UPDATE users SET admitted = 'invitation' WHERE sub = ? AND admitted IS NULL", sub);
       if (!existing) this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, ?, ?)", workspace, sub, row!.role, nowSeconds());
       else if (ROLES.indexOf(row!.role as Role) < ROLES.indexOf(existing.role as Role)) this.#run("UPDATE members SET role = ? WHERE workspace = ? AND sub = ?", row!.role, workspace, sub);
     });
@@ -262,6 +297,7 @@ export class Directory extends DurableObject<Env> {
     if (!existing && count >= LIMITS.membersPerWorkspace) fail(429, "too_many_members");
     this.ctx.storage.transactionSync(() => {
       this.#run("DELETE FROM invitations WHERE id = ?", id);
+      this.#run("UPDATE users SET admitted = 'invitation' WHERE sub = ? AND admitted IS NULL", sub);
       if (!existing) this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, ?, ?)", workspace, sub, row!.role, nowSeconds());
     });
     this.#changed(workspace, true);
@@ -377,6 +413,76 @@ export class Directory extends DurableObject<Env> {
     return { role, station_name: row!.name as string };
   }
 
+  // ── the admin's console ─────────────────────────────────────────────────
+  // The caller has checked that the account is the admin's (admin.ts).
+
+  adminUsers(): AdminUser[] {
+    const memberships = new Map<string, AdminUser["workspaces"]>();
+    for (const row of this.#rows("SELECT m.sub, w.id, w.name, m.role FROM members m JOIN workspaces w ON w.id = m.workspace ORDER BY w.created_at")) {
+      const list = memberships.get(row.sub as string) ?? [];
+      list.push({ id: row.id as string, name: row.name as string, role: row.role as Role });
+      memberships.set(row.sub as string, list);
+    }
+    return this.#rows("SELECT sub, email, name, picture, created_at, last_seen, admitted FROM users ORDER BY created_at DESC").map((row) => {
+      const workspaces = memberships.get(row.sub as string) ?? [];
+      const admission: Admission | null = isAdmin(this.env, row.email as string) ? "admin" : (row.admitted as Admission | null) ?? (workspaces.length ? "early" : null);
+      return {
+        sub: row.sub as string, email: row.email as string, name: row.name as string, picture: row.picture as string,
+        created_at: row.created_at as number, last_seen: row.last_seen as number | null, admission, workspaces,
+      };
+    });
+  }
+
+  adminWorkspaces(): AdminWorkspace[] {
+    const now = nowSeconds();
+    return this.#rows(`SELECT w.id, w.name, w.created_at, u.sub, u.email, u.name AS user_name, u.picture FROM workspaces w
+      LEFT JOIN users u ON u.sub = w.created_by ORDER BY w.created_at DESC`).map((w) => ({
+      id: w.id as string,
+      name: w.name as string,
+      created_at: w.created_at as number,
+      created_by: w.sub === null ? null : { sub: w.sub as string, email: w.email as string, name: w.user_name as string, picture: w.picture as string },
+      members: this.#rows(`SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
+        FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, w.id) as unknown as MemberView[],
+      stations: this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", w.id)
+        .map((row) => ({ ...row, online: this.#presence(row.id as string).length > 0 })) as unknown as StationView[],
+      invitations: this.#rows(`SELECT i.id, i.role, i.email, i.created_by, i.expires_at, COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter
+        FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.workspace = ? AND i.expires_at > ? ORDER BY i.expires_at`, w.id, now) as unknown as AdminWorkspace["invitations"],
+    }));
+  }
+
+  inviteCodes(): InviteCodeView[] {
+    return this.#rows(`SELECT c.code, c.note, c.created_at, c.expires_at, c.revoked_at, c.used_at, u.sub, u.email, u.name, u.picture, w.id, w.name AS workspace_name
+      FROM invite_codes c LEFT JOIN users u ON u.sub = c.used_by LEFT JOIN workspaces w ON w.id = c.workspace ORDER BY c.created_at DESC, c.code`).map((row) => ({
+      code: row.code as string,
+      note: row.note as string,
+      created_at: row.created_at as number,
+      expires_at: row.expires_at as number,
+      revoked_at: row.revoked_at as number | null,
+      used_at: row.used_at as number | null,
+      used_by: row.sub === null ? null : { sub: row.sub as string, email: row.email as string, name: row.name as string, picture: row.picture as string },
+      workspace: row.id === null ? null : { id: row.id as string, name: row.workspace_name as string },
+    }));
+  }
+
+  createInviteCode(sub: string, note: unknown, days: unknown): InviteCodeView {
+    const clean = typeof note === "string" ? note.trim().replace(/\s+/g, " ") : "";
+    if (clean.length > 200) fail(400, "invalid_note");
+    const ttl = days === undefined ? CODE_TTL_DAYS : Number.isInteger(days) && (days as number) >= 1 && (days as number) <= 365 ? (days as number) : fail(400, "invalid_expiry");
+    const code = newCode();
+    const now = nowSeconds();
+    this.#run("INSERT INTO invite_codes (code, note, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)", code, clean, sub, now, now + ttl * 24 * 60 * 60);
+    return this.inviteCodes().find((c) => c.code === code)!;
+  }
+
+  /** Stops an unused code from being redeemed; a used one has done its work and stays as it is. */
+  revokeInviteCode(value: string): void {
+    const code = normalizeCode(value) ?? fail(404, "invite_code_invalid");
+    const row = this.#one("SELECT used_by FROM invite_codes WHERE code = ?", code);
+    if (!row) fail(404, "invite_code_invalid");
+    if (row!.used_by !== null) fail(409, "invite_code_used");
+    this.#run("UPDATE invite_codes SET revoked_at = COALESCE(revoked_at, ?) WHERE code = ?", nowSeconds(), code);
+  }
+
   // ── sockets ─────────────────────────────────────────────────────────────
 
   /**
@@ -389,6 +495,8 @@ export class Directory extends DurableObject<Env> {
     const pair = new WebSocketPair();
     if (path === "/events") {
       const sub = request.headers.get("x-ember-sub")!;
+      // Every device opens this when it starts: the nearest thing to "last seen" that costs no write per request.
+      this.#run("UPDATE users SET last_seen = ? WHERE sub = ?", nowSeconds(), sub);
       this.ctx.acceptWebSocket(pair[1], [`sub:${sub}`]);
       pair[1].serializeAttachment({ sub } satisfies Attachment);
       return new Response(null, { status: 101, webSocket: pair[0], headers: { "sec-websocket-protocol": EVENTS_PROTOCOL } });

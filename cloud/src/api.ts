@@ -1,7 +1,8 @@
 // The account-facing API: workspaces, members, invitations, stations and
 // grants, and each device's event socket; plus the two things stations do
-// with their own key (enroll, and hold their presence socket). Returns null
-// for paths it does not own.
+// with their own key (enroll, and hold their presence socket); and the admin's
+// console. Returns null for paths it does not own.
+import { isAdmin } from "./admin";
 import { bearerToken, denied, readJson, reply, verifyToken, type Claims } from "./auth";
 import { EVENTS_PROTOCOL, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
@@ -14,6 +15,8 @@ const STATUS: Record<string, number> = {
   already_member: 409, invalid_name: 400, invalid_role: 400, invalid_email: 400,
   last_owner: 409,
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
+  invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
+  invalid_note: 400, invalid_expiry: 400,
 };
 
 async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
@@ -97,6 +100,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-ember-sub": claims.sub } }));
   }
 
+  if (path.startsWith("/v1/admin/")) return admin(request, env, path, method);
+
   // ── accounts ────────────────────────────────────────────────────────────
   const isAccountRoute = path === "/v1/me" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
@@ -121,7 +126,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     if (byId[2] === "accept") return directory(() => dir.acceptById(sub, claims.email, byId[1]!));
     return directory(() => dir.declineById(claims.email, byId[1]!));
   }
-  if (path === "/v1/workspaces" && method === "POST") return directory(() => dir.createWorkspace(sub, text("name")));
+  if (path === "/v1/workspaces" && method === "POST") return directory(() => dir.createWorkspace(sub, text("name"), isAdmin(env, claims.email), input.invite_code));
   if (path === "/v1/invitations/preview" && method === "POST") return directory(() => dir.previewInvitation(text("token")));
   if (path === "/v1/invitations/accept" && method === "POST") return directory(() => dir.acceptInvitation(sub, claims.email, text("token")));
 
@@ -162,4 +167,32 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     }
   }
   return reply({ error: "not_found" }, 404);
+}
+
+/** What any path nobody serves answers; the console's paths answer it to everyone but the admin. */
+const notFound = () => new Response("Not found", { status: 404 });
+
+async function admin(request: Request, env: Env, path: string, method: string): Promise<Response> {
+  const claims = await account(bearerToken(request), env);
+  if (!claims || !isAdmin(env, claims.email)) return notFound();
+  let input: Record<string, unknown>;
+  try {
+    input = await body(request);
+  } catch {
+    return reply({ error: "invalid_request" }, 400);
+  }
+  const dir = env.DIRECTORY.getByName("primary");
+  if (path === "/v1/admin/me" && method === "GET") return reply({ email: claims.email });
+  if (path === "/v1/admin/users" && method === "GET") return directory(async () => ({ users: await dir.adminUsers() }));
+  if (path === "/v1/admin/workspaces" && method === "GET") return directory(async () => ({ workspaces: await dir.adminWorkspaces() }));
+  if (path === "/v1/admin/invite-codes" && method === "GET") return directory(async () => ({ codes: await dir.inviteCodes() }));
+  if (path === "/v1/admin/invite-codes" && method === "POST") {
+    return directory(async () => {
+      const made = await dir.createInviteCode(claims.sub, input.note, input.days);
+      return { ...made, url: `${env.PUBLIC_ORIGIN}/?invite=${made.code}` };
+    });
+  }
+  const revoke = /^\/v1\/admin\/invite-codes\/([A-Za-z0-9-]{1,32})\/revoke$/.exec(path);
+  if (revoke && method === "POST") return directory(() => dir.revokeInviteCode(revoke[1]!));
+  return notFound();
 }

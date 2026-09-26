@@ -10,6 +10,14 @@ export class Directory extends ProductionDirectory {
   sweepAt(ms: number) {
     return this.sweep(ms);
   }
+  /** A code whose time is up. */
+  expireInviteCode(code: string) {
+    this.ctx.storage.sql.exec("UPDATE invite_codes SET expires_at = ? WHERE code = ?", nowSeconds(), code);
+  }
+  /** An account as members were before invite codes: in a workspace, admitted by nothing on record. */
+  forgetAdmission(sub: string) {
+    this.ctx.storage.sql.exec("UPDATE users SET admitted = NULL WHERE sub = ?", sub);
+  }
 }
 
 export class Account extends ProductionAccount {
