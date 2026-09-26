@@ -93,7 +93,6 @@ function SessionView({ sessionKey }: { sessionKey: string }) {
             </button>
           </Tip>
           <h1>{sessionTitle(session, name)}</h1>
-          {station.name && <span className="page-bar-station">{station.name}</span>}
         </div>
         <div className="page-bar-actions">
           <ChatInfo detail={detail} connect={connect} base={base} />

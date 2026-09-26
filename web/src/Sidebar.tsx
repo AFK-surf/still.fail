@@ -80,7 +80,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
           return (
             <section key={day.daysAgo} aria-label={label}>
               <div className="nav-heading">{label}</div>
-              {day.items.map((item) => <SessionRow key={`${item.station}/${item.session.key}`} item={item} showStation={several} />)}
+              {day.items.map((item) => <SessionRow key={`${item.station}/${item.session.key}`} item={item} />)}
             </section>
           );
         })}
@@ -89,8 +89,8 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
   );
 }
 
-/** A chat in the list. Where several stations share one list, it names the one it runs on. */
-function SessionRow({ item, showStation }: { item: ChatItem; showStation: boolean }) {
+/** A chat in the list. The station is its agent's, not the chat's: it shows with the agent, not here. */
+function SessionRow({ item }: { item: ChatItem }) {
   const { session: s, connect } = item;
   const name = connect?.name ?? s.connect;
   const { key } = useParams();
@@ -103,7 +103,6 @@ function SessionRow({ item, showStation }: { item: ChatItem; showStation: boolea
           {s.connect === "ember"
             ? <Tip label="ember 对话" side="right"><span className="session-kind"><Mark size={12} /></span></Tip>
             : <Tip label={connect ? `来自 ${connect.name}` : "来自连接"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
-          {showStation && <span className="station-tag small">{item.stationName}</span>}
           <PeopleStack people={s.participants} />
           <Time className="nav-time" at={s.lastActiveAt} />
         </span>
