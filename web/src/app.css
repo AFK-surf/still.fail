@@ -323,7 +323,7 @@
 .history-name { color: var(--text); font-weight: 600; }
 .history-sep { color: var(--subtle); }
 .history-summary { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.side-tab-agent { display: inline-flex; align-items: center; gap: 6px; }
+.side-tab-agent { display: inline-flex; align-items: center; gap: 6px; line-height: 1; }
 .chat-info { width: 320px; padding: 12px 14px; }
 .chat-info .details-list { margin-top: 10px; }
 .history-tools { display: flex; align-items: center; gap: 2px; flex: none; }
@@ -624,7 +624,7 @@
 .side-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--canvas); }
 .side-tabs { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--line); flex: none; }
 .side-tab-list { flex: 1; display: flex; gap: 2px; }
-.side-tab { height: 30px; padding: 0 12px; border: 0; border-radius: calc(10px * var(--corner-scale)); background: none; color: var(--muted); font-size: var(--text-sm); cursor: pointer; corner-shape: var(--corner-shape); }
+.side-tab { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border: 0; border-radius: calc(10px * var(--corner-scale)); background: none; color: var(--muted); font-size: var(--text-sm); cursor: pointer; corner-shape: var(--corner-shape); }
 .side-tab:hover { color: var(--text); background: var(--hover); }
 .side-tab[data-state="active"] { color: var(--text); background: var(--selected); font-weight: 500; }
 .side-content { flex: 1; min-height: 0; display: flex; flex-direction: column; outline: none; }
