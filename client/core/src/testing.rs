@@ -29,6 +29,8 @@ type StreamResponder = Box<dyn Fn(&HttpRequest) -> Result<StreamResponse, HostEr
 pub struct FakeHost {
     pub origin: String,
     storage: RefCell<HashMap<String, Vec<u8>>>,
+    /// The core's database: (table, key) → bytes.
+    pub db: RefCell<std::collections::BTreeMap<(String, String), Vec<u8>>>,
     responder: RefCell<Option<Responder>>,
     stream_responder: RefCell<Option<StreamResponder>>,
     /// The WebSockets opened: url, protocols, and the sender that feeds their frames (dropping it closes the socket).
@@ -50,6 +52,7 @@ impl FakeHost {
         Rc::new(FakeHost {
             origin: "https://ember.test".into(),
             storage: RefCell::default(),
+            db: RefCell::default(),
             responder: RefCell::default(),
             stream_responder: RefCell::default(),
             sockets: RefCell::default(),
@@ -182,6 +185,30 @@ impl Host for FakeHost {
 
     fn storage_delete(&self, key: &str) -> LocalBoxFuture<'static, Result<(), HostError>> {
         self.storage.borrow_mut().remove(key);
+        async { Ok(()) }.boxed_local()
+    }
+
+    fn db_read(&self, range: crate::host::DbRange) -> LocalBoxFuture<'static, Result<Vec<(String, Vec<u8>)>, HostError>> {
+        let db = self.db.borrow();
+        let found = db
+            .range((range.table.clone(), range.from.clone())..(range.table.clone(), range.to.clone()))
+            .map(|((_, key), value)| (key.clone(), value.clone()))
+            .collect();
+        async move { Ok(found) }.boxed_local()
+    }
+
+    fn db_write(&self, ops: Vec<crate::host::DbOp>) -> LocalBoxFuture<'static, Result<(), HostError>> {
+        let mut db = self.db.borrow_mut();
+        for op in ops {
+            match op {
+                crate::host::DbOp::Put { table, key, value } => {
+                    db.insert((table, key), value);
+                }
+                crate::host::DbOp::Delete { table, key } => {
+                    db.remove(&(table, key));
+                }
+            }
+        }
         async { Ok(()) }.boxed_local()
     }
 

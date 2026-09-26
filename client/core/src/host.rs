@@ -48,6 +48,21 @@ pub struct StreamResponse {
 /// A receive-only WebSocket's text frames. The stream ends when the socket closes; dropping it closes the socket.
 pub type SocketFrames = LocalBoxStream<'static, Result<String, HostError>>;
 
+/// Keys `[from, to)` of one table of the core's database (docs/core-db.md), in key order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DbRange {
+    pub table: String,
+    pub from: String,
+    pub to: String,
+}
+
+/// One change to the core's database; a batch of them is written at once or not at all.
+#[derive(Clone, Debug, PartialEq)]
+pub enum DbOp {
+    Put { table: String, key: String, value: Vec<u8> },
+    Delete { table: String, key: String },
+}
+
 pub trait Host {
     /// Where ember cloud is: the page's origin on the web, https://ember.3720.org natively.
     fn cloud_origin(&self) -> String;
@@ -61,6 +76,15 @@ pub trait Host {
     fn storage_get(&self, key: &str) -> LocalBoxFuture<'static, Result<Option<Vec<u8>>, HostError>>;
     fn storage_set(&self, key: &str, value: Vec<u8>) -> LocalBoxFuture<'static, Result<(), HostError>>;
     fn storage_delete(&self, key: &str) -> LocalBoxFuture<'static, Result<(), HostError>>;
+
+    /// The core's database (docs/core-db.md): records by table and key — SQLite natively, IndexedDB on the web.
+    /// A host without one keeps nothing: reads find nothing, writes are dropped.
+    fn db_read(&self, _range: DbRange) -> LocalBoxFuture<'static, Result<Vec<(String, Vec<u8>)>, HostError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn db_write(&self, _ops: Vec<DbOp>) -> LocalBoxFuture<'static, Result<(), HostError>> {
+        Box::pin(async { Ok(()) })
+    }
 
     /// Milliseconds since the Unix epoch.
     fn now_ms(&self) -> f64;

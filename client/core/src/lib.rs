@@ -5,6 +5,7 @@
 
 pub mod accounts;
 pub mod cloud;
+pub mod data;
 pub mod core;
 pub mod delta;
 pub mod entries;

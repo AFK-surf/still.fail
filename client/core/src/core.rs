@@ -28,6 +28,7 @@ use serde_json::{Value, json};
 
 use crate::accounts::{AccountView, Accounts};
 use crate::cloud::Cloud;
+use crate::data::{Center, Data};
 use crate::error::{CoreError, Result};
 use crate::host::Host;
 use crate::kept::Kept;
@@ -61,15 +62,18 @@ struct Inner {
     views: Rc<Views>,
     /// Threads' entries and transcripts kept on the device.
     kept: Rc<Kept>,
+    /// The data center: what the cloud and the stations said (data.rs).
+    data: Rc<Data>,
+    /// Where what is read or pushed goes: the data center, or the store for the rest.
+    center: Rc<Center>,
     /// The device endpoint, brought up once (it needs the relay url from `/v1/me`); cleared if that fails so the next use retries.
     mesh: RefCell<Option<Shared<LocalBoxFuture<'static, Result<Rc<Mesh>>>>>>,
     relay_url: RefCell<Option<String>>,
     /// Which account reaches each workspace, from the latest `/v1/me` answers.
     owners: RefCell<HashMap<String, String>>,
-    /// Each account's latest `/v1/me`: its answer, or why it failed.
-    mes: RefCell<HashMap<String, Result<Value>>>,
-    /// Each account's latest successful `/v1/me`: whom it reaches.
-    reach: RefCell<HashMap<String, Value>>,
+    /// Whether each account's latest `/v1/me` answered this run, or why it failed. What it said is the data
+    /// center's `me` record (kept from run to run): whom the account reaches.
+    mes: RefCell<HashMap<String, Result<()>>>,
     /// The accounts as last shown, so a change that UIs cannot see (a refreshed token) is not one.
     shown_accounts: RefCell<Vec<AccountView>>,
     /// Every account's `/v1/me` under way.
@@ -106,16 +110,34 @@ impl Core {
         let tracer = Tracer::new(host.clone(), sample);
         let accounts = Accounts::load(host.clone()).await;
         let cloud = Cloud::new(host.clone(), accounts.clone(), tracer.clone());
+        // What was last known is there before any UI asks.
+        let data = Data::new(host.clone());
+        data.load().await;
         let inner = Rc::new_cyclic(|me: &Weak<Inner>| {
             let store = Store::new(host.clone());
+            store.set_held({
+                let data = data.clone();
+                Rc::new(move |topic: &Topic| data.get(topic))
+            });
+            data.on_change({
+                let store = Rc::downgrade(&store);
+                Rc::new(move |topic: &Topic| {
+                    if let Some(store) = store.upgrade() {
+                        store.changed(topic);
+                    }
+                })
+            });
+            let center = Rc::new(Center { store: store.clone(), data: data.clone() });
             let wire = station::wire(host.clone(), mesh_source(me.clone()), grants(me.clone()));
             let kept = Kept::new(host.clone());
-            let stations = Stations::new(host.clone(), store.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone());
+            let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone());
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
             store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
             Inner {
                 views,
                 kept,
+                data: data.clone(),
+                center,
                 me: me.clone(),
                 host: host.clone(),
                 tracer: tracer.clone(),
@@ -127,7 +149,6 @@ impl Core {
                 relay_url: RefCell::default(),
                 owners: RefCell::default(),
                 mes: RefCell::default(),
-                reach: RefCell::default(),
                 me_loading: RefCell::default(),
                 shown_accounts: RefCell::new(accounts.list()),
                 me_fetches: RefCell::default(),
@@ -469,7 +490,11 @@ impl Inner {
         let accounts = self.accounts.list();
         let mes = self.mes.borrow();
         accounts.into_iter().map(|a| {
-            let me = mes.get(&a.sub).cloned().unwrap_or_else(|| Err(CoreError::signed_out("这个账号已退出")));
+            let me = match mes.get(&a.sub).cloned() {
+                Some(Ok(())) => self.data.record("me", &a.sub).ok_or_else(|| CoreError::signed_out("这个账号已退出")),
+                Some(Err(error)) => Err(error),
+                None => Err(CoreError::signed_out("这个账号已退出")),
+            };
             (a, me)
         }).collect()
     }
@@ -505,9 +530,9 @@ impl Inner {
                         );
                     }
                 }
-                self.reach.borrow_mut().insert(account.sub.clone(), me.clone());
+                self.data.put("me", &account.sub, me.clone());
             }
-            self.mes.borrow_mut().insert(account.sub.clone(), me);
+            self.mes.borrow_mut().insert(account.sub.clone(), me.map(|_| ()));
         }
         self.recompute_owners();
         self.forget_unreachable();
@@ -518,12 +543,15 @@ impl Inner {
     fn recompute_owners(&self) {
         let accounts = self.accounts.list();
         self.mes.borrow_mut().retain(|sub, _| accounts.iter().any(|a| &a.sub == sub));
-        self.reach.borrow_mut().retain(|sub, _| accounts.iter().any(|a| &a.sub == sub));
-        let reach = self.reach.borrow();
+        for (sub, _) in self.data.records("me") {
+            if !accounts.iter().any(|a| a.sub == sub) {
+                self.data.forget_record("me", &sub);
+            }
+        }
         let mut owners = self.owners.borrow_mut();
         owners.clear();
         for account in &accounts {
-            let Some(me) = reach.get(&account.sub) else { continue };
+            let Some(me) = self.data.record("me", &account.sub) else { continue };
             for workspace in me.get("workspaces").and_then(Value::as_array).into_iter().flatten() {
                 if let Some(id) = workspace.get("id").and_then(Value::as_str) {
                     owners.entry(id.to_string()).or_insert_with(|| account.sub.clone());
@@ -536,10 +564,12 @@ impl Inner {
     /// one signs out) — decided only when every account's `/v1/me` has answered once, since one not heard from
     /// yet may reach them. The station's own page (`local`) is no account's.
     fn forget_unreachable(&self) {
-        if self.reach.borrow().len() < self.accounts.list().len() {
+        if self.accounts.list().iter().any(|a| self.data.record("me", &a.sub).is_none()) {
             return;
         }
         let workspaces: HashSet<String> = self.owners.borrow().keys().cloned().collect();
+        let reached = workspaces.clone();
+        self.data.retain(move |station| station == "local" || station.split_once('/').is_some_and(|(w, _)| reached.contains(w)), Some(&workspaces));
         self.host.spawn(self.kept.retain(move |station| station == "local" || station.split_once('/').is_some_and(|(w, _)| workspaces.contains(w))));
     }
 
@@ -547,6 +577,11 @@ impl Inner {
     fn forget_gone_stations(&self, workspace: &str, view: &Value) {
         let ids: HashSet<String> = view.get("stations").and_then(Value::as_array).into_iter().flatten().filter_map(|s| Some(s.get("id")?.as_str()?.to_string())).collect();
         let workspace = workspace.to_string();
+        let (listed, of) = (ids.clone(), workspace.clone());
+        self.data.retain(move |station| match station.split_once('/') {
+            Some((w, id)) if w == of => listed.contains(id),
+            _ => true,
+        }, None);
         self.host.spawn(self.kept.retain(move |station| match station.split_once('/') {
             Some((w, id)) if w == workspace => ids.contains(id),
             _ => true,
@@ -557,21 +592,25 @@ impl Inner {
         Ok(serde_json::to_value(self.accounts.list()).expect("accounts serialize"))
     }
 
-    /// Every account with what its latest `/v1/me` said. `loaded` is true only once
-    /// that answer came: an empty list before it (or after a failure) is not "none".
+    /// Every account with what its `/v1/me` said, as the data center has it (from this run, or kept from the last).
+    /// `loaded` is true only once it answered this run: what was kept, or an empty list before an answer (or after a
+    /// failure), is not "none" — a UI that makes a workspace for an account with none waits for it.
     fn workspaces_value(&self) -> Value {
         let mes = self.mes.borrow();
-        let entries = self.accounts.list().into_iter().map(|account| match mes.get(&account.sub) {
-            Some(Ok(me)) => json!({
+        let entries = self.accounts.list().into_iter().map(|account| {
+            let me = self.data.record("me", &account.sub).unwrap_or(Value::Null);
+            let mut entry = json!({
                 "account": account,
                 "workspaces": me.get("workspaces").cloned().unwrap_or_else(|| json!([])),
                 "invitations": me.get("invitations").cloned().unwrap_or_else(|| json!([])),
                 "relay_url": me.get("relay_url").cloned().unwrap_or(Value::Null),
-                "loaded": true,
-            }),
+                "loaded": matches!(mes.get(&account.sub), Some(Ok(()))),
+            });
             // One account failing (offline, signed out elsewhere) still shows the others.
-            Some(Err(error)) => json!({ "account": account, "workspaces": [], "invitations": [], "relay_url": null, "loaded": false, "error": error }),
-            None => json!({ "account": account, "workspaces": [], "invitations": [], "relay_url": null, "loaded": false }),
+            if let Some(Err(error)) = mes.get(&account.sub) {
+                entry["error"] = json!(error);
+            }
+            entry
         });
         Value::Array(entries.collect())
     }
@@ -587,6 +626,10 @@ impl Inner {
             return;
         }
         self.live.borrow_mut().insert(topic.clone(), 0);
+        // What the accounts' `/v1/me` said last time is shown at once (not `loaded`); reading it again follows.
+        if *topic == Topic::Workspaces && self.accounts.list().iter().any(|a| self.data.record("me", &a.sub).is_some()) {
+            self.store.set(topic, Ok(self.workspaces_value()));
+        }
         self.sync_sockets();
         // A socket on its first try reads the topics when it opens; otherwise they are read now.
         if !self.sockets.borrow().values().any(|s| s.state == SocketState::Connecting) {
@@ -633,7 +676,8 @@ impl Inner {
             self.forget_gone_stations(workspace, view);
         }
         if self.live.borrow().get(topic) == Some(&fetch) {
-            self.store.set(topic, value);
+            // A workspace goes to the data center; the list of them is put together from the accounts' records.
+            self.center.set(topic, value);
         }
     }
 
@@ -742,7 +786,7 @@ impl Inner {
                 };
                 // Complete in itself: the station's presence changes in place, and it was last seen now.
                 let now = (self.host.now_ms() / 1000.0).floor();
-                self.store.update(&Topic::Workspace { workspace: workspace.to_string() }, &mut |view| {
+                self.center.update(&Topic::Workspace { workspace: workspace.to_string() }, &mut |view| {
                     for station in view.get_mut("stations").and_then(Value::as_array_mut).into_iter().flatten() {
                         if station.get("id").and_then(Value::as_str) == Some(id) {
                             station["online"] = json!(online);

@@ -76,6 +76,8 @@ struct Inner {
     /// what one event changes (a live step ending, the timeline growing) goes out together.
     pending: Vec<Topic>,
     window_open: bool,
+    /// The values of the topics the data center holds (`data.rs`): read there, never kept here but as sent.
+    held: Option<Rc<dyn Fn(&Topic) -> Option<Value>>>,
 }
 
 #[derive(Default)]
@@ -104,6 +106,36 @@ impl Store {
         self.inner.borrow_mut().source = Some(source);
     }
 
+    /// Where the values of the data center's topics are read: they have no value of their own here.
+    pub fn set_held(&self, held: Rc<dyn Fn(&Topic) -> Option<Value>>) {
+        self.inner.borrow_mut().held = Some(held);
+    }
+
+    fn held(&self, topic: &Topic) -> Option<Value> {
+        let held = self.inner.borrow().held.clone()?;
+        held(topic)
+    }
+
+    /// A topic starts: the source brings it up to date; what the data center already has of it goes out at once.
+    fn start(&self, topic: &Topic, source: Option<Rc<dyn Source>>) {
+        if let Some(source) = source {
+            source.start(topic);
+        }
+        if self.held(topic).is_some() {
+            self.invalidate(topic);
+        }
+    }
+
+    /// The data center changed a topic's value: it goes out (computed from there), and whatever watches it hears now.
+    pub fn changed(&self, topic: &Topic) {
+        self.invalidate(topic);
+        let watchers = match self.inner.borrow().topics.get(topic) {
+            Some(entry) => watchers(entry),
+            None => return,
+        };
+        watchers.iter().for_each(|w| w());
+    }
+
     /// Adds a subscriber; sends the cached value (or error) at once if there is one, and starts the topic if it was not live.
     pub fn subscribe(&self, client: ClientId, id: RequestId, topic: Topic) {
         // The same request id again means the UI replaced that subscription.
@@ -122,8 +154,8 @@ impl Store {
         if let Some(value) = cached {
             self.host.emit(client, Out::whole(value).to(id));
         }
-        if started && let Some(source) = source {
-            source.start(&topic);
+        if started {
+            self.start(&topic, source);
         }
     }
 
@@ -149,8 +181,8 @@ impl Store {
             entry.idle = None;
             (id, started, inner.source.clone())
         };
-        if started && let Some(source) = source {
-            source.start(topic);
+        if started {
+            self.start(topic, source);
         }
         Watch { store: self.me.clone(), topic: topic.clone(), id }
     }
@@ -239,16 +271,20 @@ impl Store {
         }
     }
 
-    /// The topic's value or error; `None` while it has neither.
+    /// The topic's value or error; `None` while it has neither. A data center topic's value is read there (its
+    /// error, while it has nothing, is kept here).
     pub fn value(&self, topic: &Topic) -> Option<Result<Value, CoreError>> {
-        self.inner.borrow().topics.get(topic)?.value.clone()
+        if let Some(value) = self.held(topic) {
+            return Some(Ok(value));
+        }
+        match self.inner.borrow().topics.get(topic)?.value.clone()? {
+            Err(error) => Some(Err(error)),
+            Ok(value) => (!crate::data::holds(topic)).then_some(Ok(value)),
+        }
     }
 
     pub fn get(&self, topic: &Topic) -> Option<Value> {
-        match self.inner.borrow().topics.get(topic)?.value.as_ref()? {
-            Ok(value) => Some(value.clone()),
-            Err(_) => None,
-        }
+        self.value(topic)?.ok()
     }
 
     /// Topics with at least one subscriber (or within their eviction grace).
