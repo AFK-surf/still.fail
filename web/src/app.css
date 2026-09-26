@@ -1414,6 +1414,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .model-triple .quota-rings { margin-left: 2px; align-items: center; }
 .model-triple .quota-ring-letter { display: none; }
 .model-triple .quota-ring-cell { display: flex; align-items: center; }
+.model-triple .triple-rings { display: inline-flex; align-items: center; }
 .model-triple[data-drop~="name"] .triple-account-name { display: none; }
 .model-triple[data-drop~="name"] .triple-account-short { display: inline; }
 .model-triple[data-drop~="account"] .triple-account { display: none; }
