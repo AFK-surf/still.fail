@@ -1080,3 +1080,18 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .composer-thumb-remove { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: color-mix(in oklch, #000 55%, transparent); color: #fff; cursor: pointer; opacity: 0; transition: opacity var(--dur) var(--ease-out); }
 .composer-thumb:hover .composer-thumb-remove, .composer-thumb-remove:focus-visible { opacity: 1; }
 @media (hover: none) { .composer-thumb-remove { opacity: 1; } }
+
+/* Quote cards, lighter: one soft tile, the passage small and grey, the comment under it. */
+.quote-cards { width: auto; max-width: min(380px, 88%); gap: 4px; }
+.msg-row .quote-cards { justify-self: start; }
+.quote-card { border: 0; border-radius: calc(12px * var(--corner-scale)); background: color-mix(in oklch, var(--text) 4%, var(--canvas)); }
+.quote-card-source { gap: 0; padding: 7px 11px 0; background: none; }
+.quote-card-source:not(:disabled):hover { background: none; }
+.quote-card-source:not(:disabled):hover .quote-card-text { color: var(--text); }
+.quote-card-text { display: -webkit-box; -webkit-line-clamp: 2; font-size: var(--text-xs); line-height: 1.5; color: var(--muted); }
+.quote-card-text svg { display: inline; vertical-align: -1px; margin-right: 4px; color: var(--accent); }
+.quote-card-who { font-weight: 500; color: var(--text); }
+.quote-card-comment { padding: 3px 11px 8px; font-size: var(--text-sm); line-height: 1.5; }
+.quote-card:not(:has(.quote-card-comment)) .quote-card-source { padding-bottom: 7px; }
+.composer-quote .quote-card { max-width: none; }
+.composer-quote .quote-card-source { padding-right: 30px; }

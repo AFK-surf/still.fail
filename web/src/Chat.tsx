@@ -201,12 +201,7 @@ function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?
   return (
     <div className="quote-card">
       <button type="button" className="quote-card-source" onClick={onJump} disabled={!onJump} title={onJump ? "跳到原消息" : undefined}>
-        <span className="quote-card-head">
-          <QuoteIcon size={12} strokeWidth={2.2} aria-hidden="true" />
-          <span className="quote-card-who">{quote.role === "agent" ? quote.author : quote.author}</span>
-          <span className="quote-card-kind">的消息</span>
-        </span>
-        <span className="quote-card-text">{quote.text}</span>
+        <span className="quote-card-text"><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className="quote-card-who">{quote.author}：</span>{quote.text}</span>
       </button>
       {comment ?? (quote.comment ? <div className="quote-card-comment">{quote.comment}</div> : null)}
       {onRemove && <button type="button" className="quote-card-remove" aria-label="移除引用" onClick={onRemove}><X size={12} /></button>}
