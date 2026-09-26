@@ -5,6 +5,8 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("emberDesktop", {
   openCore: (id: number) => ipcRenderer.send("core:open", id),
+  /** The host a station's web service is shown at (ember-preview://<host>/): see main.ts, previews. */
+  previewHost: (station: string, port: number): Promise<string | null> => ipcRenderer.invoke("preview:host", station, port),
 });
 
 ipcRenderer.on("core:port", (event, id: number) => window.postMessage({ emberCore: "port", id }, location.origin, event.ports));

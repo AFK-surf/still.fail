@@ -317,6 +317,8 @@ export function workerOpener(): Opener {
 export interface EmberDesktop {
   /** Asks for a port to the core; it arrives as a window message `{ emberCore: "port", id }`. */
   openCore(id: number): void;
+  /** The host a station's web service is shown at, ember-preview://<host>/ (apps/desktop/src/main.ts, previews). */
+  previewHost(station: string, port: number): Promise<string | null>;
 }
 
 declare global {

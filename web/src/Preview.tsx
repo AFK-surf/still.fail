@@ -4,7 +4,8 @@
 // scripts reach nothing of ember's; its service worker hands every request of
 // the service to this page, which sends it to the station through the core,
 // like any other call, and hands the answer back. No port on the station is
-// open to anyone.
+// open to anyone. The desktop app needs none of that: the frame is at
+// ember-preview://, which the app serves itself through its core.
 import { RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useCall } from "./core/react.ts";
@@ -23,6 +24,45 @@ const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCo
 interface Asked { id: number; method: string; path: string; headers: [string, string][]; body: Uint8Array | null }
 
 export function StationPreview({ station, port }: { station: string; port: number }) {
+  return window.emberDesktop ? <DesktopPreview station={station} port={port} /> : <WebPreview station={station} port={port} />;
+}
+
+/** Where it is and a reload, over the frame. */
+function PreviewBar({ port, typed, setTyped, go }: { port: number; typed: string; setTyped: (path: string) => void; go: (path: string) => void }) {
+  return (
+    <form className="preview-bar" onSubmit={(e) => { e.preventDefault(); go(typed); }}>
+      <span className="preview-host">localhost:{port}</span>
+      <input className="preview-path" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="路径" spellCheck={false} />
+      <button type="button" className="icon-btn" aria-label="重新载入" title="重新载入" onClick={() => go(typed)}><RotateCw size={14} strokeWidth={1.75} /></button>
+    </form>
+  );
+}
+
+function DesktopPreview({ station, port }: { station: string; port: number }) {
+  const [host, setHost] = useState<string | null>(null);
+  const [path, setPath] = useState("/");
+  const [typed, setTyped] = useState("/");
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void window.emberDesktop!.previewHost(station, port).then((h) => { if (live) setHost(h); });
+    return () => { live = false; };
+  }, [station, port]);
+  const go = (to: string) => {
+    const next = to.startsWith("/") ? to : `/${to}`;
+    setTyped(next);
+    setPath(next);
+    setN((x) => x + 1);
+  };
+  return (
+    <div className="preview">
+      <PreviewBar port={port} typed={typed} setTyped={setTyped} go={go} />
+      {host && <iframe key={n} className="preview-frame" title={`localhost:${port}`} src={`ember-preview://${host}${path}`} />}
+    </div>
+  );
+}
+
+function WebPreview({ station, port }: { station: string; port: number }) {
   const call = useCall();
   const [path, setPath] = useState("/");
   const [typed, setTyped] = useState("/");
@@ -63,11 +103,7 @@ export function StationPreview({ station, port }: { station: string; port: numbe
   };
   return (
     <div className="preview">
-      <form className="preview-bar" onSubmit={(e) => { e.preventDefault(); go(typed); }}>
-        <span className="preview-host">localhost:{port}</span>
-        <input className="preview-path" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="路径" spellCheck={false} />
-        <button type="button" className="icon-btn" aria-label="重新载入" title="重新载入" onClick={() => go(typed)}><RotateCw size={14} strokeWidth={1.75} /></button>
-      </form>
+      <PreviewBar port={port} typed={typed} setTyped={setTyped} go={go} />
       <iframe key={nonce} ref={frame} className="preview-frame" title={`localhost:${port}`}
         src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(path)}`} />
     </div>
