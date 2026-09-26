@@ -5,7 +5,7 @@
 import { ArrowLeft, Check, KeyRound, LogOut, Plug, Plus, Server, Settings2, Trash2, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
-import { useConnects, useStations, type StationView } from "../api.ts";
+import { useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, checkTone, RUNTIME_LABEL, timeUntil } from "../format.ts";
 import { DeviceCard, QuotaBars } from "../components.tsx";
@@ -192,9 +192,8 @@ export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-export function ConnectsSettings({ entry, stations }: { entry: WorkspaceEntry; stations: Station[] }) {
-  const connects = useConnects(entry.id);
-  return <ConnectList items={connects.value?.items ?? []} stations={stations} showStation loading={connects.value?.loading ?? connects.loading} back={`/w/${entry.id}/settings`} />;
+export function ConnectsSettings({ entry }: { entry: WorkspaceEntry }) {
+  return <ConnectList scope={entry.id} settings={`/w/${entry.id}/settings`} />;
 }
 
 export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {

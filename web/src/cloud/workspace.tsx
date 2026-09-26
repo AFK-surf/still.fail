@@ -56,11 +56,11 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/general" element={<GeneralSettings entry={entry} />} />
             <Route path="settings/members" element={<MembersSettings entry={entry} />} />
             <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
-            <Route path="settings/connects" element={<ConnectsSettings entry={entry} stations={stations} />} />
+            <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
             <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
             <Route path="s/:station/*" element={<StationPages stations={stations} />} />
-            <Route path="new" element={<NewChat stations={stations} onCreated={(station, key) => navigate(`${station.base}/sessions/${encodeURIComponent(key)}`)} />} />
+            <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, key) => navigate(`${stationBase(station)}/sessions/${encodeURIComponent(key)}`)} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
         </main>
