@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { useDark } from "./theme.ts";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
@@ -21,9 +22,50 @@ export function Lockup({ height = 30, alt = "ember" }: { height?: number; alt?: 
   return <Themed name="lockup" width={Math.round((height * 264) / 60)} height={height} alt={alt} className="brand-lockup" />;
 }
 
-/** The sidebar's top: the lockup, or in the desktop app the buddy alone, beside the window's buttons. */
+/**
+ * The sidebar's top. The buddy holds the sidebar open: it stands on the sidebar's edge pushing it, and a click closes
+ * the sidebar while it hops to rest at the top left (beside the window's buttons in the desktop app); a click there
+ * opens it again. On the web the name stays at the top; on a phone, where the sidebar is a page, it is the lockup.
+ */
 export function SidebarBrand() {
-  return window.emberDesktop ? <Mark size={24} /> : <Lockup />;
+  return (
+    <>
+      {!window.emberDesktop && <Themed name="wordmark" width={81} height={22} alt="ember" className="brand-wordmark" />}
+      {!window.emberDesktop && <span className="brand-phone"><Lockup /></span>}
+      <SidebarBuddy />
+    </>
+  );
+}
+
+type Pose = "push" | "hop" | "rest";
+const SIDEBAR = "ember.sidebar";
+
+/** Whether the sidebar is closed: on the page's root (so the layout follows), and kept on this device. */
+function closeSidebar(closed: boolean) {
+  if (closed) document.documentElement.dataset.sidebar = "closed";
+  else delete document.documentElement.dataset.sidebar;
+  try { localStorage.setItem(SIDEBAR, closed ? "closed" : "open"); } catch { /* private mode: for this page only */ }
+}
+
+function SidebarBuddy() {
+  const [closed, setClosed] = useState(() => document.documentElement.dataset.sidebar === "closed");
+  const [pose, setPose] = useState<Pose>(closed ? "rest" : "push");
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const toggle = () => {
+    const next = !closed;
+    setClosed(next);
+    closeSidebar(next);
+    // It hops on the way, and lands in the pose of where it goes.
+    setPose("hop");
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setPose(next ? "rest" : "push"), 380);
+  };
+  return (
+    <button type="button" className="sidebar-buddy" data-pose={pose} onClick={toggle} aria-label={closed ? "展开侧边栏" : "收起侧边栏"} title={closed ? "展开侧边栏" : "收起侧边栏"}>
+      <Themed name={`buddy/${pose}`} width={28} height={28} />
+    </button>
+  );
 }
 
 type Illus = "new-chat" | "no-station" | "station-offline" | "sign-in";
