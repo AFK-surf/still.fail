@@ -2,7 +2,7 @@
 // SDK: Node's WebSocket and fetch are enough for what ember uses.
 import { log } from "../log.ts";
 import { splitForSlack, toMrkdwn } from "./mrkdwn.ts";
-import type { ChatMessage, ChatSurface, InboundMessage, ThreadRef } from "./types.ts";
+import type { ChatEvent, ChatMessage, ChatSurface, InboundMessage, ThreadRef } from "./types.ts";
 import type { Attachment } from "../store.ts";
 
 /** Message subtypes that are still a person talking. */
@@ -44,6 +44,13 @@ export async function verifySlackTokens(tokens: { appToken: string; botToken: st
   return { identity, errors };
 }
 
+/** The Slack team a bot token belongs to, or null when Slack cannot be asked (within ten seconds). */
+export async function slackTeamOf(botToken: string): Promise<string | null> {
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000).unref());
+  const asked = slackApi("auth.test", {}, botToken).then((auth) => identityOf(auth).teamId || null, () => null);
+  return Promise.race([asked, timeout]);
+}
+
 function identityOf(auth: Record<string, any>): SlackIdentity {
   return { team: String(auth.team ?? ""), teamId: String(auth.team_id ?? ""), url: String(auth.url ?? ""), botUserId: String(auth.user_id ?? ""), botName: String(auth.user ?? "") };
 }
@@ -76,6 +83,7 @@ export class SlackSurface implements ChatSurface {
   #stopped = false;
   #connected = false;
   #lastError: string | null = null;
+  readonly #statusListeners = new Set<() => void>();
 
   constructor(tokens: { appToken: string; botToken: string }) {
     if (!tokens.appToken.startsWith("xapp-")) throw new Error("slack.appToken must be an app-level token (xapp-…)");
@@ -92,12 +100,28 @@ export class SlackSurface implements ChatSurface {
     return this.#identity;
   }
 
+  get workspace(): string | null {
+    return this.#identity?.teamId || null;
+  }
+
   /** For the admin page: whether the socket is up, and the last connection error. */
   get status(): { connected: boolean; lastError: string | null } {
     return { connected: this.#connected, lastError: this.#lastError };
   }
 
-  async start(handler: (message: InboundMessage) => Promise<void>): Promise<void> {
+  /** Calls `listener` whenever `status` changes. */
+  onStatus(listener: () => void): void {
+    this.#statusListeners.add(listener);
+  }
+
+  #setStatus(connected: boolean, lastError: string | null): void {
+    if (connected === this.#connected && lastError === this.#lastError) return;
+    this.#connected = connected;
+    this.#lastError = lastError;
+    for (const listener of this.#statusListeners) listener();
+  }
+
+  async start(handler: (event: ChatEvent) => Promise<void>): Promise<void> {
     this.#identity = identityOf(await this.#api("auth.test", {}, this.#botToken));
     log.info("slack authenticated", { botUserId: this.#identity.botUserId, team: this.#identity.team });
     void this.#connectLoop(handler);
@@ -108,11 +132,16 @@ export class SlackSurface implements ChatSurface {
     this.#socket?.close();
   }
 
-  async post(thread: ThreadRef, markdown: string, files: Attachment[] = []): Promise<void> {
+  /** A long message goes out in parts; the first part's ts stands for the whole. */
+  async post(thread: ThreadRef, markdown: string, files: Attachment[] = []): Promise<string> {
     if (files.length) throw new Error("attaching files is not supported in Slack yet; mention the file paths in the text instead");
+    let first: string | undefined;
     for (const text of splitForSlack(toMrkdwn(markdown))) {
-      await this.#api("chat.postMessage", { channel: thread.channel, thread_ts: thread.threadTs, text, unfurl_links: "false" }, this.#botToken);
+      const posted = await this.#api("chat.postMessage", { channel: thread.channel, thread_ts: thread.threadTs, text, unfurl_links: "false" }, this.#botToken);
+      first ??= String(posted.ts);
     }
+    if (first === undefined) throw new Error("nothing to post");
+    return first;
   }
 
   /** Display name via users.info, cached for the connection's lifetime. */
@@ -157,7 +186,7 @@ export class SlackSurface implements ChatSurface {
     return name;
   }
 
-  async history(thread: ThreadRef, before: string | undefined, limit: number): Promise<ChatMessage[]> {
+  async history(thread: ThreadRef, before: string, limit: number): Promise<ChatMessage[]> {
     const all: ChatMessage[] = [];
     let cursor: string | undefined;
     do {
@@ -169,11 +198,10 @@ export class SlackSurface implements ChatSurface {
       }
       cursor = page.response_metadata?.next_cursor || undefined;
     } while (cursor);
-    const earlier = before === undefined ? all : all.filter((m) => Number(m.ts) < Number(before));
-    return earlier.slice(-limit);
+    return all.filter((m) => Number(m.ts) < Number(before)).slice(-limit);
   }
 
-  async #connectLoop(handler: (message: InboundMessage) => Promise<void>): Promise<void> {
+  async #connectLoop(handler: (event: ChatEvent) => Promise<void>): Promise<void> {
     let backoff = 1000;
     while (!this.#stopped) {
       try {
@@ -181,7 +209,7 @@ export class SlackSurface implements ChatSurface {
         await this.#runSocket(String(url), handler);
         backoff = 1000;
       } catch (error) {
-        this.#lastError = error instanceof Error ? error.message : String(error);
+        this.#setStatus(false, error instanceof Error ? error.message : String(error));
         log.warn("slack socket failed", { error, retryInMs: backoff });
         await new Promise((r) => setTimeout(r, backoff));
         backoff = Math.min(backoff * 2, 60_000);
@@ -190,16 +218,13 @@ export class SlackSurface implements ChatSurface {
   }
 
   /** Resolves when the socket closes (Slack rotates connections routinely). */
-  #runSocket(url: string, handler: (message: InboundMessage) => Promise<void>): Promise<void> {
+  #runSocket(url: string, handler: (event: ChatEvent) => Promise<void>): Promise<void> {
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(url);
       this.#socket = socket;
-      socket.addEventListener("open", () => {
-        this.#connected = true;
-        this.#lastError = null;
-      });
+      socket.addEventListener("open", () => this.#setStatus(true, null));
       socket.addEventListener("close", () => {
-        this.#connected = false;
+        this.#setStatus(false, this.#lastError);
         resolve();
       });
       socket.addEventListener("error", () => reject(new Error("slack socket error")));
@@ -212,9 +237,9 @@ export class SlackSurface implements ChatSurface {
             return;
           }
           if (envelope.type !== "events_api") return;
-          const message = this.#toInbound(envelope.payload?.event ?? {});
+          const chatEvent = this.#toEvent(envelope.payload?.event ?? {});
           try {
-            if (message) await handler(message);
+            if (chatEvent) await handler(chatEvent);
             socket.send(JSON.stringify({ envelope_id: envelope.envelope_id }));
           } catch (error) {
             // Not acknowledged: Slack redelivers, and the store dedupes.
@@ -223,6 +248,19 @@ export class SlackSurface implements ChatSurface {
         })();
       });
     });
+  }
+
+  #toEvent(event: Record<string, any>): ChatEvent | undefined {
+    if (event.type === "message" && event.subtype === "message_changed") {
+      const changed = event.message ?? {};
+      if (!changed.ts || changed.bot_id) return undefined;
+      return { kind: "changed", channel: String(event.channel), ts: String(changed.ts), text: String(changed.text ?? "") };
+    }
+    if (event.type === "message" && event.subtype === "message_deleted") {
+      return event.deleted_ts ? { kind: "deleted", channel: String(event.channel), ts: String(event.deleted_ts) } : undefined;
+    }
+    const message = this.#toInbound(event);
+    return message && { kind: "message", message };
   }
 
   #toInbound(event: Record<string, any>): InboundMessage | undefined {

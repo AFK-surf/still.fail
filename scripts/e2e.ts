@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ChatMessage, ChatSurface, ThreadRef } from "../src/chat/types.ts";
+import type { ChatSurface, ThreadRef } from "../src/chat/types.ts";
 import { parseConfig, type RuntimeKind } from "../src/config.ts";
 import { Hub, sessionKey } from "../src/hub.ts";
 import { McpEndpoint } from "../src/mcp.ts";
@@ -36,15 +36,14 @@ const config = parseConfig({
 
 class ConsoleChat implements ChatSurface {
   readonly botUserId = "UBOT";
+  readonly workspace = null;
   readonly posts: { thread: string; text: string }[] = [];
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
-  async post(thread: ThreadRef, text: string): Promise<void> {
+  async post(thread: ThreadRef, text: string): Promise<string> {
     this.posts.push({ thread: thread.threadTs, text });
     console.log(`  [post ${thread.threadTs}] ${text.replaceAll("\n", " ⏎ ").slice(0, 200)}`);
-  }
-  async history(): Promise<ChatMessage[]> {
-    return [];
+    return nextTs();
   }
 }
 
@@ -64,7 +63,7 @@ async function quiet(connect: string, threadTs: string, timeoutMs = 300_000): Pr
   let calm = 0;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 1000));
-    const idle = store.getSession(k)?.running === false && store.pendingInbound(k).length === 0;
+    const idle = store.getSession(k)?.running === false && store.pendingMessages(k).length === 0;
     calm = idle ? calm + 1 : 0;
     if (calm >= 4) return;
   }
@@ -89,8 +88,8 @@ for (const runtime of runtimes) {
   await say(runtime, threadTs, "What number did you just post? Reply with only the number.", false);
   await quiet(runtime, threadTs);
 
-  // Make the session cold: claude's process is evicted; codex's shared app-server is restarted.
-  if (runtime === "claude") hub.evictIdle(Date.now() + 3_600_000);
+  // Make the session cold: claude's process is evicted (warmMinutes 0 does that as it idles); codex's shared app-server is restarted.
+  if (runtime === "claude") await hub.evict(sessionKey(runtime, "C1", threadTs));
   else await drivers.codex.shutdown();
   await new Promise((r) => setTimeout(r, 3000));
   await say(runtime, threadTs, "Say that number once more, only the number.", false);

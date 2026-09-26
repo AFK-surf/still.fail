@@ -8,20 +8,24 @@
 // replace. Either way every message carries its source and the agent names the
 // thread it answers, so a session never assumes it belongs to one conversation;
 // replies go out through whichever connect the thread came in on.
+//
+// Everything said in a thread is recorded once (see store.ts): people's
+// messages are delivered to every session in the thread, and what agents and
+// ember post there is recorded after the platform takes it.
 import { randomBytes } from "node:crypto";
-import { copyFileSync, mkdirSync, statSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { copyFileSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
 import { EFFORTS, profileFor, RUNTIMES, type Config, type Connect, type Profile, type RuntimeKind } from "./config.ts";
 import { pickProfile, type ProfileHealth } from "./pool.ts";
-import { INTERNAL_CONNECT, type InternalChat } from "./chat/internal.ts";
-import type { ChatSurface, InboundMessage, ThreadRef } from "./chat/types.ts";
-import { parseThreadAddress, threadAddress } from "./instructions.ts";
+import { INTERNAL_CHANNEL, INTERNAL_CONNECT, nextTs, type InternalChat } from "./chat/internal.ts";
+import type { ChatEvent, ChatMessage, ChatSurface, InboundMessage } from "./chat/types.ts";
+import { formatHistory, parseThreadAddress, threadAddress } from "./instructions.ts";
 import { log } from "./log.ts";
 import type { Tool } from "./mcp.ts";
 import type { AgentDriver } from "./runtime/types.ts";
 import { SessionActor, type DeclaredState } from "./session.ts";
-import type { Attachment, Quote, SessionRow, SessionScope, Store } from "./store.ts";
+import { EMBER_SURFACE, slackSurface, type Attachment, type Quote, type SessionRow, type SessionScope, type Store, type ThreadRow } from "./store.ts";
 import { LiveHub } from "./live.ts";
 import { transcriptPath } from "./transcript.ts";
 import { imageSize } from "./image-size.ts";
@@ -48,6 +52,8 @@ export class Hub {
   readonly #drivers: Record<RuntimeKind, AgentDriver>;
   readonly #mcpUrl: string;
   readonly #actors = new Map<string, SessionActor>();
+  /** When each idle process is next looked at for eviction. */
+  readonly #deadlines = new Map<string, ReturnType<typeof setTimeout>>();
   /** How profiles are doing, for the pool; the admin API knows their checks and allowances. */
   #health: (id: string) => ProfileHealth = () => ({ check: null, quota: null });
   readonly #picked = new Map<string, number>();
@@ -90,19 +96,31 @@ export class Hub {
     return join(this.#config.dataDir, "repos");
   }
 
+  /** Takes one event from a connect's platform. Resolves once it is durably recorded (or deliberately ignored). */
+  async receive(connectId: string, event: ChatEvent): Promise<void> {
+    if (event.kind === "message") return this.accept(connectId, event.message);
+    const surface = this.#surface(connectId);
+    if (event.kind === "changed") this.#store.editMessage(surface, event.channel, event.ts, event.text);
+    else this.#store.deleteMessage(surface, event.channel, event.ts);
+  }
+
   /** Accepts one message seen by a connect. Resolves once it is durably recorded (or deliberately ignored). */
   async accept(connectId: string, message: InboundMessage): Promise<void> {
     const connect = this.#connect(connectId);
     const chat = this.#chat(connectId);
+    const surface = this.#surface(connectId);
     const single = connect.mode === "single-session";
     const bound = single ? this.#store.binding(connect.id) : undefined;
     const key = single ? bound ?? newSingleSessionKey(connect.id) : sessionKey(connect.id, message.channel, message.threadTs);
+    const existing = this.#store.threadAt(surface, message.channel, message.threadTs);
+    const members = existing ? this.#store.threadSessions(existing.id) : [];
     const exists = Boolean(this.#store.getSession(key));
     const wanted = single
-      ? message.addressed || !connect.requireMention || (exists && this.#store.inThread(key, message.channel, message.threadTs))
+      ? message.addressed || !connect.requireMention || (exists && members.some((m) => m.session === key))
       : exists || message.addressed;
-    if (!wanted) return; // chatter this connect is not part of
-    if (!exists) {
+    // Chatter this connect is not part of, in a thread no session takes part in.
+    if (!wanted && members.length === 0) return;
+    if (wanted && !exists) {
       try {
         this.#createSession(key, connect, single ? "all" : "thread", message, null, `slack:${connect.id}:${message.user}`);
         if (single) this.#store.setBinding(connect.id, key);
@@ -112,21 +130,48 @@ export class Hub {
         return;
       }
     }
-    const fresh = this.#store.insertInbound({
-      connect: connect.id, channel: message.channel, threadTs: message.threadTs, ts: message.ts, sessionKey: key,
-      user: message.user, text: message.text, receivedAt: Date.now(),
-    });
-    if (!fresh) return;
-    this.#store.setFirstThread(key, message.channel, message.threadTs);
-    this.#store.touch(key);
-    const actor = this.#actor(this.#store.getSession(key)!);
-    if (isStopCommand(message.text)) {
-      const [row] = this.#store.pendingInbound(key).filter((m) => m.ts === message.ts && m.channel === message.channel);
-      if (row) this.#store.markDelivered([row]);
-      void actor.stop();
-      return;
+    const thread = existing ?? await this.#openSlackThread(chat, surface, message, `slack:${connect.id}:${message.user}`);
+    if (wanted) this.#store.joinThread(thread.id, key, connect.id);
+    const { seq, fresh } = this.#store.insertMessage({ thread: thread.id, ts: message.ts, authorKind: "person", author: message.user, text: message.text });
+    // A message seen by a second connect is already delivered to the thread; only a session it brings in lacks it.
+    const targets = fresh ? this.#store.threadSessions(thread.id).map((m) => m.session) : wanted ? [key] : [];
+    this.#handOver(seq, targets, message.text);
+  }
+
+  /**
+   * A Slack thread ember starts following. When that happens mid-thread, what
+   * was said before is recorded first (without deliveries), so the thread on
+   * ember's page and chat_history are complete and seq keeps Slack's order.
+   */
+  async #openSlackThread(chat: ChatSurface, surface: string, message: InboundMessage, createdBy: string): Promise<ThreadRow> {
+    let earlier: ChatMessage[] = [];
+    if (message.ts !== message.threadTs && chat.history) {
+      try {
+        earlier = await chat.history(message, message.ts, 200);
+      } catch (error) {
+        log.warn("cannot read what the thread said before; continuing without it", { channel: message.channel, threadTs: message.threadTs, error });
+      }
     }
-    void actor.kick();
+    // Asked before the thread exists, so a connect seeing the same message meanwhile cannot record it ahead of these.
+    const thread = this.#store.openThread({ surface, channel: message.channel, threadTs: message.threadTs, createdBy });
+    for (const m of earlier) this.#store.insertMessage({ thread: thread.id, ts: m.ts, authorKind: "person", author: m.user, text: m.text });
+    return thread;
+  }
+
+  /** Gives sessions a message they have not had: each runs it, or stops for `-stop`. */
+  #handOver(seq: number, sessions: string[], text: string): void {
+    for (const key of this.#store.deliver(seq, sessions)) {
+      this.#store.touch(key);
+      const row = this.#store.getSession(key);
+      if (!row) continue;
+      const actor = this.#actor(row);
+      if (isStopCommand(text)) {
+        this.#store.markDelivered(key, [seq]);
+        void actor.stop();
+      } else {
+        void actor.kick();
+      }
+    }
   }
 
   /** After a restart: resume cut-off turns, then deliver whatever is still pending. */
@@ -136,14 +181,19 @@ export class Hub {
       log.info("recovering a turn cut off by restart", { session: row.key });
       void this.#actor(row).recover();
     }
-    for (const key of this.#store.sessionsWithPendingInbound()) {
+    for (const key of this.#store.sessionsWithPending()) {
       const row = this.#store.getSession(key);
       if (row && this.#online(row)) void this.#actor(row).kick();
     }
   }
 
-  /** Ends idle claude processes beyond the warm limit, oldest first. Codex threads share a process and stay. */
-  evictIdle(now = Date.now()): void {
+  /**
+   * Ends idle claude processes beyond the warm limit, oldest first, once
+   * they have idled past warmMs. Codex threads share a process and stay.
+   * Runs when a process goes idle (the count grew) and at each idle
+   * process's deadline (one may have become old enough).
+   */
+  #evictIdle(now = Date.now()): void {
     const idle = [...this.#actors.values()]
       .filter((a) => a.runtime === "claude")
       .map((actor) => ({ actor, idle: actor.idleMs(now) }))
@@ -155,6 +205,16 @@ export class Hub {
       void actor.evict();
       excess--;
     }
+  }
+
+  /** A process went idle: look again when it has idled past warmMs. */
+  #idle(key: string): void {
+    clearTimeout(this.#deadlines.get(key));
+    this.#deadlines.set(key, setTimeout(() => {
+      this.#deadlines.delete(key);
+      this.#evictIdle();
+    }, this.#config.warmMs).unref());
+    this.#evictIdle();
   }
 
   /**
@@ -179,44 +239,64 @@ export class Hub {
     return target;
   }
 
-  /** Opens a chat on the admin page bound to a session. Returns the chat's thread ts. */
-  openChat(sessionKey: string, createdBy: string, title: string | null = null): string {
+  /**
+   * Opens a chat on ember's page with a session in it. Returns the thread.
+   * More sessions can join it later (see addToThread).
+   */
+  openChat(sessionKey: string, createdBy: string, title: string | null = null): ThreadRow {
     if (!this.#internal) throw new Error("ember chat is not available");
     if (!this.#store.getSession(sessionKey)) throw new Error(`unknown session ${sessionKey}`);
-    return this.#internal.open(sessionKey, createdBy, title).threadTs;
+    const thread = this.#store.openThread({ surface: EMBER_SURFACE, channel: INTERNAL_CHANNEL, threadTs: nextTs(), title, createdBy });
+    this.#store.joinThread(thread.id, sessionKey, INTERNAL_CONNECT);
+    return thread;
+  }
+
+  /** Brings another session into a chat on ember's page; it hears what is said from then on. */
+  addToThread(threadId: number, sessionKey: string): void {
+    const thread = this.#store.getThread(threadId);
+    if (!thread || thread.surface !== EMBER_SURFACE) throw new Error(`no ember chat ${threadId}`);
+    if (!this.#store.getSession(sessionKey)) throw new Error(`unknown session ${sessionKey}`);
+    this.#store.joinThread(threadId, sessionKey, INTERNAL_CONNECT);
   }
 
   /**
-   * A person's message to a session from the admin page. Each session has one
-   * such chat, made on its first message; earlier sessions may have several,
-   * of which the first is used.
+   * A person's message in a chat on ember's page: recorded with its quotes
+   * and files and delivered to every session in the chat, like a Slack
+   * message. Returns its seq.
    */
-  async sayToSession(sessionKey: string, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []): Promise<string> {
-    const threadTs = this.#store.listChats(sessionKey)[0]?.threadTs ?? this.openChat(sessionKey, user);
-    await this.sayInChat(threadTs, user, text, attachments, quotes);
-    return threadTs;
+  say(threadId: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []): number {
+    const thread = this.#store.getThread(threadId);
+    if (!thread || thread.surface !== EMBER_SURFACE) throw new Error(`no ember chat ${threadId}`);
+    const { seq } = this.#store.insertMessage({ thread: threadId, ts: nextTs(), authorKind: "person", author: user, text, attachments, quotes });
+    this.#handOver(seq, this.#store.threadSessions(threadId).map((m) => m.session), text);
+    return seq;
   }
 
-  /** A person's message in an admin-page chat: recorded there and delivered to the chat's session like any chat message. */
-  async sayInChat(threadTs: string, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []): Promise<void> {
-    if (!this.#internal) throw new Error("ember chat is not available");
-    const chat = this.#store.getChat(threadTs);
-    if (!chat) throw new Error(`unknown chat ${threadTs}`);
-    const row = this.#store.getSession(chat.sessionKey);
-    if (!row) throw new Error(`unknown session ${chat.sessionKey}`);
-    const message = this.#internal.say(threadTs, user, text, attachments, quotes);
-    this.#store.insertInbound({
-      connect: INTERNAL_CONNECT, channel: message.channel, threadTs, ts: message.ts, sessionKey: row.key,
-      user, text: message.text, receivedAt: Date.now(),
-    });
-    this.#store.touch(row.key);
-    const actor = this.#actor(row);
-    if (isStopCommand(text)) {
-      this.#store.markDelivered(this.#store.pendingInbound(row.key).filter((m) => m.ts === message.ts));
-      void actor.stop();
-      return;
-    }
-    void actor.kick();
+  /** Hides a session from lists, or shows it again. */
+  archive(key: string, archived: boolean): void {
+    if (!this.#store.getSession(key)) throw new Error(`unknown session ${key}`);
+    this.#store.setArchived(key, archived);
+  }
+
+  /**
+   * Deletes a session: its process ends, its rows go (see Store.deleteSession)
+   * and its workspace directory with them. The runtime's transcript stays in
+   * the profile's home, which may be a person's own.
+   */
+  async deleteSession(key: string): Promise<void> {
+    const row = this.#store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    const actor = this.#actors.get(key);
+    this.#actors.delete(key);
+    clearTimeout(this.#deadlines.get(key));
+    this.#deadlines.delete(key);
+    await actor?.dispose();
+    this.live.forget(key);
+    this.#store.deleteSession(key);
+    // Sessions made by ember keep their workspace in a directory of their own.
+    const home = basename(row.workspace) === "workspace" && row.workspace.startsWith(join(this.#config.dataDir, "sessions")) ? dirname(row.workspace) : row.workspace;
+    rmSync(home, { recursive: true, force: true });
+    log.info("session deleted", { session: key });
   }
 
   /** Live process state of a session, for the admin page. */
@@ -271,7 +351,7 @@ export class Hub {
    * model and effort chosen by whoever starts it rather than a connect's.
    * The profile defaults to the first one of that runtime.
    */
-  newSession(options: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string; title?: string; createdBy: string }): string {
+  newSession(options: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string; title?: string; createdBy: string }): { key: string; thread: ThreadRow } {
     const profiles = this.#config.profiles.filter((p) => p.runtime === options.runtime);
     if (!profiles.length) throw new Error(`no ${options.runtime} profile configured`);
     const profile = options.profile ? profiles.find((p) => p.id === options.profile) : this.#pick(profiles, options.model?.trim() || null);
@@ -282,13 +362,14 @@ export class Hub {
     mkdirSync(workspace, { recursive: true });
     mkdirSync(this.reposDir, { recursive: true });
     const now = Date.now();
+    const title = options.title?.trim() || null;
     this.#store.insertSession({
-      key, connect: INTERNAL_CONNECT, scope: "all", title: options.title?.trim() || null, createdBy: options.createdBy, channel: "", threadTs: "",
+      key, connect: INTERNAL_CONNECT, scope: "all", title, createdBy: options.createdBy,
       runtime: options.runtime, profile: profile.id, model: options.model?.trim() || profile.model || null, effort: options.effort || null,
       workspace, token: randomBytes(24).toString("base64url"), createdAt: now, lastActiveAt: now,
     });
     log.info("session created", { session: key, connect: INTERNAL_CONNECT, runtime: options.runtime, profile: profile.id, model: options.model ?? null });
-    return key;
+    return { key, thread: this.openChat(key, options.createdBy, title) };
   }
 
   /** Lets the pool see profiles' checks and allowances. */
@@ -314,23 +395,23 @@ export class Hub {
   }
 
   async shutdown(): Promise<void> {
+    for (const timer of this.#deadlines.values()) clearTimeout(timer);
     this.live.close();
     await Promise.all([...this.#actors.values()].map((a) => a.dispose()));
     await Promise.all(RUNTIMES.map((r) => this.#drivers[r].shutdown()));
   }
 
   tools(): Tool[] {
-    /** The connection and a thread of this session the agent named with to=. */
-    const target = (key: string, to: unknown): { chat: ChatSurface; thread: ThreadRef } => {
-      const row = this.#store.getSession(key);
-      if (!row) throw new Error("unknown session");
-      const known = () => this.#store.listThreads(key).map((t) => threadAddress(t.channel, t.threadTs)).join(", ") || "none yet";
+    /** A thread of this session the agent named with to=, and how the session posts there. */
+    const target = (key: string, to: unknown): ThreadRow & { connect: string } => {
+      if (!this.#store.getSession(key)) throw new Error("unknown session");
+      const known = () => this.#store.sessionThreads(key).map((t) => threadAddress(t.channel, t.threadTs)).join(", ") || "none yet";
       if (typeof to !== "string" || !to.trim()) throw new Error(`to is required: the thread attribute of the message you are answering. This session's threads: ${known()}`);
-      const thread = parseThreadAddress(to);
-      if (!thread) throw new Error(`to must look like CHANNEL/THREAD_TS, got ${JSON.stringify(to)}`);
-      const via = this.#store.threadConnect(key, thread.channel, thread.threadTs);
-      if (!via) throw new Error(`${to} is not a conversation of this session. Its threads: ${known()}`);
-      return { chat: this.#chat(via), thread };
+      const address = parseThreadAddress(to);
+      if (!address) throw new Error(`to must look like CHANNEL/THREAD_TS, got ${JSON.stringify(to)}`);
+      const thread = this.#store.sessionThread(key, address.channel, address.threadTs);
+      if (!thread) throw new Error(`${to} is not a conversation of this session. Its threads: ${known()}`);
+      return thread;
     };
     const stateArg = (value: unknown): DeclaredState | undefined => {
       if (value === undefined || value === null || value === "") return undefined;
@@ -358,9 +439,10 @@ export class Hub {
           const paths = Array.isArray(args.files) ? args.files.map(String) : [];
           if (!text && !paths.length) throw new Error("text is empty");
           const kind = stateArg(args.kind);
-          const { chat, thread } = target(key, args.to);
+          const thread = target(key, args.to);
           const files = paths.length ? this.#attach(key, paths) : [];
-          await chat.post(thread, text, files);
+          const ts = await this.#chat(thread.connect).post(thread, text, files);
+          this.#store.insertMessage({ thread: thread.id, ts, authorKind: "agent", author: key, text, attachments: files, declared: kind ?? null });
           if (kind) this.#actors.get(key)?.declare(kind);
           const where = threadAddress(thread.channel, thread.threadTs);
           return kind ? `Posted to ${where}, and recorded state ${kind}.` : `Posted to ${where}.`;
@@ -384,7 +466,7 @@ export class Hub {
       },
       {
         name: "chat_history",
-        description: "Read earlier messages of one of your conversations, oldest first.",
+        description: "Read earlier messages of one of your conversations, oldest first, your own posts included.",
         inputSchema: {
           type: "object",
           properties: {
@@ -398,11 +480,18 @@ export class Hub {
         run: async (key, args) => {
           const limit = Math.min(Math.max(Number(args.limit ?? 30) || 30, 1), 200);
           const before = typeof args.before === "string" && args.before ? args.before : undefined;
-          const { chat, thread } = target(key, args.to);
-          const messages = await chat.history(thread, before, limit);
+          const thread = target(key, args.to);
+          const from = before === undefined ? undefined : this.#store.messageAt(thread.id, before);
+          if (before !== undefined && !from) throw new Error(`no message ${before} in ${args.to}`);
+          const messages = this.#store.messagesBefore(thread.id, from?.seq, limit).filter((m) => m.deletedAt === null);
           if (messages.length === 0) return "No earlier messages.";
-          const address = threadAddress(thread.channel, thread.threadTs);
-          return messages.map((m) => `<message via="slack" thread="${address}" from="${m.user}"${m.fromBot ? " bot" : ""} ts="${m.ts}">\n${m.text}\n</message>`).join("\n");
+          const chat = this.#chatOf(thread.connect);
+          const names = new Map<string, string>();
+          for (const author of new Set(messages.filter((m) => m.authorKind === "person").map((m) => m.author))) {
+            const name = await chat?.userName?.(author);
+            if (name) names.set(author, name);
+          }
+          return formatHistory(messages, { surface: thread.surface, address: threadAddress(thread.channel, thread.threadTs), self: key, names });
         },
       },
     ];
@@ -424,8 +513,13 @@ export class Hub {
     return connectId === INTERNAL_CONNECT ? this.#internal : this.#chats.get(connectId);
   }
 
+  /** Where a connect's threads live; the rule the v10 migration follows too. */
+  #surface(connectId: string): string {
+    return connectId === INTERNAL_CONNECT ? EMBER_SURFACE : slackSurface(connectId, this.#chatOf(connectId)?.workspace);
+  }
+
   #online(row: SessionRow): boolean {
-    const via = this.#store.latestInbound(row.key)?.connect ?? row.connect;
+    const via = this.#store.latestThread(row.key)?.connect ?? row.connect;
     if (this.#chatOf(via)) return true;
     log.warn("session's latest thread came through a connect that is not connected; leaving it", { session: row.key, connect: via });
     return false;
@@ -440,7 +534,7 @@ export class Hub {
     mkdirSync(this.reposDir, { recursive: true });
     const now = Date.now();
     this.#store.insertSession({
-      key, connect: connect.id, scope, title, createdBy, channel: message?.channel ?? "", threadTs: message?.threadTs ?? "",
+      key, connect: connect.id, scope, title, createdBy,
       runtime: connect.bind.runtime, profile: profile.id, model: connect.bind.model ?? null, effort: connect.bind.effort ?? null,
       workspace, token: randomBytes(24).toString("base64url"), createdAt: now, lastActiveAt: now,
     });
@@ -462,6 +556,7 @@ export class Hub {
         memoryPath: agentHomePaths(this.#config.agentHome).memory,
         maxNudges: this.#config.maxNudges,
         live: this.live,
+        idle: (key) => this.#idle(key),
       });
       this.#actors.set(row.key, actor);
     }

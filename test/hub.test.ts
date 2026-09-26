@@ -9,6 +9,8 @@ import { Store } from "../src/store.ts";
 import { InternalChat } from "../src/chat/internal.ts";
 import { FakeChat, FakeDriver, message, settle } from "./fakes.ts";
 
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; team?: { requireMention?: boolean } } = {}) {
   const { team, ...rest } = overrides;
   const dataDir = mkdtempSync(join(tmpdir(), "ember-test-"));
@@ -30,7 +32,7 @@ function setup(overrides: { maxNudges?: number; maxWarmClaude?: number; warmMinu
   const teamChat = new FakeChat("UTEAM");
   const claude = new FakeDriver("claude");
   const codex = new FakeDriver("codex");
-  const hub = new Hub({ config: () => config, store, chats: new Map([["cl", chat], ["gpt", gptChat], ["team", teamChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp", internal: new InternalChat(store) });
+  const hub = new Hub({ config: () => config, store, chats: new Map([["cl", chat], ["gpt", gptChat], ["team", teamChat]]), drivers: { claude, codex }, mcpUrl: "http://127.0.0.1:1/mcp", internal: new InternalChat() });
   const tools = Object.fromEntries(hub.tools().map((t) => [t.name, t]));
   const call = (key: string, name: string, args: Record<string, unknown>) => tools[name]!.run(key, args);
   const accept = (m: ReturnType<typeof message>, connect = "cl") => hub.accept(connect, m);
@@ -56,11 +58,21 @@ test("thread chatter without a session is ignored", async () => {
   assert.equal(claude.sessions.length, 0);
 });
 
-test("a mention inside an existing thread tells the agent about earlier messages", async () => {
-  const { claude, accept } = setup();
+test("a mention inside an existing thread records what was said before and tells the agent about it", async () => {
+  const { claude, accept, chat, store, call } = setup();
+  chat.earlier.set("1.000001", [
+    { ts: "1.000001", user: "U2", text: "the build is red", fromBot: false },
+    { ts: "3.000001", user: "U3", text: "since this morning", fromBot: false },
+  ]);
   await accept(message({ threadTs: "1.000001", ts: "5.000001" }));
   await settle();
   assert.match(claude.last.prompts[0]!, /Thread C1\/1.000001 had messages before you were brought in/);
+  assert.doesNotMatch(claude.last.prompts[0]!, /the build is red/, "earlier messages are recorded, not delivered");
+  const thread = store.threadAt("slack:T1", "C1", "1.000001")!;
+  assert.deepEqual(store.messagesBefore(thread.id, undefined, 10).map((m) => m.ts), ["1.000001", "3.000001", "5.000001"]);
+  const history = await call(sessionKey("cl", "C1", "1.000001"), "chat_history", { to: "C1/1.000001", before: "5.000001" });
+  assert.match(history, /from="U2" ts="1.000001">\nthe build is red/);
+  assert.doesNotMatch(history, /hello/);
 });
 
 test("a message during a running turn is steered into it", async () => {
@@ -108,6 +120,37 @@ test("chat_post with kind final posts and settles the turn without a nudge", asy
   await settle();
   assert.equal(claude.last.prompts.length, 1);
   assert.deepEqual(chat.posts, [{ thread: { channel: "C1", threadTs: m.threadTs }, text: "**done**" }]);
+});
+
+test("the agent's posts are recorded in the thread, and chat_history shows them as its own", async () => {
+  const { call, accept, store } = setup();
+  const m = message({ text: "<@UBOT> look" });
+  await accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "looking", kind: "block" });
+  const thread = store.threadAt("slack:T1", "C1", m.threadTs)!;
+  const [said, posted] = store.messagesBefore(thread.id, undefined, 10);
+  assert.deepEqual([said!.authorKind, posted!.authorKind, posted!.author, posted!.declared], ["person", "agent", key, "block"]);
+  assert.equal(store.pendingMessages(key).length, 0, "an agent's own post is not delivered back to it");
+  const history = await call(key, "chat_history", { to: `C1/${m.threadTs}` });
+  assert.match(history, /from="U1" ts="[\d.]+">\n<@UBOT> look[\s\S]*from="you" ts="[\d.]+">\nlooking/);
+});
+
+test("Slack edits and deletes change the recorded message and move the cursor", async () => {
+  const { hub, accept, store } = setup();
+  const m = message({ text: "<@UBOT> typo" });
+  await accept(m);
+  const thread = store.threadAt("slack:T1", "C1", m.threadTs)!;
+  const before = store.threadRev(thread.id);
+  await hub.receive("cl", { kind: "changed", channel: "C1", ts: m.ts, text: "<@UBOT> fixed" });
+  await hub.receive("cl", { kind: "changed", channel: "C1", ts: m.ts, text: "<@UBOT> fixed" }); // Slack repeats roots when replies come
+  const [edited] = store.messagesAfter(thread.id, before);
+  assert.equal(edited!.text, "<@UBOT> fixed");
+  assert.equal(store.threadRev(thread.id), before + 1);
+  await hub.receive("gpt", { kind: "deleted", channel: "C1", ts: m.ts });
+  const [deleted] = store.messagesAfter(thread.id, before + 1);
+  assert.deepEqual([deleted!.text, deleted!.deletedAt !== null], ["", true]);
 });
 
 test("chat_state rejects kinds other than final and block", async () => {
@@ -175,8 +218,8 @@ test("a connect's runtime, profile and model decide the session", async () => {
   assert.match(claude.last.options.instructions, /You are Claude bot/);
 });
 
-test("two connects in one thread keep separate sessions and reply through their own connection", async () => {
-  const { chat, gptChat, claude, codex, call, accept } = setup();
+test("two connects in one thread keep separate sessions, share its messages, and reply through their own connection", async () => {
+  const { chat, gptChat, claude, codex, call, accept, store } = setup();
   const root = message({ text: "<@UBOT> <@UGPT> compare notes" });
   await accept(root);
   await accept(root, "gpt");
@@ -190,6 +233,11 @@ test("two connects in one thread keep separate sessions and reply through their 
   await call(sessionKey("gpt", "C1", root.threadTs), "chat_post", { to: `C1/${root.threadTs}`, text: "from gpt" });
   assert.deepEqual(gptChat.posts.map((p) => p.text), ["from gpt"]);
   assert.equal(chat.posts.length, 0);
+  const thread = store.threadAt("slack:T1", "C1", root.threadTs)!;
+  assert.deepEqual(store.threadSessions(thread.id).map((m) => [m.session, m.connect]), [
+    [sessionKey("cl", "C1", root.threadTs), "cl"], [sessionKey("gpt", "C1", root.threadTs), "gpt"],
+  ]);
+  assert.deepEqual(store.messagesBefore(thread.id, undefined, 10).map((m) => m.authorKind), ["person", "person", "agent"], "each message once, however many connects saw it");
 });
 
 test("a mention of one connect does not start a session for another connect that sees the message", async () => {
@@ -232,28 +280,38 @@ test("when the runtime session cannot be resumed, a new one starts and is told t
   assert.match(claude.last.prompts[0]!, /could not be restored[\s\S]*still there\?/);
 });
 
-test("idle claude processes beyond the warm limit are evicted, oldest first", async () => {
-  const { hub, claude, accept } = setup({ maxWarmClaude: 1, warmMinutes: 0 });
+test("idle claude processes beyond the warm limit are evicted, oldest first, as soon as another goes idle", async () => {
+  const { claude, accept } = setup({ maxWarmClaude: 1, warmMinutes: 0 });
   const a = message({ ts: "1.1", threadTs: "1.1" });
   const b = message({ ts: "2.1", threadTs: "2.1" });
   await accept(a);
   await settle();
   claude.last.end({ kind: "aborted" });
   await settle();
+  assert.equal(claude.last.disposed, false, "within the limit");
   await accept(b);
   await settle();
   claude.last.end({ kind: "aborted" });
   await settle();
-  hub.evictIdle(Date.now() + 1000);
-  await settle();
   assert.deepEqual(claude.sessions.map((s) => s.disposed), [true, false]);
 });
 
-test("a running turn is never evicted", async () => {
-  const { hub, claude, accept } = setup({ maxWarmClaude: 0, warmMinutes: 0 });
+test("an idle process beyond the limit is evicted at its own deadline", async () => {
+  const { claude, accept } = setup({ maxWarmClaude: 0, warmMinutes: 0.002 }); // 120 ms
   await accept(message());
   await settle();
-  hub.evictIdle(Date.now() + 10_000_000);
+  claude.last.end({ kind: "aborted" });
+  await settle();
+  assert.equal(claude.last.disposed, false, "not idle long enough yet");
+  await wait(250);
+  await settle();
+  assert.equal(claude.last.disposed, true);
+});
+
+test("a running turn is never evicted", async () => {
+  const { claude, accept } = setup({ maxWarmClaude: 0, warmMinutes: 0 });
+  await accept(message());
+  await wait(20);
   await settle();
   assert.equal(claude.last.disposed, false);
 });
@@ -325,7 +383,7 @@ test("a single-session connect can be pointed at a new or an existing session", 
   const t = message({ text: "<@UTEAM> via team", channel: "C7" });
   await accept(t, "team");
   await settle();
-  assert.equal(store.listInbound(clKey).length, 2);
+  assert.deepEqual(store.sessionThreads(clKey).map((t) => [t.channel, t.connect]), [["C7", "team"], ["C1", "cl"]]);
   await call(clKey, "chat_post", { to: `C7/${t.threadTs}`, text: "to team thread" });
   await call(clKey, "chat_post", { to: `C1/${m.threadTs}`, text: "to cl thread" });
   assert.deepEqual(teamChat.posts.map((p) => p.text), ["to team thread"]);
@@ -344,17 +402,76 @@ test("a chat opened on the admin page reaches the session like Slack, and the ag
   claude.last.end();
   await settle();
   const thread = hub.openChat(key, "local", "排查");
-  await hub.sayInChat(thread, "local", "现在进展如何？");
+  hub.say(thread.id, "local", "现在进展如何？");
   await settle();
   const prompt = claude.last.prompts.at(-1)!;
-  assert.match(prompt, new RegExp(`<message via="web" connect="ember" thread="EMBER/${thread.replace(".", "\\.")}" from="管理员 \\(local\\)"`));
+  assert.match(prompt, new RegExp(`<message via="web" connect="ember" thread="EMBER/${thread.threadTs.replace(".", "\\.")}" from="管理员 \\(local\\)"`));
   assert.match(prompt, /现在进展如何/);
-  assert.equal(await call(key, "chat_post", { to: `EMBER/${thread}`, text: "快好了", kind: "final" }), `Posted to EMBER/${thread}, and recorded state final.`);
-  assert.deepEqual(store.chatMessages(thread).map((x) => [x.role, x.text]), [["person", "现在进展如何？"], ["agent", "快好了"]]);
+  assert.equal(await call(key, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "快好了", kind: "final" }), `Posted to EMBER/${thread.threadTs}, and recorded state final.`);
+  assert.deepEqual(store.messagesBefore(thread.id, undefined, 10).map((x) => [x.authorKind, x.text]), [["person", "现在进展如何？"], ["agent", "快好了"]]);
   assert.equal(chat.posts.length, 1, "only the Slack thread's own answer went to Slack");
-  const history = await call(key, "chat_history", { to: `EMBER/${thread}` });
+  const history = await call(key, "chat_history", { to: `EMBER/${thread.threadTs}` });
   assert.match(history, /现在进展如何/);
   assert.throws(() => hub.openChat("nope", "local"), /unknown session/);
+});
+
+test("a person's message in a chat with several agents reaches each of them once", async () => {
+  const { claude, codex, hub, store } = setup();
+  const one = hub.newSession({ runtime: "claude", createdBy: "local" });
+  const two = hub.newSession({ runtime: "codex", createdBy: "local" });
+  hub.addToThread(one.thread.id, two.key);
+  hub.say(one.thread.id, "a@example.com", "你们俩分一下工", [], [{ author: "Claude", role: "agent", ts: "1.000001", text: "上一条", comment: "这里" }]);
+  await settle();
+  for (const driver of [claude, codex]) {
+    assert.equal(driver.sessions.length, 1);
+    assert.match(driver.last.prompts[0]!, /\[Quote\] From your own earlier message 1\.000001 in this conversation:\n> 上一条\nTheir comment on it: 这里\n\n你们俩分一下工/);
+  }
+  assert.equal(store.pendingMessages(one.key).length + store.pendingMessages(two.key).length, 0);
+  const [message] = store.messagesBefore(one.thread.id, undefined, 10);
+  assert.equal(message!.text, "你们俩分一下工", "the words are stored as typed; the quote is a column");
+  assert.equal(message!.quotes[0]!.comment, "这里");
+});
+
+test("a pending message edited before delivery reaches the agent as edited, and a deleted one not at all", async () => {
+  const { claude, hub, accept, store } = setup();
+  const m = message();
+  await accept(m);
+  await settle();
+  const session = claude.last;
+  session.steer = async () => false;
+  const edited = message({ threadTs: m.threadTs, ts: "9999.5", addressed: false, text: "first draft" });
+  const gone = message({ threadTs: m.threadTs, ts: "9999.6", addressed: false, text: "never mind" });
+  await accept(edited);
+  await accept(gone);
+  await hub.receive("cl", { kind: "changed", channel: "C1", ts: edited.ts, text: "final words" });
+  await hub.receive("cl", { kind: "deleted", channel: "C1", ts: gone.ts });
+  session.end();
+  await settle();
+  assert.match(session.prompts[1]!, /final words/);
+  assert.doesNotMatch(session.prompts[1]!, /first draft|never mind/);
+  assert.equal(store.pendingMessages(sessionKey("cl", "C1", m.threadTs)).length, 0);
+});
+
+test("deleting a session ends its process and removes its workspace and the threads only it was in", async () => {
+  const { claude, hub, accept, store, config } = setup();
+  const m = message();
+  await accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const row = store.getSession(key)!;
+  const { existsSync, mkdirSync, writeFileSync } = await import("node:fs");
+  // The runtime's transcript lives in the profile's home and stays.
+  const transcript = join(config.profiles[0]!.home, "projects", "x", `${row.runtimeSessionId}.jsonl`);
+  mkdirSync(join(transcript, ".."), { recursive: true });
+  writeFileSync(transcript, "{}\n");
+  assert.equal(existsSync(row.workspace), true);
+  await hub.deleteSession(key);
+  assert.equal(claude.last.disposed, true);
+  assert.equal(store.getSession(key), undefined);
+  assert.equal(store.threadAt("slack:T1", "C1", m.threadTs), undefined);
+  assert.equal(existsSync(row.workspace), false);
+  assert.equal(existsSync(join(row.workspace, "..")), false);
+  assert.equal(existsSync(transcript), true);
 });
 
 test("command parsing", () => {

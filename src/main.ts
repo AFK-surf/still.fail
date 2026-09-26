@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { AdminApi } from "./admin/api.ts";
 import { linkAgentHome } from "./agent-home.ts";
 import { Connections } from "./connections.ts";
-import { SlackSurface } from "./chat/slack.ts";
+import { SlackSurface, slackTeamOf } from "./chat/slack.ts";
 import { Hub } from "./hub.ts";
 import { log } from "./log.ts";
 import { LoginManager } from "./login.ts";
@@ -23,7 +23,16 @@ import { Store } from "./store.ts";
 const settings = Settings.load();
 /** Display names of people who reached this station through ember cloud, by email. */
 const names = new Map<string, string>();
-const store = new Store(join(settings.dataDir, "ember.db"));
+const dbPath = join(settings.dataDir, "ember.db");
+// Moving older data into threads names Slack threads by team; ask Slack once, before the store opens.
+const teams = new Map<string, string>();
+if (Store.needsTeams(dbPath)) {
+  await Promise.all(settings.config.connects.filter((c) => c.slack.botToken).map(async (c) => {
+    const team = await slackTeamOf(c.slack.botToken);
+    if (team) teams.set(c.id, team);
+  }));
+}
+const store = new Store(dbPath, { teams });
 linkAgentHome(settings.config.agentHome, settings.config.profiles);
 
 const reaped = await reapStaleGroups(store);
@@ -33,14 +42,14 @@ const mcpUrl = `http://${settings.config.http.host}:${settings.config.http.port}
 // One chat connection per connect; Slack is the only kind so far.
 const connections: Connections = new Connections(
   (connect) => new SlackSurface(connect.slack),
-  (connectId, message): Promise<void> => hub.accept(connectId, message),
+  (connectId, event): Promise<void> => hub.receive(connectId, event),
 );
 const codex = new CodexDriver(store);
 const hub: Hub = new Hub({
   config: () => settings.config,
   store,
   chats: connections.chats,
-  internal: new InternalChat(store, (user) => names.get(user) ?? (user === "local" ? "管理员" : user)),
+  internal: new InternalChat((user) => names.get(user) ?? (user === "local" ? "管理员" : user)),
   mcpUrl,
   drivers: { claude: new ClaudeDriver(store), codex },
 });
@@ -117,14 +126,12 @@ await connections.reconcile(settings.config);
 if (connections.chats.size === 0) log.warn("no connect is connected; add or enable one on the admin page");
 await hub.recover();
 mesh.start();
-const evictTimer = setInterval(() => hub.evictIdle(), 60_000);
 
 let stopping = false;
 async function shutdown(signal: string): Promise<void> {
   if (stopping) return;
   stopping = true;
   log.info("shutting down", { signal });
-  clearInterval(evictTimer);
   logins.stopAll();
   await mesh.stop();
   await connections.stopAll();
