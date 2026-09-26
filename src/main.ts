@@ -19,8 +19,14 @@ import { CodexDriver } from "./runtime/codex.ts";
 import { reapStaleGroups } from "./runtime/process.ts";
 import { Settings } from "./settings.ts";
 import { Store } from "./store.ts";
+import { builtKey, ErrorReports } from "./telemetry.ts";
 
 const settings = Settings.load();
+// Built by `pnpm build` from web/ into dist/admin.
+const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "admin");
+// Errors before the mesh supervisor is made are reported without the station's id.
+let stationId = (): string | null => null;
+const reports = new ErrorReports({ key: builtKey(UI_DIR), enabled: () => settings.config.telemetry.errors, station: () => stationId() });
 /** Display names of people who reached this station through ember cloud, by email. */
 const names = new Map<string, string>();
 const dbPath = join(settings.dataDir, "ember.db");
@@ -56,15 +62,15 @@ const hub: Hub = new Hub({
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
 const logins = new LoginManager(settings.config.dataDir);
 const mesh = new MeshSupervisor({ dataDir: settings.config.dataDir, admin: `http://127.0.0.1:${settings.config.adminHttp.port}` });
+stationId = () => mesh.status().station;
 const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, checkOnStart: true, quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)) });
 
 settings.onChange((config) => {
+  reports.update();
   linkAgentHome(config.agentHome, config.profiles);
   void connections.reconcile(config);
 });
 
-// Built by `pnpm build` from web/ into dist/admin.
-const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "admin");
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".woff2": "font/woff2",
@@ -139,6 +145,7 @@ async function shutdown(signal: string): Promise<void> {
   server.close();
   adminServer.close();
   store.close();
+  await reports.shutdown();
   process.exit(0);
 }
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
