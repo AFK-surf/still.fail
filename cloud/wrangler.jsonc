@@ -8,7 +8,8 @@
   "workers_dev": false,
   "routes": [{ "pattern": "ember.3720.org", "custom_domain": true }],
   "preview_urls": false,
-  "observability": { "enabled": false },
+  // Workers Logs: requests, errors and console output of the Worker and its Durable Objects, in the Cloudflare dashboard.
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
   "vars": {
     "PUBLIC_ORIGIN": "https://ember.3720.org",
     "GOOGLE_CLIENT_ID": "",
