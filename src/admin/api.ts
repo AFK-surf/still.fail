@@ -22,6 +22,7 @@ import { INTERNAL_CONNECT } from "../chat/internal.ts";
 import { EMBER_SURFACE } from "../store.ts";
 import { appIdOf, applySettings, rotateConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
 import { log } from "../log.ts";
+import { parseTraceparent, route, serverSpan } from "../tracing.ts";
 import type { Settings } from "../settings.ts";
 import type { Store } from "../store.ts";
 import { checkProfile, loginCommand, type ProfileCheck } from "../profiles.ts";
@@ -40,8 +41,11 @@ export interface AdminDeps {
   logins: LoginManager;
   /** Display names of people seen through ember cloud, by email; shared with ember's own chat. */
   names: Map<string, string>;
-  /** ember-mesh's shared secret, and its state for the page; `changes` emits "change" when the state does. */
-  mesh?: { secret(): string | null; status(): MeshStatus; changes?: EventEmitter };
+  /**
+   * ember-mesh's shared secret, and its state for the page; `changes` emits "change" when the state does. `span`
+   * takes a request's span (OTLP JSON) to send with ember-mesh's own, when traces are on.
+   */
+  mesh?: { secret(): string | null; status(): MeshStatus; changes?: EventEmitter; span?(span: object): void };
   /** A profile's allowance; absent where nobody can ask (tests). */
   quota?: (profile: Profile) => Promise<ProfileQuota>;
   /** How a profile is checked; tests replace it so no real CLI runs. */
@@ -127,6 +131,8 @@ export class AdminApi {
   /** Open /events streams, and /sessions/:key/live streams (which only need the keepalive). */
   readonly #clients = new Set<Client>();
   readonly #streams = new Set<ServerResponse>();
+  /** Requests whose span is still open: a stream's ends once it is open (`stream`), anything else's when it is answered. */
+  readonly #spans = new WeakMap<ServerResponse, (stream: boolean) => void>();
   /** Timers that run only while someone follows: quotas, host samples, keepalives. */
   #quotaTimer: ReturnType<typeof setInterval> | null = null;
   #hostTimer: ReturnType<typeof setInterval> | null = null;
@@ -197,13 +203,30 @@ export class AdminApi {
     const url = new URL(req.url ?? "/", "http://ember");
     if (!url.pathname.startsWith("/admin/api/")) return false;
     const path = url.pathname.slice("/admin/api".length);
-    // What each request cost here, to tell the station's share of a slow page from the network's.
+    // What each request cost here, to tell the station's share of a slow page from the network's; a span of the
+    // caller's trace when it records one.
     const started = performance.now();
+    const startedAt = Date.now();
+    // What went out on the connection (head and body): headers given to writeHead cannot be read back.
+    const written = req.socket.bytesWritten;
+    const sent = () => req.socket.bytesWritten - written || undefined;
+    const parent = parseTraceparent(req.headers.traceparent);
     let who = "?";
-    res.on("close", () => log.info("admin request", {
-      method: req.method, path: url.pathname.slice("/admin/api".length) + url.search, status: res.statusCode,
-      ms: Math.round(performance.now() - started), bytes: Number(res.getHeader("content-length") ?? 0) || undefined, via: who,
-    }));
+    const mesh = this.#deps.mesh;
+    if (parent?.sampled && mesh?.span) {
+      const span = (stream: boolean) => {
+        this.#spans.delete(res);
+        mesh.span!(serverSpan(parent, `${req.method} ${route(url.pathname)}`, startedAt, performance.now() - started, {
+          "http.request.method": req.method, "url.path": route(url.pathname), "http.response.status_code": res.statusCode,
+          "http.response.size": stream ? undefined : sent(), "ember.stream": stream || undefined, "ember.via": who,
+        }, res.statusCode >= 500));
+      };
+      this.#spans.set(res, span);
+    }
+    res.on("close", () => {
+      this.#spans.get(res)?.(false);
+      log.info("admin request", { method: req.method, path: url.pathname.slice("/admin/api".length) + url.search, status: res.statusCode, ms: Math.round(performance.now() - started), bytes: sent(), via: who });
+    });
     try {
       let viewer: Viewer;
       try {
@@ -712,6 +735,7 @@ export class AdminApi {
   #live(req: IncomingMessage, res: ServerResponse, key: string, from: number): void {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
     res.write("retry: 2000\n\n");
+    this.#spans.get(res)?.(true);
     const stop = this.#deps.hub.live.subscribe(key, from, (message) => res.write(`event: ${message.type}\ndata: ${JSON.stringify(message)}\n\n`));
     this.#streams.add(res);
     this.#timers();
@@ -726,6 +750,8 @@ export class AdminApi {
   #events(req: IncomingMessage, res: ServerResponse, viewer: Viewer, host: boolean): void {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
     res.write("retry: 3000\n\n");
+    // A stream's span ends once it is open: it may stay open for hours.
+    this.#spans.get(res)?.(true);
     const client: Client = { res, viewer, host };
     this.#clients.add(client);
     this.#streams.add(res);

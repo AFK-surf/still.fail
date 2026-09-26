@@ -101,6 +101,8 @@ export interface Config {
   warmMs: number;
   /** Idle claude processes beyond this count are evicted, oldest first, once past warmMs. */
   maxWarmClaude: number;
+  /** traces: send the spans of traced requests to ember cloud (through ember-mesh; read when it starts). Off unless set. */
+  telemetry: { traces: boolean };
 }
 
 export interface RawConnect {
@@ -151,6 +153,7 @@ export interface RawConfig {
   maxNudges?: number;
   warmMinutes?: number;
   maxWarmClaude?: number;
+  telemetry?: { traces?: boolean };
 }
 
 /** Rewrites older config shapes into the current one. Returns the input when already current. */
@@ -241,6 +244,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
     maxNudges: raw.maxNudges ?? 2,
     warmMs: (raw.warmMinutes ?? 30) * 60_000,
     maxWarmClaude: raw.maxWarmClaude ?? 4,
+    telemetry: { traces: raw.telemetry?.traces === true },
   };
 }
 

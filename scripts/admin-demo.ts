@@ -16,6 +16,7 @@ import { LiveHub } from "../src/live.ts";
 import { transcriptPath } from "../src/transcript.ts";
 import { EMBER_SURFACE, type Attachment, type Quote } from "../src/store.ts";
 import { LoginManager } from "../src/login.ts";
+import { MeshSupervisor } from "../src/mesh.ts";
 import { slackManifest } from "../src/admin/slack-manifest.ts";
 import type { SlackApps } from "../src/chat/slack-apps.ts";
 import { Settings } from "../src/settings.ts";
@@ -142,10 +143,13 @@ const slackApps = {
   createApp: async () => ({ appId: "A0DEMO2", oauthAuthorizeUrl: "" }),
   setIcon: async () => {},
 } as unknown as SlackApps;
+// With EMBER_DEMO_MESH set to the data directory of an enrolled station, the demo runs its ember-mesh as ember
+// does, with traces on (EMBER_MESH_BIN picks the binary).
+const supervisor = process.env.EMBER_DEMO_MESH ? new MeshSupervisor({ dataDir: process.env.EMBER_DEMO_MESH, admin: `http://127.0.0.1:${port}`, traces: () => true }) : null;
 const api = new AdminApi({
   settings, store, hub, connections, slackApps, names: new Map(),
   // With EMBER_MESH_SECRET set, requests relayed by an ember-mesh started with the same secret are accepted.
-  ...(process.env.EMBER_MESH_SECRET ? { mesh: { secret: () => process.env.EMBER_MESH_SECRET!, status: () => ({ state: "running" as const, origin: null, station: null, workspace: null, name: null }) } } : {}),
+  ...(supervisor ? { mesh: supervisor } : process.env.EMBER_MESH_SECRET ? { mesh: { secret: () => process.env.EMBER_MESH_SECRET!, status: () => ({ state: "running" as const, origin: null, station: null, workspace: null, name: null }) } } : {}),
   logins: new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin }),
   checkProfile: async (p) => (p.kind === "subscription"
     ? { state: "login", detail: "还没有登录", models: null, checkedAt: Date.now() }
@@ -163,4 +167,7 @@ createServer((req, res) => {
     .then((body) => res.writeHead(200, { "content-type": types[extname(rel)] ?? "text/html" }).end(body))
     .catch(() => readFile(join(ui, "index.html")).then((body) => res.writeHead(200, { "content-type": "text/html" }).end(body)))
     .catch(() => res.writeHead(404).end());
-}).listen(port, "127.0.0.1", () => console.log(`admin demo on http://127.0.0.1:${port}/admin, data ${dataDir}; claude transcripts ${claudeIds.length}, codex ${codexIds.length}`));
+}).listen(port, "127.0.0.1", () => {
+  console.log(`admin demo on http://127.0.0.1:${port}/admin, data ${dataDir}; claude transcripts ${claudeIds.length}, codex ${codexIds.length}`);
+  supervisor?.start();
+});

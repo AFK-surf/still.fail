@@ -118,7 +118,7 @@ class FakeSlackApps {
   }
 }
 
-async function setup(options: { access?: { teamDomain: string; aud: string }; store?: Store; dataDir?: string; quota?: () => void } = {}) {
+async function setup(options: { access?: { teamDomain: string; aud: string }; store?: Store; dataDir?: string; quota?: () => void; spans?: any[] } = {}) {
   const slackApps = new FakeSlackApps();
   const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "ember-admin-"));
   const logins = new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin });
@@ -147,6 +147,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string }; st
     settings, store, hub, connections: conns, logins, names: new Map(), slackApps: slackApps as unknown as SlackApps,
     checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks),
     ...(options.quota ? { quota: async () => { options.quota!(); return { state: "ok" as const, windows: [{ label: "5 小时", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: Date.now() }; } } : {}),
+    ...(options.spans ? { mesh: { secret: () => null, status: () => ({ state: "off" as const, origin: null, station: null, workspace: null, name: null }), span: (span: object) => options.spans!.push(span) } } : {}),
   });
   const server = createServer((req, res) => void api.handle(req, res));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -161,6 +162,49 @@ async function setup(options: { access?: { teamDomain: string; aud: string }; st
   };
   return { slackApps, dataDir, path, settings, store, hub, conns, claude, connections, call, base, close: () => { logins.stopAll(); server.closeAllConnections(); server.close(); } };
 }
+
+test("a request in a recorded trace is a span of it, without ids or queries", async () => {
+  const spans: any[] = [];
+  const t = await setup({ spans });
+  const trace = "4bf92f3577b34da6a3ce929d0e0e4736";
+  const settle = () => new Promise((r) => setTimeout(r, 50));
+  try {
+    const before = Date.now();
+    assert.equal((await t.call("GET", "/overview", undefined, { traceparent: `00-${trace}-00f067aa0ba902b7-01` })).status, 200);
+    assert.equal((await t.call("GET", "/threads/123/messages?limit=5", undefined, { traceparent: `00-${trace}-00f067aa0ba902b8-01` })).status, 404);
+    // Not recorded by the caller, or no trace at all: no span.
+    await t.call("GET", "/overview", undefined, { traceparent: `00-${trace}-00f067aa0ba902b7-00` });
+    await t.call("GET", "/overview");
+    await settle();
+    assert.equal(spans.length, 2);
+    const [overview, messages] = spans;
+    assert.equal(overview.traceId, trace);
+    assert.equal(overview.parentSpanId, "00f067aa0ba902b7");
+    assert.match(overview.spanId, /^[0-9a-f]{16}$/);
+    assert.equal(overview.name, "GET /admin/api/overview");
+    assert.equal(overview.kind, 2);
+    const start = Number(BigInt(overview.startTimeUnixNano) / 1_000_000n);
+    assert.ok(start >= before - 1 && BigInt(overview.endTimeUnixNano) >= BigInt(overview.startTimeUnixNano));
+    const attributes = Object.fromEntries(overview.attributes.map((a: any) => [a.key, Object.values(a.value)[0]]));
+    assert.equal(attributes["http.response.status_code"], "200");
+    assert.equal(attributes["ember.via"], "local");
+    assert.ok(Number(attributes["http.response.size"]) > 100);
+    assert.equal(messages.name, "GET /admin/api/threads/:id/messages");
+    assert.deepEqual(messages.status, { code: 1 });
+
+    // A stream's span ends as it opens, not when it closes.
+    const events = await follow(`${t.base}/events`, { traceparent: `00-${trace}-00f067aa0ba902b9-01` });
+    await settle();
+    assert.equal(spans.length, 3);
+    assert.equal(spans[2].name, "GET /admin/api/events");
+    assert.ok(spans[2].attributes.some((a: any) => a.key === "ember.stream" && a.value.boolValue === true));
+    events.close();
+    await settle();
+    assert.equal(spans.length, 3);
+  } finally {
+    t.close();
+  }
+});
 
 test("local visits need no sign-in", async () => {
   const t = await setup();
