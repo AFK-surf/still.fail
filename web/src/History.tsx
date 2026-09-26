@@ -4,9 +4,10 @@
 import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ConnectView, LiveView, SessionSummary, ShownPhase, ShownStep, ThreadView, TimelineEntry } from "./api.ts";
-import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, slackThreadUrl, splitThread, threadNamer } from "./format.ts";
+import { botUserIdOf, compactNumber, duration, parsePrompt, RUNTIME_LABEL, splitThread, threadNamer } from "./format.ts";
 import { Avatar, ICON, Pill, SlackLogo } from "./ui.tsx";
-import { usePerson } from "./station.tsx";
+import { useLink, usePerson } from "./station.tsx";
+import { Link } from "react-router";
 import { Prose } from "./Prose.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { Mark } from "./brand.tsx";
@@ -122,35 +123,25 @@ function toItems(entries: TimelineEntry[]): Item[] {
  * stands (in the header line) and `actions` what can
  * be done to it right now (stop a turn, release the process).
  */
-export function History({ session, threads, connect, summary, actions, details, slackBase, onOpenChat, live }: {
+export function History({ session, threads, connect, summary, actions, details, live }: {
   /** Who the agent is shows on the tab; the head carries a short summary (allowance, disk, cache) and `details` unfolds under it. */
   session: SessionSummary; threads: ThreadView[]; connect: ConnectView | undefined; summary?: ReactNode; actions?: ReactNode; details?: ReactNode;
   /** The transcript as it grows, the steps the runtime is streaming right now after its last entry, and where the running turn stands. */
   live: LiveView | undefined;
-  /** The Slack workspace URL, for links to threads. */
-  slackBase?: string | null | undefined;
-  /** Brings ember's own chat into view. */
-  onOpenChat?: (() => void) | undefined;
 }) {
   const botUserId = botUserIdOf(connect);
   const member = usePerson();
-  const threadName = threadNamer(session, threads);
-  // A thread address as a place: its platform's mark, its name, and a way there.
+  const link = useLink();
+  const threadName = threadNamer(threads);
+  // A thread address as a place: its platform's mark, its name, and the way to its chat.
   const where = (address: string | null | undefined): ReactNode => {
     const t = address ? splitThread(address) : null;
     if (!t) return null;
     const name = threadName(t.channel, t.threadTs).where;
-    if (t.channel === "EMBER") {
-      return (
-        <button type="button" className="h-place" onClick={onOpenChat} title="打开对话">
-          <Mark size={13} />{name}
-        </button>
-      );
-    }
-    const url = slackThreadUrl(slackBase, t.channel, t.threadTs);
-    const inner = <><SlackLogo size={13} />{name}</>;
-    return url
-      ? <a className="h-place" href={url} target="_blank" rel="noopener" title="在 Slack 中打开">{inner}</a>
+    const inner = <>{t.channel === "EMBER" ? <Mark size={13} /> : <SlackLogo size={13} />}{name}</>;
+    const thread = threads.find((x) => x.channel === t.channel && x.threadTs === t.threadTs);
+    return thread
+      ? <Link className="h-place" to={link(`/chats/${thread.id}`)} title="打开对话">{inner}</Link>
       : <span className="h-place">{inner}</span>;
   };
   const [usageOpen, setUsageOpen] = useState(false);

@@ -83,7 +83,7 @@ export function turnResult(turn: TurnSummary | null): Status {
   return "unexpected"; // completed without saying final or block
 }
 
-export function sessionStatus(s: SessionSummary): Status {
+export function sessionStatus(s: Pick<SessionSummary, "process" | "pending" | "lastTurn">): Status {
   if (s.process === "running") return "running";
   if (s.pending > 0) return "queued";
   const result = turnResult(s.lastTurn);
@@ -190,6 +190,11 @@ export function statusBadge(status: Status): Badge | null {
   if (status === "failed" || status === "unexpected") return "failed";
   return null;
 }
+/** A chat's badge, from its agents': one that is blocked comes first, then one at work, then one that failed. */
+export function chatBadge(agents: Pick<SessionSummary, "process" | "pending" | "lastTurn">[]): Badge | null {
+  const badges = new Set(agents.map((a) => statusBadge(sessionStatus(a))));
+  return (["block", "run", "failed"] as const).find((b) => badges.has(b)) ?? null;
+}
 export const BADGE_LABEL: Record<Badge, string> = { block: "Block：agent 停下来等人处理", run: "工作中", failed: "失败了，需要处理" };
 
 export function statusTone(status: Status): Tone {
@@ -200,19 +205,25 @@ export function statusTone(status: Status): Tone {
   return "neutral";
 }
 
+/** The Slack workspace a connect is signed in to, while it is connected: links into Slack start there. */
+export function slackWorkspaceUrl(connect: ConnectView | null | undefined): string | null {
+  const c = connect?.connection;
+  return c && (c.state === "connected" || c.state === "reconnecting") ? c.workspace?.url ?? null : null;
+}
+
 export function botUserIdOf(connect: ConnectView | undefined): string | null {
   const c = connect?.connection;
   return c && (c.state === "connected" || c.state === "reconnecting") ? c.botUserId : null;
 }
 
 /** Names a thread for people: its channel (by name when known) and when it began. */
-export function threadNamer(session: SessionSummary, threads: ThreadView[]) {
+export function threadNamer(threads: ThreadView[]) {
   return (channel: string, threadTs: string) => {
     const started = new Date(Number(threadTs) * 1000);
     const when = `${started.getMonth() + 1}月${started.getDate()}日 ${started.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
     const thread = threads.find((t) => t.channel === channel && t.threadTs === threadTs);
-    // ember's own chat goes by its session's name.
-    if (channel === "EMBER") return { where: thread?.title || sessionTitle(session, ""), when };
+    // A chat on ember's page goes by its title, else what was first said in it.
+    if (channel === "EMBER") return { where: thread?.title || cleanText(thread?.firstText ?? null) || "ember 对话", when };
     const where = channel.startsWith("D") ? "私信" : `#${thread?.channelName ?? channel}`;
     return { where, when };
   };

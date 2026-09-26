@@ -1,10 +1,10 @@
 import { ArrowLeft, KeyRound, Monitor, Plug, Settings, SquarePen } from "lucide-react";
-import { stationBase, useLink, useOnlyMine } from "./station.tsx";
+import { stationBase, useLink, useOnlyMine, usePerson } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter, PeopleStack } from "./components.tsx";
-import { NavLink, useLocation, useParams } from "react-router";
-import { MeContext, useChats, type ChatItem } from "./api.ts";
-import { BADGE_LABEL, dayLabel, sessionStatus, sessionTitle, statusBadge } from "./format.ts";
+import { NavLink, useLocation } from "react-router";
+import { MeContext, useChats, useIsMine, type ChatItem } from "./api.ts";
+import { BADGE_LABEL, chatBadge, cleanText, dayLabel } from "./format.ts";
 import { ConnectKindIcon, ICON, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { Lockup, Mark } from "./brand.tsx";
 
@@ -34,7 +34,7 @@ function SettingsNav() {
   const connectOpen = useLocation().pathname.startsWith("/connects");
   return (
     <div className="nav-scroll">
-      <NavLink className="nav-row" to={link(lastChat("local", "/sessions"))}><ArrowLeft {...ICON} />返回会话</NavLink>
+      <NavLink className="nav-row" to={link(lastChat("local", "/chats"))}><ArrowLeft {...ICON} />返回会话</NavLink>
       <div className="nav-heading">设置</div>
       <NavLink className="nav-row" to={link("/settings/connects")} aria-current={connectOpen ? "page" : undefined}><Plug {...ICON} />连接</NavLink>
       <NavLink className="nav-row" to={link("/settings/accounts")}><KeyRound {...ICON} />Profile</NavLink>
@@ -80,7 +80,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
           return (
             <section key={day.daysAgo} aria-label={label}>
               <div className="nav-heading">{label}</div>
-              {day.items.map((item) => <SessionRow key={`${item.station}/${item.session.key}`} item={item} />)}
+              {day.items.map((item) => <ChatRow key={`${item.station}/${item.thread.id}`} item={item} />)}
             </section>
           );
         })}
@@ -89,24 +89,26 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
   );
 }
 
-/** A chat in the list. The station is its agent's, not the chat's: it shows with the agent, not here. Unread messages make the title bold and show their count. */
-function SessionRow({ item }: { item: ChatItem }) {
-  const { session: s, connect } = item;
-  const name = connect?.name ?? s.connect;
-  const { key } = useParams();
-  const badge = statusBadge(sessionStatus(s));
+/**
+ * A chat in the list: its title (bold while something in it is unread), the
+ * last thing said in it, where it came from, its people and when it was last
+ * written in. The dot on the right is its agents' state (block before work
+ * before failure).
+ */
+function ChatRow({ item }: { item: ChatItem }) {
+  const { thread, connect } = item;
+  const badge = chatBadge(item.agents);
   return (
-    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/sessions/${encodeURIComponent(s.key)}`} aria-current={key === s.key ? "page" : undefined}
-      data-unread={item.unread > 0 || undefined}>
+    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${thread.id}`} data-unread={item.unread || undefined}>
       <span className="nav-session-text">
-        <span className="nav-session-title">{sessionTitle(s, name)}</span>
+        <span className="nav-session-title">{item.title}</span>
+        {item.last && <LastMessage item={item} />}
         <span className="nav-session-meta">
-          {s.connect === "ember"
+          {thread.surface === "ember"
             ? <Tip label="ember 对话" side="right"><span className="session-kind"><Mark size={16} className="kind-mark" /></span></Tip>
-            : <Tip label={connect ? `来自 ${connect.name}` : "来自连接"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
-          <PeopleStack people={s.participants} />
-          <Time className="nav-time" at={s.lastActiveAt} />
-          {item.unread > 0 && <span className="nav-unread" aria-label={`${item.unread} 条未读`}>{item.unread > 99 ? "99+" : item.unread}</span>}
+            : <Tip label={connect ? `来自 ${connect.name}` : "来自 Slack"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
+          <PeopleStack people={item.people} />
+          <Time className="nav-time" at={item.lastActiveAt} />
         </span>
       </span>
       {badge && (
@@ -116,4 +118,18 @@ function SessionRow({ item }: { item: ChatItem }) {
       )}
     </NavLink>
   );
+}
+
+/** The last thing said in a chat, on one line: who, then what. */
+function LastMessage({ item }: { item: ChatItem }) {
+  const person = usePerson();
+  const isMine = useIsMine();
+  const last = item.last!;
+  const agent = last.authorKind === "agent" ? item.agents.find((a) => a.key === last.author) : undefined;
+  const who = last.authorKind === "ember" ? "ember"
+    : last.authorKind === "agent" ? agent?.model || last.authorName || "agent"
+    : isMine({ id: last.author, email: last.author }) ? "你"
+    : person(last.author)?.name || last.authorName || last.author;
+  const text = last.deletedAt !== null ? "（已删除）" : cleanText(last.text) || "（文件）";
+  return <span className="nav-session-last"><span className="nav-session-who">{who}：</span>{text}</span>;
 }

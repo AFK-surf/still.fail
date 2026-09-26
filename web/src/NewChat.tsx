@@ -1,6 +1,6 @@
 // A new chat, after Zork's: say what to do, having picked where it runs
 // (station), on what (runtime and model) and how hard it thinks. The first
-// message (or file) makes the session and its chat on that station.
+// message (or file) makes the chat and its agent's session on that station.
 import { Check, ChevronDown, Server } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { Link } from "react-router";
@@ -31,8 +31,8 @@ function keepChoice(station: string, choice: Choice): void {
   }
 }
 
-/** A new chat in a scope (a workspace, or "local"); `onCreated` gets the station's address and the new session. */
-export function NewChat({ scope, onCreated }: { scope: string; onCreated(station: string, key: string): void }) {
+/** A new chat in a scope (a workspace, or "local"); `onCreated` gets the station's address and the new chat's thread. */
+export function NewChat({ scope, onCreated }: { scope: string; onCreated(station: string, thread: number): void }) {
   const stations = useStations(scope);
   const online = (stations.value ?? []).filter((s) => s.online);
   const [stationId, setStationId] = useState(() => {
@@ -58,7 +58,7 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
   );
 }
 
-function NewChatOn({ view, station, stations, onStation, onCreated }: { view: StationView; station: Station; stations: StationView[]; onStation(id: string): void; onCreated(station: string, key: string): void }) {
+function NewChatOn({ view, station, stations, onStation, onCreated }: { view: StationView; station: Station; stations: StationView[]; onStation(id: string): void; onCreated(station: string, thread: number): void }) {
   const api = useApi();
   const profiles = view.overview?.profiles ?? [];
   const [choice, setChoice] = useState<Choice>(() => ({ runtime: "", model: "", effort: "", ...lastChoice(station.id) }));
@@ -80,22 +80,22 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       void api.checkProfile(p.id).catch(() => {});
     }
   }, [profiles, api]);
-  const made = useRef<Promise<string> | null>(null);
+  const made = useRef<Promise<{ key: string; thread: number }> | null>(null);
   const [making, setMaking] = useState(false);
   const pick = (next: Partial<Choice>) => {
     const c = { ...choice, ...next };
     setChoice(c);
     keepChoice(station.id, c);
   };
-  const ensureSession = () => {
+  const ensureChat = () => {
     if (!runtime || !model) return Promise.reject(new Error("先在 Profile 里启用模型"));
     made.current ??= (async () => {
       setMaking(true);
-      const { key } = await api.newSession({
+      const { key, thread } = await api.newChat({
         runtime, model,
         ...(choice.effort ? { effort: choice.effort } : {}),
       });
-      return key;
+      return { key, thread: thread.id };
     })().catch((error: unknown) => { made.current = null; setMaking(false); throw error; });
     return made.current;
   };
@@ -143,8 +143,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         {!view.overview ? <p className="muted">正在读取 {station.name} 的 Profile…</p>
           : profiles.length === 0 ? <p className="field-error">这台 station 还没有 Profile，先到 <Link className="inline-link" to={`${station.base}/settings/accounts`}>设置 → Profile</Link> 里加一个。</p>
           : !runtimes.length && <p className="field-error">这台 station 的 Profile 都还没有启用模型。到 <Link className="inline-link" to={`${station.base}/settings/accounts`}>设置 → Profile</Link> 里勾选可以用的模型。</p>}
-        <Composer sessionKey={null} ensureSession={ensureSession} placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
-          onSent={(key) => onCreated(station.address, key)} />
+        <Composer thread={null} sessionKey={null} ensureChat={ensureChat} placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
+          onSent={(thread) => onCreated(station.address, thread)} />
         {making && <p className="muted new-chat-making">正在 {station.name} 上创建会话…</p>}
       </div>
     </div>

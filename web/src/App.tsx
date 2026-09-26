@@ -7,7 +7,7 @@ import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
 import { ConnectsPage } from "./pages/Connects.tsx";
 import { DevicePage } from "./pages/Device.tsx";
-import { SessionPage } from "./pages/Session.tsx";
+import { ChatPage } from "./pages/ChatPage.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
 import { Loading } from "./ui.tsx";
@@ -16,11 +16,11 @@ import { Mark } from "./brand.tsx";
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
 function useDetailOpen(): boolean {
   const path = useLocation().pathname;
-  return /^\/(new$|sessions\/.+|connects\/.+|settings(\/.*)?$)/.test(path);
+  return /^\/(new$|chats\/.+|connects\/.+|settings(\/.*)?$)/.test(path);
 }
 
 export function App() {
-  useRememberChat("local", (p) => /^\/(new|sessions\/.+)$/.test(p));
+  useRememberChat("local", (p) => /^\/(new|chats\/.+)$/.test(p));
   const overview = useOverview("local");
   const detail = useDetailOpen();
 
@@ -44,8 +44,8 @@ export function App() {
         <Sidebar />
         <main className="main">
           <Routes>
-            <Route path="/" element={<Navigate to="/sessions" replace />} />
-            <Route path="/sessions/:key?" element={<SessionPage />} />
+            <Route path="/" element={<Navigate to="/chats" replace />} />
+            <Route path="/chats/:thread?" element={<ChatPage />} />
             <Route path="/new" element={<LocalNewChat />} />
             <Route path="/connects/:id" element={<ConnectPage />} />
             <Route path="/bots/:id" element={<LegacyBot />} />
@@ -54,7 +54,7 @@ export function App() {
             <Route path="/settings/device" element={<DevicePage />} />
             <Route path="/settings/accounts" element={<AccountsPage />} />
             <Route path="/settings/accounts/:id" element={<AccountPage />} />
-            <Route path="*" element={<Navigate to="/sessions" replace />} />
+            <Route path="*" element={<Navigate to="/chats" replace />} />
           </Routes>
         </main>
       </div>
@@ -71,5 +71,5 @@ function LegacyBot() {
 /** A new chat on this station. */
 function LocalNewChat() {
   const navigate = useNavigate();
-  return <NewChat scope="local" onCreated={(_, key) => navigate(`/sessions/${encodeURIComponent(key)}`)} />;
+  return <NewChat scope="local" onCreated={(_, thread) => navigate(`/chats/${thread}`)} />;
 }
