@@ -14,6 +14,8 @@ import kotlinx.serialization.json.JsonElement
     val workspaces: List<WorkspaceSummary> = emptyList(),
     /** Invitations waiting for this account's email. */
     val invitations: List<PendingInvitation> = emptyList(),
+    /** The account's `/v1/me` has answered; until then (or after a failure) an empty list says nothing. */
+    val loaded: Boolean = false,
     /** Set when this account could not be read. */
     val error: JsonElement? = null,
 )

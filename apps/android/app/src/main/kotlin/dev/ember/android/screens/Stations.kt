@@ -7,9 +7,16 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -158,9 +165,9 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
             }
             val overview = s.overview
             if (overview != null) {
-                SectionHeader("Profile", "勾选的模型才能用", start = 24.dp)
+                SectionHeader("Profile", start = 24.dp)
                 if (overview.profiles.isEmpty()) Card { Text("这台机器还没有 Profile。", fontSize = 14.sp, color = C.muted) }
-                overview.profiles.forEach { ProfileCard(address, it) }
+                else ListCard { overview.profiles.forEach { ProfileRow(address, it) } }
                 SectionHeader("连接", start = 24.dp)
                 ListCard {
                     overview.connects.forEach { c ->
@@ -186,32 +193,81 @@ private fun connectionText(state: String) = when (state) {
     "connected" -> "在线"; "reconnecting" -> "重连中"; "starting" -> "连接中"; "error" -> "连接失败"; "no_tokens" -> "未连接 Slack"; else -> "已停用"
 }
 
-/** A profile: how much of its allowance is used, and its models; tapping one enables or disables it. */
-@OptIn(ExperimentalLayoutApi::class)
+private fun quotaText(p: ProfileView): String {
+    val window = p.quota?.windows?.firstOrNull()
+    return if (window != null) "额度已用 ${window.usedPercent.toInt()}% · ${window.label}窗口" else "额度：${p.quota?.detail ?: "还没查过"}"
+}
+
+/** A profile on its station's page: its allowance and how many of its models are enabled; its page picks them. */
 @Composable
-private fun ProfileCard(station: String, p: ProfileView) {
+private fun ProfileRow(station: String, p: ProfileView) {
+    val app = LocalApp.current
+    ListRow(onClick = { app.push(Screen.Profile(station, p.id)) }) {
+        Column(Modifier.weight(1f)) {
+            Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val models = if (p.available.isEmpty()) "还没有列出模型" else "已启用 ${p.models.count { it in p.available }} / ${p.available.size} 个模型"
+            Text("$models · ${quotaText(p)}", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        IconIn(Icons.Chevron, 14.dp, C.subtle)
+    }
+}
+
+/**
+ * Which of a profile's models may be used, as the web's profile page has it:
+ * one per line, a filter when there are many, and all / none of what is shown.
+ */
+@Composable
+fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    Card {
-        Text(p.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = C.ink)
-        val window = p.quota?.windows?.firstOrNull()
-        Text(if (window != null) "额度已用 ${window.usedPercent.toInt()}% · ${window.label}窗口" else "额度：${p.quota?.detail ?: "还没查过"}", fontSize = 13.sp, color = C.muted)
-        if (p.available.isEmpty()) Text("还没有列出模型：Profile 检查之后才知道能用哪些。", fontSize = 13.sp, color = C.subtle, modifier = Modifier.padding(top = 6.dp))
-        FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            p.available.forEach { m ->
-                val on = m in p.models
+    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
+    val s = stations.value?.firstOrNull { it.station == address }
+    val p = s?.overview?.profiles?.firstOrNull { it.id == id }
+    var filter by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxSize()) {
+        NavBar(s?.name ?: "Station", app::pop, p?.name ?: "Profile")
+        if (p == null) return Loading(stations.error?.message ?: "正在读取…")
+        val all = (p.available + p.models).distinct().sorted()
+        val shown = all.filter { it.contains(filter.trim(), ignoreCase = true) }
+        val save = { models: List<String> ->
+            scope.launch {
+                try {
+                    app.api(address).setModels(p.id, models.distinct().sorted())
+                } catch (e: CoreException) {
+                    app.toast = "没改成：${e.message}"
+                }
+            }
+        }
+        LazyColumn(Modifier.weight(1f), contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
+            item {
                 Text(
-                    (if (on) "✓ " else "") + m, fontSize = 12.sp, color = if (on) C.accentInk else C.ink,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) C.accentBg else C.chip).clickable {
-                        scope.launch {
-                            try {
-                                app.api(station).setModels(p.id, if (on) p.models - m else p.models + m)
-                            } catch (e: CoreException) {
-                                app.toast = "没改成：${e.message}"
-                            }
-                        }
-                    }.padding(horizontal = 9.dp, vertical = 4.dp),
+                    if (all.isEmpty()) "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。"
+                    else "只有勾选的模型能在新对话和连接里选。已启用 ${p.models.size} / ${all.size}。${quotaText(p)}",
+                    fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
+            }
+            if (all.isNotEmpty()) item {
+                Row(Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (all.size > 10) Field(filter, { filter = it }, "筛选模型", modifier = Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
+                    val suffix = if (filter.isBlank()) "" else "筛选结果"
+                    Text("全选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(p.models + shown) })
+                    Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(p.models - shown.toSet()) })
+                }
+            }
+            items(shown, key = { it }) { m ->
+                val on = m in p.models
+                Row(
+                    Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface)
+                        .clickable { save(if (on) p.models - m else p.models + m) }.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (on) C.accent else C.chip), contentAlignment = Alignment.Center) {
+                        if (on) IconIn(Icons.Check, 13.dp, C.bg)
+                    }
+                    Text(m, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (m !in p.available && p.available.isNotEmpty()) Text("检查里没有了", fontSize = 12.sp, color = C.subtle)
+                }
+                Spacer(Modifier.height(4.dp))
             }
         }
     }

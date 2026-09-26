@@ -12,11 +12,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -48,11 +47,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ember.android.AppState
@@ -92,6 +89,7 @@ import dev.ember.android.ui.MenuItem
 import dev.ember.android.ui.MenuSpec
 import dev.ember.android.ui.ModelMark
 import dev.ember.android.ui.Mono
+import dev.ember.android.ui.ReaderSpec
 import dev.ember.android.ui.Ring
 import dev.ember.android.ui.Seg
 import dev.ember.android.ui.SheetGrab
@@ -124,9 +122,8 @@ private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String) {
     val model = live.value?.usage?.model ?: s.model
     Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         ModelMark(model, s.runtime, 20.dp)
-        Text(agentLabel(model, s.effort), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        // On a narrow screen the words give way before the agent's name does.
-        Text("执行历史", fontSize = 13.sp, color = C.muted, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
+        // The sheet is the agent's history; its head is the agent, with the room its name needs.
+        Text(agentLabel(model, s.effort), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Actions(station, agent)
         Seg(listOf("步骤", "详情"), tab, { tab = it })
     }
@@ -168,7 +165,7 @@ private fun Summary(agent: ChatAgentView, live: LiveView?, host: HostInfo?) {
     val windows = agent.profile?.quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     val parts = windows.map { "${it.label} 已用 ${Math.round(it.usedPercent)}%" } +
         listOfNotNull(hit?.let { "缓存命中 $it%" }, host?.takeIf { it.disk.totalBytes > 0 }?.let { "磁盘剩 ${gb(it.disk.freeBytes)}" })
-    if (parts.isNotEmpty()) Text(parts.joinToString(" · "), fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 4.dp))
+    if (parts.isNotEmpty()) Text(parts.joinToString(" · "), fontSize = 12.sp, lineHeight = 17.sp, color = C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 4.dp))
     Box(Modifier.height(8.dp))
 }
 
@@ -218,49 +215,76 @@ private fun Edge(text: String) = Text(text, color = C.subtle, fontSize = 12.sp, 
 private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgentView, mention: (String) -> String, bound: List<String>, person: (String) -> String?) {
     when (item) {
         is HistoryItem.Received -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (item.note.isNotEmpty()) Message(Icons.Received, { Text("收到来自 ", fontSize = 13.sp, color = C.muted); Strong("ember"); Text(" 的提醒", fontSize = 13.sp, color = C.muted) }) {
-                Fold { Text(item.note, fontSize = 14.sp, lineHeight = 21.sp, color = C.ink) }
+            if (item.note.isNotEmpty()) Message(Icons.Received, { Text("收到来自 ", fontSize = 13.sp, color = C.muted); Strong("ember"); Text(" 的提醒", fontSize = 13.sp, color = C.muted) }, item.note) {
+                Text(item.note, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink)
             }
             item.messages.forEach { m ->
+                val text = mention(m.text)
                 Message(Icons.Received, {
                     Text("收到来自 ", fontSize = 13.sp, color = C.muted)
                     if (m.slack) SlackName(station, m, bound) else Strong(person(m.user) ?: m.name ?: m.user)
                     Text(" 的消息", fontSize = 13.sp, color = C.muted)
-                    m.thread?.let { Text(" · ", fontSize = 13.sp, color = C.muted); Place(station, of, agent, it) }
-                }) { Fold { Text(mention(m.text), fontSize = 14.sp, lineHeight = 21.sp, color = C.ink) } }
+                    m.thread?.let { Text(" · ", fontSize = 13.sp, color = C.muted); Box(Modifier.weight(1f, fill = false)) { Place(station, of, agent, it) } }
+                }, text) { Text(text, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink) }
             }
         }
         is HistoryItem.Post -> Message(Icons.Send, {
             Text("发送到 ", fontSize = 13.sp, color = C.muted)
-            if (item.to != null) Place(station, of, agent, item.to) else Row(verticalAlignment = Alignment.CenterVertically) { SlackMark(12.dp); Strong(" Slack") }
-            if (item.kind == "final") Pill("已完成", C.green)
+            Box(Modifier.weight(1f, fill = false)) {
+                if (item.to != null) Place(station, of, agent, item.to) else Row(verticalAlignment = Alignment.CenterVertically) { SlackMark(12.dp); Strong(" Slack") }
+            }
             if (item.kind == "block") Pill("Block", C.blue)
             if (item.failed) Pill("发送失败", C.red)
-        }) { Fold { Markdown(item.text, size = 14) } }
+        }, item.text) { Markdown(item.text, size = 15) }
         is HistoryItem.Mark -> Text(
             when (item.kind) { "final" -> "标记为已完成"; "block" -> "进入 block 状态：agent 停下来等人处理"; else -> "标记为 ${item.kind}" },
             fontSize = 13.sp, color = C.muted,
         )
-        is HistoryItem.Text -> Box(Modifier.let { if (item.subagent) it.padding(start = 12.dp) else it }) { Fold { Markdown(item.text, size = 14) } }
+        is HistoryItem.Text -> Box(Modifier.let { if (item.subagent) it.padding(start = 12.dp) else it }) {
+            val app = LocalApp.current
+            val model = agentLabel(agent.session.model, null)
+            Brief(item.text) { app.reader = ReaderSpec({ Text("$model 写道", fontSize = 13.sp, color = C.muted) }) { Markdown(item.text, size = 15) } }
+        }
         is HistoryItem.Group -> Group(item)
     }
 }
 
+/** What an entry says, in brief: its words as plain text, two lines at most. A tap opens it in full. */
+@Composable
+private fun Brief(text: String, open: () -> Unit) {
+    Text(
+        plain(text), fontSize = 14.sp, lineHeight = 21.sp, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(onClick = open),
+    )
+}
+
+/** Markdown as one run of plain words, for a brief: no fences, headings, emphasis or line breaks. */
+private fun plain(text: String): String = text
+    .replace(Regex("```[^\\n]*"), " ")
+    .replace(Regex("(?m)^\\s{0,3}(#{1,6}|>|[-*+]|\\d+\\.)\\s+"), "")
+    .replace(Regex("\\*\\*|__|`"), "")
+    .replace(Regex("\\s+"), " ")
+    .trim()
+
 @Composable
 private fun Strong(text: String) = Text(text, fontSize = 13.sp, color = C.ink, fontWeight = FontWeight.SemiBold)
 
-/** A message in or out, drawn alike: a line saying what and where, then the words beside a bar (they answer each other). */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * A message in or out, drawn alike: a line saying what and where, then its words in brief beside a bar (they answer
+ * each other). A tap on the words opens the whole of it on its own page, under the same line.
+ */
 @Composable
-private fun Message(icon: androidx.compose.ui.graphics.vector.ImageVector, label: @Composable () -> Unit, body: @Composable () -> Unit) {
+private fun Message(icon: androidx.compose.ui.graphics.vector.ImageVector, label: @Composable RowScope.() -> Unit, text: String, full: @Composable () -> Unit) {
+    val app = LocalApp.current
+    val line: @Composable RowScope.() -> Unit = {
+        IconIn(icon, 14.dp, C.muted, Modifier.padding(end = 5.dp))
+        label()
+    }
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        FlowRow(verticalArrangement = Arrangement.Center, itemVerticalAlignment = Alignment.CenterVertically) {
-            IconIn(icon, 14.dp, C.muted, Modifier.padding(end = 5.dp))
-            label()
-        }
+        Row(verticalAlignment = Alignment.CenterVertically, content = line)
         Row(Modifier.height(IntrinsicSize.Min)) {
             Box(Modifier.width(2.dp).fillMaxHeight().clip(RoundedCornerShape(1.dp)).background(C.line))
-            Box(Modifier.padding(start = 10.dp).weight(1f)) { body() }
+            Box(Modifier.padding(start = 10.dp).weight(1f)) { Brief(text) { app.reader = ReaderSpec(line, full) } }
         }
     }
 }
@@ -281,7 +305,7 @@ private fun Place(station: String, of: ChatOf, agent: ChatAgentView, address: St
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         if (channel == "EMBER") Mark(12.dp) else SlackMark(12.dp)
-        Text(placeName(agent.threads, channel, ts), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (open != null) C.accentInk else C.ink)
+        Text(placeName(agent.threads, channel, ts), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (open != null) C.accentInk else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -368,26 +392,6 @@ private fun Folding(name: String, hint: String?, meta: String?, failed: Boolean,
 private fun Code(text: String, failed: Boolean = false) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (failed) C.red.copy(alpha = 0.08f) else C.surface2).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 8.dp)) {
         Text(text.take(4000), style = Mono, color = C.ink, softWrap = false, maxLines = 40)
-    }
-}
-
-/**
- * Long text folds to five lines; a button unfolds it. The height is measured,
- * so markdown (lists, code) folds the same way as plain text.
- */
-@Composable
-private fun Fold(lineHeight: Dp = 21.dp, content: @Composable () -> Unit) {
-    var long by remember { mutableStateOf(false) }
-    var open by remember { mutableStateOf(false) }
-    val max = with(LocalDensity.current) { (lineHeight * 5).roundToPx() }
-    Column {
-        Box(Modifier.clipToBounds().layout { m, c ->
-            val p = m.measure(c.copy(maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
-            val over = p.height > max + 4
-            if (over != long) long = over
-            layout(p.width, if (over && !open) max else p.height) { p.place(0, 0) }
-        }) { content() }
-        if (long) Text(if (open) "收起" else "展开", fontSize = 12.sp, color = C.accentInk, modifier = Modifier.padding(top = 2.dp).clickable { open = !open })
     }
 }
 

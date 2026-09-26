@@ -69,7 +69,9 @@ function Landing() {
   const asking = asked.current && !create.result;
   const first = workspaces?.flatMap((a) => a.workspaces)[0];
   const pending = workspaces?.flatMap((a) => a.invitations.map((i) => ({ ...i, account: a.account }))) ?? [];
-  const ready = workspaces !== undefined;
+  // Only once every account has answered does "no workspace" mean none: not before, not after a failure.
+  const ready = workspaces !== undefined && workspaces.every((a) => a.loaded);
+  const failed = workspaces?.find((a) => a.error)?.error;
   useEffect(() => {
     if (ready && !first && pending.length === 0 && !create.busy && !create.result && !create.error) create.run(inviteCode());
   }, [ready, first, pending.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -103,7 +105,7 @@ function Landing() {
     );
   }
   if (create.error) return <div className="gate"><h1>没能建好 workspace</h1><p>{create.error.message}</p><Button onClick={() => create.run(inviteCode())}>重试</Button></div>;
-  return <div className="gate"><Loading label={ready ? "正在为你建一个 workspace…" : "正在读取你的 workspace…"} /></div>;
+  return <div className="gate"><Loading label={ready ? "正在为你建一个 workspace…" : failed ? `没能读取你的 workspace：${failed.message}` : "正在读取你的 workspace…"} /></div>;
 }
 
 /** Asks for the invite code a new workspace needs; what the last try said stands under it. */

@@ -100,6 +100,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -418,7 +419,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
                 Box(Modifier.animateItem(fadeInSpec = tween(250), placementSpec = null, fadeOutSpec = tween(200))) {
                     when (row) {
                         Entry.Older -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Spinner(16.dp) }
-                        Entry.Empty -> Text("在这里发消息，这个对话里的 agent 会在这里回复。", color = C.muted, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 16.dp))
+                        Entry.Empty -> Text("在这里发消息，这个对话里的 agent 会在这里回复。", color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 24.dp))
                         Entry.Line -> UnreadLine()
                         is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.seq in pending && now - row.m.createdAt > 1000)
                         is Entry.Out -> Out(ctx, row.o)
@@ -1009,12 +1010,13 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ThreadView)
                         InfoRow(onClick = { openHistory(app, station, of, s.key) }) {
                             ModelMark(model, s.runtime, 36.dp, s.state(), around = C.surface2)
                             Column(Modifier.weight(1f)) {
-                                Text(agentLabel(model, s.effort), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                                Text(agentLabel(model, s.effort), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                // One line: it gives way with an ellipsis rather than wrapping.
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     if (a.connect != null) SlackMark(11.dp)
                                     Text(
-                                        listOfNotNull(a.connect?.name, PROCESS_LABEL[s.process] ?: s.process, "最近活动 ${relativeTime(s.lastActiveAt)}").joinToString(" · "),
-                                        fontSize = 12.sp, color = C.muted,
+                                        listOfNotNull(a.connect?.name, PROCESS_LABEL[s.process] ?: s.process, relativeTime(s.lastActiveAt)).joinToString(" · "),
+                                        fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                             }

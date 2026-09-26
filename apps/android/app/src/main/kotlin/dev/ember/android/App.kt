@@ -49,6 +49,8 @@ import dev.ember.android.screens.StationsScreen
 import dev.ember.android.ui.C
 import dev.ember.android.ui.Loading
 import dev.ember.android.ui.MenuHost
+import dev.ember.android.ui.ReaderHost
+import dev.ember.android.ui.ReaderSpec
 import dev.ember.android.ui.SheetHost
 import dev.ember.android.ui.SheetSpec
 import dev.ember.android.ui.MenuSpec
@@ -67,6 +69,8 @@ sealed interface Screen {
     data object NewChat : Screen { override val id = "new" }
     data object Stations : Screen { override val id = "stations" }
     data class Station(val address: String) : Screen { override val id = "station/$address" }
+    /** A profile's models, to pick which may be used. */
+    data class Profile(val address: String, val profile: String) : Screen { override val id = "profile/$address/$profile" }
     data object Me : Screen { override val id = "me" }
 }
 
@@ -77,6 +81,8 @@ class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cl
     var sheet by mutableStateOf<SheetSpec?>(null)
     var menu by mutableStateOf<MenuSpec?>(null)
     var toast by mutableStateOf<String?>(null)
+    /** One entry of an execution history in full, over everything (the sheet stays under it). */
+    var reader by mutableStateOf<ReaderSpec?>(null)
 
     /** The workspace chosen last; the first one when it is gone. */
     var workspace by mutableStateOf(prefs.getString("workspace", null)); private set
@@ -125,9 +131,11 @@ fun EmberApp(app: AppState) {
                 val entries = workspaces.value?.entries()
                 val current = entries?.firstOrNull { it.workspace.id == app.workspace } ?: entries?.firstOrNull()
                 LaunchedEffect(current?.workspace?.id) { current?.let { if (it.workspace.id != app.workspace) app.pickWorkspace(it.workspace.id) } }
+                // Only once every account has answered does "no workspace" mean none: not before, not after a failure.
+                val all = workspaces.value
                 if (current == null) {
-                    if (entries == null) Loading(workspaces.error?.message ?: "正在读取你的 workspace…")
-                    else Landing(signedIn, workspaces.value.orEmpty())
+                    if (entries == null || all == null || !all.all { it.loaded }) Loading(workspaces.error?.message ?: all?.firstNotNullOfOrNull { it.error }?.let { "没能读取你的 workspace" } ?: "正在读取你的 workspace…")
+                    else Landing(signedIn, all)
                 } else {
                     Pages(app, current)
                 }
@@ -136,6 +144,7 @@ fun EmberApp(app: AppState) {
         // Pages scroll under the status bar; it keeps the paper behind its icons.
         Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
         SheetHost(app)
+        ReaderHost(app)
         MenuHost(app)
         ToastHost(app)
     }
@@ -158,6 +167,7 @@ private fun Pages(app: AppState, current: dev.ember.android.data.WorkspaceEntry)
                     Screen.NewChat -> NewChatScreen(current.workspace.id)
                     Screen.Stations -> StationsScreen(current)
                     is Screen.Station -> StationScreen(current, screen.address)
+                    is Screen.Profile -> ProfileScreen(current, screen.address, screen.profile)
                     Screen.Me -> MeScreen(current)
                 }
             }

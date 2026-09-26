@@ -438,6 +438,13 @@ export class Directory extends DurableObject<Env> {
     });
   }
 
+  /** The operator removes a workspace as its owner would (the admin token's route). */
+  adminDeleteWorkspace(id: string): void {
+    const owner = this.#one("SELECT sub FROM members WHERE workspace = ? AND role = 'owner' LIMIT 1", id);
+    if (!owner) fail(404, "workspace_not_found");
+    this.deleteWorkspace(owner!.sub as string, id);
+  }
+
   adminWorkspaces(): AdminWorkspace[] {
     const now = nowSeconds();
     return this.#rows(`SELECT w.id, w.name, w.created_at, u.sub, u.email, u.name AS user_name, u.picture FROM workspaces w

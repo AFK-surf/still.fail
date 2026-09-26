@@ -35,6 +35,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -209,6 +212,31 @@ fun ToastHost(app: AppState) {
                 text ?: "", color = C.bg, fontSize = 14.sp,
                 modifier = Modifier.padding(horizontal = 24.dp).clip(RoundedCornerShape(18.dp)).background(C.ink).padding(horizontal = 16.dp, vertical = 10.dp),
             )
+        }
+    }
+}
+
+/** A page with one thing in full: what it is (a line, as the history labels it), then all of it. */
+class ReaderSpec(val label: @Composable RowScope.() -> Unit, val content: @Composable () -> Unit)
+
+/** The reader comes in from the side over everything; back (or ‹) returns to where it was opened. */
+@Composable
+fun ReaderHost(app: AppState) {
+    val spec = app.reader
+    var shown by remember { mutableStateOf<ReaderSpec?>(null) }
+    if (spec != null) shown = spec
+    BackHandler(enabled = spec != null) { app.reader = null }
+    AnimatedVisibility(spec != null, enter = androidx.compose.animation.slideInHorizontally { it }, exit = androidx.compose.animation.slideOutHorizontally { it }) {
+        val current = shown ?: return@AnimatedVisibility
+        Column(
+            Modifier.fillMaxSize().background(C.bg).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
+                .windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars),
+        ) {
+            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 10.dp)) { NavBack("执行历史") { app.reader = null } }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) { current.label() }
+                current.content()
+            }
         }
     }
 }

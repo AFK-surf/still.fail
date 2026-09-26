@@ -557,7 +557,8 @@ impl Inner {
         Ok(serde_json::to_value(self.accounts.list()).expect("accounts serialize"))
     }
 
-    /// Every account with what its latest `/v1/me` said.
+    /// Every account with what its latest `/v1/me` said. `loaded` is true only once
+    /// that answer came: an empty list before it (or after a failure) is not "none".
     fn workspaces_value(&self) -> Value {
         let mes = self.mes.borrow();
         let entries = self.accounts.list().into_iter().map(|account| match mes.get(&account.sub) {
@@ -566,10 +567,11 @@ impl Inner {
                 "workspaces": me.get("workspaces").cloned().unwrap_or_else(|| json!([])),
                 "invitations": me.get("invitations").cloned().unwrap_or_else(|| json!([])),
                 "relay_url": me.get("relay_url").cloned().unwrap_or(Value::Null),
+                "loaded": true,
             }),
             // One account failing (offline, signed out elsewhere) still shows the others.
-            Some(Err(error)) => json!({ "account": account, "workspaces": [], "invitations": [], "relay_url": null, "error": error }),
-            None => json!({ "account": account, "workspaces": [], "invitations": [], "relay_url": null }),
+            Some(Err(error)) => json!({ "account": account, "workspaces": [], "invitations": [], "relay_url": null, "loaded": false, "error": error }),
+            None => json!({ "account": account, "workspaces": [], "invitations": [], "relay_url": null, "loaded": false }),
         });
         Value::Array(entries.collect())
     }
@@ -1186,6 +1188,7 @@ mod tests {
             assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (1, 1));
             apply(&host, &mut values);
             assert_eq!(values[&1][0]["workspaces"][0]["id"], "ws");
+            assert_eq!(values[&1][0]["loaded"], true);
             assert_eq!(values[&2]["stations"][0]["online"], false);
 
             // A station event is complete in itself.

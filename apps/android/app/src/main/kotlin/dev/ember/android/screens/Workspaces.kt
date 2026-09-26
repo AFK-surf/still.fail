@@ -175,7 +175,7 @@ private fun Button(label: String, primary: Boolean, busy: Boolean = false, enabl
 
 /** A line to type in, on a soft frame. */
 @Composable
-private fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier) {
+internal fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier) {
     Box(
         modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
     ) {

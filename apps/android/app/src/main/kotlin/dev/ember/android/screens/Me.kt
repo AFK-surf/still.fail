@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextOverflow
+import dev.ember.android.ui.IconIn
+import dev.ember.android.ui.Icons
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -64,38 +68,45 @@ fun MeScreen(current: WorkspaceEntry) {
                 }
             }
         }
-        SectionHeader("账号与 workspace", start = 24.dp)
+        // One line per workspace: the name gives way with an ellipsis; which account it is under shows only when there are several.
+        val list = accounts.value.orEmpty()
+        SectionHeader("Workspace", start = 24.dp)
         ListCard {
-            val entries = workspaces.value?.entries().orEmpty()
-            entries.forEach { e ->
+            workspaces.value?.entries().orEmpty().forEach { e ->
                 ListRow(onClick = { app.pickWorkspace(e.workspace.id); app.home() }) {
-                    Text(e.workspace.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                    Text(e.account.email, fontSize = 13.sp, color = C.muted)
+                    Column(Modifier.weight(1f)) {
+                        Text(e.workspace.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (list.size > 1) Text(e.account.email, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (e.workspace.id == current.workspace.id) IconIn(Icons.Check, 14.dp, C.accent)
                 }
-            }
-            ListRow(onClick = { scope.launch { signIn(app, context) } }) {
-                Text("＋ 登录另一个 Google 账号", fontSize = 15.sp, color = C.accent)
             }
         }
         SectionHeader("外观", start = 24.dp)
         val themes = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
         Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },
             Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth(), height = 36.dp, fill = true)
-        // Signing out is per account, as on the web; with one account it is just 退出登录.
+        // Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added.
+        SectionHeader("账号", start = 24.dp)
         ListCard {
-            val list = accounts.value.orEmpty()
             list.forEach { a ->
-                ListRow(onClick = {
-                    scope.launch {
-                        try {
-                            Auth.signOut(app.core, a.sub)
-                            app.home()
-                            if (list.size > 1) app.toast = "已退出 ${a.email}"
-                        } catch (e: CoreException) {
-                            app.toast = "没能退出：${e.message}"
+                ListRow {
+                    Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(if (list.size > 1) "退出" else "退出登录", fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
+                        scope.launch {
+                            try {
+                                Auth.signOut(app.core, a.sub)
+                                app.home()
+                                if (list.size > 1) app.toast = "已退出 ${a.email}"
+                            } catch (e: CoreException) {
+                                app.toast = "没能退出：${e.message}"
+                            }
                         }
-                    }
-                }) { Text(if (list.size > 1) "退出 ${a.email}" else "退出登录", fontSize = 15.sp, color = C.red) }
+                    })
+                }
+            }
+            ListRow(onClick = { scope.launch { signIn(app, context) } }) {
+                Text("＋ 登录另一个 Google 账号", fontSize = 15.sp, color = C.accent)
             }
         }
         Spacer(Modifier.height(30.dp))

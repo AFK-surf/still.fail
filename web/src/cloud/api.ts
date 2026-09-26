@@ -15,6 +15,8 @@ export interface AccountWorkspaces {
   workspaces: WorkspaceSummary[];
   invitations: PendingInvitation[];
   relay_url: string | null;
+  /** The account's `/v1/me` has answered; until then (or after a failure) an empty list says nothing. */
+  loaded: boolean;
   error?: ErrorBody;
 }
 

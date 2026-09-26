@@ -234,8 +234,9 @@ private fun Toolbar(app: AppState, modifier: Modifier) {
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Seg(listOf("全部", "我参与的"), if (app.onlyMine) 1 else 0, { app.showOnlyMine(it == 1) }, Modifier.weight(1f).widthIn(max = 220.dp), height = 36.dp, fill = true)
-        Spacer(Modifier.weight(0.001f).widthIn(min = 12.dp))
+        Seg(listOf("全部", "我参与的"), if (app.onlyMine) 1 else 0, { app.showOnlyMine(it == 1) }, Modifier.width(200.dp), height = 36.dp, fill = true)
+        // The switch keeps its own width (a weight would stretch it up to the button); the room left goes between them.
+        Spacer(Modifier.weight(1f).widthIn(min = 16.dp))
         Box(
             Modifier.size(48.dp).shadow(10.dp, CircleShape).clip(CircleShape).background(C.ink).clickable { app.push(Screen.NewChat) },
             contentAlignment = Alignment.Center,
