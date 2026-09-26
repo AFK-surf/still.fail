@@ -773,7 +773,8 @@ export class AdminApi {
   /** Sets an app's icon (a PNG data URL); what went wrong, in words, or null. */
   async #setIcon(by: string, appId: string, icon: string): Promise<string | null> {
     try {
-      await this.#apps.setIcon(by, appId, Buffer.from(icon.replace(/^data:image\/png;base64,/, ""), "base64"));
+      const [, type = "image/png", data = ""] = /^data:(image\/[a-z]+);base64,(.*)$/s.exec(icon) ?? [];
+      await this.#apps.setIcon(by, appId, Buffer.from(data, "base64"), type);
       return null;
     } catch (error) {
       return error instanceof SlackApiError && error.code === "app_not_owned_by_manager_app"

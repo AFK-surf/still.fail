@@ -273,10 +273,11 @@ export class SlackApps {
     return { appId, clientId: String(data.credentials?.client_id ?? ""), clientSecret: String(data.credentials?.client_secret ?? "") };
   }
 
-  async setIcon(by: string, appId: string, png: Buffer): Promise<void> {
+  /** `type`: the picture's (a PNG or a JPEG). */
+  async setIcon(by: string, appId: string, picture: Buffer, type = "image/png"): Promise<void> {
     const form = new FormData();
     form.set("app_id", appId);
-    form.set("file", new Blob([new Uint8Array(png)], { type: "image/png" }), "icon.png");
+    form.set("file", new Blob([new Uint8Array(picture)], { type }), type === "image/jpeg" ? "icon.jpg" : "icon.png");
     await this.#forApp(by, appId, "apps.icon.set", form);
   }
 

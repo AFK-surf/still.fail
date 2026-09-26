@@ -99,7 +99,10 @@ export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; o
   );
 }
 
-/** Crops an image to a centred square and scales it to 1024 px, the size Slack wants (512–2000). */
+/**
+ * Crops an image to a centred square and scales it to 1024 px, the size Slack wants (512–2000), as a JPEG: small enough
+ * to send (a PNG of a rich picture is megabytes).
+ */
 async function toIcon(file: File): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
@@ -109,8 +112,12 @@ async function toIcon(file: File): Promise<string> {
     const side = Math.min(image.naturalWidth, image.naturalHeight);
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 1024;
-    canvas.getContext("2d")!.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 1024, 1024);
-    return canvas.toDataURL("image/png");
+    const g = canvas.getContext("2d")!;
+    // A JPEG has no transparency: what was clear is white, not black.
+    g.fillStyle = "#FFFFFF";
+    g.fillRect(0, 0, 1024, 1024);
+    g.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 1024, 1024);
+    return canvas.toDataURL("image/jpeg", 0.9);
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -153,7 +160,7 @@ function useBuddies(): Avatar[] | null {
   return list;
 }
 
-/** An avatar as the app's icon: 1024 px, its colour behind it, the drawing centred (a maker's mark smaller, in white when mono). */
+/** An avatar as the app's icon (a JPEG, its colour filling it): 1024 px, its colour behind it, the drawing centred (a maker's mark smaller, in white when mono). */
 async function renderAvatar(avatar: Avatar, bg: string, maker: boolean): Promise<string> {
   const image = new Image();
   image.src = avatar.src;
@@ -185,7 +192,7 @@ async function renderAvatar(avatar: Avatar, bg: string, maker: boolean): Promise
     const scale = (1024 * 0.92) / Math.max(w, h);
     g.drawImage(image, x, y, w, h, (1024 - w * scale) / 2, (1024 - h * scale) / 2, w * scale, h * scale);
   }
-  return canvas.toDataURL("image/png");
+  return canvas.toDataURL("image/jpeg", 0.9);
 }
 
 /** Where a picture has anything drawn (not transparent): x, y, width, height in its own pixels. */
