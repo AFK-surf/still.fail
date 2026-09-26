@@ -8,6 +8,9 @@ import { App } from "./App.tsx";
 import "./theme.css";
 import "./app.css";
 
+// ?core: the new client core on the page's console, while pages still use the old data layer.
+if (new URLSearchParams(location.search).has("core")) (window as unknown as { emberCore: unknown }).emberCore = () => import("./core/react.ts");
+
 const root = createRoot(document.getElementById("app")!);
 
 // Built twice: served by a station at /admin (talks to it directly), and as
