@@ -1369,13 +1369,11 @@ mod tests {
             assert!(token.starts_with("ember-token.fresh-") && token != "ember-token.fresh-1", "{token}");
             assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (3, 3));
 
-            // Nobody looks any more: the socket closes (after the topics' grace) and stays closed.
+            // Nobody looks any more: the core keeps its workspaces in sync all the same (sync.rs), so the socket stays.
             core.receive(ui, ClientMessage::Unsubscribe { id: 1, unsubscribe: true });
             core.receive(ui, ClientMessage::Unsubscribe { id: 2, unsubscribe: true });
             pass(crate::store::EVICT_AFTER_MS * 5 / 4).await;
-            assert_eq!(host.open_sockets("/v1/events"), 0);
-            pass(SOCKET_RETRY_MAX_MS).await;
-            assert_eq!(host.sockets.borrow().len(), 2);
+            assert_eq!(host.open_sockets("/v1/events"), 1);
         });
     }
 
