@@ -1437,6 +1437,8 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
   .shell { transition: grid-template-columns 380ms var(--ease-out); }
   [data-sidebar="closed"] .shell { grid-template-columns: 0px minmax(0, 1fr); }
   [data-sidebar="closed"] .sidebar { overflow: hidden; border-right-color: transparent; }
+  /* Closing or opening, its contents keep their width and are cut, not laid out anew at every step. */
+  .sidebar > :not(.resize-handle) { min-width: calc(var(--sidebar-w, 240px) - 1px); }
   [data-sidebar="closed"] .page-bar { padding-left: 52px; }
   [data-desktop][data-sidebar="closed"] .page-bar { padding-left: 124px; }
 }
