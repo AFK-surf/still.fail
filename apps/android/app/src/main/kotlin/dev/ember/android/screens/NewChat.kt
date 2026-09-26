@@ -127,7 +127,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
     LaunchedEffect(profiles) {
         for (p in profiles) if (p.check == null && checked.add(p.id)) launch { try { app.api(view.station).checkProfile(p.id) } catch (_: CoreException) {} }
     }
-    // The chat and its session are made on the first file or message, once.
+    // The chat and its session are made with the first message, once.
     var made by remember(view.station) { mutableStateOf<Deferred<Pair<String, Long>>?>(null) }
     var making by remember(view.station) { mutableStateOf(false) }
     val ensure: suspend () -> Pair<String, Long> = {
@@ -136,7 +136,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
             made = d
             making = true
             try {
-                d.complete(app.api(view.station).newChat(runtime!!.runtime, m, effort.ifEmpty { null }))
+                d.complete(app.api(view.station).newChat(runtime!!, m, effort.ifEmpty { null }))
             } catch (e: CoreException) {
                 made = null
                 d.completeExceptionally(e)
