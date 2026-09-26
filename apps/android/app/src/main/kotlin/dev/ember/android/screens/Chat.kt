@@ -894,7 +894,9 @@ class Draft {
     var focus by mutableIntStateOf(0)
     var warmed = 0L
     val uploading get() = files.any { it.done == null && it.error == null }
-    val ready get() = (text.isNotBlank() || files.any { it.done != null } || quotes.isNotEmpty()) && !uploading && !starting
+    /** Nothing can be sent (its station is offline). */
+    var locked by mutableStateOf(false)
+    val ready get() = (text.isNotBlank() || files.any { it.done != null } || quotes.isNotEmpty()) && !uploading && !starting && !locked
 
     fun quote(author: String, text: String, ts: String?, role: String) {
         val q = DraftQuote(System.nanoTime(), author, text, ts, role)
@@ -1065,6 +1067,7 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<C
     val keeper = agents.firstOrNull()?.key
     val launchers = AttachLaunchers { picked -> app.upload(draft, station, picked, scope) }
     val thread = view.thread
+    draft.locked = view.offline
     // A capsule floating over the list, which runs on around it.
     Column(
         modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)
@@ -1073,6 +1076,7 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<C
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { draft.focus++ }.padding(ComposerInset),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (view.offline) Text("这台 station 离线了：这里是之前读到的内容，暂时不能发消息。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
         DraftExtras(draft)
         ComposerBar(draft, "发消息", onPlus = { openAttach(app, launchers) },
             // Typing starts the session's runtime, so a cold start overlaps the writing.

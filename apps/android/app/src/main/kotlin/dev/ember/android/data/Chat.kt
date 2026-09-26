@@ -101,6 +101,8 @@ import kotlinx.serialization.Serializable
     val more: Boolean = false,
     val outbox: List<OutboxItem> = emptyList(),
     val link: LinkView = LinkView(),
+    /** Its station is offline (the core says): what was kept shows, nothing can be sent. */
+    val offline: Boolean = false,
 )
 
 @Serializable data class TimelineEntry(
