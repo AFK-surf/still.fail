@@ -782,12 +782,12 @@ test("the sidebar is one kind of item, an agent merged with its internal chat; a
     row = (await rows()).find((r) => r.id === String(chat.id));
     assert.deepEqual([row.title, row.last.text, row.last.authorKind, row.unread, row.mine], ["看看日志", "看看日志", "person", false, true]);
     // What the agent says is unread until read; the Slack thread's messages never show in the chat.
-    const said = t.store.insertMessage({ thread: chat.id, ts: "9.000001", authorKind: "agent", author: slackKey, text: "x".repeat(300) }).seq;
+    const said = t.store.insertMessage({ thread: chat.id, ts: "9.000001", authorKind: "agent", author: slackKey, text: "x".repeat(300) }).n;
     row = (await rows()).find((r) => r.id === String(chat.id));
     assert.deepEqual([row.unread, row.last.text.length, row.last.seq], [true, 200, said]);
-    await t.call("PUT", `/threads/${chat.id}/read`, { seq: said });
+    await t.call("PUT", `/threads/${chat.id}/read`, { n: said });
     assert.equal((await rows()).find((r) => r.id === String(chat.id)).unread, false);
-    assert.deepEqual((await t.call("GET", `/threads/${chat.id}/messages`)).body.messages.map((m: any) => m.text), ["看看日志", "x".repeat(300)]);
+    assert.deepEqual((await t.call("GET", `/threads/${chat.id}/entries`)).body.entries.map((e: any) => e.text), ["看看日志", "x".repeat(300)]);
 
     // Archived: its item goes.
     await t.call("POST", `/sessions/${encodeURIComponent(slackKey)}/archive`);
