@@ -11,7 +11,12 @@ import { join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const CLOUD_ORIGIN = (process.env.EMBER_CLOUD_ORIGIN ?? "https://ember.3720.org").replace(/\/+$/, "");
-const APP_ORIGIN = "app://ember";
+/**
+ * Where the page comes from: the web app packed with the app, at app://ember; or, run from the source with
+ * `--dev-url=<a Vite dev server>` (dev.sh HMR=1), that server, so changes to the page show as they are saved.
+ */
+const DEV_URL = process.argv.find((arg) => arg.startsWith("--dev-url="))?.slice("--dev-url=".length).replace(/\/+$/, "") ?? null;
+const APP_ORIGIN = DEV_URL ? new URL(DEV_URL).origin : "app://ember";
 /** Where ember cloud sends a native sign-in back to (cloud/src/auth.ts, APP_REDIRECT). */
 const AUTH_CALLBACK = "ember://auth/callback";
 /** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/ and ember_core.node. */
