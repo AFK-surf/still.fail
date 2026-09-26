@@ -2270,16 +2270,19 @@ mod tests {
     fn a_stream_silent_past_its_keepalive_is_read_again() {
         run(async {
             let (host, _sink, wire, stations) = setup();
+            // Timers 100 times faster: 40 s of silence is 0.4 s here.
+            host.speed_up(100);
+            let wait = |ms: u64| wait(ms / 100);
             stations.start(&live("k"));
             host.settle().await;
             assert_eq!(wire.count("GET", "/admin/api/sessions/k/live?from=0"), 1);
             // The keepalive keeps it open.
             wait(STREAM_IDLE_MS / 2).await;
             wire.push("/admin/api/sessions/k/live", ": ping\n\n");
-            wait(STREAM_IDLE_MS / 2 + 100).await;
+            wait(STREAM_IDLE_MS / 2 + 5_000).await;
             assert_eq!(wire.count("GET", "/admin/api/sessions/k/live?from=0"), 1);
             // Nothing at all for longer: the link is taken for gone, and it is asked for again.
-            wait(STREAM_IDLE_MS + RECONNECT_MS + 100).await;
+            wait(STREAM_IDLE_MS + RECONNECT_MS + 5_000).await;
             assert_eq!(wire.count("GET", "/admin/api/sessions/k/live?from=0"), 2);
         });
     }
