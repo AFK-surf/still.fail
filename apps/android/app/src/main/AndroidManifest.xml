@@ -27,6 +27,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="ember" android:host="auth" android:path="/callback" />
             </intent-filter>
+            <!-- An item's link (a session's link in Slack): the app opens it, verified by ember cloud's assetlinks.json. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPrefix="/o/" />
+            </intent-filter>
         </activity>
     </application>
 

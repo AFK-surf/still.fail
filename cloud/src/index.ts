@@ -206,6 +206,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return reply({ error: "invalid_request" }, 400);
     }
   }
+  // The Android app opens an item's link (/o/…) itself: this says the domain is its (App Links).
+  if (path === "/.well-known/assetlinks.json") {
+    return new Response(JSON.stringify(ASSET_LINKS), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" } });
+  }
   const handled = await api(request, env, url);
   if (handled) return handled;
   if (path === "/v1/auth/session" || path === "/v1/auth/sessions" || /^\/v1\/auth\/sessions\/[^/]+$/.test(path)) {
@@ -253,3 +257,13 @@ async function handle(request: Request, env: Env): Promise<Response> {
   const status = await record.publish(payload, timestamp.toString());
   return new Response(null, { status, headers: cors });
 }
+
+/** Android App Links: dev.ember.android, signed with this certificate, opens https://ember.3720.org/o/… itself. */
+const ASSET_LINKS = [{
+  relation: ["delegate_permission/common.handle_all_urls"],
+  target: {
+    namespace: "android_app",
+    package_name: "dev.ember.android",
+    sha256_cert_fingerprints: ["A0:1A:48:B5:E1:A6:D2:AB:FB:EA:34:57:B6:C7:1D:12:57:BC:42:97:93:BD:8B:3E:BE:F6:BE:8E:E1:55:B5:6A"],
+  },
+}];

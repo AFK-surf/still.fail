@@ -106,6 +106,12 @@ class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cl
     /** The top page gives way to another (a new chat becomes the chat it made). */
     fun replace(screen: Screen) { sheet = null; forward = true; stack = stack.dropLast(1) + screen }
     fun home() { sheet = null; forward = false; stack = listOf(Screen.Home) }
+    /** An item's link from outside: its workspace, and its page over the list (back goes to the list). */
+    fun openItem(workspace: String, station: String, session: String) {
+        pickWorkspace(workspace)
+        sheet = null; menu = null; forward = true
+        stack = listOf(Screen.Home, Screen.Chat("$workspace/$station", ChatOf.Session(session)))
+    }
 
     fun api(station: String) = StationApi(core, station)
     /** For what outlives the page that started it (a message sent as the page moves to its new chat). */

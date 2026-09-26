@@ -51,10 +51,19 @@ class MainActivity : ComponentActivity() {
         handle(intent)
     }
 
-    /** ember cloud's sign-in comes back as ember://auth/callback?…; the core finishes it. */
+    /**
+     * ember cloud's sign-in comes back as ember://auth/callback?…, which the core finishes; an item's link
+     * (https://ember.3720.org/o/<workspace>/<station>/<session>) opens that item.
+     */
     private fun handle(intent: Intent?) {
         val uri = intent?.data ?: return
         val app = app ?: return
+        val parts = uri.pathSegments
+        if (uri.scheme == "https" && parts.size == 4 && parts[0] == "o") {
+            setIntent(Intent())
+            app.openItem(parts[1], parts[2], parts[3])
+            return
+        }
         if (uri.scheme != "ember" || uri.host != "auth") return
         setIntent(Intent())
         lifecycleScope.launch {
