@@ -993,3 +993,5 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
   .activity-rows[data-shift], .activity-row:last-child, .activity-rows[data-shift] .activity-row:first-child { animation: none; }
   .agent-activity { transition: none; }
 }
+.agent-activity { grid-template-columns: minmax(0, 1fr); }
+.msg-row .msg-files { justify-content: flex-start; }
