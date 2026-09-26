@@ -478,10 +478,12 @@ impl Views {
         let detail = match self.store.value(&Topic::Session { station: station.to_string(), key: key.to_string() }) {
             Some(Ok(detail)) => detail,
             Some(Err(_)) => return None,
-            None => {
-                let summaries = self.ok(Topic::Sessions { station: station.to_string() })?;
-                json!({ "session": summaries.as_array()?.iter().find(|s| s.get("key").and_then(Value::as_str) == Some(key))? })
-            }
+            None => match self.ok(Topic::Sessions { station: station.to_string() }) {
+                Some(summaries) => json!({ "session": summaries.as_array()?.iter().find(|s| s.get("key").and_then(Value::as_str) == Some(key))? }),
+                // The station's list not read yet: the agent as the sidebar's rows have it (kept on the device), so a
+                // chat opened from them shows who its agents are at once.
+                None => json!({ "session": self.row_agent(station, key)? }),
+            },
         };
         let overview = self.ok(Topic::Overview { station: station.to_string() });
         let of = |list: &str, id: Option<&Value>| find(overview.as_ref().and_then(|o| o.get(list)), id);
@@ -493,6 +495,21 @@ impl Views {
             "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
             "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
         }))
+    }
+
+    /// An agent as a sidebar row lists it (key, runtime, model, effort, process, pending, lastTurn), with the connect
+    /// its row came from: a session's summary in short.
+    fn row_agent(&self, station: &str, key: &str) -> Option<Value> {
+        let rows = self.ok(Topic::ChatRows { station: station.to_string() })?;
+        rows.as_array()?.iter().find_map(|row| {
+            let mut agent = row.get("agents")?.as_array()?.iter().find(|a| a.get("key").and_then(Value::as_str) == Some(key))?.clone();
+            if row.get("session").and_then(Value::as_str) == Some(key)
+                && let (Some(connect), Some(obj)) = (row.get("connect").filter(|c| c.is_string()), agent.as_object_mut())
+            {
+                obj.insert("connect".into(), connect.clone());
+            }
+            Some(agent)
+        })
     }
 
     /// The page of an item whose agent has no chat yet: the agent alone, no messages, titled as the station's item

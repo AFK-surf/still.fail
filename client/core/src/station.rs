@@ -45,6 +45,10 @@ pub const RECONNECT_MS: u64 = 2_000;
 pub const EVENTS_COALESCE_MS: u64 = 400;
 /// Entries per page of a thread.
 pub const PAGE: u64 = 50;
+/// How many of a station's chats (the latest active) are brought onto the device ahead of being opened.
+const WARM_CHATS: usize = 30;
+/// The pause between two of them.
+const WARM_GAP_MS: u64 = 150;
 
 const EVENT_STREAM: &str = "text/event-stream";
 
@@ -334,6 +338,8 @@ struct StationState {
     gaps: HashMap<u64, Vec<Value>>,
     flushing: bool,
     link: Value,
+    /// Its chats were brought onto the device once (see `warm`).
+    warmed: bool,
 }
 
 impl StationState {
@@ -351,6 +357,7 @@ impl StationState {
             gaps: HashMap::new(),
             flushing: false,
             link: json!({ "state": "connecting" }),
+            warmed: false,
         }
     }
 
@@ -694,6 +701,56 @@ impl Stations {
         }
         if matches!(topic, Topic::Threads { .. } | Topic::Session { .. } | Topic::ChatRows { .. }) && let Some(station) = topic.station() {
             self.keep_summaries(station);
+        }
+        if let Topic::ChatRows { station } = topic {
+            let first = self.stations.borrow_mut().get_mut(station).is_some_and(|s| !std::mem::replace(&mut s.warmed, true));
+            if first && self.sink.get(topic).is_some() {
+                let (this, station) = (self.rc(), station.clone());
+                self.spawn_in(None, async move { this.warm(&station).await });
+            }
+        }
+    }
+
+    /// Once a station's sidebar rows are read, the chats they list come onto the device in the background, one after
+    /// another, the latest active first: each one's latest page (or, for one kept, what came after it) with its
+    /// summary and title, so a chat opens from what is kept rather than waiting for the station. Chats open meanwhile
+    /// read themselves; it stops when the station is no longer in use.
+    async fn warm(&self, station: &str) {
+        let Some(addr) = self.addr(station) else { return };
+        let rows = self.sink.get(&Topic::ChatRows { station: station.into() }).unwrap_or(Value::Null);
+        let mut chats: Vec<(f64, u64, Value)> = rows.as_array().into_iter().flatten()
+            .filter_map(|r| Some((r.get("lastActiveAt").and_then(Value::as_f64).unwrap_or(0.0), r.get("thread")?.as_u64()?, r.get("title").cloned().unwrap_or(Value::Null))))
+            .collect();
+        chats.sort_by(|a, b| b.0.total_cmp(&a.0));
+        chats.truncate(WARM_CHATS);
+        if chats.is_empty() {
+            return;
+        }
+        // The summaries a chat opens with (as the station lists its threads).
+        let threads = self.call(&addr, "GET", "/threads", Vec::new(), Vec::new()).await.ok();
+        for (_, id, title) in chats {
+            if self.addr(station).is_none() {
+                return;
+            }
+            let topic = Topic::Thread { station: station.into(), thread: id };
+            if self.is_live(&topic) {
+                continue;
+            }
+            let log = Log::thread(station, id);
+            let kept_last = self.kept.open(&log, 0).await.map(|(held, _)| held.last);
+            let path = match kept_last {
+                Some(last) => format!("/threads/{id}/entries?after={last}"),
+                None => format!("/threads/{id}/entries?limit={PAGE}"),
+            };
+            let Ok(answer) = self.call(&addr, "GET", &path, Vec::new(), Vec::new()).await else { continue };
+            let summary = threads.as_ref().and_then(|t| t.as_array()?.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned());
+            let entries = answer.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
+            if let Some(first) = entries.first().and_then(n_of) {
+                self.kept.write(&log, first, entries, false, summary.clone()).await;
+            }
+            self.kept.summary(&log, summary, title.is_string().then_some(title)).await;
+            // Gently: one chat at a time, with room between for what the viewer asks.
+            self.host.sleep(WARM_GAP_MS).await;
         }
     }
 
