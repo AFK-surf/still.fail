@@ -34,9 +34,10 @@ interface Entry {
   drop: ReturnType<typeof setTimeout> | null;
 }
 
-// A topic nobody watches is let go after a moment, so a remount (or React's
-// StrictMode double effect) does not resubscribe.
-const LINGER_MS = 2000;
+// A topic nobody watches is let go after a while: going back to what was just
+// shown (switching chats quickly, a remount) finds it current at once, with
+// no frame waiting for the core's first answer.
+const LINGER_MS = 30_000;
 const entries = new Map<string, Entry>();
 const IDLE: TopicState<never> = { value: undefined, error: null, loading: false };
 

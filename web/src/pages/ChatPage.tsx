@@ -99,7 +99,12 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   };
   const saveTabs = (next: string[]) => commit(next, active);
   const setActive = (key: string | null) => commit(open, key);
-  const openTab = (key: string) => commit(open.includes(key) ? open : [...open, key], key);
+  // Whether the panel is being opened here (it eases in then), not shown with the chat as it was left.
+  const [opening, setOpening] = useState(false);
+  const openTab = (key: string) => {
+    if (open.length === 0) setOpening(true);
+    commit(open.includes(key) ? open : [...open, key], key);
+  };
   const closeTab = (key: string) => {
     const next = open.filter((t) => t !== key);
     commit(next, shown === key ? next.at(-1) ?? null : active);
@@ -160,7 +165,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       <ChatPanel chat={chat} lives={lives} onOpenHistory={openHistory} {...firstMessage} />
       </div>
         {panel && shown && (
-          <Tabs.Root className="side-panel" value={shown} onValueChange={setActive}>
+          <Tabs.Root className="side-panel" value={shown} onValueChange={setActive} data-opening={opening || undefined} onAnimationEnd={(e) => { if (e.target === e.currentTarget) setOpening(false); }}>
             <ResizeHandle variable="--panel-w" edge="left" min={320} max={960} label="调整侧栏宽度" />
             <div className="side-bar">
               <Tabs.List className="side-tab-list" aria-label="执行历史">
