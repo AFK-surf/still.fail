@@ -615,9 +615,9 @@ mod tests {
             let (mesh, station) = setup(host.clone()).await;
             assert_eq!(host.stored(DEVICE_KEY).map(|k| k.len()), Some(32));
             let link = mesh.link(&station.id(), grants("ok", Rc::default())).await.unwrap();
-            assert_eq!(*station.grants.borrow(), vec!["ok-1".to_string()]);
-
+            // Requests follow the grant without waiting for its answer; by the reply the station has read it.
             let mut reply = link.request(head("/admin/api/sessions"), b"{\"a\":1}".to_vec()).await.unwrap();
+            assert_eq!(*station.grants.borrow(), vec!["ok-1".to_string()]);
             assert_eq!(reply.status, 200);
             assert!(reply.headers.contains(&("content-type".into(), "text/event-stream".into())));
             assert!(reply.headers.contains(&("x-method".into(), "POST".into())));
@@ -638,7 +638,9 @@ mod tests {
         run(async {
             let (mesh, station) = setup(FakeHost::new()).await;
             let count = Rc::new(Cell::new(0));
-            let error = mesh.link(&station.id(), grants("bad", count.clone())).await.err().unwrap();
+            // The link comes at once; its requests fail with the station's refusal.
+            let link = mesh.link(&station.id(), grants("bad", count.clone())).await.unwrap();
+            let error = link.request(head("/admin/api/sessions"), Vec::new()).await.err().unwrap();
             assert_eq!(error.code, "grant_refused");
             assert!(error.message.contains("station 拒绝了授权"), "{}", error.message);
             // A failed opening is not kept: the next call tries again.
@@ -659,6 +661,7 @@ mod tests {
             let c = mesh.link(&id, grants("ok", count.clone())).await.unwrap();
             assert!(Rc::ptr_eq(&a, &c));
             assert_eq!(count.get(), 1);
+            a.request(head("/admin/api/overview"), Vec::new()).await.unwrap();
             assert_eq!(station.conns.borrow().len(), 1);
         });
     }
@@ -669,6 +672,7 @@ mod tests {
             let (mesh, station) = setup(FakeHost::new()).await;
             let count = Rc::new(Cell::new(0));
             let first = mesh.link(&station.id(), grants("ok", count.clone())).await.unwrap();
+            first.request(head("/admin/api/overview"), Vec::new()).await.unwrap();
             station.conns.borrow()[0].close(3u32.into(), b"grant_expired");
             for _ in 0..100 {
                 if first.closed().is_some() {
@@ -679,8 +683,8 @@ mod tests {
             assert_eq!(first.closed().as_deref(), Some("授权已过期"));
             let second = mesh.link(&station.id(), grants("ok", count.clone())).await.unwrap();
             assert!(!Rc::ptr_eq(&first, &second));
-            assert_eq!(*station.grants.borrow(), vec!["ok-1".to_string(), "ok-2".to_string()]);
             let reply = second.request(head("/admin/api/overview"), Vec::new()).await.unwrap();
+            assert_eq!(*station.grants.borrow(), vec!["ok-1".to_string(), "ok-2".to_string()]);
             assert_eq!(reply.status, 200);
             assert!(reply.body().await.is_ok());
         });

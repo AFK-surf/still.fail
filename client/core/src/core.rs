@@ -147,19 +147,6 @@ impl Core {
                 core.accounts_changed();
             }
         }));
-        // Signed in: bring the device endpoint up now and let it reach the relay while the page loads, so the first
-        // station link only has its own handshake to do.
-        if !accounts.list().is_empty() {
-            let warm = Rc::downgrade(&inner);
-            host.spawn(
-                async move {
-                    if let Some(core) = warm.upgrade() {
-                        let _ = core.mesh().await;
-                    }
-                }
-                .boxed_local(),
-            );
-        }
         Core { inner, next_client: Cell::new(1) }
     }
 
@@ -497,7 +484,21 @@ impl Inner {
             }
             if let Ok(me) = &me {
                 if let Some(url) = me.get("relay_url").and_then(Value::as_str) {
+                    let first = self.relay_url.borrow().is_none();
                     self.relay_url.borrow_mut().get_or_insert_with(|| url.to_string());
+                    // The relay is known: bring the device endpoint up now and let it reach the relay while the page
+                    // loads, so a station link has only its own handshake to do (no request of its own: the URL is here).
+                    if first && self.mesh.borrow().is_none() {
+                        let warm = self.me.clone();
+                        self.host.spawn(
+                            async move {
+                                if let Some(core) = warm.upgrade() {
+                                    let _ = core.mesh().await;
+                                }
+                            }
+                            .boxed_local(),
+                        );
+                    }
                 }
                 self.reach.borrow_mut().insert(account.sub.clone(), me.clone());
             }
