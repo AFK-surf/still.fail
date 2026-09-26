@@ -96,7 +96,8 @@ async function body(req: IncomingMessage): Promise<Record<string, any>> {
 }
 
 function send(res: ServerResponse, status: number, value: unknown): void {
-  res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(value));
+  const text = JSON.stringify(value);
+  res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", "content-length": Buffer.byteLength(text) }).end(text);
 }
 
 /** Memory of each recorded runtime process group, from ps. */
@@ -196,6 +197,13 @@ export class AdminApi {
     const url = new URL(req.url ?? "/", "http://ember");
     if (!url.pathname.startsWith("/admin/api/")) return false;
     const path = url.pathname.slice("/admin/api".length);
+    // What each request cost here, to tell the station's share of a slow page from the network's.
+    const started = performance.now();
+    let who = "?";
+    res.on("close", () => log.info("admin request", {
+      method: req.method, path: url.pathname.slice("/admin/api".length) + url.search, status: res.statusCode,
+      ms: Math.round(performance.now() - started), bytes: Number(res.getHeader("content-length") ?? 0) || undefined, via: who,
+    }));
     try {
       let viewer: Viewer;
       try {
@@ -204,6 +212,7 @@ export class AdminApi {
         if (error instanceof AccessDenied) throw new HttpError(403, error.message);
         throw error;
       }
+      who = viewer.via;
       if (viewer.via === "mesh" && viewer.name) this.#deps.names.set(viewer.email, viewer.name);
       await this.#route(req, res, url, path, viewer);
     } catch (error) {
