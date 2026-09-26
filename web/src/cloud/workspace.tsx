@@ -140,7 +140,6 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             <span className="ws-mark" aria-hidden="true">{([...current.name][0] ?? "?").toUpperCase()}</span>
             <span className="account-text">
               <span className="account-name">{current.name}</span>
-              <span className="account-email">{current.account.email}</span>
             </span>
             {pending.length > 0 && <span className="invite-dot" role="img" aria-label={`${pending.length} 个邀请`} />}
             <ChevronsUpDown {...ICON} size={14} />
