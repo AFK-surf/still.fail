@@ -1,7 +1,7 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { scopeOf, useStation, useLink } from "../station.tsx";
-import { ExternalLink, MessageCircle, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { ExternalLink, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind, type SlackAppLinks } from "../api.ts";
