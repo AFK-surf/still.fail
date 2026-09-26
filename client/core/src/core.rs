@@ -175,7 +175,7 @@ fn gone() -> CoreError {
 }
 
 impl Inner {
-    async fn execute(self: Rc<Self>, call: Call) -> Result<Value> {
+    async fn execute(&self, call: Call) -> Result<Value> {
         match call {
             Call::AuthBegin { redirect_uri, return_to, device_name } => {
                 let url = self.accounts.begin_sign_in(&redirect_uri, &return_to, &device_name).await?;
@@ -472,7 +472,7 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         device: Option<String>,
     }
 
-    fn params<T: DeserializeOwned>(params: Value) -> Result<T> {
+    fn read<T: DeserializeOwned>(params: Value) -> Result<T> {
         serde_json::from_value(params_or_empty(params)).map_err(|e| CoreError::invalid(format!("参数不对：{e}")))
     }
     fn base64(text: &str, what: &str) -> Result<Vec<u8>> {
@@ -481,29 +481,29 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
 
     Ok(match name {
         "auth.begin" => {
-            let p: Begin = params(params)?;
+            let p: Begin = read(params)?;
             Call::AuthBegin { redirect_uri: p.redirect_uri, return_to: p.return_to, device_name: p.device_name }
         }
-        "auth.complete" => Call::AuthComplete { query: params::<Complete>(params)?.query },
-        "auth.signOut" => Call::SignOut { account: params::<SignOut>(params)?.account },
+        "auth.complete" => Call::AuthComplete { query: read::<Complete>(params)?.query },
+        "auth.signOut" => Call::SignOut { account: read::<SignOut>(params)?.account },
         "cloud.request" => {
-            let p: CloudRequest = params(params)?;
+            let p: CloudRequest = read(params)?;
             Call::CloudRequest { account: p.account, method: p.method, path: p.path, body: p.body }
         }
         "station.request" => {
-            let p: StationRequest = params(params)?;
+            let p: StationRequest = read(params)?;
             Call::StationRequest { station: p.station, method: p.method, path: p.path, body: p.body }
         }
         "station.upload" => {
-            let p: Upload = params(params)?;
+            let p: Upload = read(params)?;
             Call::StationUpload { bytes: base64(&p.bytes, "文件内容")?, station: p.station, key: p.key, name: p.name }
         }
         "station.file" => {
-            let p: File = params(params)?;
+            let p: File = read(params)?;
             Call::StationFile { station: p.station, key: p.key, name: p.name }
         }
         "migrate" => {
-            let p: Migrate = params(params)?;
+            let p: Migrate = read(params)?;
             let device = match p.device {
                 Some(text) => {
                     let key = base64(&text, "设备密钥")?;
