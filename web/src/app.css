@@ -1056,3 +1056,9 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .code-copy { height: 24px; padding: 0 7px; font-size: 11px; background: color-mix(in oklch, var(--canvas) 80%, transparent); }
 .markdown .code-block pre, .code-shiki pre.shiki { padding: 12px 14px; font-size: 12.5px; line-height: 1.6; }
 .markdown :not(pre) > code { padding: 1px 5px; border-radius: 5px; background: color-mix(in oklch, var(--text) 6%, transparent); font-size: .88em; color: var(--text); }
+/* Circles and capsules keep true round ends; smooth corners are for ordinary rounded rectangles. */
+.activity-done, .activity-pulse, .attach-btn, .chip, .choice-badge, .composer-box:not([data-multiline]), .composer-quote-remove,
+.file-card-remove, .h-place, .invite-dot, .lightbox-action, .lightbox-bar, .msg-avatar, .msg-avatar .avatar, .msg-avatar img,
+.nav-marker, .person, .pill, .quota-fill, .quota-track, .radio, .radio-dot, .segmented, .segmented-option, .send-btn, .spinner,
+.status-dot, .switch, .switch-thumb, .toast, .btn, .quote-pop, .people-stack img, img.person { corner-shape: round; }
+::-webkit-scrollbar-thumb { corner-shape: round; }
