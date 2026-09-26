@@ -59,6 +59,8 @@ export interface StationView {
   host: HostInfo | null;
   /** Runtimes with an enabled model, and those models. */
   runtimes: { runtime: RuntimeKind; models: string[] }[];
+  /** The models it can run, each with the runtimes it runs on (the core's). */
+  models: { model: string; runtimes: RuntimeKind[] }[];
 }
 
 export interface ConnectsView { items: { station: string; stationName: string; connect: ConnectView }[]; loading: boolean }

@@ -34,11 +34,19 @@ export function connectSubtitle(c: ConnectView): string {
   return `${RUNTIME_LABEL[c.bind.runtime]} · ${agentLabel(c.bind.model ?? undefined, c.bind.effort)}`;
 }
 
+function useStationView() {
+  const station = useStation();
+  return useStations(scopeOf(station.address)).value?.find((s) => s.station === station.address);
+}
+
 /** The models the station's profiles of a runtime have enabled, as the core puts them together (the station's `runtimes`). */
 function useRuntimeModels(runtime: RuntimeKind): string[] {
-  const station = useStation();
-  const view = useStations(scopeOf(station.address)).value?.find((s) => s.station === station.address);
-  return view?.runtimes.find((r) => r.runtime === runtime)?.models ?? [];
+  return useStationView()?.runtimes.find((r) => r.runtime === runtime)?.models ?? [];
+}
+
+/** The models the station can run, each with the runtimes it runs on (the core's). */
+function useStationModels(): { model: string; runtimes: RuntimeKind[] }[] {
+  return useStationView()?.models ?? [];
 }
 
 function ConnectDetail({ connect, overview }: { connect: ConnectView; overview: Overview }) {
@@ -402,21 +410,24 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const [step, setStep] = useState<1 | 2>(1);
   const [made, setMade] = useState<{ appId: string; links: SlackAppLinks } | null>(null);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
-  const [runtime, setRuntime] = useState<RuntimeKind>("claude");
+  // The model first; the runtime only when the model runs on more than one.
+  const models = useStationModels();
   const [model, setModel] = useState("");
+  const [picked, setPicked] = useState<RuntimeKind | null>(null);
+  const entry = models.find((m) => m.model === model) ?? models[0];
+  const runtime: RuntimeKind = entry && picked && entry.runtimes.includes(picked) ? picked : entry?.runtimes[0] ?? "claude";
   const [effort, setEffort] = useState("");
   const [mode, setMode] = useState<{ mode: ConnectMode; requireMention: boolean }>({ mode: "multi-session", requireMention: true });
-  const models = useRuntimeModels(runtime);
   const configured = overview.value?.slackConfig.configured ?? false;
 
   const close = () => {
-    setStep(1); setMade(null); setTokens(emptyTokens); setModel(""); setEffort("");
+    setStep(1); setMade(null); setTokens(emptyTokens); setModel(""); setPicked(null); setEffort("");
     setMode({ mode: "multi-session", requireMention: true });
     onClose();
   };
   const makeApp = useAction(() => api.makeSlackApp(), (result) => setMade(result));
   const create = useAction(() => api.createConnect({
-    kind: "slack", ...mode, bind: { runtime, model: model.trim(), effort },
+    kind: "slack", ...mode, bind: { runtime, model: entry?.model ?? "", effort },
     slack: { appToken: tokens.appToken, botToken: tokens.botToken, ...(made ? { appId: made.appId } : {}) },
   }), ({ id }) => {
     toast("已添加连接，正在连接 Slack");
@@ -463,18 +474,23 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
       )}
       {step === 2 && (
         <>
-          <Field label="运行时" hint="创建后不能换。">
-            <Segmented label="运行时" value={runtime} onChange={(r) => { setRuntime(r); setModel(""); setEffort(""); }}
-              options={[{ value: "claude", label: "Claude Code" }, { value: "codex", label: "Codex" }]} />
-          </Field>
           <div className="field-grid">
             <Field label="模型" htmlFor="new-connect-model">
-              <ModelPicker id="new-connect-model" runtime={runtime} value={model} onChange={setModel} />
+              {models.length === 0
+                ? <Link id="new-connect-model" className="input input-link" to={link("/settings/accounts")}>Profile 还没有启用模型 · 去勾选</Link>
+                : <Select id="new-connect-model" value={entry?.model ?? ""} onChange={(m) => { setModel(m); setEffort(""); }} label="模型"
+                    options={models.map((m) => ({ value: m.model, label: m.model }))} />}
             </Field>
             <Field label="思考深度" htmlFor="new-connect-effort">
               <EffortPicker id="new-connect-effort" runtime={runtime} value={effort} onChange={setEffort} />
             </Field>
           </div>
+          {entry && entry.runtimes.length > 1 && (
+            <Field label="运行时" hint="这个模型两个运行时都能跑。创建后不能换。">
+              <Segmented label="运行时" value={runtime} onChange={(r) => { setPicked(r); setEffort(""); }}
+                options={entry.runtimes.map((r) => ({ value: r, label: RUNTIME_LABEL[r] }))} />
+            </Field>
+          )}
           <Field label="会话方式">
             <ModeChoices mode={mode.mode} requireMention={mode.requireMention} onChange={setMode} />
           </Field>

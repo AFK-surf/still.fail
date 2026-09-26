@@ -63,12 +63,13 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   const api = useApi();
   const profiles = view.overview?.profiles ?? [];
   const [choice, setChoice] = useState<Choice>(() => ({ runtime: "", model: "", effort: "", ...lastChoice(station.id) }));
-  // Runtimes this station has models for; which profile runs the chat is the station's account pool's choice.
-  const runtimes = view.runtimes.map((r) => r.runtime);
+  // The model first, from what the station's profiles have enabled; then, only when it runs on more than one, the
+  // runtime. Which profile runs the chat is the station's account pool's choice. A remembered model or runtime that is
+  // no longer there gives way to the first that is.
+  const entry = view.models.find((m) => m.model === choice.model) ?? view.models[0];
+  const model = entry?.model ?? "";
+  const runtimes = entry?.runtimes ?? [];
   const runtime: RuntimeKind | undefined = runtimes.includes(choice.runtime as RuntimeKind) ? (choice.runtime as RuntimeKind) : runtimes[0];
-  const enabled = view.runtimes.find((r) => r.runtime === runtime)?.models ?? [];
-  // Only enabled models can be used: a remembered one that is no longer enabled gives way to the first that is.
-  const model = enabled.includes(choice.model) ? choice.model : enabled[0] ?? "";
   useEffect(() => {
     if (runtime && runtime !== choice.runtime) setChoice((c) => ({ ...c, runtime, effort: "" }));
   }, [runtime]);
@@ -115,19 +116,19 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         // Nothing to choose from: the chooser leads to where models are enabled.
         <Link className="chooser" to={`${station.base}/settings/accounts`} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
       ) : (
-      <Chooser label={<><ModelLogo model={model} runtime={runtime} size={13} />{modelLabel}</>} title="用哪个运行时和模型">
-        {runtimes.map((rt) => (
-          <DropdownMenu.Group key={rt}>
-            <DropdownMenu.Label className="menu-label chooser-group"><RuntimeLogo runtime={rt} size={12} />{RUNTIME_LABEL[rt]}</DropdownMenu.Label>
-            {(view.runtimes.find((r) => r.runtime === rt)?.models ?? []).map((m) => (
-              <Item key={m} checked={rt === runtime && model === m} onSelect={() => pick({ runtime: rt, model: m, ...(rt !== runtime ? { effort: "" } : {}) })}>
-                <ModelLogo model={m} runtime={rt} size={12} />{m}
-              </Item>
-            ))}
-          </DropdownMenu.Group>
+      <Chooser label={<><ModelLogo model={model} runtime={runtime} size={13} />{modelLabel}</>} title="用哪个模型">
+        {view.models.map((m) => (
+          <Item key={m.model} checked={model === m.model} onSelect={() => pick({ model: m.model, ...(m.runtimes.includes(runtime!) ? {} : { runtime: m.runtimes[0], effort: "" }) })}>
+            <ModelLogo model={m.model} runtime={m.runtimes[0]!} size={12} />{m.model}
+          </Item>
         ))}
       </Chooser>
       )}
+      {/* The runtime only when the model runs on more than one. */}
+      {runtime && runtimes.length > 1 && (
+        <Chooser label={<><RuntimeLogo runtime={runtime} size={12} />{RUNTIME_LABEL[runtime]}</>} title="用哪个运行时">
+          {runtimes.map((rt) => <Item key={rt} checked={rt === runtime} onSelect={() => pick({ runtime: rt, effort: "" })}><RuntimeLogo runtime={rt} size={12} />{RUNTIME_LABEL[rt]}</Item>)}
+        </Chooser>
       {runtime && (
         <Chooser label={<>思考 {choice.effort ? EFFORT_LABEL[choice.effort] ?? choice.effort : "默认"}</>} title="思考深度">
           <Item checked={!choice.effort} onSelect={() => pick({ effort: "" })}>运行时默认</Item>
