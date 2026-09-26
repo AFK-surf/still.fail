@@ -8,7 +8,7 @@ import { NewChat } from "../NewChat.tsx";
 import { lastChat, useRememberChat } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
 import { useMemo, useState, type ReactNode } from "react";
-import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { keys, makeApi, useLiveUpdates, type Overview, type SessionSummary } from "../api.ts";
 import { connectionText, dayLabel, modeShort, presence } from "../format.ts";
 import { AccountPage, AccountsPage } from "../pages/Accounts.tsx";
@@ -155,7 +155,7 @@ function WorkspaceHome({ view, stations }: { view: WorkspaceView | undefined; st
       <h2>{stations.length ? "选一个会话" : "这个 workspace 还没有 station"}</h2>
       <p>{stations.length
         ? `左边是 ${stations.length} 台 station 上的会话${up < stations.length ? `（${stations.length - up} 台离线）` : ""}，最近活动的在最上面。`
-        : "到「设置」里添加一台 station：在要运行 ember 的机器上执行一条命令即可。"}</p>
+        : <>到 <Link className="inline-link" to={`/w/${view.id}/settings/stations`}>设置 → Station</Link> 里添加一台 station：在要运行 ember 的机器上执行一条命令即可。</>}</p>
     </Empty>
   );
 }
@@ -185,7 +185,7 @@ function WorkspaceSidebar({ entry, stations, loading }: { entry: WorkspaceEntry;
         {failed.map((s) => <p key={s.id} className="nav-empty nav-error">连不上「{s.name}」，正在重试…</p>)}
         {groups.length === 0 && (connecting.length > 0 || loading) && <SkeletonRows />}
         {offline.length > 0 && <p className="nav-empty">{offline.map((s) => s.name).join("、")} 离线，它们的会话暂时看不到。</p>}
-        {groups.length === 0 && !failed.length && !connecting.length && !loading && <p className="nav-empty">{onlyMine ? "没有你发起的会话。" : stations.length ? "还没有会话。在 Slack 里 @ 它们，或者打开会话新建对话。" : "还没有 station，到「设置 → Station」添加。"}</p>}
+        {groups.length === 0 && !failed.length && !connecting.length && !loading && <p className="nav-empty">{onlyMine ? "没有你发起的会话。" : stations.length ? <>还没有会话。在 Slack 里 @ 它们，或者 <NavLink className="inline-link" to={`/w/${entry.id}/new`}>新建对话</NavLink>。</> : <>还没有 station，到 <NavLink className="inline-link" to={`/w/${entry.id}/settings/stations`}>设置 → Station</NavLink> 添加。</>}</p>}
         {groups.map((group) => (
           <section key={group.label} aria-label={group.label}>
             <div className="nav-heading">{group.label}</div>

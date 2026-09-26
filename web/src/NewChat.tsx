@@ -3,6 +3,7 @@
 // message (or file) makes the session and its chat on that station.
 import { Check, ChevronDown, Server } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
+import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { keys, makeApi, useOverview, type ProfileView } from "./api.ts";
@@ -106,7 +107,11 @@ function NewChatOn({ station, stations, onStation, onCreated }: { station: Stati
           {stations.map((s) => <Item key={s.id} checked={s.id === station.id} onSelect={() => onStation(s.id)}>{s.name}</Item>)}
         </Chooser>
       )}
-      <Chooser label={runtime ? <><ModelLogo model={model || null} runtime={runtime} size={13} />{modelLabel}</> : "没有可用模型"} title="用哪个运行时和模型">
+      {!runtime || !model ? (
+        // Nothing to choose from: the chooser leads to where models are enabled.
+        <Link className="chooser" to={`${station.base}/settings/accounts`} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
+      ) : (
+      <Chooser label={<><ModelLogo model={model} runtime={runtime} size={13} />{modelLabel}</>} title="用哪个运行时和模型">
         {runtimes.map((rt) => (
           <DropdownMenu.Group key={rt}>
             <DropdownMenu.Label className="menu-label chooser-group"><RuntimeLogo runtime={rt} size={12} />{RUNTIME_LABEL[rt]}</DropdownMenu.Label>
@@ -118,6 +123,7 @@ function NewChatOn({ station, stations, onStation, onCreated }: { station: Stati
           </DropdownMenu.Group>
         ))}
       </Chooser>
+      )}
       {runtime && (
         <Chooser label={<>思考 {choice.effort ? EFFORT_LABEL[choice.effort] ?? choice.effort : "默认"}</>} title="思考深度">
           <Item checked={!choice.effort} onSelect={() => pick({ effort: "" })}>运行时默认</Item>
@@ -133,8 +139,8 @@ function NewChatOn({ station, stations, onStation, onCreated }: { station: Stati
         <h1 className="new-chat-title">新对话</h1>
         <p className="new-chat-sub">说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
         {overview.isPending ? <p className="muted">正在读取 {station.name} 的 Profile…</p>
-          : profiles.length === 0 ? <p className="field-error">这台 station 还没有 Profile，先到设置里加一个。</p>
-          : !runtimes.length && <p className="field-error">这台 station 的 Profile 都还没有启用模型。到「设置 → Profile」里勾选可以用的模型。</p>}
+          : profiles.length === 0 ? <p className="field-error">这台 station 还没有 Profile，先到 <Link className="inline-link" to={`${station.base}/settings/accounts`}>设置 → Profile</Link> 里加一个。</p>
+          : !runtimes.length && <p className="field-error">这台 station 的 Profile 都还没有启用模型。到 <Link className="inline-link" to={`${station.base}/settings/accounts`}>设置 → Profile</Link> 里勾选可以用的模型。</p>}
         <Composer sessionKey={null} ensureSession={ensureSession} placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
           onSent={(key) => onCreated(station, key)} />
         {making && <p className="muted new-chat-making">正在 {station.name} 上创建会话…</p>}

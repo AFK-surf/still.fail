@@ -318,11 +318,13 @@ function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClo
 
 /** Model choice: the account's model list when it has been checked, free text otherwise. */
 export function ModelPicker({ id, account, value, onChange }: { id: string; account: ProfileView | undefined; value: string; onChange(value: string): void }) {
+  const link = useLink();
   // Only models enabled on the profile can be bound.
   const models = account?.models ?? [];
   const fallback = account?.model ? `账号默认（${account.model}）` : "运行时默认";
   if (models.length === 0) {
-    return <Select id={id} value="" onChange={() => {}} options={[{ value: "", label: `${fallback}（这个 Profile 还没有启用模型）` }]} label="模型" />;
+    // Nothing to choose from: the field leads to where this profile's models are enabled.
+    return <Link id={id} className="input input-link" to={link(account ? `/settings/accounts/${account.id}` : "/settings/accounts")}>这个 Profile 还没有启用模型 · 去勾选</Link>;
   }
   const options = [{ value: "", label: fallback }, ...[...new Set([...(value ? [value] : []), ...models])].map((m) => ({ value: m, label: m }))];
   return <Select id={id} value={value} onChange={onChange} options={options} label="模型" />;
@@ -351,7 +353,7 @@ function BindSection({ connect, overview }: { connect: ConnectView; overview: Ov
           </Field>
         </div>
         <div className="field-grid">
-          <Field label="模型" htmlFor="bind-model" hint={chosen?.models.length ? `这个 Profile 启用了 ${chosen.models.length} 个模型。` : "在「Profile」页面勾选模型后，这里才能选。"}>
+          <Field label="模型" htmlFor="bind-model" hint={chosen?.models.length ? `这个 Profile 启用了 ${chosen.models.length} 个模型。` : <>在 <Link className="inline-link" to={link(chosen ? `/settings/accounts/${chosen.id}` : "/settings/accounts")}>Profile 页面</Link> 勾选模型后，这里才能选。</>}>
             <ModelPicker id="bind-model" account={chosen} value={model} onChange={setModel} />
           </Field>
           <Field label="思考深度" htmlFor="bind-effort">
@@ -492,7 +494,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
           </Field>
           <div className="field-grid">
             <Field label="Profile" htmlFor="new-connect-account"
-              error={accounts.length === 0 ? `还没有 ${RUNTIME_LABEL[runtime]} 的 Profile，先到「设置 → Profile」添加。` : undefined}>
+              error={accounts.length === 0 ? <>还没有 {RUNTIME_LABEL[runtime]} 的 Profile，先到 <Link className="inline-link" to={link("/settings/accounts")}>设置 → Profile</Link> 添加。</> : undefined}>
               <Select id="new-connect-account" value={chosen?.id ?? ""} onChange={(v) => { setAccount(v); setModel(""); }} disabled={accounts.length === 0}
                 options={accounts.map((p) => ({ value: p.id, label: p.name }))} placeholder="没有可用账号" />
             </Field>

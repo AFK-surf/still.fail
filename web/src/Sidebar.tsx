@@ -72,7 +72,7 @@ function MainNav() {
       <div className="nav-scroll">
         {sessions.isPending && <SkeletonRows />}
         {groups.length === 0 && !sessions.isPending && (
-          <p className="nav-empty">{onlyMine ? "没有你发起的会话。" : connects.length ? "在 Slack 里 @ 它，会话就会出现在这里。" : "先到「设置 → 连接」添加一个连接。"}</p>
+          <p className="nav-empty">{onlyMine ? "没有你发起的会话。" : connects.length ? "在 Slack 里 @ 它，会话就会出现在这里。" : <>先到 <NavLink className="inline-link" to={link("/settings/connects")}>设置 → 连接</NavLink> 添加一个连接。</>}</p>
         )}
         {groups.map((group) => (
           <section key={group.label} aria-label={group.label}>
