@@ -496,6 +496,8 @@ impl Views {
             let person = m.get("authorKind").and_then(Value::as_str) == Some("person");
             let author = m.get("author").and_then(Value::as_str).unwrap_or("").to_string();
             m["mine"] = json!(person && crate::present::is_viewer(&viewer, &author, &slack_users));
+            // What ember itself says in a chat (a limit hit, a failure): a notice, not someone's message.
+            m["system"] = json!(m.get("authorKind").and_then(Value::as_str) == Some("ember"));
         }
         // A sent message leaves the outbox as its own entry (or anything later) arrives.
         let newest = page.get("last").and_then(Value::as_u64);
@@ -692,20 +694,39 @@ fn runtimes(overview: Option<&Value>) -> Value {
 /// The models the station can run, each with the runtimes it runs on (those of the profiles that have it enabled):
 /// a model is chosen first, and a runtime only when it has more than one.
 fn models(overview: Option<&Value>) -> Value {
-    let mut on: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    let mut on: BTreeMap<&str, (BTreeSet<&str>, Vec<Option<f64>>)> = BTreeMap::new();
     for p in overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten() {
         let runtimes: Vec<&str> = p.get("runtimes").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+        let back = spent_until(p);
         for model in p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
-            on.entry(model).or_default().extend(runtimes.iter().copied());
+            let entry = on.entry(model).or_default();
+            entry.0.extend(runtimes.iter().copied());
+            entry.1.push(back);
         }
     }
     // Claude Code first where both run it: it is the one most chats use.
     let order = |r: &&str| RUNTIMES.iter().position(|x| x == r).unwrap_or(usize::MAX);
-    Value::Array(on.into_iter().map(|(model, runtimes)| {
+    Value::Array(on.into_iter().map(|(model, (runtimes, backs))| {
         let mut runtimes: Vec<&str> = runtimes.into_iter().collect();
         runtimes.sort_by_key(order);
-        json!({ "model": model, "runtimes": runtimes })
+        // Spent when every account that runs it has a window used up; back when the first of them refills.
+        let spent = backs.iter().all(Option::is_some).then(|| backs.iter().flatten().copied().fold(f64::INFINITY, f64::min));
+        json!({ "model": model, "runtimes": runtimes, "spent": spent.map(|until| json!({ "until": until.is_finite().then_some(until) })) })
     }).collect())
+}
+
+/// When a profile whose quota has a window used up can run again: when the last of those windows refills (unknown:
+/// infinity). None when nothing of it is used up.
+fn spent_until(profile: &Value) -> Option<f64> {
+    let quota = profile.get("quota").filter(|q| q.get("state").and_then(Value::as_str) == Some("ok"))?;
+    let full: Vec<Option<f64>> = quota.get("windows").and_then(Value::as_array).into_iter().flatten()
+        .filter(|w| w.get("usedPercent").and_then(Value::as_f64).is_some_and(|u| u >= 100.0))
+        .map(|w| w.get("resetsAt").and_then(Value::as_f64))
+        .collect();
+    if full.is_empty() {
+        return None;
+    }
+    Some(full.iter().map(|at| at.unwrap_or(f64::INFINITY)).fold(0.0, f64::max))
 }
 
 #[cfg(test)]
@@ -1114,7 +1135,8 @@ mod tests {
             t.set(workspace(), stations(t.now_s(), true, false));
             t.read(&mut ui, 1).await;
             let overview_a = json!({"connects": [], "profiles": [
-                {"id": "p1", "runtimes": ["codex"], "models": ["o3", "gpt-5"]},
+                // Its week used up: its models are spent until it refills.
+                {"id": "p1", "runtimes": ["codex"], "models": ["o3", "gpt-5"], "quota": {"state": "ok", "windows": [{"label": "5 小时", "usedPercent": 40, "resetsAt": 100}, {"label": "每周", "usedPercent": 100, "resetsAt": 5000}]}},
                 {"id": "p2", "runtimes": ["claude"], "models": []},
                 {"id": "p3", "runtimes": ["claude"], "models": ["sonnet"]},
                 {"id": "p4", "runtimes": ["claude"], "models": ["opus", "sonnet"]},
@@ -1134,7 +1156,10 @@ mod tests {
             assert_eq!(v[0]["host"], json!({"hostname": "studio"}));
             assert_eq!(v[0]["runtimes"], json!([{"runtime": "claude", "models": ["deepseek-flash", "opus", "sonnet"]}, {"runtime": "codex", "models": ["deepseek-flash", "gpt-5", "o3"]}]));
             // An account run on both offers its model on both: a runtime is chosen for it.
-            assert_eq!(v[0]["models"], json!([{"model": "deepseek-flash", "runtimes": ["claude", "codex"]}, {"model": "gpt-5", "runtimes": ["codex"]}, {"model": "o3", "runtimes": ["codex"]}, {"model": "opus", "runtimes": ["claude"]}, {"model": "sonnet", "runtimes": ["claude"]}]));
+            assert_eq!(v[0]["models"], json!([
+                {"model": "deepseek-flash", "runtimes": ["claude", "codex"], "spent": null}, {"model": "gpt-5", "runtimes": ["codex"], "spent": {"until": 5000.0}},
+                {"model": "o3", "runtimes": ["codex"], "spent": {"until": 5000.0}}, {"model": "opus", "runtimes": ["claude"], "spent": null}, {"model": "sonnet", "runtimes": ["claude"], "spent": null},
+            ]));
             assert_eq!(
                 v[1],
                 json!({"station": "ws/b", "id": "b", "name": "beta", "online": false, "lastSeen": v[1]["lastSeen"], "version": null,
