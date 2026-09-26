@@ -360,10 +360,15 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         atWork.forEach { add(Entry.Working(it)) }
     }
 
-    val list = rememberLazyListState()
+    val placeKey = "$station:${thread?.id ?: agents.firstOrNull()?.key ?: ""}"
+    // The list starts where it is going (where the chat was left, the unread line, or the newest), rather than
+    // composing its top only to jump away from it.
+    val list = rememberLazyListState(
+        initialFirstVisibleItemIndex = app.places[placeKey]?.let { (id, _) -> rows.indexOfFirst { it.id == id } }?.takeIf { it >= 0 }
+            ?: rows.indexOfFirst { it is Entry.Line }.takeIf { it >= 0 } ?: rows.lastIndex.coerceAtLeast(0),
+    )
     val follow = rememberFollow(list)
     val density = LocalDensity.current
-    val placeKey = "$station:${thread?.id ?: agents.firstOrNull()?.key ?: ""}"
     // Put in place once: back where the chat was left, else at the unread line, else at the newest.
     val lineShown = remember { mutableStateOf(false) }
     LaunchedEffect(above, messages.isNotEmpty()) {

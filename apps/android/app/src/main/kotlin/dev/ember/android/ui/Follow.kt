@@ -33,9 +33,12 @@ class Follow(val list: LazyListState, private val margin: Int) {
     internal var touched = false
 
     suspend fun toEnd() {
-        val count = list.layoutInfo.totalItemsCount
+        val info = list.layoutInfo
+        val count = info.totalItemsCount
         if (count == 0) return
-        list.scrollToItem(count - 1)
+        // Jumping to an item throws away what is on screen and composes it again; with the last one already in
+        // view (most of the time: following), scrolling the rest of the way keeps what is there.
+        if ((info.visibleItemsInfo.lastOrNull()?.index ?: -1) < count - 1) list.scrollToItem(count - 1)
         // Past the last item's top to its end, however tall it has grown.
         list.scrollBy(1_000_000f)
     }
