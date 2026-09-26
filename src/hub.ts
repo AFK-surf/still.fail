@@ -13,7 +13,7 @@
 // messages are delivered to every session in the thread, and what agents and
 // ember post there is recorded after the platform takes it.
 import { randomBytes } from "node:crypto";
-import { copyFileSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { agentHomePaths } from "./agent-home.ts";
 import { EFFORTS, profileFor, RUNTIMES, type Config, type Connect, type Profile, type RuntimeKind } from "./config.ts";
@@ -25,7 +25,7 @@ import { log } from "./log.ts";
 import type { Tool } from "./mcp.ts";
 import type { AgentDriver } from "./runtime/types.ts";
 import { SessionActor, type DeclaredState } from "./session.ts";
-import { EMBER_SURFACE, slackSurface, type Attachment, type Quote, type SessionRow, type SessionScope, type Store, type ThreadRow } from "./store.ts";
+import { EMBER_SURFACE, slackSurface, writeCompressed, type Attachment, type Quote, type SessionRow, type SessionScope, type Store, type ThreadRow } from "./store.ts";
 import { LiveHub } from "./live.ts";
 import { transcriptPath } from "./transcript.ts";
 import { imageSize } from "./image-size.ts";
@@ -100,8 +100,8 @@ export class Hub {
   async receive(connectId: string, event: ChatEvent): Promise<void> {
     if (event.kind === "message") return this.accept(connectId, event.message);
     const surface = this.#surface(connectId);
-    if (event.kind === "changed") this.#store.editMessage(surface, event.channel, event.ts, event.text);
-    else this.#store.deleteMessage(surface, event.channel, event.ts);
+    if (event.kind === "changed") this.#store.editMessage(surface, event.channel, event.threadTs, event.ts, event.text);
+    else this.#store.deleteMessage(surface, event.channel, event.threadTs, event.ts);
   }
 
   /** Accepts one message seen by a connect. Resolves once it is durably recorded (or deliberately ignored). */
@@ -132,16 +132,16 @@ export class Hub {
     }
     const thread = existing ?? await this.#openSlackThread(chat, surface, message, `slack:${connect.id}:${message.user}`);
     if (wanted) this.#store.joinThread(thread.id, key, connect.id);
-    const { seq, fresh } = this.#store.insertMessage({ thread: thread.id, ts: message.ts, authorKind: "person", author: message.user, text: message.text });
+    const { n, fresh } = this.#store.insertMessage({ thread: thread.id, ts: message.ts, authorKind: "person", author: message.user, text: message.text });
     // A message seen by a second connect is already delivered to the thread; only a session it brings in lacks it.
     const targets = fresh ? this.#store.threadSessions(thread.id).map((m) => m.session) : wanted ? [key] : [];
-    this.#handOver(seq, targets, message.text);
+    this.#handOver(thread.id, n, targets, message.text);
   }
 
   /**
    * A Slack thread ember starts following. When that happens mid-thread, what
    * was said before is recorded first (without deliveries), so the thread on
-   * ember's page and chat_history are complete and seq keeps Slack's order.
+   * ember's page and chat_history are complete and the log keeps Slack's order.
    */
   async #openSlackThread(chat: ChatSurface, surface: string, message: InboundMessage, createdBy: string): Promise<ThreadRow> {
     let earlier: ChatMessage[] = [];
@@ -159,14 +159,14 @@ export class Hub {
   }
 
   /** Gives sessions a message they have not had: each runs it, or stops for `-stop`. */
-  #handOver(seq: number, sessions: string[], text: string): void {
-    for (const key of this.#store.deliver(seq, sessions)) {
+  #handOver(thread: number, n: number, sessions: string[], text: string): void {
+    for (const key of this.#store.deliver(thread, n, sessions)) {
       this.#store.touch(key);
       const row = this.#store.getSession(key);
       if (!row) continue;
       const actor = this.#actor(row);
       if (isStopCommand(text)) {
-        this.#store.markDelivered(key, [seq]);
+        this.#store.markDelivered(key, [{ thread, n }]);
         void actor.stop();
       } else {
         void actor.kick();
@@ -262,26 +262,44 @@ export class Hub {
   /**
    * A person's message in a chat on ember's page: recorded with its quotes
    * and files and delivered to every session in the chat, like a Slack
-   * message. Returns its seq.
+   * message. Returns its entry number.
    */
   say(threadId: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = []): number {
     const thread = this.#store.getThread(threadId);
     if (!thread || thread.surface !== EMBER_SURFACE) throw new Error(`no ember chat ${threadId}`);
-    const { seq } = this.#store.insertMessage({ thread: threadId, ts: nextTs(), authorKind: "person", author: user, text, attachments, quotes });
-    this.#handOver(seq, this.#store.threadSessions(threadId).map((m) => m.session), text);
-    return seq;
+    const { n } = this.#store.insertMessage({ thread: threadId, ts: nextTs(), authorKind: "person", author: user, text, attachments, quotes });
+    this.#handOver(threadId, n, this.#store.threadSessions(threadId).map((m) => m.session), text);
+    return n;
   }
 
-  /** Hides a session from lists, or shows it again. */
+  /**
+   * Hides a session from lists, or shows it again (see Store.setArchived).
+   * Archiving also keeps a copy of its transcript, written like an archived
+   * thread; the runtime's own file in the profile's home stays as it is.
+   */
   archive(key: string, archived: boolean): void {
-    if (!this.#store.getSession(key)) throw new Error(`unknown session ${key}`);
+    const row = this.#store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
     this.#store.setArchived(key, archived);
+    const copy = this.#transcriptCopy(key);
+    if (!archived) {
+      rmSync(copy, { force: true });
+      return;
+    }
+    const profile = this.#config.profiles.find((p) => p.id === row.profile);
+    const path = row.runtimeSessionId && profile ? transcriptPath(row.runtime, profile.home, row.runtimeSessionId) : undefined;
+    if (path) writeCompressed(copy, readFileSync(path, "utf8"));
+  }
+
+  /** Where an archived session's transcript copy is. */
+  #transcriptCopy(key: string): string {
+    return join(this.#store.archiveDir, "transcripts", `${key}.jsonl.zst`);
   }
 
   /**
    * Deletes a session: its process ends, its rows go (see Store.deleteSession)
-   * and its workspace directory with them. The runtime's transcript stays in
-   * the profile's home, which may be a person's own.
+   * and its workspace directory and transcript copy with them. The runtime's
+   * transcript stays in the profile's home, which may be a person's own.
    */
   async deleteSession(key: string): Promise<void> {
     const row = this.#store.getSession(key);
@@ -293,6 +311,7 @@ export class Hub {
     await actor?.dispose();
     this.live.forget(key);
     this.#store.deleteSession(key);
+    rmSync(this.#transcriptCopy(key), { force: true });
     // Sessions made by ember keep their workspace in a directory of their own.
     const home = basename(row.workspace) === "workspace" && row.workspace.startsWith(join(this.#config.dataDir, "sessions")) ? dirname(row.workspace) : row.workspace;
     rmSync(home, { recursive: true, force: true });
@@ -483,7 +502,7 @@ export class Hub {
           const thread = target(key, args.to);
           const from = before === undefined ? undefined : this.#store.messageAt(thread.id, before);
           if (before !== undefined && !from) throw new Error(`no message ${before} in ${args.to}`);
-          const messages = this.#store.messagesBefore(thread.id, from?.seq, limit).filter((m) => m.deletedAt === null);
+          const messages = this.#store.messagesBefore(thread.id, from?.n, limit);
           if (messages.length === 0) return "No earlier messages.";
           const chat = this.#chatOf(thread.connect);
           const names = new Map<string, string>();

@@ -1,10 +1,17 @@
 // All durable ember state, in one SQLite file. Runtime transcripts stay in the
 // runtimes' own homes; this records what ember needs to route and resume, and
 // everything said in the threads its sessions take part in.
+//
+// A thread is a log of entries that are appended and never changed (see
+// docs/station-storage.md): an edit or a delete is an entry of its own, which
+// readers merge into the message it changes. A thread whose sessions are all
+// archived is written out to a zstd file and read from there.
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import type { RuntimeKind } from "./config.ts";
 import type { ProfileCheck } from "./profiles.ts";
 import type { ProfileQuota } from "./quota.ts";
@@ -63,24 +70,48 @@ export interface Membership {
 
 export type AuthorKind = "person" | "agent" | "ember";
 
-export interface MessageRow {
-  seq: number;
-  /** The change cursor: grows on every insert, edit and delete, across all threads. */
-  rev: number;
+export type EntryKind = "message" | "edit" | "delete";
+
+/** One entry of a thread's log. Entries are only ever appended; they go only with their whole thread. */
+export interface EntryRow {
   thread: number;
-  /** The platform's id (Slack ts; ember makes Slack-like ones). */
-  ts: string;
+  /** 1, 2, 3 … within the thread, no gaps. */
+  n: number;
+  kind: EntryKind;
+  /** edit and delete: the n of the message it changes. */
+  target: number | null;
+  /** message: the platform's id (Slack ts; ember makes Slack-like ones), unique in the thread. */
+  ts: string | null;
+  /** message: who said it; edit and delete: whose message it changes. */
   authorKind: AuthorKind;
   /** person: Slack user id, email or "local"; agent: session key; ember: "ember". */
   author: string;
-  /** As shown (Markdown); empty once deleted. */
+  /** message and edit: Markdown; null for a delete. */
+  text: string | null;
+  /** message and edit: the files and quotes it has (an edit gives the message's whole new version). */
+  attachments: Attachment[];
+  quotes: Quote[];
+  /** message: an agent's final or block, posted with it. */
+  declared: string | null;
+  at: number;
+}
+
+/** A message as it reads now: its latest edit's words, files and quotes. */
+export interface MessageRow {
+  thread: number;
+  /** Its entry's n. */
+  n: number;
+  ts: string;
+  authorKind: AuthorKind;
+  author: string;
   text: string;
   attachments: Attachment[];
   quotes: Quote[];
-  /** An agent's final or block, posted with this message. */
   declared: string | null;
   createdAt: number;
+  /** When its latest edit came; null if never edited. */
   editedAt: number | null;
+  /** When a delete came for it; null while it stands. */
   deletedAt: number | null;
 }
 
@@ -110,10 +141,11 @@ export interface Attachment {
 /** A thread for listings: who takes part, the last thing said, and how much the viewer has not read. */
 export interface ThreadSummary extends ThreadRow {
   sessions: Membership[];
-  last: MessageRow | null;
-  /** The thread's latest rev: follow it with messagesAfter. */
-  rev: number;
-  /** The viewer's read position (a seq), 0 if never read. */
+  /** The thread's last entry number, 0 before anything is said: follow it with entriesAfter. */
+  last: number;
+  /** The latest message as merged (deleted ones are gone), for lists. */
+  lastMessage: MessageRow | null;
+  /** The viewer's read position (an entry number), 0 if never read. */
   read: number;
   /** Messages after the read position, not deleted and not the viewer's own. */
   unread: number;
@@ -153,7 +185,7 @@ export const EMBER_SURFACE = "ember";
  * Bump on schema changes and add a step to MIGRATIONS that brings the
  * previous version up. Versions without a migration path are refused.
  */
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 interface MigrationContext {
   /** The Slack team of each connect, where known; threads are named by team. */
@@ -163,7 +195,7 @@ interface MigrationContext {
 const MIGRATIONS: Record<number, (db: DatabaseSync, context: MigrationContext) => void> = {
   // v9 → v10: chats, chat_messages and inbound become threads, messages and deliveries.
   9: (db, { teams }) => {
-    db.exec(TABLES);
+    db.exec(V10_TABLES);
     db.function("surface_of", (connect) => (connect === "ember" ? EMBER_SURFACE : slackSurface(String(connect), teams.get(String(connect)))));
     db.exec(`
       INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at)
@@ -217,6 +249,49 @@ const MIGRATIONS: Record<number, (db: DatabaseSync, context: MigrationContext) =
       ALTER TABLE sessions ADD COLUMN archived_at INTEGER;
     `);
   },
+  // v10 → v11: messages become thread logs of entries; deliveries and reads point at (thread, n).
+  10: (db) => {
+    db.exec(`
+      -- Thread ids are never used again, so what a client keeps of a thread stays true.
+      ALTER TABLE threads RENAME TO threads_v10;
+      ${THREADS}
+      INSERT INTO threads (id, surface, channel, thread_ts, title, created_by, created_at)
+        SELECT id, surface, channel, thread_ts, title, created_by, created_at FROM threads_v10;
+      DROP TABLE threads_v10;
+      ${ENTRIES}
+
+      -- Each message in thread order; a deleted one is followed by its delete. An edited one keeps
+      -- the edited words (the older ones are gone); a deleted one's were cleared already.
+      CREATE TEMP TABLE numbered AS
+        SELECT seq, thread, deleted_at,
+          ROW_NUMBER() OVER (PARTITION BY thread ORDER BY seq)
+            + COALESCE(SUM(deleted_at IS NOT NULL) OVER (PARTITION BY thread ORDER BY seq ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS n
+        FROM messages;
+      INSERT INTO entries (thread, n, kind, ts, author_kind, author, text, attachments, quotes, declared, at)
+        SELECT m.thread, x.n, 'message', m.ts, m.author_kind, m.author, m.text, m.attachments, m.quotes, m.declared, m.created_at
+        FROM messages m JOIN numbered x ON x.seq = m.seq;
+      INSERT INTO entries (thread, n, kind, target, author_kind, author, at)
+        SELECT m.thread, x.n + 1, 'delete', x.n, m.author_kind, m.author, m.deleted_at
+        FROM messages m JOIN numbered x ON x.seq = m.seq WHERE m.deleted_at IS NOT NULL;
+
+      ALTER TABLE deliveries RENAME TO deliveries_v10;
+      ${DELIVERIES}
+      INSERT INTO deliveries (thread, n, session, delivered_at)
+        SELECT x.thread, x.n, d.session, d.delivered_at FROM deliveries_v10 d JOIN numbered x ON x.seq = d.message ORDER BY d.message;
+      DROP TABLE deliveries_v10;
+
+      -- A read position was a seq: it becomes the last entry of the messages it covered.
+      ALTER TABLE reads RENAME TO reads_v10;
+      ${READS}
+      INSERT INTO reads (viewer, thread, n, at)
+        SELECT r.viewer, r.thread, COALESCE((SELECT MAX(x.n + (x.deleted_at IS NOT NULL)) FROM numbered x WHERE x.thread = r.thread AND x.seq <= r.seq), 0), r.at
+        FROM reads_v10 r;
+      DROP TABLE reads_v10;
+
+      DROP TABLE numbered;
+      DROP TABLE messages;
+    `);
+  },
 };
 
 /** Where a Slack connect's threads live: its team, or the connect itself while the team is unknown. */
@@ -224,7 +299,8 @@ export function slackSurface(connect: string, teamId: string | null | undefined)
   return teamId ? `slack:${teamId}` : `slack:${connect}`;
 }
 
-const TABLES = `
+/** v10's tables, which the v9 step fills. */
+const V10_TABLES = `
 CREATE TABLE IF NOT EXISTS threads (
   id INTEGER PRIMARY KEY,
   surface TEXT NOT NULL,
@@ -280,6 +356,91 @@ CREATE TABLE IF NOT EXISTS profile_status (
   check_json TEXT, checked_at INTEGER,
   quota_json TEXT, quota_at INTEGER
 );
+`;
+
+const THREADS = `
+CREATE TABLE IF NOT EXISTS threads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  surface TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  thread_ts TEXT NOT NULL,
+  title TEXT,
+  created_by TEXT,
+  created_at INTEGER NOT NULL,
+  archived_at INTEGER,
+  UNIQUE (surface, channel, thread_ts)
+);`;
+
+const ENTRIES = `
+CREATE TABLE IF NOT EXISTS entries (
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  target INTEGER,
+  ts TEXT,
+  author_kind TEXT NOT NULL,
+  author TEXT NOT NULL,
+  text TEXT,
+  attachments TEXT,
+  quotes TEXT,
+  declared TEXT,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (thread, n)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
+CREATE INDEX IF NOT EXISTS entries_target ON entries (thread, target) WHERE target IS NOT NULL;`;
+
+const DELIVERIES = `
+CREATE TABLE IF NOT EXISTS deliveries (
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  session TEXT NOT NULL,
+  delivered_at INTEGER,
+  PRIMARY KEY (thread, n, session)
+);
+CREATE INDEX IF NOT EXISTS deliveries_pending ON deliveries (session) WHERE delivered_at IS NULL;
+CREATE INDEX IF NOT EXISTS deliveries_session ON deliveries (session, thread);`;
+
+const READS = `
+CREATE TABLE IF NOT EXISTS reads (
+  viewer TEXT NOT NULL,
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (viewer, thread)
+);`;
+
+const TABLES = `
+${THREADS}
+CREATE TABLE IF NOT EXISTS thread_sessions (
+  thread INTEGER NOT NULL,
+  session TEXT NOT NULL,
+  connect TEXT NOT NULL,
+  joined_at INTEGER NOT NULL,
+  PRIMARY KEY (thread, session)
+);
+CREATE INDEX IF NOT EXISTS thread_sessions_session ON thread_sessions (session);
+${ENTRIES}
+${DELIVERIES}
+${READS}
+CREATE TABLE IF NOT EXISTS profile_status (
+  profile TEXT PRIMARY KEY,
+  check_json TEXT, checked_at INTEGER,
+  quota_json TEXT, quota_at INTEGER
+);
+-- Each message as it reads now: its latest edit's words, files and quotes, and when a delete came.
+CREATE VIEW IF NOT EXISTS merged AS
+  SELECT m.thread, m.n, m.ts, m.author_kind, m.author,
+    CASE WHEN e.n IS NULL THEN m.text ELSE e.text END AS text,
+    CASE WHEN e.n IS NULL THEN m.attachments ELSE e.attachments END AS attachments,
+    CASE WHEN e.n IS NULL THEN m.quotes ELSE e.quotes END AS quotes,
+    m.declared, m.at AS created_at, e.at AS edited_at, d.at AS deleted_at
+  FROM entries m
+  LEFT JOIN entries e ON e.thread = m.thread
+    AND e.n = (SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n AND x.kind = 'edit')
+  LEFT JOIN entries d ON d.thread = m.thread
+    AND d.n = (SELECT MIN(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n AND x.kind = 'delete')
+  WHERE m.kind = 'message';
 `;
 
 const SCHEMA = `
@@ -358,10 +519,21 @@ function toMembership(row: Row): Membership {
   return { thread: row.thread as number, session: row.session as string, connect: row.connect as string, joinedAt: row.joined_at as number };
 }
 
+function toEntry(row: Row): EntryRow {
+  return {
+    thread: row.thread as number, n: row.n as number, kind: row.kind as EntryKind, target: (row.target as number | null) ?? null,
+    ts: (row.ts as string | null) ?? null, authorKind: row.author_kind as AuthorKind, author: row.author as string,
+    text: (row.text as string | null) ?? null,
+    attachments: row.attachments ? JSON.parse(row.attachments as string) as Attachment[] : [],
+    quotes: row.quotes ? JSON.parse(row.quotes as string) as Quote[] : [],
+    declared: (row.declared as string | null) ?? null, at: row.at as number,
+  };
+}
+
 function toMessage(row: Row): MessageRow {
   return {
-    seq: row.seq as number, rev: row.rev as number, thread: row.thread as number, ts: row.ts as string,
-    authorKind: row.author_kind as AuthorKind, author: row.author as string, text: row.text as string,
+    thread: row.thread as number, n: row.n as number, ts: row.ts as string,
+    authorKind: row.author_kind as AuthorKind, author: row.author as string, text: (row.text as string | null) ?? "",
     attachments: row.attachments ? JSON.parse(row.attachments as string) as Attachment[] : [],
     quotes: row.quotes ? JSON.parse(row.quotes as string) as Quote[] : [],
     declared: (row.declared as string | null) ?? null, createdAt: row.created_at as number,
@@ -369,23 +541,54 @@ function toMessage(row: Row): MessageRow {
   };
 }
 
+/** Entries merged into their messages, as the `merged` view does: for a thread read from its archive file. */
+function mergeEntries(entries: readonly EntryRow[]): MessageRow[] {
+  const messages = new Map<number, MessageRow>();
+  for (const e of entries) {
+    if (e.kind === "message") {
+      messages.set(e.n, {
+        thread: e.thread, n: e.n, ts: e.ts ?? "", authorKind: e.authorKind, author: e.author, text: e.text ?? "",
+        attachments: e.attachments, quotes: e.quotes, declared: e.declared, createdAt: e.at, editedAt: null, deletedAt: null,
+      });
+      continue;
+    }
+    const m = e.target === null ? undefined : messages.get(e.target);
+    if (!m) continue;
+    if (e.kind === "edit") Object.assign(m, { text: e.text ?? "", attachments: e.attachments, quotes: e.quotes, editedAt: e.at });
+    else m.deletedAt ??= e.at;
+  }
+  return [...messages.values()];
+}
+
 const json = (value: unknown[] | undefined): string | null => (value?.length ? JSON.stringify(value) : null);
+
+/** Archived threads whose entries are kept decompressed, the most recently read last. */
+const ARCHIVE_CACHE = 32;
 
 /**
  * `changes` emits:
  * - "session" (key): anything about that session changed;
  * - "session-removed" (key): it was deleted;
- * - "thread" ({ id, rev, messages }): messages were said, edited or deleted there, or its sessions changed (no messages);
- * - "read" ({ viewer, thread, seq }): a viewer's read position moved;
+ * - "thread" ({ id, entries }): entries were appended there (contiguous, in order), or its sessions changed (none);
+ * - "thread-removed" ({ id }): it went, with every entry it had;
+ * - "read" ({ viewer, thread, n }): a viewer's read position moved;
  * - "processes": the recorded runtime processes changed.
  */
 export class Store {
   readonly #db: DatabaseSync;
   readonly changes = new EventEmitter();
+  /** Where archived threads (and sessions' transcript copies) are written; see archiveDir. */
+  #archiveDir: string | undefined;
+  /** Entries of archived threads read lately (they never change), the most recent last. */
+  readonly #archived = new Map<number, EntryRow[]>();
 
-  /** `teams` names the Slack team of each connect, for moving older data into threads (see MIGRATIONS). */
-  constructor(path: string, options: { teams?: ReadonlyMap<string, string> } = {}) {
+  /**
+   * `teams` names the Slack team of each connect, for moving older data into threads (see MIGRATIONS).
+   * `archive` is where archived threads go: `archive/` beside the database unless given.
+   */
+  constructor(path: string, options: { teams?: ReadonlyMap<string, string>; archive?: string } = {}) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
+    this.#archiveDir = options.archive ?? (path === ":memory:" ? undefined : join(dirname(path), "archive"));
     this.#db = new DatabaseSync(path);
     this.#db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
     let version = Store.#version(this.#db);
@@ -425,6 +628,12 @@ export class Store {
 
   close(): void {
     this.#db.close();
+  }
+
+  /** Where archived threads and transcript copies go (`threads/`, `transcripts/`). */
+  get archiveDir(): string {
+    // An in-memory store (tests) archives into a directory of its own.
+    return (this.#archiveDir ??= mkdtempSync(join(tmpdir(), "ember-archive-")));
   }
 
   #transaction<T>(run: () => T): T {
@@ -477,18 +686,28 @@ export class Store {
     this.#db.prepare("UPDATE sessions SET last_active_at = ? WHERE key = ?").run(Date.now(), key);
   }
 
-  /** Hides a session from lists, or shows it again. */
+  /**
+   * Hides a session from lists, or shows it again. A thread whose sessions
+   * are all archived goes out to its archive file; showing one of them again
+   * brings it back.
+   */
   setArchived(key: string, archived: boolean): void {
     this.#db.prepare("UPDATE sessions SET archived_at = ? WHERE key = ?").run(archived ? Date.now() : null, key);
+    for (const { id } of this.sessionThreads(key)) {
+      if (!archived && this.#isArchived(id)) this.#restoreThread(id);
+      else if (archived && !this.#isArchived(id) && this.#db.prepare(`SELECT 1 FROM thread_sessions ts JOIN sessions s ON s.key = ts.session
+        WHERE ts.thread = ? AND s.archived_at IS NULL LIMIT 1`).get(id) === undefined) this.#archiveThread(id);
+    }
     this.notify(key);
   }
 
   /**
    * Forgets a session: its row, turns, deliveries, memberships and bindings,
-   * and the threads only it took part in, with their messages and reads.
+   * and the threads only it took part in, with their entries (or archive
+   * files) and reads.
    */
   deleteSession(key: string): void {
-    const { kept } = this.#transaction(() => {
+    const { kept, removed } = this.#transaction(() => {
       const threads = (this.#db.prepare("SELECT thread FROM thread_sessions WHERE session = ?").all(key) as Row[]).map((r) => r.thread as number);
       this.#db.prepare("DELETE FROM thread_sessions WHERE session = ?").run(key);
       this.#db.prepare("DELETE FROM deliveries WHERE session = ?").run(key);
@@ -496,21 +715,28 @@ export class Store {
       this.#db.prepare("DELETE FROM bindings WHERE session_key = ?").run(key);
       this.#db.prepare("DELETE FROM sessions WHERE key = ?").run(key);
       const kept: number[] = [];
+      const removed: number[] = [];
       for (const thread of threads) {
         if (this.#db.prepare("SELECT 1 FROM thread_sessions WHERE thread = ? LIMIT 1").get(thread) !== undefined) {
           kept.push(thread);
           continue;
         }
-        this.#db.prepare("DELETE FROM deliveries WHERE message IN (SELECT seq FROM messages WHERE thread = ?)").run(thread);
-        this.#db.prepare("DELETE FROM messages WHERE thread = ?").run(thread);
+        removed.push(thread);
+        this.#db.prepare("DELETE FROM deliveries WHERE thread = ?").run(thread);
+        this.#db.prepare("DELETE FROM entries WHERE thread = ?").run(thread);
         this.#db.prepare("DELETE FROM reads WHERE thread = ?").run(thread);
         this.#db.prepare("DELETE FROM threads WHERE id = ?").run(thread);
       }
-      return { kept };
+      return { kept, removed };
     });
-    // Threads that went with it need no event of their own: they belonged to the removed session.
+    for (const thread of removed) {
+      this.#archived.delete(thread);
+      rmSync(this.#threadFile(thread), { force: true });
+    }
     this.changes.emit("session-removed", key);
-    for (const thread of kept) this.#threadChanged(thread, []);
+    // Clients drop what they keep of the threads that went with it.
+    for (const thread of removed) this.changes.emit("thread-removed", { id: thread });
+    for (const thread of kept) this.changes.emit("thread", { id: thread, entries: [] });
   }
 
   // ── single-session bindings ────────────────────────────────────────────
@@ -574,7 +800,7 @@ export class Store {
       .run(thread, session, connect, Date.now()).changes > 0;
     if (joined) {
       this.notify(session);
-      this.#threadChanged(thread, []);
+      this.changes.emit("thread", { id: thread, entries: [] });
     }
     return joined;
   }
@@ -602,159 +828,265 @@ export class Store {
    * joined last when it has heard nothing yet.
    */
   latestThread(session: string): (ThreadRow & { connect: string }) | undefined {
-    const row = (this.#db.prepare(`SELECT t.*, ts.connect FROM deliveries d JOIN messages m ON m.seq = d.message
-        JOIN threads t ON t.id = m.thread JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
-        WHERE d.session = ? ORDER BY d.message DESC LIMIT 1`).get(session)
+    const row = (this.#db.prepare(`SELECT t.*, ts.connect FROM deliveries d JOIN threads t ON t.id = d.thread
+        JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+        WHERE d.session = ? ORDER BY d.rowid DESC LIMIT 1`).get(session)
       ?? this.#db.prepare(`SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
         WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT 1`).get(session)) as Row | undefined;
     return row ? { ...toThread(row), connect: row.connect as string } : undefined;
   }
 
   /**
-   * Threads with their sessions, last message and the viewer's unread count,
-   * most recently active first: those of one session, one thread, or all.
+   * Threads with their sessions, last entry, latest message and the viewer's
+   * unread count, most recently said in first: those of one session, one
+   * thread, or all.
    */
   listThreads(viewer: string, filter: { session?: string; thread?: number } = {}): ThreadSummary[] {
     const where = filter.thread !== undefined ? "WHERE t.id = ?" : filter.session !== undefined ? "WHERE t.id IN (SELECT thread FROM thread_sessions WHERE session = ?)" : "";
     const params = filter.thread ?? filter.session;
-    const rows = this.#db.prepare(`
-      SELECT t.*, COALESCE(r.seq, 0) AS read_seq,
-        (SELECT MAX(rev) FROM messages m WHERE m.thread = t.id) AS rev,
-        (SELECT MAX(seq) FROM messages m WHERE m.thread = t.id) AS last_seq,
-        (SELECT COUNT(*) FROM messages m WHERE m.thread = t.id AND m.seq > COALESCE(r.seq, 0) AND m.deleted_at IS NULL
-          AND NOT (m.author_kind = 'person' AND m.author = ?)) AS unread,
-        (SELECT substr(m.text, 1, 300) FROM messages m WHERE m.thread = t.id AND m.author_kind = 'person' AND m.deleted_at IS NULL
-          ORDER BY m.seq LIMIT 1) AS first_text
-      FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?
-      ${where}
-      ORDER BY COALESCE(last_seq, 0) DESC, t.created_at DESC, t.id DESC
-    `).all(...(params === undefined ? [viewer, viewer] : [viewer, viewer, params])) as Row[];
-    return rows.map((r) => {
-      const last = r.last_seq == null ? undefined : this.#db.prepare("SELECT * FROM messages WHERE seq = ?").get(r.last_seq as number) as Row | undefined;
+    const rows = this.#db.prepare(`SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ? ${where}`)
+      .all(...(params === undefined ? [viewer] : [viewer, params])) as Row[];
+    const summaries = rows.map((r): ThreadSummary => {
+      const id = r.id as number;
+      const read = r.read_n as number;
       return {
-        ...toThread(r), sessions: this.threadSessions(r.id as number), last: last ? toMessage(last) : null,
-        rev: (r.rev as number | null) ?? 0, read: r.read_seq as number, unread: r.unread as number,
-        people: this.#threadPeople(r.id as number, r.surface as string), firstText: (r.first_text as string | null) ?? null,
+        ...toThread(r), sessions: this.threadSessions(id), last: this.lastEntry(id), lastMessage: this.lastMessage(id),
+        read, unread: this.unreadCount(viewer, id, read), people: this.#threadPeople(id, r.surface as string), firstText: this.#firstText(id),
       };
     });
+    const said = (t: ThreadSummary) => t.lastMessage?.createdAt ?? 0;
+    return summaries.sort((a, b) => said(b) - said(a) || b.createdAt - a.createdAt || b.id - a.id);
+  }
+
+  /** The thread's latest message as merged (deleted ones are gone), for lists. */
+  lastMessage(thread: number): MessageRow | null {
+    if (this.#isArchived(thread)) return this.#archivedMessages(thread).findLast((m) => m.deletedAt === null) ?? null;
+    const row = this.#db.prepare("SELECT * FROM merged WHERE thread = ? AND deleted_at IS NULL ORDER BY n DESC LIMIT 1").get(thread) as Row | undefined;
+    return row ? toMessage(row) : null;
+  }
+
+  /** Messages after the viewer's read position (or `read`), not deleted and not the viewer's own. */
+  unreadCount(viewer: string, thread: number, read = this.readPosition(viewer, thread)): number {
+    const theirs = (m: { authorKind: AuthorKind; author: string }) => !(m.authorKind === "person" && m.author === viewer);
+    if (this.#isArchived(thread)) return this.#archivedMessages(thread).filter((m) => m.n > read && m.deletedAt === null && theirs(m)).length;
+    return (this.#db.prepare(`SELECT COUNT(*) AS c FROM merged WHERE thread = ? AND n > ? AND deleted_at IS NULL
+      AND NOT (author_kind = 'person' AND author = ?)`).get(thread, read, viewer) as Row).c as number;
   }
 
   /** Everyone who wrote in a thread, as creator references (a Slack user through a connect in it), earliest first. */
   #threadPeople(thread: number, surface: string): string[] {
     const connect = (this.#db.prepare("SELECT MIN(connect) AS connect FROM thread_sessions WHERE thread = ?").get(thread) as Row).connect as string | null;
-    const authors = (this.#db.prepare(`SELECT author, MIN(seq) AS first FROM messages WHERE thread = ? AND author_kind = 'person'
-      GROUP BY author ORDER BY first`).all(thread) as Row[]).map((r) => r.author as string);
+    const authors = this.#isArchived(thread)
+      ? [...new Set(this.#archivedEntries(thread).filter((e) => e.kind === "message" && e.authorKind === "person").map((e) => e.author))]
+      : (this.#db.prepare(`SELECT author, MIN(n) AS first FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person'
+        GROUP BY author ORDER BY first`).all(thread) as Row[]).map((r) => r.author as string);
     if (surface === EMBER_SURFACE) return authors;
     return connect ? authors.map((author) => `slack:${connect}:${author}`) : [];
   }
 
-  // ── messages ────────────────────────────────────────────────────────────
+  /** The first thing a person said in it (up to 300 characters). */
+  #firstText(thread: number): string | null {
+    if (this.#isArchived(thread)) return this.#archivedMessages(thread).find((m) => m.authorKind === "person" && m.deletedAt === null)?.text.slice(0, 300) ?? null;
+    const row = this.#db.prepare(`SELECT substr(text, 1, 300) AS text FROM merged WHERE thread = ? AND author_kind = 'person' AND deleted_at IS NULL
+      ORDER BY n LIMIT 1`).get(thread) as Row | undefined;
+    return row ? row.text as string : null;
+  }
+
+  // ── entries ─────────────────────────────────────────────────────────────
 
   /**
    * Records something said. A message already recorded in that thread (Slack
    * delivers to every connect in the channel, and redelivers) is the same
-   * message: its seq comes back with `fresh` false and nothing changes.
+   * message: its n comes back with `fresh` false and nothing changes.
    */
-  insertMessage(m: Omit<MessageRow, "seq" | "rev" | "createdAt" | "editedAt" | "deletedAt" | "attachments" | "quotes" | "declared"> & {
-    attachments?: Attachment[]; quotes?: Quote[]; declared?: string | null; createdAt?: number;
-  }): { seq: number; fresh: boolean } {
-    const inserted = this.#transaction(() => {
-      const existing = this.#db.prepare("SELECT seq FROM messages WHERE thread = ? AND ts = ?").get(m.thread, m.ts) as Row | undefined;
-      if (existing) return { seq: existing.seq as number, fresh: false };
-      const result = this.#db.prepare(`INSERT INTO messages (rev, thread, ts, author_kind, author, text, attachments, quotes, declared, created_at)
-        VALUES (${NEXT_REV}, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(m.thread, m.ts, m.authorKind, m.author, m.text, json(m.attachments), json(m.quotes), m.declared ?? null, m.createdAt ?? Date.now());
-      return { seq: Number(result.lastInsertRowid), fresh: true };
+  insertMessage(m: { thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[]; quotes?: Quote[]; declared?: string | null; at?: number }): { n: number; fresh: boolean } {
+    const existing = this.messageAt(m.thread, m.ts);
+    if (existing) return { n: existing.n, fresh: false };
+    const entry = this.#append({
+      thread: m.thread, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind, author: m.author, text: m.text,
+      attachments: m.attachments ?? [], quotes: m.quotes ?? [], declared: m.declared ?? null, at: m.at ?? Date.now(),
     });
-    if (inserted.fresh) this.#threadChanged(m.thread, [inserted.seq]);
-    return inserted;
+    return { n: entry.n, fresh: true };
   }
 
-  /** A platform edit. Returns the thread, or undefined for a message ember never recorded or whose words did not change. */
-  editMessage(surface: string, channel: string, ts: string, text: string): number | undefined {
-    return this.#change(surface, channel, ts, "text = ?, edited_at = ?", [text, Date.now()], (m) => m.text !== text && m.deleted_at === null);
-  }
-
-  /** A platform delete: words and files go, the row stays so cursors hold. */
-  deleteMessage(surface: string, channel: string, ts: string): number | undefined {
-    return this.#change(surface, channel, ts, "text = '', attachments = NULL, quotes = NULL, deleted_at = ?", [Date.now()], (m) => m.deleted_at === null);
-  }
-
-  /** Changes a recorded message where `applies`, taking the next rev. Returns its thread, or undefined when nothing changed. */
-  #change(surface: string, channel: string, ts: string, set: string, values: (string | number)[], applies: (row: Row) => boolean): number | undefined {
-    const row = this.#transaction(() => {
-      const found = this.#db.prepare(`SELECT m.* FROM messages m JOIN threads t ON t.id = m.thread
-        WHERE t.surface = ? AND t.channel = ? AND m.ts = ?`).get(surface, channel, ts) as Row | undefined;
-      if (!found || !applies(found)) return undefined;
-      this.#db.prepare(`UPDATE messages SET ${set}, rev = ${NEXT_REV} WHERE seq = ?`).run(...values, found.seq as number);
-      return found;
+  /**
+   * A platform edit: an edit entry with the message's new words. Returns the
+   * thread, or undefined for a message ember never recorded, one deleted, or
+   * one whose words did not change.
+   */
+  editMessage(surface: string, channel: string, threadTs: string, ts: string, text: string): number | undefined {
+    const message = this.#platformMessage(surface, channel, threadTs, ts);
+    if (!message || message.deletedAt !== null || message.text === text) return undefined;
+    this.#append({
+      thread: message.thread, kind: "edit", target: message.n, ts: null, authorKind: message.authorKind, author: message.author, text,
+      attachments: message.attachments, quotes: message.quotes, declared: null, at: Date.now(),
     });
-    if (!row) return undefined;
-    this.#threadChanged(row.thread as number, [row.seq as number]);
-    return row.thread as number;
+    return message.thread;
   }
 
-  getMessage(seq: number): MessageRow | undefined {
-    const row = this.#db.prepare("SELECT * FROM messages WHERE seq = ?").get(seq) as Row | undefined;
-    return row ? toMessage(row) : undefined;
+  /** A platform delete: a delete entry. Returns the thread, or undefined for a message ember never recorded or one deleted already. */
+  deleteMessage(surface: string, channel: string, threadTs: string, ts: string): number | undefined {
+    const message = this.#platformMessage(surface, channel, threadTs, ts);
+    if (!message || message.deletedAt !== null) return undefined;
+    this.#append({
+      thread: message.thread, kind: "delete", target: message.n, ts: null, authorKind: message.authorKind, author: message.author, text: null,
+      attachments: [], quotes: [], declared: null, at: Date.now(),
+    });
+    return message.thread;
   }
 
+  #platformMessage(surface: string, channel: string, threadTs: string, ts: string): MessageRow | undefined {
+    const thread = this.threadAt(surface, channel, threadTs);
+    return thread && this.messageAt(thread.id, ts);
+  }
+
+  /** Appends an entry as the thread's next, bringing an archived thread back first. */
+  #append(entry: Omit<EntryRow, "n">): EntryRow {
+    if (this.#isArchived(entry.thread)) this.#restoreThread(entry.thread);
+    const appended = this.#transaction(() => {
+      const n = ((this.#db.prepare("SELECT MAX(n) AS n FROM entries WHERE thread = ?").get(entry.thread) as Row).n as number | null ?? 0) + 1;
+      this.#insertEntry({ ...entry, n });
+      return { ...entry, n };
+    });
+    this.changes.emit("thread", { id: entry.thread, entries: [appended] });
+    return appended;
+  }
+
+  #insertEntry(e: EntryRow): void {
+    this.#db.prepare(`INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(e.thread, e.n, e.kind, e.target, e.ts, e.authorKind, e.author, e.text, json(e.attachments), json(e.quotes), e.declared, e.at);
+  }
+
+  /** The thread's last entry number, 0 before anything is said. */
+  lastEntry(thread: number): number {
+    if (this.#isArchived(thread)) return this.#archivedEntries(thread).at(-1)?.n ?? 0;
+    return ((this.#db.prepare("SELECT MAX(n) AS n FROM entries WHERE thread = ?").get(thread) as Row).n as number | null) ?? 0;
+  }
+
+  /** Entries after n: what came since. */
+  entriesAfter(thread: number, n: number): EntryRow[] {
+    return this.entriesBetween(thread, n + 1, Number.MAX_SAFE_INTEGER);
+  }
+
+  /** The latest `limit` entries before n (the latest of all without it), oldest first. */
+  entriesBefore(thread: number, n: number | undefined, limit: number): EntryRow[] {
+    const before = n ?? Number.MAX_SAFE_INTEGER;
+    if (this.#isArchived(thread)) return this.#archivedEntries(thread).filter((e) => e.n < before).slice(-limit);
+    return (this.#db.prepare("SELECT * FROM entries WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?")
+      .all(thread, before, limit) as Row[]).reverse().map(toEntry);
+  }
+
+  /** Entries from n = `from` to n = `to`, both included: a gap. */
+  entriesBetween(thread: number, from: number, to: number): EntryRow[] {
+    if (this.#isArchived(thread)) return this.#archivedEntries(thread).filter((e) => e.n >= from && e.n <= to);
+    return (this.#db.prepare("SELECT * FROM entries WHERE thread = ? AND n >= ? AND n <= ? ORDER BY n").all(thread, from, to) as Row[]).map(toEntry);
+  }
+
+  /** A message of the thread by its platform id, as merged. */
   messageAt(thread: number, ts: string): MessageRow | undefined {
-    const row = this.#db.prepare("SELECT * FROM messages WHERE thread = ? AND ts = ?").get(thread, ts) as Row | undefined;
+    if (this.#isArchived(thread)) return this.#archivedMessages(thread).find((m) => m.ts === ts);
+    const row = this.#db.prepare("SELECT * FROM merged WHERE thread = ? AND ts = ?").get(thread, ts) as Row | undefined;
     return row ? toMessage(row) : undefined;
   }
 
-  /** Every message of the thread said, edited or deleted after cursor `rev`, in thread order. */
-  messagesAfter(thread: number, rev: number): MessageRow[] {
-    return (this.#db.prepare("SELECT * FROM messages WHERE thread = ? AND rev > ? ORDER BY seq").all(thread, rev) as Row[]).map(toMessage);
+  /** The latest `limit` messages before n (the latest of all without it) that are not deleted, as merged, oldest first. */
+  messagesBefore(thread: number, n: number | undefined, limit: number): MessageRow[] {
+    const before = n ?? Number.MAX_SAFE_INTEGER;
+    if (this.#isArchived(thread)) return this.#archivedMessages(thread).filter((m) => m.n < before && m.deletedAt === null).slice(-limit);
+    return (this.#db.prepare("SELECT * FROM merged WHERE thread = ? AND n < ? AND deleted_at IS NULL ORDER BY n DESC LIMIT ?")
+      .all(thread, before, limit) as Row[]).reverse().map(toMessage);
   }
 
-  /** The latest `limit` messages of the thread before `seq` (all when absent), oldest first. */
-  messagesBefore(thread: number, seq: number | undefined, limit: number): MessageRow[] {
-    return (this.#db.prepare("SELECT * FROM messages WHERE thread = ? AND seq < ? ORDER BY seq DESC LIMIT ?")
-      .all(thread, seq ?? Number.MAX_SAFE_INTEGER, limit) as Row[]).reverse().map(toMessage);
+  // ── archive ─────────────────────────────────────────────────────────────
+
+  #isArchived(thread: number): boolean {
+    return (this.#db.prepare("SELECT archived_at FROM threads WHERE id = ?").get(thread) as Row | undefined)?.archived_at != null;
   }
 
-  /** The thread's latest rev, 0 before anything is said. */
-  threadRev(thread: number): number {
-    return ((this.#db.prepare("SELECT MAX(rev) AS rev FROM messages WHERE thread = ?").get(thread) as Row).rev as number | null) ?? 0;
+  #threadFile(thread: number): string {
+    return join(this.archiveDir, "threads", `${thread}.jsonl.zst`);
   }
 
-  #threadChanged(thread: number, seqs: number[]): void {
-    const messages = seqs.map((seq) => this.getMessage(seq)).filter((m): m is MessageRow => Boolean(m));
-    this.changes.emit("thread", { id: thread, rev: this.threadRev(thread), messages });
+  /**
+   * Writes a thread's entries out to its archive file (one entry per line,
+   * zstd) and deletes their rows. Entries never change, so the file is the
+   * thread as it was and what clients keep of it stays true.
+   */
+  #archiveThread(thread: number): void {
+    const entries = (this.#db.prepare("SELECT * FROM entries WHERE thread = ? ORDER BY n").all(thread) as Row[]).map(toEntry);
+    const path = this.#threadFile(thread);
+    writeCompressed(path, entries.map((e) => `${JSON.stringify(e)}\n`).join(""));
+    try {
+      this.#transaction(() => {
+        this.#db.prepare("DELETE FROM entries WHERE thread = ?").run(thread);
+        this.#db.prepare("UPDATE threads SET archived_at = ? WHERE id = ?").run(Date.now(), thread);
+      });
+    } catch (error) {
+      rmSync(path, { force: true });
+      throw error;
+    }
+  }
+
+  /** Loads an archived thread's entries back into the database and removes its file. */
+  #restoreThread(thread: number): void {
+    const entries = this.#archivedEntries(thread);
+    this.#transaction(() => {
+      for (const e of entries) this.#insertEntry(e);
+      this.#db.prepare("UPDATE threads SET archived_at = NULL WHERE id = ?").run(thread);
+    });
+    this.#archived.delete(thread);
+    rmSync(this.#threadFile(thread), { force: true });
+  }
+
+  /** An archived thread's entries, from its file. */
+  #archivedEntries(thread: number): EntryRow[] {
+    let entries = this.#archived.get(thread);
+    if (entries) {
+      this.#archived.delete(thread);
+    } else {
+      const text = zstdDecompressSync(readFileSync(this.#threadFile(thread))).toString("utf8");
+      entries = text.split("\n").filter(Boolean).map((line) => JSON.parse(line) as EntryRow);
+      if (this.#archived.size >= ARCHIVE_CACHE) this.#archived.delete(this.#archived.keys().next().value!);
+    }
+    this.#archived.set(thread, entries);
+    return entries;
+  }
+
+  #archivedMessages(thread: number): MessageRow[] {
+    return mergeEntries(this.#archivedEntries(thread));
   }
 
   // ── deliveries ─────────────────────────────────────────────────────────
 
   /** Hands a message to sessions. Returns those that did not have it yet. */
-  deliver(seq: number, sessions: readonly string[]): string[] {
-    const stmt = this.#db.prepare("INSERT OR IGNORE INTO deliveries (message, session) VALUES (?, ?)");
-    const added = sessions.filter((s) => stmt.run(seq, s).changes > 0);
+  deliver(thread: number, n: number, sessions: readonly string[]): string[] {
+    const stmt = this.#db.prepare("INSERT OR IGNORE INTO deliveries (thread, n, session) VALUES (?, ?, ?)");
+    const added = sessions.filter((s) => stmt.run(thread, n, s).changes > 0);
     for (const key of added) this.notify(key);
     return added;
   }
 
-  /** What the session has yet to read, in the order it was said. */
+  /** What the session has yet to read, as merged now (deleted ones too, to be marked read), in the order it was handed over. */
   pendingMessages(session: string): PendingMessage[] {
     return (this.#db.prepare(`SELECT m.*, t.surface, t.channel, t.thread_ts, ts.connect FROM deliveries d
-      JOIN messages m ON m.seq = d.message JOIN threads t ON t.id = m.thread
+      JOIN merged m ON m.thread = d.thread AND m.n = d.n JOIN threads t ON t.id = d.thread
       JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
-      WHERE d.session = ? AND d.delivered_at IS NULL ORDER BY m.seq`).all(session) as Row[])
+      WHERE d.session = ? AND d.delivered_at IS NULL ORDER BY d.rowid`).all(session) as Row[])
       .map((r) => ({ ...toMessage(r), surface: r.surface as string, channel: r.channel as string, threadTs: r.thread_ts as string, connect: r.connect as string }));
   }
 
-  markDelivered(session: string, seqs: readonly number[]): void {
-    const stmt = this.#db.prepare("UPDATE deliveries SET delivered_at = ? WHERE message = ? AND session = ? AND delivered_at IS NULL");
+  markDelivered(session: string, messages: readonly { thread: number; n: number }[]): void {
+    const stmt = this.#db.prepare("UPDATE deliveries SET delivered_at = ? WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL");
     const now = Date.now();
-    for (const seq of seqs) stmt.run(now, seq, session);
-    if (seqs.length) this.notify(session);
+    for (const m of messages) stmt.run(now, m.thread, m.n, session);
+    if (messages.length) this.notify(session);
   }
 
   /** Threads the session has already read something from. */
   heardThreads(session: string): Set<number> {
-    return new Set((this.#db.prepare(`SELECT DISTINCT m.thread FROM deliveries d JOIN messages m ON m.seq = d.message
-      WHERE d.session = ? AND d.delivered_at IS NOT NULL`).all(session) as Row[]).map((r) => r.thread as number));
+    return new Set((this.#db.prepare("SELECT DISTINCT thread FROM deliveries WHERE session = ? AND delivered_at IS NOT NULL")
+      .all(session) as Row[]).map((r) => r.thread as number));
   }
 
   sessionsWithPending(): string[] {
@@ -763,28 +1095,39 @@ export class Store {
 
   /** Everyone who wrote in each session's threads, as creator references, earliest first. */
   participants(session?: string): Map<string, string[]> {
-    const out = new Map<string, string[]>();
-    const rows = this.#db.prepare(`SELECT ts.session, t.surface, MIN(ts.connect) AS connect, m.author, MIN(m.seq) AS first
-      FROM thread_sessions ts JOIN threads t ON t.id = ts.thread JOIN messages m ON m.thread = ts.thread AND m.author_kind = 'person'
-      ${session ? "WHERE ts.session = ?" : ""}
-      GROUP BY ts.session, t.surface, m.author ORDER BY first`).all(...(session ? [session] : [])) as Row[];
+    const rows = this.#db.prepare(`SELECT ts.session, ts.connect, t.id, t.surface, t.archived_at FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
+      ${session ? "WHERE ts.session = ?" : ""}`).all(...(session ? [session] : [])) as Row[];
+    // Each person once per session, at the first time they wrote in any of its threads.
+    const firsts = new Map<string, Map<string, number>>();
     for (const r of rows) {
-      const ref = r.surface === EMBER_SURFACE ? r.author as string : `slack:${r.connect as string}:${r.author as string}`;
-      const key = r.session as string;
-      const refs = out.get(key) ?? [];
-      if (!refs.includes(ref)) out.set(key, [...refs, ref]);
+      const thread = r.id as number;
+      const authors = r.archived_at != null
+        ? this.#archivedEntries(thread).filter((e) => e.kind === "message" && e.authorKind === "person")
+        : (this.#db.prepare(`SELECT author, MIN(at) AS at FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' GROUP BY author`)
+          .all(thread) as Row[]).map((a) => ({ author: a.author as string, at: a.at as number }));
+      const refs = firsts.get(r.session as string) ?? new Map<string, number>();
+      firsts.set(r.session as string, refs);
+      for (const { author, at } of authors) {
+        const ref = r.surface === EMBER_SURFACE ? author : `slack:${r.connect as string}:${author}`;
+        if (!refs.has(ref) || at < refs.get(ref)!) refs.set(ref, at);
+      }
     }
-    return out;
+    return new Map([...firsts].filter(([, refs]) => refs.size > 0).map(([key, refs]) => [key, [...refs].sort((a, b) => a[1] - b[1]).map(([ref]) => ref)]));
   }
 
   // ── reads ───────────────────────────────────────────────────────────────
 
+  /** How far a viewer has read a thread (an entry number), 0 if never. */
+  readPosition(viewer: string, thread: number): number {
+    return (this.#db.prepare("SELECT n FROM reads WHERE viewer = ? AND thread = ?").get(viewer, thread) as Row | undefined)?.n as number | undefined ?? 0;
+  }
+
   /** Moves a viewer's read position forward (never back). Returns where it is now. */
-  setRead(viewer: string, thread: number, seq: number): number {
-    this.#db.prepare(`INSERT INTO reads (viewer, thread, seq, at) VALUES (?, ?, ?, ?)
-      ON CONFLICT (viewer, thread) DO UPDATE SET seq = MAX(seq, excluded.seq), at = excluded.at`).run(viewer, thread, seq, Date.now());
-    const now = (this.#db.prepare("SELECT seq FROM reads WHERE viewer = ? AND thread = ?").get(viewer, thread) as Row).seq as number;
-    this.changes.emit("read", { viewer, thread, seq: now });
+  setRead(viewer: string, thread: number, n: number): number {
+    this.#db.prepare(`INSERT INTO reads (viewer, thread, n, at) VALUES (?, ?, ?, ?)
+      ON CONFLICT (viewer, thread) DO UPDATE SET n = MAX(n, excluded.n), at = excluded.at`).run(viewer, thread, n, Date.now());
+    const now = this.readPosition(viewer, thread);
+    this.changes.emit("read", { viewer, thread, n: now });
     return now;
   }
 
@@ -816,7 +1159,8 @@ export class Store {
       SELECT s.key,
         (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
         (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
-        (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN messages m ON m.seq = d.message WHERE d.session = s.key ORDER BY d.message LIMIT 1) AS first_text,
+        (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
+          WHERE d.session = s.key AND m.deleted_at IS NULL ORDER BY d.rowid LIMIT 1) AS first_text,
         l.kind, l.outcome, l.declared, l.detail, l.started_at, l.ended_at
       FROM sessions s
       LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
@@ -871,5 +1215,9 @@ export class Store {
   }
 }
 
-/** The next change cursor, taken inside the statement's transaction. */
-const NEXT_REV = "(SELECT COALESCE(MAX(rev), 0) + 1 FROM messages)";
+/** Writes a file compressed with zstd: aside first, then renamed into place. */
+export function writeCompressed(path: string, text: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(`${path}.tmp`, zstdCompressSync(Buffer.from(text)));
+  renameSync(`${path}.tmp`, path);
+}

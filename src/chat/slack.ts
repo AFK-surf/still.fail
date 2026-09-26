@@ -254,10 +254,12 @@ export class SlackSurface implements ChatSurface {
     if (event.type === "message" && event.subtype === "message_changed") {
       const changed = event.message ?? {};
       if (!changed.ts || changed.bot_id) return undefined;
-      return { kind: "changed", channel: String(event.channel), ts: String(changed.ts), text: String(changed.text ?? "") };
+      // A message outside any thread is the root of its own.
+      return { kind: "changed", channel: String(event.channel), threadTs: String(changed.thread_ts ?? changed.ts), ts: String(changed.ts), text: String(changed.text ?? "") };
     }
     if (event.type === "message" && event.subtype === "message_deleted") {
-      return event.deleted_ts ? { kind: "deleted", channel: String(event.channel), ts: String(event.deleted_ts) } : undefined;
+      if (!event.deleted_ts) return undefined;
+      return { kind: "deleted", channel: String(event.channel), threadTs: String(event.previous_message?.thread_ts ?? event.deleted_ts), ts: String(event.deleted_ts) };
     }
     const message = this.#toInbound(event);
     return message && { kind: "message", message };

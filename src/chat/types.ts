@@ -17,8 +17,8 @@ export interface InboundMessage extends ThreadRef {
 /** What a platform tells ember: a new message, or a change to one already said. */
 export type ChatEvent =
   | { kind: "message"; message: InboundMessage }
-  | { kind: "changed"; channel: string; ts: string; text: string }
-  | { kind: "deleted"; channel: string; ts: string };
+  | { kind: "changed"; channel: string; threadTs: string; ts: string; text: string }
+  | { kind: "deleted"; channel: string; threadTs: string; ts: string };
 
 export interface ChatMessage {
   ts: string;

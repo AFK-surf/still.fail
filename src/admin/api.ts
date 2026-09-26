@@ -14,7 +14,7 @@ import type { ConnectMode, RawConfig, RawConnect, RawProfile, RuntimeKind } from
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
 import type { MeshStatus } from "../mesh.ts";
-import type { Attachment, MessageRow, Quote, ThreadSummary } from "../store.ts";
+import type { Attachment, AuthorKind, EntryRow, MessageRow, Quote, ThreadSummary } from "../store.ts";
 import { hostInfo, type HostInfo } from "../host.ts";
 import type { ProfileQuota } from "../quota.ts";
 import type { Profile } from "../config.ts";
@@ -29,7 +29,7 @@ import { checkProfile, loginCommand, type ProfileCheck } from "../profiles.ts";
 import { AccessDenied, AccessGate, viewerId, viewerName, type Viewer } from "./access.ts";
 import { verifySlackTokens } from "../chat/slack.ts";
 import { createAppUrl, slackManifest } from "./slack-manifest.ts";
-import type { Creator, MessageView, Overview, ProcessState, SessionDetail, SessionSummary, StationEvents, ThreadMessages, ThreadView } from "./types.ts";
+import type { Creator, EntryView, MessageView, Overview, ProcessState, SessionDetail, SessionSummary, StationEvents, ThreadEntries, ThreadView } from "./types.ts";
 
 const SECRET_KEY = /KEY|TOKEN|SECRET|PASSWORD|AUTH/i;
 
@@ -189,11 +189,11 @@ export class AdminApi {
       this.#emit("session-removed", { key });
       this.#overviewChanged();
     });
-    changes.on("thread", (change: { id: number; rev: number; messages: MessageRow[] }) => {
+    changes.on("thread", (change: { id: number; entries: EntryRow[] }) => {
       if (this.#clients.size === 0) return;
-      const views = this.#messageViews(change.id, change.messages);
-      this.#emitLater("thread", views.then((messages) => ({ id: change.id, rev: change.rev, messages })));
+      this.#emitLater("thread", this.#entryViews(change.id, change.entries).then((entries) => ({ id: change.id, entries })));
     });
+    changes.on("thread-removed", (removed: StationEvents["thread-removed"]) => this.#emit("thread-removed", removed));
     changes.on("read", (read: StationEvents["read"]) => this.#emit("read", read, (c) => viewerId(c.viewer) === read.viewer));
     changes.on("processes", () => this.#overviewChanged());
   }
@@ -311,7 +311,7 @@ export class AdminApi {
       const thread = Number.isInteger(threadId) ? this.#deps.store.getThread(threadId) : undefined;
       if (!thread) throw new HttpError(404, `unknown thread ${id}`);
       if (!action && method === "GET") return send(res, 200, await this.#thread(threadId, viewer));
-      if (action === "messages" && method === "GET") return send(res, 200, await this.#messages(threadId, url.searchParams));
+      if (action === "entries" && method === "GET") return send(res, 200, await this.#entries(threadId, url.searchParams));
       if (action === "messages" && method === "POST") {
         if (thread.surface !== EMBER_SURFACE) throw new HttpError(400, "只能在 ember 自己的对话里发消息");
         const input = await body(req);
@@ -319,13 +319,13 @@ export class AdminApi {
         const attachments = this.#attachments(threadId, input.attachments);
         const quotes = quotesOf(input.quotes);
         if (!text && attachments.length === 0 && quotes.length === 0) throw new HttpError(400, "消息是空的");
-        return send(res, 200, { seq: this.#deps.hub.say(threadId, viewerId(viewer), text, attachments, quotes) });
+        return send(res, 200, { n: this.#deps.hub.say(threadId, viewerId(viewer), text, attachments, quotes) });
       }
       if (action === "read" && method === "PUT") {
         const input = await body(req);
-        const seq = Number(input.seq);
-        if (!Number.isInteger(seq) || seq < 0) throw new HttpError(400, "seq 必须是整数");
-        return send(res, 200, { viewer: viewerId(viewer), thread: threadId, seq: this.#deps.store.setRead(viewerId(viewer), threadId, seq) });
+        const n = Number(input.n);
+        if (!Number.isInteger(n) || n < 0) throw new HttpError(400, "n 必须是整数");
+        return send(res, 200, { viewer: viewerId(viewer), thread: threadId, n: this.#deps.store.setRead(viewerId(viewer), threadId, n) });
       }
       if (action === "sessions" && method === "POST") {
         const input = await body(req);
@@ -664,32 +664,37 @@ export class AdminApi {
 
   async #threadView(t: ThreadSummary): Promise<ThreadView> {
     const chat = this.#threadChat(t.id);
-    const [channelName, creator, last, people] = await Promise.all([
+    const names = this.#authorNames(t.id);
+    const [channelName, creator, lastMessage, people] = await Promise.all([
       t.surface === EMBER_SURFACE ? null : chat?.channelName?.(t.channel) ?? null,
       this.#creator(t.createdBy),
-      t.last ? this.#messageViews(t.id, [t.last]).then(([m]) => m ?? null) : null,
+      t.lastMessage ? this.#messageView(t.lastMessage, names) : null,
       this.#people(t.people),
     ]);
-    return { ...t, channelName, creator, last, people };
+    return { ...t, channelName, creator, lastMessage, people };
   }
 
   /**
-   * GET /threads/:id/messages: `after` (a rev) gives every message changed
-   * since; `before` (a seq) pages back; neither gives the latest page.
+   * GET /threads/:id/entries: `after` (an n) gives what came since; `before`
+   * pages back (`limit` entries); `from` and `to` a gap (both included);
+   * none of them the latest page.
    */
-  async #messages(thread: number, params: URLSearchParams): Promise<ThreadMessages> {
-    const rev = this.#deps.store.threadRev(thread);
+  async #entries(thread: number, params: URLSearchParams): Promise<ThreadEntries> {
+    const store = this.#deps.store;
+    const number = (name: string): number | undefined => {
+      if (!params.has(name)) return undefined;
+      const value = Number(params.get(name));
+      if (!Number.isInteger(value) || value < 0) throw new HttpError(400, `${name} 必须是整数`);
+      return value;
+    };
+    const [after, before, from, to] = [number("after"), number("before"), number("from"), number("to")];
     const limit = Math.min(Math.max(Number(params.get("limit")) || 50, 1), 500);
-    if (params.has("after")) {
-      const after = Number(params.get("after"));
-      if (!Number.isInteger(after) || after < 0) throw new HttpError(400, "after 必须是整数");
-      return { rev, messages: await this.#messageViews(thread, this.#deps.store.messagesAfter(thread, after)), more: false };
-    }
-    const before = params.has("before") ? Number(params.get("before")) : undefined;
-    if (before !== undefined && (!Number.isInteger(before) || before < 0)) throw new HttpError(400, "before 必须是整数");
-    const page = this.#deps.store.messagesBefore(thread, before, limit + 1);
-    const more = page.length > limit;
-    return { rev, messages: await this.#messageViews(thread, more ? page.slice(1) : page), more };
+    if ((from === undefined) !== (to === undefined)) throw new HttpError(400, "from 和 to 要一起给");
+    const last = store.lastEntry(thread);
+    const entries = after !== undefined ? store.entriesAfter(thread, after)
+      : from !== undefined ? store.entriesBetween(thread, from, to!)
+      : store.entriesBefore(thread, before, limit);
+    return { last, entries: await this.#entryViews(thread, entries) };
   }
 
   /** A connection that can name the thread's people and channel: that of a session taking part. */
@@ -701,29 +706,43 @@ export class AdminApi {
     return undefined;
   }
 
-  /** Messages with their authors' names. */
-  async #messageViews(thread: number, messages: MessageRow[]): Promise<MessageView[]> {
+  /** Who wrote in a thread, in words: each author asked once. */
+  #authorNames(thread: number): (kind: AuthorKind, author: string) => Promise<string | null> {
     const t = this.#deps.store.getThread(thread);
     const chat = this.#threadChat(thread);
     const members = this.#deps.store.threadSessions(thread);
     const names = new Map<string, Promise<string | null>>();
-    const nameOf = (m: MessageRow): Promise<string | null> => {
-      if (m.authorKind === "ember") return Promise.resolve("ember");
-      if (m.authorKind === "agent") {
+    const nameOf = (kind: AuthorKind, author: string): Promise<string | null> => {
+      if (kind === "ember") return Promise.resolve("ember");
+      if (kind === "agent") {
         // An agent goes by the name of the connect it posts through (on the page, of the connect that started it).
-        const session = this.#deps.store.getSession(m.author);
-        const via = members.find((x) => x.session === m.author)?.connect;
+        const session = this.#deps.store.getSession(author);
+        const via = members.find((x) => x.session === author)?.connect;
         const connect = via === INTERNAL_CONNECT || !via ? session?.connect : via;
         return Promise.resolve(this.#deps.settings.config.connects.find((c) => c.id === connect)?.name ?? session?.title ?? null);
       }
-      if (t?.surface === EMBER_SURFACE) return Promise.resolve(m.author === "local" ? "管理员" : this.#deps.names.get(m.author) ?? m.author);
-      return chat?.userName?.(m.author) ?? Promise.resolve(null);
+      if (t?.surface === EMBER_SURFACE) return Promise.resolve(author === "local" ? "管理员" : this.#deps.names.get(author) ?? author);
+      return chat?.userName?.(author) ?? Promise.resolve(null);
     };
-    for (const m of messages) {
-      const key = `${m.authorKind}:${m.author}`;
-      if (!names.has(key)) names.set(key, nameOf(m));
-    }
-    return Promise.all(messages.map(async (m) => ({ ...m, authorName: await names.get(`${m.authorKind}:${m.author}`)! })));
+    return (kind, author) => {
+      const key = `${kind}:${author}`;
+      if (!names.has(key)) names.set(key, nameOf(kind, author));
+      return names.get(key)!;
+    };
+  }
+
+  /** Entries with their authors' names. */
+  async #entryViews(thread: number, entries: EntryRow[]): Promise<EntryView[]> {
+    const names = this.#authorNames(thread);
+    return Promise.all(entries.map(async (e) => ({ ...e, authorName: await names(e.authorKind, e.author) })));
+  }
+
+  /** A merged message as lists show it (a thread's latest), with its author's name. */
+  async #messageView(m: MessageRow, names: (kind: AuthorKind, author: string) => Promise<string | null>): Promise<MessageView> {
+    return {
+      seq: m.n, thread: m.thread, ts: m.ts, authorKind: m.authorKind, author: m.author, authorName: await names(m.authorKind, m.author),
+      text: m.text, attachments: m.attachments, quotes: m.quotes, declared: m.declared, createdAt: m.createdAt, editedAt: m.editedAt,
+    };
   }
 
   // ── event streams ───────────────────────────────────────────────────────

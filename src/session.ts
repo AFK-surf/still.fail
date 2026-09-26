@@ -168,7 +168,7 @@ export class SessionActor {
   }
 
   #delivered(messages: readonly PendingMessage[]): void {
-    this.#deps.store.markDelivered(this.key, messages.map((m) => m.seq));
+    this.#deps.store.markDelivered(this.key, messages.map((m) => ({ thread: m.thread, n: m.n })));
   }
 
   /**

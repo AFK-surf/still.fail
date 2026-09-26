@@ -3,7 +3,7 @@ import type { RuntimeKind } from "../config.ts";
 import type { ConnectKind, ConnectMode } from "../config.ts";
 import type { ConnectState } from "../connections.ts";
 import type { LoginJob, LoginState } from "../login.ts";
-import type { Attachment, AuthorKind, Membership, Quote } from "../store.ts";
+import type { Attachment, AuthorKind, EntryKind, Membership, Quote } from "../store.ts";
 import type { MeshStatus } from "../mesh.ts";
 import type { HostInfo } from "../host.ts";
 import type { LiveMessage, LivePhaseView, LiveStep } from "../live.ts";
@@ -14,7 +14,7 @@ import type { AccessKind, ProfileCheck } from "../profiles.ts";
 import type { TimelineEntry, TranscriptUsage } from "../transcript.ts";
 
 export type { LiveEvent, LiveMessage, LivePhase, LivePhaseView, LiveStep };
-export type { Attachment, AuthorKind, Membership, Quote, HostInfo, LoginJob, LoginState, MeshStatus, ProfileQuota, QuotaWindow };
+export type { Attachment, AuthorKind, EntryKind, Membership, Quote, HostInfo, LoginJob, LoginState, MeshStatus, ProfileQuota, QuotaWindow };
 export type { AccessKind, ConnectKind, ConnectMode, ConnectState, ProfileCheck, RuntimeKind, TimelineEntry, TranscriptUsage };
 
 export type ProcessState = "running" | "warm" | "cold";
@@ -132,35 +132,54 @@ export interface TurnRecord extends TurnSummary {
   id: string;
 }
 
-/** GET /sessions/:key. Messages are read per thread; the transcript comes from /sessions/:key/live. */
+/** GET /sessions/:key. Entries are read per thread; the transcript comes from /sessions/:key/live. */
 export interface SessionDetail {
   session: SessionSummary;
   threads: ThreadView[];
   turns: TurnRecord[];
 }
 
-/** Something said in a thread. */
-export interface MessageView {
-  /** Orders the thread; `before` pages back by it. */
-  seq: number;
-  /** The change cursor; `after` follows it. Grows on every insert, edit and delete, across threads. */
-  rev: number;
+/** One entry of a thread's log (GET /threads/:id/entries). Entries never change; the client core merges them into messages. */
+export interface EntryView {
   thread: number;
-  ts: string;
+  /** 1, 2, 3 … within the thread, no gaps. */
+  n: number;
+  kind: EntryKind;
+  /** edit and delete: the n of the message it changes. */
+  target: number | null;
+  /** message: the platform's id (Slack ts). */
+  ts: string | null;
   authorKind: AuthorKind;
   /** person: Slack user id, email or "local"; agent: its session key; ember: "ember". */
   author: string;
-  /** Who that is in words, where known: a person's name, the name an agent goes by there. */
+  /** Who that is in words, where known when the entry was read: a person's name, the name an agent goes by there. */
   authorName: string | null;
-  /** Markdown; empty once deleted. */
+  /** message and edit: Markdown. */
+  text: string | null;
+  /** message and edit: its files and quotes (an edit gives the message's whole new version). */
+  attachments: Attachment[];
+  quotes: Quote[];
+  /** message: final or block, when an agent's post ended its work with it. */
+  declared: string | null;
+  at: number;
+}
+
+/** A message as merged from its thread's entries: its latest edit's words, files and quotes. Deleted ones are gone. */
+export interface MessageView {
+  /** Its entry's n. */
+  seq: number;
+  thread: number;
+  ts: string;
+  authorKind: AuthorKind;
+  author: string;
+  authorName: string | null;
   text: string;
   attachments: Attachment[];
   quotes: Quote[];
-  /** final or block, when an agent's post ended its work with it. */
   declared: string | null;
   createdAt: number;
+  /** When its latest edit came; null if never edited. */
   editedAt: number | null;
-  deletedAt: number | null;
 }
 
 /** A thread: a Slack thread or a chat on ember's page. */
@@ -178,10 +197,11 @@ export interface ThreadView {
   createdAt: number;
   /** The sessions taking part, and the connect each posts through. */
   sessions: Membership[];
-  last: MessageView | null;
-  /** The thread's latest rev: follow it with GET /threads/:id/messages?after=. */
-  rev: number;
-  /** The viewer's read position (a seq), 0 if never read. */
+  /** Its last entry number, 0 before anything is said: follow it with GET /threads/:id/entries?after=. */
+  last: number;
+  /** The latest message as merged, for lists. */
+  lastMessage: MessageView | null;
+  /** The viewer's read position (an entry number), 0 if never read. */
   read: number;
   /** Messages after it, not deleted and not the viewer's own. */
   unread: number;
@@ -191,22 +211,23 @@ export interface ThreadView {
   firstText: string | null;
 }
 
-/** GET /threads/:id/messages. */
-export interface ThreadMessages {
-  /** The thread's latest rev when this was read: ask `after` it next. */
-  rev: number;
-  messages: MessageView[];
-  /** A page back through history (`before`, or no cursor) may have older messages before it. */
-  more: boolean;
+/** GET /threads/:id/entries. */
+export interface ThreadEntries {
+  /** The thread's last entry number when this was read. */
+  last: number;
+  entries: EntryView[];
 }
 
 /** What GET /events sends, by event name. */
 export interface StationEvents {
   session: SessionSummary;
   "session-removed": { key: string };
-  thread: { id: number; rev: number; messages: MessageView[] };
+  /** Entries appended to a thread, contiguous and in order; none when its sessions changed. */
+  thread: { id: number; entries: EntryView[] };
+  /** A thread went, with all its entries: clients drop what they keep of it. */
+  "thread-removed": { id: number };
   /** Only to the viewer it is about. */
-  read: { viewer: string; thread: number; seq: number };
+  read: { viewer: string; thread: number; n: number };
   overview: Overview;
   /** Only to streams opened with ?host=1. */
   host: HostInfo;
