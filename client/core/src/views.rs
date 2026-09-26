@@ -580,6 +580,8 @@ impl Views {
             "session": session,
             "connect": of("connects", session.get("connect")),
             "profile": of("profiles", session.get("profile")),
+            // Whom it can be moved to: the profiles that run its runtime (its transcripts are shared by them all).
+            "profiles": runnable_on(overview.as_ref(), &session),
             "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
             "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
         }))
@@ -712,6 +714,24 @@ fn runtimes(overview: Option<&Value>) -> Value {
         (!models.is_empty()).then(|| json!({ "runtime": runtime, "models": models }))
     });
     Value::Array(list.collect())
+}
+
+/// The profiles a session can run on, those of its runtime: `{ id, name, current, spent }` (`spent`: a window of it is
+/// used up, and when it is back).
+fn runnable_on(overview: Option<&Value>, session: &Value) -> Value {
+    let runtime = session.get("runtime").and_then(Value::as_str).unwrap_or("");
+    let current = session.get("profile").and_then(Value::as_str);
+    Value::Array(overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
+        .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
+        .map(|p| {
+            let id = p.get("id").and_then(Value::as_str).unwrap_or("");
+            let spent = spent_until(p);
+            json!({
+                "id": id, "name": p.get("name").cloned().unwrap_or(json!(id)), "current": Some(id) == current,
+                "spent": spent.map(|until| json!({ "until": until.is_finite().then_some(until) })),
+            })
+        })
+        .collect())
 }
 
 /// The models the station can run, each with the runtimes it runs on (those of the profiles that have it enabled):
