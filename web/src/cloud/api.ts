@@ -1,57 +1,43 @@
-// ember cloud's account API, called as one of the signed-in accounts.
-import { accessToken } from "./accounts.ts";
-import type { InvitationView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
+// ember cloud's account API, called through the core as one of the signed-in
+// accounts. Reads are the core's `workspaces` and `workspace` topics; after a
+// write the core refetches them, so nothing here keeps a cache.
+import { useCallback, useRef, useState } from "react";
+import type { ErrorBody } from "../core/client.ts";
+import { core, useTopic, type TopicState } from "../core/react.ts";
+import type { Account } from "./accounts.ts";
+import type { InvitationView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
 
-export type { InvitationView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView };
+export type { InvitationView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView };
 
-export class CloudError extends Error {
-  readonly status: number;
-  readonly code: string;
-  constructor(status: number, code: string) {
-    super(MESSAGES[code] ?? code);
-    this.status = status;
-    this.code = code;
-  }
+/** One account's `/v1/me`, as the `workspaces` topic lists it (`error` when that account could not be read). */
+export interface AccountWorkspaces {
+  account: Account;
+  workspaces: WorkspaceSummary[];
+  invitations: PendingInvitation[];
+  relay_url: string | null;
+  error?: ErrorBody;
 }
 
-const MESSAGES: Record<string, string> = {
-  workspace_not_found: "找不到这个 workspace，或者你已经不在里面了",
-  member_not_found: "找不到这个成员",
-  station_not_found: "找不到这台 station",
-  invitation_not_found: "邀请链接无效或已过期",
-  invitation_for_other_email: "这个邀请是发给另一个邮箱的，请换对应的账号接受",
-  forbidden: "你在这个 workspace 里没有这个权限",
-  invalid_name: "名字不能为空，最长 80 个字",
-  invalid_email: "要填对方登录 ember 用的邮箱",
-  already_member: "这个邮箱的主人已经在 workspace 里了",
-  last_owner: "workspace 至少要保留一个 owner",
-  too_many_workspaces: "你创建的 workspace 太多了",
-  too_many_invitations: "未处理的邀请太多了，先撤回一些",
-  too_many_members: "成员数量到上限了",
-  too_many_stations: "station 数量到上限了",
-  invalid_session: "登录已失效，请重新登录",
-};
-
-async function call<T>(sub: string, method: string, path: string, body?: unknown): Promise<T> {
-  const response = await fetch(path, {
-    method,
-    headers: { authorization: `Bearer ${await accessToken(sub)}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  const data = await response.json().catch(() => ({})) as { error?: string };
-  if (!response.ok) throw new CloudError(response.status, data.error ?? `http_${response.status}`);
-  return data as T;
+/** Every signed-in account with its workspaces and the invitations waiting for its email. */
+export function useWorkspaces(): TopicState<AccountWorkspaces[]> {
+  return useTopic<AccountWorkspaces[]>({ topic: "workspaces" });
 }
 
-export interface Me { user: UserView | null; workspaces: WorkspaceSummary[]; invitations: PendingInvitation[]; relay_url: string }
-export interface Grant { grant: string; expires_at: number; station: string; station_name: string; relay_url: string }
+/** One workspace, read as whichever signed-in account belongs to it. */
+export function useWorkspace(id: string): TopicState<WorkspaceView> {
+  return useTopic<WorkspaceView>({ topic: "workspace", workspace: id });
+}
+
+function call<T>(sub: string, method: string, path: string, body?: unknown): Promise<T> {
+  return core().call("cloud.request", body === undefined ? { account: sub, method, path } : { account: sub, method, path, body }) as Promise<T>;
+}
+
+export interface LoginSession { id: string; name: string; created_at: number; expires_at: number; current: boolean }
 
 const ws = (id: string) => `/v1/workspaces/${encodeURIComponent(id)}`;
 
 export const cloud = {
-  me: (sub: string) => call<Me>(sub, "GET", "/v1/me"),
   createWorkspace: (sub: string, name: string) => call<WorkspaceView>(sub, "POST", "/v1/workspaces", { name }),
-  workspace: (sub: string, id: string) => call<WorkspaceView>(sub, "GET", ws(id)),
   renameWorkspace: (sub: string, id: string, name: string) => call<WorkspaceView>(sub, "PATCH", ws(id), { name }),
   deleteWorkspace: (sub: string, id: string) => call<{ ok: true }>(sub, "DELETE", ws(id)),
   invite: (sub: string, id: string, role: Role, email: string) =>
@@ -67,5 +53,33 @@ export const cloud = {
   enroll: (sub: string, id: string, name: string) => call<{ token: string; expires_at: number; command: string }>(sub, "POST", `${ws(id)}/enrollments`, { name }),
   renameStation: (sub: string, id: string, station: string, name: string) => call<WorkspaceView>(sub, "PATCH", `${ws(id)}/stations/${station}`, { name }),
   removeStation: (sub: string, id: string, station: string) => call<{ ok: true }>(sub, "DELETE", `${ws(id)}/stations/${station}`),
-  grant: (sub: string, id: string, station: string, device: string) => call<Grant>(sub, "POST", `${ws(id)}/stations/${station}/grant`, { device }),
+  loginSessions: (sub: string) => call<{ sessions: LoginSession[] }>(sub, "GET", "/v1/auth/sessions").then((r) => r.sessions),
+  revokeLoginSession: (sub: string, id: string) => call<{ ok: true }>(sub, "DELETE", `/v1/auth/sessions/${id}`),
 };
+
+export interface Action<A, T> {
+  run(arg: A): void;
+  busy: boolean;
+  /** The last try's error, until the next try. */
+  error: Error | null;
+  /** What the running (or last) try was given. */
+  arg: A | undefined;
+  /** The last try's answer, once it succeeded. */
+  result: T | undefined;
+}
+
+/** A write behind a button: whether it is running, how it ended, and what to do after it succeeded. */
+export function useAction<A = void, T = unknown>(write: (arg: A) => Promise<T>, onDone?: (result: T, arg: A) => void): Action<A, T> {
+  const [state, setState] = useState<{ busy: boolean; error: Error | null; arg: A | undefined; result: T | undefined }>({ busy: false, error: null, arg: undefined, result: undefined });
+  // The latest closures, so `run` stays the same function across renders.
+  const latest = useRef({ write, onDone });
+  latest.current = { write, onDone };
+  const run = useCallback((arg: A) => {
+    setState({ busy: true, error: null, arg, result: undefined });
+    latest.current.write(arg).then(
+      (result) => { setState({ busy: false, error: null, arg, result }); latest.current.onDone?.(result, arg); },
+      (error: unknown) => setState({ busy: false, error: error instanceof Error ? error : new Error(String(error)), arg, result: undefined }),
+    );
+  }, []);
+  return { run, ...state };
+}

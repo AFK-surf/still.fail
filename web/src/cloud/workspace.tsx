@@ -1,112 +1,63 @@
-// A workspace in ember cloud: every station's sessions, chats and connects in
-// one place. Each station has its own iroh link and its own slice of the data
-// cache (StationContext); the sidebar merges their sessions, and a page opened
-// from it talks to the station the item belongs to.
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronsUpDown, LogOut, Plus, Settings, SquarePen, UserPlus } from "lucide-react";
+// A workspace in ember cloud: every station's chats and connects in one
+// place. The core reaches each station and puts the workspace's views
+// together (docs/client-core.md); a page opened from the sidebar talks to the
+// station the item belongs to (StationContext).
+import { Check, ChevronsUpDown, LogOut, Plus, Settings, UserPlus } from "lucide-react";
 import { NewChat } from "../NewChat.tsx";
 import { lastChat, useRememberChat } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
-import { keys, makeApi, useLiveUpdates, type Overview, type SessionSummary } from "../api.ts";
-import { connectionText, dayLabel, modeShort, presence } from "../format.ts";
+import { useStations } from "../api.ts";
 import { AccountPage, AccountsPage } from "../pages/Accounts.tsx";
-import { ConnectPage, NewConnectDialog } from "../pages/Connect.tsx";
+import { ConnectPage } from "../pages/Connect.tsx";
 import { SessionPage } from "../pages/Session.tsx";
-import { SessionRow, useSessionGroups } from "../Sidebar.tsx";
-import { MineFilter, useOnlyMine } from "../components.tsx";
+import { ChatList } from "../Sidebar.tsx";
 import { AccountSettings, ConnectsSettings, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
-import { MeContext, PeopleContext, StationContext, type Station } from "../station.tsx";
+import { PeopleContext, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
-import { Button, ConnectKindIcon, Dialog, Empty, Field, ICON, IconButton, Loading, ResizeHandle, Select, SkeletonRows, StatusDot } from "../ui.tsx";
-import { signIn, signOut, type Account } from "./accounts.ts";
-import { cloud, type PendingInvitation, type WorkspaceView } from "./api.ts";
-export type { PendingInvitation };
-import { Avatar, online, useAccounts } from "./gate.tsx";
-import { StationTransport } from "./link.ts";
+import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select } from "../ui.tsx";
+import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
+import { cloud, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
+import { Avatar } from "./gate.tsx";
 import { Illustration, Lockup } from "../brand.tsx";
 
-export interface WorkspaceEntry { id: string; name: string; account: Account; relay: string; stations: number; members: number }
+/** The workspace in view and the signed-in account that reaches it. */
+export interface WorkspaceEntry { id: string; name: string; account: Account }
 
-export interface InvitationEntry extends PendingInvitation { account: Account }
-
-/** What every signed-in account can reach, and the invitations waiting for their emails. */
-function useMe() {
-  const list = useAccounts();
-  return useQuery({
-    queryKey: ["cloud", "me", list.map((a) => a.sub).join(",")],
-    queryFn: async () => {
-      const results = await Promise.all(list.map(async (account) => ({ account, me: await cloud.me(account.sub).catch(() => null) })));
-      return {
-        workspaces: results.flatMap(({ account, me }) => (me?.workspaces ?? []).map((w): WorkspaceEntry => ({ id: w.id, name: w.name, stations: w.stations, members: w.members, account, relay: me!.relay_url }))),
-        invitations: results.flatMap(({ account, me }) => (me?.invitations ?? []).map((i): InvitationEntry => ({ ...i, account }))),
-      };
-    },
-    enabled: list.length > 0,
-    refetchInterval: 60_000,
-  });
-}
-
-/** Every workspace of every signed-in account, each with the account that reaches it. */
-export function useWorkspaces() {
-  const me = useMe();
-  return { ...me, data: me.data?.workspaces };
-}
-
-export function useInvitations() {
-  const me = useMe();
-  return { ...me, data: me.data?.invitations };
-}
-
-// One link per station for the page's lifetime, whichever component asks.
-const transports = new Map<string, StationTransport>();
-function transportFor(sub: string, ws: string, station: string, relay: string): StationTransport {
-  const key = `${sub}/${ws}/${station}`;
-  let t = transports.get(key);
-  if (!t) transports.set(key, (t = new StationTransport(sub, ws, station, relay)));
-  return t;
-}
+interface InvitationEntry extends PendingInvitation { account: Account }
 
 export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
-  const view = useQuery({
-    queryKey: ["cloud", "workspace", entry.id, entry.account.sub],
-    queryFn: () => cloud.workspace(entry.account.sub, entry.id),
-    refetchInterval: 30_000,
-  });
-  const stations = useMemo<Station[]>(() => (view.data?.stations ?? []).map((s) => ({
-    id: s.id, name: s.name, online: online(s),
-    base: `/w/${entry.id}/s/${s.id}`, settings: `/w/${entry.id}/settings`,
-    address: `${entry.id}/${s.id}`,
-    transport: transportFor(entry.account.sub, entry.id, s.id, entry.relay),
-  })), [view.data, entry]);
+  const view = useWorkspace(entry.id).value;
+  const found = useStations(entry.id);
+  const stations = useMemo<Station[]>(() => (found.value ?? []).map((s) => ({
+    id: s.id, name: s.name, online: s.online,
+    address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings`,
+  })), [found.value, entry.id]);
   const path = useLocation().pathname;
   const navigate = useNavigate();
   useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/sessions\/.+)$/.test(p));
   const detail = /\/(s\/[^/]+\/.+|settings|new$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
-  const me = useMemo(() => ({ id: entry.account.email, email: entry.account.email }), [entry.account.email]);
-  const people = useMemo(() => new Map((view.data?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view.data]);
+  const people = useMemo(() => new Map((view?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view]);
 
   return (
-    <MeContext.Provider value={me}>
     <PeopleContext.Provider value={people}>
       <div className="shell" data-detail={detail}>
-        {stations.filter((s) => s.online).map((s) => <Live key={s.id} station={s} />)}
         {settings
           ? <nav className="sidebar" aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className="brand brand-compact"><Lockup /></div><div className="account-slot"><WorkspaceSwitcher current={entry} /></div><SettingsNav entry={entry} /></nav>
-          : <WorkspaceSidebar entry={entry} stations={stations} loading={view.isPending} />}
+          : <WorkspaceSidebar entry={entry} />}
         <main className="main">
           <Routes>
-            <Route index element={<WorkspaceHome view={view.data} stations={stations} />} />
+            <Route index element={<WorkspaceHome id={entry.id} stations={found.value && stations} />} />
             <Route path="settings" element={<Navigate to="stations" replace />} />
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
             <Route path="settings/general" element={<GeneralSettings entry={entry} />} />
             <Route path="settings/members" element={<MembersSettings entry={entry} />} />
-            <Route path="settings/stations" element={<StationsSettings entry={entry} stations={stations} />} />
+            <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} stations={stations} />} />
-            <Route path="settings/profiles" element={<RuntimeSettings entry={entry} stations={stations} />} />
+            <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
             <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
             <Route path="s/:station/*" element={<StationPages stations={stations} />} />
             <Route path="new" element={<NewChat stations={stations} onCreated={(station, key) => navigate(`${station.base}/sessions/${encodeURIComponent(key)}`)} />} />
@@ -115,17 +66,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
         </main>
       </div>
     </PeopleContext.Provider>
-    </MeContext.Provider>
   );
-}
-
-/** Keeps one station's data current. */
-function Live({ station }: { station: Station }) {
-  return <StationContext.Provider value={station}><LiveInner /></StationContext.Provider>;
-}
-function LiveInner() {
-  useLiveUpdates(true);
-  return null;
 }
 
 function StationPages({ stations }: { stations: Station[] }) {
@@ -146,60 +87,29 @@ function StationPages({ stations }: { stations: Station[] }) {
   );
 }
 
-function WorkspaceHome({ view, stations }: { view: WorkspaceView | undefined; stations: Station[] }) {
-  if (!view) return <Loading label="正在读取 workspace…" />;
+/** `stations` is undefined until the core has listed them. */
+function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | undefined }) {
+  if (!stations) return <Loading label="正在读取 workspace…" />;
   // With stations there is always a chat in view: the one last open, or a new one.
-  if (stations.length) return <Navigate to={lastChat(view.id, `/w/${view.id}/new`)} replace />;
-  const up = stations.filter((s) => s.online).length;
+  if (stations.length) return <Navigate to={lastChat(id, `/w/${id}/new`)} replace />;
   return (
     <Empty>
       <Illustration name="no-station" />
-      <h2>{stations.length ? "选一个会话" : "这个 workspace 还没有 station"}</h2>
-      <p>{stations.length
-        ? `左边是 ${stations.length} 台 station 上的会话${up < stations.length ? `（${stations.length - up} 台离线）` : ""}，最近活动的在最上面。`
-        : <>到 <Link className="inline-link" to={`/w/${view.id}/settings/stations`}>设置 → Station</Link> 里添加一台 station：在要运行 ember 的机器上执行一条命令即可。</>}</p>
+      <h2>这个 workspace 还没有 station</h2>
+      <p>到 <Link className="inline-link" to={`/w/${id}/settings/stations`}>设置 → Station</Link> 里添加一台 station：在要运行 ember 的机器上执行一条命令即可。</p>
     </Empty>
   );
 }
 
 // ── sidebar ─────────────────────────────────────────────────────────────
 
-function WorkspaceSidebar({ entry, stations, loading }: { entry: WorkspaceEntry; stations: Station[]; loading: boolean }) {
-  const live = stations.filter((s) => s.online);
-  const sessions = useQueries({ queries: live.map((s) => ({ queryKey: keys.sessions(s.id), queryFn: () => makeApi(s.transport).sessions() })) });
-  const overviews = useQueries({ queries: live.map((s) => ({ queryKey: keys.overview(s.id), queryFn: () => makeApi(s.transport).overview(), refetchInterval: 10_000 })) });
-  const [onlyMine] = useOnlyMine();
-  const rows = useMemo(() => live.flatMap((station, i) =>
-    (sessions[i]?.data ?? []).map((session) => ({ session, station, overview: overviews[i]?.data as Overview | undefined }))), [live, sessions, overviews]);
-  const groups = useSessionGroups(rows);
-  const failed = live.filter((_, i) => sessions[i]?.isError);
-  const connecting = live.filter((_, i) => sessions[i]?.isPending);
-  const offline = stations.filter((s) => !s.online);
-
+function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav className="sidebar" aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className="brand brand-compact"><Lockup /></div>
       <div className="account-slot"><WorkspaceSwitcher current={entry} /></div>
-      <div className="nav-new"><NavLink className="nav-row" to={`/w/${entry.id}/new`}><SquarePen {...ICON} />新建对话</NavLink></div>
-      <MineFilter label="会话" />
-      <div className="nav-scroll">
-        {connecting.map((s) => <p key={s.id} className="nav-connecting"><span className="spinner" aria-hidden="true" />正在连接 {s.name}…</p>)}
-        {failed.map((s) => <p key={s.id} className="nav-empty nav-error">连不上「{s.name}」，正在重试…</p>)}
-        {groups.length === 0 && (connecting.length > 0 || loading) && <SkeletonRows />}
-        {offline.length > 0 && <p className="nav-empty">{offline.map((s) => s.name).join("、")} 离线，它们的会话暂时看不到。</p>}
-        {groups.length === 0 && !failed.length && !connecting.length && !loading && <p className="nav-empty">{onlyMine ? "没有你发起的会话。" : stations.length ? <>还没有会话。在 Slack 里 @ 它们，或者 <NavLink className="inline-link" to={`/w/${entry.id}/new`}>新建对话</NavLink>。</> : <>还没有 station，到 <NavLink className="inline-link" to={`/w/${entry.id}/settings/stations`}>设置 → Station</NavLink> 添加。</>}</p>}
-        {groups.map((group) => (
-          <section key={group.label} aria-label={group.label}>
-            <div className="nav-heading">{group.label}</div>
-            {group.items.map(({ session, station, overview }) => (
-              <StationContext.Provider key={`${station.id}/${session.key}`} value={station}>
-                <SessionRow session={session} connect={overview?.connects.find((c) => c.id === session.connect)} station={station.name} />
-              </StationContext.Provider>
-            ))}
-          </section>
-        ))}
-      </div>
+      <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings/stations`} />
       <div className="nav-foot">
         <NavLink className="nav-row" to={`/w/${entry.id}/settings`}><Settings {...ICON} />设置</NavLink>
       </div>
@@ -209,23 +119,19 @@ function WorkspaceSidebar({ entry, stations, loading }: { entry: WorkspaceEntry;
 
 /** The sidebar's header: the workspace in view, which account it belongs to, and the others. */
 function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
-  const workspaces = useWorkspaces();
-  const invitations = useInvitations();
-  const list = useAccounts();
+  const byAccount = useWorkspaces().value ?? [];
+  const list = useAccounts() ?? [];
   const navigate = useNavigate();
   const toast = useToast();
-  const queries = useQueryClient();
   const [creating, setCreating] = useState(false);
-  const respond = useMutation({
-    mutationFn: ({ invite, accept }: { invite: InvitationEntry; accept: boolean }) =>
+  const respond = useAction(
+    ({ invite, accept }: { invite: InvitationEntry; accept: boolean }) =>
       accept ? cloud.acceptInvitationById(invite.account.sub, invite.id) : cloud.declineInvitation(invite.account.sub, invite.id).then(() => null),
-    onSuccess: (joined, { invite }) => {
-      void queries.invalidateQueries({ queryKey: ["cloud"] });
+    (joined, { invite }) => {
       if (joined) { toast(`已加入「${invite.name}」`); navigate(`/w/${joined.id}`); } else toast("已忽略邀请");
     },
-  });
-  const pending = invitations.data ?? [];
-  const byAccount = list.map((a) => ({ account: a, items: (workspaces.data ?? []).filter((w) => w.account.sub === a.sub) }));
+  );
+  const pending = byAccount.flatMap((a) => a.invitations.map((i): InvitationEntry => ({ ...i, account: a.account })));
   return (
     <>
       <DropdownMenu.Root modal={false}>
@@ -252,15 +158,15 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
                       <span className="muted">{invite.account.email}{list.length > 1 ? "" : ""}</span>
                     </span>
                     <span className="menu-invite-actions">
-                      <DropdownMenu.Item className="btn btn-primary menu-invite-btn" onSelect={() => respond.mutate({ invite, accept: true })}>加入</DropdownMenu.Item>
-                      <DropdownMenu.Item className="btn btn-ghost menu-invite-btn" onSelect={() => respond.mutate({ invite, accept: false })}>忽略</DropdownMenu.Item>
+                      <DropdownMenu.Item className="btn btn-primary menu-invite-btn" onSelect={() => respond.run({ invite, accept: true })}>加入</DropdownMenu.Item>
+                      <DropdownMenu.Item className="btn btn-ghost menu-invite-btn" onSelect={() => respond.run({ invite, accept: false })}>忽略</DropdownMenu.Item>
                     </span>
                   </div>
                 ))}
                 <DropdownMenu.Separator className="menu-sep" />
               </>
             )}
-            {byAccount.map(({ account, items }, i) => (
+            {byAccount.map(({ account, workspaces: items }, i) => (
               <div key={account.sub}>
                 {i > 0 && <DropdownMenu.Separator className="menu-sep" />}
                 <DropdownMenu.Label className="menu-label menu-account"><Avatar account={account} size={16} />{account.email}</DropdownMenu.Label>
@@ -269,7 +175,7 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
                   <DropdownMenu.Item key={w.id} className="menu-item" onSelect={() => navigate(`/w/${w.id}`)}>
                     <span className="ws-mark" aria-hidden="true">{([...w.name][0] ?? "?").toUpperCase()}</span>
                     <span className="thread-item"><span>{w.name}</span><span className="muted">{w.stations} 台 station · {w.members} 人</span></span>
-                    {w.id === current.id && w.account.sub === current.account.sub && <Check {...ICON} size={14} className="menu-check" />}
+                    {w.id === current.id && account.sub === current.account.sub && <Check {...ICON} size={14} className="menu-check" />}
                   </DropdownMenu.Item>
                 ))}
               </div>
@@ -297,22 +203,18 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
   );
 }
 
-export function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void }) {
-  const list = useAccounts();
+function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void }) {
+  const list = useAccounts() ?? [];
   const navigate = useNavigate();
-  const queries = useQueryClient();
   const [name, setName] = useState("");
   const [owner, setOwner] = useState(list[0]?.sub ?? "");
-  const create = useMutation({
-    mutationFn: () => cloud.createWorkspace(owner || list[0]!.sub, name),
-    onSuccess: (w) => { void queries.invalidateQueries({ queryKey: ["cloud"] }); setName(""); onClose(); navigate(`/w/${w.id}`); },
-  });
+  const create = useAction(() => cloud.createWorkspace(owner || list[0]!.sub, name), (w) => { setName(""); onClose(); navigate(`/w/${w.id}`); });
   return (
     <Dialog open={open} onClose={onClose} title="新建 workspace" description="workspace 是一组人和他们共用的 station。你会成为它的 owner。"
-      footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="primary" disabled={!name.trim()} busy={create.isPending} onClick={() => create.mutate()}>新建</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="primary" disabled={!name.trim()} busy={create.busy} onClick={() => create.run()}>新建</Button></>}>
       <Field label="名字" htmlFor="ws-name">
         <input id="ws-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="例如：Cue 团队" maxLength={80}
-          onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); }} />
+          onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.run(); }} />
       </Field>
       {list.length > 1 && (
         <Field label="属于哪个账号" htmlFor="ws-owner">
