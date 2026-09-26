@@ -27,6 +27,7 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
   const firstCount = useRef<number | null>(null);
   if (firstCount.current === null) firstCount.current = messages.length;
   const wasWriting = useRef(false);
+  const heldReply = useRef<{ text: string; count: number } | null>(null);
   const streamedTs = useRef(new Set<string>());
   const status = sessionStatus(detail.session);
   // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
@@ -125,7 +126,11 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
         {(() => {
           // The agent writing to this chat right now: its chat_post, as far as it has streamed.
           const writing = live.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && (partialString(s.input, "to") ?? "").startsWith("EMBER/"));
-          const text = writing ? partialString(writing.input, "text") : null;
+          let text = writing ? partialString(writing.input, "text") : null;
+          // Once written, the reply stays in place until the posted message arrives, so it never blinks out between the two.
+          if (text) heldReply.current = { text, count: messages.length };
+          else if (heldReply.current && messages.length === heldReply.current.count) text = heldReply.current.text;
+          else heldReply.current = null;
           if (text) wasWriting.current = true;
           // The reply being written, under the activity (which stays while the agent works).
           const writingNow = text ? (
