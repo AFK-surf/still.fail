@@ -272,27 +272,6 @@ export class Hub {
     return seq;
   }
 
-  /**
-   * A person's message written on ember's page into a Slack chat: the connect's
-   * bot posts it into the thread, saying who wrote it, so the thread stays
-   * whole in Slack; it is recorded under the ts Slack gave that post (Slack's
-   * echo of the bot's own post is ignored) as the person's, and delivered to
-   * every session in the chat. Returns its seq.
-   */
-  async sayInSlack(threadId: number, user: string, name: string, text: string, quotes: Quote[] = []): Promise<number> {
-    const thread = this.#store.getThread(threadId);
-    if (!thread || thread.surface === EMBER_SURFACE) throw new Error(`no Slack chat ${threadId}`);
-    const members = this.#store.threadSessions(threadId);
-    const via = members.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT);
-    if (!via) throw new Error(`Slack chat ${threadId} has no connect`);
-    const quoted = quotes.map((q) => `${q.text.split("\n").map((l) => `> ${l}`).join("\n")}${q.comment ? `\n${q.comment}` : ""}`);
-    const markdown = [`*${name}*（来自 ember）：`, ...quoted, text].filter(Boolean).join("\n");
-    const ts = await this.#chat(via).post({ channel: thread.channel, threadTs: thread.threadTs }, markdown);
-    const { seq } = this.#store.insertMessage({ thread: threadId, ts, authorKind: "person", author: user, text, attachments: [], quotes });
-    this.#handOver(seq, members.map((m) => m.session), text);
-    return seq;
-  }
-
   /** Hides a session from lists, or shows it again. */
   archive(key: string, archived: boolean): void {
     if (!this.#store.getSession(key)) throw new Error(`unknown session ${key}`);

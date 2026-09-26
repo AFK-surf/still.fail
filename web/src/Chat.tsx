@@ -108,7 +108,7 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
         {chat.more && <div className="chat-older" aria-hidden="true"><span className="spinner" /></div>}
         {messages.length === 0 && (
           <div className="chat-empty">
-            <p>在这里发消息，这个对话里的 agent 会在这里回复。</p>
+            <p>{thread.surface === "ember" ? "在这里发消息，这个对话里的 agent 会在这里回复。" : "这个 thread 里还没有消息。"}</p>
           </div>
         )}
         {messages.map((m) => {
@@ -215,8 +215,25 @@ export function ChatPanel({ chat, lives, onOpenHistory }: { chat: ChatView; live
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
-      <Composer thread={thread.id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
+      {thread.surface === "ember"
+        ? <Composer thread={thread.id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
+        : <SlackReply chat={chat} />}
     </section>
+  );
+}
+
+/** Where a Slack thread's composer would be: people answer it in Slack. */
+function SlackReply({ chat }: { chat: ChatView }) {
+  const connect = chat.agents.find((a) => a.connect?.kind === "slack")?.connect ?? null;
+  const url = slackThreadUrl(slackWorkspaceUrl(connect), chat.thread.channel, chat.thread.threadTs);
+  return (
+    <div className="composer-wrap">
+      <p className="chat-slack-reply">
+        {url
+          ? <a className="inline-link" href={url} target="_blank" rel="noopener"><SlackLogo size={13} />在 Slack 里回复</a>
+          : <span className="muted"><SlackLogo size={13} />在 Slack 里回复</span>}
+      </p>
+    </div>
   );
 }
 

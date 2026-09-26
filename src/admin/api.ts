@@ -290,17 +290,12 @@ export class AdminApi {
       if (!action && method === "GET") return send(res, 200, await this.#thread(threadId, viewer));
       if (action === "messages" && method === "GET") return send(res, 200, await this.#messages(threadId, url.searchParams));
       if (action === "messages" && method === "POST") {
+        if (thread.surface !== EMBER_SURFACE) throw new HttpError(400, "只能在 ember 自己的对话里发消息");
         const input = await body(req);
         const text = String(input.text ?? "").trim();
         const attachments = this.#attachments(threadId, input.attachments);
         const quotes = quotesOf(input.quotes);
         if (!text && attachments.length === 0 && quotes.length === 0) throw new HttpError(400, "消息是空的");
-        if (thread.surface !== EMBER_SURFACE) {
-          // A Slack chat: the bot carries it into the thread (files cannot go that way yet).
-          if (attachments.length) throw new HttpError(400, "Slack 对话里暂时不能从 ember 发附件");
-          if (!text) throw new HttpError(400, "消息是空的");
-          return send(res, 200, { seq: await this.#deps.hub.sayInSlack(threadId, viewerId(viewer), viewerName(viewer), text, quotes) });
-        }
         return send(res, 200, { seq: this.#deps.hub.say(threadId, viewerId(viewer), text, attachments, quotes) });
       }
       if (action === "read" && method === "PUT") {
