@@ -814,11 +814,11 @@ test("a viewer can say a Slack user is them: the station then takes that user fo
     await localEvents.next("overview", (o) => o.slackUsers.includes("U42"));
     await settle();
     assert.equal(devEvents.events.some((e) => e.event === "chat" && e.data.mine), false);
-    // U7 wrote in the Slack thread: for dev, the row is theirs and U7's words are their own.
+    // U7 only wrote in the Slack thread: their words are dev's own now, but the agent's row is not dev's —
+    // with no chat yet, only whoever started the session counts.
     assert.deepEqual((await t.call("PUT", "/me/slack/U7", undefined, dev)).body.slackUsers, ["U7"]);
-    assert.equal(await mine(dev), true);
+    assert.equal(await mine(dev), false);
     assert.equal(await slackUnread(dev), 1);
-    assert.equal((await devEvents.next("chat", (r) => r.session === key && r.mine)).origin.channel, "C1");
     await devEvents.next("overview", (o) => o.slackUsers.includes("U7"));
     assert.deepEqual((await t.call("GET", "/overview", undefined, dev)).body.slackUsers, ["U7"]);
 
@@ -826,7 +826,6 @@ test("a viewer can say a Slack user is them: the station then takes that user fo
     await t.call("DELETE", "/me/slack/U7", undefined, dev);
     assert.equal(await mine(dev), false);
     assert.equal(await slackUnread(dev), 2);
-    await devEvents.next("chat", (r) => r.session === key && !r.mine);
 
     // Items come and go on the stream: the agent's item, once it has a chat, is at its chat's id.
     const from = localEvents.events.length;

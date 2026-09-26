@@ -1247,7 +1247,8 @@ mod tests {
             assert!(host.take_emitted().iter().any(|(_, m)| matches!(m, CoreMessage::Value { id: 1, .. })));
             let admin: Vec<_> = host.requests.borrow().iter().filter(|r| r.url.contains("/admin/api/")).cloned().collect();
             let paths: Vec<&str> = admin.iter().map(|r| r.url.trim_start_matches("https://ember.test/admin/api")).collect();
-            assert_eq!(paths.len(), 6, "{paths:?}");
+            assert_eq!(paths.len(), 7, "{paths:?}");
+            assert!(paths.contains(&"/chats"), "the title as the sidebar has it: {paths:?}");
             assert!(paths.contains(&"/sessions/k1"), "the agent read as the chat opens: {paths:?}");
             let parents: Vec<String> = admin.iter().map(|r| header(r, "traceparent").expect("traceparent")).collect();
             let trace = parents[0][3..35].to_string();

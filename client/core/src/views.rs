@@ -1099,7 +1099,7 @@ mod tests {
             t.subscribe(1, chat_topic("ws/a", 7));
             t.read(&mut ui, 1).await;
             // Its thread and its messages are asked for at once.
-            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), overview("ws/a"), link("ws/a")]));
+            assert_eq!(sorted(t.started()), sorted(vec![threads("ws/a"), sessions("ws/a"), page_of("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a")]));
             assert!(ui.value.is_none(), "nothing before the thread is read");
 
             let now = t.host.now_ms();
