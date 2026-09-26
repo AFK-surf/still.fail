@@ -434,6 +434,15 @@ export function ProviderLogo({ runtime, kind, size = 16 }: { runtime: "claude" |
   return <ModelLogo model={runtime === "claude" || kind === "anthropic-api" ? "claude" : "openai"} runtime={runtime} size={size} />;
 }
 
+/** The runtimes a profile runs, as small marks after its name: CC for Claude Code, Codex. */
+export function RuntimeTags({ runtimes }: { runtimes: ("claude" | "codex")[] }) {
+  return (
+    <span className="runtime-tags">
+      {runtimes.map((r) => <span key={r} className="runtime-tag" title={r === "claude" ? "Claude Code" : "Codex"}><RuntimeLogo runtime={r} size={11} />{r === "claude" ? "CC" : "Codex"}</span>)}
+    </span>
+  );
+}
+
 /** An agent as the phone shows it: its model's maker on a tile, and where it stands as a badge. */
 export function AgentMark({ model, runtime, badge, size = 20 }: { model: string | null | undefined; runtime: "claude" | "codex"; badge: Badge | null; size?: number }) {
   return (

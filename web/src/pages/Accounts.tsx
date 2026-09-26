@@ -7,57 +7,61 @@ import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Ov
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeLogo, Section, Segmented, Select, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeLogo, RuntimeTags, Section, Segmented, Select, Time } from "../ui.tsx";
 
-function AccessMark({ kind, runtime, size = 32 }: { kind: AccessKind; runtime: RuntimeKind; size?: number }) {
-  return <span className="mark" style={{ width: size, height: size }}><ProviderLogo runtime={runtime} kind={kind} size={Math.round(size * .55)} /></span>;
-}
 
 export function AccountsPage() {
   const link = useLink();
   const overview = useOverview(useStation().address);
   const [adding, setAdding] = useState(false);
   const profiles = overview.value?.profiles ?? [];
-  const groups = (["claude", "codex"] as RuntimeKind[]).map((runtime) => ({ runtime, items: profiles.filter((p) => p.runtime === runtime) }));
   return (
     <div className="page page-narrow">
       <MobileBack to={link("/chats")} label="对话" />
       <header className="page-head">
         <div>
           <h1>Profile</h1>
-          <p className="page-sub">Profile 决定 agent 用什么运行 Claude Code 或 Codex：用哪份订阅，或者接到哪个模型服务。</p>
+          <p className="page-sub">Profile 是 agent 用来跑模型的账号：一份订阅，或者一个模型服务的 key。一个账号能跑哪些运行时，ember 会自己配好。</p>
         </div>
         <Button icon={Plus} onClick={() => setAdding(true)}>添加 Profile</Button>
       </header>
       {profiles.length === 0 && <Empty><p>还没有 Profile。连接至少需要一个 Profile 才能运行。</p></Empty>}
-      {groups.filter((g) => g.items.length).map((g) => (
-        <section key={g.runtime} className="section" aria-label={RUNTIME_LABEL[g.runtime]}>
-          <div className="group-head"><RuntimeLogo runtime={g.runtime} size={14} /><strong>{RUNTIME_LABEL[g.runtime]}</strong><span className="muted">{g.items.length} 个</span></div>
-          <ul className="list">
-            {g.items.map((p) => {
-              const tone = checkTone(p.check);
-              return (
-                <li key={p.id}>
-                  <Link className="list-row account-row" to={link(`/settings/accounts/${p.id}`)}>
-                    <span className="mark runtime-mark"><ProviderLogo runtime={p.runtime} kind={p.access.kind} size={18} /></span>
-                    <span className="list-row-text">
-                      <span className="list-row-title">{p.name}</span>
-                      <span className="muted runtime-line"><RuntimeLogo runtime={p.runtime} size={12} />{RUNTIME_LABEL[p.runtime]} · {ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.value!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
-                    </span>
-                    <QuotaBars quota={p.quota} compact />
-                    <Pill tone={tone.tone}>{tone.label}</Pill>
-                    <ChevronRight {...ICON} className="list-row-chevron" />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ))}
+      {profiles.length > 0 && (
+        <ul className="list">
+          {profiles.map((p) => {
+            const tone = checkTone(p.check);
+            return (
+              <li key={p.id}>
+                <Link className="list-row account-row" to={link(`/settings/accounts/${p.id}`)}>
+                  <span className="mark runtime-mark"><ProviderLogo runtime={p.runtime} kind={p.access.kind} size={18} /></span>
+                  <span className="list-row-text">
+                    <span className="list-row-title">{p.name}<RuntimeTags runtimes={p.runtimes} /></span>
+                    <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.value!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
+                  </span>
+                  <QuotaBars quota={p.quota} compact />
+                  <Pill tone={tone.tone}>{tone.label}</Pill>
+                  <ChevronRight {...ICON} className="list-row-chevron" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <AddAccountDialog open={adding} onClose={() => setAdding(false)} />
     </div>
   );
 }
+
+/** What can be added, by whose account it is; `runtime` only where the account is for one (a subscription, variables). */
+const CHOICES = {
+  "claude-sub": { kind: "subscription", runtime: "claude", title: "Claude 订阅", description: "Claude Pro / Max，跑 Claude Code。在浏览器里登录一次。" },
+  "chatgpt-sub": { kind: "subscription", runtime: "codex", title: "ChatGPT 订阅", description: "ChatGPT Plus / Pro，跑 Codex。用设备码登录一次。" },
+  "opencode-go": { kind: "opencode-go", runtime: null, title: "OpenCode Go", description: "一个 key，Claude Code 和 Codex 都能用。" },
+  "anthropic-api": { kind: "anthropic-api", runtime: null, title: "Anthropic API", description: "Anthropic 的 API key，跑 Claude Code。" },
+  "env-claude": { kind: "env", runtime: "claude", title: "自定义环境变量（Claude Code）", description: "自己设置接模型服务的环境变量。" },
+  "env-codex": { kind: "env", runtime: "codex", title: "自定义环境变量（Codex）", description: "自己设置接模型服务的环境变量。" },
+} as const satisfies Record<string, { kind: AccessKind; runtime: RuntimeKind | null; title: string; description: string }>;
+type Choice = keyof typeof CHOICES;
 
 /**
  * A new profile: a subscription is signed in first and the station makes the profile once that succeeds (named by the
@@ -69,8 +73,9 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
   const overview = useOverview(useStation().address);
   const navigate = useNavigate();
   const toast = useToast();
-  const [runtime, setRuntime] = useState<RuntimeKind>("claude");
-  const [kind, setKind] = useState<AccessKind>("subscription");
+  // What to add, by whose account it is: a subscription (which one), a key, or variables set by hand for one runtime.
+  const [choice, setChoice] = useState<Choice>("claude-sub");
+  const { kind, runtime } = CHOICES[choice];
   const [key, setKey] = useState("");
   const [login, setLogin] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -78,15 +83,15 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
   const provider = runtime === "claude" ? "Claude" : "ChatGPT";
   const close = () => {
     if (login && !pending?.created) void api.dropLogin(login).catch(() => {});
-    setLogin(null); setKey(""); setCode(""); setKind("subscription");
+    setLogin(null); setKey(""); setCode(""); setChoice("claude-sub");
     onClose();
   };
   const go = (id: string, message: string) => { toast(message); setLogin(null); setKey(""); setCode(""); onClose(); navigate(link(`/settings/accounts/${id}`)); };
   // The sign-in made its profile: on to it.
   useEffect(() => { if (pending?.created) go(pending.created, "已登录，添加了 Profile"); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
-  const start = useAction(() => api.newLogin(runtime), ({ id }) => setLogin(id));
+  const start = useAction(() => api.newLogin(runtime!), ({ id }) => setLogin(id));
   const send = useAction(() => api.newLoginCode(login!, code), () => setCode(""));
-  const add = useAction(() => api.addProfile({ runtime, access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }), ({ id }) => go(id, "已验证并添加 Profile"));
+  const add = useAction(() => api.addProfile({ ...(runtime ? { runtime } : {}), access: { kind, ...(KEYED.has(kind) ? { key } : {}) } }), ({ id }) => go(id, "已验证并添加 Profile"));
   const job = pending?.job ?? null;
   const signing = login !== null;
   return (
@@ -103,15 +108,11 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void })
           : <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
       ) : (
         <>
-          <Field label="运行时">
-            <Segmented label="运行时" value={runtime} onChange={(r) => { setRuntime(r); if (!ACCESS_KINDS[r].includes(kind)) setKind("subscription"); }}
-              options={[{ value: "claude", label: "Claude Code" }, { value: "codex", label: "Codex" }]} />
-          </Field>
-          <Field label="接入方式">
-            <Choices label="接入方式" value={kind} onChange={(v) => setKind(v as AccessKind)}
-              options={ACCESS_KINDS[runtime].map((k) => ({
-                value: k, icon: <AccessMark kind={k} runtime={runtime} size={28} />, description: ACCESS[k].description,
-                title: k === "subscription" ? (runtime === "claude" ? "Claude 订阅" : "ChatGPT 订阅") : ACCESS[k].label,
+          <Field label="账号">
+            <Choices label="账号" value={choice} onChange={(v) => setChoice(v as Choice)}
+              options={(Object.keys(CHOICES) as Choice[]).map((c) => ({
+                value: c, title: CHOICES[c].title, description: CHOICES[c].description,
+                icon: <span className="mark" style={{ width: 28, height: 28 }}><ProviderLogo runtime={CHOICES[c].runtime ?? "claude"} kind={CHOICES[c].kind} size={15} /></span>,
               }))} />
           </Field>
           {KEYED.has(kind) && (
@@ -169,7 +170,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
           ) : (
             <h1 className="identity-name">{profile.name}<IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
           )}
-          <p className="identity-sub"><span className="runtime-line"><RuntimeLogo runtime={profile.runtime} size={12} />{RUNTIME_LABEL[profile.runtime]}</span><span>{ACCESS[profile.access.kind].label}</span><span className="mono">{profile.id}</span></p>
+          <p className="identity-sub"><RuntimeTags runtimes={profile.runtimes} /><span>{ACCESS[profile.access.kind].label}</span><span className="mono">{profile.id}</span></p>
         </div>
         <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash2, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>
