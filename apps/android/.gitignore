@@ -2,3 +2,5 @@
 .kotlin/
 **/build/
 local.properties
+# The root ignores data/ (the station's); here it is a source package.
+!/app/src/main/kotlin/dev/ember/android/data/
