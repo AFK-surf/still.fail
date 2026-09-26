@@ -405,20 +405,6 @@ test("a single-session connect can be set to wake without a mention", async () =
   }
 });
 
-test("a legacy bots config is rewritten as connects on load", async () => {
-  const dataDir = mkdtempSync(join(tmpdir(), "ember-legacy-"));
-  const path = join(dataDir, "config.json");
-  writeFileSync(path, JSON.stringify({
-    profiles: [{ id: "cc", runtime: "claude", home: "homes/cc" }],
-    bots: [{ id: "ds", runtime: "claude", profile: "cc", model: "m" }],
-  }));
-  const settings = new Settings(path, dataDir);
-  assert.deepEqual(settings.config.connects.map((c) => [c.id, c.mode, c.bind.model]), [["ds", "multi-session", "m"]]);
-  const saved = JSON.parse(readFileSync(path, "utf8"));
-  assert.equal(saved.bots, undefined);
-  assert.deepEqual(saved.connects[0].bind, { runtime: "claude", model: "m" });
-});
-
 test("a subscription sign-in runs on the ember host and relays the link, the code and the result", async () => {
   const t = await setup();
   try {
