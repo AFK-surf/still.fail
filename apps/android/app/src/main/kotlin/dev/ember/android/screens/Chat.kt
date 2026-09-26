@@ -67,6 +67,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 import dev.ember.android.ui.Edge
+import dev.ember.android.ui.floating
 import dev.ember.android.ui.glass
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.HazeState
@@ -233,7 +234,7 @@ fun ChatScreen(station: String, of: ChatOf) {
     Box(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
         Messages(station, of, view, agents, draft, Modifier.fillMaxSize().hazeSource(haze).background(C.bg), with(density) { topBar.toDp() }, with(density) { bottomBar.toDp() })
         ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze, Edge.Top))
-        Composer(station, of, view, agents, draft, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.glass(haze, Edge.Bottom))
+        Composer(station, of, view, agents, draft, haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })
     }
 }
 
@@ -481,7 +482,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     Box(modifier.fillMaxWidth()) {
         LazyColumn(
             Modifier.fillMaxSize(), state = list,
-            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = top, bottom = bottom), verticalArrangement = Arrangement.spacedBy(14.dp, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
+            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = top, bottom = bottom + 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
         ) {
             items(rows, key = { it.id }) { row ->
                 val fresh = remember(row.id) { row.id !in known }
@@ -506,7 +507,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         if (awayFromEnd(list)) {
             val scope = rememberCoroutineScope()
             Box(
-                Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom - 8.dp).size(38.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(C.surface)
+                Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom + 4.dp).size(38.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(C.surface)
                     .clickable { scope.launch { follow.jump() } },
                 contentAlignment = Alignment.Center,
             ) { IconIn(Icons.Down, 18.dp, C.ink) }
@@ -982,9 +983,10 @@ fun DraftExtras(draft: Draft) {
     }
 }
 
-/** The bar: ＋, a field that grows with the text, and a round send button (a spinner while a new chat is made). */
+/** The bar: ＋, a field that grows with the text, and a round send button (a spinner while a new chat is made). In a floating
+ * capsule the capsule is the field's frame: the field and ＋ have none of their own. */
 @Composable
-fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit) {
+fun ComposerBar(draft: Draft, placeholder: String, floating: Boolean = false, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit) {
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
@@ -992,11 +994,11 @@ fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: (
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         // The attach sheet comes up in the keyboard's place: the keyboard goes first.
         Box(
-            Modifier.size(36.dp).clip(CircleShape).background(C.chip).clickable { focusManager.clearFocus(); keyboard?.hide(); onPlus() },
+            Modifier.size(36.dp).clip(CircleShape).let { if (floating) it else it.background(C.chip) }.clickable { focusManager.clearFocus(); keyboard?.hide(); onPlus() },
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Plus, 18.dp) }
         Box(
-            Modifier.weight(1f).heightIn(min = 36.dp).clip(RoundedCornerShape(18.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(18.dp))
+            Modifier.weight(1f).heightIn(min = 36.dp).clip(RoundedCornerShape(18.dp)).let { if (floating) it else it.background(C.surface).border(1.dp, C.line, RoundedCornerShape(18.dp)) }
                 .padding(horizontal = 14.dp, vertical = 7.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -1026,7 +1028,7 @@ fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: (
  * the agent, and the page moves to it.
  */
 @Composable
-private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, modifier: Modifier = Modifier) {
+private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, haze: HazeState, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val api = app.api(station)
@@ -1036,9 +1038,14 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<C
         app.upload(draft, station, { keeper ?: throw CoreException("no_agent", "这个对话里没有 agent，文件无处可放", null) }, picked, scope)
     }
     val thread = view.thread
-    Column(modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // A capsule floating over the list, which runs on around it.
+    Column(
+        modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)
+            .floating(haze, RoundedCornerShape(26.dp)).padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         DraftExtras(draft)
-        ComposerBar(draft, "发消息", onPlus = { openAttach(app, launchers) },
+        ComposerBar(draft, "发消息", floating = true, onPlus = { openAttach(app, launchers) },
             // Typing starts the session's runtime, so a cold start overlaps the writing.
             onType = {
                 if (keeper != null && System.currentTimeMillis() - draft.warmed > 60_000) {

@@ -1,10 +1,11 @@
-// Frosted bars: a page's list runs under its top bar and its bottom one, and
-// they show it through, blurred (Haze; Android 12 and later blur, earlier ones
-// get the tinted glass alone). The tint is the page's paper, so the bars read
-// as the page, not as panels on it; and a bar has no hard edge: its glass
-// fades out over a strip past its content, toward the list.
+// Frosted glass over a page's list (Haze; Android 12 and later blur, earlier
+// ones get the tinted glass alone). The top bar is the page's paper, frosted,
+// with no hard edge: its glass fades out over a strip past its content. What
+// sits at the bottom floats instead: capsules raised over the list, which runs
+// on around them.
 package dev.ember.android.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -14,7 +15,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -42,8 +46,8 @@ fun Modifier.glass(state: HazeState, edge: Edge): Modifier {
     return onSizeChanged { height = it.height }
         .hazeEffect(state) {
             backgroundColor = bg
-            tints = listOf(HazeTint(bg.copy(alpha = 0.55f)))
-            blurRadius = 28.dp
+            tints = listOf(HazeTint(bg.copy(alpha = 0.7f)))
+            blurRadius = 24.dp
             noiseFactor = 0f
             if (height > 0) {
                 val solid = ((height - fade) / height).coerceIn(0f, 1f)
@@ -59,4 +63,20 @@ fun Modifier.glass(state: HazeState, edge: Edge): Modifier {
 private fun fadePadding(edge: Edge, fade: Dp) = when (edge) {
     Edge.Top -> PaddingValues(bottom = fade)
     Edge.Bottom -> PaddingValues(top = fade)
+}
+
+/** A capsule floating over the list that `state` is the source of: raised, frosted, with a hairline round it. */
+@Composable
+fun Modifier.floating(state: HazeState, shape: Shape): Modifier {
+    val bg = C.bg
+    val tint = if (C.dark) C.surface2 else C.surface
+    return shadow(10.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
+        .clip(shape)
+        .hazeEffect(state) {
+            backgroundColor = bg
+            tints = listOf(HazeTint(tint.copy(alpha = 0.72f)))
+            blurRadius = 20.dp
+            noiseFactor = 0f
+        }
+        .border(0.5.dp, C.line, shape)
 }

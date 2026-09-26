@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import dev.ember.android.ui.Edge
+import dev.ember.android.ui.floating
 import dev.ember.android.ui.glass
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.HazeState
@@ -114,7 +115,7 @@ fun HomeScreen(current: WorkspaceEntry) {
     val density = LocalDensity.current
     var topBar by remember { mutableIntStateOf(0) }
     var bottomBar by remember { mutableIntStateOf(0) }
-    val padding = with(density) { PaddingValues(top = topBar.toDp(), bottom = bottomBar.toDp()) }
+    val padding = with(density) { PaddingValues(top = topBar.toDp(), bottom = bottomBar.toDp() + 8.dp) }
     Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze)) {
             val width = constraints.maxWidth
@@ -134,7 +135,7 @@ fun HomeScreen(current: WorkspaceEntry) {
             }
             NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
         }
-        Toolbar(app, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.glass(haze, Edge.Bottom))
+        Toolbar(app, haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })
     }
 }
 
@@ -256,13 +257,17 @@ private fun LastMessage(item: ChatItem) {
 }
 
 @Composable
-private fun Toolbar(app: AppState, modifier: Modifier) {
+private fun Toolbar(app: AppState, haze: HazeState, modifier: Modifier) {
     Row(
         modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Seg(listOf("全部", "我参与的"), if (app.onlyMine) 1 else 0, { app.showOnlyMine(it == 1) }, Modifier.width(200.dp), height = 36.dp, fill = true)
+        // Both float over the list: the switch as a capsule, the button as a disc.
+        Seg(
+            listOf("全部", "我参与的"), if (app.onlyMine) 1 else 0, { app.showOnlyMine(it == 1) },
+            Modifier.width(200.dp).floating(haze, RoundedCornerShape(22.dp)), height = 44.dp, fill = true, radius = 22.dp, inset = 4.dp,
+        )
         // The switch keeps its own width (a weight would stretch it up to the button); the room left goes between them.
         Spacer(Modifier.weight(1f).widthIn(min = 16.dp))
         Box(

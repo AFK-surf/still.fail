@@ -205,7 +205,7 @@ fun reducedMotion(): Boolean {
  * at 6%), and a light thumb that slides to the chosen option.
  */
 @Composable
-fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, height: Dp = 30.dp, fill: Boolean = false) {
+fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, height: Dp = 30.dp, fill: Boolean = false, radius: Dp = 10.dp, inset: Dp = 2.dp) {
     // Where each option sits in the track, in px: (x, width).
     val places = remember(options) { mutableStateListOf(*Array(options.size) { 0f to 0f }) }
     val x = remember { Animatable(0f) }
@@ -222,11 +222,11 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
     }
     val density = LocalDensity.current
     val thumb = if (C.dark) Color(0xFF3A3B40) else Color.White
-    Box(modifier.height(height).clip(RoundedCornerShape(10.dp)).background(C.ink.copy(alpha = 0.06f)).padding(2.dp)) {
+    Box(modifier.height(height).clip(RoundedCornerShape(radius)).background(C.ink.copy(alpha = 0.06f)).padding(inset)) {
         if (w.value > 0f) Box(
             Modifier.offset { IntOffset(x.value.roundToInt(), 0) }.width(with(density) { w.value.toDp() }).fillMaxHeight()
                 // A hairline all round, not an elevation shadow (which falls below and makes the thumb look low).
-                .background(thumb, RoundedCornerShape(8.dp)).border(0.5.dp, C.line, RoundedCornerShape(8.dp)),
+                .background(thumb, RoundedCornerShape(radius - inset)).border(0.5.dp, C.line, RoundedCornerShape(radius - inset)),
         )
         Row(Modifier.fillMaxHeight().let { if (fill) it.fillMaxWidth() else it }) {
             options.forEachIndexed { i, label ->
