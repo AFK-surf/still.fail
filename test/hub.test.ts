@@ -541,6 +541,9 @@ test("a session moves to another profile of its runtime, its transcript with it"
   writeFileSync(from, "{}\n");
   const other = { ...config.profiles[0]!, id: "cc2", name: "another", home: join(dirname(config.profiles[0]!.home), "cc2") };
   config.profiles.push(other);
+  await assert.rejects(hub.setProfile(key, "cc2"), /正在跑/, "not while a turn runs");
+  await hub.stop(key);
+  await settle();
   await hub.setProfile(key, "cc2");
   assert.equal(store.getSession(key)!.profile, "cc2");
   assert.equal(readFileSync(join(other.home, "projects", "x", `${row.runtimeSessionId}.jsonl`), "utf8"), "{}\n", "the next turn resumes it there");
