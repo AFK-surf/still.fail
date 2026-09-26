@@ -1104,3 +1104,6 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .composer-quote .quote-card-source { padding: 9px 34px 0 16px; }
 .composer-quote .quote-card-comment { padding: 3px 16px 10px; }
 .composer-quote .quote-card-remove { top: 8px; right: 10px; }
+/* What waits in the composer never crowds out the conversation: quotes and files scroll within a bounded height. */
+.composer-quotes { max-height: 176px; overflow-y: auto; overscroll-behavior: contain; }
+.composer-box .composer-files { max-height: 148px; overflow-y: auto; overscroll-behavior: contain; }
