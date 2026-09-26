@@ -1047,3 +1047,12 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 @keyframes msg-flash { 0%, 60% { background: var(--accent-bg); } 100% { background: transparent; } }
 .msg-flash { animation: msg-flash 1400ms var(--ease-out); border-radius: 12px; }
 @media (prefers-reduced-motion: reduce) { .msg-flash { animation: none; outline: 2px solid var(--accent); } }
+
+/* Code: a quiet tinted block, no frame; language and copy sit in the corner and come forward on hover. */
+.code-block { position: relative; margin: 0 0 8px; border: 0; border-radius: 12px; background: color-mix(in oklch, var(--text) 4%, var(--canvas)); overflow: hidden; }
+.code-bar { position: absolute; top: 4px; right: 4px; height: 24px; padding: 0; border: 0; gap: 2px; opacity: .55; transition: opacity var(--dur) var(--ease-out); }
+.code-block:hover .code-bar, .code-bar:focus-within { opacity: 1; }
+.code-lang { padding: 0 6px; font-family: var(--font-sans, inherit); font-size: 10px; letter-spacing: .02em; color: var(--subtle); }
+.code-copy { height: 24px; padding: 0 7px; font-size: 11px; background: color-mix(in oklch, var(--canvas) 80%, transparent); }
+.markdown .code-block pre, .code-shiki pre.shiki { padding: 12px 14px; font-size: 12.5px; line-height: 1.6; }
+.markdown :not(pre) > code { padding: 1px 5px; border-radius: 5px; background: color-mix(in oklch, var(--text) 6%, transparent); font-size: .88em; color: var(--text); }

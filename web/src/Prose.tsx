@@ -9,12 +9,12 @@ import remarkGfm from "remark-gfm";
 import type { HighlighterCore } from "shiki/core";
 
 let highlighter: Promise<HighlighterCore> | null = null;
-const THEME = "github-light";
+const THEME = "vitesse-light";
 
 function getHighlighter(): Promise<HighlighterCore> {
   highlighter ??= (async () => {
     const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] = await Promise.all([import("shiki/core"), import("shiki/engine/javascript")]);
-    return createHighlighterCore({ themes: [import("shiki/themes/github-light.mjs")], langs: [], engine: createJavaScriptRegexEngine() });
+    return createHighlighterCore({ themes: [import("shiki/themes/vitesse-light.mjs")], langs: [], engine: createJavaScriptRegexEngine() });
   })();
   return highlighter;
 }
