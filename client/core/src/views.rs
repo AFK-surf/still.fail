@@ -950,13 +950,14 @@ mod tests {
             shown["state"] = Value::Null;
             assert_eq!(items[2], shown);
 
-            // An offline station's chats, as they were kept, are still listed; the station says it is offline.
-            t.set(rows("ws/c"), json!([row("9", now - 500.0)]));
+            // A station going offline keeps its chats listed, as they were read (the data center keeps them); it only
+            // says it is offline.
+            t.set(workspace(), stations(t.now_s(), true, false));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
-            assert_eq!(ids(&v), vec!["9", "1", "1", "s1"]);
-            assert_eq!(v["stations"][2]["state"], "offline");
-            t.store.set(&rows("ws/c"), Ok(json!([])));
+            assert_eq!(ids(&v), vec!["1", "1", "s1"]);
+            assert_eq!(v["stations"][1]["state"], "offline");
+            t.set(workspace(), stations(t.now_s(), true, true));
 
             // One station failing shows as that station's state; the other's rows stay.
             t.store.set(&rows("ws/a"), Err(CoreError::new("http_500", "坏了")));
