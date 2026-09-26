@@ -116,7 +116,9 @@ export function ModelTriple({ options, value, onPick, profilesFor, current, runt
           </div>
           <div className="run-picker-foot">
             <Popover.Close className="btn btn-ghost btn-sm">取消</Popover.Close>
-            <button type="button" className="btn btn-primary btn-sm" disabled={!option || !changed} onClick={() => { setOpen(false); onPick(next); }}>确定</button>
+            {/* Nothing changed: it says so, and only closes. */}
+            <button type="button" className={changed ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"} disabled={!option}
+              onClick={() => { setOpen(false); if (changed) onPick(next); }}>{changed ? "确定" : "不变"}</button>
           </div>
         </Popover.Content>
       </Popover.Portal>
