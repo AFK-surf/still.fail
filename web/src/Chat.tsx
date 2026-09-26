@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownStep } from "./api.ts";
@@ -17,7 +17,7 @@ export function ChatPanel({ detail, chat, live = [], onOpenHistory }: { detail: 
   const list = useRef<HTMLDivElement>(null);
   const messages = chat?.messages ?? [];
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
-  const [editing, setEditing] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
+  const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
   useEffect(() => {
     if (list.current) list.current.scrollTop = list.current.scrollHeight;
@@ -113,16 +113,11 @@ export function ChatPanel({ detail, chat, live = [], onOpenHistory }: { detail: 
       {picked && (
         <button type="button" className="quote-pop" style={{ left: picked.at.x, top: picked.at.y }}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => { setEditing(picked); setPicked(null); window.getSelection()?.removeAllRanges(); }}>
-          <QuoteIcon size={13} />引用
+          onClick={() => { setQuotes((all) => [...all, picked.quote]); setFocusQuote(picked.quote.id); setPicked(null); window.getSelection()?.removeAllRanges(); }}>
+          <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
-      {editing && (
-        <QuoteEditor draft={editing.quote} at={editing.at} onClose={() => setEditing(null)}
-          onSave={(q) => { setQuotes((all) => (all.some((x) => x.id === q.id) ? all.map((x) => (x.id === q.id ? q : x)) : [...all, q])); setEditing(null); }} />
-      )}
-      <Composer sessionKey={detail.session.key} quotes={quotes} setQuotes={setQuotes}
-        onEditQuote={(quote, at) => setEditing({ quote, at })} />
+      <Composer sessionKey={detail.session.key} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)} />
     </section>
   );
 }
@@ -218,37 +213,6 @@ function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "
 
 interface DraftQuote extends Quote { id: string }
 
-/** Zork's comment editor: the passage, and a field for what to say about it. */
-function QuoteEditor({ draft, at, onSave, onClose }: { draft: DraftQuote; at: { x: number; y: number }; onSave(q: DraftQuote): void; onClose(): void }) {
-  const [comment, setComment] = useState(draft.comment);
-  const box = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ left: at.x, top: at.y });
-  // Keep the editor on screen: above the anchor when there is room, else below.
-  useLayoutEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const w = el.offsetWidth, h = el.offsetHeight;
-    setPos({ left: Math.max(8, Math.min(window.innerWidth - w - 8, at.x - w / 2)), top: at.y - h - 10 > 8 ? at.y - h - 10 : Math.min(window.innerHeight - h - 8, at.y + 24) });
-  }, [at.x, at.y]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div className="quote-editor" ref={box} style={pos} role="dialog" aria-label="引用">
-      <div className="quote-editor-source">{draft.author}：「{draft.text}」</div>
-      <textarea autoFocus className="quote-editor-input" rows={3} value={comment} placeholder="说点什么（可以留空）"
-        onChange={(e) => setComment(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSave({ ...draft, comment: comment.trim() }); } }} />
-      <div className="quote-editor-actions">
-        <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
-        <button type="button" className="btn btn-primary" onClick={() => onSave({ ...draft, comment: comment.trim() })}>{draft.comment || comment ? "保存" : "添加"}</button>
-      </div>
-    </div>
-  );
-}
-
 // ── composer ────────────────────────────────────────────────────────────
 
 const MAX_FILE = 50 * 1024 * 1024;
@@ -262,9 +226,10 @@ interface Pending { id: number; name: string; size: number; done: Attachment | n
  * files and quotes waiting to go above it. Files (picked, pasted or dropped)
  * go to the session's workspace on the station as soon as they are added.
  */
-function Composer({ sessionKey, quotes, setQuotes, onEditQuote }: {
+function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
   sessionKey: string; quotes: DraftQuote[]; setQuotes(update: (all: DraftQuote[]) => DraftQuote[]): void;
-  onEditQuote(quote: DraftQuote, at: { x: number; y: number }): void;
+  /** A quote just added: its comment line takes the focus. */
+  focusQuote: string | null; onFocused(): void;
 }) {
   const api = useApi();
   const station = useStation();
@@ -275,8 +240,14 @@ function Composer({ sessionKey, quotes, setQuotes, onEditQuote }: {
   const input = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const nextId = useRef(1);
+  const quoteInputs = useRef(new Map<string, HTMLInputElement>());
+  useEffect(() => {
+    if (!focusQuote) return;
+    quoteInputs.current.get(focusQuote)?.focus();
+    onFocused();
+  }, [focusQuote]);
   const send = useMutation({
-    mutationFn: (value: string) => api.sayToSession(sessionKey, value, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ author, text: t, comment }) => ({ author, text: t, comment }))),
+    mutationFn: (value: string) => api.sayToSession(sessionKey, value, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ author, text: t, comment }) => ({ author, text: t, comment: comment.trim() }))),
     onSuccess: () => { setText(""); setFiles([]); setQuotes(() => []); void client.invalidateQueries({ queryKey: keys.session(station.id, sessionKey) }); },
   });
   const add = (list: FileList | File[]) => {
@@ -305,32 +276,32 @@ function Composer({ sessionKey, quotes, setQuotes, onEditQuote }: {
   };
   return (
     <div className="composer-wrap">
-      {(files.length > 0 || quotes.length > 0) && (
-        <div className="composer-queue">
-          {files.length > 0 && (
-            <div className="composer-files">
-              {files.map((f) => (
-                <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={() => setFiles((all) => all.filter((x) => x.id !== f.id))} />
-              ))}
-            </div>
-          )}
-          {quotes.map((q) => (
-            <div key={q.id} className="queued-quote">
-              <div className="queued-quote-text">
-                <span className="queued-quote-source">{q.author}：{q.text}</span>
-                {q.comment && <span className="queued-quote-comment">{q.comment}</span>}
-              </div>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); onEditQuote(q, { x: r.left + r.width / 2, y: r.top }); }}>编辑</button>
-              <button type="button" className="icon-btn" aria-label="移除引用" onClick={() => setQuotes((all) => all.filter((x) => x.id !== q.id))}><X size={12} /></button>
-            </div>
-          ))}
-        </div>
-      )}
-      <form className="composer-box" data-multiline={text.includes("\n") || text.length > 60 || undefined} data-dragging={dragging || undefined}
+      <form className="composer-box" data-multiline={text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0 || undefined} data-dragging={dragging || undefined}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); add(e.dataTransfer.files); } }}>
+        {quotes.length > 0 && (
+          <div className="composer-quotes">
+            {quotes.map((q) => (
+              <div key={q.id} className="composer-quote" onClick={(e) => e.stopPropagation()}>
+                <div className="composer-quote-source"><span className="composer-quote-author">{q.author}</span>{q.text}</div>
+                <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
+                  className="composer-quote-comment" value={q.comment} placeholder="对这段说点什么（可以不写）" aria-label={`对 ${q.author} 这段的批注`}
+                  onChange={(e) => { const v = e.target.value; setQuotes((all) => all.map((x) => (x.id === q.id ? { ...x, comment: v } : x))); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); input.current?.focus(); } }} />
+                <button type="button" className="composer-quote-remove" aria-label="移除引用" onClick={() => setQuotes((all) => all.filter((x) => x.id !== q.id))}><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+        {files.length > 0 && (
+          <div className="composer-files">
+            {files.map((f) => (
+              <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={() => setFiles((all) => all.filter((x) => x.id !== f.id))} />
+            ))}
+          </div>
+        )}
         <textarea ref={input} className="composer-text" rows={1} value={text} placeholder="给这个会话发消息" aria-label="消息"
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); add(e.clipboardData.files); } }}
