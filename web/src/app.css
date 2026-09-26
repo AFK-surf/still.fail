@@ -651,6 +651,10 @@
 .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-sm); animation: appear 0s linear 400ms both; }
 .loading-fill { flex: 1; min-height: 100%; justify-content: center; }
 .gate .loading { justify-content: center; }
+/* Codex's device sign-in: the code, large, then the one button that copies it and opens the page it goes into. */
+.device-code { display: grid; justify-items: start; gap: 10px; }
+.device-code-value { font-size: 22px; font-weight: 600; letter-spacing: 0.08em; padding: 6px 12px; border-radius: 10px; background: var(--hover); user-select: all; }
+.device-code p { margin: 0; font-size: var(--text-sm); }
 /* What ember itself says in a chat: a notice across it, apart from people's and agents' messages. */
 .msg-system { display: flex; justify-content: center; }
 .msg-system-box { display: flex; align-items: flex-start; gap: 8px; max-width: min(560px, 100%); padding: 8px 12px; border-radius: 12px; background: color-mix(in oklch, var(--amber) 10%, var(--canvas)); border: 1px solid color-mix(in oklch, var(--amber) 22%, transparent); font-size: var(--text-sm); color: var(--text); }

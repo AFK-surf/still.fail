@@ -348,6 +348,24 @@ function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) 
   );
 }
 
+/**
+ * Codex's device sign-in: the code comes first and is copied as the login page opens, so it is pasted there with no
+ * trip back; the rest finishes by itself.
+ */
+function DeviceCode({ url, code }: { url: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  const go = () => {
+    void navigator.clipboard.writeText(code).then(() => setCopied(true), () => {}).finally(() => window.open(url, "_blank", "noopener"));
+  };
+  return (
+    <div className="device-code">
+      <span className="device-code-value mono">{code}</span>
+      <Button variant="primary" icon={ExternalLink} onClick={go}>{copied ? "已复制，重新打开登录页" : "复制代码并打开登录页"}</Button>
+      <p className="muted">在打开的 OpenAI 页面用要给 ember 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续，不用回来点。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
+    </div>
+  );
+}
+
 /** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude), or the link
  * and the one-time code to enter (Codex). */
 function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: {
@@ -373,19 +391,7 @@ function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: 
           </li>
         </ol>
       )}
-      {job.state === "needs_approval" && job.url && job.userCode && (
-        <ol className="steps">
-          <li>
-            <span>打开 OpenAI 的设备登录页面，用要给 ember 使用的 ChatGPT 账号登录。</span>
-            <a className="btn btn-primary" href={job.url} target="_blank" rel="noopener"><ExternalLink {...ICON} />打开登录页面</a>
-          </li>
-          <li>
-            <span>输入这个一次性代码：</span>
-            <CopyCommand text={job.userCode} />
-          </li>
-          <li className="muted"><span className="activity-pulse inline" aria-hidden="true" />输入后这里会自动完成，不用回来点。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</li>
-        </ol>
-      )}
+      {job.state === "needs_approval" && job.url && job.userCode && <DeviceCode url={job.url} code={job.userCode} />}
       {job.state === "verifying" && <p className="muted"><span className="activity-pulse inline" aria-hidden="true" />正在完成登录…</p>}
       {job.state === "done" && <p className="muted"><span className="activity-pulse inline" aria-hidden="true" />已登录，正在添加…</p>}
     </>
@@ -424,7 +430,9 @@ function ModelPool({ profile, found, onSave }: { profile: ProfileView; found: st
     if (next.has(m)) next.delete(m); else next.add(m);
     commit(next);
   };
-  const [choosing, setChoosing] = useState(false);
+  // With none enabled yet (a profile just added), the whole list is out to choose from.
+  const [picked, setChoosing] = useState<boolean | null>(null);
+  const choosing = picked ?? enabled.size === 0;
   const on = [...enabled].sort();
   return (
     <Section title="模型" description={all.length
