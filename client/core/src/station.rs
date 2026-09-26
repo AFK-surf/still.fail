@@ -1,13 +1,16 @@
 //! Stations' admin API, over a mesh link (or plain HTTP for `local`), and the
-//! station topics: overview, sessions, session, live, host, link.
+//! station topics: overview, sessions, threads, session, thread, live, host, link.
 //!
 //! While any topic of a station is live, its `/admin/api/events` stream is held
-//! open: `session` events refetch that session's live topics and `sessions`,
-//! `config` events refetch `overview`. A `live` topic holds
-//! `/sessions/:key/live?from=<timeline length>` open and merges its `timeline`
-//! messages into the `session` topic's `transcript.timeline` (and `usage`), so
-//! the session never has to be refetched whole while it runs. `overview` and
-//! `host` also refresh on a timer (10 s / 15 s).
+//! open and is all that keeps the topics current: each topic is read once when
+//! it starts, and again only after the stream was down. Events carry what
+//! changed (a session's summary, a thread's changed messages, a read position,
+//! the overview, host samples), which goes into the topics as it is; what an
+//! event does not carry (a thread's unread count) is read for that one thing.
+//! Host samples are asked for (`?host=1`) only while a `host` topic is live. A
+//! `live` topic holds `/sessions/:key/live?from=<entries known>` open: the
+//! transcript from its first entry and then as it grows, the steps in flight
+//! and the phase. Nothing here runs on a timer but reconnects.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -27,11 +30,10 @@ use crate::store::{Source, Store};
 
 /// How long a failed or ended stream waits before it is opened again.
 pub const RECONNECT_MS: u64 = 2_000;
-/// Bursts of `session` events become one refetch per topic.
+/// A burst of `thread` events becomes one read of each thread's summary.
 pub const EVENTS_COALESCE_MS: u64 = 400;
-/// Connection states and process memory change without events.
-pub const OVERVIEW_REFRESH_MS: u64 = 10_000;
-pub const HOST_REFRESH_MS: u64 = 15_000;
+/// Messages per page of a thread.
+pub const PAGE: usize = 50;
 
 const EVENT_STREAM: &str = "text/event-stream";
 
@@ -288,16 +290,6 @@ fn decode(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn topic_path(topic: &Topic) -> Option<String> {
-    match topic {
-        Topic::Overview { .. } => Some("/overview".into()),
-        Topic::Sessions { .. } => Some("/sessions".into()),
-        Topic::Session { key, .. } => Some(format!("/sessions/{}", encode(key))),
-        Topic::Host { .. } => Some("/host".into()),
-        _ => None,
-    }
-}
-
 /// A station's non-2xx answer as an error.
 fn http_error(status: u16, data: &Value) -> CoreError {
     let message = data.get("error").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| format!("请求失败（{status}）"));
@@ -310,12 +302,21 @@ fn http_error(status: u16, data: &Value) -> CoreError {
 struct StationState {
     addr: StationAddr,
     topics: HashSet<Topic>,
-    events: Option<AbortHandle>,
-    /// Per topic: its timer or live stream.
+    /// The `/events` stream, and whether it asks for host samples.
+    events: Option<(AbortHandle, bool)>,
+    /// The stream a new one replaces (to start or stop host samples). It stays open until its successor is, so no
+    /// event falls between the two.
+    replaced: Option<AbortHandle>,
+    /// Numbers the streams opened; only the newest reports.
+    generation: u64,
+    /// The stream dropped since the topics were read: the next one to open reads them again.
+    stale: bool,
+    /// Per topic: its live stream.
     tasks: HashMap<Topic, AbortHandle>,
     /// Per session key: the steps in flight and the phase.
     lives: HashMap<String, LiveView>,
-    dirty: HashSet<String>,
+    /// Threads whose summaries (last message, unread) are read again once a burst of events is over.
+    dirty: HashSet<u64>,
     flushing: bool,
     link: Value,
 }
@@ -326,6 +327,9 @@ impl StationState {
             addr,
             topics: HashSet::new(),
             events: None,
+            replaced: None,
+            generation: 0,
+            stale: false,
             tasks: HashMap::new(),
             lives: HashMap::new(),
             dirty: HashSet::new(),
@@ -333,18 +337,68 @@ impl StationState {
             link: json!({ "state": "connecting" }),
         }
     }
+
+    fn wants_host(&self) -> bool {
+        self.topics.iter().any(|t| matches!(t, Topic::Host { .. }))
+    }
 }
 
-/// A `live` topic's value: `LiveMessage` semantics as useLiveSession applied them.
+/// The steps in flight and the phase of a `live` topic (`LiveMessage` semantics as useLiveSession applied them).
 #[derive(Default, Clone)]
 struct LiveView {
     steps: Vec<Value>,
     phase: Option<Value>,
 }
 
-impl LiveView {
-    fn value(&self) -> Value {
-        json!({ "steps": self.steps, "phase": self.phase })
+/// A `live` topic before its stream has said anything: `loaded` turns true with the stream's first steps, which
+/// follow the transcript entries it already has.
+fn live_start() -> Value {
+    json!({ "loaded": false, "timeline": [], "usage": null, "steps": [], "phase": null })
+}
+
+fn seq_of(message: &Value) -> Option<u64> {
+    message.get("seq").and_then(Value::as_u64)
+}
+
+/// The session's chat on ember's page among its threads: the first one made.
+pub fn ember_thread(threads: &Value) -> Option<&Value> {
+    threads.as_array()?.iter().filter(|t| t.get("surface").and_then(Value::as_str) == Some("ember")).min_by_key(|t| t.get("id").and_then(Value::as_u64))
+}
+
+/// Threads as the station lists them: the latest message first, then the newest thread.
+fn sort_threads(threads: &mut [Value]) {
+    let key = |t: &Value| {
+        let last = t.get("last").and_then(seq_of).unwrap_or(0);
+        let created = t.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0);
+        (last, created, t.get("id").and_then(Value::as_u64).unwrap_or(0))
+    };
+    threads.sort_by(|a, b| {
+        let (a, b) = (key(a), key(b));
+        b.0.cmp(&a.0).then(b.1.total_cmp(&a.1)).then(b.2.cmp(&a.2))
+    });
+}
+
+/// Puts a thread's summary into a list, replacing the one with its id.
+fn upsert_thread(list: &mut Vec<Value>, view: &Value) {
+    let id = view.get("id");
+    match list.iter().position(|t| t.get("id") == id) {
+        Some(i) => list[i] = view.clone(),
+        None => list.push(view.clone()),
+    }
+    sort_threads(list);
+}
+
+/// Whether the turns a session detail lists still end as its summary says.
+fn same_turns(turns: Option<&Value>, summary: &Value) -> bool {
+    let turns = turns.and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+    if summary.get("turns").and_then(Value::as_u64) != Some(turns.len() as u64) {
+        return false;
+    }
+    let last = summary.get("lastTurn").filter(|t| !t.is_null());
+    match (turns.last(), last) {
+        (None, None) => true,
+        (Some(record), Some(last)) => ["kind", "outcome", "declared", "detail", "startedAt", "endedAt"].iter().all(|k| record.get(k) == last.get(k)),
+        _ => false,
     }
 }
 
@@ -361,17 +415,22 @@ impl Stations {
         Rc::new_cyclic(|me| Stations { host, sink, wire, me: me.clone(), stations: RefCell::default() })
     }
 
-    /// One JSON call to the admin API (path without the `/admin/api` prefix); then refetches the live topics the write can change.
+    /// One JSON call to the admin API (path without the `/admin/api` prefix); a write answers once the live topics
+    /// it changes are current.
     pub async fn request(&self, station: &StationAddr, method: &str, path: &str, body: Option<Value>) -> Result<Value> {
+        let value = self.json(station, method, path, body).await?;
+        if !method.eq_ignore_ascii_case("GET") {
+            self.after_write(station, path, &value).await;
+        }
+        Ok(value)
+    }
+
+    async fn json(&self, station: &StationAddr, method: &str, path: &str, body: Option<Value>) -> Result<Value> {
         let (headers, bytes) = match body {
             Some(body) => (vec![("content-type".into(), "application/json".into())], serde_json::to_vec(&body).unwrap_or_default()),
             None => (Vec::new(), Vec::new()),
         };
-        let value = self.call(station, method, path, headers, bytes).await?;
-        if !method.eq_ignore_ascii_case("GET") {
-            self.after_write(station, path).await;
-        }
-        Ok(value)
+        self.call(station, method, path, headers, bytes).await
     }
 
     /// POST /sessions/:key/files?name= with the raw bytes; answers the attachment.
@@ -422,26 +481,49 @@ impl Stations {
         Ok(reply.body)
     }
 
-    /// Reloads the topics a successful write can have changed; the write answers only after, so a page
-    /// that moves on right away finds what it wrote.
-    async fn after_write(&self, station: &StationAddr, path: &str) {
-        let station = station.to_string();
+    /// Brings the topics a successful write changed up to date before the write answers, so a page that moves on
+    /// right away finds what it wrote: from the answer where it says (an overview, a thread, a read position),
+    /// else by reading them again. The station's events would bring the same a moment later.
+    async fn after_write(&self, station: &StationAddr, path: &str, answer: &Value) {
+        let name = station.to_string();
         let path = path.split('?').next().unwrap_or("");
         let parts: Vec<String> = path.split('/').filter(|p| !p.is_empty()).map(decode).collect();
         let mut touched = Vec::new();
         match parts.first().map(String::as_str) {
             Some("sessions") => {
                 if let Some(key) = parts.get(1) {
-                    touched.push(Topic::Session { station: station.clone(), key: key.clone() });
+                    touched.push(Topic::Session { station: name.clone(), key: key.clone() });
                 }
-                touched.push(Topic::Sessions { station });
+                touched.push(Topic::Sessions { station: name.clone() });
+                // A new chat answers its thread.
+                if let Some(thread) = answer.get("thread").filter(|t| t.is_object()) {
+                    self.put_thread(&name, thread);
+                }
+            }
+            Some("threads") => {
+                if answer.get("surface").is_some() {
+                    self.put_thread(&name, answer);
+                } else if let (Some(thread), Some(seq)) = (answer.get("thread").and_then(Value::as_u64), answer.get("seq").and_then(Value::as_u64)) {
+                    self.put_read(&name, thread, seq);
+                }
+                if let (Some(id), Some("messages")) = (parts.get(1).and_then(|id| id.parse().ok()), parts.get(2).map(String::as_str)) {
+                    touched.push(Topic::Thread { station: name.clone(), thread: id });
+                }
             }
             Some("connects") => {
-                touched.push(Topic::Overview { station: station.clone() });
-                touched.push(Topic::Sessions { station });
+                touched.push(Topic::Overview { station: name.clone() });
+                touched.push(Topic::Sessions { station: name.clone() });
             }
-            Some("profiles") | Some("slack") => touched.push(Topic::Overview { station }),
+            Some("profiles") | Some("slack") => touched.push(Topic::Overview { station: name.clone() }),
             _ => {}
+        }
+        // Profile and connect edits answer the overview as it is now.
+        if answer.get("connects").is_some() && answer.get("profiles").is_some() {
+            let overview = Topic::Overview { station: name };
+            if self.is_live(&overview) {
+                self.sink.set(&overview, Ok(answer.clone()));
+            }
+            touched.retain(|t| *t != overview);
         }
         join_all(touched.iter().map(|topic| self.reload(topic))).await;
     }
@@ -465,7 +547,19 @@ impl Stations {
         self.stations.borrow().get(station).map(|s| s.addr.clone())
     }
 
-    /// Fetches a live topic again; a failure only shows when there is nothing better to show.
+    /// The station's live topics that `pick` chooses.
+    fn live_topics(&self, station: &str, pick: impl Fn(&Topic) -> bool) -> Vec<Topic> {
+        self.stations.borrow().get(station).map(|s| s.topics.iter().filter(|t| pick(t)).cloned().collect()).unwrap_or_default()
+    }
+
+    /// Sets a topic from an event, if it is live.
+    fn set_live(&self, topic: Topic, value: Value) {
+        if self.is_live(&topic) {
+            self.sink.set(&topic, Ok(value));
+        }
+    }
+
+    /// Reads a live topic again; a failure only shows when there is nothing better to show.
     fn refetch(&self, topic: &Topic) {
         let this = self.rc();
         let topic = topic.clone();
@@ -476,12 +570,25 @@ impl Stations {
         if !self.is_live(topic) {
             return;
         }
-        let (Some(path), Some(addr)) = (topic_path(topic), topic.station().and_then(|s| self.addr(s))) else { return };
+        let Some(addr) = topic.station().and_then(|s| self.addr(s)) else { return };
+        let path = match topic {
+            Topic::Overview { .. } => "/overview".to_string(),
+            Topic::Sessions { .. } => "/sessions".to_string(),
+            Topic::Threads { .. } => "/threads".to_string(),
+            Topic::Session { key, .. } => format!("/sessions/{}", encode(key)),
+            // A thread already read only asks for what changed since.
+            Topic::Thread { thread, .. } => match self.sink.get(topic).and_then(|v| v.get("rev")?.as_u64()) {
+                Some(rev) => format!("/threads/{thread}/messages?after={rev}"),
+                None => format!("/threads/{thread}/messages?limit={PAGE}"),
+            },
+            _ => return,
+        };
         let result = self.call(&addr, "GET", &path, Vec::new(), Vec::new()).await;
         if !self.is_live(topic) {
             return;
         }
         match result {
+            Ok(changed) if path.contains("after=") => self.merge_messages(topic, &changed),
             Ok(value) => self.sink.set(topic, Ok(value)),
             Err(error) => {
                 if self.sink.get(topic).is_none() {
@@ -491,8 +598,11 @@ impl Stations {
         }
     }
 
+    /// After the events stream was down: everything it may have missed is read once.
     fn refetch_all(&self, station: &str) {
-        let topics: Vec<Topic> = self.stations.borrow().get(station).map(|s| s.topics.iter().cloned().collect()).unwrap_or_default();
+        let topics = self.live_topics(station, |t| {
+            matches!(t, Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::Session { .. } | Topic::Thread { .. })
+        });
         for topic in topics {
             self.refetch(&topic);
         }
@@ -510,18 +620,72 @@ impl Stations {
         }
     }
 
-    /// Holds the station's `/events` open while any of its topics is live.
-    async fn follow_events(self: Rc<Self>, station: String, addr: StationAddr) {
-        let mut opened_before = false;
+    // ── the events stream ──
+
+    /// Opens the station's `/events` if it is not open, or opens it anew when a `host` topic starts or stops
+    /// (host samples are asked for with `?host=1` when the stream opens).
+    fn sync_events(&self, station: &str) {
+        let (addr, host, generation) = {
+            let mut stations = self.stations.borrow_mut();
+            let Some(s) = stations.get_mut(station) else { return };
+            let host = s.wants_host();
+            if s.events.as_ref().is_some_and(|(_, asks)| *asks == host) {
+                return;
+            }
+            if let Some((old, _)) = s.events.take()
+                && let Some(older) = s.replaced.replace(old)
+            {
+                older.abort();
+            }
+            s.generation += 1;
+            (s.addr.clone(), host, s.generation)
+        };
+        let task = self.spawn(self.rc().follow_events(station.to_string(), addr, host, generation));
+        if let Some(s) = self.stations.borrow_mut().get_mut(station) {
+            s.events = Some((task, host));
+        }
+    }
+
+    /// Whether this stream is the station's newest; if so, the one it replaces goes now.
+    fn took_over(&self, station: &str, generation: u64) -> bool {
+        let mut stations = self.stations.borrow_mut();
+        let Some(s) = stations.get_mut(station) else { return false };
+        if s.generation != generation {
+            return false;
+        }
+        if let Some(old) = s.replaced.take() {
+            old.abort();
+        }
+        true
+    }
+
+    fn is_current(&self, station: &str, generation: u64) -> bool {
+        self.stations.borrow().get(station).is_some_and(|s| s.generation == generation)
+    }
+
+    fn set_stale(&self, station: &str, stale: bool) -> bool {
+        self.stations.borrow_mut().get_mut(station).map(|s| std::mem::replace(&mut s.stale, stale)).unwrap_or(false)
+    }
+
+    /// Holds the station's `/events` open while any of its topics is live; its events keep the topics current.
+    async fn follow_events(self: Rc<Self>, station: String, addr: StationAddr, host: bool, generation: u64) {
+        let path = if host { "/events?host=1" } else { "/events" };
         loop {
-            match self.open_stream(&addr, "/events").await {
+            // Replaced before it opened: its successor asks instead.
+            if !self.is_current(&station, generation) {
+                return;
+            }
+            let opened = self.open_stream(&addr, path).await;
+            if !self.took_over(&station, generation) {
+                return;
+            }
+            match opened {
                 Ok(mut body) => {
                     self.set_link(&station, json!({ "state": "online" }));
-                    // After a reconnect, anything of this station may have changed.
-                    if opened_before {
+                    // Down for a while: what changed meanwhile was not told.
+                    if self.set_stale(&station, false) {
                         self.refetch_all(&station);
                     }
-                    opened_before = true;
                     let mut parser = SseParser::default();
                     let mut why = "连接断开了".to_string();
                     while let Some(chunk) = body.next().await {
@@ -537,109 +701,390 @@ impl Stations {
                             }
                         }
                     }
+                    if !self.is_current(&station, generation) {
+                        return;
+                    }
+                    self.set_stale(&station, true);
                     self.set_link(&station, json!({ "state": "offline", "message": why }));
                 }
-                Err(error) if error.status.is_some() => self.set_link(&station, json!({ "state": "error", "message": error.message })),
-                Err(error) => self.set_link(&station, json!({ "state": "offline", "message": error.message })),
+                Err(error) => {
+                    self.set_stale(&station, true);
+                    let state = if error.status.is_some() { "error" } else { "offline" };
+                    self.set_link(&station, json!({ "state": state, "message": error.message }));
+                }
             }
             self.host.sleep(RECONNECT_MS).await;
         }
     }
 
     fn on_event(&self, station: &str, name: &str, data: &str) {
+        let Ok(data) = serde_json::from_str::<Value>(data) else { return };
         match name {
-            "session" => {
-                let Some(key) = serde_json::from_str::<Value>(data).ok().and_then(|v| v.get("key")?.as_str().map(str::to_string)) else { return };
-                let schedule = {
-                    let mut stations = self.stations.borrow_mut();
-                    let Some(s) = stations.get_mut(station) else { return };
-                    s.dirty.insert(key);
-                    !std::mem::replace(&mut s.flushing, true)
-                };
-                if schedule {
-                    let this = self.rc();
-                    let station = station.to_string();
-                    let sleep = self.host.sleep(EVENTS_COALESCE_MS);
-                    self.spawn(async move {
-                        sleep.await;
-                        this.flush(&station);
-                    });
-                }
+            "session" => self.on_session(station, &data),
+            "session-removed" => {
+                let Some(key) = data.get("key").and_then(Value::as_str) else { return };
+                self.on_session_removed(station, key);
             }
-            "config" | "login" => self.refetch(&Topic::Overview { station: station.into() }),
+            "thread" => {
+                let Some(id) = data.get("id").and_then(Value::as_u64) else { return };
+                self.merge_messages(&Topic::Thread { station: station.into(), thread: id }, &data);
+                // The summaries (last message, unread) are not in the event.
+                self.mark_dirty(station, id);
+            }
+            "read" => {
+                let (Some(thread), Some(seq)) = (data.get("thread").and_then(Value::as_u64), data.get("seq").and_then(Value::as_u64)) else { return };
+                self.put_read(station, thread, seq);
+            }
+            "overview" => self.set_live(Topic::Overview { station: station.into() }, data),
+            "host" => self.set_live(Topic::Host { station: station.into() }, data),
             _ => {}
         }
     }
 
-    fn flush(&self, station: &str) {
-        let dirty = {
-            let mut stations = self.stations.borrow_mut();
-            let Some(s) = stations.get_mut(station) else { return };
-            s.flushing = false;
-            std::mem::take(&mut s.dirty)
-        };
-        self.refetch(&Topic::Sessions { station: station.into() });
-        for key in dirty {
-            self.refetch(&Topic::Session { station: station.into(), key });
+    /// A session's summary changed: it replaces the one in `sessions` and in its `session` topic. The detail's
+    /// turns are read again only when the summary says they changed.
+    fn on_session(&self, station: &str, summary: &Value) {
+        let Some(key) = summary.get("key").and_then(Value::as_str) else { return };
+        // `/sessions` lists the shown ones.
+        let shown = summary.get("archivedAt").is_none_or(Value::is_null);
+        self.sink.update(&Topic::Sessions { station: station.into() }, &mut |list| {
+            let Some(list) = list.as_array_mut() else { return };
+            match (list.iter().position(|s| s.get("key").and_then(Value::as_str) == Some(key)), shown) {
+                (Some(i), true) => list[i] = summary.clone(),
+                (Some(i), false) => {
+                    list.remove(i);
+                }
+                (None, true) => list.insert(0, summary.clone()),
+                (None, false) => {}
+            }
+        });
+        let topic = Topic::Session { station: station.into(), key: key.into() };
+        let mut turns_changed = false;
+        self.sink.update(&topic, &mut |detail| {
+            turns_changed = !same_turns(detail.get("turns"), summary);
+            detail["session"] = summary.clone();
+        });
+        if turns_changed {
+            self.refetch(&topic);
         }
     }
 
-    /// Refetches a topic every `ms` while it is live.
-    fn every(&self, topic: &Topic, ms: u64) -> AbortHandle {
-        let this = self.rc();
-        let topic = topic.clone();
-        self.spawn(async move {
-            loop {
-                this.host.sleep(ms).await;
-                this.refetch(&topic);
+    fn on_session_removed(&self, station: &str, key: &str) {
+        self.sink.update(&Topic::Sessions { station: station.into() }, &mut |list| {
+            if let Some(list) = list.as_array_mut() {
+                list.retain(|s| s.get("key").and_then(Value::as_str) != Some(key));
             }
-        })
+        });
+        let topic = Topic::Session { station: station.into(), key: key.into() };
+        if self.is_live(&topic) {
+            self.sink.set(&topic, Err(CoreError::new("http_404", "这个会话已经删除了").with_status(404)));
+        }
+        // Its threads lose it; those left with nobody went with it.
+        self.sink.update(&Topic::Threads { station: station.into() }, &mut |list| {
+            let Some(list) = list.as_array_mut() else { return };
+            for thread in list.iter_mut() {
+                if let Some(members) = thread.get_mut("sessions").and_then(Value::as_array_mut) {
+                    members.retain(|m| m.get("session").and_then(Value::as_str) != Some(key));
+                }
+            }
+            list.retain(|t| t.get("sessions").and_then(Value::as_array).is_some_and(|m| !m.is_empty()));
+        });
     }
 
-    /// How much of the session's timeline is known here.
-    fn timeline_len(&self, station: &str, key: &str) -> usize {
-        self.sink
-            .get(&Topic::Session { station: station.into(), key: key.into() })
-            .and_then(|v| v.get("transcript")?.get("timeline")?.as_array().map(Vec::len))
-            .unwrap_or(0)
-    }
+    // ── threads ──
 
-    /// Holds `/sessions/:key/live` open, resuming from what is known.
-    async fn follow_live(self: Rc<Self>, station: String, addr: StationAddr, key: String) {
-        loop {
-            let path = format!("/sessions/{}/live?from={}", encode(&key), self.timeline_len(&station, &key));
-            if let Ok(mut body) = self.open_stream(&addr, &path).await {
-                let mut parser = SseParser::default();
-                while let Some(Ok(bytes)) = body.next().await {
-                    for (_, data) in parser.feed(&bytes) {
-                        if let Ok(message) = serde_json::from_str::<Value>(&data) {
-                            self.on_live(&station, &key, &message);
+    /// Changed messages (an event, or `?after=`) into a thread's topic: replaced by seq, new ones in order. A
+    /// change to a message older than the pages loaded waits until that page is.
+    fn merge_messages(&self, topic: &Topic, changed: &Value) {
+        let messages = changed.get("messages").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+        let rev = changed.get("rev").and_then(Value::as_u64).unwrap_or(0);
+        self.sink.update(topic, &mut |value| {
+            let more = value.get("more").and_then(Value::as_bool).unwrap_or(false);
+            if let Some(list) = value.get_mut("messages").and_then(Value::as_array_mut) {
+                let oldest = list.first().and_then(seq_of);
+                for message in messages {
+                    let Some(seq) = seq_of(message) else { continue };
+                    match list.binary_search_by_key(&seq, |m| seq_of(m).unwrap_or(0)) {
+                        Ok(i) => list[i] = message.clone(),
+                        Err(i) => {
+                            if !(more && oldest.is_some_and(|oldest| seq < oldest)) {
+                                list.insert(i, message.clone());
+                            }
                         }
                     }
                 }
             }
-            self.host.sleep(RECONNECT_MS).await;
+            if value.get("rev").and_then(Value::as_u64).is_none_or(|known| rev > known) {
+                value["rev"] = json!(rev);
+            }
+        });
+    }
+
+    /// A thread's summary into every live topic that lists it: `threads`, and the `session` topics of the
+    /// sessions taking part (a session that left it loses it).
+    fn put_thread(&self, station: &str, view: &Value) {
+        let Some(id) = view.get("id").and_then(Value::as_u64) else { return };
+        let members: Vec<&str> = view.get("sessions").and_then(Value::as_array).into_iter().flatten().filter_map(|m| m.get("session")?.as_str()).collect();
+        self.sink.update(&Topic::Threads { station: station.into() }, &mut |list| {
+            if let Some(list) = list.as_array_mut() {
+                upsert_thread(list, view);
+            }
+        });
+        for topic in self.live_topics(station, |t| matches!(t, Topic::Session { .. })) {
+            let Topic::Session { key, .. } = &topic else { continue };
+            let member = members.contains(&key.as_str());
+            self.sink.update(&topic, &mut |detail| {
+                let Some(threads) = detail.get_mut("threads").and_then(Value::as_array_mut) else { return };
+                if member {
+                    upsert_thread(threads, view);
+                } else {
+                    threads.retain(|t| t.get("id").and_then(Value::as_u64) != Some(id));
+                }
+            });
         }
     }
 
-    fn on_live(&self, station: &str, key: &str, message: &Value) {
+    fn remove_thread(&self, station: &str, id: u64) {
+        let drop_it = |list: &mut Value| {
+            if let Some(list) = list.as_array_mut() {
+                list.retain(|t| t.get("id").and_then(Value::as_u64) != Some(id));
+            }
+        };
+        self.sink.update(&Topic::Threads { station: station.into() }, &mut |list| drop_it(list));
+        for topic in self.live_topics(station, |t| matches!(t, Topic::Session { .. })) {
+            self.sink.update(&topic, &mut |detail| {
+                if let Some(threads) = detail.get_mut("threads") {
+                    drop_it(threads);
+                }
+            });
+        }
+    }
+
+    /// The viewer read a thread up to `seq`: its read position moves there, and nothing is unread once it
+    /// covers the last message (otherwise the count is read again).
+    fn put_read(&self, station: &str, thread: u64, seq: u64) {
+        let stale = std::cell::Cell::new(false);
+        let apply = |list: &mut Value| {
+            for t in list.as_array_mut().into_iter().flatten() {
+                if t.get("id").and_then(Value::as_u64) != Some(thread) || t.get("read").and_then(Value::as_u64).is_some_and(|read| read >= seq) {
+                    continue;
+                }
+                t["read"] = json!(seq);
+                if t.get("last").and_then(seq_of).is_none_or(|last| seq >= last) {
+                    t["unread"] = json!(0);
+                } else {
+                    stale.set(true);
+                }
+            }
+        };
+        self.sink.update(&Topic::Threads { station: station.into() }, &mut |list| apply(list));
+        for topic in self.live_topics(station, |t| matches!(t, Topic::Session { .. })) {
+            self.sink.update(&topic, &mut |detail| {
+                if let Some(threads) = detail.get_mut("threads") {
+                    apply(threads);
+                }
+            });
+        }
+        if stale.get() {
+            self.mark_dirty(station, thread);
+        }
+    }
+
+    /// How far the viewer has read a thread, as a live topic lists it.
+    fn read_position(&self, station: &str, thread: u64) -> Option<u64> {
+        let find = |list: Option<&Value>| {
+            list?.as_array()?.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(thread))?.get("read")?.as_u64()
+        };
+        let lists = self.live_topics(station, |t| matches!(t, Topic::Threads { .. } | Topic::Session { .. }));
+        lists.iter().filter_map(|topic| {
+            let value = self.sink.get(topic)?;
+            match topic {
+                Topic::Session { .. } => find(value.get("threads")),
+                _ => find(Some(&value)),
+            }
+        }).max()
+    }
+
+    /// Reads a thread's summary again once the burst of events is over, if a live topic lists threads.
+    fn mark_dirty(&self, station: &str, thread: u64) {
+        let schedule = {
+            let mut stations = self.stations.borrow_mut();
+            let Some(s) = stations.get_mut(station) else { return };
+            if !s.topics.iter().any(|t| matches!(t, Topic::Threads { .. } | Topic::Session { .. })) {
+                return;
+            }
+            s.dirty.insert(thread);
+            !std::mem::replace(&mut s.flushing, true)
+        };
+        if schedule {
+            let this = self.rc();
+            let station = station.to_string();
+            let sleep = self.host.sleep(EVENTS_COALESCE_MS);
+            self.spawn(async move {
+                sleep.await;
+                this.flush_threads(&station).await;
+            });
+        }
+    }
+
+    async fn flush_threads(&self, station: &str) {
+        let (dirty, addr) = {
+            let mut stations = self.stations.borrow_mut();
+            let Some(s) = stations.get_mut(station) else { return };
+            s.flushing = false;
+            (std::mem::take(&mut s.dirty), s.addr.clone())
+        };
+        join_all(dirty.into_iter().map(|id| {
+            let addr = addr.clone();
+            async move {
+                match self.call(&addr, "GET", &format!("/threads/{id}"), Vec::new(), Vec::new()).await {
+                    Ok(view) => self.put_thread(station, &view),
+                    Err(error) if error.status == Some(404) => self.remove_thread(station, id),
+                    Err(_) => {}
+                }
+            }
+        }))
+        .await;
+    }
+
+    // ── chats on ember's page ──
+
+    /// The session's chat on ember's page, from its topic when that has been read, else asked for.
+    pub async fn ember_thread(&self, station: &StationAddr, key: &str) -> Result<Option<Value>> {
+        let threads = match self.sink.get(&Topic::Session { station: station.to_string(), key: key.into() }) {
+            Some(detail) => detail.get("threads").cloned().unwrap_or(Value::Null),
+            None => self.json(station, "GET", &format!("/threads?session={}", encode(key)), None).await?,
+        };
+        Ok(ember_thread(&threads).cloned())
+    }
+
+    /// The id of the session's chat on ember's page, opening one when it has none.
+    pub async fn chat_thread(&self, station: &StationAddr, key: &str) -> Result<u64> {
+        let thread = match self.ember_thread(station, key).await? {
+            Some(thread) => thread,
+            None => {
+                let made = self.json(station, "POST", "/threads", Some(json!({ "session": key }))).await?;
+                self.put_thread(&station.to_string(), &made);
+                made
+            }
+        };
+        thread.get("id").and_then(Value::as_u64).ok_or_else(|| CoreError::new("bad_response", "station 的回复里没有对话"))
+    }
+
+    /// A person's message into a thread. Answers its seq once the thread's topic, where live, holds it.
+    pub async fn post(&self, station: &StationAddr, thread: u64, message: Value) -> Result<u64> {
+        let answer = self.json(station, "POST", &format!("/threads/{thread}/messages"), Some(message)).await?;
+        let seq = answer.get("seq").and_then(Value::as_u64).ok_or_else(|| CoreError::new("bad_response", "station 的回复里没有消息序号"))?;
+        let topic = Topic::Thread { station: station.to_string(), thread };
+        let has = |v: &Value| v.get("messages").and_then(Value::as_array).is_some_and(|m| m.iter().any(|m| seq_of(m) == Some(seq)));
+        if self.sink.get(&topic).is_some_and(|v| !has(&v)) {
+            self.reload(&topic).await;
+        }
+        Ok(seq)
+    }
+
+    /// The page of messages before those loaded, into the thread's topic. Answers whether still older ones exist.
+    pub async fn older(&self, station: &StationAddr, thread: u64) -> Result<bool> {
+        let topic = Topic::Thread { station: station.to_string(), thread };
+        let Some(value) = self.sink.get(&topic) else { return Ok(false) };
+        let first = value.get("messages").and_then(Value::as_array).and_then(|m| m.first()).and_then(seq_of);
+        let (Some(before), true) = (first, value.get("more").and_then(Value::as_bool).unwrap_or(false)) else { return Ok(false) };
+        let page = self.json(station, "GET", &format!("/threads/{thread}/messages?before={before}&limit={PAGE}"), None).await?;
+        let older: Vec<Value> = page.get("messages").and_then(Value::as_array).into_iter().flatten().filter(|m| seq_of(m).is_some_and(|s| s < before)).cloned().collect();
+        let more = page.get("more").and_then(Value::as_bool).unwrap_or(false);
+        let mut still = false;
+        self.sink.update(&topic, &mut |value| {
+            let Some(list) = value.get_mut("messages").and_then(Value::as_array_mut) else { return };
+            // Another page came first: this one is not next to what is loaded any more.
+            if list.first().and_then(seq_of) != Some(before) {
+                still = value.get("more").and_then(Value::as_bool).unwrap_or(false);
+                return;
+            }
+            list.splice(0..0, older.iter().cloned());
+            value["more"] = json!(more);
+            still = more;
+        });
+        Ok(still)
+    }
+
+    /// Records how far the viewer has read a thread; nothing is sent when it is read that far already.
+    pub async fn read(&self, station: &StationAddr, thread: u64, seq: u64) -> Result<()> {
+        let name = station.to_string();
+        if self.read_position(&name, thread).is_some_and(|read| read >= seq) {
+            return Ok(());
+        }
+        let answer = self.json(station, "PUT", &format!("/threads/{thread}/read"), Some(json!({ "seq": seq }))).await?;
+        self.put_read(&name, thread, answer.get("seq").and_then(Value::as_u64).unwrap_or(seq));
+        Ok(())
+    }
+
+    // ── live ──
+
+    /// Holds `/sessions/:key/live` open: the transcript from its first entry, then as it grows, and the steps in
+    /// flight. A reconnect asks from the entries already here.
+    async fn follow_live(self: Rc<Self>, station: String, addr: StationAddr, key: String) {
+        let topic = Topic::Live { station: station.clone(), key: key.clone() };
+        self.sink.set(&topic, Ok(live_start()));
+        loop {
+            let from = self.sink.get(&topic).and_then(|v| v.get("timeline")?.as_array().map(Vec::len)).unwrap_or(0);
+            let path = format!("/sessions/{}/live?from={from}", encode(&key));
+            let mut gap = false;
+            if let Ok(mut body) = self.open_stream(&addr, &path).await {
+                let mut parser = SseParser::default();
+                'read: while let Some(Ok(bytes)) = body.next().await {
+                    for (_, data) in parser.feed(&bytes) {
+                        if let Ok(message) = serde_json::from_str::<Value>(&data)
+                            && !self.on_live(&station, &key, &message)
+                        {
+                            gap = true;
+                            break 'read;
+                        }
+                    }
+                }
+            }
+            if gap {
+                // Entries that cannot be placed: start over from the first.
+                if let Some(s) = self.stations.borrow_mut().get_mut(&station).and_then(|s| s.lives.get_mut(&key)) {
+                    *s = LiveView::default();
+                }
+                self.sink.set(&topic, Ok(live_start()));
+            } else {
+                self.host.sleep(RECONNECT_MS).await;
+            }
+        }
+    }
+
+    /// One message of the live stream into the topic; false when its entries leave a gap.
+    fn on_live(&self, station: &str, key: &str, message: &Value) -> bool {
+        let topic = Topic::Live { station: station.into(), key: key.into() };
         let now = self.host.now_ms();
         let kind = message.get("type").and_then(Value::as_str).unwrap_or("");
+        let mut entries_came = false;
         if kind == "timeline" {
-            self.merge_timeline(station, key, message);
+            let start = message.get("start").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let entries = message.get("entries").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+            let mut placed = false;
+            self.sink.update(&topic, &mut |live| {
+                let Some(timeline) = live.get_mut("timeline").and_then(Value::as_array_mut) else { return };
+                if start > timeline.len() {
+                    return;
+                }
+                timeline.truncate(start);
+                timeline.extend(entries.iter().cloned());
+                live["usage"] = message.get("usage").cloned().unwrap_or(Value::Null);
+                placed = true;
+            });
+            if !placed {
+                return false;
+            }
+            entries_came = !entries.is_empty();
         }
         let view = {
             let mut stations = self.stations.borrow_mut();
-            let Some(view) = stations.get_mut(station).and_then(|s| s.lives.get_mut(key)) else { return };
+            let Some(view) = stations.get_mut(station).and_then(|s| s.lives.get_mut(key)) else { return true };
             match kind {
-                "timeline" => {
-                    // Ended steps stay until the entries that record them arrive.
-                    let entries = message.get("entries").and_then(Value::as_array).is_some_and(|e| !e.is_empty());
-                    if !entries {
-                        return;
-                    }
-                    view.steps.retain(|s| s.get("ended") != Some(&Value::Bool(true)));
-                }
+                // Ended steps stay until the entries that record them arrive.
+                "timeline" if entries_came => view.steps.retain(|s| s.get("ended") != Some(&Value::Bool(true))),
                 "steps" => {
                     view.steps = message.get("steps").and_then(Value::as_array).cloned().unwrap_or_default();
                     view.phase = message.get("phase").filter(|p| !p.is_null()).map(|p| {
@@ -649,39 +1094,22 @@ impl Stations {
                 }
                 "clear" => *view = LiveView::default(),
                 "step" => {
-                    let Some(event) = message.get("event") else { return };
+                    let Some(event) = message.get("event") else { return true };
                     apply_step(view, event, now);
                 }
-                _ => return,
+                _ => return true,
             }
-            view.value()
+            view.clone()
         };
-        self.sink.set(&Topic::Live { station: station.into(), key: key.into() }, Ok(view));
-    }
-
-    /// Puts a `timeline` message's entries into the cached session at `start`;
-    /// refetches the session when they cannot be placed.
-    fn merge_timeline(&self, station: &str, key: &str, message: &Value) {
-        let topic = Topic::Session { station: station.into(), key: key.into() };
-        let start = message.get("start").and_then(Value::as_u64).unwrap_or(0) as usize;
-        let entries = message.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
-        let usage = message.get("usage").cloned().unwrap_or(Value::Null);
-        // Stays false when the session has no value or no transcript yet, or on a gap.
-        let mut merged = false;
-        self.sink.update(&topic, &mut |session| {
-            let Some(transcript) = session.get_mut("transcript").filter(|t| t.is_object()) else { return };
-            let Some(timeline) = transcript.get_mut("timeline").and_then(Value::as_array_mut) else { return };
-            if start > timeline.len() {
-                return;
+        self.sink.update(&topic, &mut |live| {
+            live["steps"] = json!(view.steps);
+            live["phase"] = json!(view.phase);
+            // The stream sends the steps right after the entries it has: the transcript is all here.
+            if kind == "steps" {
+                live["loaded"] = json!(true);
             }
-            timeline.truncate(start);
-            timeline.extend(entries.iter().cloned());
-            transcript["usage"] = usage.clone();
-            merged = true;
         });
-        if !merged {
-            self.refetch(&topic);
-        }
+        true
     }
 }
 
@@ -740,22 +1168,15 @@ impl Source for Stations {
                 return;
             }
         };
-        let (fresh, new_station) = {
+        let fresh = {
             let mut stations = self.stations.borrow_mut();
             let state = stations.entry(station.clone()).or_insert_with(|| StationState::new(addr.clone()));
-            let new_station = state.events.is_none();
-            (state.topics.insert(topic.clone()), new_station)
+            state.topics.insert(topic.clone())
         };
         if !fresh {
             return;
         }
-        if new_station {
-            let events = self.spawn(self.rc().follow_events(station.clone(), addr.clone()));
-            if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
-                s.events = Some(events);
-            }
-        }
-        let task = match topic {
+        match topic {
             Topic::Link { .. } => {
                 // The state as it is when this runs: the events stream may have moved on.
                 let (this, station) = (self.rc(), station.clone());
@@ -765,57 +1186,48 @@ impl Source for Stations {
                         this.set_link(&station, link);
                     }
                 });
-                None
             }
-            Topic::Overview { .. } => {
-                self.refetch(topic);
-                Some(self.every(topic, OVERVIEW_REFRESH_MS))
-            }
-            Topic::Host { .. } => {
-                self.refetch(topic);
-                Some(self.every(topic, HOST_REFRESH_MS))
-            }
-            Topic::Sessions { .. } | Topic::Session { .. } => {
-                self.refetch(topic);
-                None
-            }
+            Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::Session { .. } | Topic::Thread { .. } => self.refetch(topic),
+            // Samples come on the events stream, which asks for them now.
+            Topic::Host { .. } => {}
             Topic::Live { key, .. } => {
                 if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
                     s.lives.insert(key.clone(), LiveView::default());
                 }
-                let (sink, t) = (self.sink.clone(), topic.clone());
-                self.spawn(async move { sink.set(&t, Ok(LiveView::default().value())) });
-                Some(self.spawn(self.rc().follow_live(station.clone(), addr, key.clone())))
+                let task = self.spawn(self.rc().follow_live(station.clone(), addr, key.clone()));
+                if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
+                    s.tasks.insert(topic.clone(), task);
+                }
             }
-            _ => None,
-        };
-        if let Some(task) = task {
-            if let Some(s) = self.stations.borrow_mut().get_mut(&station) {
-                s.tasks.insert(topic.clone(), task);
-            }
+            _ => {}
         }
+        self.sync_events(&station);
     }
 
     fn stop(&self, topic: &Topic) {
         let Some(station) = topic.station() else { return };
-        let mut stations = self.stations.borrow_mut();
-        let Some(state) = stations.get_mut(station) else { return };
-        state.topics.remove(topic);
-        if let Some(task) = state.tasks.remove(topic) {
-            task.abort();
-        }
-        if let Topic::Live { key, .. } = topic {
-            state.lives.remove(key);
-        }
-        if state.topics.is_empty() {
-            if let Some(events) = state.events.take() {
-                events.abort();
-            }
-            for (_, task) in state.tasks.drain() {
+        {
+            let mut stations = self.stations.borrow_mut();
+            let Some(state) = stations.get_mut(station) else { return };
+            state.topics.remove(topic);
+            if let Some(task) = state.tasks.remove(topic) {
                 task.abort();
             }
-            stations.remove(station);
+            if let Topic::Live { key, .. } = topic {
+                state.lives.remove(key);
+            }
+            if state.topics.is_empty() {
+                for task in state.events.take().map(|(t, _)| t).into_iter().chain(state.replaced.take()) {
+                    task.abort();
+                }
+                for (_, task) in state.tasks.drain() {
+                    task.abort();
+                }
+                stations.remove(station);
+                return;
+            }
         }
+        self.sync_events(station);
     }
 }
 
@@ -880,12 +1292,19 @@ mod tests {
         /// Sends SSE text on the newest open stream whose path starts with `prefix`.
         fn push(&self, prefix: &str, text: &str) {
             let streams = self.streams.borrow();
-            let (_, tx) = streams.iter().rev().find(|(p, _)| p.starts_with(prefix)).expect("stream open");
+            let (_, tx) = streams.iter().rev().find(|(p, tx)| p.starts_with(prefix) && !tx.is_closed()).expect("stream open");
             tx.unbounded_send(Ok(text.as_bytes().to_vec())).unwrap();
+        }
+        fn event(&self, name: &str, data: Value) {
+            self.push("/admin/api/events", &format!("event: {name}\ndata: {data}\n\n"));
         }
         fn end(&self, prefix: &str) {
             let mut streams = self.streams.borrow_mut();
             streams.retain(|(p, _)| !p.starts_with(prefix));
+        }
+        /// Paths of the streams still open (the core has not let go of them).
+        fn open(&self) -> Vec<String> {
+            self.streams.borrow().iter().filter(|(_, tx)| !tx.is_closed()).map(|(p, _)| p.clone()).collect()
         }
     }
 
@@ -932,20 +1351,42 @@ mod tests {
     fn sessions() -> Topic {
         Topic::Sessions { station: ST.into() }
     }
+    fn threads() -> Topic {
+        Topic::Threads { station: ST.into() }
+    }
+    fn thread(id: u64) -> Topic {
+        Topic::Thread { station: ST.into(), thread: id }
+    }
     fn overview() -> Topic {
         Topic::Overview { station: ST.into() }
     }
+    fn host_topic() -> Topic {
+        Topic::Host { station: ST.into() }
+    }
+    fn link() -> Topic {
+        Topic::Link { station: ST.into() }
+    }
     fn remote() -> StationAddr {
         StationAddr::parse(ST).unwrap()
-    }
-    fn timeline_of(sink: &FakeSink, key: &str) -> Value {
-        sink.get(&session(key)).unwrap()["transcript"]["timeline"].clone()
     }
     fn live_of(sink: &FakeSink, key: &str) -> Value {
         sink.get(&live(key)).unwrap()
     }
     fn msg(value: Value) -> String {
         format!("event: {}\ndata: {}\n\n", value["type"].as_str().unwrap(), value)
+    }
+    fn summary(key: &str, turns: u64) -> Value {
+        json!({"key": key, "title": null, "archivedAt": null, "turns": turns, "lastTurn": null})
+    }
+    fn message(seq: u64, text: &str) -> Value {
+        json!({"seq": seq, "rev": seq, "thread": 7, "ts": format!("{seq}.0"), "authorKind": "person", "author": "a@x.com", "text": text})
+    }
+    fn thread_view(id: u64, members: &[&str], last: u64, read: u64, unread: u64) -> Value {
+        json!({"id": id, "surface": "ember", "createdAt": id, "sessions": members.iter().map(|s| json!({"thread": id, "session": s})).collect::<Vec<_>>(),
+            "last": if last > 0 { message(last, "…") } else { Value::Null }, "rev": last, "read": read, "unread": unread})
+    }
+    fn texts(sink: &FakeSink, id: u64) -> Vec<String> {
+        sink.get(&thread(id)).unwrap()["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap().to_string()).collect()
     }
 
     // ── tests ──
@@ -1012,10 +1453,12 @@ mod tests {
     }
 
     #[test]
-    fn writes_refetch_what_they_touch() {
+    fn writes_bring_what_they_touch_up_to_date() {
         run(async {
             let (host, sink, wire, stations) = setup();
-            for t in [session("k 1"), session("other"), sessions(), overview()] {
+            wire.answer("GET /admin/api/sessions/k%201", 200, json!({"session": summary("k 1", 0), "threads": [], "turns": []}));
+            wire.answer("GET /admin/api/threads", 200, json!([]));
+            for t in [session("k 1"), session("other"), sessions(), overview(), threads()] {
                 stations.start(&t);
             }
             host.settle().await;
@@ -1023,131 +1466,310 @@ mod tests {
             let before = |p: &str| wire.count("GET", p);
             let (s, k, o, other) = (before("/admin/api/sessions"), before("/admin/api/sessions/k%201"), before("/admin/api/overview"), before("/admin/api/sessions/other"));
             stations.request(&remote(), "POST", "/sessions/k%201/stop", None).await.unwrap();
-            host.settle().await;
             assert_eq!(wire.count("GET", "/admin/api/sessions"), s + 1);
             assert_eq!(wire.count("GET", "/admin/api/sessions/k%201"), k + 1);
             assert_eq!(wire.count("GET", "/admin/api/sessions/other"), other);
             assert_eq!(wire.count("GET", "/admin/api/overview"), o);
-            stations.request(&remote(), "PUT", "/connects/c", Some(json!({}))).await.unwrap();
+            // A profile edit answers the overview: that is the topic's value, nothing is read again.
+            let edited = json!({"viewer": {}, "connects": [], "profiles": [{"id": "p"}]});
+            wire.answer("PUT /admin/api/profiles/p", 200, edited.clone());
+            stations.request(&remote(), "PUT", "/profiles/p", Some(json!({}))).await.unwrap();
+            assert_eq!(sink.get(&overview()), Some(edited));
+            assert_eq!(wire.count("GET", "/admin/api/overview"), o);
             stations.request(&remote(), "POST", "/profiles/p/check", None).await.unwrap();
-            host.settle().await;
-            assert_eq!(wire.count("GET", "/admin/api/overview"), o + 2);
-            assert_eq!(wire.count("GET", "/admin/api/sessions"), s + 2);
+            assert_eq!(wire.count("GET", "/admin/api/overview"), o + 1);
+            // Another chat on a session answers its thread, which goes into the lists without a request.
+            let reads = wire.calls.borrow().len();
+            wire.answer("POST /admin/api/threads", 200, thread_view(9, &["k 1"], 0, 0, 0));
+            stations.request(&remote(), "POST", "/threads", Some(json!({"session": "k 1"}))).await.unwrap();
+            assert_eq!(sink.get(&session("k 1")).unwrap()["threads"][0]["id"], 9);
+            assert_eq!(sink.get(&threads()).unwrap()[0]["id"], 9);
+            assert_eq!(wire.calls.borrow().len(), reads + 1);
             // A read changes nothing.
             stations.request(&remote(), "GET", "/slack/config-token", None).await.unwrap();
-            host.settle().await;
-            assert_eq!(wire.count("GET", "/admin/api/overview"), o + 2);
+            assert_eq!(wire.count("GET", "/admin/api/overview"), o + 1);
         });
     }
 
     #[test]
-    fn events_refetch_coalesced() {
+    fn topics_are_read_once_and_nothing_runs_on_a_timer() {
         run(async {
-            let (host, sink, wire, stations) = setup();
-            let link = Topic::Link { station: ST.into() };
-            for t in [session("a"), session("b"), sessions(), overview(), link.clone()] {
+            let (host, _sink, wire, stations) = setup();
+            for t in [session("a"), sessions(), overview(), threads(), thread(7), host_topic(), link(), live("a")] {
                 stations.start(&t);
             }
             host.settle().await;
-            assert_eq!(sink.get(&link).unwrap()["state"], "online");
-            assert_eq!(wire.count("GET", "/admin/api/events"), 1, "one events stream per station");
-            let n = |p: &str| wire.count("GET", p);
-            let (a, b, s, o) = (n("/admin/api/sessions/a"), n("/admin/api/sessions/b"), n("/admin/api/sessions"), n("/admin/api/overview"));
-            for _ in 0..3 {
-                wire.push("/admin/api/events", "event: session\ndata: {\"key\":\"a\"}\n\n");
-            }
-            wire.push("/admin/api/events", "event: session\ndata: {\"key\":\"nobody-watches\"}\n\n");
-            host.settle().await;
-            assert_eq!(n("/admin/api/sessions"), s, "waits for the burst to end");
-            wait(EVENTS_COALESCE_MS).await;
-            assert_eq!(n("/admin/api/sessions/a"), a + 1);
-            assert_eq!(n("/admin/api/sessions/b"), b);
-            assert_eq!(n("/admin/api/sessions"), s + 1);
-            assert_eq!(n("/admin/api/sessions/nobody-watches"), 0);
-            wire.push("/admin/api/events", "event: config\ndata: {}\n\n");
-            host.settle().await;
-            assert_eq!(n("/admin/api/overview"), o + 1);
+            assert_eq!(wire.open(), vec!["/admin/api/events?host=1", "/admin/api/sessions/a/live?from=0"]);
+            let requests = wire.calls.borrow().len();
+            assert_eq!(requests, 7, "{:?}", wire.paths());
+            host.sleeps.borrow_mut().clear();
+            wait(RECONNECT_MS * 2).await;
+            assert_eq!(wire.calls.borrow().len(), requests, "idle: no request");
+            assert!(host.sleeps.borrow().is_empty(), "idle: no timer {:?}", host.sleeps.borrow());
         });
     }
 
     #[test]
-    fn events_reconnect_and_report_the_link() {
+    fn session_events_update_in_place() {
         run(async {
             let (host, sink, wire, stations) = setup();
-            let link = Topic::Link { station: ST.into() };
-            stations.start(&link);
+            wire.answer("GET /admin/api/sessions", 200, json!([summary("a", 1), summary("b", 0)]));
+            wire.answer("GET /admin/api/sessions/a", 200, json!({"session": summary("a", 1), "threads": [], "turns": [{"id": "t1", "kind": "chat", "outcome": null, "declared": null, "detail": null, "startedAt": 1, "endedAt": null}]}));
+            stations.start(&sessions());
+            stations.start(&session("a"));
+            host.settle().await;
+            let reads = wire.calls.borrow().len();
+            // The same turns: only the summary changes, without a request.
+            let mut renamed = summary("a", 1);
+            renamed["title"] = json!("新名字");
+            renamed["lastTurn"] = json!({"kind": "chat", "outcome": null, "declared": null, "detail": null, "startedAt": 1, "endedAt": null});
+            wire.event("session", renamed.clone());
+            wire.event("session", summary("c", 0));
+            host.settle().await;
+            assert_eq!(wire.calls.borrow().len(), reads);
+            let list = sink.get(&sessions()).unwrap();
+            let keys: Vec<&str> = list.as_array().unwrap().iter().map(|s| s["key"].as_str().unwrap()).collect();
+            assert_eq!(keys, vec!["c", "a", "b"]);
+            assert_eq!(list[1]["title"], "新名字");
+            assert_eq!(sink.get(&session("a")).unwrap()["session"]["title"], "新名字");
+            // The turn ended: the detail's turns are read again.
+            let mut ended = renamed.clone();
+            ended["lastTurn"]["endedAt"] = json!(2);
+            wire.event("session", ended);
+            host.settle().await;
+            assert_eq!(wire.count("GET", "/admin/api/sessions/a"), 2);
+            // Archived: gone from the list. Removed: gone, and its topic says so.
+            let mut archived = summary("b", 0);
+            archived["archivedAt"] = json!(5);
+            wire.event("session", archived);
+            wire.event("session-removed", json!({"key": "a"}));
+            host.settle().await;
+            let keys: Vec<String> = sink.get(&sessions()).unwrap().as_array().unwrap().iter().map(|s| s["key"].as_str().unwrap().to_string()).collect();
+            assert_eq!(keys, vec!["c"]);
+            assert_eq!(sink.values.borrow()[&session("a")].as_ref().unwrap_err().status, Some(404));
+        });
+    }
+
+    #[test]
+    fn overview_and_host_come_from_events() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            stations.start(&overview());
+            host.settle().await;
+            assert_eq!(wire.open(), vec!["/admin/api/events"]);
+            wire.event("overview", json!({"connects": [1]}));
+            wire.event("host", json!({"hostname": "not asked"}));
+            host.settle().await;
+            assert_eq!(sink.get(&overview()), Some(json!({"connects": [1]})));
+            assert_eq!(sink.get(&host_topic()), None);
+            // Host samples are asked for while a host topic is live: the stream opens anew with ?host=1, and the old one goes once it has.
+            stations.start(&host_topic());
+            host.settle().await;
+            assert_eq!(wire.open(), vec!["/admin/api/events?host=1"]);
+            wire.event("host", json!({"hostname": "studio"}));
+            host.settle().await;
+            assert_eq!(sink.get(&host_topic()), Some(json!({"hostname": "studio"})));
+            assert_eq!(wire.count("GET", "/admin/api/overview"), 1, "a handover is no reconnect: nothing is read again");
+            stations.stop(&host_topic());
+            host.settle().await;
+            assert_eq!(wire.open(), vec!["/admin/api/events"]);
+            assert_eq!(wire.count("GET", "/admin/api/host"), 0);
+        });
+    }
+
+    #[test]
+    fn thread_events_merge_messages_and_refresh_summaries() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads/7/messages?limit=50", 200, json!({"rev": 12, "messages": [message(11, "a"), message(12, "b")], "more": true}));
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 12, 12, 0)]));
+            wire.answer("GET /admin/api/threads/7", 200, thread_view(7, &["k"], 14, 12, 2));
+            wire.answer("GET /admin/api/threads/8", 200, thread_view(8, &["k"], 20, 0, 1));
+            stations.start(&thread(7));
+            stations.start(&threads());
+            host.settle().await;
+            assert_eq!(texts(&sink, 7), vec!["a", "b"]);
+            // New messages and an edit, in one burst: merged at once; the summary is read once after it.
+            wire.event("thread", json!({"id": 7, "rev": 13, "messages": [message(13, "c")]}));
+            wire.event("thread", json!({"id": 7, "rev": 15, "messages": [message(14, "d"), {"seq": 12, "rev": 15, "text": "b 改了"}]}));
+            // Older than the page, while older pages exist: not placed.
+            wire.event("thread", json!({"id": 7, "rev": 16, "messages": [message(3, "old")]}));
+            host.settle().await;
+            assert_eq!(texts(&sink, 7), vec!["a", "b 改了", "c", "d"]);
+            assert_eq!(sink.get(&thread(7)).unwrap()["rev"], 16);
+            assert_eq!(wire.count("GET", "/admin/api/threads/7"), 0, "waits for the burst to end");
+            wait(EVENTS_COALESCE_MS).await;
+            assert_eq!(wire.count("GET", "/admin/api/threads/7"), 1);
+            assert_eq!(sink.get(&threads()).unwrap()[0]["unread"], 2);
+            // A thread not listed yet comes in, first (its last message is the newest).
+            wire.event("thread", json!({"id": 8, "rev": 20, "messages": [message(20, "x")]}));
+            host.settle().await;
+            wait(EVENTS_COALESCE_MS).await;
+            let ids: Vec<u64> = sink.get(&threads()).unwrap().as_array().unwrap().iter().map(|t| t["id"].as_u64().unwrap()).collect();
+            assert_eq!(ids, vec![8, 7]);
+            // Reading up to the last message: nothing unread, without a request. Short of it: counted again.
+            wire.event("read", json!({"viewer": "a@x.com", "thread": 7, "seq": 14}));
+            host.settle().await;
+            assert_eq!(sink.get(&threads()).unwrap()[1]["unread"], 0);
+            assert_eq!(sink.get(&threads()).unwrap()[1]["read"], 14);
+            wire.event("read", json!({"viewer": "a@x.com", "thread": 8, "seq": 15}));
+            host.settle().await;
+            wait(EVENTS_COALESCE_MS).await;
+            assert_eq!(wire.count("GET", "/admin/api/threads/8"), 2);
+            // A thread gone: out of the list.
+            wire.answer("GET /admin/api/threads/8", 404, json!({"error": "unknown thread 8"}));
+            wire.event("thread", json!({"id": 8, "rev": 21, "messages": []}));
+            host.settle().await;
+            wait(EVENTS_COALESCE_MS).await;
+            assert_eq!(sink.get(&threads()).unwrap().as_array().unwrap().len(), 1);
+        });
+    }
+
+    #[test]
+    fn a_session_topic_follows_its_threads() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/sessions/k", 200, json!({"session": summary("k", 0), "threads": [thread_view(7, &["k"], 12, 0, 1)], "turns": []}));
+            wire.answer("GET /admin/api/threads/9", 200, thread_view(9, &["k", "j"], 30, 0, 1));
+            stations.start(&session("k"));
+            host.settle().await;
+            wire.event("thread", json!({"id": 9, "rev": 30, "messages": []}));
+            wire.event("read", json!({"viewer": "a@x.com", "thread": 7, "seq": 12}));
+            host.settle().await;
+            wait(EVENTS_COALESCE_MS).await;
+            let detail = sink.get(&session("k")).unwrap();
+            let ids: Vec<u64> = detail["threads"].as_array().unwrap().iter().map(|t| t["id"].as_u64().unwrap()).collect();
+            assert_eq!(ids, vec![9, 7]);
+            assert_eq!(detail["threads"][1]["unread"], 0);
+            // The session left thread 9.
+            wire.answer("GET /admin/api/threads/9", 200, thread_view(9, &["j"], 30, 0, 1));
+            wire.event("thread", json!({"id": 9, "rev": 31, "messages": []}));
+            host.settle().await;
+            wait(EVENTS_COALESCE_MS).await;
+            assert_eq!(sink.get(&session("k")).unwrap()["threads"].as_array().unwrap().len(), 1);
+        });
+    }
+
+    #[test]
+    fn a_thread_pages_back_and_catches_up() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads/7/messages?limit=50", 200, json!({"rev": 12, "messages": [message(11, "c"), message(12, "d")], "more": true}));
+            wire.answer("GET /admin/api/threads/7/messages?before=11&limit=50", 200, json!({"rev": 12, "messages": [message(9, "a"), message(10, "b")], "more": false}));
+            stations.start(&thread(7));
+            stations.start(&link());
+            host.settle().await;
+            assert!(stations.older(&remote(), 7).await.unwrap() == false);
+            assert_eq!(texts(&sink, 7), vec!["a", "b", "c", "d"]);
+            assert_eq!(sink.get(&thread(7)).unwrap()["more"], false);
+            // Nothing older: no request.
+            assert!(!stations.older(&remote(), 7).await.unwrap());
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/messages?before=9&limit=50"), 0);
+            // The stream was down: what changed since the thread's rev is read, and the pages stay.
+            wire.answer("GET /admin/api/threads/7/messages?after=12", 200, json!({"rev": 13, "messages": [message(13, "e")], "more": false}));
+            wire.end("/admin/api/events");
+            host.settle().await;
+            assert_eq!(sink.get(&link()).unwrap()["state"], "offline");
+            wait(RECONNECT_MS + 50).await;
+            assert_eq!(sink.get(&link()).unwrap()["state"], "online");
+            assert_eq!(texts(&sink, 7), vec!["a", "b", "c", "d", "e"]);
+            assert_eq!(wire.count("GET", "/admin/api/threads/7/messages?limit=50"), 1);
+        });
+    }
+
+    #[test]
+    fn posts_into_a_thread_and_answers_once_it_shows() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            wire.answer("GET /admin/api/threads/7/messages?limit=50", 200, json!({"rev": 12, "messages": [message(12, "d")], "more": false}));
+            wire.answer("POST /admin/api/threads/7/messages", 200, json!({"seq": 13}));
+            wire.answer("GET /admin/api/threads/7/messages?after=12", 200, json!({"rev": 13, "messages": [message(13, "你好")], "more": false}));
+            stations.start(&thread(7));
+            host.settle().await;
+            assert_eq!(stations.post(&remote(), 7, json!({"text": "你好"})).await.unwrap(), 13);
+            assert_eq!(texts(&sink, 7), vec!["d", "你好"]);
+            // A session without a chat on ember's page gets one.
+            wire.answer("GET /admin/api/threads?session=k", 200, json!([{"id": 3, "surface": "slack:T1"}]));
+            wire.answer("POST /admin/api/threads", 200, thread_view(8, &["k"], 0, 0, 0));
+            assert_eq!(stations.chat_thread(&remote(), "k").await.unwrap(), 8);
+            wire.answer("GET /admin/api/threads?session=k", 200, json!([{"id": 9, "surface": "ember"}, {"id": 8, "surface": "ember"}]));
+            assert_eq!(stations.chat_thread(&remote(), "k").await.unwrap(), 8, "the first one made");
+            assert_eq!(wire.count("POST", "/admin/api/threads"), 1);
+            // Reading: sent once, not again for less.
+            stations.start(&threads());
+            wire.answer("GET /admin/api/threads", 200, json!([thread_view(7, &["k"], 13, 0, 1)]));
+            host.settle().await;
+            wire.answer("PUT /admin/api/threads/7/read", 200, json!({"viewer": "a@x.com", "thread": 7, "seq": 13}));
+            stations.read(&remote(), 7, 13).await.unwrap();
+            stations.read(&remote(), 7, 12).await.unwrap();
+            assert_eq!(wire.count("PUT", "/admin/api/threads/7/read"), 1);
+            assert_eq!(sink.get(&threads()).unwrap()[0]["unread"], 0);
+        });
+    }
+
+    #[test]
+    fn events_reconnect_report_the_link_and_read_everything_once() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            stations.start(&link());
             stations.start(&sessions());
             host.settle().await;
-            assert_eq!(sink.get(&link).unwrap()["state"], "online");
+            assert_eq!(sink.get(&link()).unwrap()["state"], "online");
             *wire.stream_status.borrow_mut() = None;
             wire.end("/admin/api/events");
             host.settle().await;
-            assert_eq!(sink.get(&link).unwrap()["state"], "offline");
+            assert_eq!(sink.get(&link()).unwrap()["state"], "offline");
             wait(RECONNECT_MS + 50).await;
-            assert_eq!(sink.get(&link).unwrap(), json!({"state": "offline", "message": "连不上"}));
+            assert_eq!(sink.get(&link()).unwrap(), json!({"state": "offline", "message": "连不上"}));
             *wire.stream_status.borrow_mut() = Some(403);
             wait(RECONNECT_MS + 50).await;
-            assert_eq!(sink.get(&link).unwrap(), json!({"state": "error", "message": "没有权限"}));
+            assert_eq!(sink.get(&link()).unwrap(), json!({"state": "error", "message": "没有权限"}));
             let s = wire.count("GET", "/admin/api/sessions");
             *wire.stream_status.borrow_mut() = Some(200);
             wait(RECONNECT_MS + 50).await;
-            assert_eq!(sink.get(&link).unwrap()["state"], "online");
-            assert_eq!(wire.count("GET", "/admin/api/sessions"), s + 1, "a reconnect refetches the station's topics");
+            assert_eq!(sink.get(&link()).unwrap()["state"], "online");
+            assert_eq!(wire.count("GET", "/admin/api/sessions"), s + 1, "a reconnect reads the station's topics once");
             // Nothing live: the stream closes and stays closed.
-            stations.stop(&link);
+            stations.stop(&link());
             stations.stop(&sessions());
             let e = wire.count("GET", "/admin/api/events");
             wait(RECONNECT_MS + 100).await;
             assert_eq!(wire.count("GET", "/admin/api/events"), e);
+            assert!(wire.open().is_empty());
         });
     }
 
     #[test]
-    fn live_merges_the_timeline() {
+    fn live_holds_the_transcript_and_its_usage() {
         run(async {
             let (host, sink, wire, stations) = setup();
-            wire.answer("GET /admin/api/sessions/k", 200, json!({"transcript": {"timeline": ["a", "b"], "usage": {"modelCalls": 1}}}));
-            stations.start(&session("k"));
-            host.settle().await;
             stations.start(&live("k"));
             host.settle().await;
-            assert!(wire.paths().contains(&"GET /admin/api/sessions/k/live?from=2".to_string()));
-            wire.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 2, "entries": ["c"], "usage": {"modelCalls": 2}})));
+            assert_eq!(live_of(&sink, "k"), live_start());
+            assert!(wire.paths().contains(&"GET /admin/api/sessions/k/live?from=0".to_string()));
+            let push = |v: Value| wire.push("/admin/api/sessions/k/live", &msg(v));
+            push(json!({"type": "timeline", "start": 0, "entries": ["a", "b"], "usage": {"modelCalls": 1, "model": "claude-opus"}}));
+            push(json!({"type": "steps", "steps": [], "phase": null}));
             host.settle().await;
-            assert_eq!(timeline_of(&sink, "k"), json!(["a", "b", "c"]));
-            assert_eq!(sink.get(&session("k")).unwrap()["transcript"]["usage"]["modelCalls"], 2);
+            let v = live_of(&sink, "k");
+            assert_eq!((v["loaded"].clone(), v["timeline"].clone(), v["usage"]["model"].clone()), (json!(true), json!(["a", "b"]), json!("claude-opus")));
+            push(json!({"type": "timeline", "start": 2, "entries": ["c"], "usage": {"modelCalls": 2}}));
+            host.settle().await;
+            assert_eq!(live_of(&sink, "k")["timeline"], json!(["a", "b", "c"]));
+            assert_eq!(live_of(&sink, "k")["usage"]["modelCalls"], 2);
             // Overlap: replaced from `start`.
-            wire.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 1, "entries": ["B", "c", "d"], "usage": {}})));
+            push(json!({"type": "timeline", "start": 1, "entries": ["B", "c", "d"], "usage": {}}));
             host.settle().await;
-            assert_eq!(timeline_of(&sink, "k"), json!(["a", "B", "c", "d"]));
-            // A gap: the session is fetched again.
-            let fetched = wire.count("GET", "/admin/api/sessions/k");
-            wire.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 9, "entries": ["z"], "usage": {}})));
-            host.settle().await;
-            assert_eq!(wire.count("GET", "/admin/api/sessions/k"), fetched + 1);
-            assert_eq!(timeline_of(&sink, "k"), json!(["a", "b"]), "the refetched session");
-            // Reconnects ask from what is known now.
-            wire.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 2, "entries": ["c", "d", "e"], "usage": {}})));
-            host.settle().await;
+            assert_eq!(live_of(&sink, "k")["timeline"], json!(["a", "B", "c", "d"]));
+            // Reconnects ask from what is known.
             wire.end("/admin/api/sessions/k/live");
             wait(RECONNECT_MS + 50).await;
-            assert!(wire.paths().contains(&"GET /admin/api/sessions/k/live?from=5".to_string()), "{:?}", wire.paths());
-        });
-    }
-
-    #[test]
-    fn live_without_a_transcript_refetches() {
-        run(async {
-            let (host, _sink, wire, stations) = setup();
-            wire.answer("GET /admin/api/sessions/k", 200, json!({"transcript": null}));
-            stations.start(&session("k"));
-            stations.start(&live("k"));
+            assert!(wire.paths().contains(&"GET /admin/api/sessions/k/live?from=4".to_string()), "{:?}", wire.paths());
+            // A gap: from the start again, at once.
+            wire.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 9, "entries": ["z"], "usage": {}})));
             host.settle().await;
-            assert!(wire.paths().contains(&"GET /admin/api/sessions/k/live?from=0".to_string()));
-            let fetched = wire.count("GET", "/admin/api/sessions/k");
-            wire.push("/admin/api/sessions/k/live", &msg(json!({"type": "timeline", "start": 0, "entries": ["a"], "usage": {}})));
-            host.settle().await;
-            assert_eq!(wire.count("GET", "/admin/api/sessions/k"), fetched + 1);
+            assert_eq!(wire.count("GET", "/admin/api/sessions/k/live?from=0"), 2);
+            assert_eq!(live_of(&sink, "k")["loaded"], false);
         });
     }
 
@@ -1155,11 +1777,8 @@ mod tests {
     fn live_steps_and_phase() {
         run(async {
             let (host, sink, wire, stations) = setup();
-            wire.answer("GET /admin/api/sessions/k", 200, json!({"transcript": {"timeline": [], "usage": {}}}));
-            stations.start(&session("k"));
             stations.start(&live("k"));
             host.settle().await;
-            assert_eq!(live_of(&sink, "k"), json!({"steps": [], "phase": null}));
             let push = |v: Value| wire.push("/admin/api/sessions/k/live", &msg(v));
             let now = host.now_ms();
             push(json!({"type": "steps", "steps": [{"id": "s0", "step": "text", "text": "hi", "input": "", "output": "", "startedAt": 1}], "phase": {"phase": "thinking", "elapsedMs": 5000}}));
@@ -1199,22 +1818,8 @@ mod tests {
             assert_eq!((v["steps"][0]["text"].as_str(), v["steps"][0]["subagent"].as_bool(), v["steps"][0]["parent"].as_str()), (Some(""), Some(true), Some("t0")));
             push(json!({"type": "clear"}));
             host.settle().await;
-            assert_eq!(live_of(&sink, "k"), json!({"steps": [], "phase": null}));
-        });
-    }
-
-    #[test]
-    fn timers_refresh_overview() {
-        run(async {
-            let (host, _sink, wire, stations) = setup();
-            stations.start(&overview());
-            host.settle().await;
-            let o = wire.count("GET", "/admin/api/overview");
-            wait(OVERVIEW_REFRESH_MS).await;
-            assert_eq!(wire.count("GET", "/admin/api/overview"), o + 1);
-            stations.stop(&overview());
-            wait(OVERVIEW_REFRESH_MS).await;
-            assert_eq!(wire.count("GET", "/admin/api/overview"), o + 1);
+            let v = live_of(&sink, "k");
+            assert_eq!((v["steps"].clone(), v["phase"].clone(), v["timeline"].clone()), (json!([]), Value::Null, json!(["x"])));
         });
     }
 
@@ -1224,12 +1829,11 @@ mod tests {
             let (host, sink, wire, stations) = setup();
             let bad = Topic::Overview { station: "nope".into() };
             stations.start(&bad);
-            wire.answer("GET /admin/api/host", 502, json!({"error": "坏了"}));
-            let h = Topic::Host { station: ST.into() };
-            stations.start(&h);
+            wire.answer("GET /admin/api/sessions", 502, json!({"error": "坏了"}));
+            stations.start(&sessions());
             host.settle().await;
             assert_eq!(sink.values.borrow()[&bad].as_ref().unwrap_err().code, "invalid_params");
-            assert_eq!(sink.values.borrow()[&h].as_ref().unwrap_err().message, "坏了");
+            assert_eq!(sink.values.borrow()[&sessions()].as_ref().unwrap_err().message, "坏了");
         });
     }
 

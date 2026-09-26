@@ -37,6 +37,8 @@ pub struct FakeHost {
     pub refuse_sockets: Cell<bool>,
     /// Every request fetched, in order.
     pub requests: RefCell<Vec<HttpRequest>>,
+    /// Every sleep asked for (ms, before speeding up), in order: timers show here.
+    pub sleeps: RefCell<Vec<u64>>,
     emitted: RefCell<Vec<(ClientId, CoreMessage)>>,
     seed: RefCell<u64>,
     utc_offset_min: Cell<i32>,
@@ -53,6 +55,7 @@ impl FakeHost {
             sockets: RefCell::default(),
             refuse_sockets: Cell::new(false),
             requests: RefCell::default(),
+            sleeps: RefCell::default(),
             emitted: RefCell::default(),
             seed: RefCell::new(0x5eed),
             utc_offset_min: Cell::new(0),
@@ -84,6 +87,27 @@ impl FakeHost {
     /// Makes the core's timers run `factor` times faster (eviction after 0.6 s at 100).
     pub fn speed_up(&self, factor: u64) {
         self.speedup.set(factor);
+    }
+
+    /// Sends a text frame on the newest open WebSocket whose url ends with `path`.
+    pub fn socket_send(&self, path: &str, text: &str) {
+        let sockets = self.sockets.borrow();
+        let (_, _, tx) = sockets.iter().rev().find(|(url, _, tx)| url.ends_with(path) && !tx.is_closed()).expect("socket open");
+        tx.unbounded_send(Ok(text.to_string())).unwrap();
+    }
+
+    /// Closes every WebSocket whose url ends with `path` (the server went away).
+    pub fn socket_close(&self, path: &str) {
+        for (url, _, tx) in self.sockets.borrow().iter() {
+            if url.ends_with(path) {
+                tx.close_channel();
+            }
+        }
+    }
+
+    /// WebSockets whose url ends with `path` that are still open.
+    pub fn open_sockets(&self, path: &str) -> usize {
+        self.sockets.borrow().iter().filter(|(url, _, tx)| url.ends_with(path) && !tx.is_closed()).count()
     }
 
     pub fn take_emitted(&self) -> Vec<(ClientId, CoreMessage)> {
@@ -170,6 +194,7 @@ impl Host for FakeHost {
     }
 
     fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()> {
+        self.sleeps.borrow_mut().push(ms);
         tokio::time::sleep(std::time::Duration::from_micros(ms * 1000 / self.speedup.get())).boxed_local()
     }
 

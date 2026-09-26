@@ -361,6 +361,9 @@ mod tests {
         fn fetch_stream(&self, request: HttpRequest) -> LocalBoxFuture<'static, std::result::Result<StreamResponse, HostError>> {
             self.0.fetch_stream(request)
         }
+        fn websocket(&self, url: String, protocols: Vec<String>) -> LocalBoxFuture<'static, std::result::Result<crate::host::SocketFrames, HostError>> {
+            self.0.websocket(url, protocols)
+        }
         fn storage_get(&self, key: &str) -> LocalBoxFuture<'static, std::result::Result<Option<Vec<u8>>, HostError>> {
             self.0.storage_get(key)
         }

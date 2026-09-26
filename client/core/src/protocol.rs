@@ -46,6 +46,10 @@ pub enum Topic {
     Session { station: String, key: String },
     Live { station: String, key: String },
     Host { station: String },
+    /// Every thread of a station, with the viewer's unread counts.
+    Threads { station: String },
+    /// One thread's messages: its latest page, older pages as `chat.older` loads them.
+    Thread { station: String, thread: u64 },
     // Views: put together from the topics above (see views.rs). `scope` is a workspace id or "local".
     Chats { scope: String, #[serde(default)] mine: bool },
     Stations { scope: String },
@@ -57,8 +61,8 @@ impl Topic {
     /// The station a station topic belongs to; `None` for the account topics and the views.
     pub fn station(&self) -> Option<&str> {
         match self {
-            Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } => Some(station),
-            Topic::Session { station, .. } | Topic::Live { station, .. } => Some(station),
+            Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } => Some(station),
+            Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } => Some(station),
             Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } => None,
         }
