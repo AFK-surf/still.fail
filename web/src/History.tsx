@@ -295,15 +295,13 @@ function Group({ steps, thinking }: { steps: Step[]; thinking: TimelineEntry[] }
   const failed = steps.filter((s) => s.result?.ok === false).length;
   const pending = steps.filter((s) => !s.result).length;
   const firstThought = thinking[0]?.text.split("\n").find((l) => l.trim()) ?? "";
-  // Described calls speak for themselves; counting by kind is for the rest.
-  const said = steps.map((s) => describe(s.call)).filter((d): d is string => d !== null);
-  const summary = !steps.length ? `思考：${firstThought.slice(0, 80)}`
-    : said.length === steps.length ? (said.length <= 2 ? said.join("；") : `${said.slice(0, 2).join("；")} 等 ${said.length} 项`)
-    : said.length ? `${said[0]}${steps.length > 1 ? ` 等 ${steps.length} 项操作` : ""}`
-    : `执行了 ${steps.length} 项操作：${parts.join("、")}`;
+  // The group is named by its latest tool call: its description, else what it did and to what. Thinking and model requests do not count.
+  const last = steps.at(-1);
+  const lastText = last ? describe(last.call) ?? `${CATEGORY[categorize(last.call.tool ?? "")].verb === "其他" ? toolName(last.call.tool) : CATEGORY[categorize(last.call.tool ?? "")].verb} ${hint(last.call)}`.trim() : "";
+  const summary = !steps.length ? `思考：${firstThought.slice(0, 80)}` : steps.length === 1 ? lastText : `${lastText} · 共 ${steps.length} 项`;
   return (
     <div className="h-group" data-failed={failed > 0}>
-      <button type="button" className="h-group-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" className="h-group-head" aria-expanded={open} onClick={() => setOpen(!open)} title={parts.join("、") || undefined}>
         {open ? <ChevronDown {...ICON} size={14} /> : <ChevronRight {...ICON} size={14} />}
         <span>{summary}</span>
         {failed > 0 && <Pill tone="red">{failed} 项失败</Pill>}
