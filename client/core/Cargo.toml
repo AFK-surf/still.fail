@@ -13,6 +13,7 @@ base64 = "0.22"
 sha2 = "0.10"
 hex = "0.4"
 thiserror = "2"
+ember-shapes = { path = "../shapes" }
 # iroh's QUIC: its congestion settings (see mesh.rs, transport).
 noq-proto = { version = "1", default-features = false }
 

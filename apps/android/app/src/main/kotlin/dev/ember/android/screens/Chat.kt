@@ -134,19 +134,19 @@ import dev.chrisbanes.haze.hazeSource
 import dev.ember.android.AppState
 import dev.ember.android.LocalApp
 import dev.ember.android.Screen
-import dev.ember.android.data.ActivityRowView
+import dev.ember.android.data.ActivityRow
 import dev.ember.android.data.Attachment
-import dev.ember.android.data.ChatAgentView
+import dev.ember.android.data.ChatAgent
 import dev.ember.android.data.ChatOf
 import dev.ember.android.data.ChatState
 import dev.ember.android.data.ChatView
 import dev.ember.android.data.Maker
 import dev.ember.android.data.ChatsView
-import dev.ember.android.data.LiveView
-import dev.ember.android.data.MessageView
-import dev.ember.android.data.OutboxItem
+import dev.ember.android.data.Live
+import dev.ember.android.data.ChatMessage
+import dev.ember.android.data.Outgoing
 import dev.ember.android.data.Quote
-import dev.ember.android.data.ThreadView
+import dev.ember.android.data.ChatThread
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceView
 import dev.ember.android.data.rememberTopic
@@ -193,7 +193,7 @@ fun rememberStationName(station: String): String {
 }
 
 /** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
-class ChatAgent(val view: ChatAgentView, val live: LiveView?) {
+class AgentHere(val view: ChatAgent, val live: Live?) {
     val key get() = view.session.key
     val runtime get() = view.session.runtime
     val maker get() = view.session.maker
@@ -219,7 +219,7 @@ fun ChatScreen(station: String, of: ChatOf) {
         return
     }
     val agents = view.agents.map { a ->
-        key(a.session.key) { ChatAgent(a, rememberTopic<LiveView>(app.core, Topics.live(station, a.session.key)).value.value) }
+        key(a.session.key) { AgentHere(a, rememberTopic<Live>(app.core, Topics.live(station, a.session.key)).value.value) }
     }
     val draft = remember { Draft() }
     // The messages run under the bar and the composer, which are frosted glass over them.
@@ -237,7 +237,7 @@ fun ChatScreen(station: String, of: ChatOf) {
 
 /** The chat's bar: its title from the left, then its people, then its agents' marks (each opens its history); "…" is the chat's own page. */
 @Composable
-private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, modifier: Modifier = Modifier) {
+private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<AgentHere>, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val thread = view.thread
     BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }, modifier = modifier) {
@@ -289,27 +289,27 @@ private sealed interface Entry {
     data object Older : Entry { override val id = "older" }
     data object Empty : Entry { override val id = "empty" }
     data object Line : Entry { override val id = "line" }
-    data class Said(val m: MessageView) : Entry { override val id get() = "m:${m.ts}" }
-    data class Out(val o: OutboxItem) : Entry { override val id get() = "o:${o.id}" }
+    data class Said(val m: ChatMessage) : Entry { override val id get() = "m:${m.ts}" }
+    data class Out(val o: Outgoing) : Entry { override val id get() = "o:${o.id}" }
     data class Working(val agent: AgentAtWork) : Entry { override val id get() = "act:${agent.key}" }
     /** The room an activity that folded away leaves behind (as the web's floor): what is above it does not drop. */
     data class Floor(val px: Int) : Entry { override val id get() = "floor" }
 }
 
 /** An agent at work: who it is, its transcript and steps in flight, and since when its turn runs. */
-class AgentAtWork(val key: String, val who: String, val runtime: String, val maker: Maker?, val live: LiveView?, val since: Long?)
+class AgentAtWork(val key: String, val who: String, val runtime: String, val maker: Maker?, val live: Live?, val since: Long?)
 
 /** What the messages need to know about the chat: who is who, and whose workspace keeps a file. */
-private class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<ChatAgent>) {
+private class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<AgentHere>) {
     fun agent(key: String) = agents.firstOrNull { it.key == key }
-    fun mine(m: MessageView) = m.mine
+    fun mine(m: ChatMessage) = m.mine
     /** Files are kept in a session's workspace: the agent whose workspace holds it, else the first. */
     fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key
 }
 
 /** `top` and `bottom`: the bars over it, which the list keeps its ends clear of. */
 @Composable
-private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, haze: HazeState, modifier: Modifier, top: Dp = 0.dp, bottom: Dp = 0.dp) {
+private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<AgentHere>, draft: Draft, haze: HazeState, modifier: Modifier, top: Dp = 0.dp, bottom: Dp = 0.dp) {
     val app = LocalApp.current
     val ctx = Here(station, of, view, agents)
     val thread = view.thread
@@ -321,7 +321,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     // from what the device kept or from the station a moment later.
     val open = remember { (thread?.read ?: 0L) to System.currentTimeMillis() }
     val (readAt, openedAt) = open
-    val unread = { m: MessageView -> m.seq > readAt && m.createdAt <= openedAt && !ctx.mine(m) }
+    val unread = { m: ChatMessage -> m.seq > readAt && m.createdAt <= openedAt && !ctx.mine(m) }
     val first = view.messages.firstOrNull()?.seq
     // Those not loaded yet may hold it: the pages before are loaded first.
     val above = view.more && first != null && first > readAt + 1 && messages.any(unread)
@@ -568,7 +568,7 @@ private fun holdMenu(text: String, who: String, ts: String?, role: String, draft
 private fun plain(text: String) = text.replace(Regex("[`*#>]"), "").replace(Regex("\\s+"), " ").trim()
 
 @Composable
-private fun Said(ctx: Here, m: MessageView, draft: Draft, list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>, waitingNow: Boolean) {
+private fun Said(ctx: Here, m: ChatMessage, draft: Draft, list: androidx.compose.foundation.lazy.LazyListState, rows: List<Entry>, waitingNow: Boolean) {
     val jump = rememberJump(list, rows)
     // What ember itself says: a notice across the chat, apart from people's and agents' messages.
     if (m.system) {
@@ -592,7 +592,7 @@ private fun Said(ctx: Here, m: MessageView, draft: Draft, list: androidx.compose
             Files(ctx, m.attachments)
             if (waitingNow) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 Spinner(10.dp); Text("等待 agent 接收", fontSize = 11.sp, color = C.subtle)
-            } else Text(m.time["createdAt"]?.ago ?: "", fontSize = 11.sp, color = C.subtle)
+            } else Text(m.time?.get("createdAt")?.ago ?: "", fontSize = 11.sp, color = C.subtle)
         }
         return
     }
@@ -600,14 +600,14 @@ private fun Said(ctx: Here, m: MessageView, draft: Draft, list: androidx.compose
     val who = m.by.name
     val (hold, press) = holdMenu(m.text, who, m.ts, if (m.authorKind == "agent") "agent" else "person", draft)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (agent != null) AgentHead(agent.key, who, agent.maker, agent.runtime, m.time["createdAt"]?.ago ?: "", ctx)
+        if (agent != null) AgentHead(agent.key, who, agent.maker, agent.runtime, m.time?.get("createdAt")?.ago ?: "", ctx)
         else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             when (m.authorKind) {
                 "agent", "ember" -> Mark(18.dp)
                 else -> Avatar(m.author, who, 18.dp, picture = m.by.picture)
             }
             Text(who, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-            Text(m.time["createdAt"]?.ago ?: "", fontSize = 11.sp, color = C.subtle)
+            Text(m.time?.get("createdAt")?.ago ?: "", fontSize = 11.sp, color = C.subtle)
         }
         m.quotes.forEach { QuoteCard(it, jump) }
         Box(hold.clip(RoundedCornerShape(12.dp)).background(press)) {
@@ -631,7 +631,7 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
 
 /** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
 @Composable
-private fun Out(ctx: Here, o: OutboxItem) {
+private fun Out(ctx: Here, o: Outgoing) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val thread = ctx.view.thread
@@ -914,7 +914,7 @@ fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: Corout
     if (picked.bytes.size > MAX_FILE) { p.error = "超过 50 MB"; return }
     scope.launch {
         try {
-            p.done = api(station).upload(picked.name, picked.bytes, picked.width, picked.height)
+            p.done = api(station).upload(picked.name, picked.bytes, picked.width?.toLong(), picked.height?.toLong())
         } catch (e: CoreException) {
             p.error = e.message
         }
@@ -1041,7 +1041,7 @@ fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: (
  * the agent, and the page moves to it.
  */
 @Composable
-private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<ChatAgent>, draft: Draft, haze: HazeState, modifier: Modifier = Modifier) {
+private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<AgentHere>, draft: Draft, haze: HazeState, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val api = app.api(station)
@@ -1095,7 +1095,7 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<C
 // ── the chat's own page ────────────────────────────────────────────────
 
 /** The chat itself: where it came from, who started it and takes part, its agents (each leads to its history). */
-fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ThreadView) {
+fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread) {
     app.sheet = SheetSpec(0.72f, draggable = true) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
         val view = chat.value
@@ -1106,8 +1106,8 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ThreadView)
                 Detail("来自", view?.place?.let { "Slack · $it" } ?: "ember 对话")
                 Detail("发起", (view?.thread ?: thread).creator?.shown?.display ?: "未记录")
                 Detail("参与", "${view?.people?.size ?: 0} 人") { view?.people?.let { if (it.isNotEmpty()) PeopleStack(it.take(8), 16.dp, C.surface2) } }
-                Detail("创建", (view?.thread ?: thread).time["createdAt"]?.ago ?: "")
-                (view?.thread ?: thread).lastMessage?.let { Detail("最近消息", it.time["createdAt"]?.ago ?: "") }
+                Detail("创建", (view?.thread ?: thread).time?.get("createdAt")?.ago ?: "")
+                (view?.thread ?: thread).lastMessage?.let { Detail("最近消息", it.time?.get("createdAt")?.ago ?: "") }
             }
             if (view != null && view.agents.isNotEmpty()) {
                 GroupLabel("参与的 agent · 点开看它的执行历史")
@@ -1122,7 +1122,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ThreadView)
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     if (a.connect != null) SlackMark(11.dp)
                                     Text(
-                                        listOfNotNull(a.connect?.name, s.processText, s.time["lastActiveAt"]?.ago).joinToString(" · "),
+                                        listOfNotNull(a.connect?.name, s.processText, s.time?.get("lastActiveAt")?.ago).joinToString(" · "),
                                         fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
                                 }

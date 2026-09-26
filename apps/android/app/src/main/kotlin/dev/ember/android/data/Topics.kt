@@ -24,7 +24,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.serializer
 
-val EmberJson = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputValues = true }
+// What the core sends has its shape (Shapes.kt, generated from client/shapes): a value that does not fit is an error,
+// never a default put in its place. ember cloud's topics are not shaped yet: what they add is passed over.
+val EmberJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
 /** A topic's value as a screen sees it: the value (kept through a later error), why it failed, whether it is still coming. */
 data class Topic<T>(val value: T?, val error: CoreException?, val loading: Boolean)

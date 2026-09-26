@@ -2,7 +2,7 @@ import { profilesPage, useStation, useLink } from "../station.tsx";
 import { ChevronRight, ExternalLink, LogIn, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type OverviewShown, type ProfileInput, type ProfileShown, type ProfileView, type RuntimeKind } from "../api.ts";
+import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
 import { ACCESS, ACCESS_KINDS, KEYED } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
@@ -137,7 +137,7 @@ export function AccountPage() {
   return <AccountView key={profile.id} profile={profile} overview={overview.value} />;
 }
 
-function AccountView({ profile, overview }: { profile: ProfileShown; overview: OverviewShown }) {
+function AccountView({ profile, overview }: { profile: Profile; overview: Overview }) {
   const api = useApi();
   const station = useStation();
   const link = useLink();
@@ -215,7 +215,7 @@ function AccountView({ profile, overview }: { profile: ProfileShown; overview: O
  * The account itself: its key (shown masked, replaced here — its provider stays, since a profile is that account), or
  * for a subscription, signing in again (as another account, or after it expired).
  */
-function AccountSection({ profile, signedIn, onSave, busy }: { profile: ProfileView; signedIn: boolean; onSave(input: ProfileInput, done: () => void): void; busy: boolean }) {
+function AccountSection({ profile, signedIn, onSave, busy }: { profile: Profile; signedIn: boolean; onSave(input: ProfileInput, done: () => void): void; busy: boolean }) {
   const [replacing, setReplacing] = useState(false);
   const [key, setKey] = useState("");
   const keyed = KEYED.has(profile.access.kind);
@@ -251,7 +251,7 @@ interface EnvRow { row: number; key: string; value: string; masked: string | nul
 let nextRow = 1;
 
 /** The variables a custom profile runs with: what reaches its runtime's model service, set by hand. */
-function EnvSection({ profile, onSave, busy }: { profile: ProfileView; onSave(input: ProfileInput): void; busy: boolean }) {
+function EnvSection({ profile, onSave, busy }: { profile: Profile; onSave(input: ProfileInput): void; busy: boolean }) {
   const [rows, setRows] = useState<EnvRow[]>(() => profile.env.map((e) => ({ row: nextRow++, key: e.key, value: e.secret ? "" : e.value, masked: e.secret ? e.value : null, original: e.key })));
   const patch = (): Record<string, string | null> => {
     const out: Record<string, string | null> = {};
@@ -296,7 +296,7 @@ function EnvSection({ profile, onSave, busy }: { profile: ProfileView; onSave(in
  * Signing a subscription account in without a terminal: ember runs the
  * runtime's login on its own machine and this panel relays the browser steps.
  */
-function SignIn({ profile, needed }: { profile: ProfileView; needed: boolean }) {
+function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   const api = useApi();
   const toast = useToast();
   const [code, setCode] = useState("");
@@ -396,7 +396,7 @@ function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: 
   );
 }
 
-function QuotaSection({ profile }: { profile: ProfileShown }) {
+function QuotaSection({ profile }: { profile: Profile }) {
   const api = useApi();
   // A refresh comes back with the overview.
   const refresh = useAction(() => api.refreshQuota(profile.id));
@@ -414,7 +414,7 @@ function QuotaSection({ profile }: { profile: ProfileShown }) {
  * and connects offer only enabled models, and the account pool sends a chat
  * only to a profile that has its model enabled.
  */
-function ModelPool({ profile, found, onSave }: { profile: ProfileShown; found: string[] | null; onSave(models: string[]): void }) {
+function ModelPool({ profile, found, onSave }: { profile: Profile; found: string[] | null; onSave(models: string[]): void }) {
   const [enabled, setEnabled] = useState(() => new Set(profile.models));
   const [filter, setFilter] = useState("");
   useEffect(() => setEnabled(new Set(profile.models)), [profile.models.join("\n")]);

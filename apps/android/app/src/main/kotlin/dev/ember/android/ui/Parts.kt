@@ -78,7 +78,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import dev.ember.android.R
 import dev.ember.android.data.ChatState
-import dev.ember.android.data.Creator
+import dev.ember.android.data.Person
 import dev.ember.android.data.Maker
 
 // ── model marks ────────────────────────────────────────────────────────
@@ -94,7 +94,7 @@ private val MONO = setOf("anthropic", "openai", "kimi", "xai")
 
 /** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's. */
 @Composable
-fun MakerIcon(maker: Maker?, runtime: String, size: Dp, modifier: Modifier = Modifier) {
+fun MakerIcon(maker: Maker?, runtime: String?, size: Dp, modifier: Modifier = Modifier) {
     val id = maker?.id?.takeIf { it in MAKER_MARKS } ?: if (runtime == "codex") "openai" else "anthropic"
     Image(painterResource(MAKER_MARKS.getValue(id)), maker?.name, modifier.size(size), colorFilter = if (id in MONO) ColorFilter.tint(C.ink) else null)
 }
@@ -175,11 +175,11 @@ private fun rememberPicture(url: String?): androidx.compose.ui.graphics.ImageBit
 
 /** People overlapping a little, each ringed in the page's color. */
 @Composable
-fun PeopleStack(people: List<Creator>, size: Dp = 18.dp, ring: Color = C.bg) {
+fun PeopleStack(people: List<Person>, size: Dp = 18.dp, ring: Color = C.bg) {
     Row {
         people.forEachIndexed { i, p ->
             Box(Modifier.offset(x = (-5 * i).dp).zIndex(-i.toFloat()).size(size + 3.dp).clip(CircleShape).background(ring), contentAlignment = Alignment.Center) {
-                Avatar(p.id, p.shown?.display ?: p.name, size, picture = p.shown?.picture)
+                Avatar(p.id, p.shown.display, size, picture = p.shown.picture)
             }
         }
     }
@@ -189,7 +189,7 @@ fun PeopleStack(people: List<Creator>, size: Dp = 18.dp, ring: Color = C.bg) {
 
 /** A percentage as a ring, coloured by the core's level. */
 @Composable
-fun Ring(percent: Int, label: String, level: String, size: Dp = 46.dp) {
+fun Ring(percent: Long, label: String, level: String, size: Dp = 46.dp) {
     val c = C
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(Modifier.size(size), contentAlignment = Alignment.Center) {
@@ -198,7 +198,7 @@ fun Ring(percent: Int, label: String, level: String, size: Dp = 46.dp) {
                 val inset = w / 2 + 1.dp.toPx()
                 val box = Size(this.size.width - inset * 2, this.size.height - inset * 2)
                 drawArc(c.line, 0f, 360f, false, Offset(inset, inset), box, style = Stroke(w))
-                val p = percent.coerceIn(0, 100)
+                val p = percent.coerceIn(0L, 100L)
                 if (p > 0) drawArc(levelColor(c, level), -90f, 360f * p / 100, false, Offset(inset, inset), box, style = Stroke(w, cap = StrokeCap.Round))
             }
             Text("$percent", fontSize = if (size < 44.dp) 12.sp else 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
@@ -215,7 +215,7 @@ private fun levelColor(c: EmberColors, level: String): Color = when (level) { "r
  * the core's level. The number is what is left, and a full one shows none.
  */
 @Composable
-fun QuotaRing(left: Int, level: String, size: Dp = 20.dp) {
+fun QuotaRing(left: Long, level: String, size: Dp = 20.dp) {
     val c = C
     val used = 100 - left
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
@@ -232,7 +232,7 @@ fun QuotaRing(left: Int, level: String, size: Dp = 20.dp) {
 
 /** A profile's allowance in a line: every window (shortest first, as the core puts them), a ring with its mark beside it. */
 @Composable
-fun QuotaRings(quota: dev.ember.android.data.ProfileQuota?) {
+fun QuotaRings(quota: dev.ember.android.data.Quota?) {
     val windows = quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     if (windows.isEmpty()) return
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -9,7 +9,7 @@ import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
-import { useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgentView, type ChatView, type SessionShown, type Status, type ThreadShown } from "../api.ts";
+import { useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { ChatPanel } from "../Chat.tsx";
@@ -39,7 +39,7 @@ function useChatOpened(chat: ChatView | undefined): void {
   useEffect(() => {
     if (!chat || reported.current) return;
     reported.current = true;
-    const surface = chat.thread === null || chat.thread.surface === "ember" ? "ember" : "slack";
+    const surface = !chat.thread || chat.thread.surface === "ember" ? "ember" : "slack";
     // The frame after the commit: when the messages are on screen.
     requestAnimationFrame(() => track("chat_opened", { surface, open: opening.cold ? "cold" : "warm", ms: Math.round(performance.now() - opening.at) }));
   }, [chat, opening]);
@@ -255,7 +255,7 @@ function slackConnect(chat: ChatView) {
 }
 
 /** The chat itself: where it came from, who started it and takes part, its agents. Opens from the title bar. */
-function ChatInfo({ chat, thread }: { chat: ChatView; thread: ThreadShown }) {
+function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
   const link = useLink();
   const connect = slackConnect(chat);
   const row = (label: string, value: ReactNode) => <div className="detail-row"><dt>{label}</dt><dd>{value}</dd></div>;
@@ -290,7 +290,7 @@ function ChatInfo({ chat, thread }: { chat: ChatView; thread: ThreadShown }) {
 }
 
 /** An agent of the chat in its info: what it runs, where it came from, and how it stands. */
-function AgentLine({ agent }: { agent: ChatAgentView }) {
+function AgentLine({ agent }: { agent: ChatAgent }) {
   const { session, connect } = agent;
   return (
     <li>
@@ -306,14 +306,14 @@ function AgentLine({ agent }: { agent: ChatAgentView }) {
  * The history's line under its head: only what is worth a look now, as the core says (a quota running out, the disk
  * filling up, an account that cannot run); nothing when all is well.
  */
-function HistorySummary({ agent }: { agent: ChatAgentView }) {
+function HistorySummary({ agent }: { agent: ChatAgent }) {
   if (agent.attention.length === 0) return null;
   return (
     <span className="history-summary">
       {agent.attention.map((a, i) => (
-        a.kind === "quota" ? (
-          <Tip key={i} label={<>{a.tip[0]}{a.tip[1] && <><br />{a.tip[1]}</>}</>}>
-            <span className="attention attention-quota"><QuotaRing left={a.left} level={a.level} size={20} /><span className="quota-ring-letter">{a.mark}</span></span>
+        a.quota ? (
+          <Tip key={i} label={<>{a.text}{a.more && <><br />{a.more}</>}</>}>
+            <span className="attention attention-quota"><QuotaRing left={a.quota.left} level={a.quota.level} size={20} /><span className="quota-ring-letter">{a.quota.mark}</span></span>
           </Tip>
         ) : (
           <span key={i} className="attention" data-tone={a.kind === "disk" ? "amber" : "red"}>{a.text}</span>
@@ -328,7 +328,7 @@ function HistorySummary({ agent }: { agent: ChatAgentView }) {
  * which can be changed here, or left to the station; then the model and effort; then what it has used; the station
  * last, folded. Changes take from its next turn on.
  */
-function SessionDetails({ agent }: { agent: ChatAgentView }) {
+function SessionDetails({ agent }: { agent: ChatAgent }) {
   const { session } = agent;
   const station = useStation();
   const link = useLink();
@@ -341,12 +341,8 @@ function SessionDetails({ agent }: { agent: ChatAgentView }) {
     <div className="session-details">
       {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota). */}
       <ModelTriple title="换模型、思考深度和账号" runtimeFixed
-        options={agent.choices.map((c) => ({ model: c.model, maker: c.maker, runtimes: [session.runtime], efforts: { [session.runtime]: session.efforts }, accounts: { [session.runtime]: c.profiles }, spent: null }))}
-        current={(() => {
-          const on = agent.profiles.find((p) => p.current);
-          return { id: session.profile, name: on?.name ?? agent.profile?.name ?? session.profile, kind: on?.kind ?? agent.profile?.access.kind ?? null, quota: on?.quota ?? agent.profile?.quota ?? null };
-        })()}
-        value={{ model: session.model ?? "", runtime: session.runtime, effort: session.effort, profile: session.profilePinned ? session.profile : null }}
+        options={agent.choices} current={agent.account}
+        value={{ model: session.model ?? "", runtime: session.runtime, effort: session.effort ?? null, profile: session.profilePinned ? session.profile ?? null : null }}
         onPick={({ model, effort, profile }) => void change.run({ model, effort, profile })} />
       {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
       {/* What it used: a line, quiet. */}
@@ -369,7 +365,7 @@ function SessionDetails({ agent }: { agent: ChatAgentView }) {
 }
 
 /** What can be done to it right now: stop a turn, release an idle process. */
-function SessionActions({ session, status }: { session: SessionShown; status: Status }) {
+function SessionActions({ session, status }: { session: Session; status: Status }) {
   const api = useApi();
   const toast = useToast();
   const stop = useAction(() => api.stop(session.key), () => toast("已请求停止"));

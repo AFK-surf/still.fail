@@ -82,6 +82,8 @@ struct Inner {
     clock: bool,
     /// The clock is wanted (a UI's core; tests leave it off, their time is their own).
     clock_on: bool,
+    /// Values go out through their shapes (client/shapes); the store's own tests send whatever they like.
+    shaped: bool,
 }
 
 #[derive(Default)]
@@ -166,6 +168,11 @@ impl Store {
 
     /// Wakes a second past each minute, while any topic is live, to send again what shows times in words ("3 分钟前",
     /// a day's heading); stops when none is.
+    /// Sends every value through its shape (present::conform).
+    pub fn set_shaped(&self) {
+        self.inner.borrow_mut().shaped = true;
+    }
+
     /// Starts the minute clock (see `tick`).
     pub fn set_clock(&self) {
         self.inner.borrow_mut().clock_on = true;
@@ -386,6 +393,7 @@ impl Store {
         let computed = if stale { self.held(topic).map(Ok).or_else(|| source.and_then(|s| s.compute(topic))) } else { None };
         let (subscribers, out, watchers) = {
             let mut inner = self.inner.borrow_mut();
+            let shaped = inner.shaped;
             let Some(entry) = inner.topics.get_mut(topic) else { return };
             let mut changed = Vec::new();
             if let Some(value) = computed
@@ -397,9 +405,13 @@ impl Store {
             let Some(value) = entry.value.clone() else { return };
             // With what the clients show of it put in (present.rs).
             let clock = crate::present::Clock { now: self.host.now_ms(), offset_min: self.host.utc_offset_min(self.host.now_ms()) };
-            let value = value.map(|mut v| {
+            let value = value.and_then(|mut v| {
                 crate::present::decorate(topic, &mut v, clock);
-                v
+                if !shaped {
+                    return Ok(v);
+                }
+                // A value its shape does not allow is the core's bug: it goes out as an error saying where.
+                crate::present::conform(topic, v).map_err(|at| CoreError::new("shape", format!("{topic:?} 不合约定：{at}")))
             });
             let out = match (&entry.sent, &value) {
                 (Some(Ok(old)), Ok(new)) => {

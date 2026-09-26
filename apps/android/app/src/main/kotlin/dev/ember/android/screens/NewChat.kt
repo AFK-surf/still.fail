@@ -50,7 +50,7 @@ import dev.ember.android.R
 import dev.ember.android.Screen
 import dev.ember.android.data.ChatOf
 import dev.ember.android.data.RUNTIME_LABEL
-import dev.ember.android.data.ModelRuntimes
+import dev.ember.android.data.ModelOption
 import dev.ember.android.data.StationView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.rememberTopic
@@ -242,7 +242,7 @@ private fun pickStation(app: AppState, stations: List<StationView>, current: Str
     }
 }
 
-private fun pickModel(app: AppState, view: StationView, current: String, onPick: (ModelRuntimes) -> Unit) {
+private fun pickModel(app: AppState, view: StationView, current: String, onPick: (ModelOption) -> Unit) {
     app.sheet = SheetSpec(0.5f) {
         SheetGrab()
         SheetHead("用哪个模型")

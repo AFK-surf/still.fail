@@ -3,7 +3,7 @@ import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation } from "react-router";
-import { MeContext, useChats, type ChatItem } from "./api.ts";
+import { useChats, type ChatItem } from "./api.ts";
 import { Avatar, ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
@@ -54,7 +54,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
   const all = useChats(scope, false);
   const mine = useChats(scope, true);
   return (
-    <MeContext.Provider value={all.value?.me ?? mine.value?.me ?? null}>
+    <>
       <div className="nav-new">
         <NavLink className="nav-row" to={newChat}><SquarePen {...ICON} />新建对话</NavLink>
         <MineFilter label="会话" mine="我参与的" compact />
@@ -65,7 +65,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
           <ChatPane chats={mine} scope={scope} onlyMine newChat={newChat} settings={settings} hidden={!onlyMine} />
         </div>
       </div>
-    </MeContext.Provider>
+    </>
   );
 }
 

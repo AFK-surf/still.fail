@@ -4,7 +4,7 @@ import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
 import { CheckCircle2, ExternalLink, KeyRound, Plus, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type ConnectMode, type ConnectShown, type ModelChoice, type OverviewShown, type RuntimeKind, type MadeSlackApp } from "../api.ts";
+import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type SlackInstall, type ConnectMode, type Connect, type ModelOption, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
 import { MODE } from "../format.ts";
 import { AppFields, ConfigTokenForm, NEW_APP, SlackAppSection } from "./SlackApp.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
@@ -42,11 +42,11 @@ function useStationView() {
 }
 
 /** The models the station can run, each with the runtimes it runs on (the core's). */
-function useStationModels(): ModelChoice[] {
+function useStationModels(): ModelOption[] {
   return useStationView()?.models ?? [];
 }
 
-function ConnectDetail({ item, overview }: { item: ConnectItem; overview: OverviewShown }) {
+function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overview }) {
   const connect = item.connect;
   const api = useApi();
   const station = useStation();
@@ -106,7 +106,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
 }
 
 /** The Slack link, when it needs something: tokens to connect with, or an error. Up and running, the header says so. */
-function SlackSection({ connect }: { connect: ConnectShown }) {
+function SlackSection({ connect }: { connect: Connect }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
@@ -132,7 +132,7 @@ function SlackSection({ connect }: { connect: ConnectShown }) {
 }
 
 /** Replaces the connect's Slack tokens (either one; the other kept), verified before they are saved. */
-function TokenDialog({ connect, onClose }: { connect: ConnectShown; onClose(): void }) {
+function TokenDialog({ connect, onClose }: { connect: Connect; onClose(): void }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
@@ -186,7 +186,7 @@ function RunSection({ item }: { item: ConnectItem }) {
           {models.length === 0
             ? <Link className="inline-link" to={profilesPage(station)}>{connect.runtimeText} 的 Profile 还没有启用模型 · 去勾选</Link>
             : <ModelTriple title="换模型、思考深度和账号" runtimeFixed options={models}
-                value={{ model: connect.bind.model ?? "", runtime: connect.bind.runtime, effort: connect.bind.effort, profile: connect.bind.profile }}
+                value={{ model: connect.bind.model ?? "", runtime: connect.bind.runtime, effort: connect.bind.effort ?? null, profile: connect.bind.profile ?? null }}
                 onPick={(p) => save.put({ bind: { model: p.model, effort: p.effort ?? "", profile: p.profile } }, () => toast("已保存，新会话会用新的设置"))} />}
         </div>
         <div className="run-card-row">
@@ -218,7 +218,7 @@ function RunSection({ item }: { item: ConnectItem }) {
 }
 
 /** What switching to `next` does to this connect's conversations, in plain words. */
-function consequences(connect: ConnectShown, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
+function consequences(connect: Connect, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
   const out: string[] = [];
   if (connect.mode === "multi-session" && next.mode === "single-session") {
     out.push("之后它收到的消息都进同一个会话；已有的每个 thread 的会话不再收到新消息，包括这些 thread 里的回复。记录会保留。");
@@ -237,7 +237,7 @@ function consequences(connect: ConnectShown, next: { mode: ConnectMode; requireM
   return out;
 }
 
-function ModeDialog({ connect, running, onClose }: { connect: ConnectShown; running: number; onClose(): void }) {
+function ModeDialog({ connect, running, onClose }: { connect: Connect; running: number; onClose(): void }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const [next, setNext] = useState({ mode: connect.mode, requireMention: connect.requireMention });
@@ -332,7 +332,7 @@ function ConnectSessions({ item }: { item: ConnectItem }) {
  */
 type NewStep = "team" | "app" | "install" | "manual" | "bind";
 
-type SlackTeam = OverviewShown["slackTeams"][number];
+type SlackTeam = Overview["slackTeams"][number];
 
 /** A Slack workspace's icon, or Slack's mark before it is known. */
 function SlackTeamIcon({ team }: { team: SlackTeam }) {
@@ -463,7 +463,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
       )}
       {step === "install" && made && (
         <>
-          <MadeAppSteps made={made} installed={overview.value?.slackInstalls.find((i) => i.state === made.state) ?? null} />
+          <MadeAppSteps made={made} installed={overview.value?.slackInstalls.find((i) => i.state === made.state)} />
           {iconError && <p className="field-error" role="alert">图标没传上：{iconError}</p>}
           <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} />
         </>
@@ -497,7 +497,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
  * What is left in Slack once ember made the app: installing it, and the app-level token. Installed through Slack's
  * OAuth (`made.install`), Slack sends the bot token back to the station itself; else it is copied from the OAuth page.
  */
-function MadeAppSteps({ made, installed }: { made: MadeSlackApp; installed: { installed: boolean; team: string | null } | null }) {
+function MadeAppSteps({ made, installed }: { made: MadeSlackApp; installed: SlackInstall | undefined }) {
   const { links } = made;
   return (
     <ol className="steps">
@@ -527,7 +527,7 @@ function MadeAppSteps({ made, installed }: { made: MadeSlackApp; installed: { in
 }
 
 /** Hands a connect to another person: a workspace member in ember cloud, any email on the station's own page. */
-function OwnerDialog({ connect, onClose }: { connect: ConnectShown; onClose(): void }) {
+function OwnerDialog({ connect, onClose }: { connect: Connect; onClose(): void }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const people = [...useContext(PeopleContext).values()];

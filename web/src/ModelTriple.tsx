@@ -4,7 +4,7 @@
 import { ChevronDown } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useLayoutEffect, useRef, useState } from "react";
-import type { ModelChoice, RunnableProfile, RuntimeKind } from "./api.ts";
+import type { ModelOption, RunnableProfile, RuntimeKind } from "./api.ts";
 import { QuotaBars } from "./components.tsx";
 import { RUNTIME_LABEL } from "./format.ts";
 import { ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
@@ -12,23 +12,16 @@ import { ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
 const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
 
-/** A model that can be chosen, as the core gives it: its maker, the runtimes it runs on, for each how hard it can think
- * and who runs it, and whether its accounts' quota is used up. */
-export type ModelOption = ModelChoice;
-
 /** `profile`: the one kept to; null: the station picks. */
 export interface Pick { model: string; runtime: RuntimeKind; effort: string | null; profile: string | null }
 
-/** An account as the control shows it. */
-export type Account = Pick_<RunnableProfile, "id" | "name" | "kind" | "quota">;
-type Pick_<T, K extends keyof T> = { [P in K]: T[P] };
 
 export function ModelTriple({ options, value, onPick, current, runtimeFixed, side = "bottom", title = "换模型" }: {
   options: ModelOption[];
   value: Pick;
   onPick(pick: Pick): void;
   /** A session's: the account it runs on now (the station's pick shows it). */
-  current?: Account;
+  current?: RunnableProfile | undefined;
   runtimeFixed?: boolean;
   side?: "top" | "bottom";
   title?: string;
@@ -38,7 +31,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
   const option = options.find((o) => o.model === draft.model);
   const on: RuntimeKind = runtimeFixed ? value.runtime : option?.runtimes.includes(draft.runtime) ? draft.runtime : option?.runtimes[0] ?? value.runtime;
   const askRuntime = !runtimeFixed && (option?.runtimes.length ?? 0) > 1;
-  const accounts: Account[] = option?.accounts[on] ?? [];
+  const accounts: RunnableProfile[] = option?.accounts[on] ?? [];
   const efforts = option?.efforts[on] ?? [];
   // An account kept to that does not run the model drafted gives way to the station's pick, said so.
   const profile = draft.profile && accounts.some((a) => a.id === draft.profile) ? draft.profile : null;

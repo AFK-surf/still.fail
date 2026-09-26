@@ -6,7 +6,7 @@ import { useStation } from "../station.tsx";
 import { ExternalLink, ImageUp, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTopic } from "../core/react.ts";
-import { useAction, useApi, type ConnectView, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
+import { useAction, useApi, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Field, ICON, Section, SwitchRow } from "../ui.tsx";
 
@@ -27,7 +27,7 @@ const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
  * The connect's Slack app, folded (it is changed now and then): its name, icon and permissions, edited here and written
  * into the app's manifest with the viewer's configuration token; without one, a way to add it, in a dialog.
  */
-export function SlackAppSection({ connect }: { connect: ConnectView }) {
+export function SlackAppSection({ connect }: { connect: Connect }) {
   const station = useStation();
   // Read from Slack through the station; the core reads it again after a write to the connect.
   const app = useTopic<SlackAppView>({ topic: "slackApp", station: station.address, connect: connect.id });
@@ -344,7 +344,7 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
   );
 }
 
-function AppForm({ connect, settings, links, onSaved }: { connect: ConnectView; settings: SlackAppSettings; links: SlackAppLinks; onSaved(): void }) {
+function AppForm({ connect, settings, links, onSaved }: { connect: Connect; settings: SlackAppSettings; links: SlackAppLinks; onSaved(): void }) {
   const api = useApi();
   const toast = useToast();
   const [draft, setDraft] = useState(settings);

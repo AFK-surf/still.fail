@@ -471,7 +471,7 @@ export function RuntimeTags({ runtimes }: { runtimes: ("claude" | "codex")[] }) 
 }
 
 /** An agent as the phone shows it: its model's maker on a tile, and where it stands as a badge. */
-export function AgentMark({ maker, runtime, badge, badgeText, size = 20 }: { maker: Maker | null | undefined; runtime: "claude" | "codex"; badge: Badge | null; badgeText?: string | null; size?: number }) {
+export function AgentMark({ maker, runtime, badge, badgeText, size = 20 }: { maker: Maker | null | undefined; runtime: "claude" | "codex"; badge: Badge | undefined; badgeText?: string | undefined; size?: number }) {
   return (
     <span className="agent-mark" style={{ "--mark": `${size}px` } as CSSProperties} data-badge={badge ?? undefined} role="img" aria-label={badgeText ?? undefined}>
       <ModelLogo maker={maker} runtime={runtime} size={Math.round(size * 0.62)} />

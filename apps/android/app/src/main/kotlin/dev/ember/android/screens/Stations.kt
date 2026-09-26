@@ -46,7 +46,9 @@ import androidx.compose.ui.unit.sp
 import dev.ember.android.LocalApp
 import dev.ember.android.R
 import dev.ember.android.Screen
-import dev.ember.android.data.ProfileView
+import dev.ember.android.data.Profile
+import dev.ember.android.ui.QuotaRings
+import dev.ember.android.data.available
 import dev.ember.android.data.StationView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceEntry
@@ -184,21 +186,17 @@ private fun connectionText(state: String) = when (state) {
     "connected" -> "在线"; "reconnecting" -> "重连中"; "starting" -> "连接中"; "error" -> "连接失败"; "no_tokens" -> "未连接 Slack"; else -> "已停用"
 }
 
-private fun quotaText(p: ProfileView): String {
-    val window = p.quota?.windows?.firstOrNull()
-    return if (window != null) "额度已用 ${window.usedPercent.toInt()}% · ${window.label}窗口" else "额度：${p.quota?.detail ?: "还没查过"}"
-}
 
 /** A profile on its station's page: its allowance and how many of its models are enabled; its page picks them. */
 @Composable
-private fun ProfileRow(station: String, p: ProfileView) {
+private fun ProfileRow(station: String, p: Profile) {
     val app = LocalApp.current
     ListRow(onClick = { app.push(Screen.Profile(station, p.id)) }) {
         Column(Modifier.weight(1f)) {
             Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val models = if (p.available.isEmpty()) "还没有列出模型" else "已启用 ${p.models.count { it in p.available }} / ${p.available.size} 个模型"
-            Text("$models · ${quotaText(p)}", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(p.modelsText, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        QuotaRings(p.quota)
         IconIn(Icons.Chevron, 14.dp, C.subtle)
     }
 }
@@ -233,7 +231,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             item {
                 Text(
                     if (all.isEmpty()) "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。"
-                    else "只有勾选的模型能在新对话和连接里选。已启用 ${p.models.size} / ${all.size}。${quotaText(p)}",
+                    else "只有勾选的模型能在新对话和连接里选。${p.modelsText}。",
                     fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
             }

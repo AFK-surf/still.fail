@@ -713,6 +713,13 @@ impl Views {
         crate::present::connect(&mut connect);
         let mut profile = of("profiles", session.get("profile"));
         crate::present::profile(&mut profile);
+        let runnable = runnable_on(overview.as_ref(), &session, self.host.now_ms());
+        let account = runnable.as_array().and_then(|r| r.iter().find(|p| p.get("current") == Some(&Value::Bool(true))).cloned())
+            .or_else(|| profile.is_object().then(|| json!({
+                "id": profile["id"], "name": profile["name"], "current": true, "kind": profile["access"]["kind"],
+                "runtime": profile["runtime"], "quota": profile.get("quota").cloned().unwrap_or(Value::Null),
+            })))
+            .unwrap_or(Value::Null);
         Some(json!({
             // Where it stands, and its mark: decided here for every client (present.rs).
             "status": crate::present::session_status(&session),
@@ -724,6 +731,8 @@ impl Views {
             "profiles": runnable_on(overview.as_ref(), &session, self.host.now_ms()),
             // What it can be moved to, a model at a time: another model, and then who runs it.
             "choices": choices(overview.as_ref(), &session, self.host.now_ms()),
+            // The account it runs on now, as its model control shows it.
+            "account": account,
             // What is worth a look about it now (a quota running out, the disk filling up): its history's summary.
             "attention": attention(overview.as_ref(), &session, self.host.now_ms()),
             // When its running turn began (null when none runs): its activity counts from there.
@@ -916,10 +925,9 @@ const LOW_LEFT: f64 = 20.0;
 const LOW_DISK: f64 = 10.0;
 const LOW_DISK_BYTES: f64 = 10.0 * 1024.0 * 1024.0 * 1024.0;
 
-/// What is worth a look about a session now, most pressing first; empty when nothing is:
-/// `{ kind: "account", state, name, detail }` (its account cannot run: signed out, key refused),
-/// `{ kind: "quota", label, left, until }` (a window of its account running out),
-/// `{ kind: "disk", freeBytes, totalBytes }` (the station's disk filling up).
+/// What is worth a look about a session now, most pressing first; empty when nothing is: its account cannot run
+/// (signed out, key refused), a window of its account running out (with its ring), the station's disk filling up.
+/// Each says so in `text` (shapes: Attention).
 fn attention(overview: Option<&Value>, session: &Value, now: f64) -> Value {
     let mut out = Vec::new();
     let profile = find(overview.and_then(|o| o.get("profiles")), session.get("profile"));
@@ -928,19 +936,19 @@ fn attention(overview: Option<&Value>, session: &Value, now: f64) -> Value {
         if let Some(state @ ("login" | "failed")) = check.and_then(|c| c.get("state")).and_then(Value::as_str) {
             let name = p.get("name").and_then(Value::as_str).unwrap_or("");
             let text = if state == "login" { format!("「{name}」要重新登录") } else { format!("「{name}」的 key 被拒绝") };
-            out.push(json!({ "kind": "account", "state": state, "name": name, "detail": check.and_then(|c| c.get("detail")), "text": text }));
+            out.push(json!({ "kind": "account", "text": text }));
         }
         if p.get("quota").and_then(|q| q.get("state")).and_then(Value::as_str) == Some("ok") {
             for w in p.get("quota").and_then(|q| q.get("windows")).and_then(Value::as_array).into_iter().flatten() {
                 let left = 100.0 - w.get("usedPercent").and_then(Value::as_f64).unwrap_or(0.0);
                 if left <= LOW_LEFT {
                     let label = w.get("label").and_then(Value::as_str).unwrap_or("");
-                    let left = left.max(0.0).round();
-                    let refills = w.get("resetsAt").and_then(Value::as_f64).map(|at| crate::format::refills_in(at, now));
+                    let left = left.max(0.0).round() as i64;
+                    let until = w.get("resetsAt").and_then(Value::as_i64);
                     out.push(json!({
-                        "kind": "quota", "label": label, "left": left, "until": w.get("resetsAt"),
-                        "mark": crate::format::window_mark(label).0, "tip": [format!("{label}剩余 {left}%"), refills],
-                        "level": if left <= 10.0 { "red" } else { "amber" },
+                        "kind": "quota", "text": format!("{label}剩余 {left}%"),
+                        "more": until.map(|at| crate::format::refills_in(at as f64, now)),
+                        "quota": { "left": left, "mark": crate::format::window_mark(label).0, "level": if left <= 10 { "red" } else { "amber" }, "until": until },
                     }));
                 }
             }
@@ -949,7 +957,7 @@ fn attention(overview: Option<&Value>, session: &Value, now: f64) -> Value {
     if let Some(disk) = overview.and_then(|o| o.get("disk")).filter(|d| d.is_object()) {
         let (free, total) = (disk.get("freeBytes").and_then(Value::as_f64).unwrap_or(0.0), disk.get("totalBytes").and_then(Value::as_f64).unwrap_or(0.0));
         if total > 0.0 && (free / total * 100.0 <= LOW_DISK || free <= LOW_DISK_BYTES) {
-            out.push(json!({ "kind": "disk", "freeBytes": free, "totalBytes": total, "text": format!("磁盘剩 {}", crate::format::gb(free)) }));
+            out.push(json!({ "kind": "disk", "text": format!("磁盘剩 {}", crate::format::gb(free)) }));
         }
     }
     Value::Array(out)
@@ -964,8 +972,8 @@ fn runnable_on(overview: Option<&Value>, session: &Value, now: f64) -> Value {
     profiles_running(overview, runtime, model, current, now)
 }
 
-/// The models a session can move to (those a profile of its runtime has enabled), each with the profiles that run it:
-/// `[{ model, profiles }]`, `profiles` as `runnable_on` has them.
+/// The models a session can move to (those a profile of its runtime has enabled), as a model control offers them
+/// (shapes: ModelOption): its runtime alone, how hard it can think there, and who runs it (as `runnable_on` has them).
 fn choices(overview: Option<&Value>, session: &Value, now: f64) -> Value {
     let runtime = session.get("runtime").and_then(Value::as_str).unwrap_or("");
     let current = session.get("profile").and_then(Value::as_str);
@@ -975,8 +983,9 @@ fn choices(overview: Option<&Value>, session: &Value, now: f64) -> Value {
         .collect();
     Value::Array(models.into_iter()
         .map(|model| json!({
-            "model": model, "maker": crate::present::maker(Some(model)),
-            "profiles": profiles_running(overview, runtime, Some(model), current, now),
+            "model": model, "maker": crate::present::maker(Some(model)), "runtimes": [runtime],
+            "efforts": { runtime: crate::format::efforts(runtime) },
+            "accounts": { runtime: profiles_running(overview, runtime, Some(model), current, now) },
         }))
         .collect())
 }
@@ -1108,6 +1117,7 @@ mod tests {
         let host = FakeHost::new();
         host.speed_up(SPEEDUP);
         let store = Store::new(host.clone());
+        store.set_shaped();
         let router = Rc::new(Router::default());
         let email_of: EmailOf = Rc::new(|ws: &str| (ws == "ws").then(|| "Me@x.com".to_string()));
         *router.views.borrow_mut() = Some(Views::new(host.clone(), store.clone(), email_of));
@@ -1135,6 +1145,8 @@ mod tests {
                 match message {
                     CoreMessage::Value { id: i, value } if i == id => (ui.value, ui.error) = (Some(value), None),
                     CoreMessage::Delta { id: i, delta } if i == id => delta::apply(ui.value.as_mut().expect("a delta needs a value"), &delta),
+                    // What goes out breaking its shape is a bug here, whatever the test looks at.
+                    CoreMessage::Error { error, .. } if error.code == "shape" => panic!("{}", error.message),
                     CoreMessage::Error { id: i, error } if i == id => ui.error = Some(error),
                     _ => continue,
                 }
@@ -1190,8 +1202,8 @@ mod tests {
     /// `a` and `b` online as asked, `c` never seen.
     fn stations(now_s: f64, a_online: bool, b_online: bool) -> Value {
         json!({"id": "ws", "stations": [
-            {"id": "a", "name": "alpha", "online": a_online, "last_seen": now_s - 10.0, "version": "0.4.0"},
-            {"id": "b", "name": "beta", "online": b_online, "last_seen": now_s - 1000.0, "version": null},
+            {"id": "a", "name": "alpha", "online": a_online, "last_seen": now_s as i64 - 10, "version": "0.4.0"},
+            {"id": "b", "name": "beta", "online": b_online, "last_seen": now_s as i64 - 1000, "version": null},
             {"id": "c", "name": "gamma", "online": false, "last_seen": null, "version": null},
         ]})
     }
@@ -1201,16 +1213,84 @@ mod tests {
     }
 
     fn member(thread: u64, key: &str, connect: &str) -> Value {
-        json!({"thread": thread, "session": key, "connect": connect})
+        json!({"thread": thread, "session": key, "connect": connect, "joinedAt": 1})
+    }
+
+    /// Merges `patch` into `base`, key by key.
+    fn with(mut base: Value, patch: Value) -> Value {
+        if let (Some(b), Some(p)) = (base.as_object_mut(), patch.as_object()) {
+            b.extend(p.clone());
+        }
+        base
+    }
+
+    /// A session as the station's list has it, with `patch` over it.
+    fn full_session(key: &str, patch: Value) -> Value {
+        with(json!({
+            "key": key, "connect": "c1", "scope": "thread", "title": null, "createdBy": null, "boundTo": [], "creator": null,
+            "participants": [], "runtime": "claude", "profile": "p1", "profilePinned": false, "model": null, "effort": null,
+            "runtimeSessionId": null, "workspace": "/w", "running": false, "createdAt": 1, "lastActiveAt": 1, "archivedAt": null,
+            "process": "cold", "turns": 0, "pending": 0, "firstText": null, "lastTurn": null,
+        }), patch)
+    }
+
+    fn turn(id: &str) -> Value {
+        json!({"id": id, "kind": "chat", "outcome": null, "declared": null, "detail": null, "startedAt": 1, "endedAt": null})
+    }
+
+    /// A profile as a station's overview has it.
+    fn profile(id: &str, patch: Value) -> Value {
+        with(json!({
+            "id": id, "name": id, "runtime": "claude", "runtimes": ["claude"], "access": {"kind": "subscription", "key": ""},
+            "home": "/h", "homeExists": true, "model": null, "models": [], "env": [], "usedBy": [], "loginCommand": "",
+            "check": null, "login": null, "quota": null,
+        }), patch)
+    }
+
+    /// A station's overview with these connects and profiles.
+    fn overview_of(connects: Vec<Value>, profiles: Vec<Value>) -> Value {
+        json!({
+            "viewer": {"via": "local"}, "connects": connects, "profiles": profiles, "processes": [],
+            "counts": {"sessions": 0, "running": 0, "warm": 0}, "mesh": null, "slackUsers": [], "slackTeams": [],
+            "slackInstalls": [], "disk": null, "logins": [],
+        })
+    }
+
+    fn host_info(hostname: &str) -> Value {
+        json!({
+            "hostname": hostname, "os": "macOS 26", "arch": "arm64", "cpus": 8, "cpuModel": "M4", "load": 0.2, "uptimeSec": 100,
+            "memory": {"totalBytes": 1024, "usedBytes": 512, "swapUsedBytes": null}, "disk": {"path": "/", "totalBytes": 1024, "freeBytes": 512},
+            "emberRssBytes": 10, "checkedAt": 1,
+        })
+    }
+
+    /// A Slack thread as a session's detail lists it.
+    fn slack_thread(id: u64) -> Value {
+        json!({
+            "id": id, "surface": "slack:T1", "channel": "C1", "channelName": "ops", "threadTs": "1.0", "title": null, "createdBy": null,
+            "creator": null, "createdAt": 1, "sessions": [], "last": 0, "lastMessage": null, "read": 0, "unread": 0, "people": [], "firstText": null,
+        })
+    }
+
+    /// A connect as a station's overview has it.
+    fn connect(id: &str, name: &str) -> Value {
+        json!({
+            "id": id, "name": name, "team": null, "enabled": true, "kind": "slack", "mode": "multi-session", "requireMention": true,
+            "bind": {"runtime": "claude", "model": null, "effort": null, "profile": null}, "slack": {"appToken": "", "botToken": ""},
+            "connection": {"state": "no_tokens"}, "createdBy": null, "sessions": 0, "session": null,
+        })
     }
 
     /// A chat on ember's page with these agents, last written in at `at`.
     fn thread(id: u64, keys: &[&str], at: f64) -> Value {
         json!({
             "id": id, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": format!("{id}.0"), "title": null,
-            "createdAt": at - 10.0, "creator": null, "sessions": keys.iter().map(|k| member(id, k, "ember")).collect::<Vec<_>>(),
+            "createdAt": at as i64 - 10, "creator": null, "sessions": keys.iter().map(|k| member(id, k, "ember")).collect::<Vec<_>>(),
             "last": id * 10,
-            "lastMessage": {"seq": id * 10, "authorKind": "agent", "author": keys.first().copied().unwrap_or(""), "authorName": null, "text": "好的", "createdAt": at},
+            "lastMessage": {
+                "seq": id * 10, "thread": id, "ts": format!("{}.0", id * 10), "authorKind": "agent", "author": keys.first().copied().unwrap_or(""),
+                "authorName": null, "text": "好的", "attachments": [], "quotes": [], "declared": null, "createdAt": at as i64, "editedAt": null,
+            },
             "read": 0, "unread": 0, "people": [], "firstText": null,
         })
     }
@@ -1221,7 +1301,7 @@ mod tests {
         json!({
             "id": id, "session": if thread.is_some() { "s" } else { id }, "thread": thread,
             "title": format!("{id} 的标题"), "agents": [session(id)], "last": null, "unread": false, "mine": false,
-            "lastActiveAt": at, "connect": null, "origin": null,
+            "lastActiveAt": at as i64, "connect": null, "origin": null,
         })
     }
 
@@ -1241,9 +1321,9 @@ mod tests {
         let session = json!({"profile": "a"});
         assert_eq!(attention(Some(&overview("ok", 50.0, 500e9)), &session, 0.0), json!([]), "nothing when all is well");
         assert_eq!(attention(Some(&overview("login", 92.0, 5e9)), &session, 0.0), json!([
-            {"kind": "account", "state": "login", "name": "A", "detail": "d", "text": "「A」要重新登录"},
-            {"kind": "quota", "label": "每周", "left": 8.0, "until": 2, "mark": "W", "tip": ["每周剩余 8%", "马上刷新"], "level": "red"},
-            {"kind": "disk", "freeBytes": 5e9, "totalBytes": 1000e9, "text": "磁盘剩 5 GB"},
+            {"kind": "account", "text": "「A」要重新登录"},
+            {"kind": "quota", "text": "每周剩余 8%", "more": "马上刷新", "quota": {"left": 8, "mark": "W", "level": "red", "until": 2}},
+            {"kind": "disk", "text": "磁盘剩 5 GB"},
         ]));
     }
 
@@ -1263,7 +1343,7 @@ mod tests {
         ]));
         // Every model of its runtime, each with who runs it.
         let choices = choices(Some(&overview), &session, 0.0);
-        assert!(choices.as_array().unwrap().iter().any(|c| c["model"] == "m" && c["profiles"].as_array().unwrap().len() == 2));
+        assert!(choices.as_array().unwrap().iter().any(|c| c["model"] == "m" && c["accounts"]["codex"].as_array().unwrap().len() == 2));
     }
 
     #[test]
@@ -1283,9 +1363,9 @@ mod tests {
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             assert_eq!(v["loading"], true);
             assert_eq!(v["stations"], json!([
-                {"station": "ws/a", "id": "a", "name": "alpha", "state": "connecting", "message": null},
-                {"station": "ws/b", "id": "b", "name": "beta", "state": "connecting", "message": null},
-                {"station": "ws/c", "id": "c", "name": "gamma", "state": "offline", "message": null},
+                {"station": "ws/a", "id": "a", "name": "alpha", "state": "connecting"},
+                {"station": "ws/b", "id": "b", "name": "beta", "state": "connecting"},
+                {"station": "ws/c", "id": "c", "name": "gamma", "state": "offline"},
             ]));
             assert_eq!(v["days"], json!([]));
 
@@ -1310,7 +1390,9 @@ mod tests {
             shown["stationName"] = json!("alpha");
             // What clients draw of it is the core's: its state (none: its agent is idle).
             shown["state"] = Value::Null;
-            assert_eq!(plain(&items[2]), shown);
+            // Its agents as the rows' shape has them: what their marks need.
+            shown["agents"] = json!([{"key": "s1", "runtime": "claude", "model": "opus", "process": "cold", "pending": 0}]);
+            assert_eq!(plain(&items[2]), plain(&shown));
 
             // A station going offline keeps its chats listed, as they were read (the data center keeps them); it only
             // says it is offline.
@@ -1394,8 +1476,8 @@ mod tests {
             let day = |ago: i64, ids: &[&str]| (ago, ids.iter().map(|s| s.to_string()).collect::<Vec<_>>());
             assert_eq!(days, vec![day(0, &["3"]), day(1, &["1", "4"]), day(3, &["2"]), day(4, &["a"])]);
             assert_eq!(v["days"][1]["at"], json!(midnight - 1000.0));
-            assert_eq!(v["me"], json!({"id": "local", "email": null}));
-            assert_eq!(v["stations"], json!([{"station": "local", "id": "local", "name": "", "state": "online", "message": null}]));
+            assert_eq!(v["me"], json!({"id": "local"}));
+            assert_eq!(v["stations"], json!([{"station": "local", "id": "local", "name": "", "state": "online"}]));
         });
     }
 
@@ -1437,7 +1519,7 @@ mod tests {
             let mut named = row("1", now - 1.0);
             named["title"] = json!("排查");
             named["unread"] = json!(true);
-            named["last"] = json!({"seq": 7, "authorKind": "agent", "author": "a", "authorName": null, "text": "好的", "createdAt": now - 1.0});
+            named["last"] = json!({"seq": 7, "authorKind": "agent", "author": "a", "authorName": null, "text": "好的", "createdAt": now as i64 - 1});
             let mut said = row("2", now - 2.0);
             said["title"] = json!("看看 这个");
             t.set(rows("local"), json!([named, said]));
@@ -1508,16 +1590,16 @@ mod tests {
             t.subscribe(1, Topic::Stations { scope: "ws".into() });
             t.set(workspace(), stations(t.now_s(), true, false));
             t.read(&mut ui, 1).await;
-            let overview_a = json!({"connects": [], "profiles": [
+            let overview_a = overview_of(vec![], vec![
                 // Its week used up: its models are spent until it refills.
-                {"id": "p1", "runtimes": ["codex"], "models": ["o3", "gpt-5"], "quota": {"state": "ok", "windows": [{"label": "5 小时", "usedPercent": 40, "resetsAt": 100}, {"label": "每周", "usedPercent": 100, "resetsAt": 5000}]}},
-                {"id": "p2", "runtimes": ["claude"], "models": []},
-                {"id": "p3", "runtimes": ["claude"], "models": ["sonnet"]},
-                {"id": "p4", "runtimes": ["claude"], "models": ["opus", "sonnet"]},
-                {"id": "p5", "runtimes": ["claude", "codex"], "models": ["deepseek-flash"]},
-            ]});
+                profile("p1", json!({"runtimes": ["codex"], "models": ["o3", "gpt-5"], "quota": {"state": "ok", "detail": null, "checkedAt": 1, "windows": [{"label": "5 小时", "usedPercent": 40, "resetsAt": 100}, {"label": "每周", "usedPercent": 100, "resetsAt": 5000}]}})),
+                profile("p2", json!({"runtimes": ["claude"], "models": []})),
+                profile("p3", json!({"runtimes": ["claude"], "models": ["sonnet"]})),
+                profile("p4", json!({"runtimes": ["claude"], "models": ["opus", "sonnet"]})),
+                profile("p5", json!({"runtimes": ["claude", "codex"], "models": ["deepseek-flash"]})),
+            ]);
             t.set(overview("ws/a"), overview_a.clone());
-            t.set(host_of("ws/a"), json!({"hostname": "studio"}));
+            t.set(host_of("ws/a"), host_info("studio"));
             t.set(link("ws/a"), json!({"state": "error", "message": "没有权限"}));
             t.read(&mut ui, 1).await;
             let v = ui.value.unwrap();
@@ -1526,7 +1608,8 @@ mod tests {
             assert_eq!(v[0]["version"], "0.4.0");
             assert_eq!(v[0]["online"], true);
             assert_eq!(v[0]["link"], json!({"state": "error", "message": "没有权限"}));
-            assert_eq!(plain(&v[0]["overview"]), overview_a);
+            let ids: Vec<&str> = v[0]["overview"]["profiles"].as_array().unwrap().iter().filter_map(|p| p["id"].as_str()).collect();
+            assert_eq!(ids, ["p1", "p2", "p3", "p4", "p5"]);
             assert_eq!(v[0]["host"]["hostname"], "studio");
             assert_eq!(v[0]["runtimes"], json!([{"runtime": "claude", "models": ["deepseek-flash", "opus", "sonnet"]}, {"runtime": "codex", "models": ["deepseek-flash", "gpt-5", "o3"]}]));
             // An account run on both offers its model on both: a runtime is chosen for it.
@@ -1539,12 +1622,14 @@ mod tests {
             let gpt = &v[0]["models"][1];
             assert_eq!((gpt["maker"]["id"].as_str(), gpt["efforts"]["codex"][0].as_str(), gpt["accounts"]["codex"][0]["id"].as_str()), (Some("openai"), Some("minimal"), Some("p1")));
             assert!(gpt["spent"]["text"].as_str().unwrap().starts_with("额度用完 · "));
+            // Offline: what it was, and since when.
             assert_eq!(
                 plain(&v[1]),
-                json!({"station": "ws/b", "id": "b", "name": "beta", "online": false, "lastSeen": v[1]["lastSeen"], "version": null,
-                    "link": {"state": "offline", "message": null}, "overview": null, "host": null, "runtimes": [], "models": []})
+                json!({"station": "ws/b", "id": "b", "name": "beta", "online": false, "lastSeen": v[1]["lastSeen"],
+                    "link": {"state": "offline"}, "runtimes": [], "models": []})
             );
-            assert_eq!(v[2]["lastSeen"], Value::Null);
+            assert!(v[1]["summary"].as_str().unwrap().starts_with("离线 · "));
+            assert!(v[2].get("lastSeen").is_none());
         });
     }
 
@@ -1559,25 +1644,25 @@ mod tests {
             assert_eq!(sorted(t.started()), sorted(vec![workspace(), overview("ws/a"), overview("ws/b"), sessions("ws/a"), sessions("ws/b"), threads("ws/a"), threads("ws/b")]));
             let me = json!({"id": "Me@x.com", "email": "Me@x.com"});
             assert_eq!(ui.value.as_ref().unwrap(), &json!({"me": me, "items": [], "loading": true}));
-            let c1 = json!({"id": "c1", "createdBy": {"id": "me@x.com", "name": "我"}});
-            let c2 = json!({"id": "c2", "createdBy": null});
-            t.set(overview("ws/a"), json!({"connects": [c1, c2]}));
+            let c1 = with(connect("c1", "one"), json!({"createdBy": {"id": "me@x.com", "name": "我"}}));
+            let c2 = connect("c2", "two");
+            t.set(overview("ws/a"), overview_of(vec![c1.clone(), c2.clone()], vec![]));
             t.store.set(&overview("ws/b"), Err(CoreError::new("offline", "连不上")));
             t.read(&mut ui, 1).await;
-            let none = json!({"sessions": [], "bound": null, "candidates": [], "running": 0});
-            let item = |c: &Value| {
-                let mut item = json!({"station": "ws/a", "stationName": "alpha", "connect": c});
-                item.as_object_mut().unwrap().extend(none.as_object().unwrap().clone());
-                item
-            };
-            assert_eq!(plain(ui.value.as_ref().unwrap()), json!({"me": me, "items": [item(&c1), item(&c2)], "loading": false}));
+            let v = ui.value.as_ref().unwrap();
+            let listed: Vec<(&str, &str)> = v["items"].as_array().unwrap().iter().map(|i| (i["station"].as_str().unwrap(), i["connect"]["id"].as_str().unwrap())).collect();
+            assert_eq!(listed, [("ws/a", "c1"), ("ws/a", "c2")]);
+            assert_eq!((v["loading"].as_bool(), v["items"][0]["running"].as_i64(), v["items"][0]["sessions"].as_array().map(Vec::len)), (Some(false), Some(0), Some(0)));
+            // Its owner, named for people: the viewer.
+            assert_eq!(v["items"][0]["connect"]["createdBy"]["shown"]["display"], "你");
             // What it says of itself is the core's.
             assert_eq!(ui.value.as_ref().unwrap()["items"][0]["connect"]["statusText"], "未连接 Slack");
             // Only mine: the connects the viewer added.
             let mut mine = Ui::default();
             t.subscribe(2, Topic::Connects { scope: "ws".into(), mine: true });
             t.read(&mut mine, 2).await;
-            assert_eq!(plain(&mine.value.unwrap()["items"]), json!([item(&c1)]));
+            let mine: Vec<String> = mine.value.unwrap()["items"].as_array().unwrap().iter().map(|i| i["connect"]["id"].as_str().unwrap().to_string()).collect();
+            assert_eq!(mine, ["c1"]);
         });
     }
 
@@ -1602,10 +1687,11 @@ mod tests {
 
     /// A value without what the clients show of it (present.rs): what a view puts together, alone.
     fn plain(v: &Value) -> Value {
-        const SHOWN: [&str; 31] = ["time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "mark", "summary"];
+        const SHOWN: [&str; 32] = ["time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "mark", "summary", "modelsText"];
         match v {
             Value::Array(items) => Value::Array(items.iter().map(plain).collect()),
-            Value::Object(map) => Value::Object(map.iter().filter(|(k, _)| !SHOWN.contains(&k.as_str())).map(|(k, v)| (k.clone(), plain(v))).collect()),
+            // An absent option is left out, as the shapes send it.
+            Value::Object(map) => Value::Object(map.iter().filter(|(k, v)| !SHOWN.contains(&k.as_str()) && !v.is_null()).map(|(k, v)| (k.clone(), plain(v))).collect()),
             other => other.clone(),
         }
     }
@@ -1641,7 +1727,7 @@ mod tests {
             t.subscribe(1, agent_page("ws/a", "k"));
             t.read(&mut ui, 1).await;
             let now = t.host.now_ms();
-            t.set(sessions("ws/a"), json!([{"key": "k", "connect": "ember", "profile": "p1"}]));
+            t.set(sessions("ws/a"), json!([full_session("k", json!({"connect": "ember"}))]));
             t.set(rows("ws/a"), json!([{"id": "k", "session": "k", "thread": null, "title": "修构建", "agents": []}]));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().expect("the agent alone");
@@ -1693,34 +1779,36 @@ mod tests {
             // The messages do not wait for the agents: those not read yet are their summaries where the list has them.
             let v = ui.value.clone().unwrap();
             assert_eq!(v["agents"], json!([]));
-            t.set(sessions("ws/a"), json!([{"key": "j", "connect": "ember", "profile": "p1"}]));
+            t.set(sessions("ws/a"), json!([full_session("j", json!({"connect": "ember"}))]));
             t.read(&mut ui, 1).await;
-            assert_eq!(plain(&ui.value.clone().unwrap()["agents"]), json!([{"status": "idle", "badge": null, "session": {"key": "j", "connect": "ember", "profile": "p1"}, "connect": null, "profile": null, "profiles": [], "choices": [], "attention": [], "turns": [], "threads": []}]));
+            let agents = ui.value.clone().unwrap()["agents"].clone();
+            assert_eq!((agents.as_array().unwrap().len(), agents[0]["session"]["key"].as_str(), agents[0]["status"].as_str()), (1, Some("j"), Some("idle")));
+            assert!(agents[0].get("connect").is_none() && agents[0].get("profile").is_none());
 
-            t.set(session_of("ws/a", "k"), json!({"session": {"key": "k", "connect": "c1", "profile": "p2"}, "threads": [chat.clone()], "turns": [{"id": "t1"}]}));
+            t.set(session_of("ws/a", "k"), json!({"session": full_session("k", json!({"profile": "p2"})), "threads": [chat.clone()], "turns": [turn("t1")]}));
             t.store.set(&session_of("ws/a", "j"), Err(CoreError::new("http_404", "没有这个会话")));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             assert_eq!(v["title"], "排查");
-            assert_eq!(plain(&v["thread"]), chat);
-            assert_eq!(plain(&v["people"]), chat["people"]);
+            assert_eq!(plain(&v["thread"]), plain(&chat));
+            assert_eq!(plain(&v["people"]), plain(&chat["people"]));
             assert_eq!(v["people"][0]["shown"]["name"], "本机管理页");
-            assert_eq!(v["link"], json!({"state": "connecting", "message": null}));
+            assert_eq!(v["link"], json!({"state": "connecting"}));
             assert_eq!((v["messages"].as_array().unwrap().len(), v["more"].clone()), (30, json!(true)));
             assert_eq!(v["agents"].as_array().unwrap().len(), 1, "an agent that cannot be read is left out");
             assert_eq!(v["agents"][0]["session"]["key"], "k");
-            assert_eq!(v["agents"][0]["turns"], json!([{"id": "t1"}]));
-            assert_eq!(plain(&v["agents"][0]["threads"]), json!([chat]));
+            assert_eq!(v["agents"][0]["turns"][0]["id"], "t1");
+            assert_eq!(plain(&v["agents"][0]["threads"]), plain(&json!([chat])));
             assert_eq!((v["agents"][0]["connect"].clone(), v["agents"][0]["profile"].clone()), (Value::Null, Value::Null));
 
-            t.set(overview("ws/a"), json!({"connects": [{"id": "c1", "name": "Slack"}], "profiles": [{"id": "p1"}, {"id": "p2", "name": "主力"}]}));
+            t.set(overview("ws/a"), overview_of(vec![connect("c1", "Slack")], vec![profile("p1", json!({})), profile("p2", json!({"name": "主力"}))]));
             t.set(link("ws/a"), json!({"state": "online"}));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
-            assert_eq!(plain(&v["agents"][0]["connect"]), json!({"id": "c1", "name": "Slack"}));
-            assert_eq!(plain(&v["agents"][0]["profile"]), json!({"id": "p2", "name": "主力"}));
-            assert_eq!(v["link"], json!({"state": "online", "message": null}));
+            assert_eq!((v["agents"][0]["connect"]["id"].as_str(), v["agents"][0]["connect"]["name"].as_str()), (Some("c1"), Some("Slack")));
+            assert_eq!((v["agents"][0]["profile"]["id"].as_str(), v["agents"][0]["profile"]["name"].as_str()), (Some("p2"), Some("主力")));
+            assert_eq!(v["link"], json!({"state": "online"}));
 
             // A new message goes out as an append.
             t.store.update(&page_of("ws/a", 7), &mut |p| {
@@ -1735,7 +1823,7 @@ mod tests {
             let mut appended = merge(&[entry(41, "新的")]);
             appended[0]["mine"] = json!(false);
             appended[0]["system"] = json!(false);
-            assert_eq!(plain(&serde_json::to_value(delta).unwrap()), json!([{"path": ["messages"], "append": appended}]));
+            assert_eq!(plain(&serde_json::to_value(delta).unwrap()), plain(&json!([{"path": ["messages"], "append": appended}])));
             delta::apply(ui.value.as_mut().unwrap(), delta);
             // An edit shows in its message: merged here, not by the page.
             t.store.update(&page_of("ws/a", 7), &mut |p| {
@@ -1759,7 +1847,7 @@ mod tests {
             t.store.update(&threads("ws/a"), &mut |list| list[1]["sessions"].as_array_mut().unwrap().push(member(7, "n", "ember")));
             t.read(&mut ui, 1).await;
             assert_eq!(t.started(), vec![session_of("ws/a", "n")]);
-            t.set(session_of("ws/a", "n"), json!({"session": {"key": "n", "connect": "ember", "profile": "p1"}, "threads": [], "turns": []}));
+            t.set(session_of("ws/a", "n"), json!({"session": full_session("n", json!({"connect": "ember"})), "threads": [], "turns": []}));
             t.read(&mut ui, 1).await;
             assert_eq!(ui.value.clone().unwrap()["agents"].as_array().unwrap().iter().map(|a| a["session"]["key"].as_str().unwrap()).collect::<Vec<_>>(), vec!["k", "n"]);
 
@@ -1785,13 +1873,13 @@ mod tests {
             t.set(threads("local"), json!([slack]));
             t.set(page_of("local", 3), page(1, &["<@U0BOT> 部署挂了", "在看"], Value::Null));
             t.read(&mut ui, 1).await;
-            t.set(session_of("local", "k"), json!({"session": {"key": "k", "connect": "c1"}, "threads": [], "turns": []}));
+            t.set(session_of("local", "k"), json!({"session": full_session("k", json!({})), "threads": [], "turns": []}));
             t.read(&mut ui, 1).await;
             let v = ui.value.unwrap();
             assert_eq!(v["title"], "部署挂了");
             assert_eq!(v["thread"]["surface"], "slack:T1");
             assert_eq!(v["messages"].as_array().unwrap().len(), 2);
-            assert_eq!(v["me"], json!({"id": "local", "email": null}));
+            assert_eq!(v["me"], json!({"id": "local"}));
         });
     }
 
@@ -1803,18 +1891,19 @@ mod tests {
             t.subscribe(1, Topic::Chat { station: "ws/a".into(), thread: None, session: Some("k".into()) });
             t.read(&mut ui, 1).await;
             assert_eq!(sorted(t.started()), sorted(vec![session_of("ws/a", "k"), rows("ws/a"), sessions("ws/a"), overview("ws/a"), link("ws/a"), workspace()]));
-            t.set(session_of("ws/a", "k"), json!({"session": {"key": "k", "connect": "c1", "profile": "p1"}, "threads": [{"id": 3, "surface": "slack:T1"}], "turns": [{"id": "t1"}]}));
+            t.set(session_of("ws/a", "k"), json!({"session": full_session("k", json!({})), "threads": [slack_thread(3)], "turns": [turn("t1")]}));
             t.read(&mut ui, 1).await;
             assert!(ui.value.is_none(), "its title is the station's: it waits for the items");
             let mut item = row("k", t.host.now_ms());
             item["title"] = json!("部署挂了");
             t.set(rows("ws/a"), json!([row("7", t.host.now_ms()), item]));
-            t.set(overview("ws/a"), json!({"connects": [{"id": "c1", "name": "Slack"}], "profiles": []}));
+            t.set(overview("ws/a"), overview_of(vec![connect("c1", "Slack")], vec![]));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             assert_eq!((v["thread"].clone(), v["title"].clone(), v["messages"].clone(), v["outbox"].clone(), v["more"].clone()), (Value::Null, json!("部署挂了"), json!([]), json!([]), json!(false)));
-            assert_eq!(plain(&v["agents"]), json!([{"status": "idle", "badge": null, "session": {"key": "k", "connect": "c1", "profile": "p1"}, "connect": {"id": "c1", "name": "Slack"}, "profile": null, "profiles": [], "choices": [], "attention": [],
-                "turns": [{"id": "t1"}], "threads": [{"id": 3, "surface": "slack:T1"}]}]));
+            let a = &v["agents"][0];
+            assert_eq!((v["agents"].as_array().unwrap().len(), a["session"]["key"].as_str(), a["connect"]["name"].as_str(), a["status"].as_str()), (1, Some("k"), Some("Slack"), Some("idle")));
+            assert_eq!((a["turns"][0]["id"].as_str(), a["threads"][0]["id"].as_i64()), (Some("t1"), Some(3)));
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             // Deleted: the page says so.
             t.store.set(&session_of("ws/a", "k"), Err(CoreError::new("http_404", "这个会话已经删除了").with_status(404)));

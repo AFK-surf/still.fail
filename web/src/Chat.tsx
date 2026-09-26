@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArrowDown, ArrowUp, Bot, Brain, ChevronDown, ChevronUp, Download, FileText, Globe, MessagesSquare, Pencil, Plus, Quote as QuoteIcon, Search, Terminal, Wrench, X, ArrowDownToLine, MessageSquare, Send, Sparkle, Sparkles } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { useApi, useChatSend, useIsMine, type Api, type Attachment, type ChatView, type LiveView, type Maker, type MessageView, type Quote, type SessionShown, type SessionSummary, type ActivityView } from "./api.ts";
+import { useApi, useChatSend, type Activity as ActivityView, type Api, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
@@ -14,15 +14,14 @@ import { useStickToBottom } from "./scroll.ts";
 import { track } from "./telemetry.ts";
 
 /** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
-interface ChatAgent { key: string; who: string; runtime: SessionSummary["runtime"]; maker: Maker | null; session: SessionShown; status: ChatView["agents"][number]["status"]; live: LiveView | undefined; since: number | null }
-type ChatMessage = ChatView["messages"][number];
+interface AgentHere { key: string; who: string; runtime: RuntimeKind; maker: Maker | undefined; session: Session; status: Status; live: Live | undefined; since: number | undefined }
 
 /**
  * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
  * `ensureChat` makes the chat with the first message, which `onSent` then follows.
  */
 export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
-  chat: ChatView; lives: ReadonlyMap<string, LiveView>; onOpenHistory(key: string, entry?: number): void;
+  chat: ChatView; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
   ensureChat?: () => Promise<{ key: string; thread: number }>; onSent?: (thread: number) => void;
 }) {
   const station = useStation();
@@ -34,9 +33,8 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
-  const isMine = useIsMine();
   // Whose a message is, the core says.
-  const mineOf = (m: MessageView & { mine?: boolean }) => m.mine === true;
+  const mineOf = (m: ChatMessage) => m.mine;
   useStickToBottom(list, ".msg", floor);
   // Without a chat there is nothing older to load and nothing to read.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
@@ -51,7 +49,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   // Messages there when the chat opened (and older pages loaded later) show at once; newer ones ease in, except a reply that already streamed in place.
   const firstSeq = useRef<number | null>(null);
   if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
-  const agents: ChatAgent[] = chat.agents.map(({ session, status, since }) => (
+  const agents: AgentHere[] = chat.agents.map(({ session, status, since }) => (
     { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, session, status, live: lives.get(session.key), since }
   ));
   const agentOf = (key: string) => agents.find((a) => a.key === key);
@@ -220,9 +218,9 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
  * no line, and the chat opens at its bottom. Answers the seq of the message
  * the line goes over.
  */
-function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: MessageView[], mine: (m: MessageView) => boolean, older: () => Promise<unknown>, returning = false): number | null {
+function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: ChatMessage[], mine: (m: ChatMessage) => boolean, older: () => Promise<unknown>, returning = false): number | null {
   const [open] = useState(() => ({ read: chat.thread?.read ?? 0, at: Date.now() }));
-  const unread = (m: MessageView) => m.seq > open.read && m.createdAt <= open.at && !mine(m);
+  const unread = (m: ChatMessage) => m.seq > open.read && m.createdAt <= open.at && !mine(m);
   const first = messages[0]?.seq;
   // Those not loaded yet may hold it: the pages before are loaded first.
   const above = chat.more && first !== undefined && first > open.read + 1 && messages.some(unread);
@@ -726,9 +724,9 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
 
 /** An agent in this chat that is at work: who it is, its execution history, and its running turn. */
 interface AgentAtWork {
-  key: string; who: string; runtime: SessionSummary["runtime"]; maker: Maker | null;
+  key: string; who: string; runtime: RuntimeKind; maker: Maker | undefined;
   /** What it is doing, as the core says (null until its live view has come). */
-  activity: ActivityView | null; since: number | null;
+  activity: ActivityView | null; since: number | undefined;
 }
 
 /** A row's mark, by the icon the core names for it (activity.rs). */

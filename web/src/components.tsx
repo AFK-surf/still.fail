@@ -1,6 +1,6 @@
 // Small pieces the station client and ember cloud share.
 import { useAppearance } from "./theme.ts";
-import type { HostShown, PersonShown, QuotaShown } from "./api.ts";
+import type { Host, Level, PersonShown, Quota } from "./api.ts";
 import { useOnlyMine } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
 import { Check, ListFilter } from "lucide-react";
@@ -55,7 +55,7 @@ export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown
 
 /** A profile's allowance, as the core puts its windows (shortest first, each marked): compact, a ring per window. */
 /** `ring`: the size of a compact ring, where a line is lower than a row (the model control). */
-export function QuotaBars({ quota, compact, ring }: { quota: QuotaShown | null | undefined; compact?: boolean; ring?: number }) {
+export function QuotaBars({ quota, compact, ring }: { quota: Quota | null | undefined; compact?: boolean; ring?: number }) {
   if (!quota) return compact ? null : <p className="muted quota-note">还没查过额度。</p>;
   if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className="muted quota-note">{quota.detail ?? "查不到额度。"}</p>;
   if (compact) {
@@ -88,7 +88,7 @@ export function QuotaBars({ quota, compact, ring }: { quota: QuotaShown | null |
 
 /** What is left of a window, as a ring: full when untouched, shorter as it goes, coloured by the core's `level`; the
  * number left inside (up to 99; a full ring says 100 by itself). Use eats it clockwise from the top. */
-export function QuotaRing({ left, level, size = 26 }: { left: number; level: "ok" | "amber" | "red"; size?: number }) {
+export function QuotaRing({ left, level, size = 26 }: { left: number; level: Level; size?: number }) {
   const used = 100 - left;
   const stroke = size > 40 ? 5 : 3;
   const c = size / 2;
@@ -118,7 +118,7 @@ export function PeopleStack({ people, max = 3 }: { people: { id: string; shown: 
   );
 }
 
-function Meter({ meter }: { meter: HostShown["meters"][number] }) {
+function Meter({ meter }: { meter: Host["meters"][number] }) {
   return (
     <div className="quota-row device-row">
       <span className="quota-label">{meter.label}</span>
@@ -130,7 +130,7 @@ function Meter({ meter }: { meter: HostShown["meters"][number] }) {
 }
 
 /** The machine a station runs on: what it is, and how loaded (the core's words); `processes`: its agents', in a line. */
-export function DeviceCard({ host, processes }: { host: HostShown | null | undefined; processes: string | undefined }) {
+export function DeviceCard({ host, processes }: { host: Host | null | undefined; processes: string | undefined }) {
   if (!host) return <div className="device muted">正在读取设备信息…</div>;
   return (
     <div className="device">
@@ -145,7 +145,7 @@ export function DeviceCard({ host, processes }: { host: HostShown | null | undef
 }
 
 /** A percentage as a small ring, filled clockwise from the top; colour follows the same levels as the bars. */
-export function Ring({ percent, level, size = 28, label, title }: { percent: number; level: "ok" | "amber" | "red"; size?: number; label: string; title?: string }) {
+export function Ring({ percent, level, size = 28, label, title }: { percent: number; level: Level; size?: number; label: string; title?: string }) {
   const p = percent;
   const r = (size - 4) / 2;
   const c = 2 * Math.PI * r;

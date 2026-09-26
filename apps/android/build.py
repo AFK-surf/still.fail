@@ -67,6 +67,8 @@ def main():
 
     profile = "release" if args.release else "debug"
     target_dir = Path(env.get("CARGO_TARGET_DIR", CLIENT / "target"))
+    # The app's shapes are what the core declares it sends (client/shapes): a stale Shapes.kt stops the build.
+    run(["sh", "scripts/shapes.sh", "--check"], env, cwd=ROOT)
     run(["cargo", "build", "-p", "ember-core-ffi", "--lib", "--target", TARGET, *(["--release"] if args.release else [])], env, cwd=CLIENT)
     built = target_dir / TARGET / profile / LIBRARY
 

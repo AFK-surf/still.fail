@@ -5,7 +5,7 @@ import { useToast } from "./toast.tsx";
 import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { useApi, useHistory, type HistoryItem, type HistoryView, type Place } from "./api.ts";
+import { useApi, useHistory, type HistoryGroup, type HistoryItem, type HistoryView, type Place } from "./api.ts";
 import { ICON, Pill, SlackLogo } from "./ui.tsx";
 import { useLink } from "./station.tsx";
 import { Link } from "react-router";
@@ -40,7 +40,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   // Opened at an entry (an activity row): the item that draws it comes into view, and says so for a moment.
   useEffect(() => {
     if (!focus) return;
-    const at = items.findIndex((item) => item.entries[0] <= focus.entry && focus.entry <= item.entries[1]);
+    const at = items.findIndex((item) => (item.entries[0] ?? 0) <= focus.entry && focus.entry <= (item.entries[1] ?? -1));
     const el = at < 0 ? null : body.current?.querySelector<HTMLElement>(`[data-item="${at}"]`);
     if (!el) return;
     el.scrollIntoView({ block: "center" });
@@ -76,7 +76,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
             <p className="history-edge">{history.edge}</p>
             {items.map((item, i) => (
               // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
-              <div key={item.key} className="h-item" data-item={i} data-enter={i >= firstCount.current && item.kind !== "text" ? true : undefined}>
+              <div key={item.key} className="h-item" data-item={i} data-enter={i >= firstCount.current && item.body.kind !== "text" ? true : undefined}>
                 <HistoryItemView item={item} where={where} />
               </div>
             ))}
@@ -91,36 +91,37 @@ export function History({ station, sessionKey, summary, actions, details, focus 
 }
 
 function HistoryItemView({ item, where }: { item: HistoryItem; where(place: Place | null): ReactNode }) {
-  switch (item.kind) {
+  const body = item.body;
+  switch (body.kind) {
     case "received":
       return (
         <>
-          {item.note && <Received from="ember" text={item.note} />}
-          {item.messages.map((m) => (
-            <Received key={m.key} text={m.text} place={where(m.place)}
+          {body.content.note && <Received from="ember" text={body.content.note} />}
+          {body.content.messages.map((m) => (
+            <Received key={m.key} text={m.text} place={where(m.place ?? null)}
               from={m.from.slackUser ? <SlackName user={m.from.slackUser} name={m.from.name} bound={m.from.bound} /> : m.from.name} />
           ))}
         </>
       );
     case "text":
-      return <Fold className={`h-text markdown${item.subagent ? " h-sub" : ""}`}><Prose>{item.text}</Prose></Fold>;
+      return <Fold className={`h-text markdown${body.content.subagent ? " h-sub" : ""}`}><Prose>{body.content.text}</Prose></Fold>;
     case "post":
       return (
         // Drawn like a received message (a line, then the words beside a bar): the two answer each other.
-        <div className="h-received h-post" data-failed={item.failed}>
+        <div className="h-received h-post" data-failed={body.content.failed}>
           <div className="h-label">
             <Send {...ICON} size={14} />
-            发送到 {where(item.place) ?? <span className="h-place"><SlackLogo size={13} />Slack</span>}
-            {item.block && <Pill tone="blue">Block</Pill>}
-            {item.failed && <Pill tone="red">发送失败</Pill>}
+            发送到 {where(body.content.place ?? null) ?? <span className="h-place"><SlackLogo size={13} />Slack</span>}
+            {body.content.block && <Pill tone="blue">Block</Pill>}
+            {body.content.failed && <Pill tone="red">发送失败</Pill>}
           </div>
-          <Fold className="h-quote h-quote-md markdown"><Prose>{item.text}</Prose></Fold>
+          <Fold className="h-quote h-quote-md markdown"><Prose>{body.content.text}</Prose></Fold>
         </div>
       );
     case "mark":
-      return <div className="h-mark">{item.text}</div>;
+      return <div className="h-mark">{body.content.text}</div>;
     case "group":
-      return <Group group={item} />;
+      return <Group group={body.content} />;
   }
 }
 
@@ -152,16 +153,16 @@ function Received({ from, text, place }: { from: ReactNode; text: string; place?
   );
 }
 
-function Group({ group }: { group: Extract<HistoryItem, { kind: "group" }> }) {
+function Group({ group }: { group: HistoryGroup }) {
   const [open, setOpen] = useState(false);
-  const { steps, thinking } = group;
+  const { steps, thinking, failures, pending } = group;
   return (
-    <div className="h-group" data-failed={group.failures > 0}>
+    <div className="h-group" data-failed={failures > 0}>
       <button type="button" className="h-group-head" aria-expanded={open} onClick={() => setOpen(!open)} title={group.title || undefined}>
         {open ? <ChevronDown {...ICON} size={14} /> : <ChevronRight {...ICON} size={14} />}
         <span>{group.summary}</span>
-        {group.failures > 0 && <Pill tone="red">{group.failures} 项失败</Pill>}
-        {group.pending > 0 && <Pill tone="accent">{group.pending} 项进行中</Pill>}
+        {failures > 0 && <Pill tone="red">{failures} 项失败</Pill>}
+        {pending > 0 && <Pill tone="accent">{pending} 项进行中</Pill>}
       </button>
       {open && (
         <div className="h-steps">
@@ -180,7 +181,7 @@ function Group({ group }: { group: Extract<HistoryItem, { kind: "group" }> }) {
                 <span className="h-step-meta">{step.meta}</span>
               </summary>
               <pre className="code">{step.call}</pre>
-              {step.result !== null && <pre className="code" data-failed={step.failed}>{step.result}</pre>}
+              {step.result !== undefined && <pre className="code" data-failed={step.failed}>{step.result}</pre>}
             </details>
           ))}
         </div>

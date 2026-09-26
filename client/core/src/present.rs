@@ -299,7 +299,14 @@ pub fn profile(p: &mut Value) {
     let found = p.get("check").and_then(|c| c.get("models")).and_then(Value::as_array).cloned().unwrap_or_default();
     let makers: serde_json::Map<String, Value> = p.get("models").and_then(Value::as_array).into_iter().flatten().chain(found.iter())
         .filter_map(Value::as_str).map(|m| (m.to_string(), maker(Some(m)))).collect();
+    // How many of the models it could run are enabled, in words.
+    let enabled: Vec<&str> = p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+    let mut all: Vec<&str> = found.iter().filter_map(Value::as_str).chain(enabled.iter().copied()).collect();
+    all.sort_unstable();
+    all.dedup();
+    let text = if all.is_empty() { "还没有列出模型".to_string() } else { format!("已启用 {} / {} 个模型", enabled.len(), all.len()) };
     p["makers"] = Value::Object(makers);
+    p["modelsText"] = json!(text);
 }
 
 /// A machine as the clients show it: `summary` (8 核 · 32 GB), `line` (macOS · 8 核 · 32 GB · 已运行 3 天), `facts`
@@ -342,6 +349,27 @@ pub fn host(h: &mut Value) {
 /// Whether what goes out of a topic shows times in words (sent again each minute).
 pub fn ticks(topic: &Topic) -> bool {
     !matches!(topic, Topic::Live { .. } | Topic::Thread { .. } | Topic::History { .. } | Topic::Host { .. })
+}
+
+/// A topic's value through the shape the clients are generated from (client/shapes): what it does not declare is
+/// dropped, and a value it does not allow (a fractional time, a field missing) is an error naming the field. Topics
+/// with no shape yet go as they are.
+pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
+    use ember_shapes as s;
+    match topic {
+        Topic::Chats { .. } => s::conform::<s::ChatsView>(value),
+        Topic::Chat { .. } => s::conform::<s::ChatView>(value),
+        Topic::Stations { .. } => s::conform::<Vec<s::StationView>>(value),
+        Topic::Connects { .. } => s::conform::<s::ConnectsView>(value),
+        Topic::History { .. } => s::conform::<s::HistoryView>(value),
+        Topic::Live { .. } => s::conform::<s::Live>(value),
+        Topic::Overview { .. } => s::conform::<s::Overview>(value),
+        Topic::Sessions { .. } => s::conform::<Vec<s::Session>>(value),
+        Topic::Session { .. } => s::conform::<s::SessionDetail>(value),
+        Topic::Threads { .. } => s::conform::<Vec<s::ChatThread>>(value),
+        Topic::Host { .. } => s::conform::<s::Host>(value),
+        _ => Ok(value),
+    }
 }
 
 /// What goes out of a topic, with what the clients show of it put in (see above). The transcript and a thread's

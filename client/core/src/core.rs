@@ -125,6 +125,8 @@ impl Core {
         data.load().await;
         let inner = Rc::new_cyclic(|me: &Weak<Inner>| {
             let store = Store::new(host.clone());
+            // What goes out is what the clients' types say (client/shapes).
+            store.set_shaped();
             store.set_held({
                 let data = data.clone();
                 Rc::new(move |topic: &Topic| data.get(topic))
@@ -1446,6 +1448,16 @@ mod tests {
 
     /// A core signed in as one account, on a station's own page (`local`, plain HTTP), whose admin API has chat 7
     /// with one agent; `sample` of its traces recorded. Its timers run at their real pace.
+    /// A session as the station lists it.
+    fn session(key: &str) -> Value {
+        json!({
+            "key": key, "connect": "ember", "scope": "thread", "title": null, "createdBy": null, "boundTo": [], "creator": null,
+            "participants": [], "runtime": "claude", "profile": "p1", "profilePinned": false, "model": null, "effort": null,
+            "runtimeSessionId": null, "workspace": "/w", "running": false, "createdAt": 1, "lastActiveAt": 1, "archivedAt": null,
+            "process": "cold", "turns": 0, "pending": 0, "firstText": null, "lastTurn": null,
+        })
+    }
+
     async fn local_core(sample: f64) -> (Rc<FakeHost>, Core) {
         let host = FakeHost::new();
         let account = StoredAccount { sub: "s1".into(), email: "a@x.com".into(), name: String::new(), picture: String::new(), access: "tok".into(), refresh: "r0".into(), access_expires: now_s() + 3600.0 };
@@ -1453,11 +1465,18 @@ mod tests {
         host.on_fetch(|req| {
             let path = req.url.trim_start_matches("https://ember.test");
             match path.split('?').next().unwrap() {
-                "/admin/api/threads" => json_response(200, json!([{ "id": 7, "surface": "ember", "sessions": [{ "session": "k1" }], "createdAt": 1 }])),
+                "/admin/api/threads" => json_response(200, json!([{
+                    "id": 7, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": "7.0", "title": null, "createdBy": null,
+                    "creator": null, "createdAt": 1, "sessions": [{ "thread": 7, "session": "k1", "connect": "ember", "joinedAt": 1 }],
+                    "last": 0, "lastMessage": null, "read": 0, "unread": 0, "people": [], "firstText": null,
+                }])),
                 "/admin/api/threads/7/entries" => json_response(200, json!({ "last": 0, "entries": [] })),
-                "/admin/api/sessions" => json_response(200, json!([{ "key": "k1" }])),
-                "/admin/api/sessions/k1" => json_response(200, json!({ "session": { "key": "k1" }, "threads": [], "turns": [] })),
-                "/admin/api/overview" => json_response(200, json!({ "connects": [], "profiles": [] })),
+                "/admin/api/sessions" => json_response(200, json!([session("k1")])),
+                "/admin/api/sessions/k1" => json_response(200, json!({ "session": session("k1"), "threads": [], "turns": [] })),
+                "/admin/api/overview" => json_response(200, json!({
+                    "viewer": { "via": "local" }, "connects": [], "profiles": [], "processes": [], "counts": { "sessions": 1, "running": 0, "warm": 0 },
+                    "mesh": null, "slackUsers": [], "slackTeams": [], "slackInstalls": [], "disk": null, "logins": [],
+                })),
                 "/v1/telemetry/traces" => json_response(202, json!({})),
                 _ => json_response(404, json!({})),
             }

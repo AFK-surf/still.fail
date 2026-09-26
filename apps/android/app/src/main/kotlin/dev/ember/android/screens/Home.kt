@@ -218,7 +218,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // The state rides on the agent's picture, when the agent said the last thing; nowhere else.
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item) } }
-                if (held) Text(item.time["lastActiveAt"]?.ago ?: "", fontSize = 12.sp, color = C.subtle, maxLines = 1)
+                if (held) Text(item.time?.get("lastActiveAt")?.ago ?: "", fontSize = 12.sp, color = C.subtle, maxLines = 1)
             }
         }
     }

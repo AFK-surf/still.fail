@@ -1,0 +1,13 @@
+[package]
+name = "ember-shapes"
+description = "What the core gives its clients, declared once: the web's and Android's types are generated from here (scripts/shapes.sh), and the core's values pass through these before they go out."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = { version = "3", default-features = false, features = ["macros"] }
+typeshare = "1"
+serde_path_to_error = "0.1"

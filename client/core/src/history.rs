@@ -2,13 +2,9 @@
 //! together here so every client draws the same thing. Messages in and out, state marks and the agent's own words are
 //! boundaries; the tool calls and thinking between two boundaries fold into one group, named by its latest call.
 //!
-//! `{ items: [item], live: [{ id, text }], phase: { phase, text, since } | null, usage: [{ label, value }] | null,
-//!    usageLine: string | null,
-//!    edge: string, empty: bool, loaded: bool }`, an item one of
-//! `{ kind: "received", note, messages: [{ key, from: { name, slackUser, bound }, text, place }] }`,
-//! `{ kind: "text", text, subagent }`, `{ kind: "post", text, place, block, failed }`, `{ kind: "mark", text }`,
-//! `{ kind: "group", summary, title, failures, pending, thinking: [{ text, first }], steps: [step] }`, each with `key`
-//! and `entries: [first, last]` (the transcript entries it draws: an activity row opens the history there). A place
+//! The view is `HistoryView` in client/shapes: its items (each `{ key, entries, body }`, `entries` the transcript
+//! entries it draws, first and last, for an activity row to open the history there; `body` what kind of item it is and
+//! what that kind says), what streams now, where the turn stands, the model's use, and what shows at its top. A place
 //! is `format::place`'s.
 
 use serde_json::{Value, json};
@@ -263,7 +259,7 @@ pub fn present(live: &Value, cx: &Context) -> Value {
     let failed_of = |step: &Step| step.result.is_some_and(|r| timeline[r].get("ok") == Some(&Value::Bool(false)));
     let place = |address: Option<&str>| address.map_or(Value::Null, |a| format::place(cx.threads, a, cx.offset_min));
     let shown: Vec<Value> = items.iter().map(|(item, first, last)| {
-        let mut v = match item {
+        let mut v: Value = match item {
             Item::Received(i) => {
                 let (messages, note) = parse_prompt(&s(&timeline[*i], "text"));
                 let messages: Vec<Value> = messages.iter().map(|m| {
@@ -299,9 +295,9 @@ pub fn present(live: &Value, cx: &Context) -> Value {
             } }),
             Item::Group(members, thinking) => group(timeline, &steps, members, thinking),
         };
-        v["key"] = json!(format!("e{first}"));
-        v["entries"] = json!([first, last]);
-        v
+        // Its kind, and what that kind says (shapes: HistoryBody).
+        let kind = v.as_object_mut().and_then(|o| o.remove("kind")).unwrap_or(Value::Null);
+        json!({ "key": format!("e{first}"), "entries": [first, last], "body": { "kind": kind, "content": v } })
     }).collect();
 
     // Only thinking and the reply stream here; a tool call shows once it is done, from the transcript.
@@ -461,20 +457,20 @@ mod tests {
         });
         let h = present(&live, &cx(&threads, &members, &slack));
         let items = h["items"].as_array().unwrap();
-        let kinds: Vec<&str> = items.iter().map(|i| i["kind"].as_str().unwrap()).collect();
+        let kinds: Vec<&str> = items.iter().map(|i| i["body"]["kind"].as_str().unwrap()).collect();
         assert_eq!(kinds, ["received", "group", "post", "mark", "text"]);
-        let m = &items[0]["messages"][0];
+        let m = &items[0]["body"]["content"]["messages"][0];
         assert_eq!((m["from"]["name"].as_str(), m["text"].as_str(), m["place"]["name"].as_str(), m["place"]["session"].as_str()), (Some("你"), Some("hi @ds-ember"), Some("#ops"), Some("s1")));
-        let g = &items[1];
+        let g = &items[1]["body"]["content"];
         assert_eq!(g["summary"], "看看目录 · 共 3 项");
         assert_eq!(g["title"], "读取 1 个文件、运行 1 条命令");
         assert_eq!((g["failures"].as_u64(), g["pending"].as_u64()), (Some(1), Some(1)));
         assert_eq!(g["steps"][0]["meta"], "2 秒");
         assert_eq!(g["steps"][1]["meta"], "进行中");
         assert_eq!(g["thinking"][0]["first"], "plan it");
-        assert_eq!(g["entries"], json!([1, 6]));
-        assert_eq!((items[2]["block"].as_bool(), items[2]["place"]["name"].as_str()), (Some(true), Some("#ops")));
-        assert_eq!(items[3]["text"], "标记为已完成");
+        assert_eq!(items[1]["entries"], json!([1, 6]));
+        assert_eq!((items[2]["body"]["content"]["block"].as_bool(), items[2]["body"]["content"]["place"]["name"].as_str()), (Some(true), Some("#ops")));
+        assert_eq!(items[3]["body"]["content"]["text"], "标记为已完成");
         assert_eq!(h["live"], json!([{"id": "s", "text": "正在思考…"}]));
         assert_eq!(h["phase"]["text"], "正在启动 Codex");
         assert_eq!(h["usage"][4]["value"], "50%");

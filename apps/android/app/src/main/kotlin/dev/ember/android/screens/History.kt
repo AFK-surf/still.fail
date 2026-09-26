@@ -63,17 +63,19 @@ import androidx.compose.ui.unit.sp
 import dev.ember.android.AppState
 import dev.ember.android.LocalApp
 import dev.ember.android.Screen
-import dev.ember.android.data.ChatAgentView
+import dev.ember.android.data.ChatAgent
 import dev.ember.android.data.ChatOf
 import dev.ember.android.data.ChatView
 import dev.ember.android.data.RunnableProfile
 import dev.ember.android.data.HistoryItem
+import dev.ember.android.data.HistoryBody
+import dev.ember.android.data.HistoryGroup
 import dev.ember.android.data.HistoryLive
 import dev.ember.android.data.HistoryPhase
 import dev.ember.android.data.HistoryStep
 import dev.ember.android.data.HistoryView
-import dev.ember.android.data.ModelChoice
-import dev.ember.android.data.HostInfo
+import dev.ember.android.data.ModelOption
+import dev.ember.android.data.Host
 import dev.ember.android.data.Topics
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.data.state
@@ -105,16 +107,16 @@ import kotlinx.coroutines.launch
 
 /** Opens an agent's execution history, over the item's page it belongs to. */
 /** `entry`: the transcript entry to open at (an activity row's), else its newest. */
-fun openHistory(app: AppState, station: String, of: ChatOf, key: String, entry: Int? = null) {
+fun openHistory(app: AppState, station: String, of: ChatOf, key: String, entry: Long? = null) {
     app.sheet = SheetSpec(0.55f, draggable = true) { HistorySheet(station, of, key, entry) }
 }
 
 @Composable
-private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String, entry: Int? = null) {
+private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String, entry: Long? = null) {
     val app = LocalApp.current
     val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
     val history by rememberTopic<HistoryView>(app.core, Topics.history(station, key))
-    val host by rememberTopic<HostInfo>(app.core, Topics.host(station))
+    val host by rememberTopic<Host>(app.core, Topics.host(station))
     val agent = chat.value?.agents?.firstOrNull { it.session.key == key }
     var tab by rememberSaveable { mutableStateOf(0) }
     SheetGrab()
@@ -138,7 +140,7 @@ private fun ColumnScope.HistorySheet(station: String, of: ChatOf, key: String, e
 
 /** What can be done to it right now: stop a turn, release an idle process. */
 @Composable
-private fun Actions(station: String, agent: ChatAgentView) {
+private fun Actions(station: String, agent: ChatAgent) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val s = agent.session
@@ -162,19 +164,20 @@ private fun Actions(station: String, agent: ChatAgentView) {
 
 /** The head's short line: only what is worth a look now (an account signed out, a quota running out, the disk filling up). */
 @Composable
-private fun Summary(agent: ChatAgentView) {
+private fun Summary(agent: ChatAgent) {
     if (agent.attention.isEmpty()) return Box(Modifier.height(8.dp))
     Row(
         Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
         agent.attention.forEach { a ->
-            when (a.kind) {
-                "quota" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    QuotaRing(a.left.toInt(), a.level)
-                    Text(a.mark, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = C.subtle)
+            val quota = a.quota
+            when {
+                quota != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    QuotaRing(quota.left, quota.level)
+                    Text(quota.mark, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = C.subtle)
                 }
-                "disk" -> Text(a.text, fontSize = 12.sp, color = C.warn)
+                a.kind == "disk" -> Text(a.text, fontSize = 12.sp, color = C.warn)
                 else -> Text(a.text, fontSize = 12.sp, color = C.red)
             }
         }
@@ -188,7 +191,7 @@ private sealed interface Line {
 }
 
 @Composable
-private fun Steps(station: String, of: ChatOf, agent: ChatAgentView, history: HistoryView?, entry: Int? = null) {
+private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: HistoryView?, entry: Long? = null) {
     if (history == null) return Edge("正在读取执行历史…")
     if (history.empty) return Edge(history.edge)
     val items = history.items
@@ -229,15 +232,15 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgentView, history: Hi
 private fun Edge(text: String) = Text(text, color = C.subtle, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp))
 
 @Composable
-private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgentView) {
-    when (item.kind) {
-        "received" -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item.note?.let { note ->
+private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgent) {
+    when (val body = item.body) {
+        is HistoryBody.Received -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            body.content.note?.let { note ->
                 Message(Icons.Received, { Text("收到来自 ", fontSize = 13.sp, color = C.muted); Strong("ember"); Text(" 的提醒", fontSize = 13.sp, color = C.muted) }, note) {
                     Text(note, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink)
                 }
             }
-            item.messages.forEach { m ->
+            body.content.messages.forEach { m ->
                 Message(Icons.Received, {
                     Text("收到来自 ", fontSize = 13.sp, color = C.muted)
                     val user = m.from.slackUser
@@ -247,21 +250,25 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
                 }, m.text) { Text(m.text, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink) }
             }
         }
-        "post" -> Message(Icons.Send, {
-            Text("发送到 ", fontSize = 13.sp, color = C.muted)
-            Box(Modifier.weight(1f, fill = false)) {
-                val place = item.place
-                if (place != null) Place(station, of, place) else Row(verticalAlignment = Alignment.CenterVertically) { SlackMark(12.dp); Strong(" Slack") }
-            }
-            if (item.block) Pill("Block", C.blue)
-            if (item.failed) Pill("发送失败", C.red)
-        }, item.text) { Markdown(item.text, size = 15) }
-        "mark" -> Text(item.text, fontSize = 13.sp, color = C.muted)
-        "text" -> Box(Modifier.let { if (item.subagent) it.padding(start = 12.dp) else it }) {
-            val app = LocalApp.current
-            Brief(item.text) { app.reader = ReaderSpec({ Text("${agent.session.agentText} 写道", fontSize = 13.sp, color = C.muted) }) { Markdown(item.text, size = 15) } }
+        is HistoryBody.Post -> {
+            val post = body.content
+            Message(Icons.Send, {
+                Text("发送到 ", fontSize = 13.sp, color = C.muted)
+                Box(Modifier.weight(1f, fill = false)) {
+                    val place = post.place
+                    if (place != null) Place(station, of, place) else Row(verticalAlignment = Alignment.CenterVertically) { SlackMark(12.dp); Strong(" Slack") }
+                }
+                if (post.block) Pill("Block", C.blue)
+                if (post.failed) Pill("发送失败", C.red)
+            }, post.text) { Markdown(post.text, size = 15) }
         }
-        "group" -> Group(item)
+        is HistoryBody.Mark -> Text(body.content.text, fontSize = 13.sp, color = C.muted)
+        is HistoryBody.Text -> Box(Modifier.let { if (body.content.subagent) it.padding(start = 12.dp) else it }) {
+            val app = LocalApp.current
+            val text = body.content.text
+            Brief(text) { app.reader = ReaderSpec({ Text("${agent.session.agentText} 写道", fontSize = 13.sp, color = C.muted) }) { Markdown(text, size = 15) } }
+        }
+        is HistoryBody.Group -> Group(body.content)
     }
 }
 
@@ -350,7 +357,7 @@ private fun SlackName(station: String, user: String, name: String, mine: Boolean
 }
 
 @Composable
-private fun Group(g: HistoryItem) {
+private fun Group(g: HistoryGroup) {
     var open by remember { mutableStateOf(false) }
     Column {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { open = !open }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -412,7 +419,7 @@ private fun PhaseLine(phase: HistoryPhase) {
 
 /** How it runs (which can be changed here), what it has used, the station. */
 @Composable
-private fun Details(station: String, of: ChatOf, agent: ChatAgentView, history: HistoryView?, host: HostInfo?) {
+private fun Details(station: String, of: ChatOf, agent: ChatAgent, history: HistoryView?, host: Host?) {
     val app = LocalApp.current
     val s = agent.session
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
@@ -436,10 +443,10 @@ private fun Details(station: String, of: ChatOf, agent: ChatAgentView, history: 
 
 /** How it runs, in one line: the model (never cut short), how hard it thinks, the account (cut short first). */
 @Composable
-private fun RunRow(agent: ChatAgentView, onOpen: () -> Unit) {
+private fun RunRow(agent: ChatAgent, onOpen: () -> Unit) {
     val s = agent.session
-    val current = agent.profiles.firstOrNull { it.current }
-    val name = current?.name ?: agent.profile?.name ?: s.profile
+    // The account it runs on now, as the core says.
+    val name = agent.account?.name ?: ""
     Row(
         Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp))
             .border(1.dp, C.line, RoundedCornerShape(10.dp)).clickable(onClick = onOpen).padding(horizontal = 12.dp, vertical = 10.dp),
@@ -448,7 +455,7 @@ private fun RunRow(agent: ChatAgentView, onOpen: () -> Unit) {
         MakerIcon(s.maker, s.runtime, 15.dp)
         Text(s.model ?: "选模型", fontSize = 14.sp, color = C.ink, maxLines = 1, softWrap = false)
         Text(
-            " · ${s.effort ?: "默认深度"} · ${if (s.profilePinned) name else "自动 · $name"}",
+            " · ${s.effort ?: "默认深度"} · ${if (s.profilePinned == true) name else "自动 · $name"}",
             fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
         )
         IconIn(Icons.ChevronDown, 14.dp, C.muted)
@@ -474,15 +481,15 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
         NavBar(if (list != null) "换模型" else "返回", { if (list != null) list = null else app.pop() }, when (list) { "model" -> "选模型"; "account" -> "选账号"; else -> "换模型" })
         if (agent == null) return Text(chat.error?.message ?: "正在读取…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
         val s = agent.session
-        val current = agent.profiles.firstOrNull { it.current }
-        val currentName = current?.name ?: agent.profile?.name ?: s.profile
-        val kept = if (s.profilePinned) s.profile else null
+        val current = agent.account
+        val currentName = current?.name ?: ""
+        val kept = if (s.profilePinned == true) s.profile else null
         var model by remember { mutableStateOf(s.model) }
         var effort by remember { mutableStateOf(s.effort) }
         var profile by remember { mutableStateOf(kept) }
         var busy by remember { mutableStateOf(false) }
         val choice = agent.choices.firstOrNull { it.model == model }
-        val accounts = choice?.profiles.orEmpty()
+        val accounts = choice?.accounts?.get(s.runtime).orEmpty()
         val chosen = profile?.takeIf { p -> accounts.any { it.id == p } }
         val dropped = profile != null && chosen == null
         val efforts = listOf<String?>(null) + s.efforts
@@ -574,7 +581,7 @@ private fun SettingRow(onClick: () -> Unit, leading: @Composable () -> Unit = {}
 
 /** Every model it can move to, by who made it (the core says); a filter once there are many. */
 @Composable
-private fun ModelList(models: List<ModelChoice>, runtime: String, picked: String?, onPick: (String) -> Unit) {
+private fun ModelList(models: List<ModelOption>, runtime: String, picked: String?, onPick: (String) -> Unit) {
     var filter by remember { mutableStateOf("") }
     val shown = models.filter { it.model.contains(filter.trim(), ignoreCase = true) }
     val groups = shown.groupBy { it.maker?.name ?: "其他" }.toSortedMap(compareBy<String> { it == "其他" }.thenBy { it })
