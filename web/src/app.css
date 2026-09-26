@@ -1024,3 +1024,6 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .model-pool-item[data-on] { color: var(--text); }
 .model-pool-item .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-pool-gone { font-size: var(--text-xs); }
+
+/* Smooth (continuous-curvature) corners everywhere; browsers without corner-shape keep plain rounding. */
+*, *::before, *::after { corner-shape: squircle; }
