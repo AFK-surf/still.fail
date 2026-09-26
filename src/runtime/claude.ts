@@ -172,12 +172,16 @@ export function liveFromClaude(emit: (event: LiveEvent) => void): (frame: Record
   const blocks = new Map<number, { id: string; step: LiveStepKind }>();
   const tools = new Set<string>();
   return (frame) => {
-    if (frame.type === "stream_event") {
+    if (frame.type === "system" && frame.subtype === "status" && frame.status === "requesting") {
+      emit({ kind: "phase", phase: "requesting" });
+    } else if (frame.type === "stream_event") {
       const e = frame.event ?? {};
       const subagent = frame.parent_tool_use_id ? { subagent: true } : {};
+      if (e.type === "message_stop" && !frame.parent_tool_use_id) emit({ kind: "phase", phase: "working" });
       if (e.type === "message_start") {
         message = String(e.message?.id ?? `${Date.now()}`);
         blocks.clear();
+        if (!frame.parent_tool_use_id) emit({ kind: "phase", phase: "responding" });
       } else if (e.type === "content_block_start") {
         const b = e.content_block ?? {};
         const step: LiveStepKind | null = b.type === "text" ? "text" : b.type === "thinking" ? "thinking" : b.type === "tool_use" ? "tool" : null;

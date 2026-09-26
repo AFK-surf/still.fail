@@ -177,6 +177,11 @@ export class AdminApi {
       const title = typeof input.title === "string" && input.title.trim() ? input.title.trim().slice(0, 80) : null;
       return send(res, 200, { threadTs: this.#deps.hub.openChat(id, viewerId(viewer), title) });
     }
+    if (resource === "sessions" && id && action === "warm" && method === "POST") {
+      if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
+      void this.#deps.hub.warm(id).catch((error) => log.warn("warming failed", { session: id, error }));
+      return send(res, 202, { ok: true });
+    }
     if (resource === "sessions" && id && action === "live" && method === "GET") {
       if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
       return this.#live(req, res, id, Math.max(0, Number(url.searchParams.get("from")) || 0));

@@ -102,6 +102,20 @@ export class SessionActor {
     });
   }
 
+  /**
+   * Starts the runtime process ahead of a message, so its start-up overlaps
+   * the typing. Nothing is sent; an unused process is evicted as usual.
+   */
+  warm(): Promise<void> {
+    return this.#enqueue(async () => {
+      if (this.#agent || this.#closing) return;
+      log.info("warming session process", { session: this.key });
+      await this.#ensureAgent();
+      this.#idleSince = Date.now();
+      this.#deps.store.notify(this.key);
+    });
+  }
+
   /** Ends the runtime process if it is idle. */
   evict(): Promise<void> {
     return this.#enqueue(async () => {
@@ -171,6 +185,7 @@ export class SessionActor {
    */
   async #startTurn(kind: TurnKind, text: string): Promise<void> {
     try {
+      if (!this.#agent) this.#deps.live?.event(this.key, { kind: "phase", phase: "starting" });
       let agent = await this.#ensureAgent();
       const prompt = this.#resumeLost ? `${RESUME_LOST}\n\n${text}` : text;
       this.#resumeLost = false;

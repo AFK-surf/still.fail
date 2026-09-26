@@ -12,8 +12,9 @@ import { readTimeline, TranscriptTail } from "../src/transcript.ts";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 test("claude partial messages become steps: text and thinking end with their block, a tool with its result", () => {
+  const all: LiveEvent[] = [];
+  const feed = liveFromClaude((e) => all.push(e));
   const out: LiveEvent[] = [];
-  const feed = liveFromClaude((e) => out.push(e));
   const ev = (event: object, parent: string | null = null) => feed({ type: "stream_event", event, parent_tool_use_id: parent });
   ev({ type: "message_start", message: { id: "m1" } });
   ev({ type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } });
@@ -27,6 +28,8 @@ test("claude partial messages become steps: text and thinking end with their blo
   ev({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });
   ev({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Done" } });
   ev({ type: "content_block_stop", index: 0 });
+  out.push(...all.filter((e) => e.kind !== "phase"));
+  assert.deepEqual(all.filter((e) => e.kind === "phase").map((e) => (e as any).phase), ["responding", "responding"]);
   assert.deepEqual(out, [
     { kind: "start", id: "m1:0", step: "thinking" },
     { kind: "delta", id: "m1:0", field: "text", text: "hmm" },
@@ -38,7 +41,7 @@ test("claude partial messages become steps: text and thinking end with their blo
     { kind: "start", id: "m2:0", step: "text" },
     { kind: "delta", id: "m2:0", field: "text", text: "Done" },
     { kind: "end", id: "m2:0" },
-  ]);
+  ].filter(Boolean));
 });
 
 test("codex item notifications become steps, command output streaming as it runs", () => {
@@ -51,6 +54,9 @@ test("codex item notifications become steps, command output streaming as it runs
   feed("item/started", { item: { type: "agentMessage", id: "a1" } });
   feed("item/agentMessage/delta", { itemId: "a1", delta: "ok" });
   feed("item/completed", { item: { id: "a1" } });
+  const phases = out.filter((e) => e.kind === "phase").map((e) => (e as any).phase);
+  assert.deepEqual(phases, ["working", "responding"]);
+  out.splice(0, out.length, ...out.filter((e) => e.kind !== "phase"));
   assert.deepEqual(out, [
     { kind: "start", id: "c1", step: "tool", tool: "shell", input: "ls" },
     { kind: "delta", id: "c1", field: "output", text: "a\n" },

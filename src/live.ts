@@ -4,7 +4,7 @@
 // transcript stays the record, read incrementally while someone watches.
 import { watch, type FSWatcher } from "node:fs";
 import type { RuntimeKind } from "./config.ts";
-import type { LiveEvent, LiveStepKind } from "./runtime/types.ts";
+import type { LiveEvent, LivePhase, LiveStepKind } from "./runtime/types.ts";
 import { readTimeline, TranscriptTail, type TimelineEntry, type TranscriptUsage } from "./transcript.ts";
 
 /** A step in flight, as far as it has streamed. */
@@ -19,8 +19,11 @@ export interface LiveStep {
   startedAt: number;
 }
 
+/** Where the turn stands with the model, and for how long (ms) at the time it is sent. */
+export interface LivePhaseView { phase: LivePhase; elapsedMs: number }
+
 export type LiveMessage =
-  | { type: "steps"; steps: LiveStep[] }
+  | { type: "steps"; steps: LiveStep[]; phase: LivePhaseView | null }
   | { type: "step"; event: LiveEvent }
   | { type: "timeline"; start: number; entries: TimelineEntry[]; usage: TranscriptUsage }
   | { type: "clear" };
@@ -39,6 +42,7 @@ interface Watched {
 
 export class LiveHub {
   readonly #steps = new Map<string, Map<string, LiveStep>>();
+  readonly #phase = new Map<string, { phase: LivePhase; at: number }>();
   readonly #listeners = new Map<string, Set<Listener>>();
   readonly #watched = new Map<string, Watched>();
   /** Where a session's transcript is, once its runtime has started one. */
@@ -50,6 +54,11 @@ export class LiveHub {
 
   /** A runtime's live event for a session. */
   event(key: string, event: LiveEvent): void {
+    if (event.kind === "phase") {
+      this.#phase.set(key, { phase: event.phase, at: Date.now() });
+      this.#emit(key, { type: "step", event });
+      return;
+    }
     let steps = this.#steps.get(key);
     if (!steps) this.#steps.set(key, (steps = new Map()));
     if (event.kind === "start") {
@@ -71,6 +80,7 @@ export class LiveHub {
   /** The turn is over: whatever was in flight is in the transcript now, or never will be. */
   turnEnded(key: string): void {
     this.#steps.delete(key);
+    this.#phase.delete(key);
     this.#emit(key, { type: "clear" });
     this.#soon(key);
   }
@@ -88,7 +98,8 @@ export class LiveHub {
       const entries = readTimeline(watched.tail.runtime, watched.tail.path).slice(from, watched.tail.count);
       listener({ type: "timeline", start: from, entries, usage: { ...watched.tail.usage } });
     }
-    listener({ type: "steps", steps: [...(this.#steps.get(key)?.values() ?? [])] });
+    const phase = this.#phase.get(key);
+    listener({ type: "steps", steps: [...(this.#steps.get(key)?.values() ?? [])], phase: phase ? { phase: phase.phase, elapsedMs: Date.now() - phase.at } : null });
     return () => {
       set.delete(listener);
       if (set.size === 0) {

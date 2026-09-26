@@ -231,6 +231,12 @@ export class Hub {
     return this.#actors.get(key)?.evict() ?? Promise.resolve();
   }
 
+  /** Starts a session's runtime ahead of a message; see SessionActor.warm. */
+  warm(key: string): Promise<void> {
+    const row = this.#store.getSession(key);
+    return row ? this.#actor(row).warm() : Promise.resolve();
+  }
+
   async shutdown(): Promise<void> {
     this.live.close();
     await Promise.all([...this.#actors.values()].map((a) => a.dispose()));

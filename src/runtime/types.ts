@@ -48,8 +48,15 @@ export interface SessionEvents {
 export type LiveEvent =
   | { kind: "start"; id: string; step: LiveStepKind; tool?: string; input?: string; subagent?: boolean }
   | { kind: "delta"; id: string; field: "text" | "input" | "output"; text: string }
-  | { kind: "end"; id: string };
+  | { kind: "end"; id: string }
+  | { kind: "phase"; phase: LivePhase };
 export type LiveStepKind = "text" | "thinking" | "tool";
+/**
+ * Where a turn stands with the model: the runtime starting up, a request out
+ * with nothing back yet, the model streaming its answer, or the runtime
+ * working on its own (running tools) between requests.
+ */
+export type LivePhase = "starting" | "requesting" | "responding" | "working";
 
 export interface AgentSession {
   /** Runtime-native id: claude session id, codex thread id. Persist it to resume. */

@@ -11,7 +11,7 @@ import { expandRoute, type Profile } from "../config.ts";
 import { log } from "../log.ts";
 import { codexOverrides } from "../profiles.ts";
 import { spawnGroup, type GroupProcess, type ProcessRegistry } from "./process.ts";
-import type { AgentDriver, AgentSession, FailureReason, LiveEvent, LiveStepKind, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
+import type { AgentDriver, AgentSession, FailureReason, LiveEvent, LivePhase, LiveStepKind, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
 
 const SCRUBBED = ["OPENAI_API_KEY", "CODEX_HOME"];
 
@@ -255,7 +255,16 @@ export class CodexDriver implements AgentDriver {
  */
 export function liveFromCodex(emit: (event: LiveEvent) => void): (method: string, params: Record<string, any>) => void {
   const open = new Set<string>();
+  let phase: LivePhase | null = null;
+  const to = (next: LivePhase) => {
+    if (phase !== next) emit({ kind: "phase", phase: (phase = next) });
+  };
   return (method, params) => {
+    if (method === "turn/started") to("requesting");
+    else if (method === "turn/completed") phase = null;
+    else if (method === "item/agentMessage/delta" || method.startsWith("item/reasoning/")) to("responding");
+    else if (method === "item/started" && ["commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall", "webSearch"].includes(params.item?.type)) to("working");
+    else if (method === "item/completed" && ["commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall", "webSearch"].includes(params.item?.type)) to("requesting");
     if (method === "item/started") {
       const item = params.item ?? {};
       const id = String(item.id ?? "");
