@@ -104,10 +104,9 @@ export async function harness(
     throw error;
   }
   const fetch = (path: string, init?: RequestInit) => mf.dispatchFetch(origin + path, init as any);
-  async function begin(sub = "google-test-user", invalid?: string) {
+  async function begin(sub = "google-test-user", invalid?: string, callback = "http://127.0.0.1:32145/oauth/callback") {
     const verifier = randomSecret(),
-      state = randomSecret(),
-      callback = "http://127.0.0.1:32145/oauth/callback";
+      state = randomSecret();
     const start = new URLSearchParams({
       state,
       redirect_uri: callback,

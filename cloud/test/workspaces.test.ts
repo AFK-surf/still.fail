@@ -121,3 +121,18 @@ test("the web app may use this origin's /auth/callback; other redirects are refu
     await h.close();
   }
 });
+
+test("the Android app signs in through ember://auth/callback", async () => {
+  const h = await harness();
+  try {
+    const flow = await h.begin("google-android-user", undefined, "ember://auth/callback");
+    const { redirect, code } = await h.complete(flow);
+    assert.equal(`${redirect.protocol}//${redirect.host}${redirect.pathname}`, "ember://auth/callback");
+    assert.equal(redirect.searchParams.get("state"), flow.state);
+    const tokens = await h.exchange(flow, code);
+    assert.equal(tokens.status, 200);
+    assert.equal(((await tokens.json()) as { subject: string }).subject, "google-android-user");
+  } finally {
+    await h.close();
+  }
+});

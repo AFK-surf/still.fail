@@ -1,0 +1,3 @@
+[bindings.kotlin]
+package_name = "dev.ember.core.ffi"
+cdylib_name = "ember_core_ffi"
