@@ -15,11 +15,13 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use futures::future::{Either, LocalBoxFuture, Shared};
 use futures::lock::Mutex;
 use futures::{FutureExt, pin_mut};
-use iroh::endpoint::{ConnectionError, RecvStream, SendStream, presets::Minimal};
+
+use iroh::endpoint::{ConnectionError, QuicTransportConfig, RecvStream, SendStream, presets::Minimal};
 use iroh::{Endpoint, EndpointAddr, PublicKey, RelayMode, RelayUrl, SecretKey};
 use serde_json::{Value, json};
 
@@ -143,8 +145,21 @@ async fn bind(secret: &[u8; 32], relay_url: &str) -> Result<Endpoint> {
     Endpoint::builder(Minimal)
         .secret_key(SecretKey::from_bytes(secret))
         .relay_mode(relay_mode)
+        .transport_config(transport())
         .bind()
         .await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
+}
+
+/// Through a relay a round trip is hundreds of milliseconds, and QUIC's default first window
+/// (~14 KB) would spread a chat's first page over several of them. Starting at 256 KB sends
+/// what a screen needs in one round trip; larger transfers still grow the window as usual.
+/// The station does the same (mesh/station/src/main.rs).
+pub const INITIAL_WINDOW: u64 = 256 * 1024;
+
+pub fn transport() -> QuicTransportConfig {
+    let mut cubic = noq_proto::congestion::CubicConfig::default();
+    cubic.initial_window(INITIAL_WINDOW);
+    QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build()
 }
 
 /// Connects, presents the first grant, and starts renewing it.

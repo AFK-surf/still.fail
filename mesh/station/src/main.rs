@@ -23,7 +23,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD as B64};
 use futures_util::{SinkExt, StreamExt};
 use iroh::{
     Endpoint, RelayMode, RelayUrl, SecretKey,
-    endpoint::{Connection, RecvStream, SendStream, presets::Minimal},
+    endpoint::{Connection, QuicTransportConfig, RecvStream, SendStream, presets::Minimal},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -222,6 +222,7 @@ async fn run(data: &Path, admin: String, secret: String) -> Result<()> {
         .secret_key(key)
         .alpns(vec![ALPN.to_vec()])
         .relay_mode(RelayMode::Custom(relay.into()))
+        .transport_config(transport())
         .bind()
         .await?;
     info!(station = %endpoint.id(), workspace = %state.workspace_name, "ember-mesh listening");
@@ -495,4 +496,13 @@ async fn main() -> Result<()> {
         }
         _ => usage(),
     }
+}
+
+/// Clients reach the station through a relay, where a round trip is hundreds of milliseconds;
+/// QUIC's default first window (~14 KB) would spread a chat's first page over several of them.
+/// Starting at 256 KB answers what a screen needs in one; the client core does the same.
+fn transport() -> QuicTransportConfig {
+    let mut cubic = noq_proto::congestion::CubicConfig::default();
+    cubic.initial_window(256 * 1024);
+    QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build()
 }

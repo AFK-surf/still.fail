@@ -13,6 +13,8 @@ base64 = "0.22"
 sha2 = "0.10"
 hex = "0.4"
 thiserror = "2"
+# iroh's QUIC: its congestion settings (see mesh.rs, transport).
+noq-proto = { version = "1", default-features = false }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 iroh = { version = "=1.0.3", default-features = false, features = ["tls-ring"] }
