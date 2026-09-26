@@ -14,9 +14,10 @@
 /* ── sidebar ───────────────────────────────────────────────────────── */
 
 .sidebar { background: var(--sidebar); display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
-/* The sidebar is for going places, not for copying: nothing in it is selected by a click or a drag (its fields still are). */
+/* The sidebar is for going places, not for copying: nothing in it is selected (its fields still are) or dragged off. */
 .sidebar { -webkit-user-select: none; user-select: none; }
 .sidebar :is(input, textarea) { -webkit-user-select: text; user-select: text; }
+.sidebar :is(a, img, svg) { -webkit-user-drag: none; }
 /* The buddy's drawing starts a little inside the lockup: 16 px puts it on the rows' icons below. */
 .brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px; }
 .brand-lockup { display: block; }
