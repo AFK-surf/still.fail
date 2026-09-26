@@ -21,6 +21,8 @@ import type { Tool } from "./mcp.ts";
 import type { AgentDriver } from "./runtime/types.ts";
 import { SessionActor, type DeclaredState } from "./session.ts";
 import type { Attachment, Quote, SessionRow, SessionScope, Store } from "./store.ts";
+import { LiveHub } from "./live.ts";
+import { transcriptPath } from "./transcript.ts";
 
 /** A multi-session connect's session for one thread. */
 export function sessionKey(connect: string, channel: string, threadTs: string): string {
@@ -44,6 +46,8 @@ export class Hub {
   readonly #drivers: Record<RuntimeKind, AgentDriver>;
   readonly #mcpUrl: string;
   readonly #actors = new Map<string, SessionActor>();
+  /** What running turns are doing, for the admin page's live view. */
+  readonly live: LiveHub;
 
   /**
    * `config` is read on every use, so edits apply to the next decision.
@@ -65,6 +69,12 @@ export class Hub {
     this.#chats = options.chats;
     this.#drivers = options.drivers;
     this.#mcpUrl = options.mcpUrl;
+    this.live = new LiveHub((key) => {
+      const row = this.#store.getSession(key);
+      const profile = row && this.#config.profiles.find((p) => p.id === row.profile);
+      const path = row?.runtimeSessionId && profile ? transcriptPath(row.runtime, profile.home, row.runtimeSessionId) : undefined;
+      return path && row ? { runtime: row.runtime, path } : undefined;
+    });
   }
 
   get #config(): Config {
@@ -222,6 +232,7 @@ export class Hub {
   }
 
   async shutdown(): Promise<void> {
+    this.live.close();
     await Promise.all([...this.#actors.values()].map((a) => a.dispose()));
     await Promise.all(RUNTIMES.map((r) => this.#drivers[r].shutdown()));
   }
@@ -364,6 +375,7 @@ export class Hub {
         reposDir: this.reposDir,
         memoryPath: agentHomePaths(this.#config.agentHome).memory,
         maxNudges: this.#config.maxNudges,
+        live: this.live,
       });
       this.#actors.set(row.key, actor);
     }

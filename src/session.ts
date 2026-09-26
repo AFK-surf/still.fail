@@ -6,7 +6,7 @@ import type { Profile, RuntimeKind } from "./config.ts";
 import type { ChatSurface } from "./chat/types.ts";
 import { formatInbound, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, sessionInstructions, threadAddress } from "./instructions.ts";
 import { log } from "./log.ts";
-import type { AgentDriver, AgentSession, TurnOutcome } from "./runtime/types.ts";
+import type { AgentDriver, AgentSession, LiveEvent, TurnOutcome } from "./runtime/types.ts";
 import type { InboundRow, SessionRow, Store, TurnKind } from "./store.ts";
 
 export type DeclaredState = "final" | "block";
@@ -23,6 +23,8 @@ export interface SessionDeps {
   reposDir: string;
   memoryPath: string;
   maxNudges: number;
+  /** Where the runtime's live steps go, for whoever watches the session. */
+  live?: { event(key: string, event: LiveEvent): void; turnEnded(key: string): void };
 }
 
 interface Turn {
@@ -229,7 +231,11 @@ export class SessionActor {
       turnStarted: () => void this.#enqueue(async () => {
         if (this.#agent === agent && !this.#turn) this.#beginTurn("input");
       }),
-      turnEnded: (outcome: TurnOutcome) => void this.#enqueue(() => this.#onTurnEnded(agent, outcome)),
+      turnEnded: (outcome: TurnOutcome) => {
+        this.#deps.live?.turnEnded(this.key);
+        void this.#enqueue(() => this.#onTurnEnded(agent, outcome));
+      },
+      live: (event: LiveEvent) => this.#deps.live?.event(this.key, event),
       closed: (reason: string) => void this.#enqueue(async () => {
         if (this.#agent === agent) {
           log.info("session runtime closed", { session: this.key, reason });

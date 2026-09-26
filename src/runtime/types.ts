@@ -35,7 +35,21 @@ export interface SessionEvents {
   turnEnded(outcome: TurnOutcome): void;
   /** The runtime process (or its shared host) went away; the session is unusable. */
   closed(reason: string): void;
+  /** What the turn is doing right now, as the runtime streams it; the transcript has it only once a step is done. */
+  live?(event: LiveEvent): void;
 }
+
+/**
+ * A turn's steps as they happen. A step is a stretch of the reply, of
+ * thinking, or a tool call; it starts, grows by deltas (the reply's text, the
+ * tool's input as it is written, a command's output as it runs) and ends.
+ * Nothing here is kept: once a step ends, the transcript is the record.
+ */
+export type LiveEvent =
+  | { kind: "start"; id: string; step: LiveStepKind; tool?: string; input?: string; subagent?: boolean }
+  | { kind: "delta"; id: string; field: "text" | "input" | "output"; text: string }
+  | { kind: "end"; id: string };
+export type LiveStepKind = "text" | "thinking" | "tool";
 
 export interface AgentSession {
   /** Runtime-native id: claude session id, codex thread id. Persist it to resume. */

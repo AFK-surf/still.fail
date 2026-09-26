@@ -4,7 +4,7 @@
 //   {type: user|assistant, message: {content: string | blocks}, isSidechain}
 // - codex:  $CODEX_HOME/sessions/**/rollout-*<id>.jsonl, lines of
 //   {type: response_item, payload: message | reasoning | function_call | …}
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { RuntimeKind } from "./config.ts";
 
@@ -163,4 +163,86 @@ function codexTimeline(records: Record<string, any>[]): TimelineEntry[] {
     }
   }
   return out;
+}
+
+/**
+ * Reads a transcript as it grows: each read returns the timeline entries of
+ * the lines written since the last one, and the usage so far. Lines are
+ * independent, so parsing only the new ones gives what a full read would.
+ */
+export class TranscriptTail {
+  readonly runtime: RuntimeKind;
+  readonly path: string;
+  #offset = 0;
+  #partial = "";
+  /** Timeline entries read so far. */
+  count = 0;
+  readonly usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
+  readonly #seen = new Set<string>();
+
+  constructor(runtime: RuntimeKind, path: string) {
+    this.runtime = runtime;
+    this.path = path;
+  }
+
+  /** New entries since the last read, with the index of the first. */
+  read(): { start: number; entries: TimelineEntry[] } {
+    const start = this.count;
+    let size: number;
+    try {
+      size = statSync(this.path).size;
+    } catch {
+      return { start, entries: [] };
+    }
+    if (size < this.#offset) { this.#offset = 0; this.#partial = ""; } // rewritten: start over
+    if (size === this.#offset) return { start, entries: [] };
+    const fd = openSync(this.path, "r");
+    const buffer = Buffer.alloc(size - this.#offset);
+    try {
+      readSync(fd, buffer, 0, buffer.length, this.#offset);
+    } finally {
+      closeSync(fd);
+    }
+    this.#offset = size;
+    const text = this.#partial + buffer.toString("utf8");
+    const lines = text.split("\n");
+    this.#partial = lines.pop() ?? ""; // a line still being written waits for the next read
+    const recs = lines.filter(Boolean).flatMap((line) => {
+      try {
+        return [JSON.parse(line) as Record<string, any>];
+      } catch {
+        return [];
+      }
+    });
+    this.#addUsage(recs);
+    const entries = this.runtime === "claude" ? claudeTimeline(recs) : codexTimeline(recs);
+    this.count += entries.length;
+    return { start, entries };
+  }
+
+  #addUsage(recs: Record<string, any>[]): void {
+    const u = this.usage;
+    for (const r of recs) {
+      if (this.runtime === "claude") {
+        const m = r.type === "assistant" ? r.message : undefined;
+        if (!m?.usage || !m.id || this.#seen.has(m.id)) continue;
+        this.#seen.add(m.id);
+        const cached = (m.usage.cache_read_input_tokens ?? 0) + (m.usage.cache_creation_input_tokens ?? 0);
+        u.modelCalls++;
+        u.inputTokens += (m.usage.input_tokens ?? 0) + cached;
+        u.cachedTokens += m.usage.cache_read_input_tokens ?? 0;
+        u.outputTokens += m.usage.output_tokens ?? 0;
+        if (typeof m.model === "string" && m.model !== "<synthetic>") u.model = m.model;
+      } else {
+        const p = r.payload ?? {};
+        if (r.type === "turn_context" && typeof p.model === "string") u.model = p.model;
+        const last = r.type === "event_msg" && p.type === "token_count" ? p.info?.last_token_usage : undefined;
+        if (!last) continue;
+        u.modelCalls++;
+        u.inputTokens += last.input_tokens ?? 0;
+        u.cachedTokens += last.cached_input_tokens ?? 0;
+        u.outputTokens += last.output_tokens ?? 0;
+      }
+    }
+  }
 }

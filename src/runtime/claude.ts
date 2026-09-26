@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { expandRoute } from "../config.ts";
 import { log } from "../log.ts";
 import { spawnGroup, type ProcessRegistry } from "./process.ts";
-import type { AgentDriver, AgentSession, FailureReason, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
+import type { AgentDriver, AgentSession, FailureReason, LiveEvent, LiveStepKind, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
 
 const MCP_TOKEN_VAR = "EMBER_MCP_TOKEN";
 /** Inherited variables that would let a session authenticate as something other than its profile. */
@@ -61,7 +61,7 @@ export class ClaudeDriver implements AgentDriver {
     };
     const model = options.model ?? options.profile.model;
     const args = [
-      "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+      "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
       "--dangerously-skip-permissions",
       ...(options.resume ? ["--resume", sessionId] : ["--session-id", sessionId]),
       ...(model ? ["--model", model] : []),
@@ -89,6 +89,7 @@ export class ClaudeDriver implements AgentDriver {
       authFailure = null;
       events.turnEnded(outcome);
     };
+    const live = liveFromClaude((event) => events.live?.(event));
 
     const proc = spawnGroup({
       command: this.#command, args, cwd: options.cwd, env,
@@ -101,6 +102,7 @@ export class ClaudeDriver implements AgentDriver {
           log.debug("claude non-json line", { line: line.slice(0, 500) });
           return;
         }
+        live(frame);
         if (frame.type === "system" && frame.subtype === "init" && !busy) {
           busy = true;
           events.turnStarted();
@@ -157,4 +159,53 @@ export class ClaudeDriver implements AgentDriver {
   async shutdown(): Promise<void> {
     await Promise.all([...this.#live].map((s) => s.dispose()));
   }
+}
+
+/**
+ * Claude Code's partial messages (--include-partial-messages) as live steps.
+ * Each content block of a model response is a step: text and thinking end
+ * with their block; a tool call ends when its result comes back, which also
+ * carries the output (Claude Code does not stream tool output).
+ */
+export function liveFromClaude(emit: (event: LiveEvent) => void): (frame: Record<string, any>) => void {
+  let message = "";
+  const blocks = new Map<number, { id: string; step: LiveStepKind }>();
+  const tools = new Set<string>();
+  return (frame) => {
+    if (frame.type === "stream_event") {
+      const e = frame.event ?? {};
+      const subagent = frame.parent_tool_use_id ? { subagent: true } : {};
+      if (e.type === "message_start") {
+        message = String(e.message?.id ?? `${Date.now()}`);
+        blocks.clear();
+      } else if (e.type === "content_block_start") {
+        const b = e.content_block ?? {};
+        const step: LiveStepKind | null = b.type === "text" ? "text" : b.type === "thinking" ? "thinking" : b.type === "tool_use" ? "tool" : null;
+        if (!step) return;
+        const id = step === "tool" && b.id ? String(b.id) : `${message}:${e.index}`;
+        blocks.set(Number(e.index), { id, step });
+        if (step === "tool") tools.add(id);
+        emit({ kind: "start", id, step, ...(step === "tool" ? { tool: String(b.name ?? "tool") } : {}), ...subagent });
+      } else if (e.type === "content_block_delta") {
+        const block = blocks.get(Number(e.index));
+        const d = e.delta ?? {};
+        if (!block) return;
+        if (d.type === "text_delta" && d.text) emit({ kind: "delta", id: block.id, field: "text", text: String(d.text) });
+        else if (d.type === "thinking_delta" && d.thinking) emit({ kind: "delta", id: block.id, field: "text", text: String(d.thinking) });
+        else if (d.type === "input_json_delta" && d.partial_json) emit({ kind: "delta", id: block.id, field: "input", text: String(d.partial_json) });
+      } else if (e.type === "content_block_stop") {
+        const block = blocks.get(Number(e.index));
+        if (block && block.step !== "tool") emit({ kind: "end", id: block.id });
+      }
+    } else if (frame.type === "user" && Array.isArray(frame.message?.content)) {
+      for (const c of frame.message.content) {
+        if (c?.type !== "tool_result" || !tools.has(String(c.tool_use_id))) continue;
+        const id = String(c.tool_use_id);
+        const text = typeof c.content === "string" ? c.content : Array.isArray(c.content) ? c.content.map((x: any) => x?.text ?? "").join("\n") : "";
+        if (text) emit({ kind: "delta", id, field: "output", text: text.slice(0, 8000) });
+        emit({ kind: "end", id });
+        tools.delete(id);
+      }
+    }
+  };
 }

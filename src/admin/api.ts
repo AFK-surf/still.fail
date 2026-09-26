@@ -1,7 +1,7 @@
 // The admin API behind /admin. Local visits are trusted; visits through the
 // Cloudflare tunnel must carry a valid Access identity (see access.ts).
 import { execFileSync } from "node:child_process";
-import { createReadStream, createWriteStream, existsSync, statSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { basename, extname, join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -176,6 +176,10 @@ export class AdminApi {
       if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
       const title = typeof input.title === "string" && input.title.trim() ? input.title.trim().slice(0, 80) : null;
       return send(res, 200, { threadTs: this.#deps.hub.openChat(id, viewerId(viewer), title) });
+    }
+    if (resource === "sessions" && id && action === "live" && method === "GET") {
+      if (!this.#deps.store.getSession(id)) throw new HttpError(404, `unknown session ${id}`);
+      return this.#live(req, res, id, Math.max(0, Number(url.searchParams.get("from")) || 0));
     }
     if (resource === "sessions" && id && action === "files" && method === "GET") {
       // A file sent to the session, for previews: only from its upload directory.
@@ -514,54 +518,19 @@ export class AdminApi {
     };
   }
 
-  #watchers = 0;
-  #watchTimer: ReturnType<typeof setInterval> | null = null;
-  readonly #seen = new Map<string, string>();
-  readonly #paths = new Map<string, string>();
-
   /**
-   * A running turn writes its steps to the runtime's transcript, not to the
-   * store, so nothing else would say the history grew. While someone follows
-   * the event stream, running sessions' transcripts are checked each second
-   * and a change is announced like any other session change.
+   * One session as it runs: the transcript entries from `from` on, the steps
+   * in flight, then each new step, delta and entry as it happens.
    */
-  #watch(): void {
-    if (this.#watchTimer) return;
-    this.#watchTimer = setInterval(() => {
-      for (const s of this.#deps.store.listSessions()) {
-        if (!s.running || !s.runtimeSessionId) {
-          this.#seen.delete(s.key);
-          this.#paths.delete(s.key);
-          continue;
-        }
-        // Finding a transcript can mean walking a directory tree; do it once per session.
-        let path = this.#paths.get(s.key);
-        if (!path) {
-          const profile = this.#deps.settings.config.profiles.find((p) => p.id === s.profile);
-          path = profile ? transcriptPath(s.runtime, profile.home, s.runtimeSessionId) : undefined;
-          if (!path) continue;
-          this.#paths.set(s.key, path);
-        }
-        let mark: string;
-        try {
-          const st = statSync(path);
-          mark = `${st.size}:${st.mtimeMs}`;
-        } catch {
-          continue;
-        }
-        const before = this.#seen.get(s.key);
-        this.#seen.set(s.key, mark);
-        if (before !== undefined && before !== mark) this.#deps.store.notify(s.key);
-      }
-    }, 1000);
-    this.#watchTimer.unref?.();
-  }
-
-  #unwatch(): void {
-    if (this.#watchTimer) clearInterval(this.#watchTimer);
-    this.#watchTimer = null;
-    this.#seen.clear();
-    this.#paths.clear();
+  #live(req: IncomingMessage, res: ServerResponse, key: string, from: number): void {
+    res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
+    res.write("retry: 2000\n\n");
+    const stop = this.#deps.hub.live.subscribe(key, from, (message) => res.write(`event: ${message.type}\ndata: ${JSON.stringify(message)}\n\n`));
+    const ping = setInterval(() => res.write(": ping\n\n"), 25_000);
+    req.on("close", () => {
+      clearInterval(ping);
+      stop();
+    });
   }
 
   #events(req: IncomingMessage, res: ServerResponse): void {
@@ -574,11 +543,8 @@ export class AdminApi {
     this.#deps.store.changes.on("session", onSession);
     const unsubscribe = this.#deps.settings.onChange(onConfig);
     const ping = setInterval(() => res.write(": ping\n\n"), 25_000); // keep proxies from closing an idle stream
-    this.#watchers++;
-    this.#watch();
     req.on("close", () => {
       clearInterval(ping);
-      if (--this.#watchers === 0) this.#unwatch();
       this.#deps.store.changes.off("session", onSession);
       this.#deps.logins.changes.off("change", onLogin);
       unsubscribe();

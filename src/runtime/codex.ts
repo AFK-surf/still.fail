@@ -11,7 +11,7 @@ import { expandRoute, type Profile } from "../config.ts";
 import { log } from "../log.ts";
 import { codexOverrides } from "../profiles.ts";
 import { spawnGroup, type GroupProcess, type ProcessRegistry } from "./process.ts";
-import type { AgentDriver, AgentSession, FailureReason, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
+import type { AgentDriver, AgentSession, FailureReason, LiveEvent, LiveStepKind, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
 
 const SCRUBBED = ["OPENAI_API_KEY", "CODEX_HOME"];
 
@@ -171,8 +171,10 @@ export class CodexDriver implements AgentDriver {
       events.turnEnded(outcome);
     };
 
+    const live = liveFromCodex((event) => events.live?.(event));
     host.threads.set(threadId, {
       notify(method, params) {
+        live(method, params);
         if (method === "turn/started") {
           turnId = params.turn?.id ?? turnId;
           if (!busy) {
@@ -245,4 +247,38 @@ export class CodexDriver implements AgentDriver {
     await Promise.all([...this.#hosts.values()].map((host) => host.kill()));
     this.#hosts.clear();
   }
+}
+
+/**
+ * The app-server's item notifications as live steps: an item starts, grows by
+ * deltas (the reply, reasoning, a command's output as it runs) and completes.
+ */
+export function liveFromCodex(emit: (event: LiveEvent) => void): (method: string, params: Record<string, any>) => void {
+  const open = new Set<string>();
+  return (method, params) => {
+    if (method === "item/started") {
+      const item = params.item ?? {};
+      const id = String(item.id ?? "");
+      let start: { step: LiveStepKind; tool?: string; input?: string } | null = null;
+      switch (item.type) {
+        case "agentMessage": start = { step: "text" }; break;
+        case "reasoning": start = { step: "thinking" }; break;
+        case "commandExecution": start = { step: "tool", tool: "shell", input: String(item.command ?? "") }; break;
+        case "fileChange": start = { step: "tool", tool: "apply_patch", input: (item.changes ?? []).map((c: any) => String(c.path ?? "")).join("\n") }; break;
+        case "mcpToolCall": start = { step: "tool", tool: `${item.server}.${item.tool}`, input: JSON.stringify(item.arguments ?? {}, null, 2) }; break;
+        case "dynamicToolCall": start = { step: "tool", tool: String(item.tool), input: JSON.stringify(item.arguments ?? {}, null, 2) }; break;
+        case "webSearch": start = { step: "tool", tool: "web_search", input: String(item.query ?? "") }; break;
+      }
+      if (!id || !start) return;
+      open.add(id);
+      emit({ kind: "start", id, ...start });
+    } else if (method === "item/agentMessage/delta" || method === "item/reasoning/textDelta" || method === "item/reasoning/summaryTextDelta" || method === "item/plan/delta") {
+      if (open.has(String(params.itemId)) && params.delta) emit({ kind: "delta", id: String(params.itemId), field: "text", text: String(params.delta) });
+    } else if (method === "item/commandExecution/outputDelta") {
+      if (open.has(String(params.itemId)) && params.delta) emit({ kind: "delta", id: String(params.itemId), field: "output", text: String(params.delta) });
+    } else if (method === "item/completed") {
+      const id = String(params.item?.id ?? "");
+      if (open.delete(id)) emit({ kind: "end", id });
+    }
+  };
 }
