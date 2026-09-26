@@ -687,7 +687,6 @@
 .run-picker-option:hover { background: var(--hover); }
 .run-picker-option[aria-pressed="true"] { background: var(--hover); font-weight: 600; }
 .run-picker-option .quota-rings { margin-left: auto; padding-left: 12px; }
-.run-chip { color: var(--text); font-size: var(--text-sm); }
 .run-chip .quota-rings { margin-left: 4px; }
 .run-chip .quota-ring-letter { display: none; }
 .run-usage { margin: 0; font-size: var(--text-xs); }

@@ -2,22 +2,22 @@
 // and agents. The messages are the page; each agent's execution history can
 // be opened beside them, one tab per agent.
 import { StationPreview } from "../Preview.tsx";
-import { scopeOf, useLink, useStation } from "../station.tsx";
+import { useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaBars, QuotaRing, Ring, mark, refillsIn } from "../components.tsx";
 import { ChevronDown, Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
-import { DropdownMenu, Popover, Tabs } from "radix-ui";
+import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
-import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall, useStations, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type RunnableProfile, type RuntimeKind, type SessionSummary, type ThreadView } from "../api.ts";
+import { useAction, useApi, useChat, useChats, useHost, useLives, useStationCall, type ChatAgentView, type ChatView, type LiveView, type ProfileView, type SessionSummary, type ThreadView } from "../api.ts";
 import { History } from "../History.tsx";
 import { ChatPanel } from "../Chat.tsx";
 import {
-  BADGE_LABEL, EFFORTS, EFFORT_LABEL, PROCESS_LABEL, RUNTIME_LABEL, agentLabel, compactNumber, slackThreadUrl, slackWorkspaceUrl, type Status,
+  BADGE_LABEL, EFFORTS, PROCESS_LABEL, RUNTIME_LABEL, agentLabel, compactNumber, slackThreadUrl, slackWorkspaceUrl, type Status,
 } from "../format.ts";
 import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
-import { AgentMark, Chooser, ChooserItem, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ProviderLogo, ResizeHandle, RuntimeLogo, SlackLogo, Time, Tip } from "../ui.tsx";
+import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ProviderLogo, ResizeHandle, RuntimeLogo, SlackLogo, Time, Tip } from "../ui.tsx";
 
 /**
  * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
@@ -341,19 +341,16 @@ function HistorySummary({ agent }: { agent: ChatAgentView }) {
  * last, folded. Changes take from its next turn on.
  */
 function SessionDetails({ agent, live }: { agent: ChatAgentView; live: LiveView | undefined }) {
-  const { session, profile } = agent;
+  const { session } = agent;
   const station = useStation();
   const link = useLink();
   const api = useApi();
   const toast = useToast();
   const host = useHost(station.address).value;
-  const view = useStations(scopeOf(station.address)).value?.find((s) => s.station === station.address);
   const change = useAction((input: { profile?: string | null; model?: string | null; effort?: string | null }) => api.sessionSettings(session.key, input), () => toast("已改，下一轮起生效"));
   const usage = live?.usage;
   const hitRate = usage && usage.inputTokens > 0 ? Math.round((usage.cachedTokens / usage.inputTokens) * 100) : null;
   const gb = (bytes: number) => `${Math.round(bytes / 1024 ** 3)} GB`;
-  const current = agent.profiles.find((p) => p.current);
-  const name = current?.name ?? profile?.name ?? session.profile;
   return (
     <div className="session-details">
       {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota). */}
