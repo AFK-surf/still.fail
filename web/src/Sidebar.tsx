@@ -100,6 +100,7 @@ function ChatRow({ item }: { item: ChatItem }) {
   const badge = chatBadge(item.agents);
   return (
     <NavLink className="nav-row nav-session" to={thread ? `${stationBase(item.station)}/chats/${thread.id}` : `${stationBase(item.station)}/agents/${encodeURIComponent(item.session ?? "")}`} data-unread={item.unread || undefined} onClick={chatClicked}>
+      {item.unread && <span className="unread-dot" role="img" aria-label="有未读消息" />}
       <span className="nav-session-text">
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className="nav-session-head">
