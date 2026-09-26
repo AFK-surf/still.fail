@@ -182,7 +182,7 @@ fn windows(list: &mut Vec<Value>, c: Clock) {
         let (mark, order) = format::window_mark(&label);
         w["mark"] = json!(mark);
         w["order"] = json!(order);
-        w["left"] = json!((100.0 - used).max(0.0).round());
+        w["left"] = json!((100.0 - used).max(0.0).round() as i64);
         w["level"] = json!(if used >= 90.0 { "red" } else if used >= 70.0 { "amber" } else { "ok" });
         w["refills"] = json!(w.get("resetsAt").and_then(Value::as_f64).map(|at| format::refills_in(at, c.now)));
     }
@@ -322,8 +322,8 @@ pub fn host(h: &mut Value) {
     let hours = ((uptime % 86_400.0) / 3600.0).floor();
     let arch = src.get("arch").and_then(Value::as_str).unwrap_or("").to_string();
     let meter = |label: &str, short: &str, percent: f64, value: String, note: Option<String>| {
-        let p = percent.clamp(0.0, 100.0).round();
-        json!({ "label": label, "short": short, "percent": p, "level": if p >= 90.0 { "red" } else if p >= 75.0 { "amber" } else { "ok" }, "value": value, "note": note })
+        let p = percent.clamp(0.0, 100.0).round() as i64;
+        json!({ "label": label, "short": short, "percent": p, "level": if p >= 90 { "red" } else if p >= 75 { "amber" } else { "ok" }, "value": value, "note": note })
     };
     let swap = n(&["memory", "swapUsedBytes"]);
     h["facts"] = json!([
@@ -440,6 +440,7 @@ mod tests {
             "memory": {"usedBytes": 8.0 * 1024f64.powi(3), "totalBytes": 32.0 * 1024f64.powi(3), "swapUsedBytes": null},
             "disk": {"totalBytes": 1000.0 * 1024f64.powi(3), "freeBytes": 50.0 * 1024f64.powi(3)}, "emberRssBytes": 100.0 * 1024f64.powi(2)});
         host(&mut h);
+        assert!(h["meters"][0]["percent"].is_i64() && v["quota"]["windows"][0]["left"].is_i64(), "whole numbers: clients read them as such");
         assert_eq!((h["summary"].as_str(), h["facts"][3].as_str()), (Some("8 核 · 32 GB"), Some("已运行 1 天 1 小时")));
         assert_eq!((h["meters"][2]["level"].as_str(), h["meters"][2]["value"].as_str(), h["emberText"].as_str()), (Some("red"), Some("剩 50.0 GB / 1000 GB"), Some("ember 100 MB")));
     }

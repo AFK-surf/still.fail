@@ -1538,7 +1538,7 @@ impl Stations {
                     view.steps = message.get("steps").and_then(Value::as_array).cloned().unwrap_or_default();
                     view.phase = message.get("phase").filter(|p| !p.is_null()).map(|p| {
                         let elapsed = p.get("elapsedMs").and_then(Value::as_f64).unwrap_or(0.0);
-                        json!({ "phase": p.get("phase").cloned().unwrap_or(Value::Null), "since": now - elapsed })
+                        json!({ "phase": p.get("phase").cloned().unwrap_or(Value::Null), "since": (now - elapsed).round() as i64 })
                     });
                 }
                 "clear" => *view = LiveView::default(),
@@ -1578,7 +1578,7 @@ fn apply_step(view: &mut LiveView, event: &Value, now: f64) {
     let kind = event.get("kind").and_then(Value::as_str).unwrap_or("");
     let id = event.get("id").cloned().unwrap_or(Value::Null);
     match kind {
-        "phase" => view.phase = Some(json!({ "phase": event.get("phase").cloned().unwrap_or(Value::Null), "since": now })),
+        "phase" => view.phase = Some(json!({ "phase": event.get("phase").cloned().unwrap_or(Value::Null), "since": now.round() as i64 })),
         "start" => {
             view.steps.retain(|s| s.get("id") != Some(&id));
             // What it is; what it writes comes with its transcript entry (the station tells no deltas).
@@ -1586,7 +1586,7 @@ fn apply_step(view: &mut LiveView, event: &Value, now: f64) {
                 "id": id,
                 "step": event.get("step").cloned().unwrap_or(Value::Null),
                 "input": event.get("input").and_then(Value::as_str).unwrap_or(""),
-                "startedAt": now,
+                "startedAt": now.round() as i64,
             });
             if let Some(tool) = event.get("tool").filter(|t| t.as_str().is_some_and(|t| !t.is_empty())) {
                 step["tool"] = tool.clone();
@@ -2505,6 +2505,7 @@ mod tests {
             let v = live_of(&sink, "k");
             assert_eq!(v["steps"][0]["id"], "s0");
             assert_eq!(v["phase"]["phase"], "thinking");
+            assert!(v["phase"]["since"].is_i64(), "a whole number of ms: clients read it as one");
             let since = v["phase"]["since"].as_f64().unwrap();
             assert!((since - (now - 5000.0)).abs() < 1000.0, "{since} vs {now}");
             push(json!({"type": "step", "event": {"kind": "start", "id": "t1", "step": "tool", "tool": "Bash", "input": "ls"}}));
