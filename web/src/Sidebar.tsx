@@ -91,8 +91,8 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
 
 /**
  * A chat in the list: its title (bold while something in it is unread) and
- * where it came from, then the last thing said in it and when. The dot on the
- * right is its agents' state (block before work before failure).
+ * where it came from, then the last thing said in it, when, and its agents'
+ * state as a dot (block before work before failure).
  */
 function ChatRow({ item }: { item: ChatItem }) {
   const { thread, connect } = item;
@@ -103,20 +103,19 @@ function ChatRow({ item }: { item: ChatItem }) {
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className="nav-session-head">
           <span className="nav-session-title">{item.title}</span>
-          {thread.surface === "ember"
-            ? <Tip label="ember 对话" side="right"><span className="session-kind"><Mark size={16} className="kind-mark" /></span></Tip>
-            : <Tip label={connect ? `来自 ${connect.name}` : "来自 Slack"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
+          {/* Only a chat that lives elsewhere (Slack) says so; ember's own chats need no mark. */}
+          {thread.surface !== "ember" && <Tip label={connect ? `来自 ${connect.name}` : "来自 Slack"} side="right"><span className="session-kind"><ConnectKindIcon kind={connect?.kind ?? "slack"} size={12} /></span></Tip>}
         </span>
         {/* People are in the chat itself; here only the last thing said and when. */}
         <span className="nav-session-meta">
           {item.last ? <LastMessage item={item} /> : <span className="nav-session-last" />}
           <Time className="nav-time" at={item.lastActiveAt} />
+          {/* The agents' state ends the second line, under the connect icon; its place is kept on every row so times line up. */}
+          {badge
+            ? <Tip label={BADGE_LABEL[badge]} side="right"><span className="state-dot" data-badge={badge} role="img" aria-label={BADGE_LABEL[badge]} /></Tip>
+            : <span className="state-dot" aria-hidden="true" />}
         </span>
       </span>
-      {/* The dot's place is kept on every row, so icons and times line up down the list. */}
-      {badge
-        ? <Tip label={BADGE_LABEL[badge]} side="right"><span className="state-dot" data-badge={badge} role="img" aria-label={BADGE_LABEL[badge]} /></Tip>
-        : <span className="state-dot" aria-hidden="true" />}
     </NavLink>
   );
 }
