@@ -66,6 +66,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
+import dev.ember.android.ui.Edge
 import dev.ember.android.ui.glass
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.HazeState
@@ -228,10 +229,11 @@ fun ChatScreen(station: String, of: ChatOf) {
     val density = LocalDensity.current
     var topBar by remember { mutableIntStateOf(0) }
     var bottomBar by remember { mutableIntStateOf(0) }
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
-        Messages(station, of, view, agents, draft, Modifier.fillMaxSize().hazeSource(haze), with(density) { topBar.toDp() }, with(density) { bottomBar.toDp() })
-        ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze))
-        Composer(station, of, view, agents, draft, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.glass(haze))
+    // Its own paper under all of it: the bars are see-through, and what is under the page must not show in them.
+    Box(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
+        Messages(station, of, view, agents, draft, Modifier.fillMaxSize().hazeSource(haze).background(C.bg), with(density) { topBar.toDp() }, with(density) { bottomBar.toDp() })
+        ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze, Edge.Top))
+        Composer(station, of, view, agents, draft, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.glass(haze, Edge.Bottom))
     }
 }
 
@@ -479,7 +481,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     Box(modifier.fillMaxWidth()) {
         LazyColumn(
             Modifier.fillMaxSize(), state = list,
-            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp + top, bottom = 10.dp + bottom), verticalArrangement = Arrangement.spacedBy(14.dp, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
+            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = top, bottom = bottom), verticalArrangement = Arrangement.spacedBy(14.dp, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
         ) {
             items(rows, key = { it.id }) { row ->
                 val fresh = remember(row.id) { row.id !in known }
@@ -504,7 +506,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         if (awayFromEnd(list)) {
             val scope = rememberCoroutineScope()
             Box(
-                Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 12.dp + bottom).size(38.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(C.surface)
+                Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom - 8.dp).size(38.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(C.surface)
                     .clickable { scope.launch { follow.jump() } },
                 contentAlignment = Alignment.Center,
             ) { IconIn(Icons.Down, 18.dp, C.ink) }

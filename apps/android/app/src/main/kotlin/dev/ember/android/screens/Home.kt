@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
+import dev.ember.android.ui.Edge
 import dev.ember.android.ui.glass
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.HazeState
@@ -113,7 +114,7 @@ fun HomeScreen(current: WorkspaceEntry) {
     val density = LocalDensity.current
     var topBar by remember { mutableIntStateOf(0) }
     var bottomBar by remember { mutableIntStateOf(0) }
-    val padding = with(density) { PaddingValues(top = topBar.toDp(), bottom = bottomBar.toDp() + 12.dp) }
+    val padding = with(density) { PaddingValues(top = topBar.toDp(), bottom = bottomBar.toDp()) }
     Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze)) {
             val width = constraints.maxWidth
@@ -121,7 +122,7 @@ fun HomeScreen(current: WorkspaceEntry) {
             ChatPane(mine, true, mineList, padding, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
         }
         Row(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.glass(haze)
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.glass(haze, Edge.Top)
                 .windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -133,7 +134,7 @@ fun HomeScreen(current: WorkspaceEntry) {
             }
             NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
         }
-        Toolbar(app, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.glass(haze))
+        Toolbar(app, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.glass(haze, Edge.Bottom))
     }
 }
 
