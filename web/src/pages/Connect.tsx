@@ -480,7 +480,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const footer = step === "team" ? (
     <>
       <Button variant="ghost" onClick={close}>取消</Button>
-      <Button variant="primary" disabled={!chosen} onClick={() => setStep("app")}>下一步</Button>
+      {teams.length > 0 && <Button variant="primary" disabled={!chosen} onClick={() => setStep("app")}>下一步</Button>}
     </>
   ) : step === "app" ? (
     <>
@@ -501,22 +501,27 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
 
   return (
     <Dialog open={open} onClose={close} wide title={<>{TITLES[step]}<span className="dialog-step">{order.indexOf(step) + 1} / {order.length}</span></>} footer={footer}
-      description={step === "team" ? "连接是人找到 ember 的地方：一个 Slack app，在哪个连接说话就由它绑定的模型来做。ember 用工作区的 App 配置 token 替你建 app。" : undefined}>
+      description={step === "team" && teams.length > 0 ? "用哪个 Slack 工作区的配置 token 建 app。" : undefined}>
       {step === "team" && (
         <>
           {teams.length > 0 && (
             <Choices label="Slack 工作区" value={chosen?.teamId ?? ""} onChange={setTeam}
               options={teams.map((t) => ({ value: t.teamId, title: t.name, icon: <SlackTeamIcon team={t} />, description: <TokenOwner team={t} /> }))} />
           )}
-          {teams.length === 0 || adding ? (
+          {teams.length === 0 ? (
+            <div className="token-start">
+              <h3>先拿一个 Slack 的 App 配置 token</h3>
+              <p className="muted">有了它，ember 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用，这台 station 上的其他人看不到。</p>
+              <ConfigTokenForm onSaved={(id) => { setTeam(id); setStep("app"); }} />
+            </div>
+          ) : adding ? (
             <div className="card">
-              {teams.length === 0 && <p className="card-lead">先加一个 Slack 工作区的 App 配置 token：ember 就能直接替你建 app，以后也能改它的名字、图标和权限。</p>}
               <ConfigTokenForm onSaved={(id) => { setTeam(id); setAdding(false); }} />
             </div>
           ) : (
             <Button variant="ghost" onClick={() => setAdding(true)}><Plus {...ICON} />添加工作区的配置 token</Button>
           )}
-          <Button variant="ghost" onClick={() => setStep("manual")}>不用配置 token，自己在 Slack 建 app</Button>
+          <p className="muted token-manual">不想用配置 token？<button type="button" className="text-button" onClick={() => setStep("manual")}>自己在 Slack 建 app，再粘贴 token</button></p>
         </>
       )}
       {step === "app" && (

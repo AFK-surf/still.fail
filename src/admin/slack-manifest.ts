@@ -16,7 +16,8 @@ export function botScopes(): string[] {
 export function slackManifest(name: string, description = "Coding agent in your threads (ember)", redirectUrl?: string): Record<string, unknown> {
   return {
     display_information: { name, description, background_color: "#7a2e0e" },
-    features: { bot_user: { display_name: name, always_online: true } },
+    // The Messages tab lets people message the bot directly; without it Slack says messaging the app is turned off.
+    features: { bot_user: { display_name: name, always_online: true }, app_home: { home_tab_enabled: false, messages_tab_enabled: true, messages_tab_read_only_enabled: false } },
     oauth_config: { scopes: { bot: botScopes() }, ...(redirectUrl ? { redirect_urls: [redirectUrl] } : {}) },
     settings: {
       event_subscriptions: { bot_events: [...new Set(SLACK_GROUP_IDS.flatMap((g) => SLACK_GROUPS[g].events))] },

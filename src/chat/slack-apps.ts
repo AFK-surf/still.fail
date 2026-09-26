@@ -103,6 +103,8 @@ export function applySettings(manifest: Manifest, edit: Partial<SlackAppSettings
   next.display_information ??= {};
   next.features ??= {};
   next.features.bot_user ??= { display_name: edit.displayName ?? edit.name ?? "ember", always_online: true };
+  // People can always message the bot directly (an app made before this is fixed by any change to it).
+  next.features.app_home = { ...next.features.app_home, messages_tab_enabled: true, messages_tab_read_only_enabled: false };
   if (edit.name !== undefined) next.display_information.name = edit.name.trim();
   if (edit.displayName !== undefined) next.features.bot_user.display_name = edit.displayName.trim();
   if (edit.description !== undefined) setOrDelete(next.display_information, "description", edit.description.trim());
