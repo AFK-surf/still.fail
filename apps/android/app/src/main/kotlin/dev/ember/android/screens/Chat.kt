@@ -721,7 +721,8 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
     var collapsed by remember { mutableStateOf(app.flag("activityCollapsed", false)) }
     // As the core puts it together (after Zork's): a status line and this turn's rows.
     val activity = agent.live?.activity
-    val rows = activity?.rows.orEmpty().ifEmpty { listOf(ActivityRowView("idle", "other", "处理中", true)) }
+    // Until its first row comes, its status says what it does (the web's too): no stand-in row.
+    val rows = activity?.rows.orEmpty()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
     val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(220), label = "leaving")
@@ -736,24 +737,24 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
         val shown = rows.takeLast(count + 1)
         val overflowing = shown.size > count
         val shift = remember { Animatable(0f) }
-        val newest = shown.last().key
+        val newest = shown.lastOrNull()?.key ?: "none"
         var seen by remember { mutableStateOf(newest) }
         LaunchedEffect(newest) {
             if (newest != seen && overflowing) { shift.snapTo(1f); shift.animateTo(0f, tween(450, easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f))) }
             seen = newest
         }
         // Rows fill from the top; once there are more than fit, the newest sits at the bottom.
-        Box(Modifier.fillMaxWidth().height(22.dp * count).clipToBounds(), contentAlignment = if (overflowing) Alignment.BottomStart else Alignment.TopStart) {
-            Column(Modifier.wrapContentHeight(if (overflowing) Alignment.Bottom else Alignment.Top, unbounded = true).graphicsLayer { translationY = shift.value * 22.dp.toPx() }) {
+        Box(Modifier.fillMaxWidth().height(20.dp * count).clipToBounds(), contentAlignment = if (overflowing) Alignment.BottomStart else Alignment.TopStart) {
+            Column(Modifier.wrapContentHeight(if (overflowing) Alignment.Bottom else Alignment.Top, unbounded = true).graphicsLayer { translationY = shift.value * 20.dp.toPx() }) {
                 shown.forEach { r ->
                     Row(
-                        Modifier.height(22.dp).fillMaxWidth().clickable { openHistory(app, ctx.station, ctx.of, agent.key, r.entry) },
+                        Modifier.height(20.dp).fillMaxWidth().clickable { openHistory(app, ctx.station, ctx.of, agent.key, r.entry) },
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
                             if (r.live) Spinner(11.dp) else IconIn(activityIcon(r.kind), 13.dp, C.subtle)
                         }
-                        Text(r.text, fontSize = 13.sp, color = if (r.live) C.ink else C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(r.text, fontSize = 13.sp, color = if (r.live) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
