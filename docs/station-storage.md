@@ -229,6 +229,17 @@ CREATE TABLE entries (
   session removes threads left without one): `thread-removed {id}` tells
   clients to drop what they keep of it.
 
+Archiving writes a thread out of the database: when every session of a
+thread is archived, its entries go to `<data>/archive/threads/<id>.jsonl.zst`
+(one entry per line, zstd) in one step with deleting its rows, and the
+thread row is marked archived. Since entries never change, the file is the
+thread as it was, and clients' kept copies stay valid. Reading an archived
+thread reads the file (the same API, answers from the decompressed entries);
+a new entry — someone writing in it, or unarchiving — loads it back into the
+database first and removes the file. The session's transcript copy
+(`<data>/archive/transcripts/<session>.jsonl.zst`) is written the same way;
+the runtime's own file in the profile's home is left as it is.
+
 Reading: `GET /threads/:id/entries?after=n` (what came since),
 `?before=n&limit=` (older pages), `?from=a&to=b` (a gap). Thread summaries
 carry `last` (the last n) and the latest message as merged, for lists.
