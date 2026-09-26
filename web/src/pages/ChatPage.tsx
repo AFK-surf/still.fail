@@ -111,8 +111,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const chat = chatView.value;
   const panel = open.length > 0;
   const slackUrl = !chat.thread || chat.thread.surface === "ember" ? null : slackThreadUrl(slackWorkspaceUrl(slackConnect(chat)), chat.thread.channel, chat.thread.threadTs);
-  // Before its agent has a chat, the first message makes one, bound to the agent, and the page moves to it.
-  const session = "session" in of ? of.session : null;
+  // Before its agent has a chat, the first message makes one, bound to the agent; the page stays (the core shows the
+  // chat at the same address once it is there).
+  const session = "session" in of && !chat.thread ? of.session : null;
   const firstMessage = session === null ? {} : {
     ensureChat: async () => ({ key: session, thread: (await call.request<{ id: number }>("POST", "/threads", { session })).id }),
   };

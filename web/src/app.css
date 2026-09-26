@@ -461,7 +461,8 @@
 
 .session-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .session-page .page-bar { grid-template-columns: minmax(0, 1fr) auto; }
-.session-page .page-bar-title { grid-column: 1; justify-self: stretch; gap: 10px; min-width: 0; overflow: hidden; padding-left: 8px; }
+/* Not clipped: an agent mark's state dot sits partly outside it (the title ellipsises by itself). */
+.session-page .page-bar-title { grid-column: 1; justify-self: stretch; gap: 10px; min-width: 0; padding-left: 8px; }
 /* A long title gives way first: it shrinks to an ellipsis, the people and agents after it stay whole. */
 .session-page .page-bar-title h1 { max-width: none; min-width: 0; flex: 0 1 auto; }
 .session-page .page-bar-title > :not(h1) { flex: none; }

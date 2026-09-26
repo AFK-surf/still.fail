@@ -233,7 +233,8 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ch
     BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }) {
         if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
         agents.forEach { a ->
-            Box(Modifier.clip(RoundedCornerShape(6.dp)).clickable { openHistory(app, station, of, a.key) }) { ModelMark(a.model, a.runtime, 22.dp, a.state) }
+            // Not clipped: the state's dot sits over the mark's corner, partly outside it.
+            Box(Modifier.clickable { openHistory(app, station, of, a.key) }) { ModelMark(a.model, a.runtime, 22.dp, a.state) }
         }
     }
 }
