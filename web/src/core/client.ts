@@ -257,7 +257,12 @@ export class CoreClient {
 
   #receive(data: unknown): void {
     if (typeof data !== "object" || data === null) return;
-    const message = data as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault };
+    const message = data as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean };
+    // A newer build's core took over: this page is of the older build, so it loads the newer one.
+    if (message.retired) {
+      location.reload();
+      return;
+    }
     if (message.fatal !== undefined) {
       this.#restart(message.fatal);
       return;

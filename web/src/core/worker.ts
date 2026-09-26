@@ -81,6 +81,37 @@ function guard(run: () => void): void {
   }
 }
 
+declare const __BUILT_AT__: number;
+
+/**
+ * One core per browser: a tab still on an earlier build keeps that build's worker (another script, so another shared
+ * worker), and two cores on the same storage would race each other (a login refreshed twice is taken for theft). So
+ * the workers of this origin say which build they are; an older one retires, and its pages reload onto this build.
+ */
+const builds = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("ember-core-builds");
+if (builds) {
+  builds.onmessage = (event: MessageEvent) => {
+    const other = (event.data as { built?: unknown } | null)?.built;
+    if (typeof other !== "number" || other === __BUILT_AT__) return;
+    if (other > __BUILT_AT__) retire();
+    // An older one started after this: it hears of this one and retires.
+    else builds.postMessage({ built: __BUILT_AT__ });
+  };
+  builds.postMessage({ built: __BUILT_AT__ });
+}
+
+function retire(): void {
+  if (dead) return;
+  dead = true;
+  for (const port of ports) {
+    try {
+      port.postMessage({ retired: true });
+    } catch { /* gone already */ }
+  }
+  builds?.close();
+  scope.close();
+}
+
 const ready: Promise<EmberCore> = (async () => {
   await init();
   core = await start(emit);

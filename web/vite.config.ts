@@ -48,6 +48,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), ...(posthog && mode !== "cloud" ? [stationKeyFile(posthog)] : [])],
     define: {
       __POSTHOG__: JSON.stringify(posthog),
+      // When this build was made: the core's worker of a newer build takes over from an older one (src/core/worker.ts).
+      __BUILT_AT__: JSON.stringify(Date.now()),
       // Where a station's web services are shown (cloud/src/preview.ts); the dev rig gives its own.
       __PREVIEW_ORIGIN__: JSON.stringify(process.env.EMBER_PREVIEW_ORIGIN ?? "https://preview.ember.3720.org"),
     },
