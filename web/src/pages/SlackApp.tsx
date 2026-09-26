@@ -163,21 +163,46 @@ async function renderAvatar(avatar: Avatar, bg: string, maker: boolean): Promise
   const g = canvas.getContext("2d")!;
   g.fillStyle = bg;
   g.fillRect(0, 0, 1024, 1024);
-  const size = maker ? 560 : 880;
-  const at = (1024 - size) / 2;
-  if (avatar.mono) {
-    const mark = document.createElement("canvas");
-    mark.width = mark.height = size;
-    const m = mark.getContext("2d")!;
-    m.drawImage(image, 0, 0, size, size);
-    m.globalCompositeOperation = "source-in";
-    m.fillStyle = "#FFFFFF";
-    m.fillRect(0, 0, size, size);
-    g.drawImage(mark, at, at);
+  if (maker) {
+    // A maker's mark: smaller, centred, and white when mono.
+    const size = 560;
+    const at = (1024 - size) / 2;
+    if (avatar.mono) {
+      const mark = document.createElement("canvas");
+      mark.width = mark.height = size;
+      const m = mark.getContext("2d")!;
+      m.drawImage(image, 0, 0, size, size);
+      m.globalCompositeOperation = "source-in";
+      m.fillStyle = "#FFFFFF";
+      m.fillRect(0, 0, size, size);
+      g.drawImage(mark, at, at);
+    } else {
+      g.drawImage(image, at, at, size, size);
+    }
   } else {
-    g.drawImage(image, at, at, size, size);
+    // A buddy: what is drawn (its margins trimmed) as large as fits, 92% of the icon.
+    const [x, y, w, h] = drawnBox(image);
+    const scale = (1024 * 0.92) / Math.max(w, h);
+    g.drawImage(image, x, y, w, h, (1024 - w * scale) / 2, (1024 - h * scale) / 2, w * scale, h * scale);
   }
   return canvas.toDataURL("image/png");
+}
+
+/** Where a picture has anything drawn (not transparent): x, y, width, height in its own pixels. */
+function drawnBox(image: HTMLImageElement): [number, number, number, number] {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext("2d")!;
+  g.drawImage(image, 0, 0, size, size);
+  const { data } = g.getImageData(0, 0, size, size);
+  let left = size, top = size, right = -1, bottom = -1;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    if (data[(y * size + x) * 4 + 3]! > 16) { left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y); }
+  }
+  if (right < 0) return [0, 0, image.naturalWidth, image.naturalHeight];
+  const k = image.naturalWidth / size;
+  return [left * k, top * k, (right - left + 1) * k, (bottom - top + 1) * k];
 }
 
 /** The colour an uploaded picture sits on best: the average of its edge. */
