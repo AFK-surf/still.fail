@@ -72,8 +72,9 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   useEffect(() => {
     if (busy) { wasBusy.current = true; setLeaving(false); return; }
     if (!wasBusy.current) return;
-    const fade = setTimeout(() => setLeaving(true), 1200);
-    const gone = setTimeout(() => { wasBusy.current = false; lastAgents.current = null; setLeaving(false); rerender((n) => n + 1); }, 1200 + 520);
+    // Stopped: it holds a moment (600 ms), then fades (220 ms), as Cue's does.
+    const fade = setTimeout(() => setLeaving(true), 600);
+    const gone = setTimeout(() => { wasBusy.current = false; lastAgents.current = null; setLeaving(false); rerender((n) => n + 1); }, 600 + 220);
     return () => { clearTimeout(fade); clearTimeout(gone); };
   }, [busy]);
   const name = (m: MessageView) => member(m.author)?.name || m.authorName || (m.author === "local" ? "本机" : m.author);

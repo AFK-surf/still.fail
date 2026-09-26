@@ -1177,7 +1177,7 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .activity-rows[data-shift] .activity-row:first-child { animation: fade-out 380ms var(--ease-out) both; }
 @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
 /* The turn over, the activity fades and folds away. */
-.agent-activity { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 480ms var(--ease-out), opacity 420ms var(--ease-out); }
+.agent-activity { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 220ms var(--ease-out), opacity 220ms var(--ease-out); }
 .agent-activity > .msg-main { min-height: 0; overflow: hidden; }
 .agent-activity[data-leaving] { grid-template-rows: 0fr; opacity: 0; }
 @media (prefers-reduced-motion: reduce) {

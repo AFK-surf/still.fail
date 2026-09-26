@@ -369,7 +369,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
     LaunchedEffect(busy.isEmpty()) {
         leaving = false
         if (busy.isEmpty() && lastBusy.value.isNotEmpty()) {
-            delay(1200); leaving = true; delay(520)
+            delay(600); leaving = true; delay(220)
             lastBusy.value = emptyList(); leaving = false
         }
     }
@@ -724,7 +724,7 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
     val rows = activity?.rows.orEmpty().ifEmpty { listOf(ActivityRowView("idle", "other", "处理中", true)) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
-    val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(520), label = "leaving")
+    val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(220), label = "leaving")
     val count = if (collapsed) 1 else 3
     Column(Modifier.fillMaxWidth().alpha(fade), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         AgentHead(agent.key, agent.who, agent.model, agent.runtime, (activity?.status ?: "处理中") + (agent.since?.let { " · ${elapsed(now - it)}" } ?: ""), ctx) {
