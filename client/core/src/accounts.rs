@@ -508,6 +508,9 @@ mod tests {
         fn now_ms(&self) -> f64 {
             self.0.now_ms()
         }
+        fn utc_offset_min(&self, at_ms: f64) -> i32 {
+            self.0.utc_offset_min(at_ms)
+        }
         fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()> {
             self.0.sleep(ms)
         }
