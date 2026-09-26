@@ -1404,18 +1404,17 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .model-triple { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; justify-self: start; align-self: start; width: max-content; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: calc(9px * var(--corner-scale)); corner-shape: var(--corner-shape); background: none; color: var(--text); font: inherit; font-size: var(--text-sm); cursor: pointer; white-space: nowrap; overflow: hidden; }
 .model-triple:hover, .model-triple[data-state="open"] { background: var(--hover); }
 .model-triple:disabled { color: var(--muted); cursor: default; }
-/* The model control within the room it has (ModelTriple measures it): data-drop says what it leaves out. The model's
-   name is cut short last. */
+/* The model control within the room it has (ModelTriple measures it): data-drop says what it leaves out. The model is
+   never left out nor cut short. */
 .model-triple-fit { display: block; flex: 1 1 auto; min-width: 0; max-width: 100%; }
-.model-triple .triple-model { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-.model-triple .triple-model-name { overflow: hidden; text-overflow: ellipsis; }
+.model-triple .triple-model { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .model-triple .triple-part { display: inline-flex; align-items: center; gap: 5px; flex: none; }
 .model-triple .triple-part::before { content: "·"; color: var(--muted); margin-right: 1px; }
 .model-triple .triple-account-short { display: none; }
 .model-triple .quota-rings { margin-left: 2px; }
 .model-triple[data-drop~="name"] .triple-account-name { display: none; }
 .model-triple[data-drop~="name"] .triple-account-short { display: inline; }
-.model-triple[data-drop~="rings"] :is(.triple-rings, .triple-effort[data-default]) { display: none; }
+.model-triple[data-drop~="account"] .triple-account { display: none; }
 .model-triple[data-drop~="runtime"] .triple-runtime { display: none; }
 .model-triple[data-drop~="effort"] .triple-effort { display: none; }
 .model-triple .quota-ring-letter { display: none; }

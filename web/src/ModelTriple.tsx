@@ -9,8 +9,8 @@ import { QuotaBars } from "./components.tsx";
 import { EFFORTS, RUNTIME_LABEL, timeUntil } from "./format.ts";
 import { ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
 
-/** What the control leaves out, in turn, as its room narrows: the account's name, its quota and a default effort, the runtime, the effort. */
-const DROPS = ["", "name", "name rings", "name rings runtime", "name rings runtime effort"];
+/** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
+const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
 
 /** A model that can be chosen: the runtimes it runs on, and whether its accounts' quota is used up. */
 export interface ModelOption { model: string; runtimes: RuntimeKind[]; spent?: { until: number | null } | null }
