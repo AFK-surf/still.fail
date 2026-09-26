@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use ember_core::host::{Host, HostError, HttpRequest, HttpResponse, SocketFrames, StreamResponse};
+use ember_core::host::{DbOp, DbRange, Host, HostError, HttpRequest, HttpResponse, SocketFrames, StreamResponse};
 use ember_core::{ClientId, CoreError, CoreMessage};
 use futures::future::LocalBoxFuture;
 use futures::stream;
@@ -167,6 +167,16 @@ impl Host for NativeHost {
         })
     }
 
+    fn db_read(&self, range: DbRange) -> LocalBoxFuture<'static, Result<Vec<(String, Vec<u8>)>, HostError>> {
+        let db = self.storage.db.clone();
+        self.storage.run(move || read_records(&db, range))
+    }
+
+    fn db_write(&self, ops: Vec<DbOp>) -> LocalBoxFuture<'static, Result<(), HostError>> {
+        let db = self.storage.db.clone();
+        self.storage.run(move || write_records(&db, ops))
+    }
+
     fn storage_delete(&self, key: &str) -> LocalBoxFuture<'static, Result<(), HostError>> {
         let path = self.storage.path(key);
         self.storage.run(move || match std::fs::remove_file(&path) {
@@ -247,6 +257,62 @@ type Job = Box<dyn FnOnce() + Send>;
 struct Storage {
     dir: PathBuf,
     jobs: mpsc::Sender<Job>,
+    /// The core's database, `core.db` in the directory: opened by the first job that needs it.
+    db: Arc<std::sync::Mutex<DbHandle>>,
+}
+
+/// The database connection once open, with where it is.
+struct DbHandle {
+    path: PathBuf,
+    conn: Option<rusqlite::Connection>,
+}
+
+/// The connection, opened (and its table made) on first use.
+fn open_db(handle: &mut DbHandle) -> Result<&mut rusqlite::Connection, HostError> {
+    if handle.conn.is_none() {
+        let conn = rusqlite::Connection::open(&handle.path).map_err(db_error)?;
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             CREATE TABLE IF NOT EXISTS records (tbl TEXT NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (tbl, key)) WITHOUT ROWID;",
+        )
+        .map_err(db_error)?;
+        handle.conn = Some(conn);
+    }
+    Ok(handle.conn.as_mut().expect("opened above"))
+}
+
+/// A table's records with keys in `[from, to)`, in key order.
+fn read_records(db: &std::sync::Mutex<DbHandle>, range: DbRange) -> Result<Vec<(String, Vec<u8>)>, HostError> {
+    let mut guard = db.lock().map_err(|_| HostError("数据库不可用".into()))?;
+    let conn = open_db(&mut guard)?;
+    let mut query = conn.prepare_cached("SELECT key, value FROM records WHERE tbl = ?1 AND key >= ?2 AND key < ?3 ORDER BY key").map_err(db_error)?;
+    let rows = query
+        .query_map(rusqlite::params![range.table, range.from, range.to], |row| Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?)))
+        .map_err(db_error)?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(db_error)
+}
+
+/// A batch of changes, all or none.
+fn write_records(db: &std::sync::Mutex<DbHandle>, ops: Vec<DbOp>) -> Result<(), HostError> {
+    let mut guard = db.lock().map_err(|_| HostError("数据库不可用".into()))?;
+    let conn = open_db(&mut guard)?;
+    let tx = conn.transaction().map_err(db_error)?;
+    for op in ops {
+        match op {
+            DbOp::Put { table, key, value } => {
+                tx.execute("INSERT OR REPLACE INTO records (tbl, key, value) VALUES (?1, ?2, ?3)", rusqlite::params![table, key, value]).map_err(db_error)?;
+            }
+            DbOp::Delete { table, key } => {
+                tx.execute("DELETE FROM records WHERE tbl = ?1 AND key = ?2", rusqlite::params![table, key]).map_err(db_error)?;
+            }
+        }
+    }
+    tx.commit().map_err(db_error)
+}
+
+fn db_error(error: rusqlite::Error) -> HostError {
+    HostError(format!("数据库出错：{error}"))
 }
 
 impl Storage {
@@ -260,7 +326,8 @@ impl Storage {
                 }
             })
             .expect("storage thread");
-        Storage { dir, jobs }
+        let db = Arc::new(std::sync::Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
+        Storage { dir, jobs, db }
     }
 
     /// Keys may hold anything; file names only letters, digits, `-` and `_` (the rest is %XX).
@@ -291,6 +358,21 @@ impl Storage {
 mod tests {
     use super::*;
     use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+
+    #[test]
+    fn the_database_keeps_records_across_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = |dir: &std::path::Path| std::sync::Mutex::new(DbHandle { path: dir.join("core.db"), conn: None });
+        let put = |table: &str, key: &str, value: &str| DbOp::Put { table: table.into(), key: key.into(), value: value.as_bytes().to_vec() };
+        {
+            let db = handle(dir.path());
+            write_records(&db, vec![put("row", "s\u{1}a", "1"), put("row", "s\u{1}b", "2"), put("row", "t\u{1}a", "3"), put("thread", "s\u{1}a", "4")]).unwrap();
+            write_records(&db, vec![DbOp::Delete { table: "row".into(), key: "s\u{1}b".into() }, put("row", "s\u{1}a", "5")]).unwrap();
+        }
+        let db = handle(dir.path());
+        let found = read_records(&db, DbRange { table: "row".into(), from: "s\u{1}".into(), to: "s\u{2}".into() }).unwrap();
+        assert_eq!(found, vec![("s\u{1}a".to_string(), b"5".to_vec())]);
+    }
 
     #[test]
     fn a_websocket_hands_over_its_text_frames_until_it_closes() {
