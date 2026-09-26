@@ -8,7 +8,7 @@ export const STATUS_LABEL: Record<Status, string> = {
   running: "进行中",
   queued: "排队中",
   final: "已完成",
-  block: "等你回复",
+  block: "Block",
   failed: "失败",
   aborted: "已停止",
   unexpected: "意外停止",

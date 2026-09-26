@@ -242,7 +242,7 @@ function HistoryItem({ item, mention, person, where }: { item: Item; mention(tex
             <Send {...ICON} size={14} />
             发送到 {where(typeof args.to === "string" ? args.to : null) ?? <span className="h-place"><SlackLogo size={13} />Slack</span>}
             {kind === "final" && <Pill tone="green">已完成</Pill>}
-            {kind === "block" && <Pill tone="blue">等你回复</Pill>}
+            {kind === "block" && <Pill tone="blue">Block</Pill>}
             {failed && <Pill tone="red">发送失败</Pill>}
           </div>
           <Fold className="markdown"><Prose>{String(args.text)}</Prose></Fold>
@@ -250,7 +250,7 @@ function HistoryItem({ item, mention, person, where }: { item: Item; mention(tex
       );
     }
     case "mark":
-      return <div className="h-mark">标记为{item.kind === "final" ? "已完成" : item.kind === "block" ? "等你回复" : item.kind}</div>;
+      return <div className="h-mark">{item.kind === "final" ? "标记为已完成" : item.kind === "block" ? "进入 block 状态：agent 停下来等人处理" : `标记为 ${item.kind}`}</div>;
     case "group":
       return <Group steps={item.steps} thinking={item.thinking} />;
   }
