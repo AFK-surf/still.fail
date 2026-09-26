@@ -3,6 +3,7 @@
 // (or file) makes the session on that station; then the page becomes the chat.
 package dev.ember.android.screens
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import dev.ember.android.ui.floating
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.HazeState
@@ -173,7 +174,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
                 }
             }
         }
-        Column(Modifier.fillMaxWidth().floating(haze, RoundedCornerShape(26.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().floating(haze, RoundedCornerShape(26.dp)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { draft.focus++ }.padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             DraftExtras(draft)
             ComposerBar(draft, "做任何事", onPlus = { openAttach(app, launchers) }, onType = {}, onSend = {
                 val text = draft.text.trim()

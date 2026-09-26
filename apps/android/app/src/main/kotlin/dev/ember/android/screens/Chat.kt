@@ -1054,7 +1054,9 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<C
     // A capsule floating over the list, which runs on around it.
     Column(
         modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)
-            .floating(haze, RoundedCornerShape(26.dp)).padding(8.dp),
+            .floating(haze, RoundedCornerShape(26.dp))
+            // A tap on the capsule's own room is a tap on the field.
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { draft.focus++ }.padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         DraftExtras(draft)

@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -79,4 +80,6 @@ fun Modifier.floating(state: HazeState, shape: Shape): Modifier {
             noiseFactor = 0f
         }
         .border(0.5.dp, C.line, shape)
+        // What is under it is not reached through it: a touch anywhere on the capsule, its gaps too, stays on it.
+        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }
 }
