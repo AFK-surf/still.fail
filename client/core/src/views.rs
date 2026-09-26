@@ -858,7 +858,7 @@ mod tests {
 
             t.set(workspace(), stations(t.now_s(), true, true));
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![rows("ws/a"), link("ws/a"), rows("ws/b"), link("ws/b")]), "each station's rows, and nothing to join them with");
+            assert_eq!(sorted(t.started()), sorted(vec![rows("ws/a"), link("ws/a"), overview("ws/a"), rows("ws/b"), link("ws/b"), overview("ws/b")]), "each station's rows (and its overview, for who the viewer is there), nothing to join them with");
             let v = ui.value.clone().unwrap();
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             assert_eq!(v["loading"], true);
@@ -923,7 +923,7 @@ mod tests {
             // `b` comes online, `a` goes offline.
             t.set(workspace(), stations(t.now_s(), false, true));
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![rows("ws/b"), link("ws/b")]));
+            assert_eq!(sorted(t.started()), sorted(vec![rows("ws/b"), link("ws/b"), overview("ws/b")]));
             let states: Vec<&str> = ui.value.as_ref().unwrap()["stations"].as_array().unwrap().iter().map(|s| s["state"].as_str().unwrap()).collect();
             assert_eq!(states, vec!["offline", "connecting", "offline"]);
             // `a`'s topics are let go: stopped after the grace, like a UI unsubscribing.
