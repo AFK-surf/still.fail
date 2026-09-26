@@ -243,7 +243,7 @@ export function stationApi(t: StationCall) {
     newLoginCode: (id: string, code: string) => request<{ job: LoginJob }>("POST", `/logins/${at(id)}/code`, { code }),
     dropLogin: (id: string) => request<{ ok: true }>("DELETE", `/logins/${at(id)}`),
     /** A keyed profile, made only once its key is checked. */
-    addProfile: (input: { runtime: RuntimeKind; access: { kind: AccessKind; key?: string } }) => request<{ id: string; overview: Overview }>("POST", "/profiles", input),
+    addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string } }) => request<{ id: string; overview: Overview }>("POST", "/profiles", input),
     slackApp: (connect: string) => request<SlackAppView>("GET", `/connects/${at(connect)}/slack-app`),
     putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }) =>
       request<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>("PUT", `/connects/${at(connect)}/slack-app`, input),

@@ -4,10 +4,10 @@ import { Collapsible } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type ProfileView, type RuntimeKind } from "../api.ts";
-import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL } from "../format.ts";
+import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeLogo, RuntimeTags, Section, Segmented, Select, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time } from "../ui.tsx";
 
 
 export function AccountsPage() {
