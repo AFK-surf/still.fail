@@ -61,7 +61,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
             <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
-            <Route path="s/:station/*" element={<StationPages stations={stations} />} />
+            <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`)} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
@@ -71,8 +71,10 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-function StationPages({ stations }: { stations: Station[] }) {
+/** `stations` is undefined until the core has listed them: until then nothing is said (least of all "no such station"). */
+function StationPages({ stations }: { stations: Station[] | undefined }) {
   const { station: id } = useParams();
+  if (!stations) return null;
   const station = stations.find((s) => s.id === id);
   if (!station) return <Empty><p>这个 workspace 里没有这台 station。</p></Empty>;
   if (!station.online) return <Empty><Illustration name="station-offline" /><h2>「{station.name}」离线</h2><p>它最近没有和 ember cloud 联系。确认那台机器上的 ember 在运行。</p></Empty>;

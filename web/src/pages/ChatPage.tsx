@@ -88,7 +88,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const bound = "session" in of ? of.session : chatView.value?.thread?.sessions[0]?.session ?? null;
   const tabs = chosen ?? (bound ? [bound] : []);
   const [active, setActiveState] = useState<string | null>(kept?.active ?? null);
-  const open = tabs.filter((key) => agents.some((a) => a.session.key === key));
+  // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
+  const open = agents.length ? tabs.filter((key) => agents.some((a) => a.session.key === key)) : tabs;
   const shown = active && open.includes(active) ? active : open[0] ?? null;
   // Tabs and the one in front change together, and are kept for this chat in one write.
   const commit = (next: string[], front: string | null) => {
@@ -164,7 +165,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             <div className="side-bar">
               <Tabs.List className="side-tab-list" aria-label="执行历史">
                 {open.map((key) => {
-                  const a = agents.find((x) => x.session.key === key)!;
+                  const a = agents.find((x) => x.session.key === key);
+                  // Not known yet: its place, empty, until it is.
+                  if (!a) return <span key={key} className="side-tab-wrap" />;
                   const model = lives.get(key)?.usage?.model ?? a.session.model;
                   const label = agentLabel(model, a.session.effort);
                   return (
@@ -181,8 +184,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               <IconButton label="收起侧栏" icon={PanelRightClose} onClick={() => saveTabs([])} />
             </div>
             {open.map((key) => {
-              const a = agents.find((x) => x.session.key === key)!;
+              const a = agents.find((x) => x.session.key === key);
               const live = lives.get(key);
+              if (!a) return <Tabs.Content key={key} className="side-content" value={key} />;
               return (
                 <Tabs.Content key={key} className="side-content" value={key}>
                   <History session={a.session} threads={a.threads} connect={a.connect ?? undefined} live={live} actions={<SessionActions session={a.session} />}
