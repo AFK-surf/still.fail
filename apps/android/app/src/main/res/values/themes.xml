@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paper">#F5F3EF</color>
+    <!-- The window before Compose draws: the app's paper, so opening does not flash white or black. -->
+    <style name="Theme.Ember" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+    </style>
+</resources>
