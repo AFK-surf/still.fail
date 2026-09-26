@@ -1027,3 +1027,5 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 
 /* Smooth (continuous-curvature) corners everywhere; browsers without corner-shape keep plain rounding. */
 *, *::before, *::after { corner-shape: squircle; }
+/* These panes keep their distance from the bottom themselves; the browser's top anchoring would fight it. */
+.chat-list, .history-body { overflow-anchor: none; }

@@ -1,48 +1,51 @@
-// Keeps a scrolling pane at its bottom while the reader is there: new content,
-// images finishing loading, code getting highlighted, text streaming in. Once
-// the reader scrolls up it lets go, until they come back down.
-import { useEffect, useRef, type RefObject } from "react";
+// Keeps a scrolling pane's distance from its bottom while its content changes
+// (messages arriving, images loading, text streaming, blocks folding): at the
+// bottom stays at the bottom, 300px up stays 300px up. Only the reader moves
+// that distance, by scrolling themselves.
+import { useEffect, type RefObject } from "react";
 
-export function useStickToBottom(ref: RefObject<HTMLElement | null>): RefObject<boolean> {
-  const pinned = useRef(true);
+export function useStickToBottom(ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const toBottom = () => { if (pinned.current) el.scrollTop = el.scrollHeight; };
-    // Only the reader lets go of the bottom: scrolls caused by layout (content settling, clamping) never do.
-    let byReader = 0;
-    const reader = () => { byReader = Date.now(); };
-    const onScroll = () => {
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-      if (atBottom) pinned.current = true;
-      else if (Date.now() - byReader < 600) pinned.current = false;
+    let gap = 0;
+    // The reader is scrolling while a pointer is down on the pane, or shortly after a wheel, touch or key.
+    let pointerDown = false;
+    let lastInput = 0;
+    const reading = () => pointerDown || Date.now() - lastInput < 400;
+    const distance = () => el.scrollHeight - el.scrollTop - el.clientHeight;
+    const hold = () => {
+      const target = Math.max(0, el.scrollHeight - el.clientHeight - gap);
+      if (Math.abs(el.scrollTop - target) > 0.5) el.scrollTop = target;
     };
+    const onScroll = () => {
+      if (reading()) gap = Math.max(0, distance());
+      else hold();
+    };
+    const input = () => { lastInput = Date.now(); };
+    const down = () => { pointerDown = true; };
+    const up = () => { if (pointerDown) { pointerDown = false; gap = Math.max(0, distance()); } };
     el.addEventListener("scroll", onScroll, { passive: true });
-    for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, reader, { passive: true });
-    // Any child growing (an image decoding, a block being highlighted) moves the bottom.
-    const resize = new ResizeObserver(toBottom);
+    for (const type of ["wheel", "touchmove", "keydown"]) el.addEventListener(type, input, { passive: true });
+    el.addEventListener("pointerdown", down);
+    window.addEventListener("pointerup", up);
+    // Any change of size, inside or of the pane itself, is held to the same distance from the bottom.
+    const resize = new ResizeObserver(hold);
     const watch = () => { resize.disconnect(); resize.observe(el); for (const child of el.children) resize.observe(child); };
     watch();
-    const mutations = new MutationObserver(() => { watch(); toBottom(); });
+    const mutations = new MutationObserver(() => { watch(); hold(); });
     mutations.observe(el, { childList: true, subtree: true, characterData: true });
-    // Images load after layout; catch them as they finish.
-    const onLoad = (e: Event) => { if (e.target instanceof HTMLImageElement) toBottom(); };
+    const onLoad = () => hold();
     el.addEventListener("load", onLoad, true);
-    toBottom();
-    // For a moment after opening, settle every frame: fonts, highlighting and late layout all move the bottom.
-    const until = Date.now() + 1500;
-    let frame = requestAnimationFrame(function settle() {
-      toBottom();
-      if (Date.now() < until) frame = requestAnimationFrame(settle);
-    });
+    hold();
     return () => {
-      cancelAnimationFrame(frame);
       el.removeEventListener("scroll", onScroll);
-      for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.removeEventListener(type, reader);
+      for (const type of ["wheel", "touchmove", "keydown"]) el.removeEventListener(type, input);
+      el.removeEventListener("pointerdown", down);
+      window.removeEventListener("pointerup", up);
       el.removeEventListener("load", onLoad, true);
       resize.disconnect();
       mutations.disconnect();
     };
   }, [ref]);
-  return pinned;
 }
