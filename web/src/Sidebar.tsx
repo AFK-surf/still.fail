@@ -1,10 +1,10 @@
 import { ArrowLeft, KeyRound, Monitor, Plug, Settings, SquarePen } from "lucide-react";
-import { stationBase, useLink, useOnlyMine, usePerson } from "./station.tsx";
+import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation } from "react-router";
-import { MeContext, useChats, useIsMine, type ChatItem } from "./api.ts";
-import { BADGE_LABEL, chatBadge, cleanText, dayLabel } from "./format.ts";
+import { MeContext, useChats, type ChatItem } from "./api.ts";
+import { BADGE_LABEL, cleanText, dayLabel } from "./format.ts";
 import { Avatar, ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { Lockup, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
@@ -111,7 +111,6 @@ function ChatPane({ chats, scope, onlyMine, newChat, settings, hidden }: { chats
  */
 function ChatRow({ item }: { item: ChatItem }) {
   const { connect } = item;
-  const badge = chatBadge(item.agents);
   return (
     <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`} data-unread={item.unread || undefined} onClick={chatClicked}>
       {item.unread && <span className="unread-dot" role="img" aria-label="有未读消息" />}
@@ -127,12 +126,6 @@ function ChatRow({ item }: { item: ChatItem }) {
         <span className="nav-session-meta">
           {item.last ? <LastMessage item={item} /> : <span className="nav-session-last" />}
           <Time className="nav-time" at={item.lastActiveAt} fixed />
-          {/* The agents' state ends the second line, under the connect icon; its place is kept on every row so times line up. */}
-          <span className="state-dot-slot">
-            {badge
-              ? <Tip label={BADGE_LABEL[badge]} side="right"><span className="state-dot" data-badge={badge} role="img" aria-label={BADGE_LABEL[badge]} /></Tip>
-              : <span className="state-dot" aria-hidden="true" />}
-          </span>
         </span>
       </span>
     </NavLink>
@@ -146,21 +139,19 @@ function originLabel(item: ChatItem): string {
   return ["Slack", o?.teamName, where].filter(Boolean).join(" · ");
 }
 
-/** The last thing said in a chat, on one line: a small picture of who said it (name on hover), then what. */
+/**
+ * The last thing said in a chat, on one line: a small picture of who said it (name on hover), then what. Who it is
+ * and the agent's state on its picture are the core's (present.rs); the state shows only there.
+ */
 function LastMessage({ item }: { item: ChatItem }) {
-  const person = usePerson();
-  const isMine = useIsMine();
   const last = item.last!;
-  const agent = last.authorKind === "agent" ? item.agents.find((a) => a.key === last.author) : undefined;
-  const mine = last.authorKind === "person" && isMine({ id: last.author, email: last.author });
-  const name = last.authorKind === "ember" ? "ember"
-    : last.authorKind === "agent" ? agent?.model || last.authorName || "agent"
-    : mine ? "你" : person(last.author)?.name || last.authorName || last.author;
-  const picture = last.authorKind === "person" ? person(last.author)?.picture : undefined;
-  const who = last.authorKind === "ember" ? <Mark size={12} />
-    : last.authorKind === "agent" ? <ModelLogo model={agent?.model ?? null} runtime={agent?.runtime ?? "claude"} size={12} />
-    : picture ? <img className="person-pic" src={picture} alt="" width={12} height={12} referrerPolicy="no-referrer" />
-    : <Avatar id={last.author} name={name} size={12} />;
+  const by = last.by;
+  const name = by?.name ?? last.authorName ?? last.author;
+  const who = !by || by.kind === "person"
+    ? by?.picture ? <img className="person-pic" src={by.picture} alt="" width={12} height={12} referrerPolicy="no-referrer" /> : <Avatar id={last.author} name={name} size={12} />
+    : by.kind === "ember" ? <Mark size={12} />
+    : <span className="who-agent" data-badge={by.state ?? undefined}><ModelLogo model={by.model ?? null} runtime={by.runtime ?? "claude"} size={12} /></span>;
+  const label = by?.kind === "agent" && by.state ? `${name}（${BADGE_LABEL[by.state]}）` : name;
   const text = cleanText(last.text) || "（文件）";
-  return <span className="nav-session-last"><span className="nav-session-who" title={name} aria-label={`${name}：`}>{who}</span>{text}</span>;
+  return <span className="nav-session-last"><span className="nav-session-who" title={label} aria-label={`${label}：`}>{who}</span>{text}</span>;
 }

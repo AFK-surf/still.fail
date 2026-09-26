@@ -30,7 +30,17 @@ export type SlackAppView =
 export interface LinkView { state: "connecting" | "online" | "offline" | "error"; message?: string | null }
 
 /** A row of the sidebar as its station puts it together for the viewer (`ChatRow`), and the station it is on. */
-export type ChatItem = ChatRow & { station: string; stationName: string };
+/** Who said a row's last thing, as the core puts it (client/core/src/present.rs); an agent's state rides on its picture. */
+export interface LastBy {
+  kind: "agent" | "person" | "ember"; name: string; mine: boolean;
+  model?: string | null; runtime?: "claude" | "codex"; state?: "block" | "run" | "failed" | null;
+  id?: string; picture?: string | null;
+}
+/** A sidebar row as the core gives it: the station's row, where it is, its state, and who said its last thing. */
+export type ChatItem = Omit<ChatRow, "last"> & {
+  station: string; stationName: string; state: "block" | "run" | "failed" | null;
+  last: (NonNullable<ChatRow["last"]> & { by?: LastBy }) | null;
+};
 export interface ChatDay { daysAgo: number; at: number; items: ChatItem[] }
 export interface ChatsView {
   me: Me;

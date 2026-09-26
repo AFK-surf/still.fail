@@ -1219,3 +1219,10 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 /* An entry an activity row opened the history at: shown for a moment, then back to the page. */
 .h-item { border-radius: calc(8px * var(--corner-scale)); transition: background-color 900ms var(--ease-out); corner-shape: var(--corner-shape); }
 .h-item[data-focus] { background: color-mix(in oklch, var(--accent) 10%, transparent); transition: none; }
+
+/* A row's last speaker when it is an agent: its state rides on its picture (the core decides which). */
+.who-agent { position: relative; display: inline-grid; place-items: center; }
+.who-agent[data-badge]::after { content: ""; position: absolute; right: -3px; bottom: -2px; width: 7px; height: 7px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--sidebar, var(--canvas)); }
+.who-agent[data-badge="block"]::after { background: var(--accent); }
+.who-agent[data-badge="run"]::after { background: var(--sidebar, var(--canvas)); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.who-agent[data-badge="failed"]::after { background: var(--red); }
