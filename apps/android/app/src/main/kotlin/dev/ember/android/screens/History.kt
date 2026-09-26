@@ -567,22 +567,17 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 else -> null
             }
             Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("原来", fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
-                    Text(was.joinToString(" · "), fontSize = 14.sp, color = C.ink)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("改成", fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
-                    if (!changed && !movesOff) Text("不变", fontSize = 14.sp, color = C.muted)
-                    else Text(
-                        androidx.compose.ui.text.buildAnnotatedString {
-                            becomes.forEachIndexed { i, part ->
-                                if (i > 0) append(" · ")
-                                if (part != was[i]) withStyle(androidx.compose.ui.text.SpanStyle(color = C.accent, fontWeight = FontWeight.SemiBold)) { append(part) } else append(part)
-                            }
-                        },
-                        fontSize = 14.sp, color = C.ink,
-                    )
+                // Each property on its line: what it was, and, when it changes, an arrow to what it becomes.
+                listOf("模型", "深度", "账号").forEachIndexed { i, label ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(label, fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
+                        val moved = becomes[i] != was[i]
+                        Text(was[i], fontSize = 14.sp, color = if (moved) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = !moved))
+                        if (moved) {
+                            IconIn(Icons.ArrowRight, 14.dp, C.accent)
+                            Text(becomes[i], fontSize = 14.sp, color = C.accent, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
                 if (force != null) Text(force, fontSize = 12.sp, color = C.warn)
                 Text("改了以后从下一轮开始生效。", fontSize = 12.sp, color = C.subtle)

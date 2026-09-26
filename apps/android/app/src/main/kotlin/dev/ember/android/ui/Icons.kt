@@ -46,6 +46,7 @@ object Icons {
     val ChevronDown = stroked("chevron-down", 2.5f, "M6 9l6 6 6-6")
     val ChevronUp = stroked("chevron-up", 2.5f, "M6 15l6-6 6 6")
     val ChevronRight = stroked("chevron-right", 2.5f, "M9 6l6 6-6 6")
+    val ArrowRight = stroked("arrow-right", 2.5f, "M5 12h14M13 6l6 6-6 6")
     val Down = stroked("down", 2.4f, "M12 5v14M5 12l7 7 7-7")
     val Received = stroked("received", 2f, "M12 3v12M7 10l5 5 5-5", "M5 21h14")
     val Send = stroked("send", 2f, "M22 2L11 13", "M22 2l-7 20-4-9-9-4z")
