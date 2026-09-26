@@ -56,6 +56,8 @@ struct Inner {
     me: Weak<Inner>,
     host: Rc<dyn Host>,
     tracer: Rc<Tracer>,
+    /// Client errors recorded lately, by source and message, and when (the same one once a minute).
+    reported: RefCell<HashMap<String, f64>>,
     accounts: Rc<Accounts>,
     cloud: Rc<Cloud>,
     store: Rc<Store>,
@@ -146,6 +148,7 @@ impl Core {
                 me: me.clone(),
                 host: host.clone(),
                 tracer: tracer.clone(),
+                reported: RefCell::default(),
                 accounts: accounts.clone(),
                 cloud,
                 store,
@@ -349,6 +352,27 @@ impl Inner {
             Call::AuthComplete { query } => {
                 let (account, return_to) = self.accounts.complete_sign_in(&query).await?;
                 Ok(json!({ "account": account, "return_to": return_to }))
+            }
+            Call::ClientError { source, message } => {
+                let key = format!("{source}\u{0}{message}");
+                let now = self.host.now_ms();
+                let fresh = {
+                    let mut reported = self.reported.borrow_mut();
+                    let fresh = reported.get(&key).is_none_or(|at| now - at > 60_000.0);
+                    if fresh {
+                        reported.insert(key, now);
+                    }
+                    fresh
+                };
+                if fresh {
+                    let mut span = self.tracer.always("client.error", Kind::Internal);
+                    span.set("ember.source", source);
+                    span.set("error.type", "client");
+                    span.set("exception.message", message.chars().take(1000).collect::<String>());
+                    span.fail();
+                    span.end();
+                }
+                Ok(json!({}))
             }
             Call::SignOut { account } => {
                 self.accounts.sign_out(&account).await?;
@@ -900,6 +924,9 @@ fn answer(id: RequestId, result: Result<Value>) -> CoreMessage {
 /// A call with its params checked; binary params are already decoded.
 #[derive(Debug, PartialEq)]
 enum Call {
+    /// A client could not do something with what the core gave it (a view it cannot read, say): recorded as an error
+    /// span, so it is seen with the rest of the trace, the same one at most once a minute.
+    ClientError { source: String, message: String },
     AuthBegin { redirect_uri: String, return_to: String, device_name: String },
     AuthComplete { query: String },
     SignOut { account: String },
@@ -923,7 +950,7 @@ impl Call {
             Call::StationRequest { station, .. } | Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
             Call::StationPreview { station, .. } => Some(station),
-            Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::CloudRequest { .. } | Call::Migrate { .. } => None,
+            Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::CloudRequest { .. } | Call::Migrate { .. } | Call::ClientError { .. } => None,
         }
     }
 }
@@ -942,6 +969,11 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
     #[derive(Deserialize)]
     struct SignOut {
         account: String,
+    }
+    #[derive(Deserialize)]
+    struct ClientErrorParams {
+        source: String,
+        message: String,
     }
     #[derive(Deserialize)]
     struct CloudRequest {
@@ -1031,6 +1063,10 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "auth.complete" => Call::AuthComplete { query: read::<Complete>(params)?.query },
         "auth.signOut" => Call::SignOut { account: read::<SignOut>(params)?.account },
+        "client.error" => {
+            let p = read::<ClientErrorParams>(params)?;
+            Call::ClientError { source: p.source, message: p.message }
+        }
         "cloud.request" => {
             let p: CloudRequest = read(params)?;
             Call::CloudRequest { account: p.account, method: p.method, path: p.path, body: p.body }
@@ -1152,6 +1188,10 @@ mod tests {
         );
         assert_eq!(parse_call("auth.complete", json!({"query": "?code=c&state=s"})).unwrap(), Call::AuthComplete { query: "?code=c&state=s".into() });
         assert_eq!(parse_call("auth.signOut", json!({"account": "sub1"})).unwrap(), Call::SignOut { account: "sub1".into() });
+        assert_eq!(
+            parse_call("client.error", json!({"source": "android.decode", "message": "chat: 读不懂"})).unwrap(),
+            Call::ClientError { source: "android.decode".into(), message: "chat: 读不懂".into() }
+        );
         assert_eq!(
             parse_call("cloud.request", json!({"account": "a", "method": "PATCH", "path": "/v1/workspaces/w", "body": {"name": "n"}})).unwrap(),
             Call::CloudRequest { account: "a".into(), method: "PATCH".into(), path: "/v1/workspaces/w".into(), body: Some(json!({"name": "n"})) }

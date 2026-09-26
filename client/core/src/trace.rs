@@ -129,6 +129,14 @@ impl Tracer {
         self.start(name.into(), kind, None)
     }
 
+    /// The root of a new trace that is always recorded, whatever the sampling: for what went wrong, which is rare and
+    /// worth every one.
+    pub fn always(&self, name: impl Into<String>, kind: Kind) -> Span {
+        let mut span = self.start(name.into(), kind, None);
+        span.context.sampled = true;
+        span
+    }
+
     fn start(&self, name: String, kind: Kind, parent: Option<SpanContext>) -> Span {
         let mut span = [0u8; 8];
         self.host.random_bytes(&mut span);

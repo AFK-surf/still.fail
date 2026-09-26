@@ -54,6 +54,12 @@ fun <T> rememberTopic(core: EmberCore, topic: JsonObject?, serializer: KSerializ
             try {
                 Topic(state.value?.takeIf { it !is JsonNull }?.let { decode(serializer, it) }, state.error, state.loading)
             } catch (e: CoreException) {
+                // What this app cannot read is its bug or the core's: recorded with the rest of the trace, not only shown.
+                try {
+                    core.call("client.error", buildJsonObject { put("source", "android.decode"); put("message", "${topic["topic"]}: ${e.message}") })
+                } catch (_: CoreException) {
+                    // Recording it failed too: the page still says what went wrong.
+                }
                 Topic(null, e, false)
             }
         }
