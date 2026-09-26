@@ -603,7 +603,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
         val go = changed && choice != null && !busy
         Box(
             Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(16.dp)).background(if (changed) C.accent else C.chip)
+                .clip(RoundedCornerShape(16.dp)).background(if (changed) C.ink else C.chip)
                 .clickable(enabled = !busy) {
                     if (!go) { app.pop(); return@clickable }
                     busy = true
@@ -618,7 +618,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
         ) {
             Text(
                 if (changed) "改成 ${model ?: "默认模型"} · ${effort ?: "默认深度"} · ${accountText(chosen)}" else "不变",
-                fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.accentInk else C.ink, maxLines = 2, textAlign = TextAlign.Center,
+                fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.bg else C.ink, maxLines = 2, textAlign = TextAlign.Center,
             )
         }
     }
