@@ -1457,7 +1457,7 @@ mod tests {
             assert_eq!(v["agents"], json!([]));
             t.set(sessions("ws/a"), json!([{"key": "j", "connect": "ember", "profile": "p1"}]));
             t.read(&mut ui, 1).await;
-            assert_eq!(ui.value.clone().unwrap()["agents"], json!([{"status": "idle", "badge": null, "session": {"key": "j", "connect": "ember", "profile": "p1"}, "connect": null, "profile": null, "profiles": [], "attention": [], "turns": [], "threads": []}]));
+            assert_eq!(ui.value.clone().unwrap()["agents"], json!([{"status": "idle", "badge": null, "session": {"key": "j", "connect": "ember", "profile": "p1"}, "connect": null, "profile": null, "profiles": [], "choices": [], "attention": [], "turns": [], "threads": []}]));
 
             t.set(session_of("ws/a", "k"), json!({"session": {"key": "k", "connect": "c1", "profile": "p2"}, "threads": [chat.clone()], "turns": [{"id": "t1"}]}));
             t.store.set(&session_of("ws/a", "j"), Err(CoreError::new("http_404", "没有这个会话")));
@@ -1574,7 +1574,7 @@ mod tests {
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             assert_eq!((v["thread"].clone(), v["title"].clone(), v["messages"].clone(), v["outbox"].clone(), v["more"].clone()), (Value::Null, json!("部署挂了"), json!([]), json!([]), json!(false)));
-            assert_eq!(v["agents"], json!([{"status": "idle", "badge": null, "session": {"key": "k", "connect": "c1", "profile": "p1"}, "connect": {"id": "c1", "name": "Slack"}, "profile": null, "profiles": [], "attention": [],
+            assert_eq!(v["agents"], json!([{"status": "idle", "badge": null, "session": {"key": "k", "connect": "c1", "profile": "p1"}, "connect": {"id": "c1", "name": "Slack"}, "profile": null, "profiles": [], "choices": [], "attention": [],
                 "turns": [{"id": "t1"}], "threads": [{"id": 3, "surface": "slack:T1"}]}]));
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             // Deleted: the page says so.
