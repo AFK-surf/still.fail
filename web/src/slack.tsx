@@ -32,14 +32,15 @@ export const emptyTokens: TokenState = { appToken: "", botToken: "", verified: n
 
 /**
  * Token inputs with a verify step. For an existing connect (`connect`), a blank field
- * means "keep the stored token", and verification uses the stored one.
+ * means "keep the stored token", and verification uses the stored one. An app installed through Slack's OAuth
+ * (`install`, its state) has its bot token on the station already: only the app-level token is asked for.
  */
-export function TokenFields({ value, onChange, connect, masked }: {
-  value: TokenState; onChange(value: TokenState): void; connect?: string; masked?: { appToken: string; botToken: string };
+export function TokenFields({ value, onChange, connect, masked, install }: {
+  value: TokenState; onChange(value: TokenState): void; connect?: string; masked?: { appToken: string; botToken: string }; install?: string;
 }) {
   const api = useApi();
   const [errors, setErrors] = useState<string[]>([]);
-  const verify = useAction(() => api.verifySlack({ ...(connect ? { connect } : {}), appToken: value.appToken, botToken: value.botToken }), (result) => {
+  const verify = useAction(() => api.verifySlack({ ...(connect ? { connect } : {}), ...(install ? { install } : {}), appToken: value.appToken, botToken: value.botToken }), (result) => {
     setErrors(result.errors);
     onChange({ ...value, verified: result.errors.length === 0 ? result.identity : null });
   });
@@ -55,11 +56,13 @@ export function TokenFields({ value, onChange, connect, masked }: {
           onChange={(e) => edit({ appToken: e.target.value.trim() })}
           placeholder={masked?.appToken ? `已保存 ${masked.appToken}，留空保持不变` : "xapp-…"} />
       </Field>
-      <Field label="Bot Token" htmlFor="bot-token">
-        <input id="bot-token" className="input mono" spellCheck={false} type="password" autoComplete="off" value={value.botToken}
-          onChange={(e) => edit({ botToken: e.target.value.trim() })}
-          placeholder={masked?.botToken ? `已保存 ${masked.botToken}，留空保持不变` : "xoxb-…"} />
-      </Field>
+      {!install && (
+        <Field label="Bot Token" htmlFor="bot-token">
+          <input id="bot-token" className="input mono" spellCheck={false} type="password" autoComplete="off" value={value.botToken}
+            onChange={(e) => edit({ botToken: e.target.value.trim() })}
+            placeholder={masked?.botToken ? `已保存 ${masked.botToken}，留空保持不变` : "xoxb-…"} />
+        </Field>
+      )}
       <div className="verify-row">
         <Button onClick={() => void verify.run()} busy={verify.busy} disabled={!hasInput}>验证 token</Button>
         {value.verified && (

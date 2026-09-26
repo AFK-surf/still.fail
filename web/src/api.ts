@@ -228,6 +228,8 @@ export function useStationCall(station: string): StationCall {
 }
 
 /** The admin API of one station, by what each call does. */
+export interface MadeSlackApp { appId: string; links: SlackAppLinks; install: string | null; state: string | null }
+
 export function stationApi(t: StationCall) {
   const { request } = t;
   const at = (id: string) => encodeURIComponent(id);
@@ -240,7 +242,7 @@ export function stationApi(t: StationCall) {
     putProfile: (id: string, input: ProfileInput) => request<Overview>("PUT", `/profiles/${at(id)}`, input),
     refreshQuota: (id: string) => request<ProfileQuota | null>("POST", `/profiles/${at(id)}/quota`),
     checkProfile: (id: string) => request<ProfileCheck>("POST", `/profiles/${at(id)}/check`),
-    verifySlack: (input: { connect?: string; appToken?: string; botToken?: string }) =>
+    verifySlack: (input: { connect?: string; install?: string; appToken?: string; botToken?: string }) =>
       request<{ identity: SlackIdentity | null; errors: string[] }>("POST", "/slack/verify", input),
     bindSession: (connect: string, session: string | null, title?: string) =>
       request<{ session: string }>("POST", `/connects/${at(connect)}/session`, { session, ...(title ? { title } : {}) }),
@@ -263,7 +265,10 @@ export function stationApi(t: StationCall) {
     putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }) =>
       request<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>("PUT", `/connects/${at(connect)}/slack-app`, input),
     /** Makes a Slack app with the workspace's configuration token (ember's manifest, Socket Mode on), for a connect to come. */
-    makeSlackApp: () => request<{ appId: string; links: SlackAppLinks }>("POST", "/slack/apps", {}),
+    /** `install`: Slack's install link, when the app is installed through OAuth (a station in ember cloud); `state` names it. */
+    makeSlackApp: () => request<MadeSlackApp>("POST", "/slack/apps", {}),
+    /** Hands Slack's install code to the station that made the app. */
+    slackInstalled: (code: string, state: string) => request<{ team: string | null }>("POST", "/slack/installs", { code, state }),
     /** A new Slack connect from its tokens: the station names it as its bot is named in Slack. */
     createConnect: (input: ConnectInput) => request<{ id: string; overview: Overview }>("POST", "/connects", input),
     /** How a session runs from its next turn on: its profile, model, effort (null: the runtime's default). */

@@ -165,6 +165,12 @@ async function call(method: string, token: string | null, params: Record<string,
   return data;
 }
 
+/** An installation's code (from Slack's redirect) exchanged for its bot token, with the workspace it went into. */
+export async function exchangeInstallCode(input: { clientId: string; clientSecret: string; code: string; redirectUri: string }): Promise<{ botToken: string; team: string | null }> {
+  const data = await call("oauth.v2.access", null, { client_id: input.clientId, client_secret: input.clientSecret, code: input.code, redirect_uri: input.redirectUri });
+  return { botToken: String(data.access_token ?? ""), team: data.team?.name ? String(data.team.name) : null };
+}
+
 /** Exchanges a refresh token for a fresh pair. The old refresh token stops working. */
 export async function rotateConfigToken(refreshToken: string): Promise<ConfigToken> {
   const data = await call("tooling.tokens.rotate", null, { refresh_token: refreshToken.trim() });
@@ -219,9 +225,10 @@ export class SlackApps {
     return { permissionsUpdated: Boolean(data.permissions_updated) };
   }
 
-  async createApp(manifest: Manifest): Promise<{ appId: string; oauthAuthorizeUrl: string }> {
+  /** Makes the app; its OAuth credentials come only now, once. */
+  async createApp(manifest: Manifest): Promise<{ appId: string; clientId: string; clientSecret: string }> {
     const data = await this.#call("apps.manifest.create", { manifest: JSON.stringify(manifest) });
-    return { appId: String(data.app_id), oauthAuthorizeUrl: String(data.oauth_authorize_url ?? "") };
+    return { appId: String(data.app_id), clientId: String(data.credentials?.client_id ?? ""), clientSecret: String(data.credentials?.client_secret ?? "") };
   }
 
   async setIcon(appId: string, png: Buffer): Promise<void> {

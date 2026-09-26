@@ -4,11 +4,20 @@
 // reinstall; people can turn groups off on the connect page.
 import { SLACK_GROUP_IDS, SLACK_GROUPS } from "../chat/slack-apps.ts";
 
-export function slackManifest(name: string, description = "Coding agent in your threads (ember)"): Record<string, unknown> {
+/** Every bot scope of every permission group. */
+export function botScopes(): string[] {
+  return [...new Set(SLACK_GROUP_IDS.flatMap((g) => SLACK_GROUPS[g].scopes))];
+}
+
+/**
+ * `redirectUrl`: where Slack sends a person who installed it (ember cloud's page that hands the code to the station),
+ * so the bot token is not copied by hand.
+ */
+export function slackManifest(name: string, description = "Coding agent in your threads (ember)", redirectUrl?: string): Record<string, unknown> {
   return {
     display_information: { name, description, background_color: "#7a2e0e" },
     features: { bot_user: { display_name: name, always_online: true } },
-    oauth_config: { scopes: { bot: [...new Set(SLACK_GROUP_IDS.flatMap((g) => SLACK_GROUPS[g].scopes))] } },
+    oauth_config: { scopes: { bot: botScopes() }, ...(redirectUrl ? { redirect_urls: [redirectUrl] } : {}) },
     settings: {
       event_subscriptions: { bot_events: [...new Set(SLACK_GROUP_IDS.flatMap((g) => SLACK_GROUPS[g].events))] },
       interactivity: { is_enabled: false },

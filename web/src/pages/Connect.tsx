@@ -1,10 +1,10 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
-import { ExternalLink, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { CheckCircle2, ExternalLink, Pencil, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind, type SlackAppLinks } from "../api.ts";
+import { useAction, useApi, useOverview, useSessions, useStations, useThreads, type ConnectInput, type ConnectMode, type ConnectView, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
 import { agentLabel, connectionText, EFFORT_LABEL, EFFORTS, MODE, modeText, presence, relativeTime, RUNTIME_LABEL, sessionStatus, sessionTitle, STATUS_LABEL, statusTone } from "../format.ts";
 import { ConfigTokenForm, SlackAppSection } from "./SlackApp.tsx";
 import { OwnerLabel } from "../components.tsx";
@@ -408,7 +408,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const navigate = useNavigate();
   const toast = useToast();
   const [step, setStep] = useState<1 | 2>(1);
-  const [made, setMade] = useState<{ appId: string; links: SlackAppLinks } | null>(null);
+  const [made, setMade] = useState<MadeSlackApp | null>(null);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
   // The model first; the runtime only when the model runs on more than one.
   const models = useStationModels();
@@ -428,7 +428,8 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const makeApp = useAction(() => api.makeSlackApp(), (result) => setMade(result));
   const create = useAction(() => api.createConnect({
     kind: "slack", ...mode, bind: { runtime, model: entry?.model ?? "", effort },
-    slack: { appToken: tokens.appToken, botToken: tokens.botToken, ...(made ? { appId: made.appId } : {}) },
+    slack: made?.state ? { appToken: tokens.appToken, install: made.state }
+      : { appToken: tokens.appToken, botToken: tokens.botToken, ...(made ? { appId: made.appId } : {}) },
   }), ({ id }) => {
     toast("已添加连接，正在连接 Slack");
     close();
@@ -452,7 +453,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
       description={step === 1 ? "连接是人找到 ember 的地方：一个 Slack app，在哪个连接说话就由它绑定的模型来做。名字就是 Slack 里 bot 的名字。" : undefined}>
       {step === 1 && (
         <>
-          {made ? <MadeAppSteps links={made.links} />
+          {made ? <MadeAppSteps made={made} installed={overview.value?.slackInstalls.find((i) => i.state === made.state) ?? null} />
             : configured ? (
               <div className="callout" data-tone="blue">
                 <span>ember 可以直接在 Slack 建好 app：名字、权限、Socket Mode 都配好，之后也能在连接页改名字和图标。</span>
@@ -469,7 +470,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
               </>
             )}
           {makeApp.error && <p className="field-error" role="alert">{makeApp.error.message}</p>}
-          <TokenFields value={tokens} onChange={setTokens} />
+          <TokenFields value={tokens} onChange={setTokens} install={made?.state ?? undefined} />
         </>
       )}
       {step === 2 && (
@@ -501,22 +502,35 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   );
 }
 
-/** What is left in Slack once ember made the app: installing it (for the bot token) and the app-level token. */
-function MadeAppSteps({ links }: { links: SlackAppLinks }) {
+/**
+ * What is left in Slack once ember made the app: installing it, and the app-level token. Installed through Slack's
+ * OAuth (`made.install`), Slack sends the bot token back to the station itself; else it is copied from the OAuth page.
+ */
+function MadeAppSteps({ made, installed }: { made: MadeSlackApp; installed: { installed: boolean; team: string | null } | null }) {
+  const { links } = made;
   return (
     <ol className="steps">
-      <li>
-        <span>app 已经建好。把它安装到工作区，然后在 OAuth 页复制 Bot User OAuth Token（xoxb- 开头）。</span>
-        <span className="step-actions">
-          <a className="btn btn-primary" href={links.install} target="_blank" rel="noopener"><ExternalLink {...ICON} />安装到工作区</a>
-          <a className="btn btn-secondary" href={links.oauth} target="_blank" rel="noopener">打开 OAuth 页</a>
-        </span>
-      </li>
+      {made.install ? (
+        <li>
+          {installed?.installed
+            ? <span className="verify-ok"><CheckCircle2 {...ICON} />已装进「{installed.team ?? "工作区"}」</span>
+            : <span>app 已经建好。把它安装到工作区：在 Slack 里点「允许」，bot token 会自动交给 station。</span>}
+          {!installed?.installed && <a className="btn btn-primary" href={made.install} target="_blank" rel="noopener"><ExternalLink {...ICON} />安装到工作区</a>}
+        </li>
+      ) : (
+        <li>
+          <span>app 已经建好。把它安装到工作区，然后在 OAuth 页复制 Bot User OAuth Token（xoxb- 开头）。</span>
+          <span className="step-actions">
+            <a className="btn btn-primary" href={links.install} target="_blank" rel="noopener"><ExternalLink {...ICON} />安装到工作区</a>
+            <a className="btn btn-secondary" href={links.oauth} target="_blank" rel="noopener">打开 OAuth 页</a>
+          </span>
+        </li>
+      )}
       <li>
         <span>在 Basic Information 页生成 App-Level Token，勾选 connections:write，复制（xapp- 开头）。Slack 没有开放生成它的接口，只能在这里点一下。</span>
         <a className="btn btn-secondary" href={links.appToken} target="_blank" rel="noopener"><ExternalLink {...ICON} />打开 Basic Information</a>
       </li>
-      <li>把两个 token 填在下面。</li>
+      <li>{made.install ? "把 App-Level Token 填在下面。" : "把两个 token 填在下面。"}</li>
     </ol>
   );
 }

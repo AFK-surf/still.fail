@@ -21,7 +21,7 @@ import type { ProfileQuota } from "../quota.ts";
 import type { Profile } from "../config.ts";
 import { INTERNAL_CONNECT } from "../chat/internal.ts";
 import { EMBER_SURFACE } from "../store.ts";
-import { appIdOf, applySettings, rotateConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
+import { appIdOf, applySettings, exchangeInstallCode, rotateConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
 import { log } from "../log.ts";
 import { parseTraceparent, route, serverSpan } from "../tracing.ts";
 import type { Settings } from "../settings.ts";
@@ -29,7 +29,7 @@ import type { Store } from "../store.ts";
 import { ACCESS_KINDS, checkProfile, KEYED, loginCommand, type AccessKind, type ProfileCheck } from "../profiles.ts";
 import { AccessDenied, AccessGate, viewerId, viewerName, type Viewer } from "./access.ts";
 import { verifySlackTokens } from "../chat/slack.ts";
-import { createAppUrl, slackManifest } from "./slack-manifest.ts";
+import { botScopes, createAppUrl, slackManifest } from "./slack-manifest.ts";
 import { previewTarget, proxyPreview } from "./preview.ts";
 import { serves } from "../pool.ts";
 import type { ChatRow, ChatRowAgent, Creator, EntryView, MessageView, Overview, ProcessState, SessionDetail, SessionSummary, StationEvents, ThreadEntries, ThreadView } from "./types.ts";
@@ -397,6 +397,8 @@ export class AdminApi {
     if (method === "POST" && path === "/connects") return send(res, 200, await this.#newSlackConnect(await body(req), viewer));
     // A Slack app made with the configuration token before there is a connect for it (the connect comes with its tokens).
     if (method === "POST" && path === "/slack/apps") return send(res, 200, await this.#makeSlackApp(await body(req)));
+    // Slack sent someone back from installing such an app: its code, for the bot token.
+    if (method === "POST" && path === "/slack/installs") return send(res, 200, await this.#installed(await body(req)));
     if (resource === "connects" && id && !action && method === "PUT") return send(res, 200, this.#putConnect(id, await body(req), viewer));
     if (resource === "connects" && id && !action && method === "DELETE") return send(res, 200, this.#deleteConnect(id, viewer));
     if (resource === "connects" && id && action === "session" && method === "POST") {
@@ -512,7 +514,9 @@ export class AdminApi {
       const stored = typeof input.connect === "string" ? this.#deps.settings.config.connects.find((c) => c.id === input.connect)?.slack : undefined;
       const pick = (field: "appToken" | "botToken") =>
         typeof input[field] === "string" && input[field].trim() ? input[field].trim() : stored?.[field] ?? "";
-      return send(res, 200, await verifySlackTokens({ appToken: pick("appToken"), botToken: pick("botToken") }));
+      // An app installed through Slack's OAuth (`install`, its state): its bot token is the one it got.
+      const installed = typeof input.install === "string" ? this.#installs.get(input.install)?.botToken : null;
+      return send(res, 200, await verifySlackTokens({ appToken: pick("appToken"), botToken: installed ?? pick("botToken") }));
     }
     // Development only (EMBER_DEV=1, local visits): hand ember a chat message as if the connect had received it.
     if (method === "POST" && path === "/dev/inject" && process.env.EMBER_DEV === "1" && viewer.via === "local") {
@@ -626,6 +630,8 @@ export class AdminApi {
 
   /** Sign-ins with no profile yet, by id: their runtime, their home while signing in, who started them, what they made. */
   readonly #pending = new Map<string, { runtime: RuntimeKind; home: string; by: Viewer; created: string | null }>();
+  /** Slack apps made here to be installed through OAuth, by their state, until a connect takes each (kept in memory only). */
+  readonly #installs = new Map<string, { appId: string; clientId: string; clientSecret: string; redirectUri: string; botToken: string | null; team: string | null }>();
 
   #newLogin(input: Record<string, any>, viewer: Viewer) {
     const runtime = input.runtime as RuntimeKind;
@@ -718,20 +724,51 @@ export class AdminApi {
     this.#overviewChanged();
   }
 
+  /**
+   * Makes a Slack app for a connect to come. On a station in ember cloud it is made to be installed through Slack's
+   * OAuth: `install` is the link, and Slack sends the person back to ember cloud's page, which hands the code to this
+   * station (`POST /slack/installs`), which takes the bot token for it. Elsewhere (or with no cloud) the token is copied.
+   */
   async #makeSlackApp(input: Record<string, any>) {
     if (!this.#deps.settings.config.slackConfigToken) throw new HttpError(400, "还没有设置 Slack 的 App 配置 token");
     const name = typeof input.name === "string" && input.name.trim() ? input.name.trim() : "ember";
+    const mesh = this.#deps.mesh?.status();
+    const redirectUri = mesh?.origin && mesh.workspaceId && mesh.station ? `${mesh.origin}/slack/installed` : null;
+    let app: { appId: string; clientId: string; clientSecret: string };
     try {
-      const { appId } = await this.#apps.createApp(slackManifest(name));
-      return { appId, links: slackAppLinks(appId) };
+      app = await this.#apps.createApp(slackManifest(name, undefined, redirectUri ?? undefined));
     } catch (error) {
       throw new HttpError(400, `Slack 没能创建 app：${slackError(error)}`);
+    }
+    if (!redirectUri || !app.clientId || !app.clientSecret) return { appId: app.appId, links: slackAppLinks(app.appId), install: null, state: null };
+    // Which station it is for goes with it, so ember cloud's page knows where to hand the code.
+    const state = `${mesh!.workspaceId}/${mesh!.station}~${randomBytes(16).toString("hex")}`;
+    this.#installs.set(state, { appId: app.appId, clientId: app.clientId, clientSecret: app.clientSecret, redirectUri, botToken: null, team: null });
+    const install = `https://slack.com/oauth/v2/authorize?${new URLSearchParams({ client_id: app.clientId, scope: botScopes().join(","), redirect_uri: redirectUri, state })}`;
+    return { appId: app.appId, links: slackAppLinks(app.appId), install, state };
+  }
+
+  /** An app made here was installed: its code becomes its bot token, kept here for the connect that takes it. */
+  async #installed(input: Record<string, any>) {
+    const state = String(input.state ?? "");
+    const pending = this.#installs.get(state);
+    if (!pending) throw new HttpError(400, "这个安装不是这台 station 发起的，或者 station 重启过：回到 ember 重新建一次");
+    try {
+      const { botToken, team } = await exchangeInstallCode({ clientId: pending.clientId, clientSecret: pending.clientSecret, code: String(input.code ?? ""), redirectUri: pending.redirectUri });
+      this.#installs.set(state, { ...pending, botToken, team });
+      this.#overviewChanged();
+      return { team };
+    } catch (error) {
+      throw new HttpError(400, `Slack 没能完成安装：${slackError(error)}`);
     }
   }
 
   async #newSlackConnect(input: Record<string, any>, viewer: Viewer) {
     const appToken = String(input.slack?.appToken ?? "").trim();
-    const botToken = String(input.slack?.botToken ?? "").trim();
+    // Installed through Slack's OAuth: its bot token is here already.
+    const installed = typeof input.slack?.install === "string" ? this.#installs.get(input.slack.install) : undefined;
+    if (input.slack?.install && !installed?.botToken) throw new HttpError(400, "app 还没装好：先在 Slack 里安装");
+    const botToken = installed?.botToken ?? String(input.slack?.botToken ?? "").trim();
     const { identity, errors } = await verifySlackTokens({ appToken, botToken });
     if (!identity || errors.length) throw new HttpError(400, errors.join("；") || "token 不对");
     const name = identity.botName || "ember";
@@ -739,8 +776,9 @@ export class AdminApi {
     const base = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "slack";
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-    const appId = typeof input.slack?.appId === "string" && input.slack.appId ? input.slack.appId : null;
+    const appId = installed?.appId ?? (typeof input.slack?.appId === "string" && input.slack.appId ? input.slack.appId : null);
     const overview = this.#putConnect(id, { ...input, name, kind: "slack", slack: { appToken, botToken } }, viewer);
+    if (installed) this.#installs.delete(input.slack.install);
     if (appId) {
       this.#save(viewer, `slack app of ${id}`, (raw) => ({
         ...raw,
@@ -812,6 +850,8 @@ export class AdminApi {
       disk: diskRoom(config.dataDir),
       // Sign-ins that will make a profile when they succeed (POST /logins), with the profile they made once they did.
       logins: [...this.#pending].map(([id, p]) => ({ id, runtime: p.runtime, job: this.#deps.logins.get(id), created: p.created })),
+      // Slack apps made here and waiting for their connect: whether Slack sent their install back yet (no tokens).
+      slackInstalls: [...this.#installs].map(([state, i]) => ({ state, appId: i.appId, installed: i.botToken !== null, team: i.team })),
     };
   }
 

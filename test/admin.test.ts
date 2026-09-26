@@ -111,14 +111,15 @@ class FakeSlackApps {
     this.manifest = manifest;
     return { permissionsUpdated: before !== [...manifest.oauth_config.scopes.bot].sort().join() };
   }
-  async createApp() { return { appId: "A0NEW", oauthAuthorizeUrl: "" }; }
+  made: any[] = [];
+  async createApp(manifest: any) { this.made.push(manifest); return { appId: "A0NEW", clientId: "C1", clientSecret: "S1" }; }
   async setIcon() {
     this.icons++;
     throw new SlackApiError("apps.icon.set", "app_not_owned_by_manager_app");
   }
 }
 
-async function setup(options: { access?: { teamDomain: string; aud: string }; store?: Store; dataDir?: string; quota?: () => void; spans?: any[] } = {}) {
+async function setup(options: { access?: { teamDomain: string; aud: string }; store?: Store; dataDir?: string; quota?: () => void; spans?: any[]; cloud?: string } = {}) {
   const slackApps = new FakeSlackApps();
   const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "ember-admin-"));
   const logins = new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin });
@@ -147,6 +148,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string }; st
     settings, store, hub, connections: conns, logins, names: new Map(), slackApps: slackApps as unknown as SlackApps,
     checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks),
     ...(options.quota ? { quota: async () => { options.quota!(); return { state: "ok" as const, windows: [{ label: "5 小时", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: Date.now() }; } } : {}),
+    ...(options.cloud ? { mesh: { secret: () => null, status: () => ({ state: "running" as const, origin: options.cloud!, station: "st", workspace: "W", workspaceId: "ws", name: "S" }), span: () => {} } } : {}),
     ...(options.spans ? { mesh: { secret: () => null, status: () => ({ state: "off" as const, origin: null, station: null, workspace: null, workspaceId: null, name: null }), span: (span: object) => options.spans!.push(span) } } : {}),
   });
   const server = createServer((req, res) => void api.handle(req, res));
@@ -162,6 +164,38 @@ async function setup(options: { access?: { teamDomain: string; aud: string }; st
   };
   return { slackApps, dataDir, path, settings, store, hub, conns, claude, connections, call, base, close: () => { logins.stopAll(); server.closeAllConnections(); server.close(); } };
 }
+
+test("a Slack app made on a station in ember cloud is installed through Slack's OAuth, its bot token taken by the station", async (t) => {
+  const s = await setup({ cloud: "https://cloud.test" });
+  const real = globalThis.fetch;
+  const asked: URLSearchParams[] = [];
+  t.mock.method(globalThis, "fetch", async (url: string | URL, init?: RequestInit) => {
+    if (String(url) !== "https://slack.com/api/oauth.v2.access") return real(url, init);
+    asked.push(new URLSearchParams(String(init?.body)));
+    return new Response(JSON.stringify({ ok: true, access_token: "xoxb-installed", team: { name: "Acme" } }));
+  });
+  try {
+    s.settings.update((raw) => ({ ...raw, slackConfigToken: { accessToken: "xoxe.xoxp-1", refreshToken: "xoxe-1", expiresAt: Date.now() + 3600_000 } }));
+    const made = (await s.call("POST", "/slack/apps", { name: "ember" })).body;
+    // Slack sends the person back to ember cloud's page, which hands the code to the station the state names.
+    assert.deepEqual(s.slackApps.made[0].oauth_config.redirect_urls, ["https://cloud.test/slack/installed"]);
+    const install = new URL(made.install);
+    assert.equal(install.searchParams.get("client_id"), "C1");
+    assert.equal(install.searchParams.get("redirect_uri"), "https://cloud.test/slack/installed");
+    assert.match(made.state, /^ws\/st~[0-9a-f]{32}$/);
+    assert.equal(install.searchParams.get("state"), made.state);
+    assert.deepEqual((await s.call("GET", "/overview")).body.slackInstalls, [{ state: made.state, appId: "A0NEW", installed: false, team: null }]);
+    assert.equal((await s.call("POST", "/slack/installs", { code: "c", state: "ws/st~other" })).status, 400, "only an install this station began");
+    assert.deepEqual((await s.call("POST", "/slack/installs", { code: "the-code", state: made.state })).body, { team: "Acme" });
+    assert.equal(asked[0]!.get("code"), "the-code");
+    assert.equal(asked[0]!.get("client_secret"), "S1");
+    const overview = (await s.call("GET", "/overview")).body;
+    assert.deepEqual(overview.slackInstalls, [{ state: made.state, appId: "A0NEW", installed: true, team: "Acme" }]);
+    assert.equal(JSON.stringify(overview).includes("xoxb-installed"), false, "the token stays on the station");
+  } finally {
+    s.close();
+  }
+});
 
 test("a request in a recorded trace is a span of it, without ids or queries", async () => {
   const spans: any[] = [];

@@ -90,6 +90,8 @@ export interface Overview {
   slackUsers: string[];
   /** The workspace's Slack app configuration token: with it, ember makes and edits connects' Slack apps. */
   slackConfig: { configured: boolean; teamId: string | null };
+  /** Slack apps made here, waiting for their connect: `installed` once Slack sent the install back (`team`, where to). */
+  slackInstalls: { state: string; appId: string; installed: boolean; team: string | null }[];
   /** The data disk's room; null when it cannot be read. */
   disk: { freeBytes: number; totalBytes: number } | null;
   /** Subscription sign-ins that make a profile once they succeed (POST /logins), with the profile each made. */
@@ -289,7 +291,8 @@ export interface ConnectInput {
   mode?: ConnectMode;
   requireMention?: boolean;
   bind?: { runtime?: RuntimeKind; model?: string; effort?: string };
-  slack?: { appToken?: string; botToken?: string; appId?: string };
+  /** `install`: an app installed through Slack's OAuth (its state), whose bot token the station has. */
+  slack?: { appToken?: string; botToken?: string; appId?: string; install?: string };
   /** Hands the connect to someone else (an email). Owners, admins, the station itself, or the current owner. */
   owner?: { id: string; name?: string };
 }

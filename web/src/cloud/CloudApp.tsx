@@ -15,6 +15,7 @@ import { ROLE_LABEL } from "./settings.tsx";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspaces } from "./api.ts";
 import { Illustration } from "../brand.tsx";
 import { PageViews, track } from "../telemetry.ts";
+import { stationApi, useStationCall } from "../api.ts";
 
 export function CloudApp() {
   return (
@@ -25,12 +26,38 @@ export function CloudApp() {
           <Routes>
             <Route path="/auth/callback" element={<Callback />} />
             <Route path="/invite" element={<Invite />} />
+            <Route path="/slack/installed" element={<SlackInstalled />} />
             <Route path="*" element={<Home />} />
           </Routes>
         </BrowserRouter>
       </Tooltip.Provider>
     </ToastProvider>
   );
+}
+
+/**
+ * Where Slack sends someone who installed an app a station made (its OAuth redirect): the state names the station, and
+ * the code goes to it, which takes the bot token. The dialog that made the app sees it installed.
+ */
+function SlackInstalled() {
+  const query = useMemo(() => new URLSearchParams(location.search), []);
+  const state = query.get("state") ?? "";
+  const code = query.get("code") ?? "";
+  const list = useAccounts();
+  const api = stationApi(useStationCall(state.split("~")[0] ?? ""));
+  const [result, setResult] = useState<{ team: string | null } | { error: string } | null>(null);
+  const sent = useRef(false);
+  useEffect(() => {
+    if (sent.current || !code || !state || !list?.length) return;
+    sent.current = true;
+    api.slackInstalled(code, state).then(setResult, (error: Error) => setResult({ error: error.message }));
+  }, [api, code, state, list]);
+  const back = <a className="btn btn-secondary" href="/">回到 ember</a>;
+  if (query.get("error") || !code) return <div className="gate"><h1>没有安装</h1><p>Slack 里没有允许安装这个 app。回到 ember 重新点「安装到工作区」。</p>{back}</div>;
+  if (list && list.length === 0) return <div className="gate"><h1>先登录 ember</h1><p>要用建这个 app 的账号登录，才能把安装交给 station。登录后再从 ember 里点一次「安装到工作区」。</p>{back}</div>;
+  if (!result) return <Splash label="正在把安装交给 station…" />;
+  if ("error" in result) return <div className="gate"><h1>没能完成安装</h1><p>{result.error}</p>{back}</div>;
+  return <div className="gate"><h1>已装进「{result.team ?? "工作区"}」</h1><p>回到 ember 的对话框，填上 App-Level Token 就能连上。这个页面可以关了。</p></div>;
 }
 
 function Home() {
