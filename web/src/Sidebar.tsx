@@ -114,9 +114,11 @@ function ChatRow({ item }: { item: ChatItem }) {
           {item.last ? <LastMessage item={item} /> : <span className="nav-session-last" />}
           <Time className="nav-time" at={item.lastActiveAt} />
           {/* The agents' state ends the second line, under the connect icon; its place is kept on every row so times line up. */}
-          {badge
-            ? <Tip label={BADGE_LABEL[badge]} side="right"><span className="state-dot" data-badge={badge} role="img" aria-label={BADGE_LABEL[badge]} /></Tip>
-            : <span className="state-dot" aria-hidden="true" />}
+          <span className="state-dot-slot">
+            {badge
+              ? <Tip label={BADGE_LABEL[badge]} side="right"><span className="state-dot" data-badge={badge} role="img" aria-label={BADGE_LABEL[badge]} /></Tip>
+              : <span className="state-dot" aria-hidden="true" />}
+          </span>
         </span>
       </span>
     </NavLink>

@@ -49,6 +49,10 @@
 .nav-session-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .nav-session-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-session-meta { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; overflow: hidden; }
+/* Every row is two lines high, message or not, so a row that gains its first message does not grow. */
+.nav-session-meta { min-height: 18px; }
+/* The connect icon and the state dot share one right-hand column, centred on each other. */
+.nav-session-head .session-kind, .nav-session-meta .state-dot-slot { width: 14px; flex: none; display: inline-grid; place-items: center; }
 .nav-time { margin-left: auto; flex: none; color: var(--subtle); font-variant-numeric: tabular-nums; }
 .nav-session[data-unread] .nav-session-title { font-weight: 600; color: var(--text); }
 /* Unread: a blue dot in the row's left margin, beside the title, taking no room from it. */
