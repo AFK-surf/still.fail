@@ -127,27 +127,26 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
           const writing = live.find((s) => s.step === "tool" && !s.ended && toolName(s.tool) === "chat_post" && (partialString(s.input, "to") ?? "").startsWith("EMBER/"));
           const text = writing ? partialString(writing.input, "text") : null;
           if (text) wasWriting.current = true;
-          if (text) {
-            return (
-              <div className="msg msg-row" data-author={agent}>
-                <div className="msg-main">
-                  <div className="msg-head">
-                    <span className="msg-avatar msg-avatar-agent"><ModelLogo model={detail.transcript?.usage?.model ?? detail.session.model} runtime={detail.session.runtime} size={12} /></span>
-                    <button type="button" className="msg-name msg-agent" onClick={onOpenHistory}>{agent}</button>
-                    <span className="msg-time">正在输入</span>
-                  </div>
-                  <div className="markdown h-live"><Prose>{text}</Prose></div>
+          // The reply being written, under the activity (which stays while the agent works).
+          const writingNow = text ? (
+            <div className="msg msg-row" data-author={agent}>
+              <div className="msg-main">
+                <div className="msg-head">
+                  <span className="msg-avatar msg-avatar-agent"><ModelLogo model={detail.transcript?.usage?.model ?? detail.session.model} runtime={detail.session.runtime} size={12} /></span>
+                  <button type="button" className="msg-name msg-agent" onClick={onOpenHistory}>{agent}</button>
+                  <span className="msg-time">正在输入</span>
                 </div>
+                <div className="markdown h-live"><Prose>{text}</Prose></div>
               </div>
-            );
-          }
-          if (!busy && !lastAgents.current) return null;
+            </div>
+          ) : null;
+          if (!busy && !lastAgents.current) return writingNow;
           const agents: AgentAtWork[] = busy ? [{
               key: detail.session.key, who: agent, runtime: detail.session.runtime, model: detail.transcript?.usage?.model ?? detail.session.model,
               timeline: detail.transcript?.timeline ?? [], live, phase, since: detail.turns.at(-1)?.endedAt == null ? detail.turns.at(-1)?.startedAt ?? null : null,
             }] : lastAgents.current!;
           if (busy) lastAgents.current = agents;
-          return <Activities onOpenHistory={onOpenHistory} agents={agents} leaving={leaving} />;
+          return <><Activities onOpenHistory={onOpenHistory} agents={agents} leaving={leaving} />{writingNow}</>;
         })()}
       </div>
       {picked && (
