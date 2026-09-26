@@ -57,17 +57,13 @@ export const cloud = {
   enroll: (sub: string, id: string, name: string) => call<{ token: string; expires_at: number; command: string }>(sub, "POST", `${ws(id)}/enrollments`, { name }),
   renameStation: (sub: string, id: string, station: string, name: string) => call<WorkspaceView>(sub, "PATCH", `${ws(id)}/stations/${station}`, { name }),
   removeStation: (sub: string, id: string, station: string) => call<{ ok: true }>(sub, "DELETE", `${ws(id)}/stations/${station}`),
-  loginSessions: (sub: string) => call<{ sessions: LoginSession[] }>(sub, "GET", "/v1/auth/sessions").then((r) => r.sessions),
   revokeLoginSession: (sub: string, id: string) => call<{ ok: true }>(sub, "DELETE", `/v1/auth/sessions/${id}`),
 };
 
 /** The admin's console (on its own host, src/admin/); every call is a 404 for other accounts. */
 export const admin = {
   me: (sub: string) => call<{ email: string }>(sub, "GET", "/v1/admin/me"),
-  users: (sub: string) => call<{ users: AdminUser[] }>(sub, "GET", "/v1/admin/users").then((r) => r.users),
-  workspaces: (sub: string) => call<{ workspaces: AdminWorkspace[] }>(sub, "GET", "/v1/admin/workspaces").then((r) => r.workspaces),
   /** Each with its sign-up link on the web app. */
-  codes: (sub: string) => call<{ codes: (InviteCodeView & { url: string })[] }>(sub, "GET", "/v1/admin/invite-codes").then((r) => r.codes),
   createCode: (sub: string, note: string, days: number) => call<InviteCodeView & { url: string }>(sub, "POST", "/v1/admin/invite-codes", { note, days }),
   revokeCode: (sub: string, code: string) => call<{ ok: true }>(sub, "POST", `/v1/admin/invite-codes/${encodeURIComponent(code)}/revoke`),
 };

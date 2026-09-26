@@ -300,21 +300,3 @@ export function useAction<A extends unknown[], T>(fn: (...args: A) => Promise<T>
   return { run, ...state };
 }
 
-/**
- * A GET that is no topic of the core (a Slack app's settings, read from
- * Slack through the station): read on mount, and again on `reload`.
- */
-export function useStationGet<T>(station: string, path: string): TopicState<T> & { reload(): void } {
-  const { request } = useStationCall(station);
-  const [state, setState] = useState<TopicState<T>>({ value: undefined, error: null, loading: true });
-  const [round, setRound] = useState(0);
-  useEffect(() => {
-    let current = true;
-    request<T>("GET", path).then(
-      (value) => { if (current) setState({ value, error: null, loading: false }); },
-      (error: CoreError) => { if (current) setState((s) => ({ value: s.value, error, loading: false })); },
-    );
-    return () => { current = false; };
-  }, [request, path, round]);
-  return { ...state, reload: useCallback(() => setRound((n) => n + 1), []) };
-}
