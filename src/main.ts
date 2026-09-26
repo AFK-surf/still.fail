@@ -58,7 +58,7 @@ settings.onChange((config) => {
 const UI_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "admin");
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2",
+  ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".woff2": "font/woff2",
 };
 
 /** Files under dist/admin by path; anything else gets index.html, where the client router takes over. */

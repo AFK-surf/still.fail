@@ -15,7 +15,13 @@
 
 .sidebar { background: var(--sidebar); display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 18px; }
-.brand-word { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+.brand-lockup { display: block; }
+/* 云端侧边栏：lockup 在 workspace 切换器上方 */
+.brand-compact { height: 48px; padding: 0 16px; }
+.brand-compact + .account-slot { padding-top: 0; }
+/* <picture> 只为挑 -dark 版本，不参与布局 */
+.brand-pic { display: contents; }
+.illus { display: block; max-width: 100%; height: auto; }
 .nav-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 12px; }
 .nav-foot { padding: 8px; border-top: 1px solid var(--line); }
 .nav-heading { display: flex; align-items: center; justify-content: space-between; margin: 14px 8px 4px; font-size: var(--text-xs); color: var(--muted); }
@@ -988,6 +994,8 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .new-chat-sub { margin: 0 0 8px; color: var(--muted); font-size: var(--text-sm); }
 .new-chat .composer-wrap { padding: 0; }
 .new-chat .composer-box { min-height: 96px; }
+.new-chat .illus { margin-bottom: 4px; }
+@media (max-height: 640px) { .new-chat .illus { display: none; } }
 .new-chat-making { font-size: var(--text-xs); }
 .composer-choices { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-right: auto; }
 .composer-box:not([data-multiline]) .composer-choices { order: 1; }

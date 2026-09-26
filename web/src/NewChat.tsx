@@ -14,6 +14,7 @@ import type { RuntimeKind } from "./api.ts";
 const RUNTIMES: RuntimeKind[] = ["claude", "codex"];
 import { StationContext, type Station } from "./station.tsx";
 import { ModelLogo, RuntimeLogo } from "./ui.tsx";
+import { Illustration } from "./brand.tsx";
 
 interface Choice { runtime: RuntimeKind | ""; model: string; effort: string }
 const LAST = "ember.newChat";
@@ -47,7 +48,7 @@ export function NewChat({ stations, onCreated }: { stations: Station[]; onCreate
   });
   const station = online.find((s) => s.id === stationId) ?? online[0];
   if (!station) {
-    return <div className="new-chat"><div className="new-chat-inner"><h1>新对话</h1><p className="muted">没有在线的 station。到设置里添加一台，或者启动已添加的 station。</p></div></div>;
+    return <div className="new-chat"><div className="new-chat-inner"><Illustration name="station-offline" /><h1 className="new-chat-title">新对话</h1><p className="muted">没有在线的 station。到设置里添加一台，或者启动已添加的 station。</p></div></div>;
   }
   return (
     <StationContext.Provider value={station}>
@@ -136,6 +137,7 @@ function NewChatOn({ station, stations, onStation, onCreated }: { station: Stati
   return (
     <div className="new-chat">
       <div className="new-chat-inner">
+        <Illustration name="new-chat" />
         <h1 className="new-chat-title">新对话</h1>
         <p className="new-chat-sub">说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
         {overview.isPending ? <p className="muted">正在读取 {station.name} 的 Profile…</p>

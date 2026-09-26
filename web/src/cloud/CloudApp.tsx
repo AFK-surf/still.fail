@@ -15,6 +15,7 @@ import { Avatar, online, SignInPage, useAccounts } from "./gate.tsx";
 import { useInvitations, useWorkspaces, WorkspaceShell } from "./workspace.tsx";
 import { ROLE_LABEL } from "./settings.tsx";
 import { cloud, CloudError, type Role, type StationView, type WorkspaceView } from "./api.ts";
+import { Illustration } from "../brand.tsx";
 
 const client = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, retry: (n, e) => !(e instanceof CloudError && e.status < 500) && n < 2 } } });
 
@@ -43,7 +44,7 @@ function Callback() {
   }, []);
   return (
     <div className="gate">
-      <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={40} height={40} />
+      <Illustration name="sign-in" />
       <h1>{error ? "登录没有完成" : "正在登录…"}</h1>
       {error && <><p>{error}</p><Button variant="primary" onClick={() => void signIn("/")}>重新登录</Button></>}
     </div>
@@ -87,7 +88,7 @@ function Landing() {
   if (ready && pending.length > 0) {
     return (
       <div className="gate invite-page">
-        <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={44} height={44} />
+        <Illustration name="sign-in" />
         <h1>你收到了邀请</h1>
         {pending.map((i) => (
           <div key={i.id} className="card card-row invite-card">
@@ -125,7 +126,7 @@ function Invite() {
   if (list.length === 0) return <SignInPage lead="你收到了一个 ember workspace 的邀请。先用 Google 账号登录，再决定是否加入。" />;
   return (
     <div className="gate invite-page">
-      <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={44} height={44} />
+      <Illustration name="sign-in" />
       {preview.isPending ? <h1>正在读取邀请…</h1> : preview.isError ? (
         <><h1>邀请不能用</h1><p>{preview.error.message}</p><a className="btn btn-secondary" href="/">回到 ember</a></>
       ) : (

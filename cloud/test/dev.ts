@@ -20,7 +20,7 @@ for (const name of ["studio", "mac-mini"]) {
   console.log(`ENROLL ${enrollment.command}`);
 }
 
-const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".wasm": "application/wasm", ".woff2": "font/woff2" };
+const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".wasm": "application/wasm", ".woff2": "font/woff2" };
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", origin);
