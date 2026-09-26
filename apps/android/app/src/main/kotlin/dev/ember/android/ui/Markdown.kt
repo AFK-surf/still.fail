@@ -209,7 +209,12 @@ private fun inline(node: Node): AnnotatedString {
         fun walk(n: Node) {
             when (n) {
                 is TextNode -> append(n.literal)
-                is Code -> withStyle(code) { append(" ${n.literal} ") }
+                // Thin spaces inside the span are its padding; MdText draws the rounded box behind it.
+                is Code -> {
+                    pushStringAnnotation(CODE, "")
+                    withStyle(code) { append("\u2009${n.literal}\u2009") }
+                    pop()
+                }
                 is Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { n.children().forEach(::walk) }
                 is StrongEmphasis -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { n.children().forEach(::walk) }
                 is Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { n.children().forEach(::walk) }

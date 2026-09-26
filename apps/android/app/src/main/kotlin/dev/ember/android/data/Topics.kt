@@ -9,6 +9,9 @@ import androidx.compose.runtime.produceState
 import dev.ember.core.CoreException
 import dev.ember.core.EmberCore
 import dev.ember.core.TopicState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
@@ -53,7 +56,12 @@ fun <T> rememberTopic(core: EmberCore, topic: JsonObject?, serializer: KSerializ
             } catch (e: CoreException) {
                 Topic(null, e, false)
             }
-        }.collect { next -> value = if (next.value == null && next.error != null) next.copy(value = value.value) else next }
+        }
+            // Decoding a whole value (a chat is all its messages) is work: off the main thread, and only the latest
+            // when several come at once (a chat being fetched arrives in batches).
+            .flowOn(Dispatchers.Default)
+            .conflate()
+            .collect { next -> value = if (next.value == null && next.error != null) next.copy(value = value.value) else next }
     }
 
 @Composable
