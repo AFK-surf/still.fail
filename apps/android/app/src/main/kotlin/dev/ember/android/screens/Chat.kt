@@ -1005,7 +1005,7 @@ fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: (
     val focusManager = LocalFocusManager.current
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = TextStyle(color = C.ink, fontSize = 15.sp, lineHeight = 21.sp)
-    Row(verticalAlignment = Alignment.Bottom) {
+    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         // The attach sheet comes up in the keyboard's place: the keyboard goes first.
         Box(
             Modifier.size(36.dp).clip(CircleShape).clickable { focusManager.clearFocus(); keyboard?.hide(); onPlus() },

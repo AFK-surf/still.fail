@@ -735,7 +735,7 @@
 .msg-agent:hover { text-decoration: underline; }
 
 /* Composer: one line sits on the frame's centre line; files ride above the text. */
-.composer-box:not([data-multiline]) { align-items: center; gap: 0; padding-left: 6px; }
+.composer-box:not([data-multiline]) { align-items: center; gap: 2px; padding-left: 6px; }
 /* On one line, the attach button is before the text, next to where it is typed (as on the phone). */
 .composer-box:not([data-multiline]) .composer-toolbar { display: contents; }
 .composer-box:not([data-multiline]) .attach-btn { order: -1; }
