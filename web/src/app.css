@@ -18,12 +18,14 @@
 .brand-lockup { display: block; }
 /* 云端侧边栏：lockup 在 workspace 切换器上方 */
 .brand-compact { height: 48px; padding: 0 16px; }
-.brand-compact + .account-slot { padding-top: 0; }
 /* <picture> 只为挑 -dark 版本，不参与布局 */
 .brand-pic { display: contents; }
 .illus { display: block; max-width: 100%; height: auto; }
 .nav-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 12px; }
 .nav-foot { padding: 8px; border-top: 1px solid var(--line); }
+.nav-foot-row { display: flex; align-items: center; gap: 4px; }
+.nav-foot-row .account-trigger { flex: 1; min-width: 0; }
+.nav-foot-row > .icon-btn, .nav-foot-row > * > .icon-btn { flex: none; }
 .nav-heading { display: flex; align-items: center; justify-content: space-between; margin: 14px 8px 4px; font-size: var(--text-xs); color: var(--muted); }
 .nav-heading-action { height: 28px; margin-top: 10px; margin-right: 2px; }
 .nav-heading-action .icon-btn { width: 26px; height: 26px; border-radius: calc(8px * var(--corner-scale)); corner-shape: var(--corner-shape); }
@@ -457,7 +459,6 @@
 
 /* ── ember cloud: accounts, workspaces, station frame ──────────────── */
 
-.account-slot { padding: 10px 8px 4px; }
 .account-trigger {
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: var(--r-nav);
   background: none; color: var(--text); text-align: left; cursor: pointer; corner-shape: var(--corner-shape); }

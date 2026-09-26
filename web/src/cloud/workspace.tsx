@@ -16,7 +16,7 @@ import { ChatList } from "../Sidebar.tsx";
 import { AccountSettings, ConnectsSettings, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
 import { PeopleContext, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
-import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select } from "../ui.tsx";
+import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
 import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
 import { cloud, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
 import { Avatar } from "./gate.tsx";
@@ -46,7 +46,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
     <PeopleContext.Provider value={people}>
       <div className="shell" data-detail={detail}>
         {settings
-          ? <nav className="sidebar" aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className="brand brand-compact"><Lockup /></div><div className="account-slot"><WorkspaceSwitcher current={entry} /></div><SettingsNav entry={entry} /></nav>
+          ? <nav className="sidebar" aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className="brand brand-compact"><Lockup /></div><SettingsNav entry={entry} /><div className="nav-foot"><WorkspaceSwitcher current={entry} /></div></nav>
           : <WorkspaceSidebar entry={entry} />}
         <main className="main">
           <Routes>
@@ -108,16 +108,16 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
     <nav className="sidebar" aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className="brand brand-compact"><Lockup /></div>
-      <div className="account-slot"><WorkspaceSwitcher current={entry} /></div>
       <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings/stations`} />
-      <div className="nav-foot">
-        <NavLink className="nav-row" to={`/w/${entry.id}/settings`}><Settings {...ICON} />设置</NavLink>
+      <div className="nav-foot nav-foot-row">
+        <WorkspaceSwitcher current={entry} />
+        <Tip label="设置" side="top"><NavLink className="icon-btn" to={`/w/${entry.id}/settings`} aria-label="设置"><Settings {...ICON} /></NavLink></Tip>
       </div>
     </nav>
   );
 }
 
-/** The sidebar's header: the workspace in view, which account it belongs to, and the others. */
+/** At the sidebar's foot: the workspace in view, which account it belongs to, and the others. */
 function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
   const byAccount = useWorkspaces().value ?? [];
   const list = useAccounts() ?? [];
@@ -147,7 +147,7 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content className="popover menu-list account-menu" align="start" sideOffset={4}>
+          <DropdownMenu.Content className="popover menu-list account-menu" side="top" align="start" sideOffset={6}>
             {pending.length > 0 && (
               <>
                 <DropdownMenu.Label className="menu-label">邀请</DropdownMenu.Label>
