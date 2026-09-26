@@ -1341,6 +1341,7 @@ mod tests {
             // Appended as merged, with whose it is (the core decides: not the viewer's here).
             let mut appended = merge(&[entry(41, "新的")]);
             appended[0]["mine"] = json!(false);
+            appended[0]["system"] = json!(false);
             assert_eq!(serde_json::to_value(delta).unwrap(), json!([{"path": ["messages"], "append": appended}]));
             delta::apply(ui.value.as_mut().unwrap(), delta);
             // An edit shows in its message: merged here, not by the page.
