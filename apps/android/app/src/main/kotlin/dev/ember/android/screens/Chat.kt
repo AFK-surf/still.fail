@@ -157,7 +157,6 @@ import dev.ember.android.data.rememberTopic
 import dev.ember.android.data.state
 import dev.ember.android.ui.Avatar
 import dev.ember.android.ui.C
-import dev.ember.android.ui.Edge
 import dev.ember.android.ui.IconIn
 import dev.ember.android.ui.Icons
 import dev.ember.android.ui.Loading
@@ -244,7 +243,7 @@ fun ChatScreen(station: String, of: ChatOf) {
     // Its own paper under all of it: the bars are see-through, and what is under the page must not show in them.
     Box(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) {
         Messages(station, of, view, agents, draft, haze, Modifier.fillMaxSize().background(C.bg), with(density) { topBar.toDp() }, with(density) { bottomBar.toDp() })
-        ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze, Edge.Top))
+        ChatBar(station, of, view, agents, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.glass(haze))
         Composer(station, of, view, agents, draft, haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })
     }
 }
@@ -494,7 +493,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
         // The list is what the bars and capsules over it frost (the button over it too, so it is not in it).
         LazyColumn(
             Modifier.fillMaxSize().hazeSource(haze).background(C.bg), state = list,
-            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = top, bottom = bottom + 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
+            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = top + 14.dp, bottom = bottom + 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp, if (reveal.revealing) Alignment.Bottom else Alignment.Top),
         ) {
             items(rows, key = { it.id }) { row ->
                 val fresh = remember(row.id) { row.id !in known }

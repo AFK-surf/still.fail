@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
-import dev.ember.android.ui.Edge
 import dev.ember.android.ui.floating
 import dev.ember.android.ui.glass
 import dev.chrisbanes.haze.hazeSource
@@ -116,7 +115,7 @@ fun HomeScreen(current: WorkspaceEntry) {
     val density = LocalDensity.current
     var topBar by remember { mutableIntStateOf(0) }
     var bottomBar by remember { mutableIntStateOf(0) }
-    val padding = with(density) { PaddingValues(top = topBar.toDp(), bottom = bottomBar.toDp() + 8.dp) }
+    val padding = with(density) { PaddingValues(top = topBar.toDp() + 8.dp, bottom = bottomBar.toDp() + 8.dp) }
     Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze)) {
             val width = constraints.maxWidth
@@ -124,7 +123,7 @@ fun HomeScreen(current: WorkspaceEntry) {
             ChatPane(mine, true, mineList, padding, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
         }
         Row(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.glass(haze, Edge.Top)
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.glass(haze)
                 .windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
