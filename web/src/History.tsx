@@ -230,15 +230,16 @@ function HistoryItem({ item, mention, person, where }: {
       const kind = typeof args.kind === "string" ? args.kind : null;
       const failed = item.step.result?.ok === false;
       return (
-        <div className="h-post" data-failed={failed}>
-          <div className="h-post-head">
+        // Drawn like a received message (a line, then the words beside a bar): the two answer each other.
+        <div className="h-received h-post" data-failed={failed}>
+          <div className="h-label">
             <Send {...ICON} size={14} />
             发送到 {where(typeof args.to === "string" ? args.to : null) ?? <span className="h-place"><SlackLogo size={13} />Slack</span>}
             {kind === "final" && <Pill tone="green">已完成</Pill>}
             {kind === "block" && <Pill tone="blue">Block</Pill>}
             {failed && <Pill tone="red">发送失败</Pill>}
           </div>
-          <Fold className="markdown"><Prose>{String(args.text)}</Prose></Fold>
+          <Fold className="h-quote h-quote-md markdown"><Prose>{String(args.text)}</Prose></Fold>
         </div>
       );
     }

@@ -358,9 +358,10 @@
 .h-quote { margin: 0; padding-left: 12px; border-left: 2px solid var(--line-strong); font-size: var(--text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
 .h-quote[data-clamped="true"] { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .h-received .text-toggle { justify-self: start; padding-left: 0; }
-.h-post { display: grid; gap: 6px; padding: 12px 14px; border-radius: calc(16px * var(--corner-scale)); background: var(--accent-bg); corner-shape: var(--corner-shape); }
-.h-post[data-failed="true"] { background: var(--red-bg); }
-.h-post-head { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--accent-text); font-weight: 500; }
+/* A sent message's words are Markdown: the bar of a received one, without its plain-text wrapping. */
+.h-quote-md { white-space: normal; }
+.h-post .h-label svg { color: var(--accent); }
+.h-post[data-failed="true"] .h-quote { border-left-color: var(--red); }
 .h-mark { display: flex; align-items: center; gap: 10px; font-size: var(--text-xs); color: var(--muted); }
 .h-mark::before, .h-mark::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .h-text { color: var(--text); }
@@ -912,13 +913,6 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 .msg-quote blockquote { padding: 0; border: 0; }
 .msg-quote-author { color: var(--text); font-weight: 500; }
 /* A message the agent sent: a plain card so its content (code, tables, chips) keeps its own colours. */
-.h-post { gap: 0; padding: 0; border: 1px solid var(--line); border-radius: calc(12px * var(--corner-scale)); background: var(--canvas); flex: none; corner-shape: var(--corner-shape); }
-.h-post-head { padding: 8px 12px; border-bottom: 1px solid var(--line); border-radius: calc(11px * var(--corner-scale)) calc(11px * var(--corner-scale)) 0 0; background: var(--list); color: var(--muted); corner-shape: var(--corner-shape); }
-.h-post-head svg { color: var(--accent); }
-.h-post > .markdown { padding: 10px 12px 12px; }
-.h-post[data-failed="true"] { background: var(--canvas); border-color: color-mix(in oklch, var(--red) 45%, var(--line)); }
-.h-post[data-failed="true"] .h-post-head { background: var(--red-bg); color: var(--red); }
-.h-post[data-failed="true"] .h-post-head svg { color: var(--red); }
 
 /* Code blocks: a quiet frame, the language and a copy button above, highlighting in the page's own tones. */
 .code-block { margin: 0 0 8px; border: 1px solid var(--line); border-radius: calc(10px * var(--corner-scale)); background: var(--paper); overflow: hidden; corner-shape: var(--corner-shape); }
@@ -939,11 +933,6 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 .fold-toggle { justify-self: start; }
 
 /* A message the agent sent: no frame of its own (its code blocks keep theirs), a rule in the accent down the side. */
-.h-post { gap: 6px; padding: 0 0 0 12px; border: 0; border-left: 2px solid var(--accent); border-radius: 0; background: none; }
-.h-post-head { padding: 0; border: 0; border-radius: 0; background: none; color: var(--muted); }
-.h-post > .fold > .markdown, .h-post > .markdown { padding: 0; }
-.h-post[data-failed="true"] { border: 0; border-left: 2px solid var(--red); background: none; }
-.h-post[data-failed="true"] .h-post-head { background: none; color: var(--red); }
 
 .h-phase { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); }
 .h-phase[data-phase="responding"] { color: var(--text); }
@@ -1171,12 +1160,6 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .composer-quotes { max-height: 176px; overflow-y: auto; overscroll-behavior: contain; }
 .composer-box .composer-files { max-height: 148px; overflow-y: auto; overscroll-behavior: contain; }
 
-/* A message the agent sent: no rule down the side; its body sits under the head's text, past the icon. */
-.h-post { gap: 4px; padding: 0; border: 0; border-left: 0; border-radius: 0; background: none; }
-.h-post-head { gap: 6px; }
-.h-post > .fold, .h-post > .markdown { padding-left: 20px; }
-.h-post[data-failed="true"] { border: 0; border-left: 0; }
-.h-post[data-failed="true"] .h-post-head { color: var(--red); }
 .msg-quote-card { box-shadow: none; }
 
 /* The admin console: each thing a block on the sidebar's ground, apart by spacing, with no rules between. */
