@@ -440,12 +440,16 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
     navigate(link(`/connects/${id}`));
   });
 
-  const TITLES: Record<NewStep, string> = { team: teams.length === 0 ? "先拿一个 Slack 配置 token" : "选 Slack 工作区", app: "配置 app", install: "安装", manual: "连接 Slack", bind: "绑定模型" };
+  // Getting a token is a view of its own: when there is none yet, or another is being added.
+  const gettingToken = step === "team" && (teams.length === 0 || adding);
+  const TITLES: Record<NewStep, string> = { team: teams.length === 0 ? "先拿一个 Slack 配置 token" : adding ? "添加 Slack 配置 token" : "选 Slack 工作区", app: "配置 app", install: "安装", manual: "连接 Slack", bind: "绑定模型" };
   const order: NewStep[] = step === "manual" || (step === "bind" && !made) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
   const footer = step === "team" ? (
     <>
-      <Button variant="ghost" onClick={close}>取消</Button>
-      {teams.length > 0 && <Button variant="primary" disabled={!chosen} onClick={() => setStep("app")}>下一步</Button>}
+      {adding && teams.length > 0
+        ? <Button variant="ghost" onClick={() => setAdding(false)}>返回</Button>
+        : <Button variant="ghost" onClick={close}>取消</Button>}
+      {!gettingToken && <Button variant="primary" disabled={!chosen} onClick={() => setStep("app")}>下一步</Button>}
     </>
   ) : step === "app" ? (
     <>
@@ -466,26 +470,22 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
 
   return (
     <Dialog open={open} onClose={close} wide title={<>{TITLES[step]}<span className="dialog-step">{order.indexOf(step) + 1} / {order.length}</span></>} footer={footer}
-      description={step === "team" && teams.length > 0 ? "用哪个 Slack 工作区的配置 token 建 app。" : undefined}>
-      {step === "team" && (
+      description={step === "team" && !gettingToken ? "用哪个 Slack 工作区的配置 token 建 app。" : undefined}>
+      {gettingToken && (
+        <div className="token-start">
+          <p className="muted">有了它，ember 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用，这台 station 上的其他人看不到。</p>
+          <ConfigTokenForm onSaved={(id) => { setTeam(id); setAdding(false); setStep("app"); }} />
+          {teams.length === 0 && <p className="muted token-manual">不想用配置 token？<button type="button" className="text-button" onClick={() => setStep("manual")}>自己在 Slack 建 app，再粘贴 token</button></p>}
+        </div>
+      )}
+      {step === "team" && !gettingToken && (
         <>
-          {teams.length > 0 && (
-            <Choices label="Slack 工作区" value={chosen?.teamId ?? ""} onChange={setTeam}
-              options={teams.map((t) => ({ value: t.teamId, title: t.name, icon: <SlackTeamIcon team={t} />, description: <TokenOwner team={t} /> }))} />
-          )}
-          {teams.length === 0 ? (
-            <div className="token-start">
-              <p className="muted">有了它，ember 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用，这台 station 上的其他人看不到。</p>
-              <ConfigTokenForm onSaved={(id) => { setTeam(id); setStep("app"); }} />
-            </div>
-          ) : adding ? (
-            <div className="card">
-              <ConfigTokenForm onSaved={(id) => { setTeam(id); setAdding(false); }} />
-            </div>
-          ) : (
+          <Choices label="Slack 工作区" value={chosen?.teamId ?? ""} onChange={setTeam}
+            options={teams.map((t) => ({ value: t.teamId, title: t.name, icon: <SlackTeamIcon team={t} />, description: <TokenOwner team={t} /> }))} />
+          <div className="team-more">
             <Button variant="ghost" onClick={() => setAdding(true)}><Plus {...ICON} />添加工作区的配置 token</Button>
-          )}
-          <p className="muted token-manual">不想用配置 token？<button type="button" className="text-button" onClick={() => setStep("manual")}>自己在 Slack 建 app，再粘贴 token</button></p>
+            <button type="button" className="text-button token-manual" onClick={() => setStep("manual")}>不用配置 token，自己建 app</button>
+          </div>
         </>
       )}
       {step === "app" && (

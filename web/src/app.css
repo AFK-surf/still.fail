@@ -1455,3 +1455,5 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 :is(.run-picker-option, .chooser-item) .quota-ring-cell { display: flex; align-items: center; gap: 3px; }
 /* Where it heads text, the control's text lines up with the text under it (its border and padding stand out). */
 :is(.session-details, .card) > .model-triple-fit { margin-left: -11px; }
+.team-more { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.team-more .token-manual { margin: 0; color: var(--muted); }
