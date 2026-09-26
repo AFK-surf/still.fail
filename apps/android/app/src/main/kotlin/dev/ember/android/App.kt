@@ -40,6 +40,7 @@ import dev.ember.android.data.entries
 import dev.ember.android.data.rememberTopic
 import dev.ember.android.screens.ChatScreen
 import dev.ember.android.screens.HomeScreen
+import dev.ember.android.screens.ProfileScreen
 import dev.ember.android.screens.Landing
 import dev.ember.android.screens.MeScreen
 import dev.ember.android.screens.NewChatScreen
