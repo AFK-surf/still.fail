@@ -148,7 +148,8 @@ export function ChatPanel({ detail, chat, live = [], phase = null, onOpenHistory
               timeline: detail.transcript?.timeline ?? [], live, phase, since: detail.turns.at(-1)?.endedAt == null ? detail.turns.at(-1)?.startedAt ?? null : null,
             }] : lastAgents.current!;
           if (busy) lastAgents.current = agents;
-          return <><Activities onOpenHistory={onOpenHistory} agents={agents} leaving={leaving} />{writingNow}</>;
+          // The activity is always the last thing in the chat; the reply being written comes before it.
+          return <>{writingNow}<Activities onOpenHistory={onOpenHistory} agents={agents} leaving={leaving} /></>;
         })()}
       </div>
       {picked && (
