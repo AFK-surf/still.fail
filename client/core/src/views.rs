@@ -753,8 +753,8 @@ fn attention(overview: Option<&Value>, session: &Value) -> Value {
     Value::Array(out)
 }
 
-/// The profiles a session can run on, those of its runtime: `{ id, name, current, spent }` (`spent`: a window of it is
-/// used up, and when it is back).
+/// The profiles a session can run on, those of its runtime: `{ id, name, current, spent, kind, runtime, quota }`
+/// (`spent`: a window of it is used up, and when it is back).
 fn runnable_on(overview: Option<&Value>, session: &Value) -> Value {
     let runtime = session.get("runtime").and_then(Value::as_str).unwrap_or("");
     let current = session.get("profile").and_then(Value::as_str);
@@ -766,6 +766,10 @@ fn runnable_on(overview: Option<&Value>, session: &Value) -> Value {
             json!({
                 "id": id, "name": p.get("name").cloned().unwrap_or(json!(id)), "current": Some(id) == current,
                 "spent": spent.map(|until| json!({ "until": until.is_finite().then_some(until) })),
+                // What its line shows: whose account it is, and its quota.
+                "kind": p.get("access").and_then(|a| a.get("kind")).cloned().unwrap_or(Value::Null),
+                "runtime": p.get("runtime").cloned().unwrap_or(Value::Null),
+                "quota": p.get("quota").cloned().unwrap_or(Value::Null),
             })
         })
         .collect())
@@ -1008,8 +1012,8 @@ mod tests {
         ]});
         let session = json!({"runtime": "codex", "profile": "a"});
         assert_eq!(runnable_on(Some(&overview), &session), json!([
-            {"id": "a", "name": "A", "current": true, "spent": null},
-            {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0}},
+            {"id": "a", "name": "A", "current": true, "spent": null, "kind": null, "runtime": null, "quota": null},
+            {"id": "b", "name": "B", "current": false, "spent": {"until": 9000.0}, "kind": null, "runtime": null, "quota": {"state": "ok", "windows": [{"usedPercent": 100, "resetsAt": 9000}]}},
         ]));
     }
 
