@@ -7,7 +7,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, FileText, Paperclip, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
 import { DropdownMenu, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router";
+import { Link, Navigate, useParams } from "react-router";
+import { lastChat } from "../lastChat.ts";
 import { useApi, keys, useHost, useLiveSession, useOverview, useSession, useSessions, type Attachment, type ConnectView, type SessionDetail } from "../api.ts";
 import { History } from "../History.tsx";
 import { ChatPanel } from "../Chat.tsx";
@@ -19,20 +20,9 @@ import { Button, ConnectKindIcon, Empty, ICON, IconButton, Loading, Menu, Mobile
 
 export function SessionPage() {
   const { key } = useParams();
-  const sessions = useSessions();
-  const overview = useOverview();
-  if (!key) {
-    const hasConnects = (overview.data?.connects.length ?? 0) > 0;
-    return (
-      <Empty>
-        <img src={`${import.meta.env.BASE_URL}ember.svg`} alt="" width={36} height={36} />
-        <h2>{sessions.data?.length ? "选一个会话" : hasConnects ? "还没有会话" : "添加第一个连接"}</h2>
-        <p>{sessions.data?.length ? "左边是所有连接的会话，最近活动的在最上面。"
-          : hasConnects ? "在 Slack 里 @ 它，收到的第一条消息会在这里出现。"
-          : "连接是人找到 ember 的地方，比如一个 Slack app；每个连接绑定一个模型。点左侧「连接」旁边的 + 开始。"}</p>
-      </Empty>
-    );
-  }
+  const station = useStation();
+  // There is always a chat in view: the one last open, or a new one. In ember cloud the workspace decides which.
+  if (!key) return <Navigate to={station.base ? station.base.replace(/\/s\/[^/]+$/, "") : lastChat("local", "/new")} replace />;
   return <SessionView key={key} sessionKey={key} />;
 }
 

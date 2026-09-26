@@ -318,10 +318,11 @@ function ChooseSessionDialog({ connect, onClose }: { connect: ConnectView; onClo
 
 /** Model choice: the account's model list when it has been checked, free text otherwise. */
 export function ModelPicker({ id, account, value, onChange }: { id: string; account: ProfileView | undefined; value: string; onChange(value: string): void }) {
-  const models = account?.check?.models ?? [];
+  // Only models enabled on the profile can be bound.
+  const models = account?.models ?? [];
   const fallback = account?.model ? `账号默认（${account.model}）` : "运行时默认";
   if (models.length === 0) {
-    return <input id={id} className="input mono" spellCheck={false} value={value} onChange={(e) => onChange(e.target.value)} placeholder={fallback} />;
+    return <Select id={id} value="" onChange={() => {}} options={[{ value: "", label: `${fallback}（这个 Profile 还没有启用模型）` }]} label="模型" />;
   }
   const options = [{ value: "", label: fallback }, ...[...new Set([...(value ? [value] : []), ...models])].map((m) => ({ value: m, label: m }))];
   return <Select id={id} value={value} onChange={onChange} options={options} label="模型" />;
@@ -350,7 +351,7 @@ function BindSection({ connect, overview }: { connect: ConnectView; overview: Ov
           </Field>
         </div>
         <div className="field-grid">
-          <Field label="模型" htmlFor="bind-model" hint={chosen?.check?.models?.length ? `这个 Profile 有 ${chosen.check.models.length} 个可用模型。` : "Profile 检查过后这里会列出可用模型。"}>
+          <Field label="模型" htmlFor="bind-model" hint={chosen?.models.length ? `这个 Profile 启用了 ${chosen.models.length} 个模型。` : "在「Profile」页面勾选模型后，这里才能选。"}>
             <ModelPicker id="bind-model" account={chosen} value={model} onChange={setModel} />
           </Field>
           <Field label="思考深度" htmlFor="bind-effort">

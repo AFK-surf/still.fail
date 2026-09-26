@@ -5,7 +5,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, LogOut, Plus, Settings, SquarePen, UserPlus } from "lucide-react";
 import { NewChat } from "../NewChat.tsx";
-import { useRememberChat } from "../lastChat.ts";
+import { lastChat, useRememberChat } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
 import { useMemo, useState, type ReactNode } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
@@ -146,6 +146,8 @@ function StationPages({ stations }: { stations: Station[] }) {
 
 function WorkspaceHome({ view, stations }: { view: WorkspaceView | undefined; stations: Station[] }) {
   if (!view) return <Loading label="正在读取 workspace…" />;
+  // With stations there is always a chat in view: the one last open, or a new one.
+  if (stations.length) return <Navigate to={lastChat(view.id, `/w/${view.id}/new`)} replace />;
   const up = stations.filter((s) => s.online).length;
   return (
     <Empty>

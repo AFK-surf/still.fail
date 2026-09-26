@@ -1013,3 +1013,14 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .chooser-item { display: flex; align-items: center; gap: 6px; }
 .chooser-check { width: 14px; display: inline-grid; place-items: center; flex: none; }
 .nav-new { padding: 6px 8px 2px; }
+
+/* A profile's model pool: a checklist of what it may be used for. */
+.model-pool { display: grid; gap: 8px; }
+.model-pool-tools { display: flex; align-items: center; gap: 12px; }
+.model-pool-filter { max-width: 240px; height: 30px; }
+.model-pool-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 2px 12px; }
+.model-pool-item { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 8px; font-size: var(--text-sm); color: var(--muted); cursor: pointer; }
+.model-pool-item:hover { background: var(--hover); }
+.model-pool-item[data-on] { color: var(--text); }
+.model-pool-item .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-pool-gone { font-size: var(--text-xs); }

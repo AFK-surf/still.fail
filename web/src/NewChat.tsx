@@ -33,9 +33,9 @@ function keepChoice(station: string, choice: Choice): void {
   }
 }
 
-/** Models a runtime offers on this station: what its profiles' checks listed, and their defaults. */
+/** Models a runtime can be used with on this station: the ones enabled on any of its profiles. */
 function modelsOf(profiles: ProfileView[]): string[] {
-  return [...new Set(profiles.flatMap((p) => [...(p.model ? [p.model] : []), ...(p.check?.models ?? [])]))].sort();
+  return [...new Set(profiles.flatMap((p) => p.models))].sort();
 }
 
 export function NewChat({ stations, onCreated }: { stations: Station[]; onCreated(station: Station, key: string): void }) {
@@ -60,10 +60,13 @@ function NewChatOn({ station, stations, onStation, onCreated }: { station: Stati
   const profiles = overview.data?.profiles ?? [];
   const [choice, setChoice] = useState<Choice>(() => ({ runtime: "", model: "", effort: "", ...lastChoice(station.id) }));
   // Runtimes this station has profiles for; which profile runs the chat is the station's account pool's choice.
-  const runtimes = RUNTIMES.filter((rt) => profiles.some((p) => p.runtime === rt));
+  const runtimes = RUNTIMES.filter((rt) => profiles.some((p) => p.runtime === rt && p.models.length));
   const runtime: RuntimeKind | undefined = runtimes.includes(choice.runtime as RuntimeKind) ? (choice.runtime as RuntimeKind) : runtimes[0];
+  const enabled = runtime ? modelsOf(profiles.filter((p) => p.runtime === runtime)) : [];
+  // Only enabled models can be used: a remembered one that is no longer enabled gives way to the first that is.
+  const model = enabled.includes(choice.model) ? choice.model : enabled[0] ?? "";
   useEffect(() => {
-    if (runtime && runtime !== choice.runtime) setChoice((c) => ({ ...c, runtime, model: "", effort: "" }));
+    if (runtime && runtime !== choice.runtime) setChoice((c) => ({ ...c, runtime, effort: "" }));
   }, [runtime]);
   // The model menu lists what a profile's check found; profiles not checked since the station started are checked now, once.
   const client = useQueryClient();
@@ -83,19 +86,19 @@ function NewChatOn({ station, stations, onStation, onCreated }: { station: Stati
     keepChoice(station.id, c);
   };
   const ensureSession = () => {
-    if (!runtime) return Promise.reject(new Error("这台 station 还没有 Profile"));
+    if (!runtime || !model) return Promise.reject(new Error("先在 Profile 里启用模型"));
     made.current ??= (async () => {
       setMaking(true);
       const { key } = await makeApi(station.transport).newSession({
-        runtime,
-        ...(choice.model ? { model: choice.model } : {}), ...(choice.effort ? { effort: choice.effort } : {}),
+        runtime, model,
+        ...(choice.effort ? { effort: choice.effort } : {}),
       });
       return key;
     })().catch((error: unknown) => { made.current = null; setMaking(false); throw error; });
     return made.current;
   };
   const efforts = runtime ? EFFORTS[runtime] : [];
-  const modelLabel = choice.model || "默认模型";
+  const modelLabel = model || "没有可用模型";
   const toolbar = useMemo(() => (
     <>
       {station.name && (
@@ -103,13 +106,12 @@ function NewChatOn({ station, stations, onStation, onCreated }: { station: Stati
           {stations.map((s) => <Item key={s.id} checked={s.id === station.id} onSelect={() => onStation(s.id)}>{s.name}</Item>)}
         </Chooser>
       )}
-      <Chooser label={runtime ? <><ModelLogo model={choice.model || null} runtime={runtime} size={13} />{modelLabel}</> : "没有 Profile"} title="用哪个运行时和模型">
+      <Chooser label={runtime ? <><ModelLogo model={model || null} runtime={runtime} size={13} />{modelLabel}</> : "没有可用模型"} title="用哪个运行时和模型">
         {runtimes.map((rt) => (
           <DropdownMenu.Group key={rt}>
             <DropdownMenu.Label className="menu-label chooser-group"><RuntimeLogo runtime={rt} size={12} />{RUNTIME_LABEL[rt]}</DropdownMenu.Label>
-            <Item checked={rt === runtime && !choice.model} onSelect={() => pick({ runtime: rt, model: "", ...(rt !== runtime ? { effort: "" } : {}) })}>默认模型</Item>
             {modelsOf(profiles.filter((p) => p.runtime === rt)).map((m) => (
-              <Item key={m} checked={rt === runtime && choice.model === m} onSelect={() => pick({ runtime: rt, model: m, ...(rt !== runtime ? { effort: "" } : {}) })}>
+              <Item key={m} checked={rt === runtime && model === m} onSelect={() => pick({ runtime: rt, model: m, ...(rt !== runtime ? { effort: "" } : {}) })}>
                 <ModelLogo model={m} runtime={rt} size={12} />{m}
               </Item>
             ))}
@@ -123,15 +125,17 @@ function NewChatOn({ station, stations, onStation, onCreated }: { station: Stati
         </Chooser>
       )}
     </>
-  ), [stations, station, profiles, runtime, runtimes, choice, modelLabel, efforts]);
+  ), [stations, station, profiles, runtime, runtimes, choice, model, modelLabel, efforts]);
 
   return (
     <div className="new-chat">
       <div className="new-chat-inner">
         <h1 className="new-chat-title">新对话</h1>
         <p className="new-chat-sub">说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
-        {overview.isPending ? <p className="muted">正在读取 {station.name} 的 Profile…</p> : profiles.length === 0 && <p className="field-error">这台 station 还没有 Profile，先到设置里加一个。</p>}
-        <Composer sessionKey={null} ensureSession={ensureSession} placeholder="做任何事" toolbar={toolbar} locked={!runtime} roomy
+        {overview.isPending ? <p className="muted">正在读取 {station.name} 的 Profile…</p>
+          : profiles.length === 0 ? <p className="field-error">这台 station 还没有 Profile，先到设置里加一个。</p>
+          : !runtimes.length && <p className="field-error">这台 station 的 Profile 都还没有启用模型。到「设置 → Profile」里勾选可以用的模型。</p>}
+        <Composer sessionKey={null} ensureSession={ensureSession} placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
           onSent={(key) => onCreated(station, key)} />
         {making && <p className="muted new-chat-making">正在 {station.name} 上创建会话…</p>}
       </div>

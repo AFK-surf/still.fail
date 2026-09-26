@@ -8,7 +8,7 @@ import { useApi, keys, useOverview, type AccessKind, type Overview, type Profile
 import { ACCESS, ACCESS_KINDS, checkTone, KEYED, relativeTime, RUNTIME_LABEL, slug } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, Pill, RuntimeLogo, Section, Segmented, Select, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, MobileBack, ModelLogo, Pill, RuntimeLogo, Section, Segmented, Select, Time } from "../ui.tsx";
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
 function OpenCodeMark({ size = 16 }: { size?: number; strokeWidth?: number }) {
@@ -202,12 +202,7 @@ function AccountView({ profile, overview }: { profile: ProfileView; overview: Ov
 
       <AccessSection profile={profile} onSave={(input, done) => save.mutate(input, { onSuccess: () => { toast("已保存，正在检查"); done(); } })} busy={save.isPending} />
 
-      {latest?.models && latest.models.length > 0 && (
-        <section className="section" aria-labelledby="models-heading">
-          <div className="section-head"><h2 id="models-heading">可用模型</h2><span className="muted">{latest.models.length} 个</span></div>
-          <div className="chips">{latest.models.map((m) => <span key={m} className="chip mono">{m}</span>)}</div>
-        </section>
-      )}
+      <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => save.mutate({ models })} />
 
       <Section title="使用它的连接">
         {users.length === 0 ? <p className="muted">还没有连接使用这个 Profile。</p> : (
@@ -410,6 +405,55 @@ function QuotaSection({ profile }: { profile: ProfileView }) {
     <Section title="额度" description={quota?.checkedAt ? <><Time at={quota.checkedAt} />查询；每几分钟自动更新。</> : undefined}
       actions={<Button icon={RefreshCw} busy={refresh.isPending} onClick={() => refresh.mutate()}>刷新</Button>}>
       <div className="card"><QuotaBars quota={quota} /></div>
+    </Section>
+  );
+}
+
+/**
+ * Which of the profile's models may be used: none until picked here. Chats
+ * and connects offer only enabled models, and the account pool sends a chat
+ * only to a profile that has its model enabled.
+ */
+function ModelPool({ profile, found, onSave }: { profile: ProfileView; found: string[] | null; onSave(models: string[]): void }) {
+  const [enabled, setEnabled] = useState(() => new Set(profile.models));
+  const [filter, setFilter] = useState("");
+  useEffect(() => setEnabled(new Set(profile.models)), [profile.models.join("\n")]);
+  const all = [...new Set([...(found ?? []), ...profile.models])].sort();
+  const shown = all.filter((m) => m.toLowerCase().includes(filter.trim().toLowerCase()));
+  const commit = (next: Set<string>) => {
+    setEnabled(next);
+    onSave([...next].sort());
+  };
+  const toggle = (m: string) => {
+    const next = new Set(enabled);
+    if (next.has(m)) next.delete(m); else next.add(m);
+    commit(next);
+  };
+  return (
+    <Section title="模型" description={all.length
+      ? `勾选这个 Profile 可以用的模型；只有勾选的模型能在新对话和连接里选。已启用 ${enabled.size} / ${all.length}。`
+      : "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。"}>
+      {all.length > 0 && (
+        <div className="model-pool">
+          <div className="model-pool-tools">
+            {all.length > 10 && <input className="input model-pool-filter" placeholder="筛选模型" value={filter} onChange={(e) => setFilter(e.target.value)} />}
+            <button type="button" className="text-toggle" onClick={() => commit(new Set([...enabled, ...shown]))}>全选{filter ? "筛选结果" : ""}</button>
+            <button type="button" className="text-toggle" onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>全不选{filter ? "筛选结果" : ""}</button>
+          </div>
+          <ul className="model-pool-list">
+            {shown.map((m) => (
+              <li key={m}>
+                <label className="model-pool-item" data-on={enabled.has(m) || undefined}>
+                  <input type="checkbox" checked={enabled.has(m)} onChange={() => toggle(m)} />
+                  <ModelLogo model={m} runtime={profile.runtime} size={13} />
+                  <span className="mono">{m}</span>
+                  {found && !found.includes(m) && <span className="muted model-pool-gone">检查里没有了</span>}
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Section>
   );
 }
