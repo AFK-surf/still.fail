@@ -18,10 +18,18 @@ import android.util.LruCache
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -37,6 +45,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -65,20 +74,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.Dp
-import dev.ember.android.ui.Edge
-import dev.ember.android.ui.floating
-import dev.ember.android.ui.glass
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.HazeState
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -88,8 +86,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -107,15 +107,17 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -123,9 +125,12 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import dev.ember.android.AppState
 import dev.ember.android.LocalApp
 import dev.ember.android.Screen
+import dev.ember.android.data.ActivityRowView
 import dev.ember.android.data.Attachment
 import dev.ember.android.data.ChatAgentView
 import dev.ember.android.data.ChatOf
@@ -140,7 +145,6 @@ import dev.ember.android.data.Quote
 import dev.ember.android.data.ThreadView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceView
-import dev.ember.android.data.ActivityRowView
 import dev.ember.android.data.agentLabel
 import dev.ember.android.data.elapsed
 import dev.ember.android.data.isMe
@@ -149,6 +153,7 @@ import dev.ember.android.data.rememberTopic
 import dev.ember.android.data.state
 import dev.ember.android.ui.Avatar
 import dev.ember.android.ui.C
+import dev.ember.android.ui.Edge
 import dev.ember.android.ui.IconIn
 import dev.ember.android.ui.Icons
 import dev.ember.android.ui.Loading
@@ -166,6 +171,8 @@ import dev.ember.android.ui.SheetSpec
 import dev.ember.android.ui.SlackMark
 import dev.ember.android.ui.awayFromEnd
 import dev.ember.android.ui.endInView
+import dev.ember.android.ui.floating
+import dev.ember.android.ui.glass
 import dev.ember.android.ui.rememberFollow
 import dev.ember.core.CoreException
 import java.io.ByteArrayOutputStream
@@ -504,10 +511,17 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<C
                 }
             }
         }
-        if (awayFromEnd(list)) {
-            val scope = rememberCoroutineScope()
+        // Over the send button, in line with it (the composer's capsule insets it 18dp from the edge); it comes up
+        // growing and goes the way it came.
+        val scope = rememberCoroutineScope()
+        AnimatedVisibility(
+            awayFromEnd(list), Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = bottom - 6.dp),
+            enter = fadeIn(tween(180)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.6f) + slideInVertically(tween(220, easing = FastOutSlowInEasing)) { it / 2 },
+            exit = fadeOut(tween(150)) + scaleOut(tween(180), targetScale = 0.6f) + slideOutVertically(tween(180)) { it / 2 },
+        ) {
             Box(
-                Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = bottom + 4.dp).size(38.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(C.surface)
+                // Room round it for its shadow, which the animation's bounds would cut.
+                Modifier.padding(8.dp).size(36.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(C.surface)
                     .clickable { scope.launch { follow.jump() } },
                 contentAlignment = Alignment.Center,
             ) { IconIn(Icons.Down, 18.dp, C.ink) }
