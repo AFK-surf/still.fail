@@ -9,8 +9,16 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>): RefObject<
     const el = ref.current;
     if (!el) return;
     const toBottom = () => { if (pinned.current) el.scrollTop = el.scrollHeight; };
-    const onScroll = () => { pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; };
+    // Only the reader lets go of the bottom: scrolls caused by layout (content settling, clamping) never do.
+    let byReader = 0;
+    const reader = () => { byReader = Date.now(); };
+    const onScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      if (atBottom) pinned.current = true;
+      else if (Date.now() - byReader < 600) pinned.current = false;
+    };
     el.addEventListener("scroll", onScroll, { passive: true });
+    for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, reader, { passive: true });
     // Any child growing (an image decoding, a block being highlighted) moves the bottom.
     const resize = new ResizeObserver(toBottom);
     const watch = () => { resize.disconnect(); resize.observe(el); for (const child of el.children) resize.observe(child); };
@@ -30,6 +38,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>): RefObject<
     return () => {
       cancelAnimationFrame(frame);
       el.removeEventListener("scroll", onScroll);
+      for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.removeEventListener(type, reader);
       el.removeEventListener("load", onLoad, true);
       resize.disconnect();
       mutations.disconnect();
