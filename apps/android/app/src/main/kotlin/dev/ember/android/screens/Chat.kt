@@ -997,24 +997,22 @@ fun DraftExtras(draft: Draft) {
     }
 }
 
-/** The bar: ＋, a field that grows with the text, and a round send button (a spinner while a new chat is made). In a floating
- * capsule the capsule is the field's frame: the field and ＋ have none of their own. */
+/** The bar, inside a floating capsule that is its frame: ＋, a field that grows with the text right after it, and a round send
+ * button (a spinner while a new chat is made). */
 @Composable
-fun ComposerBar(draft: Draft, placeholder: String, floating: Boolean = false, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit) {
+fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit) {
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = TextStyle(color = C.ink, fontSize = 15.sp, lineHeight = 21.sp)
-    // In a capsule the text starts right after ＋: no gap between them.
-    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(if (floating) 0.dp else 8.dp)) {
+    Row(verticalAlignment = Alignment.Bottom) {
         // The attach sheet comes up in the keyboard's place: the keyboard goes first.
         Box(
-            Modifier.size(36.dp).clip(CircleShape).let { if (floating) it else it.background(C.chip) }.clickable { focusManager.clearFocus(); keyboard?.hide(); onPlus() },
+            Modifier.size(36.dp).clip(CircleShape).clickable { focusManager.clearFocus(); keyboard?.hide(); onPlus() },
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Plus, 18.dp) }
         Box(
-            Modifier.weight(1f).heightIn(min = 36.dp).clip(RoundedCornerShape(18.dp)).let { if (floating) it else it.background(C.surface).border(1.dp, C.line, RoundedCornerShape(18.dp)) }
-                .padding(start = if (floating) 0.dp else 14.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+            Modifier.weight(1f).heightIn(min = 36.dp).padding(end = 14.dp, top = 7.dp, bottom = 7.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             if (draft.text.isEmpty()) Text(placeholder, style = style.copy(color = C.subtle))
@@ -1060,7 +1058,7 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<C
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         DraftExtras(draft)
-        ComposerBar(draft, "发消息", floating = true, onPlus = { openAttach(app, launchers) },
+        ComposerBar(draft, "发消息", onPlus = { openAttach(app, launchers) },
             // Typing starts the session's runtime, so a cold start overlaps the writing.
             onType = {
                 if (keeper != null && System.currentTimeMillis() - draft.warmed > 60_000) {

@@ -3,6 +3,9 @@
 // (or file) makes the session on that station; then the page becomes the chat.
 package dev.ember.android.screens
 
+import dev.ember.android.ui.floating
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.HazeState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -138,7 +141,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
         made!!.await()
     }
     val launchers = AttachLaunchers { app.upload(draft, view.station, { ensure().first }, it, scope) }
-    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+    val haze = remember { HazeState() }
+    Column(Modifier.weight(1f).hazeSource(haze).verticalScroll(rememberScrollState())) {
         Column(Modifier.fillMaxWidth().padding(start = 30.dp, end = 30.dp, top = 30.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 230.dp)
             Text("想让 agent 做什么？", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.padding(top = 6.dp))
@@ -153,7 +157,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
             if (making) Text("正在 ${view.name} 上创建会话…", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 6.dp))
         }
     }
-    Column(Modifier.fillMaxWidth().background(C.bg).padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // The choices, then the composer as a floating capsule, as in a chat.
+    Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Chooser({ IconIn(Icons.Server, 13.dp, C.ink) }, view.name) { pickStation(app, stations, view.station, onStation) }
             if (runtime == null || model == null) {
@@ -168,28 +173,30 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
                 }
             }
         }
-        DraftExtras(draft)
-        ComposerBar(draft, "做任何事", onPlus = { openAttach(app, launchers) }, onType = {}, onSend = {
-            val text = draft.text.trim()
-            val files = draft.files.toList()
-            draft.text = ""; draft.files.clear(); draft.error = null
-            draft.starting = true
-            scope.launch {
-                val (key, thread) = try {
-                    ensure()
-                } catch (e: CoreException) {
-                    // No chat to send into: the draft comes back.
-                    draft.text = text; draft.files.addAll(files); draft.error = e.message
-                    return@launch
-                } finally {
-                    draft.starting = false
+        Column(Modifier.fillMaxWidth().floating(haze, RoundedCornerShape(26.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DraftExtras(draft)
+            ComposerBar(draft, "做任何事", onPlus = { openAttach(app, launchers) }, onType = {}, onSend = {
+                val text = draft.text.trim()
+                val files = draft.files.toList()
+                draft.text = ""; draft.files.clear(); draft.error = null
+                draft.starting = true
+                scope.launch {
+                    val (key, thread) = try {
+                        ensure()
+                    } catch (e: CoreException) {
+                        // No chat to send into: the draft comes back.
+                        draft.text = text; draft.files.addAll(files); draft.error = e.message
+                        return@launch
+                    } finally {
+                        draft.starting = false
+                    }
+                    app.scope.launch { try { app.api(view.station).send(thread, text, files.mapNotNull { it.done }) } catch (_: CoreException) {} }
+                    // The new item's page, by its agent (its address from now on).
+                    app.replace(Screen.Chat(view.station, ChatOf.Session(key)))
                 }
-                app.scope.launch { try { app.api(view.station).send(thread, text, files.mapNotNull { it.done }) } catch (_: CoreException) {} }
-                // The new item's page, by its agent (its address from now on).
-                app.replace(Screen.Chat(view.station, ChatOf.Session(key)))
-            }
-        })
-        draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }
+            })
+            draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }
+        }
     }
 }
 
