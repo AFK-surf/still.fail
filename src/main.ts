@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { AdminApi } from "./admin/api.ts";
 import { linkAgentHome } from "./agent-home.ts";
 import { Connections } from "./connections.ts";
+import { NameBook } from "./chat/names.ts";
 import { SlackSurface, slackTeamOf } from "./chat/slack.ts";
 import { Hub } from "./hub.ts";
 import { log } from "./log.ts";
@@ -46,8 +47,14 @@ if (reaped > 0) log.warn("reaped runtime processes left by a previous run", { co
 
 const mcpUrl = `http://${settings.config.http.host}:${settings.config.http.port}/mcp`;
 // One chat connection per connect; Slack is the only kind so far.
+// Slack's names for people and channels, kept on disk; learning new ones refreshes what shows them.
+const slackNames = new NameBook(join(settings.config.dataDir, "slack-names.json"));
+slackNames.onLearn(() => {
+  for (const session of store.listSessions()) store.notify(session.key);
+  for (const thread of store.listThreads("local")) store.changes.emit("thread", { id: thread.id, rev: thread.rev, messages: [] });
+});
 const connections: Connections = new Connections(
-  (connect) => new SlackSurface(connect.slack),
+  (connect) => new SlackSurface(connect.slack, slackNames),
   (connectId, event): Promise<void> => hub.receive(connectId, event),
 );
 const codex = new CodexDriver(store);

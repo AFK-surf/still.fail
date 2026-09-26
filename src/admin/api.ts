@@ -636,8 +636,9 @@ export class AdminApi {
     const slack = /^slack:([^:]+):(.+)$/.exec(ref);
     if (slack) {
       const chat = this.#deps.connections.chats.get(slack[1]!);
-      const [name, email] = await Promise.all([chat?.userName?.(slack[2]!) ?? null, chat?.userEmail?.(slack[2]!) ?? null]);
-      return { id: ref, name: name ?? slack[2]!, email, via: "slack" };
+      // Never waits on Slack: what is known now, the rest arrives with the next update.
+      const person = chat?.knownPerson?.(slack[2]!) ?? null;
+      return { id: ref, name: person?.name || slack[2]!, email: person?.email || null, via: "slack" };
     }
     return { id: ref, name: this.#deps.names.get(ref) ?? ref, email: ref, via: "cloud" };
   }
@@ -665,7 +666,7 @@ export class AdminApi {
   async #threadView(t: ThreadSummary): Promise<ThreadView> {
     const chat = this.#threadChat(t.id);
     const [channelName, creator, last, people] = await Promise.all([
-      t.surface === EMBER_SURFACE ? null : chat?.channelName?.(t.channel) ?? null,
+      t.surface === EMBER_SURFACE ? null : chat?.knownChannel?.(t.channel) ?? null,
       this.#creator(t.createdBy),
       t.last ? this.#messageViews(t.id, [t.last]).then(([m]) => m ?? null) : null,
       this.#people(t.people),
@@ -717,7 +718,7 @@ export class AdminApi {
         return Promise.resolve(this.#deps.settings.config.connects.find((c) => c.id === connect)?.name ?? session?.title ?? null);
       }
       if (t?.surface === EMBER_SURFACE) return Promise.resolve(m.author === "local" ? "管理员" : this.#deps.names.get(m.author) ?? m.author);
-      return chat?.userName?.(m.author) ?? Promise.resolve(null);
+      return Promise.resolve(chat?.knownPerson?.(m.author)?.name || null);
     };
     for (const m of messages) {
       const key = `${m.authorKind}:${m.author}`;
