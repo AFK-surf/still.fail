@@ -558,7 +558,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             }
             GroupLabel("思考深度")
             Text("想得越深越慢，也越费额度。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
-            Seg(efforts.map { it ?: "默认" }, efforts.indexOf(effort).coerceAtLeast(0), { effort = efforts[it] }, fill = true, height = 36.dp)
+            EffortChips(efforts, effort) { effort = it }
             GroupLabel("账号")
             Text("谁来跑它。自动分配时，额度用完或登录失效会换一个。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 4.dp))
             if (dropped) Text("指定的账号没有启用 $model，改成了自动分配", fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(bottom = 4.dp))
@@ -588,6 +588,21 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             Text(
                 if (changed) "改成 ${model ?: "默认模型"} · ${effort ?: "默认深度"} · ${accountText(chosen)}" else "不变",
                 fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.accentInk else C.ink, maxLines = 2, textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+/** How hard it thinks, as chips as wide as their words, wrapping when they do not fit a line. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun EffortChips(efforts: List<String?>, picked: String?, onPick: (String?) -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        efforts.forEach { e ->
+            val on = e == picked
+            Text(
+                e ?: "默认", fontSize = 14.sp, color = if (on) C.accentInk else C.ink, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) C.accent else C.chip).clickable { onPick(e) }.padding(horizontal = 16.dp, vertical = 9.dp),
             )
         }
     }
