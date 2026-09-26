@@ -3,7 +3,8 @@
 // cache (StationContext); the sidebar merges their sessions, and a page opened
 // from it talks to the station the item belongs to.
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronsUpDown, LogOut, Plus, Settings, UserPlus } from "lucide-react";
+import { Check, ChevronsUpDown, LogOut, Plus, Settings, SquarePen, UserPlus } from "lucide-react";
+import { NewChat } from "../NewChat.tsx";
 import { DropdownMenu } from "radix-ui";
 import { useMemo, useState, type ReactNode } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
@@ -77,7 +78,8 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
     transport: transportFor(entry.account.sub, entry.id, s.id, entry.relay),
   })), [view.data, entry]);
   const path = useLocation().pathname;
-  const detail = /\/(s\/[^/]+\/.+|settings)/.test(path);
+  const navigate = useNavigate();
+  const detail = /\/(s\/[^/]+\/.+|settings|new$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
   const me = useMemo(() => ({ id: entry.account.email, email: entry.account.email }), [entry.account.email]);
@@ -103,6 +105,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} stations={stations} />} />
             <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
             <Route path="s/:station/*" element={<StationPages stations={stations} />} />
+            <Route path="new" element={<NewChat stations={stations} onCreated={(station, key) => navigate(`${station.base}/sessions/${encodeURIComponent(key)}`)} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
         </main>
@@ -171,6 +174,7 @@ function WorkspaceSidebar({ entry, stations, loading }: { entry: WorkspaceEntry;
     <nav className="sidebar" aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className="account-slot"><WorkspaceSwitcher current={entry} /></div>
+      <div className="nav-new"><NavLink className="nav-row" to={`/w/${entry.id}/new`}><SquarePen {...ICON} />新建对话</NavLink></div>
       <MineFilter label="会话" />
       <div className="nav-scroll">
         {connecting.map((s) => <p key={s.id} className="nav-connecting"><span className="spinner" aria-hidden="true" />正在连接 {s.name}…</p>)}

@@ -995,3 +995,21 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 }
 .agent-activity { grid-template-columns: minmax(0, 1fr); }
 .msg-row .msg-files { justify-content: flex-start; }
+
+/* New chat: a centred composer with the choices of where and on what it runs. */
+.new-chat { flex: 1; min-height: 0; display: grid; place-items: center; padding: 32px; overflow-y: auto; }
+.new-chat-inner { width: 100%; max-width: 720px; display: grid; gap: 10px; }
+.new-chat-title { margin: 0; font-size: var(--text-lg); font-weight: 600; }
+.new-chat-sub { margin: 0 0 8px; color: var(--muted); font-size: var(--text-sm); }
+.new-chat .composer-wrap { padding: 0; }
+.new-chat .composer-box { min-height: 96px; }
+.new-chat-making { font-size: var(--text-xs); }
+.composer-choices { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-right: auto; }
+.composer-box:not([data-multiline]) .composer-choices { order: 1; }
+.chooser { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: var(--text-xs); cursor: pointer; white-space: nowrap; }
+.chooser:hover, .chooser[data-state="open"] { background: var(--hover); color: var(--text); }
+.chooser-menu { max-height: 360px; overflow-y: auto; min-width: 220px; }
+.chooser-group { display: flex; align-items: center; gap: 6px; }
+.chooser-item { display: flex; align-items: center; gap: 6px; }
+.chooser-check { width: 14px; display: inline-grid; place-items: center; flex: none; }
+.nav-new { padding: 6px 8px 2px; }

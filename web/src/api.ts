@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useStation } from "./station.tsx";
 import type { Transport } from "./transport.ts";
 import type { SlackIdentity } from "../../src/chat/slack.ts";
-import type { Attachment, ConnectInput, HostInfo, LiveMessage, LivePhase, LiveStep, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, Quote, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
+import type { Attachment, ConnectInput, HostInfo, LiveMessage, LivePhase, LiveStep, LoginJob, Overview, ProfileCheck, ProfileInput, ProfileQuota, Quote, RuntimeKind, SessionDetail, SessionSummary } from "../../src/admin/types.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
 
 export type * from "../../src/admin/types.ts";
@@ -56,6 +56,8 @@ export function makeApi(t: Transport) {
     request<{ threadTs: string }>("POST", `/sessions/${encodeURIComponent(key)}/messages`, { text, attachments, quotes }),
   /** Starts the session's runtime ahead of a message. */
   warm: (key: string) => request<{ ok: true }>("POST", `/sessions/${encodeURIComponent(key)}/warm`),
+  /** A new chat's session, made before its first message so files can go into it. */
+  newSession: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => request<{ key: string }>("POST", "/sessions", input),
   /** A file sent to the session, as a blob for previews. */
   file: async (key: string, name: string) => {
     const r = await t.bytes(`/sessions/${encodeURIComponent(key)}/files?name=${encodeURIComponent(name)}`);

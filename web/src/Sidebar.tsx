@@ -1,4 +1,4 @@
-import { ArrowLeft, KeyRound, Monitor, Plug, Settings } from "lucide-react";
+import { ArrowLeft, KeyRound, Monitor, Plug, Settings, SquarePen } from "lucide-react";
 import { useIsMine, useLink } from "./station.tsx";
 import { useMemo } from "react";
 import { MineFilter, PeopleStack, useOnlyMine } from "./components.tsx";
@@ -66,6 +66,7 @@ function MainNav() {
 
   return (
     <>
+      <div className="nav-new"><NavLink className="nav-row" to={link("/new")}><SquarePen {...ICON} />新建对话</NavLink></div>
       <MineFilter label="会话" />
       <div className="nav-scroll">
         {sessions.isPending && <SkeletonRows />}

@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, Plus, Quote as QuoteIcon, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { keys, useApi, type Attachment, type ChatMessageRow, type Quote, type SessionDetail, type ShownPhase, type ShownStep, type TimelineEntry } from "./api.ts";
 import { activityText, partialString, toolName } from "./History.tsx";
 import { absoluteTime, agentLabel, relativeTime, sessionStatus } from "./format.ts";
@@ -286,7 +286,7 @@ function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "
 
 // ── quotes being written ────────────────────────────────────────────────
 
-interface DraftQuote extends Quote { id: string }
+export interface DraftQuote extends Quote { id: string }
 
 // ── composer ────────────────────────────────────────────────────────────
 
@@ -301,10 +301,21 @@ interface Pending { id: number; name: string; size: number; done: Attachment | n
  * files and quotes waiting to go above it. Files (picked, pasted or dropped)
  * go to the session's workspace on the station as soon as they are added.
  */
-function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
-  sessionKey: string; quotes: DraftQuote[]; setQuotes(update: (all: DraftQuote[]) => DraftQuote[]): void;
+export function Composer({ sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureSession, onSent, toolbar, placeholder = "给这个会话发消息", locked = false, roomy = false }: {
+  /** The session written to; null for a new chat, made by `ensureSession` on the first file or message. */
+  sessionKey: string | null;
+  quotes?: DraftQuote[]; setQuotes?(update: (all: DraftQuote[]) => DraftQuote[]): void;
   /** A quote just added: its comment line takes the focus. */
-  focusQuote: string | null; onFocused(): void;
+  focusQuote?: string | null; onFocused?(): void;
+  ensureSession?: () => Promise<string>;
+  onSent?: (key: string) => void;
+  /** Choices shown in the toolbar, between attach and send (a new chat's station, model and effort). */
+  toolbar?: ReactNode;
+  placeholder?: string;
+  /** While true (a new chat being made) nothing can be sent. */
+  locked?: boolean;
+  /** Text above, toolbar below, even for one line (a new chat, whose toolbar holds choices). */
+  roomy?: boolean;
 }) {
   const api = useApi();
   const station = useStation();
@@ -318,7 +329,7 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
   // Typing starts the session's runtime, so a cold start overlaps the writing.
   const warmed = useRef(0);
   const warm = () => {
-    if (Date.now() - warmed.current < 60_000) return;
+    if (!sessionKey || Date.now() - warmed.current < 60_000) return;
     warmed.current = Date.now();
     void api.warm(sessionKey).catch(() => {});
   };
@@ -328,9 +339,19 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
     quoteInputs.current.get(focusQuote)?.focus();
     onFocused();
   }, [focusQuote]);
+  const keyFor = async () => sessionKey ?? (await ensureSession!());
   const send = useMutation({
-    mutationFn: (value: string) => api.sayToSession(sessionKey, value, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ author, text: t, comment }) => ({ author, text: t, comment: comment.trim() }))),
-    onSuccess: () => { setText(""); setFiles([]); setQuotes(() => []); void client.invalidateQueries({ queryKey: keys.session(station.id, sessionKey) }); },
+    mutationFn: async (value: string) => {
+      const key = await keyFor();
+      await api.sayToSession(key, value, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ author, text: t, comment }) => ({ author, text: t, comment: comment.trim() })));
+      return key;
+    },
+    onSuccess: (key) => {
+      setText(""); setFiles([]); setQuotes(() => []);
+      void client.invalidateQueries({ queryKey: keys.session(station.id, key) });
+      void client.invalidateQueries({ queryKey: keys.sessions(station.id) });
+      onSent?.(key);
+    },
   });
   const add = (list: FileList | File[]) => {
     for (const file of Array.from(list)) {
@@ -338,7 +359,7 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
       const tooBig = file.size > MAX_FILE;
       setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null }]);
       if (tooBig) continue;
-      api.uploadFile(sessionKey, file).then(
+      keyFor().then((key) => api.uploadFile(key, file)).then(
         (done) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, done } : f))),
         (error: unknown) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, error: error instanceof Error ? error.message : "上传失败" } : f))),
       );
@@ -356,13 +377,13 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [text]);
   const uploading = files.some((f) => !f.done && !f.error);
-  const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !send.isPending;
+  const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !send.isPending && !locked;
   const submit = () => {
     if (ready) send.mutate(text.trim());
   };
   return (
     <div className="composer-wrap">
-      <form className="composer-box" data-multiline={text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0 || undefined} data-dragging={dragging || undefined}
+      <form className="composer-box" data-multiline={roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0 || undefined} data-dragging={dragging || undefined}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
@@ -388,7 +409,7 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
             ))}
           </div>
         )}
-        <textarea ref={input} className="composer-text" rows={1} value={text} placeholder="给这个会话发消息" aria-label="消息"
+        <textarea ref={input} className="composer-text" rows={1} value={text} placeholder={placeholder} aria-label="消息"
           onChange={(e) => { setText(e.target.value); warm(); }}
           onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); add(e.clipboardData.files); } }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
@@ -399,6 +420,7 @@ function Composer({ sessionKey, quotes, setQuotes, focusQuote, onFocused }: {
               <Plus size={18} />
             </button>
           </Tip>
+          {toolbar && <div className="composer-choices" onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
           <Tip label={uploading ? "文件还在上传" : "发送"}>
             <button type="submit" className="send-btn" disabled={!ready} aria-label="发送" aria-busy={send.isPending || undefined}>
               {send.isPending ? <span className="spinner" aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}

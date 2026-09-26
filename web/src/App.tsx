@@ -1,5 +1,7 @@
 import { Tooltip } from "radix-ui";
-import { Navigate, Route, Routes, useLocation, useParams } from "react-router";
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
+import { NewChat } from "./NewChat.tsx";
+import { useStation } from "./station.tsx";
 import { ApiError, useLiveUpdates, useOverview } from "./api.ts";
 import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
@@ -13,7 +15,7 @@ import { Loading } from "./ui.tsx";
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
 function useDetailOpen(): boolean {
   const path = useLocation().pathname;
-  return /^\/(sessions\/.+|connects\/.+|settings(\/.*)?$)/.test(path);
+  return /^\/(new$|sessions\/.+|connects\/.+|settings(\/.*)?$)/.test(path);
 }
 
 export function App() {
@@ -42,6 +44,7 @@ export function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/sessions" replace />} />
             <Route path="/sessions/:key?" element={<SessionPage />} />
+            <Route path="/new" element={<LocalNewChat />} />
             <Route path="/connects/:id" element={<ConnectPage />} />
             <Route path="/bots/:id" element={<LegacyBot />} />
             <Route path="/settings" element={<Navigate to="/settings/connects" replace />} />
@@ -61,4 +64,11 @@ export function App() {
 /** Links from before bots became connects. */
 function LegacyBot() {
   return <Navigate to={`/connects/${useParams().id}`} replace />;
+}
+
+/** A new chat on this station. */
+function LocalNewChat() {
+  const station = useStation();
+  const navigate = useNavigate();
+  return <NewChat stations={[station]} onCreated={(_, key) => navigate(`/sessions/${encodeURIComponent(key)}`)} />;
 }
