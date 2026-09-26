@@ -192,7 +192,8 @@ private fun Pages(app: AppState, current: dev.ember.android.data.WorkspaceEntry)
 
 /**
  * Pages move side by side, as the list's two panes do when switched: the new one pushes in whole from the right and
- * the old goes out whole to the left (and back the other way), nothing fading. A new chat rises from the bottom.
+ * the old goes out whole to the left (and back the other way), nothing fading. The viewer's own page is on the left
+ * instead; a new chat rises from the bottom.
  */
 private fun transition(from: Screen, to: Screen, forward: Boolean): ContentTransform {
     val time = 380
@@ -200,6 +201,9 @@ private fun transition(from: Screen, to: Screen, forward: Boolean): ContentTrans
     return when {
         forward && to == Screen.NewChat -> slideInVertically(tween(time, easing = Ease)) { it } togetherWith fadeOut(tween(time), 0.99f)
         !forward && from == Screen.NewChat -> fadeIn(tween(1), 0.99f) togetherWith slideOutVertically(tween(time, easing = Ease)) { it }
+        // The viewer's own page is to the left of the list (its avatar is at the list's left): it comes and goes that way.
+        forward && to == Screen.Me -> slideInHorizontally(slide) { -it } togetherWith slideOutHorizontally(slide) { it }
+        !forward && from == Screen.Me -> slideInHorizontally(slide) { it } togetherWith slideOutHorizontally(slide) { -it }
         forward -> slideInHorizontally(slide) { it } togetherWith slideOutHorizontally(slide) { -it }
         else -> slideInHorizontally(slide) { -it } togetherWith slideOutHorizontally(slide) { it }
     }.apply { targetContentZIndex = if (forward) 1f else -1f }
