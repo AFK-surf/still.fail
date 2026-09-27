@@ -11,7 +11,7 @@ import { TranscriptTail } from "../src/transcript.ts";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-test("claude partial messages become steps: text and thinking end with their block, a tool with its result", () => {
+test("claude partial messages become steps: text and thinking end with their block, a tool with its result, and starts again once its input is in", () => {
   const all: LiveEvent[] = [];
   const feed = liveFromClaude((e) => all.push(e));
   const out: LiveEvent[] = [];
@@ -22,6 +22,7 @@ test("claude partial messages become steps: text and thinking end with their blo
   ev({ type: "content_block_stop", index: 0 });
   ev({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "call_1", name: "Bash", input: {} } });
   ev({ type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: "{\"command\":" } });
+  ev({ type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: "\"ls\"}" } });
   ev({ type: "content_block_stop", index: 1 });
   feed({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "call_1", content: "hi" }] } });
   ev({ type: "message_start", message: { id: "m2" } });
@@ -36,6 +37,9 @@ test("claude partial messages become steps: text and thinking end with their blo
     { kind: "end", id: "m1:0" },
     { kind: "start", id: "call_1", step: "tool", tool: "Bash" },
     { kind: "delta", id: "call_1", field: "input", text: "{\"command\":" },
+    { kind: "delta", id: "call_1", field: "input", text: "\"ls\"}" },
+    // Its input complete, it starts again with it.
+    { kind: "start", id: "call_1", step: "tool", tool: "Bash", input: "{\"command\":\"ls\"}" },
     { kind: "delta", id: "call_1", field: "output", text: "hi" },
     { kind: "end", id: "call_1" },
     { kind: "start", id: "m2:0", step: "text" },

@@ -172,7 +172,7 @@ export class ClaudeDriver implements AgentDriver {
  */
 export function liveFromClaude(emit: (event: LiveEvent) => void): (frame: Record<string, any>) => void {
   let message = "";
-  const blocks = new Map<number, { id: string; step: LiveStepKind }>();
+  const blocks = new Map<number, { id: string; step: LiveStepKind; tool?: string; input?: string; subagent: object }>();
   const tools = new Set<string>();
   return (frame) => {
     if (frame.type === "system" && frame.subtype === "status" && frame.status === "requesting") {
@@ -191,7 +191,7 @@ export function liveFromClaude(emit: (event: LiveEvent) => void): (frame: Record
         const step: LiveStepKind | null = b.type === "text" ? "text" : b.type === "thinking" ? "thinking" : b.type === "tool_use" ? "tool" : null;
         if (!step) return;
         const id = step === "tool" && b.id ? String(b.id) : `${message}:${e.index}`;
-        blocks.set(Number(e.index), { id, step });
+        blocks.set(Number(e.index), { id, step, ...(step === "tool" ? { tool: String(b.name ?? "tool"), input: "" } : {}), subagent });
         if (step === "tool") tools.add(id);
         emit({ kind: "start", id, step, ...(step === "tool" ? { tool: String(b.name ?? "tool") } : {}), ...subagent });
       } else if (e.type === "content_block_delta") {
@@ -200,10 +200,16 @@ export function liveFromClaude(emit: (event: LiveEvent) => void): (frame: Record
         if (!block) return;
         if (d.type === "text_delta" && d.text) emit({ kind: "delta", id: block.id, field: "text", text: String(d.text) });
         else if (d.type === "thinking_delta" && d.thinking) emit({ kind: "delta", id: block.id, field: "text", text: String(d.thinking) });
-        else if (d.type === "input_json_delta" && d.partial_json) emit({ kind: "delta", id: block.id, field: "input", text: String(d.partial_json) });
+        else if (d.type === "input_json_delta" && d.partial_json) {
+          // A call's input streams in after it starts; kept (its start, a moment before, came without it).
+          if (block.input !== undefined && block.input.length < 4096) block.input += String(d.partial_json);
+          emit({ kind: "delta", id: block.id, field: "input", text: String(d.partial_json) });
+        }
       } else if (e.type === "content_block_stop") {
         const block = blocks.get(Number(e.index));
         if (block && block.step !== "tool") emit({ kind: "end", id: block.id });
+        // Its input complete, the call starts again with it: what it runs (the command, the file) can be said now.
+        else if (block?.input) emit({ kind: "start", id: block.id, step: "tool", tool: block.tool!, input: block.input, ...block.subagent });
       }
     } else if (frame.type === "user" && Array.isArray(frame.message?.content)) {
       for (const c of frame.message.content) {

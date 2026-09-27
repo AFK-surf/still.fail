@@ -1580,13 +1580,15 @@ fn apply_step(view: &mut LiveView, event: &Value, now: f64) {
     match kind {
         "phase" => view.phase = Some(json!({ "phase": event.get("phase").cloned().unwrap_or(Value::Null), "since": now.round() as i64 })),
         "start" => {
+            // Started again (with its input, which Claude Code streams after the start): it keeps when it started.
+            let started = view.steps.iter().find(|s| s.get("id") == Some(&id)).and_then(|s| s.get("startedAt")).and_then(Value::as_i64);
             view.steps.retain(|s| s.get("id") != Some(&id));
             // What it is; what it writes comes with its transcript entry (the station tells no deltas).
             let mut step = json!({
                 "id": id,
                 "step": event.get("step").cloned().unwrap_or(Value::Null),
                 "input": event.get("input").and_then(Value::as_str).unwrap_or(""),
-                "startedAt": now.round() as i64,
+                "startedAt": started.unwrap_or(now.round() as i64),
             });
             if let Some(tool) = event.get("tool").filter(|t| t.as_str().is_some_and(|t| !t.is_empty())) {
                 step["tool"] = tool.clone();

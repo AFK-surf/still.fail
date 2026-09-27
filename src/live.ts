@@ -86,8 +86,9 @@ export class LiveHub {
     if (event.kind === "delta") return this.#counted(key, Buffer.byteLength(event.text));
     if (event.kind === "start") {
       const input = (event.input ?? "").slice(0, INPUT_CHARS);
+      // Started again with its input (Claude Code streams it after the start): it keeps when it started.
       steps.set(event.id, {
-        id: event.id, step: event.step, input, startedAt: Date.now(),
+        id: event.id, step: event.step, input, startedAt: steps.get(event.id)?.startedAt ?? Date.now(),
         ...(event.tool ? { tool: event.tool } : {}), ...(event.subagent ? { subagent: true } : {}), ...(event.parent ? { parent: event.parent } : {}),
       });
       this.#emit(key, { type: "step", event: { ...event, input } });
