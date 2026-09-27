@@ -471,7 +471,8 @@ impl Sockets {
         let interfaces = self.interface_sockets_v4.read().unwrap().clone();
         for (addr, socket) in interfaces.iter() {
             if let Err(e) = socket.send_to(bytes, (MDNS_IPV4, MDNS_PORT)).await {
-                tracing::error!("error sending mDNS on interface {}: {}", addr, e);
+                // ember: debug, not error (vendor/README.md).
+                tracing::debug!("error sending mDNS on interface {}: {}", addr, e);
             } else {
                 tracing::debug!(
                     addr = %addr,

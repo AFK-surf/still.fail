@@ -364,6 +364,25 @@ async fn mesh(data: PathBuf, socket: PathBuf, ready: watch::Receiver<bool>, secr
     }
 }
 
+/// Whether a device dialing this address gets its answer from it. On a machine with two addresses on one network
+/// (studio: 192.168.20.10 on the wired VLAN, 192.168.20.107 on Wi-Fi) the system answers from one of them whichever was
+/// dialed, and QUIC drops what then comes back to the other address as sent to the wrong interface: a device that dialed
+/// the other one never gets through. So only the address the system sends from, to that network, is published.
+fn answers_from(addr: &iroh::TransportAddr) -> bool {
+    let iroh::TransportAddr::Ip(std::net::SocketAddr::V4(addr)) = addr else { return true };
+    let ip = *addr.ip();
+    if ip.is_loopback() || ip.is_link_local() {
+        return true;
+    }
+    // A neighbour on the same network (the last bit flipped); connecting a UDP socket sends nothing.
+    let neighbour = std::net::Ipv4Addr::from(u32::from(ip) ^ 1);
+    let from = std::net::UdpSocket::bind("0.0.0.0:0").and_then(|s| s.connect((neighbour, 9)).and_then(|()| s.local_addr()));
+    match from {
+        Ok(from) => from.ip() == std::net::IpAddr::V4(ip),
+        Err(_) => true,
+    }
+}
+
 async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: watch::Receiver<bool>, secret: String, telemetry: Arc<Telemetry>) -> Result<()> {
     let key = load_key(&data)?;
     let relay: RelayUrl = state.relay_url.parse().context("relay url")?;
@@ -377,6 +396,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: wa
         .relay_mode(RelayMode::Custom(relays))
         .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder())
         .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key))
+        .addr_filter(iroh::address_lookup::AddrFilter::new(|addrs| std::borrow::Cow::Owned(addrs.iter().filter(|a| answers_from(a)).cloned().collect())))
         .transport_config(transport())
         .bind()
         .await?;
