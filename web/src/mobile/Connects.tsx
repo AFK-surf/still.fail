@@ -451,7 +451,7 @@ export function NewConnectScreen() {
               ) : (
                 <li>app 已经建好。<a href={made.links.install} target="_blank" rel="noopener">安装到工作区</a>，然后在 <a href={made.links.oauth} target="_blank" rel="noopener">OAuth 页</a> 复制 Bot User OAuth Token（xoxb- 开头）。</li>
               )}
-              <li>在 <a href={made.links.appToken} target="_blank" rel="noopener">Basic Information</a> 页生成 App-Level Token，勾选 connections:write，复制（xapp- 开头）。</li>
+              <li>在 <a href={made.links.appToken} target="_blank" rel="noopener">Basic Information</a> 页生成 App-Level Token 并复制（xapp- 开头；权限 Slack 已经勾好）。</li>
               <li>{made.install ? "把 App-Level Token 填在下面。" : "把两个 token 填在下面。"}</li>
             </ol>
             <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} />
@@ -462,7 +462,7 @@ export function NewConnectScreen() {
           <>
             <ol className="m-steps-list">
               <li><button type="button" className="m-link" onClick={() => void api.createAppUrl("ember").then(({ url }) => window.open(url, "_blank", "noopener"))}>用 ember 的配置在 Slack 新建一个 app</button>。</li>
-              <li>在 app 的 Basic Information 页生成 App-Level Token，勾选 connections:write。</li>
+              <li>在 app 的 Basic Information 页生成 App-Level Token（权限 Slack 已经勾好）。</li>
               <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
               <li>把两个 token 填在下面。</li>
             </ol>
