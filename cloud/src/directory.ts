@@ -208,8 +208,7 @@ export class Directory extends DurableObject<Env> {
     const members = this.#rows(`
       SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
-    const stations = this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", id)
-      as unknown as StationView[];
+    const stations = this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", id) as unknown as StationView[];
     const invitations = MANAGERS.includes(role)
       ? this.#rows("SELECT id, role, email, created_by, expires_at FROM invitations WHERE workspace = ? AND expires_at > ? ORDER BY expires_at", id, nowSeconds()) as unknown as InvitationView[]
       : [];
@@ -495,8 +494,7 @@ export class Directory extends DurableObject<Env> {
       created_by: w.sub === null ? null : { sub: w.sub as string, email: w.email as string, name: w.user_name as string, picture: w.picture as string },
       members: this.#rows(`SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
         FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, w.id) as unknown as MemberView[],
-      stations: this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", w.id)
-        as unknown as StationView[],
+      stations: this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", w.id) as unknown as StationView[],
       invitations: this.#rows(`SELECT i.id, i.role, i.email, i.created_by, i.expires_at, COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter
         FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.workspace = ? AND i.expires_at > ? ORDER BY i.expires_at`, w.id, now) as unknown as AdminWorkspace["invitations"],
     }));
