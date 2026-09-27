@@ -38,13 +38,25 @@ export function accessEnv(runtime: RuntimeKind, kind: AccessKind, key: string, m
 }
 
 /**
+ * Codex features ember's agents have no use for, off for every profile: apps
+ * starts the ChatGPT connectors' MCP server (over the network, about 1.5 s of
+ * a new thread's start); recommended_plugins fetches and lists plugins that
+ * are not installed (several KB of prompt, and a request a turn can wait on).
+ */
+const CODEX_FEATURES_OFF: Record<string, string> = {
+  "features.apps": "false",
+  "features.recommended_plugins": "false",
+};
+
+/**
  * Codex reads its model provider from config; ember passes it as `-c`
  * overrides when it starts the app-server, so config.toml stays the user's.
  * Values are TOML.
  */
 export function codexOverrides(kind: AccessKind, model: string | undefined): Record<string, string> {
-  if (kind !== "opencode-go") return {};
+  if (kind !== "opencode-go") return { ...CODEX_FEATURES_OFF };
   return {
+    ...CODEX_FEATURES_OFF,
     model_provider: `"opencode-go"`,
     ...(model ? { model: JSON.stringify(model) } : {}),
     "model_providers.opencode-go.name": `"OpenCode Go"`,

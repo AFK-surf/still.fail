@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { parseConfig } from "../src/config.ts";
 import { codexOverrides } from "../src/profiles.ts";
+import { hostSkillsOff, withCaBundle } from "../src/runtime/codex.ts";
 import { TranscriptTail } from "../src/transcript.ts";
 import type { RuntimeKind } from "../src/config.ts";
 
@@ -48,7 +49,34 @@ test("codex gets its provider as config overrides, so config.toml stays the user
   assert.equal(overrides.model_provider, `"opencode-go"`);
   assert.equal(overrides.model, `"glm-5"`);
   assert.equal(overrides["model_providers.opencode-go.env_http_headers"], `{"x-opencode-session"="OPENCODE_SESSION"}`);
-  assert.deepEqual(codexOverrides("subscription", undefined), {});
+  assert.deepEqual(codexOverrides("subscription", undefined), { "features.apps": "false", "features.recommended_plugins": "false" });
+  assert.equal(overrides["features.apps"], "false");
+});
+
+test("codex reads a CA file rather than the system's roots, unless the user chose one", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ember-ca-"));
+  const bundle = join(dir, "cert.pem");
+  writeFileSync(bundle, "");
+  assert.equal(withCaBundle({}, bundle).SSL_CERT_FILE, bundle);
+  assert.equal(withCaBundle({ SSL_CERT_FILE: "/mine.pem" }, bundle).SSL_CERT_FILE, "/mine.pem");
+  assert.equal(withCaBundle({ CODEX_CA_CERTIFICATE: "/mine.pem" }, bundle).SSL_CERT_FILE, undefined);
+  assert.equal(withCaBundle({}, join(dir, "missing.pem")).SSL_CERT_FILE, undefined);
+});
+
+test("the user's own skills are turned off one SKILL.md at a time, linked folders included", () => {
+  const root = mkdtempSync(join(tmpdir(), "ember-skills-"));
+  const elsewhere = mkdtempSync(join(tmpdir(), "ember-skills-src-"));
+  mkdirSync(join(root, "plain"));
+  writeFileSync(join(root, "plain", "SKILL.md"), "");
+  mkdirSync(join(elsewhere, "inner"));
+  writeFileSync(join(elsewhere, "inner", "SKILL.md"), "");
+  symlinkSync(elsewhere, join(root, "pack"));
+  symlinkSync(root, join(root, "pack", "loop")); // a cycle ends
+  assert.deepEqual(hostSkillsOff(root), [
+    { path: join(root, "pack", "inner", "SKILL.md"), enabled: false },
+    { path: join(root, "plain", "SKILL.md"), enabled: false },
+  ]);
+  assert.deepEqual(hostSkillsOff(join(root, "none")), []);
 });
 
 test("usage sums model requests; claude's split responses count once", () => {

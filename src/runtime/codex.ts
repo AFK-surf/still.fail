@@ -6,7 +6,9 @@
 //   thread/start|resume `config`, not the process environment;
 // - threads need sandbox "danger-full-access" with approvalPolicy "never",
 //   or MCP tool calls are refused.
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { expandRoute, type Profile } from "../config.ts";
 import { log } from "../log.ts";
 import { codexOverrides } from "../profiles.ts";
@@ -14,6 +16,60 @@ import { spawnGroup, type GroupProcess, type ProcessRegistry } from "./process.t
 import type { AgentDriver, AgentSession, FailureReason, LiveEvent, LivePhase, LiveStepKind, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
 
 const SCRUBBED = ["OPENAI_API_KEY", "CODEX_HOME"];
+
+/**
+ * Codex otherwise reads the system's root certificates for each new connection. On macOS, from a process outside the
+ * desktop session, that can take seconds or hang past its 15 s request timeout, and fail with UnknownIssuer: a new
+ * thread's first model request waited 10 s to over a minute. SSL_CERT_FILE makes it use a CA file instead, for its
+ * model websocket as well as its HTTP clients (CODEX_CA_CERTIFICATE alone still loads the system roots for the
+ * websocket). One the user set wins.
+ */
+const CA_BUNDLE = "/etc/ssl/cert.pem";
+
+export function withCaBundle(env: NodeJS.ProcessEnv, bundle = CA_BUNDLE): NodeJS.ProcessEnv {
+  if (env.SSL_CERT_FILE || env.SSL_CERT_DIR || env.CODEX_CA_CERTIFICATE || !existsSync(bundle)) return env;
+  return { ...env, SSL_CERT_FILE: bundle };
+}
+
+/**
+ * Codex also loads the skills in the user's own ~/.agents/skills. ember's agents share skills through the agent
+ * home instead, and the personal ones pull them off course (one asks to be read at the start of every
+ * conversation), so each is turned off by path: codex's skills.config takes files, not directories.
+ */
+export function hostSkillsOff(root = join(homedir(), ".agents", "skills")): { path: string; enabled: false }[] {
+  const found: string[] = [];
+  const visited = new Set<string>();
+  const walk = (dir: string, depth: number) => {
+    if (depth > 6) return;
+    let real: string;
+    try {
+      real = realpathSync(dir);
+    } catch {
+      return;
+    }
+    if (visited.has(real)) return;
+    visited.add(real);
+    let names: string[];
+    try {
+      names = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      const path = join(dir, name);
+      let stat;
+      try {
+        stat = statSync(path); // follows links: skill folders are often linked in
+      } catch {
+        continue;
+      }
+      if (stat.isDirectory()) walk(path, depth + 1);
+      else if (name === "SKILL.md") found.push(path);
+    }
+  };
+  walk(root, 0);
+  return found.sort().map((path) => ({ path, enabled: false as const }));
+}
 
 interface ThreadHandler {
   notify(method: string, params: Record<string, any>): void;
@@ -43,6 +99,7 @@ class Host {
     const env: NodeJS.ProcessEnv = { ...process.env };
     for (const name of SCRUBBED) delete env[name];
     Object.assign(env, expandRoute(profile.envs.codex ?? {}, profile.id), { CODEX_HOME: profile.home });
+    Object.assign(env, withCaBundle(env));
     const overrides = Object.entries(codexOverrides(profile.access.kind, profile.model)).flatMap(([k, v]) => ["-c", `${k}=${v}`]);
     this.signature = hostSignature(profile);
     this.#proc = spawnGroup({
@@ -145,6 +202,7 @@ export class CodexDriver implements AgentDriver {
   async open(options: OpenOptions, events: SessionEvents): Promise<AgentSession> {
     const host = await this.#host(options.profile);
     const model = options.model ?? options.profile.model;
+    const skillsOff = hostSkillsOff();
     const common = {
       cwd: options.cwd,
       ...(model ? { model } : {}),
@@ -155,6 +213,7 @@ export class CodexDriver implements AgentDriver {
         "mcp_servers.ember.url": options.mcpUrl,
         "mcp_servers.ember.http_headers": { Authorization: `Bearer ${options.mcpToken}` },
         ...(options.effort ? { model_reasoning_effort: options.effort } : {}),
+        ...(skillsOff.length ? { "skills.config": skillsOff } : {}),
       },
     };
     const opened = options.resume
