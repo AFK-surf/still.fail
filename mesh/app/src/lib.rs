@@ -2,8 +2,10 @@
 //! same data on disk (config.json, the SQLite store) and the same admin API; the station binary (../station) runs it
 //! in place of the Node part once it does all of it (docs/station-rust.md).
 
+pub mod agent_home;
 pub mod config;
 pub mod machine_logins;
+pub mod pool;
 pub mod profiles;
 pub mod runtime;
 pub mod settings;

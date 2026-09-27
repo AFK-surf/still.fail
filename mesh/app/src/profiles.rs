@@ -109,3 +109,38 @@ mod tests {
         assert_eq!(codex_overrides(AccessKind::Subscription, None).len(), 2);
     }
 }
+
+/// Whether a profile works, and what models it offers (as the station keeps it, JSON the same as the TS station's).
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileCheck {
+    /// ok: usable; login: needs a subscription sign-in; failed: the key or login was rejected; unknown.
+    pub state: String,
+    pub detail: String,
+    /// Models the account can use, when the provider lists them.
+    pub models: Option<Vec<String>>,
+    pub checked_at: i64,
+}
+
+/// A window of an allowance.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuotaWindow {
+    pub label: String,
+    /// 0–100.
+    pub used_percent: f64,
+    /// Epoch ms; none when the provider does not say.
+    pub resets_at: Option<i64>,
+}
+
+/// How much of a profile's allowance is used, where the provider says.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileQuota {
+    /// ok: windows filled; unsupported: nothing to show for this kind; unavailable: could not ask; blocked: the
+    /// provider refuses the account (suspended, on hold, deactivated).
+    pub state: String,
+    pub windows: Vec<QuotaWindow>,
+    pub detail: Option<String>,
+    pub checked_at: i64,
+}
