@@ -267,7 +267,14 @@ impl Views {
             topics.insert(Topic::Workspace { workspace: scope.to_string() });
         }
         if let Some(Ok(stations)) = self.stations(scope) {
-            topics.extend(stations.into_iter().filter(|s| s.online).flat_map(|s| per_station(s.address)));
+            for s in stations {
+                // Whether it is up is watched for every one (a station found down comes back); what else it has, for
+                // the ones up.
+                topics.insert(Topic::Link { station: s.address.clone() });
+                if s.online {
+                    topics.extend(per_station(s.address));
+                }
+            }
         }
         topics
     }
@@ -1496,7 +1503,7 @@ mod tests {
             t.set(link("ws/b"), json!({"state": "online"}));
             t.read(&mut ui, 1).await;
             // One wrong station says itself.
-            assert_eq!(ui.value.as_ref().unwrap()["trouble"], json!({"text": "gamma 离线", "state": "offline"}), "{} {:?} {:?}", ui.value.as_ref().unwrap()["stations"], t.store.value(&link("ws/b")), t.store.live_topics().iter().filter(|t| matches!(t, Topic::Link { .. })).collect::<Vec<_>>());
+            assert_eq!(ui.value.as_ref().unwrap()["trouble"], json!({"text": "gamma 离线", "state": "offline"}));
 
             // One station failing shows as that station's state; the other's rows stay.
             t.store.set(&rows("ws/a"), Err(CoreError::new("http_500", "坏了")));
@@ -1753,8 +1760,10 @@ mod tests {
             t.subscribe(1, Topic::Connects { scope: "ws".into(), mine: false });
             t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
-            let each = |st: &str| vec![overview(st), sessions(st), threads(st)];
+            let each = |st: &str| vec![link(st), overview(st), sessions(st), threads(st)];
             assert_eq!(sorted(t.started()), sorted([vec![workspace()], each("ws/a"), each("ws/b"), each("ws/c")].concat()));
+            // gamma is not reached: nothing is waited for from it.
+            t.set(link("ws/c"), json!({"state": "offline"}));
             let me = json!({"id": "Me@x.com", "email": "Me@x.com"});
             assert_eq!(ui.value.as_ref().unwrap(), &json!({"me": me, "items": [], "loading": true}));
             let c1 = with(connect("c1", "one"), json!({"createdBy": {"id": "me@x.com", "name": "我"}}));
