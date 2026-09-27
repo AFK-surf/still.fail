@@ -70,9 +70,9 @@ Inside a trace:
 - **core**: a span per station request (`GET /admin/api/threads/:id/messages`),
   ending when the whole answer is read — an event stream's when it is open
   (`ember.stream`); `station.connect` for the events stream a view asked for;
-  `mesh.connect` when a request has to open the link first (grant, iroh
+  `mesh.connect` when a request has to open the link first (credential, iroh
   connection), with the ember cloud requests it made; ember cloud requests
-  made inside the trace (`/v1/me`, grants, workspaces).
+  made inside the trace (`/v1/me`, credentials, workspaces).
 - **ember cloud**: a span of each `/v1/*` call that carries a recorded
   `traceparent`.
 - **ember-mesh**: a span per request stream, from the stream accepted to the
@@ -165,7 +165,7 @@ hop in them:
 ```
 
 Read it as: `open_ms` is what the user waited; `link_ms` opening the link to
-the station (grant plus iroh connection); `mesh_ms` a request's time on the
+the station (credential plus iroh connection); `mesh_ms` a request's time on the
 station, of which `station_ms` was the admin API's; what a core request span
 took beyond its mesh span was the network (the relay, or the direct path).
 One trace in order:

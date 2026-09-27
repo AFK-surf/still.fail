@@ -399,33 +399,37 @@ idle sockets cost nothing).
 | --- | --- | --- |
 | `{"type":"workspaces"}` | the account's workspace list or its invitations changed (a workspace created, renamed, deleted, joined or left; a role; member or station counts; an invitation to it arrived, went, or its inviter's name changed) | that account |
 | `{"type":"workspace","id"}` | the workspace view changed: members, roles, stations, names, invitations (the managers' list) | its members, and a member who just left or was removed |
-| `{"type":"station","workspace","id","online"}` | a station connected or disconnected | the workspace's members |
 
 A device refetches `/v1/me` on `workspaces` and `/v1/workspaces/:id` on
 `workspace`; `station` is complete in itself. Nothing is replayed: after a
 reconnect the device refetches what it shows.
 
-### Station presence: `GET /v1/stations/connect` (WebSocket)
+### Station control channel: `GET /v1/stations/connect` (WebSocket)
 
-The station keeps a WebSocket open to ember cloud instead of posting a
-heartbeat: open is online, closed is offline, and both are pushed to devices
-at once (`station` above). `StationView.online` says whether it is connected
-now; `last_seen` is when it last connected or disconnected ("last online at").
+The station keeps a WebSocket open to ember cloud for what ember cloud has to
+tell it: its name and workspace, the keys member credentials are signed with,
+revocations, and its removal. It is not presence: whether a station is up,
+each device finds out by connecting to it (the client core's `link`), and a
+station works without this socket (devices keep their credentials).
+`last_seen` is when it last connected or disconnected.
 
 - **Auth**: signed with the station's key at connect, in headers:
   `x-ember-station` (its key, hex), `x-ember-ts` (unix seconds, within 5
   minutes), `x-ember-signature` (hex Ed25519 over
   `ember-station-connect-v1:<origin>:<station>:<ts>`), and `x-ember-version`.
   A station that is not enrolled gets 404 and refuses clients until it is.
-- **From the cloud**: `{"type":"state","workspace","workspace_name","name","grant_keys"}`
-  on connect and whenever these change (renamed, moved by re-enrolling).
+- **From the cloud**: `{"type":"state","workspace","workspace_name","name","grant_keys","revocations"}`
+  on connect and whenever these change (renamed, moved by re-enrolling), with
+  the last 31 days' revocations (`{kind: "sub"|"sid", id, at}`: credentials of
+  that account or login session issued at or before `at` are refused); and
+  `{"type":"revoke", …}` as one happens.
   Close codes: 4000 replaced by a newer socket of the same station, 4004
   removed from its workspace, 4008 silent.
 - **Liveness**: the station sends `ping` every 30 s and the runtime answers
   `pong` without waking the directory; a station that gets no `pong` before
   its next ping reconnects. While any station is connected, an alarm every
   90 s drops station sockets unanswered for 90 s (a station that vanished
-  without closing), so a dead station shows offline within three minutes.
+  without closing).
 - The station reconnects with backoff (1 s doubling to a minute; back to 1 s
   after a socket held a minute). A reconnect replaces the old socket without
   an offline in between.

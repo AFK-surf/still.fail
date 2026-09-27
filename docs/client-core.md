@@ -92,7 +92,7 @@ speed, and they are small.
 A station is addressed as `"<workspace>/<station>"`, or `"local"` for the page
 served by a station itself. The core knows which signed-in account reaches
 which workspace (from each account's `/v1/me`) and uses that account's token
-for grants.
+for its member credential (30 days, kept on the device: docs/cloud.md).
 
 ### Topics
 
@@ -100,8 +100,8 @@ for grants.
 | --- | --- | --- |
 | `accounts` | — | signed-in accounts (no tokens) |
 | `workspaces` | — | every workspace of every account, with its account and pending invitations |
-| `workspace` | `workspace` | the workspace view (members, stations with `online`) |
-| `link` | `station` | the station's events stream: `connecting` / `online` / `offline` / `error` + message |
+| `workspace` | `workspace` | the workspace view (members, stations) |
+| `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s) / `error` + message |
 | `overview` | `station` | the admin API's `/overview` |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
 | `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, `last` entry, `lastMessage`, the viewer's `read` and `unread`), latest message first |
@@ -349,8 +349,8 @@ client/
 - `store.rs` — topics: values, subscribers and watches, coalesced emission as deltas, eviction.
 - `delta.rs` — the ops between two values of a topic.
 - `accounts.rs` — sign-in (PKCE), token refresh (single flight per account), persistence.
-- `cloud.rs` — ember cloud API: errors, `/v1/me`, workspaces, grants. (Its events socket is held in `core.rs`, with the account topics.)
-- `mesh.rs` — the device endpoint and station links: grants, renewal (every 5 min), reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
+- `cloud.rs` — ember cloud API: errors, `/v1/me`, workspaces, member credentials. (Its events socket is held in `core.rs`, with the account topics.)
+- `mesh.rs` — the device endpoint (mDNS and the DHT to find stations, ember's and iroh's relays) and station links: the credential, reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
 - `station.rs` — the admin API over a link (or over HTTP for `local`): the station topics kept current from its events and live streams, threads (entries by number, gaps, paging, posting, read positions), uploads.
 - `kept.rs` — threads' entries and transcripts kept on the device in 256-entry chunks through `Host` storage, bounded (least recently opened go first), forgotten for stations out of reach.
 - `entries.rs` — a thread's entries merged into messages (edits and deletes applied): the one place that does it.

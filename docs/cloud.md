@@ -3,16 +3,19 @@
 ember 的执行节点叫 **station**：就是现在这套东西（连接、会话、运行时账号、管理页）跑在一台机器上。一个人可以登录多个 Google 账号；一个账号可以建多个 **workspace**，也可以被邀请进别人的 workspace；一个 workspace 里可以有多台 station。网页版和以后的客户端通过 iroh 连到 station，不经过任何业务服务器。
 
 ```
-浏览器 / 客户端 ──(iroh，只走 relay)──┐
-                                       ├─ Cloudflare：ember cloud（账号、workspace、授权签发、relay、网页托管）
-station ──(iroh：relay 或直连)─────────┘
+浏览器 ──(iroh，只走 relay)───────────────┐
+客户端（桌面、Android）──(iroh：局域网直连、   ├─ station
+                        relay 或 n0 的 relay)┘
+            │ 登录、workspace、成员凭证（30 天，缓存在设备上）
+            ▼
+Cloudflare：ember cloud（ember-cloud API、ember-relay、ember-web / ember-admin / ember-preview 静态站点）
 ```
 
-参照 zork 的做法（`deploy/cloudflare`），代码从那里分出来，单独部署：Worker 名 `ember-cloud`，和 zork 同一个 Cloudflare 账号。
+ember 以 p2p 为主：设备直接连 station，看 station 在不在线也是设备自己连出来的（不靠 ember cloud 推送）。ember cloud 只管"人"：账号、workspace、成员，以及签发成员凭证；登录过一次之后，局域网里没有 ember cloud 也能用。代码参照 zork 的做法（`deploy/cloudflare`）分出来，和 zork 同一个 Cloudflare 账号。
 
 ## 什么存在哪
 
-- **控制面**：和人有关的一切——账号、workspace、成员与角色、邀请、station 名单、访问授权。
+- **控制面**：和人有关的一切——账号、workspace、成员与角色、邀请、station 名单、成员凭证的签发与吊销。
 - **station**：station 自己的东西——连接、运行时账号、会话、对话、agent 的记忆和 skills。station 只用邮箱记"谁"（连接的添加人、对话的发送人、会话的发起人），名字和头像由网页版从控制面的成员名单里取。
 
 ## 对象
@@ -40,17 +43,18 @@ Google OAuth（`openid email profile`），沿用 zork 的会话实现：access 
 
 1. admin 在 workspace 里点「添加 station」，得到一条一次性、1 小时有效的登记命令。
 2. 在要当 station 的机器上运行它。station 用自己的 iroh 密钥签名证明持有这把密钥，控制面把这个公钥记入 workspace。
-3. station 保存控制面的授权公钥（Ed25519），之后校验授权不需要在线访问控制面。
+3. station 保存控制面的签名公钥（Ed25519），之后校验成员凭证不需要在线访问控制面。
 
-## 连接 station 与授权
+## 连接 station 与成员凭证
 
-客户端连 station 之前，向控制面申请一张 **授权**：Ed25519 签名的 JWT，写明账号、workspace、角色、目标 station、客户端设备公钥，10 分钟有效。
+设备连 station 靠一张 **成员凭证**（`POST /v1/workspaces/:ws/credential {device}`）：ember cloud 用 Ed25519 签的 JWT（`typ: ember-member+jwt`），写明账号、邮箱、名字、workspace、角色、设备公钥和登录会话（`sid`），30 天有效。
 
-- station 只接受：签名来自控制面、目标是自己、所属 workspace 是自己的、设备公钥等于这条 iroh 连接对端的公钥、没过期。
-- 授权快到期时客户端在同一连接上换新的；过期不换，station 断开连接。所以成员被移除或 station 被移出 workspace，最迟 10 分钟生效。
-- 控制面不能解密业务内容，relay 只转发加密帧。控制面下线时：已有连接照常，新连接拿不到授权（网页版本来也需要登录）；station 本机的管理页不受影响。
+- station 离线校验：签名来自登记时保存的公钥、workspace 是自己的、设备公钥等于这条 iroh 连接对端的公钥、没过期、没被吊销。同一张凭证进这个 workspace 的每一台 station。
+- 设备把凭证存在本地（`credential/<账号>/<workspace>`，记着签给哪台设备），一天内直接用，过了一天向 ember cloud 换新的；ember cloud 连不上时，旧的一直用到过期。station 拒绝时（被吊销、过期）立刻换新的。退出账号时一并删掉。
+- **吊销**：成员被移除或改角色（`sub`）、登录会话被注销（`sid`）时，ember cloud 通过 station 的控制通道推一条吊销（`revoke` 帧，`state` 帧里也带着最近 31 天的吊销）；station 拒绝签发时间不晚于吊销时间的凭证，已连着的最迟 5 秒内断开。station 不在线时错过的吊销，下次连上 ember cloud 时从 `state` 里补上。
+- ember cloud 下线时：已登录过的设备凭缓存的凭证照常连 station（局域网直连或 relay）；只有新登录、新成员需要它。station 本机的管理页不受影响。
 
-连接上用 ALPN `ember/admin/1`。第一个流交换授权；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。
+连接上用 ALPN `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。
 
 station 端由 `ember-station`（Rust，iroh 1.0.3，mesh/station）负责：它运行整个 station（把 Node 部分作为子进程看护），把 mesh 上来的请求经 Unix socket 转给 Node 部分的管理 API，带上已验证的用户身份；Node 部分据此记录「谁」做了操作、在管理页对话里说了话。
 
@@ -67,16 +71,34 @@ station 端由 `ember-station`（Rust，iroh 1.0.3，mesh/station）负责：它
 
   连接、会话、管理页对话都记录创建人：连接和对话是添加它的人（ember cloud 账号的邮箱，本机页面记为"本机管理页"）；Slack 发起的会话是发起的 Slack 用户，用 Slack 资料里的邮箱和 ember cloud 账号对应。会话列表和连接列表可以只看"我创建的"；打开会话时默认进入自己最近的对话。
 
-浏览器的设备密钥存在 IndexedDB；清掉站点数据等于换了一个新客户端，重新申请授权即可，不需要任何人重新审批。
+浏览器的设备密钥存在 IndexedDB；清掉站点数据等于换了一个新客户端，重新申请凭证即可，不需要任何人重新审批。
 
 ## relay 与发现
 
-relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Worker 转发 WebSocket 帧并做总量限制。station 和客户端都用这个 relay 作为 home relay，所以客户端只凭 station 公钥和 relay 地址就能连上，不依赖额外的发现服务；签名发现（pkarr）保留给以后能直连的原生客户端。
+relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Worker（`ember-relay`，`cloud/src/relay-worker.ts`）转发 WebSocket 帧并做总量限制。它是单独的 Worker，部署 API 不会断开任何 relay 连接。station 同时挂着 iroh 官方的公共 relay，ember 的 relay 不在时也能被找到。
+
+station 在哪、怎么连，设备自己找，不经过 ember cloud：
+
+- **局域网**：mDNS（服务名 `_ember._udp.local`，只有 station 广播，设备只查询）。每块网卡都收发；路由器在子网之间转发的 mDNS 也认。
+- **公网**：station 把自己所在的 relay 发布到 Mainline DHT，设备查得到它换过的 relay。
+- 浏览器（wasm）只能走 ember 的 relay。
+
+几处 iroh 相关库的修补（多网卡、mDNS 反射、macOS 回包源地址、晚到的地址立即补发握手包）在 `vendor/`，原因见 `vendor/README.md`。
 
 ## 部署
 
-`cloud/deploy.py`（在 studio 上运行，需要 `wrangler login` 和 OrbStack 的 docker）：构建网页版（含 wasm）、部署 Worker 和 relay 容器、写入密钥、检查 `/healthz`。线上地址 `https://ember.3720.org`，和 zork 同一个 Cloudflare 账号，Google 登录用单独的 OAuth 客户端（`524783491799-bm55…`，和 zork 同一个 Google Cloud 项目），客户端 JSON 在 studio 的 `~/ember-deploy/google-oauth.json`。密钥在 studio 的 `~/ember-deploy/keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。PostHog 的项目 key 在 `~/ember-deploy/posthog.json`，deploy.py 构建时带进网页版（见 [telemetry.md](telemetry.md)）。
+ember cloud 是五个 Worker（`cloud/wrangler*.jsonc`）：
 
-`cloud/deploy.py`（在 studio 上运行，需要 `wrangler login` 和 OrbStack 的 docker）：构建网页版（含 wasm）、部署 Worker 和 relay 容器、写入密钥、检查 `/healthz`。线上地址 `https://ember.3720.org`，和 zork 同一个 Cloudflare 账号，Google 登录用单独的 OAuth 客户端（`524783491799-bm55…`，和 zork 同一个 Google Cloud 项目），客户端 JSON 在 studio 的 `~/ember-deploy/google-oauth.json`。密钥在 studio 的 `~/ember-deploy/keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。Axiom 的写入令牌和数据集在 `~/ember-deploy/axiom.json`（`{dataset, token}`），部署时写成 Worker 的 `AXIOM_TOKEN` / `AXIOM_DATASET`；客户端和 station 的 trace 发到 `POST /v1/telemetry/traces`，由 Worker 转给 Axiom，令牌不出 Worker（见 `docs/telemetry.md`）。
+| Worker | 是什么 | 在哪 |
+|---|---|---|
+| `ember-cloud` | API（`cloud/src/index.ts`） | `ember.3720.org/v1/*`、`admin.ember.3720.org/v1/*`、`/healthz`、`/install.sh`、`/releases/*`、`/.well-known/*` |
+| `ember-relay` | relay 及其容器 | `ember.3720.org/relay`、`/ping`、`/generate_204`、`/v1/admin/relay/*` |
+| `ember-web` | 网页版，纯静态 | `ember.3720.org`（Custom Domain） |
+| `ember-admin` | 管理后台，纯静态 | `admin.ember.3720.org`（Custom Domain） |
+| `ember-preview` | 预览页，纯静态 | `preview.ember.3720.org`（Custom Domain） |
 
-本地联调（不需要 Cloudflare）：`cloud/test/dev.ts` 起一个本地控制面（Google 用模拟），配合 `iroh-relay --dev`；`/tmp/mesh-e2e.sh`（studio）把 relay、控制面、`ember-station`、管理 API 和无头浏览器串起来跑一遍。
+同一个域名上，路由优先于 Custom Domain，所以 API 和 relay 的路径到各自的 Worker，其余都是静态站点。域名没变，客户端不用改。
+
+`cloud/deploy.py [api relay web admin preview]`（在 studio 上运行，需要 `wrangler login` 和 OrbStack 的 docker）逐个部署，不写就是全部；studio 的 `ember-deploy` 只部署改动涉及的那几个，只有 relay 改了才会断开 relay 连接。线上地址 `https://ember.3720.org`，Google 登录用单独的 OAuth 客户端（`524783491799-bm55…`，和 zork 同一个 Google Cloud 项目），客户端 JSON 在 studio 的 `~/ember-deploy/google-oauth.json`。密钥在 studio 的 `~/ember-deploy/keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。PostHog 的项目 key 在 `~/ember-deploy/posthog.json`，构建网页版时带进去（见 [telemetry.md](telemetry.md)）。Axiom 的写入令牌和数据集在 `~/ember-deploy/axiom.json`（`{dataset, token}`），部署时写成 API Worker 的 `AXIOM_TOKEN` / `AXIOM_DATASET`；客户端和 station 的 trace 发到 `POST /v1/telemetry/traces`，由 Worker 转给 Axiom，令牌不出 Worker（见 `docs/telemetry.md`）。
+
+本地联调（不需要 Cloudflare）：`cloud/test/dev.ts` 在 miniflare 里按线上的路由起全部 Worker（Google 用模拟），配合 `iroh-relay --dev`；`/tmp/mesh-e2e.sh`（studio）把 relay、控制面、`ember-station`、管理 API 和无头浏览器串起来跑一遍。
