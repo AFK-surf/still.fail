@@ -971,3 +971,16 @@ test("a profile on the machine's own login: made from a login kept in a file, it
     s.close();
   }
 });
+
+test("a profile just made has its allowance read at once, without waiting for a round", async () => {
+  let quotas = 0;
+  const t = await setup({ quota: () => quotas++ });
+  try {
+    assert.equal((await t.call("PUT", "/profiles/linked", { name: "Linked", runtime: "codex", access: { kind: "subscription" }, home: "homes/linked" })).status, 200);
+    for (let i = 0; i < 50 && quotas === 0; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(quotas, 1);
+    assert.equal((await t.call("GET", "/overview")).body.profiles.find((p: any) => p.id === "linked").quota?.windows[0]?.usedPercent, 12);
+  } finally {
+    t.close();
+  }
+});

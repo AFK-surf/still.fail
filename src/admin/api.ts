@@ -1537,6 +1537,8 @@ export class AdminApi {
     this.#checks.set(id, check);
     this.#deps.store.setProfileCheck(id, check);
     this.#overviewChanged();
+    // One never asked yet (just made, however): its allowance now, not at the next round.
+    if (check.state === "ok" && !this.#quotas.has(id)) void this.#refreshQuota(id).catch((error) => log.warn("quota after a first check failed", { profile: id, error }));
     return check;
   }
 
