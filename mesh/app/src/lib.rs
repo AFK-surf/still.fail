@@ -3,6 +3,8 @@
 //! in place of the Node part once it does all of it (docs/station-rust.md).
 
 pub mod config;
+pub mod machine_logins;
 pub mod profiles;
+pub mod runtime;
 pub mod settings;
 pub mod store;

@@ -6,6 +6,7 @@ description = "ember station's own work, in Rust: its settings, store, agent run
 
 [dependencies]
 anyhow = "1"
+async-trait = "0.1"
 base64 = "0.22"
 ember-shapes = { path = "../../client/shapes" }
 futures-util = "0.3"
