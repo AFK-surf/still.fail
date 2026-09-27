@@ -12,22 +12,17 @@ export interface Access {
 }
 
 /**
- * One row of an agent's activity: what kind of thing, the icon of ember's set to mark it with, in words, whether it
- * runs now, and its transcript entry (for its history to open at).
+ * What an agent at work does now (activity.rs): `key` names the thing (a step, or where the turn stands), `text` says
+ * it; the same thing keeps its key while its words change.
  */
-export interface ActivityRow {
+export interface ActivityNow {
 	key: string;
-	kind: string;
-	icon: string;
 	text: string;
-	live: boolean;
-	entry?: number;
 }
 
-/** What an agent at work is doing (activity.rs): a status line and this period's rows. */
+/** What an agent at work is doing, as a chat shows it (activity.rs). */
 export interface Activity {
-	status: string;
-	rows: ActivityRow[];
+	now: ActivityNow;
 }
 
 /** A runtime. */

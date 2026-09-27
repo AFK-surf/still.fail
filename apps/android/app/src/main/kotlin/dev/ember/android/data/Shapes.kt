@@ -19,23 +19,18 @@ data class Access (
 	val key: String
 )
 
-/// One row of an agent's activity: what kind of thing, the icon of ember's set to mark it with, in words, whether it
-/// runs now, and its transcript entry (for its history to open at).
+/// What an agent at work does now (activity.rs): `key` names the thing (a step, or where the turn stands), `text` says
+/// it; the same thing keeps its key while its words change.
 @Serializable
-data class ActivityRow (
+data class ActivityNow (
 	val key: String,
-	val kind: String,
-	val icon: String,
-	val text: String,
-	val live: Boolean,
-	val entry: Long? = null
+	val text: String
 )
 
-/// What an agent at work is doing (activity.rs): a status line and this period's rows.
+/// What an agent at work is doing, as a chat shows it (activity.rs).
 @Serializable
 data class Activity (
-	val status: String,
-	val rows: List<ActivityRow>
+	val now: ActivityNow
 )
 
 /// A runtime.
