@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Deploys ember cloud: the Worker, its relay container, the web app and the admin's console
-(one Worker on two custom domains, PUBLIC_ORIGIN and ADMIN_ORIGIN).
+"""Deploys ember cloud, five Workers (wrangler.jsonc says what each is):
+  api      ember-cloud    the API (wrangler.jsonc)
+  relay    ember-relay    the relay and its container (wrangler.relay.jsonc)
+  web      ember-web      the web app, static (wrangler.web.jsonc)
+  admin    ember-admin    the admin's console, static (wrangler.admin.jsonc)
+  preview  ember-preview  the preview host, static (wrangler.preview.jsonc)
+Each is deployed on its own: deploying the API drops no relay connection and serves no page.
 
-    python3 deploy.py            # build the web app, deploy, set secrets, check /healthz
-    python3 deploy.py --check    # only report what is missing
+    python3 deploy.py                 # all of them, in this order: relay, api, web, admin, preview
+    python3 deploy.py api web         # only these (the static ones are built first)
+    python3 deploy.py --check         # only report what is missing
 
 Inputs (none of them in the repository):
   --google  Google "Web application" OAuth client JSON (default ~/ember-deploy/google-oauth.json;
@@ -46,8 +52,11 @@ def write_private(path: Path, value) -> None:
     os.replace(tmp, path)
 
 
-def read_template() -> dict:
-    text = (ROOT / "wrangler.jsonc").read_text()
+PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc"}
+
+
+def read_template(name: str = "wrangler.jsonc") -> dict:
+    text = (ROOT / name).read_text()
     text = re.sub(r"^\s*//.*$", "", text, flags=re.M)
     text = re.sub(r",(\s*[}\]])", r"\1", text)
     return json.loads(text)
@@ -112,10 +121,15 @@ def docker_env():
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("parts", nargs="*", help=f"what to deploy, of {', '.join(PARTS)} (default: all)")
     parser.add_argument("--google", type=Path, default=DEPLOY / "google-oauth.json")
     parser.add_argument("--check", action="store_true")
-    parser.add_argument("--skip-build", action="store_true", help="deploy the web apps already in dist/cloud-app")
+    parser.add_argument("--skip-build", action="store_true", help="deploy the static sites already in dist/")
     args = parser.parse_args()
+    unknown = set(args.parts) - set(PARTS)
+    if unknown:
+        sys.exit(f"no such part: {', '.join(sorted(unknown))}")
+    parts = [p for p in PARTS if p in args.parts] or list(PARTS)
 
     template = read_template()
     origin = template["vars"]["PUBLIC_ORIGIN"]
@@ -130,33 +144,43 @@ def main() -> None:
         print("axiom", "present" if AXIOM.exists() else f"missing: no traces without {AXIOM}")
         return
 
-    config = {**template, "account_id": account_id(), "vars": {**template["vars"], "GOOGLE_CLIENT_ID": web["client_id"]}}
-    local = ROOT / "wrangler.local.json"
-    local.write_text(json.dumps(config, indent=2) + "\n")
-
-    if not args.skip_build:
+    account = account_id()
+    if not args.skip_build and {"web", "admin", "preview"} & set(parts):
         # web/vite.config.ts reads the key from the file EMBER_POSTHOG names.
         if not POSTHOG.exists():
             print(f"note: no {POSTHOG}; building the web app without analytics")
         env = {**os.environ, "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else None
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
-    values = {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom()}
+    secrets_of = {
+        "api": {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom()},
+        "relay": {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
+    }
     with docker_env() as env:
-        wrangler("deploy", "--config", str(local), "--containers-rollout", "immediate", env=env)
-        with tempfile.TemporaryDirectory(prefix="ember-secrets-") as directory:
-            path = Path(directory) / "secrets.json"
-            write_private(path, values)
-            wrangler("secret", "bulk", str(path), "--config", str(local), env=env)
+        for part in parts:
+            config = {**read_template(PARTS[part]), "account_id": account}
+            if part == "api":
+                config["vars"] = {**config["vars"], "GOOGLE_CLIENT_ID": web["client_id"]}
+            local = ROOT / PARTS[part].replace(".jsonc", ".local.json")
+            local.write_text(json.dumps(config, indent=2) + "\n")
+            print(f"deploying {part} ({config['name']})", flush=True)
+            extra = ["--containers-rollout", "immediate"] if part == "relay" else []
+            wrangler("deploy", "--config", str(local), *extra, env=env)
+            if part in secrets_of:
+                with tempfile.TemporaryDirectory(prefix="ember-secrets-") as directory:
+                    path = Path(directory) / "secrets.json"
+                    write_private(path, secrets_of[part])
+                    wrangler("secret", "bulk", str(path), "--config", str(local), env=env)
 
     # Cloudflare turns away urllib's default User-Agent. A new custom domain's
     # certificate may take a few minutes; a failure here is not a failed deploy.
-    for each in (origin, template["vars"]["ADMIN_ORIGIN"], template["vars"]["PREVIEW_ORIGIN"]):
-        request = urllib.request.Request(f"{each}/healthz", headers={"user-agent": "ember-deploy"})
+    checks = {"api": f"{origin}/healthz", "relay": f"{origin}/ping", "web": f"{origin}/", "admin": f"{template['vars']['ADMIN_ORIGIN']}/", "preview": "https://preview.ember.3720.org/_ember/frame"}
+    for part in parts:
+        request = urllib.request.Request(checks[part], headers={"user-agent": "ember-deploy"})
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
-                print("healthz", each, response.status, response.read().decode())
+                print("check", part, checks[part], response.status)
         except OSError as error:
-            print("healthz", each, "failed:", error)
+            print("check", part, checks[part], "failed:", error)
 
 
 if __name__ == "__main__":

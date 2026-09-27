@@ -15,7 +15,7 @@ function auth(token: string) {
 test("only an operator can retire the relay process during a cutover", async () => {
   const h = await harness();
   try {
-    const relays: any = await h.mf.getDurableObjectNamespace("RELAY");
+    const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
     const relay = relays.get(relays.idFromName("primary"));
     const session = await h.login();
     for (const token of ["invalid", session.access_token]) {
@@ -33,7 +33,7 @@ test("logout does not cancel a pending native relay upgrade", { timeout: 10000 }
   const h = await harness();
   try {
     const session = await h.login();
-    const relays: any = await h.mf.getDurableObjectNamespace("RELAY");
+    const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
     await relays.get(relays.idFromName("primary")).delay(2000);
     const pending = h.fetch("/relay", {
       headers: {
@@ -78,7 +78,7 @@ test("empty-frame flooding is limited even when it consumes no payload bytes", {
     assert.equal(response.status, 101);
     const socket = response.webSocket!;
     socket.accept();
-    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET");
+    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET", "relay");
     await budgets.get(budgets.idFromName("primary")).exhaustBudget("frames");
     const closed = new Promise<number>((resolve) => socket.addEventListener("close", (event) => resolve(event.code), { once: true }));
     socket.send(new Uint8Array(0));
@@ -278,8 +278,8 @@ test("relay budgets span anonymous and account sessions; account idle expiry sti
       sockets.push(response.webSocket!);
     }
     assert.equal((await upgrade(second.access_token)).status, 429);
-    const accounts: any = await h.mf.getDurableObjectNamespace("ACCOUNTS");
-    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET");
+    const accounts: any = await h.mf.getDurableObjectNamespace("ACCOUNTS", "api");
+    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET", "relay");
     await budgets.get(budgets.idFromName("primary")).exhaustBudget();
     const close = new Promise<number>((resolve) =>
       (sockets[0] as any).addEventListener("close", (event: any) => resolve(event.code), {

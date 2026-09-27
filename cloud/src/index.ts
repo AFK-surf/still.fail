@@ -1,86 +1,26 @@
+// ember cloud's API (the Worker ember-cloud): accounts and sign-in, workspaces and their stations, the operator's
+// console API, and installing a station. It answers only the paths routed to it (wrangler.jsonc) on PUBLIC_ORIGIN's
+// and ADMIN_ORIGIN's hosts; the web apps are static Workers of their own on those hosts' Custom Domains (routes take
+// precedence over them), and the relay is a Worker of its own (relay-worker.ts), so deploying this one drops no relay
+// connection and serves no page.
 import { installScript, RELEASE_FILE } from "./install.ts";
-import { Container } from "@cloudflare/containers";
-import { previewSite } from "./preview.ts";
-import { DurableObject } from "cloudflare:workers";
-import { decodeKey, MAX_AGE_MS, readPayload, verifyPayload } from "./pkarr";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
 import type { Env } from "./env";
 import { adminApi, api } from "./api";
 import { parseTraceparent, recordCall } from "./tracing";
-export { RelayBudget } from "./relay";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
 export { Directory } from "./directory";
 export { LoginAttempt, LoginLimiter } from "./login";
 
-export class Relay extends Container<Env> {
-  defaultPort = 8080;
-  sleepAfter = "10m";
-}
-
-type RecordValue = { payload: Uint8Array; timestamp: string; expires: number };
-
-// One strongly consistent object per public key; no global discovery bottleneck.
-export class DiscoveryRecord extends DurableObject<Env> {
-  publish(payload: Uint8Array, timestamp: string): number {
-    return this.ctx.storage.transactionSync(() => {
-      const old = this.ctx.storage.kv.get<RecordValue>("record");
-      if (old && BigInt(timestamp) < BigInt(old.timestamp)) return 409;
-      if (old && timestamp === old.timestamp) {
-        // An identical retry is idempotent and does not renew an expired record.
-        return old.payload.length === payload.length && old.payload.every((b, i) => b === payload[i]) ? 204 : 409;
-      }
-      this.ctx.storage.kv.put("record", {
-        payload,
-        timestamp,
-        expires: Number(BigInt(timestamp) / 1000n) + MAX_AGE_MS,
-      });
-      return 204;
-    });
-  }
-
-  resolve(): Uint8Array | null {
-    const record = this.ctx.storage.kv.get<RecordValue>("record");
-    // Retain the timestamp after expiry so an old signed record cannot be replayed.
-    return record && record.expires > Date.now() ? record.payload : null;
-  }
-}
-
-const cors = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, PUT, OPTIONS",
-  "access-control-allow-headers": "Content-Type, Authorization",
-  "cache-control": "no-store",
-};
-
-// The admin's console has a host of its own, ADMIN_ORIGIN, served by this
-// Worker: its web app, the calls its client core makes to sign in and stay
-// signed in (the core talks to the page's origin), and the console's API;
-// nothing else. A sign-in starts on PUBLIC_ORIGIN all the same: the login's
-// cookie belongs to the host that starts it, and Google calls back to
-// PUBLIC_ORIGIN, which then sends the browser on to the console's /auth/callback.
+// The admin's console has a host of its own, ADMIN_ORIGIN: its /v1/ calls come here too — the calls its client core
+// makes to sign in and stay signed in (the core talks to the page's origin), and the console's API; nothing else. A
+// sign-in starts on PUBLIC_ORIGIN all the same: the login's cookie belongs to the host that starts it, and Google
+// calls back to PUBLIC_ORIGIN, which then sends the browser on to the console's /auth/callback.
 const CONSOLE_CALLS = new Set(["/v1/auth/token", "/v1/auth/refresh", "/v1/auth/logout", "/v1/me"]);
-// Both web apps are in one assets directory: ember's at its root, the
-// console's under /admin-app/. Every request reaches the Worker first
-// (run_worker_first), which picks the app by host; /admin-app/ is not a path
-// on either host, and each app's client-side routes fall back to its own
-// index.html here rather than in the assets' not-found handling.
-const CONSOLE_FILES = "/admin-app";
 
 const notFound = () => new Response("Not found", { status: 404 });
-
-/** A file of the web app under `root`, or, for any other path (a client-side route), its index.html. */
-async function app(env: Env, request: Request, root: string): Promise<Response> {
-  if (!env.ASSETS) return notFound();
-  const url = new URL(request.url);
-  url.pathname = root + url.pathname;
-  const file = await env.ASSETS.fetch(new Request(url, request));
-  if (file.status !== 404) return file;
-  url.pathname = root + "/";
-  url.search = "";
-  return env.ASSETS.fetch(new Request(url, request));
-}
 
 export default {
   // A /v1/* call in a recorded trace (a client core's) is a span of it, sent once the answer is out.
@@ -97,14 +37,9 @@ export default {
 async function handle(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
-  if ((path === "/healthz" || path === "/ping") && request.method === "GET") {
-    return Response.json({
-      service: "ember-cloud",
-      relay: "iroh-relay-1.1.0",
-      google_login: authConfigured(env),
-    });
+  if (path === "/healthz" && request.method === "GET") {
+    return Response.json({ service: "ember-cloud", google_login: authConfigured(env) });
   }
-  if (url.origin === env.PREVIEW_ORIGIN) return previewSite(url);
   // Installing a station: the installer, and the releases it gets.
   if (url.origin === env.PUBLIC_ORIGIN && request.method === "GET") {
     if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
@@ -115,23 +50,17 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return new Response(object.body, { headers: { "content-type": "application/gzip", "content-length": String(object.size), "cache-control": "no-store" } });
     }
   }
-  if (path === "/relay") {
-    if (url.origin !== env.PUBLIC_ORIGIN) return reply({ error: "invalid_origin" }, 421);
-    if (request.method !== "GET") return reply({ error: "method_not_allowed" }, 405);
-    return env.RELAY_BUDGET.getByName("primary").fetch(request);
-  }
   const onConsole = url.origin === env.ADMIN_ORIGIN;
   if (path.startsWith("/v1/")) {
     if (url.origin !== env.PUBLIC_ORIGIN && !onConsole) return reply({ error: "invalid_origin" }, 421);
     if (path.startsWith("/v1/auth/") && !authConfigured(env)) return reply({ error: "login_not_configured" }, 503);
   }
   if (onConsole) {
-    const read = request.method === "GET" || request.method === "HEAD";
     if (path === "/v1/auth/google/start" && request.method === "GET") {
       return new Response(null, { status: 302, headers: { location: `${env.PUBLIC_ORIGIN}${path}${url.search}`, "cache-control": "no-store" } });
     }
     if (path.startsWith("/v1/admin/")) return adminApi(request, env, path);
-    if (!CONSOLE_CALLS.has(path)) return read && !path.startsWith("/v1/") ? app(env, request, CONSOLE_FILES) : notFound();
+    if (!CONSOLE_CALLS.has(path)) return notFound();
   }
   if (path === "/v1/auth/google/start" && request.method === "GET") {
     return googleStart(env, request);
@@ -192,25 +121,16 @@ async function handle(request: Request, env: Env): Promise<Response> {
     }
   }
   const admin = /^\/v1\/admin\/accounts\/([A-Za-z0-9_-]{1,128})$/.exec(path);
-  const restartRelay = path === "/v1/admin/relay/restart";
-  const whereRelay = path === "/v1/admin/relay/where";
   const deleteWorkspace = /^\/v1\/admin\/workspaces\/([A-Za-z0-9_-]{1,64})\/delete$/.exec(path);
   const listWorkspaces = path === "/v1/admin/workspaces/list";
-  if ((admin || restartRelay || whereRelay || deleteWorkspace || listWorkspaces) && request.method === "POST") {
+  if ((admin || deleteWorkspace || listWorkspaces) && request.method === "POST") {
     const supplied = bearerToken(request);
     if (!env.ADMIN_TOKEN || env.ADMIN_TOKEN.length < 43 || !supplied || (await digest(supplied)) !== (await digest(env.ADMIN_TOKEN))) return denied();
     try {
-      if (whereRelay) return reply(await env.RELAY_BUDGET.getByName("primary").where());
       if (listWorkspaces) return reply({ workspaces: await env.DIRECTORY.getByName("primary").adminWorkspaces() });
       if (deleteWorkspace) {
         await env.DIRECTORY.getByName("primary").adminDeleteWorkspace(deleteWorkspace[1]!);
         return reply({ deleted: true });
-      }
-      if (restartRelay) {
-        // Cutovers from stateless admission must also retire the old process
-        // and its untracked sockets; a started rollout is not that guarantee.
-        await env.RELAY.getByName("primary").destroy();
-        return reply({ restarted: true });
       }
       const body = await readJson(request);
       if (typeof body.blocked !== "boolean") return reply({ error: "invalid_request" }, 400);
@@ -231,44 +151,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
     if (!claims) return denied();
     return env.ACCOUNTS.getByName(claims.sub).fetch(request);
   }
-  const match = /^\/pkarr\/([a-z0-9]{52})$/.exec(path);
-  if (!match) {
-    // Everything else is the web app (the console's files are not).
-    const consoleFile = path === CONSOLE_FILES || path.startsWith(`${CONSOLE_FILES}/`);
-    if ((request.method === "GET" || request.method === "HEAD") && !path.startsWith("/v1/") && !consoleFile) return app(env, request, "");
-    return notFound();
-  }
-  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-  if (request.method !== "GET" && request.method !== "PUT") {
-    return new Response("Method not allowed", {
-      status: 405,
-      headers: { ...cors, allow: "GET, PUT, OPTIONS" },
-    });
-  }
-  let key: Uint8Array<ArrayBuffer>;
-  try {
-    key = decodeKey(match[1]);
-  } catch {
-    return new Response("Invalid public key", { status: 400, headers: cors });
-  }
-  const record = env.RECORDS.getByName(match[1]);
-  if (request.method === "GET") {
-    const payload = await record.resolve();
-    return new Response(payload ? new Uint8Array(payload) : null, {
-      status: payload ? 200 : 404,
-      headers: { ...cors, "content-type": "application/octet-stream" },
-    });
-  }
-  let payload: Uint8Array<ArrayBuffer>;
-  let timestamp: bigint;
-  try {
-    payload = await readPayload(request);
-    timestamp = await verifyPayload(key, payload);
-  } catch {
-    return new Response("Invalid signed packet", { status: 400, headers: cors });
-  }
-  const status = await record.publish(payload, timestamp.toString());
-  return new Response(null, { status, headers: cors });
+  return notFound();
 }
 
 /** Android App Links: dev.ember.android, signed with this certificate, opens https://ember.3720.org/o/… itself. */

@@ -32,7 +32,7 @@ test("native relay works without Google configuration or credentials", { timeout
 test("pending upgrades consume capacity before the backend replies", { timeout: 10000 }, async () => {
   const h = await harness({ noGoogle: true });
   try {
-    const relays: any = await h.mf.getDurableObjectNamespace("RELAY");
+    const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
     await relays.get(relays.idFromName("primary")).delay(500);
     const responses = await Promise.all(Array.from({ length: LIMITS.connections + 1 }, () => h.fetch("/relay", { headers: upgrade })));
     assert.equal(responses.filter((r) => r.status === 101).length, LIMITS.connections);
@@ -67,7 +67,7 @@ test("a Worker restart cannot reset the anonymous relay byte budget", { timeout:
   const persist = await fs.mkdtemp(path.join(os.tmpdir(), "zork-relay-budget-"));
   let h = await harness({ noGoogle: true, persist });
   try {
-    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET");
+    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET", "relay");
     await budgets.get(budgets.idFromName("primary")).exhaustBudget();
     await h.close();
     h = await harness({ noGoogle: true, persist });

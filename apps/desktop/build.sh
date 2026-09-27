@@ -2,10 +2,10 @@
 # Builds the desktop app for macOS arm64, signed with the Apple Development certificate in the login keychain
 # (so macOS keeps its Local Network grant across updates), into out/mac-arm64/ember.app:
 # the core (client/node) as build/ember_core.node, the web app (`pnpm run
-# build:cloud`, dist/cloud-app without the admin's console) as build/web, a
+# build:cloud`, dist/cloud-web) as build/web, a
 # station (scripts/station-bundle.sh) as build/station, the app's own code as
 # build/app, then electron-builder puts them together.
-# CARGO_TARGET_DIR is honoured. SKIP_WEB=1 takes dist/cloud-app and dist/admin as they are. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops at build/: no packing, no
+# CARGO_TARGET_DIR is honoured. SKIP_WEB=1 takes dist/cloud-web and dist/admin as they are. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops at build/: no packing, no
 # signing, for Electron's own app to run as it is (dev.sh).
 set -eu
 # A non-login shell (ssh studio …) has none of these on its PATH.
@@ -24,7 +24,7 @@ rm -rf "$here/build" "$here/out"
 mkdir -p "$here/build/station"
 [ -n "${SKIP_STATION:-}" ] || sh "$root/scripts/station-bundle.sh" "$here/build/station"
 cp "$target/aarch64-apple-darwin/release/libember_core_node.dylib" "$here/build/ember_core.node"
-rsync -a --exclude admin-app "$root/dist/cloud-app/" "$here/build/web/"
+rsync -a "$root/dist/cloud-web/" "$here/build/web/"
 cd "$here"
 # electron-builder packs the Electron that electron's install script fetches (pnpm may have skipped it).
 [ -d node_modules/electron/dist ] || node node_modules/electron/install.js

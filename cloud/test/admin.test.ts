@@ -131,7 +131,7 @@ test("creating a workspace takes the admin, someone let in before, or a code", a
     assert.deepEqual(await create(dave, { invite_code: revoked }), [404, "invite_code_invalid"]);
 
     const expired = await code();
-    const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY");
+    const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
     const directory = directories.get(directories.idFromName("primary"));
     await directory.expireInviteCode(expired);
     assert.deepEqual(await create(dave, { invite_code: expired }), [410, "invite_code_expired"]);

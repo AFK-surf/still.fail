@@ -18,7 +18,7 @@ export async function harness(
     /** The console's host. */
     adminOrigin?: string;
     previewOrigin?: string;
-    /** The ASSETS binding: a few stand-in files of both web apps unless given. */
+    /** The static sites' files (`/web/…`, `/admin/…`, `/preview/…`): a few stand-ins unless given. */
     assets?: (request: Request) => Promise<Response> | Response;
     /** Axiom: a stand-in answering its requests, or "real" to reach it (with AXIOM_TOKEN from the environment). */
     axiom?: ((request: Request) => Promise<Response> | Response) | "real";
@@ -40,8 +40,8 @@ export async function harness(
   const grantPair = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
   const grantJwk = { ...(await exportJWK(grantPair.privateKey)), kid: "test-grant" };
   const grantPublicJwk = { ...(await exportJWK(grantPair.publicKey)), kid: "test-grant" };
-  const bundled = await build({
-    entryPoints: ["test/worker.ts"],
+  const bundle = async (entry: string) => (await build({
+    entryPoints: [entry],
     bundle: true,
     write: false,
     format: "esm",
@@ -51,21 +51,39 @@ export async function harness(
     },
     external: ["cloudflare:workers", "cloudflare:sockets", "node:*"],
     conditions: ["workerd", "worker", "browser"],
-  });
+  })).outputFiles[0].text;
+  // ember cloud's Workers as Cloudflare runs them: the static sites on their hosts, and routes (which take
+  // precedence) sending the API's and the relay's paths to theirs (cloud/wrangler*.jsonc).
+  const host = new URL(origin).host, adminHost = new URL(adminOrigin).host;
+  const common = { modules: true, compatibilityDate: "2026-09-08", compatibilityFlags: ["nodejs_compat"] };
   const mf = new Miniflare(
     convertV4MiniflareOptions({
-      modules: true,
-      script: bundled.outputFiles[0].text,
-      compatibilityDate: "2026-09-08",
       host: "127.0.0.1",
       ...(options.port ? { port: options.port } : {}),
-      compatibilityFlags: ["nodejs_compat"],
       log: new Log(LogLevel.ERROR),
       ...(options.persist ? { resourcePersistencePath: options.persist } : {}),
-      bindings: {
+      workers: [{
+        ...common,
+        name: "static",
+        script: await bundle("test/static-worker.ts"),
+        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin },
+        serviceBindings: { ASSETS: (options.assets ?? standInAssets) as any },
+      }, {
+        ...common,
+        name: "relay",
+        script: await bundle("test/relay-worker.ts"),
+        routes: [`${host}/relay`, `${host}/ping`, `${host}/generate_204`, `${host}/v1/admin/relay/*`],
+        bindings: { PUBLIC_ORIGIN: origin, ADMIN_TOKEN: adminToken },
+        serviceBindings: options.relay ? { TEST_RELAY: { external: { address: new URL(options.relay).host, http: {} } } } : {},
+        durableObjects: { RELAY: { className: "Relay", useSQLite: true }, RELAY_BUDGET: { className: "RelayBudget", useSQLite: true } },
+      }, {
+        ...common,
+        name: "api",
+        script: await bundle("test/worker.ts"),
+        routes: [`${host}/v1/*`, `${adminHost}/v1/*`, `${host}/healthz`, `${host}/install.sh`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`],
+        bindings: {
         PUBLIC_ORIGIN: origin,
         ADMIN_ORIGIN: adminOrigin,
-        PREVIEW_ORIGIN: previewOrigin,
         GOOGLE_CLIENT_ID: options.noGoogle ? "" : "test-google-client",
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
@@ -75,11 +93,7 @@ export async function harness(
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
         ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
       },
-      serviceBindings: {
-        ...(options.relay ? { TEST_RELAY: { external: { address: new URL(options.relay).host, http: {} } } } : {}),
-        ASSETS: (options.assets ?? standInAssets) as any,
-      },
-      durableObjects: Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Relay", "DiscoveryRecord", "RelayBudget", "Directory", "TelemetryLimiter"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "RELAY", "RECORDS", "RELAY_BUDGET", "DIRECTORY", "TELEMETRY_LIMITS"][i], { className, useSQLite: true }])),
+      durableObjects: Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS"][i], { className, useSQLite: true }])),
       outboundService: async (request) => {
         const url = new URL(request.url);
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
@@ -118,6 +132,7 @@ export async function harness(
         }
         throw new Error("unexpected outbound request: " + url.origin + url.pathname);
       },
+      }],
     }),
   );
   try {
@@ -212,16 +227,18 @@ export async function harness(
   };
 }
 
-/** Files like Cloudflare's assets binding serves them: a directory's index.html for its path with a slash, 404 for anything else. */
+/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`: see test/static-worker.ts). */
 export const STAND_IN_FILES: Record<string, string> = {
-  "/index.html": "<title>ember</title>",
-  "/assets/app.js": "// the web app",
-  "/admin-app/index.html": "<title>ember 管理后台</title>",
-  "/admin-app/assets/console.js": "// the console",
+  "/web/index.html": "<title>ember</title>",
+  "/web/assets/app.js": "// the web app",
+  "/admin/index.html": "<title>ember 管理后台</title>",
+  "/admin/assets/console.js": "// the console",
+  "/preview/_ember/frame.html": "<title>ember preview</title>",
+  "/preview/_ember/sw.js": "// the preview's service worker",
+  "/preview/404.html": "这是 ember 的预览地址",
 };
 
 function standInAssets(request: Request): Response {
-  const path = new URL(request.url).pathname;
-  const body = STAND_IN_FILES[path.endsWith("/") ? `${path}index.html` : path];
+  const body = STAND_IN_FILES[new URL(request.url).pathname];
   return body === undefined ? new MFResponse("Not found", { status: 404 }) as unknown as Response : new MFResponse(body) as unknown as Response;
 }

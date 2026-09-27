@@ -1,28 +1,20 @@
-import type { Relay, DiscoveryRecord } from "./index";
-import type { RelayBudget } from "./relay";
 import type { Account } from "./account";
 import type { Directory } from "./directory";
 import type { LoginAttempt, LoginLimiter } from "./login";
 import type { TelemetryLimiter } from "./tracing";
 
 export interface Env {
-  RELAY_BUDGET: DurableObjectNamespace<RelayBudget>;
-  RELAY: DurableObjectNamespace<Relay>;
-  RECORDS: DurableObjectNamespace<DiscoveryRecord>;
   ACCOUNTS: DurableObjectNamespace<Account>;
   DIRECTORY: DurableObjectNamespace<Directory>;
-  /** The web app's static files; absent in tests. */
-  ASSETS?: Fetcher;
   /** ember station's releases (scripts/release.sh). */
   RELEASES?: R2Bucket;
   LOGINS: DurableObjectNamespace<LoginAttempt>;
   LOGIN_LIMITS: DurableObjectNamespace<LoginLimiter>;
   TELEMETRY_LIMITS: DurableObjectNamespace<TelemetryLimiter>;
   PUBLIC_ORIGIN: string;
-  /** The admin's console, served by this Worker on a host of its own (see index.ts). */
+  /** The admin's console's host (its /v1/ calls come here: see index.ts). */
   ADMIN_ORIGIN: string;
-  PREVIEW_ORIGIN: string;
-  /** Where stations and clients find the relay; defaults to PUBLIC_ORIGIN (whose /relay is the relay). */
+  /** Where stations and clients find the relay; defaults to PUBLIC_ORIGIN (whose /relay is the relay: relay-worker.ts). */
   RELAY_URL?: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;

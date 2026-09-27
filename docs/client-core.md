@@ -380,7 +380,7 @@ collector leaves.
 ## Desktop
 
 `apps/desktop` is the web app running natively: the window loads the cloud
-build (`pnpm run build:cloud`'s `dist/cloud-app`, bundled into the app) from
+build (`pnpm run build:cloud`'s `dist/cloud-web`, bundled into the app) from
 `app://ember`, served as ember cloud serves it (a file, else `index.html`).
 Nothing in the pages differs but the host underneath:
 

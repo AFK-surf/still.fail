@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // ember's relay (src/relay-worker.ts), a Worker of its own so deploying the rest of ember cloud drops no relay
+  // connection. Its paths are routes on PUBLIC_ORIGIN's host (see wrangler.jsonc).
+  "name": "ember-relay",
+  "main": "src/relay-worker.ts",
+  "compatibility_date": "2026-09-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "ember.3720.org/relay", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/ping", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/generate_204", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/v1/admin/relay/*", "zone_name": "3720.org" },
+  ],
+  "preview_urls": false,
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "vars": { "PUBLIC_ORIGIN": "https://ember.3720.org" },
+  "containers": [{ "class_name": "Relay", "image": "./Dockerfile", "max_instances": 1, "instance_type": "lite" }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "RELAY_BUDGET", "class_name": "RelayBudget" },
+      { "name": "RELAY", "class_name": "Relay" },
+    ],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Relay", "RelayBudget"] }],
+}

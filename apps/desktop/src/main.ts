@@ -1,4 +1,4 @@
-// ember's desktop app: the web app (`pnpm run build:cloud`'s dist/cloud-app)
+// ember's desktop app: the web app (`pnpm run build:cloud`'s dist/cloud-web)
 // in a window, with its client core in a utility process instead of the
 // browser's SharedWorker (docs/client-core.md). Only the host is different:
 // the page is served from app://ember, the core runs natively (client/node,

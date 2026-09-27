@@ -1,16 +1,26 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // Template; deploy.py copies it to the ignored wrangler.local.json with the account id.
+  // ember cloud's API (src/index.ts). Template; deploy.py copies it to the ignored wrangler.local.json with the
+  // account id. ember cloud is five Workers (deploy.py deploys each only when it changed):
+  //   ember-cloud    this one: the API, on the paths below
+  //   ember-relay    the relay (wrangler.relay.jsonc)
+  //   ember-web      the web app, static, on PUBLIC_ORIGIN's Custom Domain (wrangler.web.jsonc)
+  //   ember-admin    the admin's console, static, on ADMIN_ORIGIN's (wrangler.admin.jsonc)
+  //   ember-preview  the preview host, static, on PREVIEW_ORIGIN's (wrangler.preview.jsonc)
+  // A route takes precedence over a Custom Domain on the same host, so the API's and the relay's paths reach their
+  // Workers and every other path the static ones.
   "name": "ember-cloud",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-08",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
-  // Custom domains: wrangler creates each one's DNS record and certificate on deploy.
   "routes": [
-    { "pattern": "ember.3720.org", "custom_domain": true },
-    { "pattern": "admin.ember.3720.org", "custom_domain": true },
-    { "pattern": "preview.ember.3720.org", "custom_domain": true },
+    { "pattern": "ember.3720.org/v1/*", "zone_name": "3720.org" },
+    { "pattern": "admin.ember.3720.org/v1/*", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/healthz", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/install.sh", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/releases/*", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/.well-known/*", "zone_name": "3720.org" },
   ],
   "preview_urls": false,
   // Workers Logs: requests, errors and console output of the Worker and its Durable Objects, in the Cloudflare dashboard.
@@ -18,28 +28,12 @@
   "vars": {
     "PUBLIC_ORIGIN": "https://ember.3720.org",
     "ADMIN_ORIGIN": "https://admin.ember.3720.org",
-    // Where clients show a station's web services, apart from ember's own origins (see src/preview.ts).
-    "PREVIEW_ORIGIN": "https://preview.ember.3720.org",
     "GOOGLE_CLIENT_ID": "",
-  },
-  // The web app at the root, the admin's console under admin-app/. Every
-  // request reaches the Worker first: which app a path belongs to depends on
-  // the host, and each app's client-side routes fall back to its own
-  // index.html (see index.ts), so no not-found handling here.
-  "assets": {
-    "directory": "../dist/cloud-app",
-    "binding": "ASSETS",
-    "not_found_handling": "none",
-    "run_worker_first": true,
   },
   // ember station's releases (scripts/release.sh puts them, install.sh gets them from /releases/).
   "r2_buckets": [{ "binding": "RELEASES", "bucket_name": "ember-releases" }],
-  "containers": [{ "class_name": "Relay", "image": "./Dockerfile", "max_instances": 1, "instance_type": "lite" }],
   "durable_objects": {
     "bindings": [
-      { "name": "RELAY_BUDGET", "class_name": "RelayBudget" },
-      { "name": "RELAY", "class_name": "Relay" },
-      { "name": "RECORDS", "class_name": "DiscoveryRecord" },
       { "name": "ACCOUNTS", "class_name": "Account" },
       { "name": "DIRECTORY", "class_name": "Directory" },
       { "name": "LOGINS", "class_name": "LoginAttempt" },
@@ -50,5 +44,7 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Relay", "DiscoveryRecord", "Account", "Directory", "LoginAttempt", "LoginLimiter", "RelayBudget"] },
     { "tag": "v2", "new_sqlite_classes": ["TelemetryLimiter"] },
+    // The relay moved to ember-relay; stations and devices find each other by the Mainline DHT, not /pkarr.
+    { "tag": "v3", "deleted_classes": ["Relay", "RelayBudget", "DiscoveryRecord"] },
   ],
 }

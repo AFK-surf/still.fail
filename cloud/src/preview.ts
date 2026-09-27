@@ -1,6 +1,8 @@
 // The preview host (PREVIEW_ORIGIN): where a client shows a web service
 // running on a station's machine, framed, on an origin of its own so the
-// service's scripts reach nothing of ember's (no login, no storage).
+// service's scripts reach nothing of ember's (no login, no storage). A static
+// Worker of its own (ember-preview): these files, written out by
+// build-static.ts, with the headers in its _headers.
 //
 // It serves two files and nothing else. /_ember/frame is the frame a client
 // puts in its page; it registers /_ember/sw.js for the whole host, then shows
@@ -111,14 +113,14 @@ async function relay(event, url) {
 }
 `;
 
-/** A request to the preview host. */
-export function previewSite(url: URL): Response {
-  if (url.pathname === "/_ember/frame") {
-    return new Response(FRAME, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
-  }
-  if (url.pathname === "/_ember/sw.js") {
-    return new Response(WORKER, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "service-worker-allowed": "/" } });
-  }
-  // Only reached before the service worker runs, or when a frame opens this host by itself.
-  return new Response("这是 ember 的预览地址：在 ember 里打开一个预览。", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+/** The preview host's files, by path under its assets directory. */
+export function previewFiles(): Record<string, string> {
+  return {
+    "_ember/frame.html": FRAME,
+    "_ember/sw.js": WORKER,
+    // Only reached before the service worker runs, or when a frame opens this host by itself.
+    "404.html": `<!doctype html><meta charset="utf-8"><title>ember preview</title><p>这是 ember 的预览地址：在 ember 里打开一个预览。</p>`,
+    // The service worker is the whole host's, from under /_ember/.
+    "_headers": "/_ember/sw.js\n  Service-Worker-Allowed: /\n  Cache-Control: no-cache\n/_ember/frame\n  Cache-Control: no-cache\n",
+  };
 }

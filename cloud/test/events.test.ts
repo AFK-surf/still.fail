@@ -187,7 +187,7 @@ test("a reconnect replaces the old station socket; a silent one is dropped", { t
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.deepEqual(await events.take(), [], "a station's socket tells no one");
 
-    const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY");
+    const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
     const directory = directories.get(directories.idFromName("primary"));
     await second.ping!();
     assert.equal(await directory.sweepAt(Date.now() + SILENT_MS - 5000), true, "answered pings keep it");

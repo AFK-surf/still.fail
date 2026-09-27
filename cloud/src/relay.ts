@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import type { Env } from "./env";
+import type { RelayEnv as Env } from "./relay-worker";
 import { limited, nowSeconds, reply } from "./auth";
 
 // A bounded shared service budget, never a Mesh membership authority.

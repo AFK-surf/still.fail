@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // The preview host (src/preview.ts): static files only (build-static.ts → dist/cloud-preview), headers in its
+  // _headers, anything else its 404.html.
+  "name": "ember-preview",
+  "compatibility_date": "2026-09-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "preview.ember.3720.org", "custom_domain": true }],
+  "assets": { "directory": "../dist/cloud-preview", "html_handling": "auto-trailing-slash", "not_found_handling": "404-page" },
+}
