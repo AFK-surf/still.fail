@@ -119,15 +119,18 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   hub.close();
 });
 
-test("how fast the model writes is told at most once a second, and 0 once it stops", () => {
+test("how fast the model writes is told once half a second of it has come, at most once a second, and 0 once it stops", async () => {
   const hub = new LiveHub(() => undefined);
   const got: LiveMessage[] = [];
   const stop = hub.subscribe("s", 0, (m) => got.push(m));
   hub.event("s", { kind: "start", id: "x", step: "text" });
   hub.event("s", { kind: "delta", id: "x", field: "text", text: "x".repeat(400) });
-  hub.event("s", { kind: "delta", id: "x", field: "text", text: "x".repeat(400) });
   const rates = () => got.filter((m) => m.type === "rate").map((m) => (m as { tokensPerSecond: number }).tokensPerSecond);
-  assert.equal(rates().length, 1, "the first output at once, then not within the second");
+  assert.equal(rates().length, 0, "a first few bytes say nothing of the pace");
+  await new Promise((r) => setTimeout(r, 600));
+  hub.event("s", { kind: "delta", id: "x", field: "text", text: "x".repeat(400) });
+  hub.event("s", { kind: "delta", id: "x", field: "text", text: "x".repeat(400) });
+  assert.equal(rates().length, 1, "then told, and not again within the second");
   assert.ok(rates()[0]! > 0);
   hub.event("s", { kind: "end", id: "x" });
   assert.deepEqual(rates().at(-1), 0);
