@@ -909,6 +909,30 @@ export interface MachineLogin {
 	text: string;
 }
 
+export interface SlackAppLinks {
+	settings: string;
+	install: string;
+	appToken: string;
+	oauth: string;
+}
+
+/** A Slack app ember made that no connect has taken yet, as its maker sees it (never its secrets or tokens). */
+export interface MadeSlackApp {
+	appId: string;
+	name: string;
+	teamId: string;
+	/** The Slack workspace's name, when its configuration token says. */
+	team?: string;
+	created: number;
+	links: SlackAppLinks;
+	/** The link that installs it through Slack's OAuth (a station in ember cloud); none when its tokens are copied by hand. */
+	install?: string;
+	/** Its install's state, what a connect names it by. */
+	state?: string;
+	installed: boolean;
+	installedTeam?: string;
+}
+
 export interface MeshStatus {
 	/** off | missing | running | restarting */
 	state: string;
@@ -936,13 +960,6 @@ export interface SlackTeam {
 	owner?: ConfigTokenOwner;
 }
 
-export interface SlackInstall {
-	state: string;
-	appId: string;
-	installed: boolean;
-	team?: string;
-}
-
 export interface PendingLogin {
 	id: string;
 	runtime: RuntimeKind;
@@ -960,7 +977,7 @@ export interface Overview {
 	mesh?: MeshStatus;
 	slackUsers: string[];
 	slackTeams: SlackTeam[];
-	slackInstalls: SlackInstall[];
+	slackApps: MadeSlackApp[];
 	disk?: DiskRoom;
 	logins: PendingLogin[];
 	/** This machine's own logins (none from a station older than them). */

@@ -991,6 +991,32 @@ data class MachineLogin (
 )
 
 @Serializable
+data class SlackAppLinks (
+	val settings: String,
+	val install: String,
+	val appToken: String,
+	val oauth: String
+)
+
+/// A Slack app ember made that no connect has taken yet, as its maker sees it (never its secrets or tokens).
+@Serializable
+data class MadeSlackApp (
+	val appId: String,
+	val name: String,
+	val teamId: String,
+	/// The Slack workspace's name, when its configuration token says.
+	val team: String? = null,
+	val created: Long,
+	val links: SlackAppLinks,
+	/// The link that installs it through Slack's OAuth (a station in ember cloud); none when its tokens are copied by hand.
+	val install: String? = null,
+	/// Its install's state, what a connect names it by.
+	val state: String? = null,
+	val installed: Boolean,
+	val installedTeam: String? = null
+)
+
+@Serializable
 data class MeshStatus (
 	/// off | missing | running | restarting
 	val state: String,
@@ -1021,14 +1047,6 @@ data class SlackTeam (
 )
 
 @Serializable
-data class SlackInstall (
-	val state: String,
-	val appId: String,
-	val installed: Boolean,
-	val team: String? = null
-)
-
-@Serializable
 data class PendingLogin (
 	val id: String,
 	val runtime: RuntimeKind,
@@ -1047,7 +1065,7 @@ data class Overview (
 	val mesh: MeshStatus? = null,
 	val slackUsers: List<String>,
 	val slackTeams: List<SlackTeam>,
-	val slackInstalls: List<SlackInstall>,
+	val slackApps: List<MadeSlackApp>,
 	val disk: DiskRoom? = null,
 	val logins: List<PendingLogin>,
 	/// This machine's own logins (none from a station older than them).
