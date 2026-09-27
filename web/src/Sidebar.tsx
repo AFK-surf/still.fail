@@ -46,8 +46,8 @@ function SettingsNav() {
 /**
  * The chats of a scope (a workspace, or this station), newest first and
  * grouped by day, as the core's `chats` view has them; optionally only the
- * ones the viewer started. Its empty states lead to `newChat`, and to `stationsPage` (the page itself, where stations
- * are added: nothing is appended to it).
+ * ones the viewer started, with `newChat` above them. With no station its empty state leads to `stationsPage` (the page
+ * itself, where stations are added: nothing is appended to it).
  */
 export function ChatList({ scope, newChat, stationsPage }: { scope: string; newChat: string; stationsPage: string }) {
   const [onlyMine] = useOnlyMine();
@@ -58,12 +58,13 @@ export function ChatList({ scope, newChat, stationsPage }: { scope: string; newC
     <>
       <div className="nav-new">
         <NavLink className="nav-row" to={newChat}><Compose {...ICON} />新建对话</NavLink>
-        <MineFilter label="会话" mine="我参与的" compact />
+        {/* Nothing to narrow while there is no chat at all. */}
+        {!(all.value && !all.value.loading && all.value.days.length === 0) && <MineFilter label="会话" mine="我参与的" compact />}
       </div>
       <div className="nav-slider">
         <div className="nav-track" data-mine={onlyMine || undefined}>
-          <ChatPane chats={all} scope={scope} onlyMine={false} newChat={newChat} stationsPage={stationsPage} hidden={onlyMine} />
-          <ChatPane chats={mine} scope={scope} onlyMine newChat={newChat} stationsPage={stationsPage} hidden={!onlyMine} />
+          <ChatPane chats={all} scope={scope} onlyMine={false} stationsPage={stationsPage} hidden={onlyMine} />
+          <ChatPane chats={mine} scope={scope} onlyMine stationsPage={stationsPage} hidden={!onlyMine} />
         </div>
       </div>
     </>
@@ -90,7 +91,7 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
 }
 
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
-function ChatPane({ chats, scope, onlyMine, newChat, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; newChat: string; stationsPage: string; hidden: boolean }) {
+function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; stationsPage: string; hidden: boolean }) {
   const view = chats.value;
   const stations = view?.stations ?? [];
   const days = view?.days ?? [];
@@ -108,7 +109,7 @@ function ChatPane({ chats, scope, onlyMine, newChat, stationsPage, hidden }: { c
       {days.length === 0 && (loading || connecting.length > 0) && !chats.error && <SkeletonRows />}
       {days.length === 0 && view && !loading && !failed.length && !connecting.length && (
         <p className="nav-empty">{onlyMine ? "没有你参与的会话。"
-          : stations.length ? <>还没有会话。在 Slack 里 @ {stations.length > 1 ? "它们" : "它"}，或者 <NavLink className="inline-link" to={newChat}>新建对话</NavLink>。</>
+          : stations.length ? "还没有会话。"
           : <>还没有 station，到 <NavLink className="inline-link" to={stationsPage}>设置 → Station</NavLink> 添加。</>}</p>
       )}
       {days.map((day) => (
