@@ -11,7 +11,7 @@ import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
 import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
-import { AddAccountDialog, PROFILE_LEAD } from "../pages/Accounts.tsx";
+import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, Time } from "../ui.tsx";
@@ -213,6 +213,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   const listed = useStations(entry.id).value;
   const stations = listed ?? [];
   const [adding, setAdding] = useState<string | null>(null);
+  const [addKind, setAddKind] = useState<Choice>("claude-sub");
   const online = stations.filter((s) => s.online);
   const asStation = (s: (typeof stations)[number]): Station => ({ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings` });
   const addingTo = stations.find((s) => s.station === adding);
@@ -224,13 +225,14 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
       actions={!first && online.length === 1 && <Button icon={Plus} onClick={() => setAdding(online[0]!.station)}>添加 Profile</Button>}>
       {addingTo && (
         <StationContext.Provider value={asStation(addingTo)}>
-          <AddAccountDialog open onClose={() => setAdding(null)} />
+          <AddAccountDialog key={addKind} initial={addKind} open onClose={() => setAdding(null)} />
         </StationContext.Provider>
       )}
       {first ? (
         <FirstOne icon={Key} title="添加第一个 Profile" lead={PROFILE_LEAD}>
           {online.length === 0 ? <p className="muted">没有在线的 station，等它上线再加。</p>
-            : online.map((s) => <Button key={s.id} variant={online.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => setAdding(s.station)}>{online.length === 1 ? "添加 Profile" : `加到 ${s.name}`}</Button>)}
+            : online.map((s) => <Button key={s.id} variant={online.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => { setAddKind("claude-sub"); setAdding(s.station); }}>{online.length === 1 ? "添加 Profile" : `加到 ${s.name}`}</Button>)}
+          {online.length === 1 && <MachineLoginOffers logins={online[0]!.overview?.machineLogins} onAdd={(c) => { setAddKind(c); setAdding(online[0]!.station); }} />}
         </FirstOne>
       ) : stations.map((station) => {
         const { overview } = station;

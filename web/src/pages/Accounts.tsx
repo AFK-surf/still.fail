@@ -1,3 +1,4 @@
+import type { MachineLogin } from "../core/shapes.ts";
 import { profilesPage, useStation, useLink } from "../station.tsx";
 import { ChevronRight, Edit, External, Key, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
 import { useEffect, useRef, useState } from "react";
@@ -13,6 +14,7 @@ export function AccountsPage() {
   const link = useLink();
   const overview = useOverview(useStation().address);
   const [adding, setAdding] = useState(false);
+  const [initial, setInitial] = useState<Choice>("claude-sub");
   const profiles = overview.value?.profiles ?? [];
   return (
     <div className="page page-narrow">
@@ -26,7 +28,8 @@ export function AccountsPage() {
       </header>
       {overview.value && profiles.length === 0 && (
         <FirstOne icon={Key} title="添加第一个 Profile" lead={PROFILE_LEAD}>
-          <Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>添加 Profile</Button>
+          <Button variant="primary" icon={Plus} onClick={() => { setInitial("claude-sub"); setAdding(true); }}>添加 Profile</Button>
+          <MachineLoginOffers logins={overview.value.machineLogins} onAdd={(c) => { setInitial(c); setAdding(true); }} />
         </FirstOne>
       )}
       {profiles.length > 0 && (
@@ -51,7 +54,7 @@ export function AccountsPage() {
         </ul>
         </section>
       )}
-      <AddAccountDialog open={adding} onClose={() => setAdding(false)} />
+      <AddAccountDialog key={initial} initial={initial} open={adding} onClose={() => setAdding(false)} />
     </div>
   );
 }
@@ -65,23 +68,47 @@ export const CHOICES = {
   "env-claude": { kind: "env", runtime: "claude", title: "自定义环境变量（Claude Code）", description: "自己设置接模型服务的环境变量。" },
   "env-codex": { kind: "env", runtime: "codex", title: "自定义环境变量（Codex）", description: "自己设置接模型服务的环境变量。" },
 } as const satisfies Record<string, { kind: AccessKind; runtime: RuntimeKind | null; title: string; description: string }>;
-type Choice = keyof typeof CHOICES;
+export type Choice = keyof typeof CHOICES;
+
+/** What a profile is, in a line, where the first one is asked for. */
+export const PROFILE_LEAD = "agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。";
+
+/**
+ * Where a first profile is asked for: the subscriptions this machine's own Claude Code and Codex are signed in with
+ * (the station reads them: src/machine-logins.ts), each offered as the kind to add. The login is not taken over — ember
+ * signs in with the same account once more, and the machine's own stays as it was.
+ */
+export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] | undefined; onAdd(choice: Choice): void }) {
+  const offers = (logins ?? []).filter((l) => l.loggedIn && l.plan);
+  if (!offers.length) return null;
+  return (
+    <div className="machine-logins">
+      <p className="machine-logins-head">这台机器上已经登录了</p>
+      {offers.map((l) => (
+        <div key={l.runtime} className="machine-login">
+          <ProviderLogo runtime={l.runtime} kind="subscription" size={16} />
+          <span className="machine-login-text">{l.text}</span>
+          <Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>用这个账号</Button>
+        </div>
+      ))}
+      <p className="machine-logins-note">会用同一个账号为 ember 单独登录一次，这台机器上原来的登录不受影响。</p>
+    </div>
+  );
+}
 
 /**
  * A new profile: a subscription is signed in first and the station makes the profile once that succeeds (named by the
  * account); a key is checked first and the profile made only if it works. Nothing is left behind by one that did not.
+ * `initial`: the kind chosen when it opens.
  */
-/** What a profile is, in a line, where the first one is asked for. */
-export const PROFILE_LEAD = "agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。";
-
-export function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void }) {
+export function AddAccountDialog({ open, onClose, initial = "claude-sub" }: { open: boolean; onClose(): void; initial?: Choice }) {
   const api = useApi();
   const link = useLink();
   const overview = useOverview(useStation().address);
   const navigate = useNavigate();
   const toast = useToast();
   // What to add, by whose account it is: a subscription (which one), a key, or variables set by hand for one runtime.
-  const [choice, setChoice] = useState<Choice>("claude-sub");
+  const [choice, setChoice] = useState<Choice>(initial);
   const { kind, runtime } = CHOICES[choice];
   const [key, setKey] = useState("");
   const [login, setLogin] = useState<string | null>(null);

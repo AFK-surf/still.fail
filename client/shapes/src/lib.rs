@@ -703,6 +703,21 @@ pub struct PendingLogin {
     pub created: Option<String>,
 }
 
+/// Who the station machine's own Claude Code or Codex is signed in as (only read: ember never takes the login over).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MachineLogin {
+    pub runtime: RuntimeKind,
+    pub installed: bool,
+    pub logged_in: bool,
+    pub email: Option<String>,
+    pub plan: Option<String>,
+    /// In a line, as the pages show it.
+    pub text: String,
+}
+
 /// A station's overview, with what the clients show of its connects and profiles.
 #[typeshare]
 #[skip_serializing_none]
@@ -720,6 +735,9 @@ pub struct Overview {
     pub slack_installs: Vec<SlackInstall>,
     pub disk: Option<DiskRoom>,
     pub logins: Vec<PendingLogin>,
+    /// This machine's own logins (none from a station older than them).
+    #[serde(default)]
+    pub machine_logins: Vec<MachineLogin>,
     /// Its agents' processes, in a line.
     pub processes_text: String,
 }

@@ -10,7 +10,7 @@ import type { ChatView } from "./core/shapes.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Button, Chooser, ChooserItem as Item, FirstOne, transitionTo } from "./ui.tsx";
-import { AddAccountDialog, PROFILE_LEAD } from "./pages/Accounts.tsx";
+import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "./pages/Accounts.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
@@ -102,6 +102,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   const madeChat = useTopic<ChatView>(madeKey ? { topic: "chat", station: station.address, session: madeKey } : null).value;
   const [leaving, setLeaving] = useState(false);
   const [addingProfile, setAddingProfile] = useState(false);
+  const [profileKind, setProfileKind] = useState<Choice>("claude-sub");
   const pick = (next: Partial<Choice>) => {
     const c = { ...choice, ...next };
     setChoice(c);
@@ -206,15 +207,16 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
           <FirstOne icon={Key} title={blocked === "profile" ? "先添加一个 Profile" : "勾选要用的模型"}
             lead={blocked === "profile" ? PROFILE_LEAD : `${station.name || "这台机器"} 的 Profile 还没有启用模型，勾选之后就能开始对话。`}>
             {blocked === "profile"
-              ? <Button variant="primary" icon={Plus} onClick={() => setAddingProfile(true)}>添加 Profile</Button>
+              ? <Button variant="primary" icon={Plus} onClick={() => { setProfileKind("claude-sub"); setAddingProfile(true); }}>添加 Profile</Button>
               : <Link className="btn btn-primary" to={profilesPage(station)}>去勾选模型</Link>}
             {stations.length > 1 && (
               <Chooser side="bottom" label={<><Server size={13} />{station.name}</>} title="换一台 station">
                 {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={13} />{s.name}</Item>)}
               </Chooser>
             )}
+            {blocked === "profile" && <MachineLoginOffers logins={view.overview?.machineLogins} onAdd={(c) => { setProfileKind(c); setAddingProfile(true); }} />}
           </FirstOne>
-          <AddAccountDialog open={addingProfile} onClose={() => setAddingProfile(false)} />
+          <AddAccountDialog key={profileKind} initial={profileKind} open={addingProfile} onClose={() => setAddingProfile(false)} />
         </div>
       </div>
     );
