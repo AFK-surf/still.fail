@@ -1,12 +1,12 @@
 import { profilesPage, useStation, useLink } from "../station.tsx";
-import { ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
+import { ChevronRight, Edit, External, Key, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
 import { ACCESS, ACCESS_KINDS, KEYED } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time } from "../ui.tsx";
 
 
 export function AccountsPage() {
@@ -22,9 +22,13 @@ export function AccountsPage() {
           <h1>Profile</h1>
           <p className="page-sub">Profile 是 agent 用来跑模型的账号：一份订阅，或者一个模型服务的 key。一个账号能跑哪些运行时，ember 会自己配好。</p>
         </div>
-        <Button icon={Plus} onClick={() => setAdding(true)}>添加 Profile</Button>
+        {(profiles.length > 0 || !overview.value) && <Button icon={Plus} onClick={() => setAdding(true)}>添加 Profile</Button>}
       </header>
-      {profiles.length === 0 && <Empty><p>还没有 Profile。连接至少需要一个 Profile 才能运行。</p></Empty>}
+      {overview.value && profiles.length === 0 && (
+        <FirstOne icon={Key} title="添加第一个 Profile" lead={PROFILE_LEAD}>
+          <Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>添加 Profile</Button>
+        </FirstOne>
+      )}
       {profiles.length > 0 && (
         <section className="section" aria-label="Profile">
         <ul className="list">
@@ -67,6 +71,9 @@ type Choice = keyof typeof CHOICES;
  * A new profile: a subscription is signed in first and the station makes the profile once that succeeds (named by the
  * account); a key is checked first and the profile made only if it works. Nothing is left behind by one that did not.
  */
+/** What a profile is, in a line, where the first one is asked for. */
+export const PROFILE_LEAD = "agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。";
+
 export function AddAccountDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const api = useApi();
   const link = useLink();

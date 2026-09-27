@@ -4,17 +4,17 @@
 // runtime accounts).
 import { ArrowLeft, Check, Key, LogOut, Plug, Plus, Server, Settings, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router";
+import { Link, Navigate, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
 import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
-import { AddAccountDialog } from "../pages/Accounts.tsx";
+import { AddAccountDialog, PROFILE_LEAD } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Empty, Field, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, Time } from "../ui.tsx";
+import { Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, Time } from "../ui.tsx";
 import { signOut, type Account } from "./accounts.ts";
 import { lastChat } from "../lastChat.ts";
 import { cloud, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
@@ -32,15 +32,17 @@ export const ROLE_HINT: Record<Role, string> = {
 /** The sidebar while in settings. */
 export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   const base = `/w/${entry.id}/settings`;
+  // Connects and profiles are a station's: none to show before there is one.
+  const some = (useStations(entry.id).value?.length ?? 0) > 0;
   return (
     <div className="nav-scroll">
-      <NavLink className="nav-row" to={lastChat(entry.id, `/w/${entry.id}`)} end><ArrowLeft {...ICON} />返回会话</NavLink>
+      <NavLink className="nav-row" to={lastChat(entry.id, `/w/${entry.id}`)} end><ArrowLeft {...ICON} />{some ? "返回会话" : "返回"}</NavLink>
       <div className="nav-heading">账号</div>
       <NavLink className="nav-row" to={`${base}/account`}><Avatar account={entry.account} size={18} /><span className="nav-text">{entry.account.email}</span></NavLink>
       <div className="nav-heading">Workspace · {entry.name}</div>
       <NavLink className="nav-row" to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
-      <NavLink className="nav-row" to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>
-      <NavLink className="nav-row" to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>
+      {some && <NavLink className="nav-row" to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>}
+      {some && <NavLink className="nav-row" to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>}
       <NavLink className="nav-row" to={`${base}/members`}><Users {...ICON} />成员</NavLink>
       <NavLink className="nav-row" to={`${base}/general`}><Settings {...ICON} />通用</NavLink>
       <div className="nav-heading">离开</div>
@@ -190,12 +192,16 @@ export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
   if (!view || !stations) return <Loading label="正在读取 workspace…" />;
   return (
     <Page title="Station" lead="每台 station 是一台运行 ember 的机器：它的连接、会话和 Profile 都在那台机器上。" back={`/w/${entry.id}/settings`}>
-      <Stations view={view} account={entry.account} manager={manager} stations={stations} />
+      {/* None yet: adding the first, as the workspace's page does. */}
+      {stations.length === 0 ? <FirstStation entry={entry} />
+        : <Stations view={view} account={entry.account} manager={manager} stations={stations} />}
     </Page>
   );
 }
 
 export function ConnectsSettings({ entry }: { entry: WorkspaceEntry }) {
+  const stations = useStations(entry.id).value;
+  if (stations?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
   return <ConnectList scope={entry.id} settings={`/w/${entry.id}/settings`} />;
 }
 
@@ -204,21 +210,29 @@ export function ConnectsSettings({ entry }: { entry: WorkspaceEntry }) {
  * one station): a profile is added where it runs.
  */
 export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
-  const stations = useStations(entry.id).value ?? [];
+  const listed = useStations(entry.id).value;
+  const stations = listed ?? [];
   const [adding, setAdding] = useState<string | null>(null);
   const online = stations.filter((s) => s.online);
   const asStation = (s: (typeof stations)[number]): Station => ({ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings` });
   const addingTo = stations.find((s) => s.station === adding);
+  if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
+  // Not one profile on any station (each read): the page is about adding the first.
+  const first = stations.length > 0 && stations.every((s) => s.overview && s.overview.profiles.length === 0);
   return (
     <Page title="Profile" lead="Profile 是 agent 用来跑模型的账号：一份订阅，或者一个模型服务的 key。每个 Profile 在它所在的 station 上运行，能跑哪些运行时，ember 会自己配好。" back={`/w/${entry.id}/settings`}
-      actions={online.length === 1 && <Button icon={Plus} onClick={() => setAdding(online[0]!.station)}>添加 Profile</Button>}>
-      {stations.length === 0 && <Empty><p>还没有 station。</p></Empty>}
+      actions={!first && online.length === 1 && <Button icon={Plus} onClick={() => setAdding(online[0]!.station)}>添加 Profile</Button>}>
       {addingTo && (
         <StationContext.Provider value={asStation(addingTo)}>
           <AddAccountDialog open onClose={() => setAdding(null)} />
         </StationContext.Provider>
       )}
-      {stations.map((station) => {
+      {first ? (
+        <FirstOne icon={Key} title="添加第一个 Profile" lead={PROFILE_LEAD}>
+          {online.length === 0 ? <p className="muted">没有在线的 station，等它上线再加。</p>
+            : online.map((s) => <Button key={s.id} variant={online.length === 1 ? "primary" : undefined} icon={Plus} onClick={() => setAdding(s.station)}>{online.length === 1 ? "添加 Profile" : `加到 ${s.name}`}</Button>)}
+        </FirstOne>
+      ) : stations.map((station) => {
         const { overview } = station;
         const base = stationBase(station.station);
         return (
@@ -261,9 +275,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
   return (
     <Section title={`${stations.length} 台`} actions={manager && <Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button>}>
-      {stations.length === 0 ? (
-        <div className="card"><p className="muted">{manager ? "还没有 station。点「添加 station」，在要运行 ember 的机器上执行一条命令即可加入。" : "还没有 station，等管理员添加。"}</p></div>
-      ) : (
+      {(
         <ul className="list">
           {stations.map((s) => (
             <li key={s.id} className="station-item"><div className="list-row station-row">
@@ -333,7 +345,11 @@ function EnrollSteps({ enrollment }: { enrollment: { install: string } }) {
     <>
       <p>在那台 Mac（Apple 芯片）的「终端」里执行：</p>
       <CopyCommand text={enrollment.install} />
-      <p className="muted dialog-note"><span className="activity-pulse inline" aria-hidden="true" />等它加入…（装过 ember 的机器也用这条命令；1 小时内有效）</p>
+      <p className="enroll-hint">装过 ember 的机器也用这条命令。</p>
+      <div className="enroll-wait" role="status">
+        <span className="spinner" aria-hidden="true" />
+        <span><strong>等待这台机器加入</strong><span className="muted">执行命令后会自动继续 · 命令 1 小时内有效</span></span>
+      </div>
     </>
   );
 }

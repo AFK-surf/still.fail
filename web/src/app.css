@@ -1527,11 +1527,24 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .onboarding-main { flex: 1; width: min(560px, calc(100% - 48px)); margin: 0 auto; padding: 24px 0 48px; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .onboarding-title { margin: 20px 0 8px; font-size: var(--text-lg); font-weight: 600; }
 .onboarding-lead { margin: 0 0 24px; color: var(--muted); line-height: 1.6; }
-.onboarding-card { width: 100%; text-align: left; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
+.onboarding-card { width: 100%; text-align: left; padding: 20px; border: 1px solid var(--line); border-radius: var(--r-card); corner-shape: var(--corner-shape); background: var(--canvas); }
 .onboarding-row { display: flex; gap: 8px; }
 .onboarding-card p { margin: 0; font-size: var(--text-sm); }
 .onboarding-card .command { margin-top: 8px; }
-.onboarding-card .dialog-note { margin: 12px 0 0; }
+/* An enrollment's command awaited (the first station, or one more): a status of its own under the command. */
+.enroll-hint { margin: 6px 0 0; font-size: var(--text-xs); color: var(--muted); }
+.enroll-wait { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 12px 14px; border-radius: calc(14px * var(--corner-scale)); corner-shape: var(--corner-shape); background: color-mix(in oklch, var(--accent) 9%, transparent); }
+.enroll-wait .spinner { width: 18px; height: 18px; border-top-color: var(--accent); }
+.enroll-wait > span:last-child { display: grid; gap: 2px; font-size: var(--text-sm); }
+.enroll-wait strong { font-weight: 600; }
+.enroll-wait .muted { font-size: var(--text-xs); }
 .onboarding-row .input { flex: 1; min-width: 0; }
 .onboarding-foot { margin-top: 20px; font-size: var(--text-sm); }
 .onboarding .callout { width: 100%; text-align: left; }
+
+/* A list's first one to make (ui.tsx's FirstOne): centred, one line, one button. */
+.first-one { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; margin: 24px auto; padding: 40px 24px; max-width: 460px; border: 1px dashed var(--line-strong); border-radius: var(--r-card); corner-shape: var(--corner-shape); }
+.first-one-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: color-mix(in oklch, var(--accent) 12%, transparent); color: var(--accent); }
+.first-one-title { margin: 8px 0 0; font-size: var(--text-md); font-weight: 600; }
+.first-one-lead { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
+.first-one-action { margin-top: 12px; display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }

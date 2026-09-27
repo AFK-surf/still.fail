@@ -332,6 +332,22 @@ export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>;
 }
 
+/**
+ * A list with nothing in it yet, or a page whose first step is still to take: what that first one is, in a line, and
+ * the one thing to do about it. Where it shows, the page's other actions stand back (its add button, its filters), so
+ * the eye goes here.
+ */
+export function FirstOne({ icon: Icon, title, lead, children }: { icon: (props: { size?: number }) => ReactNode; title: ReactNode; lead?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="first-one">
+      <span className="first-one-icon" aria-hidden="true"><Icon size={22} /></span>
+      <h2 className="first-one-title">{title}</h2>
+      {lead && <p className="first-one-lead">{lead}</p>}
+      <div className="first-one-action">{children}</div>
+    </div>
+  );
+}
+
 /** A titled block of a detail page. */
 export function Section({ title, actions, children, description }: { title: ReactNode; actions?: ReactNode; description?: ReactNode; children: ReactNode }) {
   const id = useId();

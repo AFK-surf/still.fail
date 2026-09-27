@@ -1,7 +1,7 @@
 // A new chat, after Zork's: say what to do, having picked where it runs
 // (station), on what (runtime and model) and how hard it thinks. The first
 // message (or file) makes the chat and its agent's session on that station.
-import { Server } from "./icons.tsx";
+import { Key, Plus, Server } from "./icons.tsx";
 import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useStations, type RuntimeKind, type StationView } from "./api.ts";
@@ -9,7 +9,8 @@ import { useTopic } from "./core/react.ts";
 import type { ChatView } from "./core/shapes.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
-import { Chooser, ChooserItem as Item, transitionTo } from "./ui.tsx";
+import { Button, Chooser, ChooserItem as Item, FirstOne, transitionTo } from "./ui.tsx";
+import { AddAccountDialog, PROFILE_LEAD } from "./pages/Accounts.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
@@ -100,6 +101,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   const [madeKey, setMadeKey] = useState<string | null>(null);
   const madeChat = useTopic<ChatView>(madeKey ? { topic: "chat", station: station.address, session: madeKey } : null).value;
   const [leaving, setLeaving] = useState(false);
+  const [addingProfile, setAddingProfile] = useState(false);
   const pick = (next: Partial<Choice>) => {
     const c = { ...choice, ...next };
     setChoice(c);
@@ -195,15 +197,34 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       </div>
     );
   }
+  // Nothing to run a chat with yet: its first step is the page (the composer comes once it can send).
+  const blocked = view.overview && sent.length === 0 ? (profiles.length === 0 ? "profile" : view.models.length === 0 ? "models" : null) : null;
+  if (blocked) {
+    return (
+      <div className="new-chat">
+        <div className="new-chat-inner">
+          <FirstOne icon={Key} title={blocked === "profile" ? "先添加一个 Profile" : "勾选要用的模型"}
+            lead={blocked === "profile" ? PROFILE_LEAD : `${station.name || "这台机器"} 的 Profile 还没有启用模型，勾选之后就能开始对话。`}>
+            {blocked === "profile"
+              ? <Button variant="primary" icon={Plus} onClick={() => setAddingProfile(true)}>添加 Profile</Button>
+              : <Link className="btn btn-primary" to={profilesPage(station)}>去勾选模型</Link>}
+            {stations.length > 1 && (
+              <Chooser side="bottom" label={<><Server size={13} />{station.name}</>} title="换一台 station">
+                {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={13} />{s.name}</Item>)}
+              </Chooser>
+            )}
+          </FirstOne>
+          <AddAccountDialog open={addingProfile} onClose={() => setAddingProfile(false)} />
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="new-chat">
       <div className="new-chat-inner">
         <Illustration name="new-chat" />
         <h1 className="new-chat-title">新对话</h1>
         <p className="new-chat-sub">说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
-        {!view.overview ? null
-          : profiles.length === 0 ? <p className="field-error">这台 station 还没有 Profile，先到 <Link className="inline-link" to={profilesPage(station)}>设置 → Profile</Link> 里加一个。</p>
-          : !runtimes.length && <p className="field-error">这台 station 的 Profile 都还没有启用模型。到 <Link className="inline-link" to={profilesPage(station)}>设置 → Profile</Link> 里勾选可以用的模型。</p>}
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
         {entry?.spent && (
           <p className="spent-notice" role="status">
