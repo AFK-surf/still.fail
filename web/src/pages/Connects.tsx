@@ -26,9 +26,9 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
   // None at all yet (not only none of the viewer's): the page is about adding the first.
   const first = !loading && !connects.error && shown.length === 0 && !onlyMine;
   // Adding one: on the one station there is, or on one picked.
-  const add = (label: string, primary = false) => targets.length === 1 ? <Button variant={primary ? "primary" : undefined} icon={Plus} onClick={() => setAdding(targets[0]!)}>{label}</Button> : targets.length > 1 && (
+  const add = (label: string, primary = false) => targets.length === 1 ? <Button variant={primary ? "primary" : "secondary"} icon={Plus} onClick={() => setAdding(targets[0]!)}>{label}</Button> : targets.length > 1 && (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger asChild><Button variant={primary ? "primary" : undefined} icon={Plus}>{label}</Button></DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild><Button variant={primary ? "primary" : "secondary"} icon={Plus}>{label}</Button></DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="popover menu-list" align={primary ? "center" : "end"} sideOffset={4}>
           <DropdownMenu.Label className="menu-label">加在哪台 station 上</DropdownMenu.Label>

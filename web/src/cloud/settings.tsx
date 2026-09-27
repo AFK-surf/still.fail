@@ -230,7 +230,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
       {first ? (
         <FirstOne icon={Key} title="添加第一个 Profile" lead={PROFILE_LEAD}>
           {online.length === 0 ? <p className="muted">没有在线的 station，等它上线再加。</p>
-            : online.map((s) => <Button key={s.id} variant={online.length === 1 ? "primary" : undefined} icon={Plus} onClick={() => setAdding(s.station)}>{online.length === 1 ? "添加 Profile" : `加到 ${s.name}`}</Button>)}
+            : online.map((s) => <Button key={s.id} variant={online.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => setAdding(s.station)}>{online.length === 1 ? "添加 Profile" : `加到 ${s.name}`}</Button>)}
         </FirstOne>
       ) : stations.map((station) => {
         const { overview } = station;
