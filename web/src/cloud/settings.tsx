@@ -11,6 +11,7 @@ import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
 import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
+import { ProfileCard } from "../ProfileCard.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
@@ -261,15 +262,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
                   {overview.profiles.map((p) => {
                     return (
                       <li key={p.id}>
-                        <Link className="list-row" to={`${base}/settings/accounts/${p.id}`}>
-                          <span className="mark runtime-mark"><ProviderLogo runtime={p.runtime} kind={p.access.kind} size={18} /></span>
-                          <span className="list-row-text">
-                            <span className="list-row-title">{p.name}<RuntimeTags runtimes={p.runtimes} /></span>
-                            <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · ${p.usedBy.length} 个连接在用` : ""}</span>
-                          </span>
-                          <QuotaBars quota={p.quota} compact />
-                          <Pill tone={p.checkTone}>{p.checkText}</Pill>
-                        </Link>
+                        <ProfileCard profile={p} to={`${base}/settings/accounts/${p.id}`} uses={p.usedBy.length ? `${p.usedBy.length} 个连接在用` : undefined} />
                       </li>
                     );
                   })}

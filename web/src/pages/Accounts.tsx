@@ -7,6 +7,7 @@ import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Ov
 import { ACCESS, ACCESS_KINDS, KEYED } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
+import { MachineLoginCard, ProfileCard } from "../ProfileCard.tsx";
 import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time } from "../ui.tsx";
 
 
@@ -38,16 +39,8 @@ export function AccountsPage() {
           {profiles.map((p) => {
             return (
               <li key={p.id}>
-                <Link className="list-row account-row" to={link(`/settings/accounts/${p.id}`)}>
-                  <span className="mark runtime-mark"><ProviderLogo runtime={p.runtime} kind={p.access.kind} size={18} /></span>
-                  <span className="list-row-text">
-                    <span className="list-row-title">{p.name}<RuntimeTags runtimes={p.runtimes} /></span>
-                    <span className="muted">{ACCESS[p.access.kind].label}{p.usedBy.length ? ` · 被 ${p.usedBy.map((id) => overview.value!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : " · 没有连接使用"}</span>
-                  </span>
-                  <QuotaBars quota={p.quota} compact />
-                  <Pill tone={p.checkTone}>{p.checkText}</Pill>
-                  <ChevronRight {...ICON} className="list-row-chevron" />
-                </Link>
+                <ProfileCard profile={p} to={link(`/settings/accounts/${p.id}`)}
+                  uses={p.usedBy.length ? `被 ${p.usedBy.map((id) => overview.value!.connects.find((c) => c.id === id)?.name ?? id).join("、")} 使用` : "没有连接使用"} />
               </li>
             );
           })}
@@ -85,11 +78,7 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
     <div className="machine-logins">
       <p className="machine-logins-head">这台机器上已经登录了</p>
       {offers.map((l) => (
-        <div key={l.runtime} className="machine-login">
-          <ProviderLogo runtime={l.runtime} kind="subscription" size={16} />
-          <span className="machine-login-text">{l.text}</span>
-          <Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>用这个账号</Button>
-        </div>
+        <MachineLoginCard key={l.runtime} login={l} action={<Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>用这个账号</Button>} />
       ))}
       <p className="machine-logins-note">会用同一个账号为 ember 单独登录一次，这台机器上原来的登录不受影响。</p>
     </div>
