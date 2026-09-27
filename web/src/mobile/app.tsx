@@ -290,6 +290,9 @@ export function SheetHead({ title, trailing }: { title: string; trailing?: React
 function MenuHost({ spec, close }: { spec: MenuSpec | null; close: () => void }) {
   const [shown, setShown] = useState<MenuSpec | null>(null);
   const [open, setOpen] = useState(false);
+  // Only a press that starts on the scrim closes it: the click a browser sends as the long-pressing finger lifts lands
+  // on the scrim that has just appeared under it.
+  const pressed = useRef(false);
   useEffect(() => {
     if (spec) { setShown(spec); requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true))); return; }
     setOpen(false);
@@ -305,7 +308,7 @@ function MenuHost({ spec, close }: { spec: MenuSpec | null; close: () => void })
   const y = below + height < window.innerHeight - 24 ? below : Math.max(24, shown.anchor.top - height - 6);
   return (
     <div className="m-overlay m-menu-layer" data-open={open || undefined}>
-      <div className="m-scrim" onClick={close} />
+      <div className="m-scrim" onPointerDown={() => { pressed.current = true; }} onClick={() => { if (pressed.current) close(); pressed.current = false; }} />
       <div className="m-menu" data-open={open || undefined} style={{ left: x, top: y, width }}>
         {shown.items.map((item) => (
           <button key={item.label} type="button" onClick={() => { close(); item.action(); }}>{item.label}{item.icon}</button>
