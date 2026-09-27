@@ -510,6 +510,11 @@ export interface ChatItem {
 	originText?: string;
 	/** Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online. */
 	offline?: string;
+	/**
+	 * Its station's link coming back, or failing and retried, in words ("正在重连 Studio…"): the row is marked with a
+	 * turning ring. Absent while linked (and while offline).
+	 */
+	reconnecting?: string;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
 }

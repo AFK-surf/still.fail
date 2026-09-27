@@ -546,6 +546,9 @@ data class ChatItem (
 	val originText: String? = null,
 	/// Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online.
 	val offline: String? = null,
+	/// Its station's link coming back, or failing and retried, in words ("正在重连 Studio…"): the row is marked with a
+	/// turning ring. Absent while linked (and while offline).
+	val reconnecting: String? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
 	val time: Map<String, Stamp>? = null
 )
