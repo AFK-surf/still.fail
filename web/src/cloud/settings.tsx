@@ -262,7 +262,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
                   {overview.profiles.map((p) => {
                     return (
                       <li key={p.id}>
-                        <ProfileCard profile={p} to={`${base}/settings/accounts/${p.id}`} uses={p.usedBy.length ? `${p.usedBy.length} 个连接在用` : undefined} />
+                        <ProfileCard profile={p} to={`${base}/settings/accounts/${p.id}`} uses={p.usedBy.length ? `${p.usedBy.length} 个连接在用` : ""} />
                       </li>
                     );
                   })}
