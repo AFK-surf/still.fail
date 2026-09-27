@@ -42,6 +42,8 @@ use tracing::{info, warn};
 use crate::telemetry::{Parent, Telemetry, route};
 
 const ALPN: &[u8] = b"ember/admin/1";
+/// Headers of one hop, not of what is relayed.
+const HOP: [&str; 9] = ["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host", "content-length"];
 const MAX_HEAD: usize = 16 * 1024;
 // Files sent to a session go through here; the station caps them at 50 MB.
 const MAX_BODY: usize = 64 * 1024 * 1024;
@@ -651,8 +653,16 @@ async fn answer(
         .header("host", "ember")
         .header("x-ember-mesh", &station.secret)
         .header("x-ember-viewer", B64.encode(serde_json::to_vec(viewer)?));
-    if let Some(ct) = head["headers"]["content-type"].as_str() {
-        request = request.header("content-type", ct);
+    // The caller's headers go on (a preview's page needs its cookies and what it accepts), but not those of the hop,
+    // nor any of ember's own: who is asking is only what this process says.
+    for (name, value) in head["headers"].as_object().into_iter().flatten() {
+        let lower = name.to_ascii_lowercase();
+        if HOP.contains(&lower.as_str()) || lower.starts_with("x-ember-") || lower == "traceparent" || lower == "tracestate" {
+            continue;
+        }
+        if let Some(value) = value.as_str() {
+            request = request.header(name.as_str(), value);
+        }
     }
     if let Some(traceparent) = traceparent {
         request = request.header("traceparent", traceparent);
@@ -677,7 +687,21 @@ async fn answer(
     };
     outcome.status = response.status().as_u16();
     let content_type = response.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("application/octet-stream").to_string();
-    write_line(send, &json!({ "status": response.status().as_u16(), "headers": { "content-type": content_type } })).await?;
+    // Its headers go back too (a preview's redirect, cookies, caching), those of the hop aside; a name said twice is
+    // one line, its values joined.
+    let mut headers = serde_json::Map::new();
+    for (name, value) in response.headers() {
+        let (name, Ok(value)) = (name.as_str(), value.to_str()) else { continue };
+        if HOP.contains(&name) || name == "content-length" {
+            continue;
+        }
+        match headers.get_mut(name) {
+            Some(Value::String(was)) => { was.push_str(", "); was.push_str(value); }
+            _ => { headers.insert(name.to_string(), json!(value)); }
+        }
+    }
+    headers.insert("content-type".into(), json!(content_type));
+    write_line(send, &json!({ "status": response.status().as_u16(), "headers": headers })).await?;
     // An event stream may stay open for hours: its span is the opening.
     if content_type.starts_with("text/event-stream") {
         traced.end(outcome, true, None);
