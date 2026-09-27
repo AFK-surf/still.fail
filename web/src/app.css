@@ -612,15 +612,20 @@
 .quota-fill[data-level="red"] { background: var(--red); }
 .quota-compact { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .quota-compact .quota-track { width: 48px; }
-/* A window of an allowance, compact: a rounded bar, filled as far as is left, what is left written in it. */
+/* A window of an allowance, compact: a rounded box, what is left written in it and its edge drawn as far as is left. */
 .quota-chips { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .quota-chip { position: relative; display: inline-flex; align-items: center; height: 20px; padding: 0 7px; overflow: hidden; border-radius: calc(6px * var(--corner-scale)); corner-shape: var(--corner-shape);
-  background: var(--neutral-bg); color: var(--green); font-size: 11px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; cursor: default; }
+  color: var(--green); font-size: 11px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; cursor: default; }
 .quota-chip[data-level="amber"] { color: var(--amber); }
 .quota-chip[data-level="red"] { color: var(--red); }
 .quota-chip[data-small] { height: 16px; padding: 0 5px; font-size: 10px; }
-.quota-chip-fill { position: absolute; inset: 0 auto 0 0; background: currentColor; opacity: .16; }
-.quota-chip-text { position: relative; display: inline-flex; gap: 4px; }
+.quota-chip-edge { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.quota-chip-edge rect { x: 0.75px; y: 0.75px; width: calc(100% - 1.5px); height: calc(100% - 1.5px); rx: calc(6px * var(--corner-scale) - 0.75px); fill: none; stroke-width: 1.5px; }
+.quota-chip-track { stroke: var(--line-strong); }
+.quota-chip-left { stroke: currentColor; stroke-linecap: round; }
+/* Its number quiet while there is plenty; in its colour once it runs low. */
+.quota-chip-text { position: relative; display: inline-flex; gap: 4px; color: var(--muted); }
+.quota-chip:is([data-level="amber"], [data-level="red"]) .quota-chip-text { color: currentColor; }
 .quota-chip-mark { color: var(--muted); }
 /* Blocks, not inline: a ring with no number inside would sit on its bottom edge instead of the others' text line. */
 .quota-ring { position: relative; display: grid; place-items: center; flex: none; width: 26px; height: 26px; color: var(--green); }
@@ -1579,6 +1584,9 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .profile-card-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* What it is wraps rather than cutting off (an account's long address would hide its plan). */
 .profile-card-sub { color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+/* An address is cut short rather than wrapped: which account it is shows well enough from its start. */
+.profile-card-sub .phrase:has(> .profile-card-email) { display: block; min-width: 0; }
+.profile-card-email { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .profile-card-state, .profile-card-action { flex: none; display: flex; align-items: center; }
 .profile-card-chevron { color: var(--muted); }
 /* Its quota beside its state, however narrow (a ring or two is small); narrow, its action across the whole width. */

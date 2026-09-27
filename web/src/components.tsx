@@ -54,8 +54,8 @@ export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown
 }
 
 /**
- * A profile's allowance, as the core puts its windows (shortest first, each marked): compact, a rounded bar per window
- * with what is left written in it (its mark too when there is more than one), filled as far as is left.
+ * A profile's allowance, as the core puts its windows (shortest first, each marked): compact, a rounded box per window
+ * with what is left written in it (its mark too when there is more than one), its edge drawn as far as is left.
  * `small`: where a line is lower than a row (the model control).
  */
 export function QuotaBars({ quota, compact, small }: { quota: Quota | null | undefined; compact?: boolean; small?: boolean }) {
@@ -68,7 +68,10 @@ export function QuotaBars({ quota, compact, small }: { quota: Quota | null | und
         {quota.windows.map((w) => (
           <Tip key={w.label} label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>
             <span className="quota-chip" data-level={w.level} data-small={small || undefined} tabIndex={0} role="img" aria-label={`${w.label}剩余 ${w.left}%`}>
-              <span className="quota-chip-fill" style={{ width: `${w.left}%` }} />
+              <svg className="quota-chip-edge" aria-hidden="true">
+                <rect className="quota-chip-track" pathLength={100} />
+                {w.left > 0 && <rect className="quota-chip-left" pathLength={100} strokeDasharray={`${w.left} 100`} />}
+              </svg>
               <span className="quota-chip-text">{!lone && <span className="quota-chip-mark">{w.mark}</span>}{w.left}%</span>
             </span>
           </Tip>

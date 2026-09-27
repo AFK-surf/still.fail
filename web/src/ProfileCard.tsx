@@ -45,8 +45,8 @@ export function MachineLoginCard({ login, action, framed = true }: { login: Mach
     <div className="profile-card" data-framed={framed ? "" : undefined}>
       <Card
         mark={<ProviderLogo runtime={login.runtime} kind="subscription" size={18} />}
-        title={RUNTIME[login.runtime]}
-        sub={login.email || plan ? [login.email && <Address key="email" email={login.email} />, plan] : ["已登录"]}
+        title={<>{RUNTIME[login.runtime]}{plan && <span className="runtime-tags"><span className="runtime-tag">{plan}</span></span>}</>}
+        sub={[login.email ? <span key="email" className="profile-card-email" title={login.email}>{login.email}</span> : "已登录"]}
         quota={quota ? <QuotaBars quota={quota} compact /> : null}
         state={<State pill={<Pill tone={blocked ? "red" : "green"}>{blocked ? "被停用" : "本机已登录"}</Pill>} why={trouble} />}
         action={action ?? null}
@@ -58,12 +58,6 @@ export function MachineLoginCard({ login, action, framed = true }: { login: Mach
 /** Its state, and why when something is wrong (what the provider said), on hover rather than in the card. */
 function State({ pill, why }: { pill: ReactNode; why: string | null | undefined }) {
   return why ? <Tip label={why}><span className="profile-card-why" tabIndex={0}>{pill}</span></Tip> : <>{pill}</>;
-}
-
-/** An email address that may break after its @ when it has to, not in the middle of a word. */
-function Address({ email }: { email: string }) {
-  const at = email.indexOf("@");
-  return at < 0 ? <>{email}</> : <>{email.slice(0, at + 1)}<wbr />{email.slice(at + 1)}</>;
 }
 
 function Card({ mark, title, sub, quota, state, action }: {
