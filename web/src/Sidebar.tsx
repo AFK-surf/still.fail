@@ -4,7 +4,7 @@ import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation } from "react-router";
 import { useChats, type ChatItem } from "./api.ts";
-import { Avatar, ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
+import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
 
@@ -79,12 +79,13 @@ function ChatPane({ chats, scope, onlyMine, newChat, settings, hidden }: { chats
   const connecting = several ? stations.filter((s) => s.state === "connecting") : [];
   const failed = several ? stations.filter((s) => s.state === "error") : [];
   const loading = !view || view.loading;
+  // A station's link coming back is said on its rows (the core's `reconnecting`); only with no rows at all to show does
+  // the list say it, in place of the rows.
   return (
     <div className="nav-scroll" aria-hidden={hidden || undefined} inert={hidden || undefined}>
-      {connecting.map((s) => <p key={s.station} className="nav-connecting"><span className="spinner" aria-hidden="true" />正在连接 {s.name}…</p>)}
-      {failed.map((s) => <p key={s.station} className="nav-empty nav-error" title={s.message ?? undefined}>连不上「{s.name}」，正在重试…</p>)}
       {chats.error && !view && <p className="nav-empty nav-error">{chats.error.message}</p>}
-      {days.length === 0 && loading && !chats.error && <SkeletonRows />}
+      {days.length === 0 && !loading && failed.map((s) => <p key={s.station} className="nav-empty nav-error" title={s.message ?? undefined}>连不上「{s.name}」，正在重试…</p>)}
+      {days.length === 0 && (loading || connecting.length > 0) && !chats.error && <SkeletonRows />}
       {days.length === 0 && view && !loading && !failed.length && !connecting.length && (
         <p className="nav-empty">{onlyMine ? "没有你参与的会话。"
           : stations.length ? <>还没有会话。在 Slack 里 @ {stations.length > 1 ? "它们" : "它"}，或者 <NavLink className="inline-link" to={newChat}>新建对话</NavLink>。</>
@@ -112,6 +113,7 @@ function ChatRow({ item }: { item: ChatItem }) {
       // Pressing a chat does not take the focus from the composer: it stays there, focused, into the next chat.
       onMouseDown={(e) => e.preventDefault()}>
       {item.unread && <span className="unread-dot" role="img" aria-label="有未读消息" />}
+      <AgentsPicture item={item} />
       <span className="nav-session-text">
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className="nav-session-head">
@@ -121,6 +123,8 @@ function ChatRow({ item }: { item: ChatItem }) {
           {/* Its station offline: greyed, and marked there instead (the core says so, row by row). */}
           {item.offline
             ? <Tip label={item.offline} side="right"><span className="session-kind" aria-label={item.offline}><Unplug size={12} /></span></Tip>
+            : item.reconnecting
+            ? <Tip label={item.reconnecting} side="right"><span className="session-kind" aria-label={item.reconnecting}><span className="spinner row-spinner" aria-hidden="true" /></span></Tip>
             : connect && <Tip label={item.originText ?? "Slack"} side="right"><span className="session-kind"><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
         </span>
         {/* People are in the chat itself; here only the last thing said and when. */}
@@ -134,17 +138,21 @@ function ChatRow({ item }: { item: ChatItem }) {
 }
 
 /**
- * The last thing said in a chat, on one line: a small picture of who said it (name on hover), then what. Who it is
- * and the agent's state on its picture are the core's (present.rs); the state shows only there.
+ * Who is in a chat, as its row's picture: its agent's mark, or two of its agents' overlapping (more are in the chat
+ * itself), with its state (block, run, failed: the core's) at the corner. A chat with no agent yet shows ember's.
  */
+function AgentsPicture({ item }: { item: ChatItem }) {
+  const agents = item.agents.slice(0, 2);
+  return (
+    <span className="row-picture" data-count={agents.length || 1} data-badge={item.state ?? undefined} title={item.agents.map((a) => a.agentText).join("、") || undefined} aria-hidden="true">
+      {agents.length === 0
+        ? <span className="row-agent"><Mark size={14} /></span>
+        : agents.map((a) => <span key={a.key} className="row-agent"><ModelLogo maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 11 : 15} /></span>)}
+    </span>
+  );
+}
+
+/** The last thing said in a chat, on one line (the row's picture says who is in it). */
 function LastMessage({ item }: { item: ChatItem }) {
-  const last = item.last!;
-  const by = last.by;
-  const name = by?.name ?? last.author;
-  const who = !by || by.kind === "person"
-    ? by?.picture ? <img className="person-pic" src={by.picture} alt="" width={12} height={12} referrerPolicy="no-referrer" /> : <Avatar id={last.author} name={name} size={12} />
-    : by.kind === "ember" ? <Mark size={12} />
-    : <span className="who-agent" data-badge={by.state ?? undefined}><ModelLogo maker={by.maker} runtime={by.runtime ?? "claude"} size={12} /></span>;
-  const label = by?.label ?? name;
-  return <span className="nav-session-last"><span className="nav-session-who" title={label} aria-label={`${label}：`}>{who}</span>{last.preview}</span>;
+  return <span className="nav-session-last">{item.last!.preview}</span>;
 }

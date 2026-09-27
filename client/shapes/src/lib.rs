@@ -1032,6 +1032,9 @@ pub struct ChatItem {
     pub origin_text: Option<String>,
     /// Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online.
     pub offline: Option<String>,
+    /// Its station's link coming back, or failing and retried, in words ("正在重连 Studio…"): the row is marked with a
+    /// turning ring. Absent while linked (and while offline).
+    pub reconnecting: Option<String>,
     /// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
     pub time: Option<HashMap<String, Stamp>>,
 }

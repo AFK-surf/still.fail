@@ -364,9 +364,16 @@ impl Views {
                     let mut row = row.clone();
                     row["station"] = json!(s.address);
                     row["stationName"] = json!(s.name);
-                    // Its station offline: the row says so itself (greyed, marked), not the list above it.
+                    // Its station offline: the row says so itself (greyed, marked), not the list above it; its link
+                    // coming back (or failing and retried), the same, marked with a turning ring.
                     if !s.online {
                         row["offline"] = json!(format!("{} 离线", s.name));
+                    } else {
+                        match self.link(&s.address, true)["state"].as_str().unwrap_or("connecting") {
+                            "error" => row["reconnecting"] = json!(format!("连不上 {}，正在重试", s.name)),
+                            "offline" => row["reconnecting"] = json!(format!("正在重连 {}…", s.name)),
+                            _ => {}
+                        }
                     }
                     // What the clients draw of it, decided here (present.rs).
                     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -1448,6 +1455,16 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!((v["stations"][0]["state"].as_str(), v["stations"][0]["message"].as_str()), (Some("connecting"), Some("连接断开了")));
             assert_eq!(ids(&v).len(), 2);
+            // Its rows say so themselves; the other station's say nothing. Failing and retried, the same, in other words.
+            let reconnecting = |v: &Value| v["days"][0]["items"].as_array().unwrap().iter().map(|i| (i["station"].as_str().unwrap().to_string(), i["reconnecting"].clone())).collect::<Vec<_>>();
+            assert!(reconnecting(&v).contains(&("ws/a".into(), json!("正在重连 alpha…"))), "{v}");
+            assert!(reconnecting(&v).iter().all(|(s, r)| s == "ws/a" || r.is_null()), "{v}");
+            t.set(link("ws/a"), json!({"state": "error", "message": "没有权限"}));
+            t.read(&mut ui, 1).await;
+            assert!(reconnecting(ui.value.as_ref().unwrap()).contains(&("ws/a".into(), json!("连不上 alpha，正在重试"))));
+            t.set(link("ws/a"), json!({"state": "connected"}));
+            t.read(&mut ui, 1).await;
+            assert!(reconnecting(ui.value.as_ref().unwrap()).iter().all(|(_, r)| r.is_null()));
 
             // The workspace failing is the view's error.
             t.store.set(&workspace(), Err(CoreError::new("not_found", "进不了这个工作区")));
