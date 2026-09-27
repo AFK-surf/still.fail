@@ -309,14 +309,14 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
   useEffect(() => { if (joined) track("station_added", { ms: Math.round(performance.now() - shown.current) }); }, [Boolean(joined)]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Dialog open onClose={onClose} wide title="添加 station"
-      description="station 是一台运行 ember 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 ember 并加入。"
+      description="给它起个名字，再在那台机器上执行一条命令。"
       footer={joined ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
         <Button variant="ghost" onClick={onClose}>{enroll.result ? "关闭" : "取消"}</Button>
         {!enroll.result && <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>生成命令</Button>}
       </>}>
       {!enroll.result ? (
-        <Field label="名字" htmlFor="station-name" hint="比如机器名：studio、mac-mini、gpu-box。">
-          <input id="station-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} maxLength={80}
+        <Field label="名字" htmlFor="station-name">
+          <input id="station-name" className="input" value={name} autoFocus placeholder="比如 studio、mac-mini" onChange={(e) => setName(e.target.value)} maxLength={80}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) enroll.run(); }} />
         </Field>
       ) : joined ? (
@@ -327,20 +327,13 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
   );
 }
 
-/** What to do with an enrollment's command, and that it is awaited. */
-function EnrollSteps({ enrollment }: { enrollment: { install: string; command: string } }) {
+/** An enrollment's command, and that the station is awaited. */
+function EnrollSteps({ enrollment }: { enrollment: { install: string } }) {
   return (
     <>
-      <ol className="steps">
-        <li><span>在要当 station 的机器（macOS，Apple 芯片）上打开「终端」，执行：</span><CopyCommand text={enrollment.install} /></li>
-        <li>它会装好 ember、加入这个 workspace，并在后台一直运行（开机自动启动）。几秒后这台机器就会出现在这里。</li>
-        <li>之后在「设置 → Profile」里登录 Claude Code 或 Codex 的账号；那台机器上还没装它们的话，安装结束时会告诉你怎么装。</li>
-      </ol>
-      <details className="manual-app">
-        <summary>这台机器上已经有 ember 了</summary>
-        <p className="muted">在 ember 的目录里执行 <CopyCommand text={`bin/${enrollment.command}`} />，然后重启 ember。</p>
-      </details>
-      <p className="muted dialog-note"><span className="activity-pulse inline" aria-hidden="true" />等待 station 加入… 命令 1 小时内有效，只能用一次。</p>
+      <p>在那台 Mac（Apple 芯片）的「终端」里执行：</p>
+      <CopyCommand text={enrollment.install} />
+      <p className="muted dialog-note"><span className="activity-pulse inline" aria-hidden="true" />等它加入…（装过 ember 的机器也用这条命令；1 小时内有效）</p>
     </>
   );
 }
@@ -362,9 +355,9 @@ export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
   if (enroll.result) return <div className="onboarding-card"><EnrollSteps enrollment={enroll.result} /></div>;
   return (
     <div className="onboarding-card">
-      <Field label="给它起个名字" htmlFor="first-station-name" hint="比如机器名：studio、mac-mini、gpu-box。">
+      <Field label="给这台机器起个名字" htmlFor="first-station-name">
         <div className="onboarding-row">
-          <input id="first-station-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} maxLength={80}
+          <input id="first-station-name" className="input" value={name} autoFocus placeholder="比如 studio、mac-mini" onChange={(e) => setName(e.target.value)} maxLength={80}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) enroll.run(); }} />
           <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>生成命令</Button>
         </div>

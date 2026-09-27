@@ -494,9 +494,6 @@
 .steps li > .btn { display: flex; width: max-content; }
 .steps .step-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 /* Making the Slack app by hand, when there is no configuration token: tucked under the token form. */
-.manual-app { margin-top: 4px; font-size: var(--text-sm); }
-.manual-app summary { cursor: pointer; color: var(--muted); }
-.manual-app[open] summary { margin-bottom: 10px; }
 .activity-pulse.inline { display: inline-block; margin-right: 8px; vertical-align: middle; }
 @media (max-width: 700px) {
   .slack-app-top { flex-direction: column; }
@@ -1532,6 +1529,9 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .onboarding-lead { margin: 0 0 24px; color: var(--muted); line-height: 1.6; }
 .onboarding-card { width: 100%; text-align: left; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
 .onboarding-row { display: flex; gap: 8px; }
+.onboarding-card p { margin: 0; font-size: var(--text-sm); }
+.onboarding-card .command { margin-top: 8px; }
+.onboarding-card .dialog-note { margin: 12px 0 0; }
 .onboarding-row .input { flex: 1; min-width: 0; }
 .onboarding-foot { margin-top: 20px; font-size: var(--text-sm); }
 .onboarding .callout { width: 100%; text-align: left; }
