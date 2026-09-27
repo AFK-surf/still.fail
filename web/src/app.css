@@ -1528,7 +1528,9 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .onboarding-title { margin: 20px 0 8px; font-size: var(--text-lg); font-weight: 600; }
 .onboarding-lead { margin: 0 0 24px; color: var(--muted); line-height: 1.6; }
 .onboarding-card { width: 100%; text-align: left; padding: 20px; border: 1px solid var(--line); border-radius: var(--r-card); corner-shape: var(--corner-shape); background: var(--canvas); }
-.onboarding-row { display: flex; gap: 8px; }
+.onboarding-row { display: flex; align-items: stretch; gap: 8px; }
+/* As tall as the field beside it. */
+.onboarding-row .btn { height: auto; }
 .onboarding-card p { margin: 0; font-size: var(--text-sm); }
 .onboarding-card .command { margin-top: 8px; }
 /* An enrollment's command awaited (the first station, or one more): a status of its own under the command. */

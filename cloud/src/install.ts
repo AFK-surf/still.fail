@@ -3,6 +3,8 @@
 // served at /releases/<file>), puts it in ~/.ember/app (the data around it stays), links `ember` into ~/.local/bin,
 // joins the workspace the token is for, and runs the station as a service of the user (launchd), started at login and
 // again if it stops. Claude Code and Codex are the machine's own: it says how to get them when they are missing.
+// On Linux the service is a systemd user service (lingering, so it runs with no one logged in); with no user systemd
+// (a container, another init) the station is started in the background, and said not to come back after a reboot.
 // Without a token, on a station already in a workspace, it updates the station (`ember update` runs it so).
 
 /** The installer for an ember cloud at `origin`. */
@@ -29,13 +31,20 @@ if [ -z "$token" ] && [ ! -f "$data/mesh/cloud.json" ]; then
   echo "已经加入 workspace 的 station 更新时不需要 token：ember update" >&2
   exit 2
 fi
-case "$(uname -s)-$(uname -m)" in
+os=$(uname -s)
+case "$os-$(uname -m)" in
   Darwin-arm64) platform=darwin-arm64 ;;
-  *) echo "暂时只支持 macOS（Apple 芯片）的机器，这台是 $(uname -s) $(uname -m)。" >&2; exit 1 ;;
+  Linux-x86_64) platform=linux-x64 ;;
+  Linux-aarch64|Linux-arm64) platform=linux-arm64 ;;
+  *) echo "暂时只支持 macOS（Apple 芯片）和 Linux（x64、arm64）的机器，这台是 $(uname -s) $(uname -m)。" >&2; exit 1 ;;
 esac
 app="$data/app"
 label="org.3720.ember.station"
 plist="$HOME/Library/LaunchAgents/$label.plist"
+unit_dir="\${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+unit="ember-station.service"
+# Whether this Linux has a systemd for the user to run services in (not a container's, not another init).
+user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; }
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
@@ -44,7 +53,13 @@ curl -fL --progress-bar "$origin/releases/ember-station-$platform.tar.gz" -o "$t
 tar -xzf "$tmp/ember.tar.gz" -C "$tmp"
 
 # One running at a time: the old one stops before the new one takes its place.
-launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+if [ "$os" = Darwin ]; then
+  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+else
+  user_systemd && systemctl --user stop "$unit" 2>/dev/null || true
+  [ -f "$data/ember.pid" ] && kill "$(cat "$data/ember.pid")" 2>/dev/null || true
+  rm -f "$data/ember.pid"
+fi
 mkdir -p "$data"
 rm -rf "$app.old"
 [ -d "$app" ] && mv "$app" "$app.old"
@@ -60,28 +75,63 @@ fi
 
 # The agents it starts are found on this PATH (Claude Code, Codex, and what they run).
 agent_path="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin"
-mkdir -p "$(dirname "$plist")"
-cat > "$plist" <<PLIST
+if [ "$os" = Darwin ]; then
+  mkdir -p "$(dirname "$plist")"
+  cat > "$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>$label</string>
-  <key>ProgramArguments</key><array><string>$app/bin/ember</string><string>start</string></array>
-  <key>EnvironmentVariables</key><dict><key>PATH</key><string>$agent_path</string><key>EMBER_DATA</key><string>$data</string></dict>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>$data/ember.log</string>
-  <key>StandardErrorPath</key><string>$data/ember.log</string>
+    <key>Label</key><string>$label</string>
+    <key>ProgramArguments</key><array><string>$app/bin/ember</string><string>start</string></array>
+    <key>EnvironmentVariables</key><dict><key>PATH</key><string>$agent_path</string><key>EMBER_DATA</key><string>$data</string></dict>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>StandardOutPath</key><string>$data/ember.log</string>
+    <key>StandardErrorPath</key><string>$data/ember.log</string>
 </dict>
 </plist>
 PLIST
-launchctl bootstrap "gui/$(id -u)" "$plist"
+  launchctl bootstrap "gui/$(id -u)" "$plist"
+else
+  if user_systemd; then
+    mkdir -p "$unit_dir"
+    cat > "$unit_dir/$unit" <<UNIT
+[Unit]
+Description=ember station
+After=network-online.target
+
+[Service]
+ExecStart=$app/bin/ember start
+Environment=PATH=$agent_path
+Environment=EMBER_DATA=$data
+Restart=always
+RestartSec=5
+StandardOutput=append:$data/ember.log
+StandardError=append:$data/ember.log
+
+[Install]
+WantedBy=default.target
+UNIT
+    systemctl --user daemon-reload
+    systemctl --user enable "$unit" >/dev/null 2>&1
+    systemctl --user restart "$unit"
+    # Also with no one logged in (a server): the user's services start with the machine.
+    loginctl enable-linger "$(id -un)" 2>/dev/null || lingering="no"
+  else
+    nohup env PATH="$agent_path" EMBER_DATA="$data" "$app/bin/ember" start >> "$data/ember.log" 2>&1 &
+    echo $! > "$data/ember.pid"
+    no_service="yes"
+  fi
+fi
 
 echo
 echo "ember station 已安装并在后台运行，几秒后会出现在 workspace 里。"
 echo "  程序：\${app}（命令 ember 在 ~/.local/bin）"
 echo "  数据和日志：$data"
+[ "$os" = Linux ] && [ -z "\${no_service:-}" ] && echo "  服务：systemctl --user status $unit"
+[ -n "\${lingering:-}" ] && echo "  没人登录时也要运行的话，执行：sudo loginctl enable-linger $(id -un)"
+[ -n "\${no_service:-}" ] && echo "  这台机器没有 systemd 用户服务，station 现在在后台运行，但重启后不会自动启动：到时执行 ember start。"
 missing=""
 command -v claude >/dev/null 2>&1 || missing="$missing Claude Code"
 command -v codex >/dev/null 2>&1 || missing="$missing Codex"
