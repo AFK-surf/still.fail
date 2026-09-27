@@ -84,6 +84,12 @@ sealed interface Screen {
     data class Preview(val station: String, val port: Int) : Screen { override val id = "preview/$station/$port" }
     /** The workspace itself: its name, its people, leaving it. */
     data object Workspace : Screen { override val id = "workspace" }
+    /** The workspace's connects; one of them; how it runs; a new one on a station. */
+    data object Connects : Screen { override val id = "connects" }
+    data class Connect(val station: String, val connect: String) : Screen { override val id = "connect/$station/$connect" }
+    data class ConnectRun(val station: String, val connect: String) : Screen { override val id = "connect-run/$station/$connect" }
+    data class NewConnect(val station: String) : Screen { override val id = "new-connect/$station" }
+    data class NewProfile(val station: String) : Screen { override val id = "new-profile/$station" }
 }
 
 class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cloudOrigin: String) {
@@ -197,6 +203,11 @@ private fun Pages(app: AppState, current: dev.ember.android.data.WorkspaceEntry)
                     Screen.Me -> MeScreen(current)
                     Screen.Workspace -> dev.ember.android.screens.WorkspaceScreen(current)
                     is Screen.Preview -> dev.ember.android.screens.PreviewScreen(screen.station, screen.port)
+                    Screen.Connects -> dev.ember.android.screens.ConnectsScreen(current)
+                    is Screen.Connect -> dev.ember.android.screens.ConnectScreen(screen.station, screen.connect)
+                    is Screen.ConnectRun -> dev.ember.android.screens.ConnectRunScreen(screen.station, screen.connect)
+                    is Screen.NewConnect -> dev.ember.android.screens.NewConnectScreen(screen.station)
+                    is Screen.NewProfile -> dev.ember.android.screens.NewProfileScreen(current, screen.station)
                 }
             }
         }

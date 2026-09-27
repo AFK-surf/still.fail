@@ -80,6 +80,7 @@ object Topics {
     val workspaces = buildJsonObject { put("topic", "workspaces") }
     fun chats(scope: String, mine: Boolean) = buildJsonObject { put("topic", "chats"); put("scope", scope); put("mine", mine) }
     fun stations(scope: String) = buildJsonObject { put("topic", "stations"); put("scope", scope) }
+    fun connects(scope: String, mine: Boolean) = buildJsonObject { put("topic", "connects"); put("scope", scope); put("mine", mine) }
     fun workspace(id: String) = buildJsonObject { put("topic", "workspace"); put("workspace", id) }
     fun loginSessions(account: String) = buildJsonObject { put("topic", "loginSessions"); put("account", account) }
     fun overview(station: String) = buildJsonObject { put("topic", "overview"); put("station", station) }

@@ -96,7 +96,7 @@ fun confirm(app: AppState, title: String, text: String, action: String, danger: 
 }
 
 /** Asks for a line (a name); `run` gets it trimmed. */
-fun ask(app: AppState, title: String, value: String, placeholder: String, action: String, run: suspend (String) -> Unit) {
+fun ask(app: AppState, title: String, value: String, placeholder: String, action: String, secret: Boolean = false, hint: String? = null, run: suspend (String) -> Unit) {
     app.sheet = SheetSpec(0.42f) {
         val scope = rememberCoroutineScope()
         var text by remember { mutableStateOf(value) }
@@ -105,7 +105,8 @@ fun ask(app: AppState, title: String, value: String, placeholder: String, action
         SheetGrab()
         SheetHead(title)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Field(text, { text = it }, placeholder)
+            if (secret) SecretField(text, { text = it }, placeholder) else Field(text, { text = it }, placeholder)
+            hint?.let { Text(it, fontSize = 12.sp, color = C.muted) }
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button("取消", primary = false) { app.sheet = null }

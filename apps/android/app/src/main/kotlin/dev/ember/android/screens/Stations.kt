@@ -126,8 +126,13 @@ fun StationsScreen(current: WorkspaceEntry) {
                 }
             }
         }
-        if (list != null && isManager(current)) ListCard {
-            ListRow(onClick = { openAddStation(app, current, list.map { it.id }) }) { Text("＋ 添加 station", fontSize = 15.sp, color = C.accent) }
+        ListCard {
+            ListRow(onClick = { app.push(Screen.Connects) }) {
+                Text("连接", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                Text("Slack app 和它们绑定的模型", fontSize = 13.sp, color = C.muted)
+                IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+            }
+            if (list != null && isManager(current)) ListRow(onClick = { openAddStation(app, current, list.map { it.id }) }) { Text("＋ 添加 station", fontSize = 15.sp, color = C.accent) }
         }
         Spacer(Modifier.height(30.dp))
     }
@@ -165,12 +170,15 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
             val overview = s.overview
             if (overview != null) {
                 SectionHeader("Profile", start = 24.dp)
-                if (overview.profiles.isEmpty()) Card { Text("这台机器还没有 Profile。", fontSize = 14.sp, color = C.muted) }
-                else ListCard { overview.profiles.forEach { ProfileRow(address, it) } }
+                ListCard {
+                    if (overview.profiles.isEmpty()) ListRow { Text("这台机器还没有 Profile。", fontSize = 15.sp, color = C.muted) }
+                    overview.profiles.forEach { ProfileRow(address, it) }
+                    if (s.online) ListRow(onClick = { app.push(Screen.NewProfile(address)) }) { Text("＋ 添加 Profile", fontSize = 15.sp, color = C.accent) }
+                }
                 SectionHeader("连接", start = 24.dp)
                 ListCard {
                     overview.connects.forEach { c ->
-                        ListRow {
+                        ListRow(onClick = { app.push(Screen.Connect(address, c.id)) }) {
                             if (c.kind == "slack") SlackMark(14.dp) else Mark(14.dp)
                             Text(c.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                             Text(connectionText(c.connection.state), fontSize = 13.sp, color = C.muted)
@@ -207,62 +215,3 @@ private fun ProfileRow(station: String, p: Profile) {
     }
 }
 
-/**
- * Which of a profile's models may be used, as the web's profile page has it:
- * one per line, a filter when there are many, and all / none of what is shown.
- */
-@Composable
-fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
-    val app = LocalApp.current
-    val scope = rememberCoroutineScope()
-    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
-    val s = stations.value?.firstOrNull { it.station == address }
-    val p = s?.overview?.profiles?.firstOrNull { it.id == id }
-    var filter by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize()) {
-        NavBar(s?.name ?: "Station", app::pop, p?.name ?: "Profile")
-        if (p == null) return Loading(stations.error?.message ?: "正在读取…")
-        val all = (p.available + p.models).distinct().sorted()
-        val shown = all.filter { it.contains(filter.trim(), ignoreCase = true) }
-        val save = { models: List<String> ->
-            scope.launch {
-                try {
-                    app.api(address).setModels(p.id, models.distinct().sorted())
-                } catch (e: CoreException) {
-                    app.toast = "没改成：${e.message}"
-                }
-            }
-        }
-        LazyColumn(Modifier.weight(1f), contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
-            item {
-                Text(
-                    if (all.isEmpty()) "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。"
-                    else "只有勾选的模型能在新对话和连接里选。${p.modelsText}。",
-                    fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                )
-            }
-            if (all.isNotEmpty()) item {
-                Row(Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (all.size > 10) Field(filter, { filter = it }, "筛选模型", modifier = Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
-                    val suffix = if (filter.isBlank()) "" else "筛选结果"
-                    Text("全选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(p.models + shown) })
-                    Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(p.models - shown.toSet()) })
-                }
-            }
-            // Plain rows on the page, no card behind them.
-            items(shown, key = { it }) { m ->
-                val on = m in p.models
-                Row(
-                    Modifier.fillMaxWidth().clickable { save(if (on) p.models - m else p.models + m) }.padding(horizontal = 24.dp, vertical = 11.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (on) C.accent else C.chip), contentAlignment = Alignment.Center) {
-                        if (on) IconIn(Icons.Check, 13.dp, C.bg)
-                    }
-                    Text(m, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (m !in p.available && p.available.isNotEmpty()) Text("检查里没有了", fontSize = 12.sp, color = C.subtle)
-                }
-            }
-        }
-    }
-}

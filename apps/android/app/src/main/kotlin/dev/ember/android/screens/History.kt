@@ -568,7 +568,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
 
 /** A line that leads to a list: what is chosen, and an arrow. */
 @Composable
-private fun SettingRow(onClick: () -> Unit, leading: @Composable () -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
+internal fun SettingRow(onClick: () -> Unit, leading: @Composable () -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.chip).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -581,7 +581,7 @@ private fun SettingRow(onClick: () -> Unit, leading: @Composable () -> Unit = {}
 
 /** Every model it can move to, by who made it (the core says); a filter once there are many. */
 @Composable
-private fun ModelList(models: List<ModelOption>, runtime: String, picked: String?, onPick: (String) -> Unit) {
+internal fun ModelList(models: List<ModelOption>, runtime: String, picked: String?, onPick: (String) -> Unit) {
     var filter by remember { mutableStateOf("") }
     val shown = models.filter { it.model.contains(filter.trim(), ignoreCase = true) }
     val groups = shown.groupBy { it.maker?.name ?: "其他" }.toSortedMap(compareBy<String> { it == "其他" }.thenBy { it })
@@ -600,7 +600,7 @@ private fun ModelList(models: List<ModelOption>, runtime: String, picked: String
 
 /** Who can run the model picked: the station's pick, or one kept to, with its quota. */
 @Composable
-private fun AccountList(accounts: List<RunnableProfile>, runtime: String, picked: String?, onPick: (String?) -> Unit) {
+internal fun AccountList(accounts: List<RunnableProfile>, runtime: String, picked: String?, onPick: (String?) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
         Text("自动分配时，额度用完或登录失效会换一个；指定了就一直用它。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
         PickLine("自动分配", checked = picked == null, onClick = { onPick(null) })
@@ -615,7 +615,7 @@ private fun AccountList(accounts: List<RunnableProfile>, runtime: String, picked
 /** How hard it thinks, as chips as wide as their words, wrapping when they do not fit a line. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun EffortChips(efforts: List<String?>, picked: String?, onPick: (String?) -> Unit) {
+internal fun EffortChips(efforts: List<String?>, picked: String?, onPick: (String?) -> Unit) {
     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         efforts.forEach { e ->
             val on = e == picked
@@ -629,7 +629,7 @@ private fun EffortChips(efforts: List<String?>, picked: String?, onPick: (String
 
 /** A choice in a list: what it is, a note under it, and a check when it is the one chosen. */
 @Composable
-private fun PickLine(label: String, sub: String? = null, checked: Boolean, onClick: () -> Unit, leading: (@Composable () -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
+internal fun PickLine(label: String, sub: String? = null, checked: Boolean, onClick: () -> Unit, leading: (@Composable () -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
