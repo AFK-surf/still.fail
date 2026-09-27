@@ -12,7 +12,7 @@
     "build": "sh client/wasm/build.sh && vite build --config web/vite.config.ts",
     "build:cloud": "sh client/wasm/build.sh && vite build --config web/vite.config.ts --mode cloud && vite build --config web/vite.config.ts --mode cloud-admin",
     "dev:web": "vite --config web/vite.config.ts",
-    "typecheck": "sh scripts/shapes.sh --check && python3 scripts/icons.py --check && tsc -p tsconfig.json && tsc -p web/tsconfig.json",
+    "typecheck": "sh scripts/shapes.sh --check && python3 scripts/icons.py --check && tsgo -p tsconfig.json && tsgo -p web/tsconfig.json",
     "test": "node --test --test-timeout=60000 \"test/**/*.test.ts\""
   },
   "devDependencies": {
@@ -20,6 +20,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitejs/plugin-react": "^5.0.0",
     "posthog-js": "^1.434.14",
     "radix-ui": "^1.6.7",

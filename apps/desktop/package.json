@@ -7,10 +7,11 @@
   "main": "build/app/main.js",
   "scripts": {
     "build": "sh build.sh",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsgo -p tsconfig.json"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "electron": "44.4.5",
     "electron-builder": "26.15.3",
     "esbuild": "0.28.2",
