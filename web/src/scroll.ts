@@ -73,6 +73,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       const target = anchor ? Math.min(bottom, Math.max(0, topOf(anchor) - 12)) : Math.max(0, bottom - gap);
       // Following on down glides; anything else (the reader's place kept, the first position) is taken at once.
       const follow = settled && (anchor !== null || gap === 0) && target > el.scrollTop + 0.5;
+      ((window as unknown as { __sl?: unknown[] }).__sl ??= []).push([Math.round(performance.now()), follow ? "F" : "P", Math.round(el.scrollTop), Math.round(target), Math.round(bottom), anchor ? String((anchor as HTMLElement).className).slice(0, 14) : "-", Math.round(gap)]); // TEMP
       if (follow) {
         goal = target;
         atBottom = true;
@@ -86,6 +87,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     const onScroll = () => {
       // A glide's own steps are not the reader's, even under a pressed pointer.
       if (reading() && Math.abs(el.scrollTop - placed) >= 1) {
+        ((window as unknown as { __sl?: unknown[] }).__sl ??= []).push([Math.round(performance.now()), "R", Math.round(el.scrollTop), pointerDown, Date.now() - lastInput]); // TEMP
         if (pointerDown) movedWhileDown = true;
         stop();
         anchor = null;
