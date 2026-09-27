@@ -862,29 +862,22 @@ pub struct Phase {
     pub since: i64,
 }
 
-/// One row of an agent's activity: what kind of thing, the icon of ember's set to mark it with, in words, whether it
-/// runs now, and its transcript entry (for its history to open at).
+/// What an agent at work does now (activity.rs): `key` names the thing (a step, or where the turn stands), `text` says
+/// it; the same thing keeps its key while its words change.
 #[typeshare]
-#[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct ActivityRow {
+pub struct ActivityNow {
     pub key: String,
-    pub kind: String,
-    pub icon: String,
     pub text: String,
-    pub live: bool,
-    #[typeshare(serialized_as = "Option<I54>")]
-    pub entry: Option<i64>,
 }
 
-/// What an agent at work is doing (activity.rs): a status line and this period's rows.
+/// What an agent at work is doing, as a chat shows it (activity.rs).
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Activity {
-    pub status: String,
-    pub rows: Vec<ActivityRow>,
+    pub now: ActivityNow,
 }
 
 /// A session as it runs: its transcript (all of it once `loaded`), the model's use, the steps in flight, where the

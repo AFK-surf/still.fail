@@ -1128,28 +1128,6 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 
 .h-step-said { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 
-/* Activity: drawn like the agent's messages; its rows scroll up as new ones arrive. */
-.agent-activity .msg-head .activity-toggle { margin-left: 2px; }
-.activity-toggle { display: grid; place-items: center; width: 20px; height: 18px; padding: 0; border: 0; border-radius: calc(6px * var(--corner-scale)); background: none; color: var(--muted); cursor: pointer; corner-shape: var(--corner-shape); }
-.activity-toggle:hover { background: var(--hover); color: var(--text); }
-.activity-window { position: relative; height: calc(3 * 20px); overflow: hidden; }
-.agent-activity[data-collapsed] .activity-window { height: 20px; }
-.activity-rows { position: absolute; inset: auto 0 0 0; display: grid; grid-auto-rows: 20px; }
-.activity-rows[data-shift] { animation: activity-scroll 260ms var(--ease-out); }
-@keyframes activity-scroll { from { transform: translateY(20px); } to { transform: none; } }
-.activity-row { display: flex; align-items: center; gap: 7px; width: 100%; height: 20px; min-width: 0; padding: 0; border: 0; background: none; font: inherit; font-size: var(--text-sm); text-align: left; color: var(--muted); cursor: pointer; }
-.activity-row:hover { color: var(--text); }
-.activity-row[data-live] { color: var(--text); }
-.activity-row:last-child { animation: fade-in 260ms var(--ease-out); }
-.activity-done { width: 5px; height: 5px; margin: 0 2px; border-radius: 50%; background: var(--line-strong); flex: none; }
-.activity-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (prefers-reduced-motion: reduce) { .activity-rows[data-shift], .activity-row:last-child { animation: none; } }
-
-/* Every row's mark sits in the same box, so the live pulse and the done dots line up. */
-.activity-mark { display: grid; place-items: center; width: 14px; height: 20px; flex: none; color: var(--subtle); }
-.activity-mark .spinner { width: 11px; height: 11px; border-width: 1.5px; }
-.activity-mark .activity-pulse { width: 7px; height: 7px; }
-
 /* Images open in a lightbox. */
 button.msg-image { padding: 0; border: 0; background: none; cursor: zoom-in; }
 .lightbox-overlay { position: fixed; inset: 0; z-index: 60; background: color-mix(in oklch, #000 72%, transparent); animation: fade-in 160ms var(--ease-out); }
@@ -1168,24 +1146,47 @@ button.msg-image { display: block; overflow: hidden; border-radius: calc(10px * 
 button.msg-image img { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; display: block; }
 button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 
-/* Activity rows fill from the top, each new one easing in below the last; past three, the rows move up and the oldest leaves. */
-.activity-rows { inset: 0 0 auto 0; }
-.activity-rows[data-shift] { transform: translateY(-20px); animation: activity-scroll 420ms var(--ease-out); }
-@keyframes activity-scroll { from { transform: none; } to { transform: translateY(-20px); } }
-@keyframes row-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-.activity-row:last-child { animation: row-in 380ms var(--ease-out) both; }
-.activity-rows[data-shift] .activity-row:first-child { animation: fade-out 380ms var(--ease-out) both; }
-@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
-/* The turn over, the activity fades and folds away. */
-.agent-activity { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 220ms var(--ease-out), opacity 220ms var(--ease-out); }
-.agent-activity > .msg-main { min-height: 0; overflow: hidden; }
-.agent-activity[data-leaving] { grid-template-rows: 0fr; opacity: 0; }
-@media (prefers-reduced-motion: reduce) {
-  .activity-rows[data-shift], .activity-row:last-child, .activity-rows[data-shift] .activity-row:first-child { animation: none; }
-  .agent-activity { transition: none; }
-}
-.agent-activity { grid-template-columns: minmax(0, 1fr); }
 .msg-row .msg-files { justify-content: flex-start; }
+
+/* Activity: one line, the agent's avatar (ringed while it works) and what it does now. What it does crossfades; the
+   turn over, the line fades and folds away. */
+.agent-activity { display: grid; grid-template-rows: 1fr; grid-template-columns: minmax(0, 1fr); animation: activity-in 220ms var(--ease-out) both; transition: grid-template-rows 220ms var(--ease-out), opacity 220ms var(--ease-out); }
+.agent-activity[data-leaving] { grid-template-rows: 0fr; opacity: 0; }
+@keyframes activity-in { from { grid-template-rows: 0fr; opacity: 0; } to { grid-template-rows: 1fr; opacity: 1; } }
+.activity-line { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 0; overflow: hidden; padding: 0; border: 0; background: none; font: inherit; font-size: var(--text-sm); text-align: left; color: var(--muted); cursor: pointer; }
+.activity-line:hover { color: var(--text); }
+.activity-avatar { position: relative; display: grid; flex: none; }
+.activity-avatar::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 1.5px solid transparent; border-top-color: var(--accent); border-right-color: var(--accent); animation: spin 1.1s linear infinite; }
+.agent-activity[data-leaving] .activity-avatar::after { opacity: 0; transition: opacity 160ms; }
+.activity-tail { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; transition: max-width 200ms var(--ease-out), opacity 160ms var(--ease-out); }
+.activity-now { display: grid; min-width: 0; }
+.activity-now-text { grid-area: 1 / 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-now-text[data-in] { animation: now-in 240ms var(--ease-out) both; }
+.activity-now-text[data-out] { animation: now-out 240ms var(--ease-out) both; pointer-events: none; }
+@keyframes now-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes now-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-5px); } }
+.activity-elapsed { flex: none; color: var(--subtle); font-variant-numeric: tabular-nums; }
+/* A message coming out of the avatar: the line folds to its avatar, which flies (a copy, over the list) to where the
+   message goes and back down. */
+.agent-activity[data-folded] .activity-tail { max-width: 0; opacity: 0; }
+.agent-activity[data-away] .activity-avatar { visibility: hidden; }
+.chat-list { position: relative; }
+.chat-list > .avatar-flying { position: absolute; z-index: 2; max-width: none; margin: 0; pointer-events: none; }
+/* Waiting its turn, a message takes no room (not even the list's gap); coming out, it grows into its place from its
+   avatar's corner. */
+.msg[data-held], .msg[data-emitting] { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 0fr; margin-top: -14px; }
+.msg[data-held] > *, .msg[data-emitting] > * { min-height: 0; overflow: hidden; }
+.msg[data-held] > * { visibility: hidden; }
+.msg[data-emitting] { grid-template-rows: 1fr; margin-top: 0; animation: emit-grow 380ms var(--ease-out) both; }
+.msg[data-emitting] > * { transform-origin: 12px 12px; animation: emit-out 380ms var(--ease-out) both; }
+.msg[data-covered] .msg-head .msg-avatar { visibility: hidden; }
+@keyframes emit-grow { from { grid-template-rows: 0fr; margin-top: -14px; } to { grid-template-rows: 1fr; margin-top: 0; } }
+@keyframes emit-out { from { opacity: 0; transform: scale(.2); } 45% { opacity: 1; } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .agent-activity, .activity-now-text[data-in], .activity-now-text[data-out], .msg[data-emitting], .msg[data-emitting] > * { animation: none; }
+  .agent-activity, .activity-tail { transition: none; }
+  .activity-avatar::after { animation: none; }
+}
 
 /* New chat: a centred composer with the choices of where and on what it runs. */
 .new-chat { flex: 1; min-height: 0; display: grid; place-items: center; padding: 32px; overflow-y: auto; }

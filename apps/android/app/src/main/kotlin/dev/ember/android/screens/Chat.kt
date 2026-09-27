@@ -23,6 +23,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -134,7 +136,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.ember.android.AppState
 import dev.ember.android.LocalApp
 import dev.ember.android.Screen
-import dev.ember.android.data.ActivityRow
+import dev.ember.android.data.ActivityNow
 import dev.ember.android.data.Attachment
 import dev.ember.android.data.ChatAgent
 import dev.ember.android.data.ChatOf
@@ -690,59 +692,48 @@ private fun quoteText(who: String, text: String) = androidx.compose.ui.text.buil
 // ── the running turn ───────────────────────────────────────────────────
 
 /**
- * An agent at work: its last three rows in three fixed lines (or the newest
- * in one), the newest coming in from below and pushing the oldest out above.
+ * An agent at work, in one line (as the web's): its avatar, ringed while it works, and what it does now (as the core
+ * says), with how long its turn has run. No name: the avatar says whose. A new thing crossfades in once the shown one
+ * has stayed a moment, so a passing 请求中 does not flicker by; the same thing's new words (its rate) show at once.
  */
 @Composable
 private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
     val app = LocalApp.current
-    var collapsed by remember { mutableStateOf(app.flag("activityCollapsed", false)) }
-    // As the core puts it together (after Zork's): a status line and this turn's rows.
-    val activity = agent.live?.activity
-    // Until its first row comes, its status says what it does (the web's too): no stand-in row.
-    val rows = activity?.rows.orEmpty()
+    val shown = steady(agent.live?.activity?.now ?: ActivityNow(key = "busy", text = "处理中"))
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
     val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(220), label = "leaving")
-    val count = if (collapsed) 1 else 3
-    Column(Modifier.fillMaxWidth().alpha(fade), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        AgentHead(agent.key, agent.who, agent.maker, agent.runtime, (activity?.status ?: "处理中") + (agent.since?.let { " · ${elapsed(now - it)}" } ?: ""), ctx) {
-            Box(Modifier.size(22.dp).clip(CircleShape).clickable { collapsed = !collapsed; app.setFlag("activityCollapsed", collapsed) }, contentAlignment = Alignment.Center) {
-                IconIn(if (collapsed) Icons.ChevronDown else Icons.ChevronUp, 13.dp, C.subtle)
-            }
+    Row(
+        Modifier.fillMaxWidth().alpha(fade).clip(RoundedCornerShape(6.dp)).clickable { openHistory(app, ctx.station, ctx.of, agent.key) },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
+            ModelMark(agent.maker, agent.runtime, 20.dp)
+            if (!leaving) CircularProgressIndicator(Modifier.size(26.dp), color = C.accent, strokeWidth = 1.5.dp)
         }
-        // One row more than fits sits above the window, so the oldest can slide out as the rest move up.
-        val shown = rows.takeLast(count + 1)
-        val overflowing = shown.size > count
-        val shift = remember { Animatable(0f) }
-        val newest = shown.lastOrNull()?.key ?: "none"
-        var seen by remember { mutableStateOf(newest) }
-        LaunchedEffect(newest) {
-            if (newest != seen && overflowing) { shift.snapTo(1f); shift.animateTo(0f, tween(450, easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f))) }
-            seen = newest
-        }
-        // Rows fill from the top; once there are more than fit, the newest sits at the bottom.
-        Box(Modifier.fillMaxWidth().height(20.dp * count).clipToBounds(), contentAlignment = if (overflowing) Alignment.BottomStart else Alignment.TopStart) {
-            Column(Modifier.wrapContentHeight(if (overflowing) Alignment.Bottom else Alignment.Top, unbounded = true).graphicsLayer { translationY = shift.value * 20.dp.toPx() }) {
-                shown.forEach { r ->
-                    Row(
-                        Modifier.height(20.dp).fillMaxWidth().clickable { openHistory(app, ctx.station, ctx.of, agent.key, r.entry) },
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
-                            if (r.live) Spinner(11.dp) else IconIn(activityIcon(r.icon), 13.dp, C.subtle)
-                        }
-                        Text(r.text, fontSize = 13.sp, color = if (r.live) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
-        }
+        AnimatedContent(
+            targetState = shown, contentKey = { it.key }, modifier = Modifier.weight(1f, fill = false),
+            transitionSpec = { (fadeIn(tween(240)) + slideInVertically(tween(240)) { it / 4 }) togetherWith (fadeOut(tween(240)) + slideOutVertically(tween(240)) { -it / 4 }) },
+            label = "now",
+        ) { said -> Text(said.text, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        agent.since?.let { Text(elapsed(now - it), fontSize = 11.sp, color = C.subtle, maxLines = 1) }
     }
 }
 
-/** A row's icon, by what kind of thing it does. */
-/** A row's mark: the icon the core names for it (activity.rs), from ember's set. */
-private fun activityIcon(icon: String) = Icons.byName[icon] ?: Icons.Other
+/** What an activity shows, steadied: another thing replaces the shown one after it has stayed 700 ms. */
+@Composable
+private fun steady(said: ActivityNow): ActivityNow {
+    var shown by remember { mutableStateOf(said) }
+    var at by remember { mutableLongStateOf(0L) }
+    val latest by rememberUpdatedState(said)
+    LaunchedEffect(said.key, said.text) {
+        if (said.key == shown.key) { shown = said; return@LaunchedEffect }
+        delay(maxOf(0L, at + 700 - System.currentTimeMillis()))
+        shown = latest
+        at = System.currentTimeMillis()
+    }
+    return shown
+}
 
 // ── files ──────────────────────────────────────────────────────────────
 

@@ -2,8 +2,8 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { ArrowDown, ArrowUp, Bot, Brain, Chats, ChevronDown, ChevronUp, Close, Command, Download, Edit, ICONS, Other, Plus, Quote as QuoteIcon, Read, Received, Said, Search, Send, Sparks, Think, Web } from "./icons.tsx";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Download, Edit, Plus, Quote as QuoteIcon, Read, Received, Said, Search, Send, Sparks, Think, Web } from "./icons.tsx";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, type Activity as ActivityView, type Api, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
@@ -53,25 +53,14 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
     { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, session, status, live: lives.get(session.key), since }
   ));
   const agentOf = (key: string) => agents.find((a) => a.key === key);
-  // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
-  const lastAgents = useRef<AgentAtWork[] | null>(null);
-  const [, rerender] = useState(0);
-  const wasBusy = useRef(false);
   const working = agents.filter((a) => a.status === "running" || a.status === "queued");
   // A message on its way already counts: the activity shows at once (for every agent it goes to) instead of after the station answers.
   const sendingNow = outbox.some((o) => o.state === "sending");
   const busyAgents = working.length ? working : sendingNow ? agents : [];
-  const busy = busyAgents.length > 0;
-  // A turn ending and the next starting leave a moment of "not running"; only a pause over a second ends the activity.
-  const [leaving, setLeaving] = useState(false);
-  useEffect(() => {
-    if (busy) { wasBusy.current = true; setLeaving(false); return; }
-    if (!wasBusy.current) return;
-    // Stopped: it holds a moment (600 ms), then fades (220 ms), as Cue's does.
-    const fade = setTimeout(() => setLeaving(true), 600);
-    const gone = setTimeout(() => { wasBusy.current = false; lastAgents.current = null; setLeaving(false); rerender((n) => n + 1); }, 600 + 220);
-    return () => { clearTimeout(fade); clearTimeout(gone); };
-  }, [busy]);
+  const atWork: AgentAtWork[] = busyAgents.map((a) => ({ key: a.key, who: a.who, runtime: a.runtime, maker: a.maker, activity: a.live?.activity ?? null, since: a.since }));
+  const emissions = useEmissions(list);
+  const shown = useLinger(atWork, emissions.keeps);
+  emissions.take(messages, firstSeq.current, new Set(shown.map((s) => s.agent.key)));
   // Where agents post to reach this chat.
   const address = thread ? `${thread.channel}/${thread.threadTs}` : null;
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
@@ -146,8 +135,10 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
           }
           const agent = m.by.agent ? agentOf(m.by.agent) : undefined;
           const who = m.by.name;
+          const emitted = emissions.stateOf(m.seq);
           return [line, (
-            <div key={m.seq} className="msg msg-row" data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"} data-enter={enter}>
+            <div key={m.seq} className="msg msg-row" data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
+              data-enter={emissions.emits(m.seq) ? undefined : enter} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}>
               <div className="msg-main">
                 <div className="msg-head">
                   <MessageAvatar message={m} name={who} />
@@ -178,18 +169,10 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
               : <span className="msg-time msg-waiting msg-sending"><span className="spinner" aria-hidden="true" />正在发送</span>}
           </div>
         ))}
-        {(() => {
-          // A reply comes whole, as a message: while the agent works, its activity says what it is doing.
-          if (!busy && !lastAgents.current) return null;
-          const atWork: AgentAtWork[] = busy ? busyAgents.map((a) => ({
-            key: a.key, who: a.who, runtime: a.runtime, maker: a.maker,
-            activity: a.live?.activity ?? null,
-            since: a.since,
-          })) : lastAgents.current!;
-          if (busy) lastAgents.current = atWork;
-          // The activity is always the last thing in the chat.
-          return <Activities onOpenHistory={onOpenHistory} agents={atWork} leaving={leaving} />;
-        })()}
+        {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
+        {shown.map(({ agent, leaving }) => (
+          <Activity key={agent.key} agent={agent} leaving={leaving} pose={emissions.poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
+        ))}
         <div ref={floor} className="chat-floor" aria-hidden="true" />
       </div>
       </div>
@@ -722,68 +705,209 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   );
 }
 
-/** An agent in this chat that is at work: who it is, its execution history, and its running turn. */
+/** An agent in this chat that is at work: who it is, and what it does now. */
 interface AgentAtWork {
   key: string; who: string; runtime: RuntimeKind; maker: Maker | undefined;
   /** What it is doing, as the core says (null until its live view has come). */
   activity: ActivityView | null; since: number | undefined;
 }
 
-const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
+/** How long an activity stays once its agent stops (a turn ending and the next starting leave a moment between), then how long it takes to fade and fold away. */
+const HOLD_MS = 600;
+const FADE_MS = 220;
 
 /**
- * One activity per agent of the chat that is at work, drawn like its
- * messages. A runtime's own sub-agents are not agents of the chat; their
- * work is one row of the agent's.
+ * The activities on screen: every agent at work, and each one that stopped for a moment more (HOLD_MS, then FADE_MS
+ * to fold away), each on its own. `keep` holds those whose message is still coming out of their avatar.
  */
-function Activities({ agents, onOpenHistory, leaving = false }: { agents: AgentAtWork[]; onOpenHistory(key: string, entry?: number): void; leaving?: boolean }) {
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(ACTIVITY_COLLAPSED) === "1");
-  const toggle = () => {
-    localStorage.setItem(ACTIVITY_COLLAPSED, collapsed ? "0" : "1");
-    setCollapsed(!collapsed);
-  };
-  return <>{agents.map((a) => <Activity key={a.key} agent={a} collapsed={collapsed} onToggle={toggle} onOpen={(entry) => onOpenHistory(a.key, entry)} leaving={leaving} />)}</>;
+function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { agent: AgentAtWork; leaving: boolean }[] {
+  const [, rerender] = useState(0);
+  const shown = useRef(new Map<string, { agent: AgentAtWork; stopped: number | null }>());
+  const now = Date.now();
+  for (const a of atWork) shown.current.set(a.key, { agent: a, stopped: null });
+  let next: number | null = null;
+  for (const [key, s] of shown.current) {
+    if (atWork.some((a) => a.key === key) || keep.has(key)) s.stopped = null;
+    else if (s.stopped === null) s.stopped = now;
+    if (s.stopped === null) continue;
+    const at = now - s.stopped < HOLD_MS ? s.stopped + HOLD_MS : s.stopped + HOLD_MS + FADE_MS;
+    if (at <= now) shown.current.delete(key);
+    else next = Math.min(next ?? at, at);
+  }
+  useEffect(() => {
+    if (next === null) return;
+    const timer = setTimeout(() => rerender((n) => n + 1), next - Date.now());
+    return () => clearTimeout(timer);
+  });
+  return [...shown.current.values()].map((s) => ({ agent: s.agent, leaving: s.stopped !== null && now - s.stopped >= HOLD_MS }));
 }
 
 /**
- * An agent at work, as the core puts it (after Zork's): its name and a status line (the action it runs, 请求中,
- * ≈ N token/s, 思考中…) with how long its turn runs, then its last three rows in three fixed lines (or the newest in
- * one). A new row comes in from below and pushes the oldest out above; a row opens its history at that entry.
+ * A message an agent posts while its activity shows comes out of the activity's avatar, one at a time:
+ * the activity folds to its avatar (fold), the avatar floats to where the message goes (float), the message comes out
+ * of it, growing into its place (spit), and the avatar goes on down to where the activity now is, which unfolds again
+ * (return). The message's own avatar is where the flying one leaves it, the same picture in the same place, so
+ * nothing blinks. Until its turn a message waits folded to nothing. With reduced motion messages just appear.
  */
-function Activity({ agent, collapsed, onToggle, onOpen, leaving }: { agent: AgentAtWork; collapsed: boolean; onToggle(): void; onOpen(entry?: number): void; leaving: boolean }) {
-  const rows = [...(agent.activity?.rows ?? [])];
-  const count = collapsed ? 1 : 3;
-  // Rows fill from the top; once there are more than fit, one extra row is kept above so it can slide out as the rest move up.
-  const shown = rows.slice(-(count + 1));
-  const overflowing = shown.length > count;
-  const newest = shown.at(-1)?.key ?? "none";
+type Pose = "fold" | "float" | "spit" | "return";
+const FOLD_MS = 170;
+const FLOAT_MS = 240;
+const SPIT_MS = 380;
+const RETURN_MS = 320;
+const EASE = "cubic-bezier(.2, .8, .2, 1)";
+
+function useEmissions(list: RefObject<HTMLDivElement | null>) {
+  const decided = useRef(new Map<number, boolean>());
+  const done = useRef(new Set<number>());
+  const queue = useRef<{ seq: number; agent: string }[]>([]);
+  const [current, setCurrent] = useState<{ seq: number; agent: string; pose: Pose } | null>(null);
+  const flying = useRef<{ el: HTMLElement; from: { x: number; y: number } } | null>(null);
+  const reduced = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
+
+  // Where an element is inside the list's content, which is what the flying avatar moves in (scrolling does not move it).
+  const at = (el: Element) => {
+    const pane = list.current!;
+    const r = el.getBoundingClientRect();
+    const p = pane.getBoundingClientRect();
+    return { x: r.left - p.left + pane.scrollLeft, y: r.top - p.top + pane.scrollTop, w: r.width, h: r.height };
+  };
+  const nextAfter = (agent: string | null) => {
+    const next = queue.current.shift();
+    // The same agent's next message goes straight on: its activity is folded already.
+    setCurrent(next ? { ...next, pose: next.agent === agent ? "float" : "fold" } : null);
+  };
+  const finish = (seq: number, agent: string) => {
+    flying.current?.el.remove();
+    flying.current = null;
+    done.current.add(seq);
+    nextAfter(agent);
+  };
+
+  useLayoutEffect(() => {
+    if (!current && queue.current.length) nextAfter(null);
+  });
+  useLayoutEffect(() => {
+    if (!current) return;
+    const { seq, agent, pose } = current;
+    const pane = list.current;
+    const avatar = pane?.querySelector(`.agent-activity[data-agent="${CSS.escape(agent)}"] .activity-avatar`);
+    const message = pane?.querySelector(`.msg[data-seq="${seq}"]`);
+    const landing = message?.querySelector(".msg-head .msg-avatar");
+    if (!pane || !avatar || !message || !landing) { finish(seq, agent); return; }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const go = (to: Pose | null, ms: number) => { timer = setTimeout(() => (to ? setCurrent({ seq, agent, pose: to }) : finish(seq, agent)), ms); };
+    if (pose === "fold") go("float", FOLD_MS);
+    if (pose === "float") {
+      const from = at(avatar);
+      const to = at(landing);
+      const el = avatar.cloneNode(true) as HTMLElement;
+      el.classList.add("avatar-flying");
+      Object.assign(el.style, { left: `${from.x}px`, top: `${from.y}px`, width: `${from.w}px`, height: `${from.h}px` });
+      pane.append(el);
+      flying.current = { el, from };
+      el.animate([{ transform: "none" }, { transform: `translate(${to.x - from.x}px, ${to.y - from.y}px)` }], { duration: FLOAT_MS, easing: EASE, fill: "forwards" });
+      go("spit", FLOAT_MS);
+    }
+    if (pose === "spit" && flying.current) {
+      const { el, from } = flying.current;
+      const to = at(landing);
+      const there = `translate(${to.x - from.x}px, ${to.y - from.y}px)`;
+      // A small swell as it lets the message out.
+      el.animate([{ transform: `${there} scale(1)` }, { transform: `${there} scale(1.16)`, offset: 0.3 }, { transform: `${there} scale(1)` }], { duration: SPIT_MS * 0.7, easing: EASE, fill: "forwards" });
+      go("return", SPIT_MS);
+    }
+    if (pose === "return" && flying.current) {
+      const { el, from } = flying.current;
+      const start = at(landing);
+      const end = at(avatar);
+      el.animate([{ transform: `translate(${start.x - from.x}px, ${start.y - from.y}px)` }, { transform: `translate(${end.x - from.x}px, ${end.y - from.y}px)` }], { duration: RETURN_MS, easing: EASE, fill: "forwards" });
+      go(null, RETURN_MS);
+    }
+    return () => clearTimeout(timer);
+  }, [current?.seq, current?.pose]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => flying.current?.el.remove(), []);
+
+  return {
+    /** Agents whose activity must stay while their messages come out. */
+    keeps: new Set([...queue.current.map((q) => q.agent), ...(current ? [current.agent] : [])]),
+    /** Messages seen for the first time: an agent's, new, while its activity shows, waits its turn to come out of it. */
+    take(messages: ChatMessage[], since: number, showing: ReadonlySet<string>) {
+      for (const m of messages) {
+        if (decided.current.has(m.seq)) continue;
+        const agent = m.authorKind === "agent" ? m.by.agent : undefined;
+        const emits = !reduced && m.seq > since && agent !== undefined && showing.has(agent);
+        decided.current.set(m.seq, emits);
+        if (emits) queue.current.push({ seq: m.seq, agent: agent! });
+      }
+    },
+    /** Whether a message comes (or came) out of an avatar: it never eases in as others do. */
+    emits: (seq: number) => decided.current.get(seq) === true,
+    /** A message's part in it: waiting folded, coming out, or none (shown as any other). */
+    stateOf(seq: number): "held" | "emitting" | null {
+      if (!decided.current.get(seq) || done.current.has(seq)) return null;
+      if (current?.seq === seq && current.pose === "spit") return "emitting";
+      if (current?.seq === seq && current.pose === "return") return null;
+      return "held";
+    },
+    /** How an agent's activity stands: folded to its avatar, and whether the avatar is away flying. */
+    poseOf(agent: string): { folded: boolean; away: boolean } {
+      if (current?.agent !== agent) return { folded: false, away: false };
+      return { folded: true, away: current.pose !== "fold" };
+    },
+  };
+}
+
+/**
+ * An agent at work, in one line: its avatar, ringed while it works, and what it does now (as the core says), with how
+ * long its turn has run. No name: the avatar says whose. What it does changes by crossfading, and each thing stays a
+ * moment, so a passing 请求中 does not flicker by. The line opens its history.
+ */
+function Activity({ agent, leaving, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
+  const now = useSteady(agent.activity?.now ?? { key: "busy", text: "处理中" });
   return (
-    <div className="msg msg-row agent-activity" data-transient="" data-collapsed={collapsed || undefined} data-leaving={leaving || undefined}>
-      <div className="msg-main">
-        <div className="msg-head">
-          <span className="msg-avatar msg-avatar-agent"><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span>
-          <button type="button" className="msg-name msg-agent" onClick={() => onOpen()} title="打开执行历史">{agent.who}</button>
-          <span className="msg-time activity-status">{agent.activity?.status ?? "处理中"}{agent.since ? <> · <Elapsed since={agent.since} /></> : null}</span>
-          <button type="button" className="activity-toggle" onClick={onToggle} aria-label={collapsed ? "展开为三行" : "收起为一行"}>
-            {collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-          </button>
-        </div>
-        <div className="activity-window">
-          <div key={overflowing ? newest : "fill"} className="activity-rows" data-shift={overflowing || undefined}>
-            {shown.map((r) => {
-              const Icon = ICONS[r.icon] ?? Other; // the icon the core names for it (activity.rs)
-              return (
-                <button type="button" key={r.key} className="activity-row" data-live={r.live || undefined} onClick={() => onOpen(r.entry ?? undefined)} title="在执行历史里查看">
-                  <span className="activity-mark" aria-hidden="true">{r.live ? <span className="spinner" /> : <Icon size={13} />}</span>
-                  <span className="activity-what">{r.text}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+    <div className="msg agent-activity" data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined}>
+      <button type="button" className="activity-line" onClick={onOpen} title="打开执行历史" aria-label={`${agent.who}：${now.current.text}`}>
+        <span className="activity-avatar" aria-hidden="true"><span className="msg-avatar msg-avatar-agent"><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>
+        <span className="activity-tail">
+          <span className="activity-now">
+            {now.previous && <span key={`was-${now.previous.key}`} className="activity-now-text" data-out="">{now.previous.text}</span>}
+            <span key={now.current.key} className="activity-now-text" data-in={now.switched || undefined}>{now.current.text}</span>
+          </span>
+          {agent.since ? <span className="activity-elapsed"><Elapsed since={agent.since} /></span> : null}
+        </span>
+      </button>
     </div>
   );
+}
+
+/** Each thing shown at least this long before the next replaces it; how long the crossfade takes. */
+const DWELL_MS = 700;
+const CROSS_MS = 240;
+
+/**
+ * What an activity shows now, steadied: a new thing (another key) replaces the shown one after it has stayed DWELL_MS,
+ * with the one it replaces kept for the crossfade; the same thing's new words (its rate) show at once.
+ */
+function useSteady(now: { key: string; text: string }) {
+  const [state, setState] = useState<{ current: { key: string; text: string }; previous: { key: string; text: string } | null; at: number; switched: boolean }>(
+    () => ({ current: now, previous: null, at: 0, switched: false }),
+  );
+  const latest = useRef(now);
+  latest.current = now;
+  useEffect(() => {
+    if (now.key === state.current.key) {
+      if (now.text !== state.current.text) setState((s) => ({ ...s, current: now }));
+      return;
+    }
+    const timer = setTimeout(() => setState((s) => ({ current: latest.current, previous: s.current, at: Date.now(), switched: true })), Math.max(0, state.at + DWELL_MS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [now.key, now.text, state.current.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!state.previous) return;
+    const timer = setTimeout(() => setState((s) => ({ ...s, previous: null })), CROSS_MS);
+    return () => clearTimeout(timer);
+  }, [state.previous]);
+  return state;
 }
 
 /** Seconds (then minutes) since a moment, ticking. */
