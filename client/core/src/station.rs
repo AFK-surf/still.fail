@@ -194,8 +194,17 @@ impl StationWire for MeshWire {
         let credentials = (self.credentials)(&workspace);
         async move {
             let mesh = mesh.await?;
-            let link = mesh.link(&station, credentials).await?;
-            let reply = link.request(head, body).await?;
+            let link = mesh.link(&station, credentials.clone()).await?;
+            // A read whose link went before it was answered (the station restarting, a network change) is asked once more,
+            // on the link opened in its place; anything that changes something is not sent twice.
+            let (link, reply) = match link.request(head.clone(), body.clone()).await {
+                Err(error) if error.code == "mesh" && head.method == "GET" => {
+                    let link = mesh.link(&station, credentials).await?;
+                    let reply = link.request(head, body).await?;
+                    (link, reply)
+                }
+                result => (link, result?),
+            };
             let (status, headers) = (reply.status, reply.headers.clone());
             let body = futures::stream::unfold(reply, |mut reply| async move { reply.next().await.map(|chunk| (chunk, reply)) });
             Ok(WireReply { status, headers, body: body.boxed_local(), via: link.path() })
