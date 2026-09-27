@@ -80,7 +80,7 @@ export interface Connect {
   /** single-session only: whether starting on a new thread needs an @mention. */
   requireMention: boolean;
   /**
-   * appId is known once ember created the app or looked it up. `team` and `botName`: the Slack workspace and the bot's
+   * appId is known once ember created the app or looked it up. `team`, `botName` and `botImage`: the Slack workspace and the bot's
    * name there, as last seen connected; together they are what a connect is known by.
    */
   slack: { appToken: string; botToken: string; appId?: string; team?: SlackPlace; botName?: string; botImage?: string };
@@ -228,7 +228,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
       requireMention: mode === "multi-session" ? true : c.requireMention ?? true,
       slack: {
         appToken: c.slack?.appToken ?? "", botToken: c.slack?.botToken ?? "", ...(c.slack?.appId ? { appId: c.slack.appId } : {}),
-        ...(c.slack?.team?.id ? { team: { id: c.slack.team.id, name: c.slack.team.name ?? "" } } : {}), ...(c.slack?.botName ? { botName: c.slack.botName } : {}),
+        ...(c.slack?.team?.id ? { team: { id: c.slack.team.id, name: c.slack.team.name ?? "" } } : {}), ...(c.slack?.botName ? { botName: c.slack.botName } : {}), ...(c.slack?.botImage ? { botImage: c.slack.botImage } : {}),
       },
       bind: { runtime, ...(c.bind.model ? { model: c.bind.model } : {}), ...(c.bind.effort ? { effort: c.bind.effort } : {}), ...(c.bind.profile ? { profile: c.bind.profile } : {}) },
       ...(c.createdBy?.id ? { createdBy: { id: c.createdBy.id, name: c.createdBy.name ?? "" } } : {}),
