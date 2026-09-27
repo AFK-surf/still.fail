@@ -11,7 +11,7 @@ import { transitionTo } from "../ui.tsx";
 import { stationBase } from "../station.tsx";
 import { useNavigate } from "react-router";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { BarFrame } from "./Chat.tsx";
+import { BarFrame, type Draft } from "./Chat.tsx";
 import { useHost } from "./ChatHost.tsx";
 import { Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow, Spinner } from "./parts.tsx";
 import { Buddy } from "./Stations.tsx";
@@ -83,12 +83,12 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
     : view.models.length === 0 ? "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。" : null;
   // The first message makes the page the chat's at once: the scene fades, the message is where the chat has it. More
   // can follow before the chat is made: they go in order once it is, and the page gives way to the chat.
-  const send = () => {
+  const sentCount = useRef(0);
+  const send = (draft: Draft) => {
     const text = draft.text.trim();
-    ((window as unknown as { __sends?: unknown[] }).__sends ??= []).push(["new", text.slice(0, 6), sent.length, !!made.current]); // TEMP
     const files = draft.files;
     draft.setText(""); draft.setFiles(() => []); draft.setError(null);
-    if (sent.length === 0) void transitionTo(() => setSent([text]));
+    if (sentCount.current++ === 0) void transitionTo(() => setSent([text]));
     else setSent((all) => [...all, text]);
     if (!made.current) {
       const making = (async () => {
@@ -103,6 +103,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
         // No chat to send into: what was sent comes back to the composer.
         (error: unknown) => {
           made.current = null;
+          sentCount.current = 0;
           setSent((all) => { draft.setText(all.join("\n\n")); return []; });
           draft.setError(error instanceof Error ? error.message : String(error));
         },

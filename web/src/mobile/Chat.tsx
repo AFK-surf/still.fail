@@ -504,9 +504,8 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
   const sending = useChatSend();
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);
-  const send = () => {
+  const send = (draft: Draft) => {
     const text = draft.text.trim();
-    ((window as unknown as { __sends?: unknown[] }).__sends ??= []).push(["chat", text.slice(0, 6), view.thread?.id ?? null]); // TEMP
     const files = draft.files;
     const quotes = draft.quotes;
     draft.setText(""); draft.setFiles(() => []); draft.setQuotes(() => []); draft.setError(null);

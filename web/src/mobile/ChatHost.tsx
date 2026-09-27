@@ -17,7 +17,8 @@ export interface HostComposer {
   placeholder: string;
   /** Nothing can be sent (its station offline), and it says why. */
   offline: boolean;
-  send(): void;
+  /** Sends what the draft holds now (given at the moment it is sent: never a draft from an earlier render). */
+  send(draft: Draft): void;
   /** Typing (a chat's agent is warmed). */
   type?(): void;
 }
@@ -35,6 +36,8 @@ export function useHost(): Host {
 export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const { station: id } = useParams();
   const draft = useDraft();
+  const now = useRef(draft);
+  now.current = draft;
   const root = useRef<HTMLDivElement>(null);
   // The callbacks as the page last gave them; what it shows, as state (changing only when it does).
   const latest = useRef<HostComposer | null>(null);
@@ -54,15 +57,16 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
       <div className="m-chat-host" ref={root}>
         {body}
         {/* Once shown, it stays (the page above changing hands it on). */}
-        {shown && <Composer shown={shown} latest={latest} draft={draft} root={root} />}
+        {shown && <Composer shown={shown} latest={latest} draft={draft} now={now} root={root} />}
       </div>
     </HostContext.Provider>
   );
 }
 
 /** The composer: a floating capsule at the page's foot, with the files and quotes going with the message. */
-function Composer({ shown, latest, draft, root }: {
-  shown: Pick<HostComposer, "station" | "placeholder" | "offline">; latest: RefObject<HostComposer | null>; draft: Draft; root: RefObject<HTMLDivElement | null>;
+function Composer({ shown, latest, draft, now, root }: {
+  shown: Pick<HostComposer, "station" | "placeholder" | "offline">; latest: RefObject<HostComposer | null>; draft: Draft; now: RefObject<Draft>;
+  root: RefObject<HTMLDivElement | null>;
 }) {
   const app = useApp();
   const upload = useUpload(draft, shown.station);
@@ -88,7 +92,7 @@ function Composer({ shown, latest, draft, root }: {
         {shown.offline && <p className="m-composer-offline">这台 station 离线了：这里是之前读到的内容，暂时不能发消息。</p>}
         <DraftExtras draft={draft} />
         <ComposerBar draft={draft} placeholder={shown.placeholder} locked={shown.offline}
-          onPlus={() => openAttach(app, upload)} onType={() => latest.current?.type?.()} onSend={() => latest.current?.send()} />
+          onPlus={() => openAttach(app, upload)} onType={() => latest.current?.type?.()} onSend={() => latest.current?.send(now.current)} />
         {draft.error && <p className="m-error m-composer-error">{draft.error}</p>}
       </div>
     </div>
