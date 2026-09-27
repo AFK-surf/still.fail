@@ -9,7 +9,9 @@ export interface MemberView extends UserView { role: Role; added_at: number }
 export interface InvitationView { id: string; role: Role; email: string | null; created_by: string; expires_at: number }
 /** An invitation waiting for the signed-in account's email. */
 export interface PendingInvitation { id: string; workspace: string; name: string; role: Role; inviter: string; expires_at: number }
-export interface WorkspaceView { id: string; name: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[] }
+/** An email added to a workspace whose account has not signed in yet: a member from its first sign-in on. */
+export interface AddedView { email: string; role: Role; added_by: string; added_at: number }
+export interface WorkspaceView { id: string; name: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[] }
 
 /** What `/v1/events` pushes: what changed, for the device to refetch. */
 export type AccountEvent =

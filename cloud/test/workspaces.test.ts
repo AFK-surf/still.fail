@@ -150,3 +150,33 @@ test("the Android app signs in through ember://auth/callback", async () => {
     await h.close();
   }
 });
+
+test("people are added by email: members at once with an account, else from their first sign-in; no invitation to accept", async () => {
+  const h = await harness();
+  try {
+    const alice = h.as(await h.login("alice"));
+    const bob = h.as(await h.login("bob"));
+    const home = await (await alice("POST", "/v1/workspaces", { name: "Home" })).json() as any;
+    await alice("POST", `/v1/workspaces/${home.id}/invitations`, { role: "member", email: "dave@example.test" });
+    const made = await (await alice("POST", `/v1/workspaces/${home.id}/members`, { role: "member", emails: ["Bob@example.test", "dave@example.test", " alice@example.test "] })).json() as any;
+    assert.deepEqual([made.joined, made.added, made.already], [["bob@example.test"], ["dave@example.test"], ["alice@example.test"]]);
+    assert.deepEqual(made.view.added.map((a: any) => a.email), ["dave@example.test"]);
+    assert.deepEqual(made.view.invitations, [], "being added replaces the invitation");
+    assert.equal((await bob("GET", `/v1/workspaces/${home.id}`)).status, 200, "an account is a member at once");
+    assert.equal((await bob("POST", `/v1/workspaces/${home.id}/members`, { emails: ["x@example.test"] })).status, 403, "only managers add");
+    assert.equal((await alice("POST", `/v1/workspaces/${home.id}/members`, { emails: ["not an email"] })).status, 400);
+    // dave signs in for the first time: a member already.
+    const dave = h.as(await h.login("dave"));
+    const me = await (await dave("GET", "/v1/me")).json() as any;
+    assert.deepEqual(me.workspaces.map((w: any) => [w.name, w.role]), [["Home", "member"]]);
+    const view = await (await alice("GET", `/v1/workspaces/${home.id}`)).json() as any;
+    assert.deepEqual([view.members.length, view.added], [3, []]);
+    // One added and taken back before signing in never joins.
+    await alice("POST", `/v1/workspaces/${home.id}/members`, { emails: ["erin@example.test"] });
+    await alice("DELETE", `/v1/workspaces/${home.id}/added/erin@example.test`);
+    const erin = h.as(await h.login("erin"));
+    assert.deepEqual((await (await erin("GET", "/v1/me")).json() as any).workspaces, []);
+  } finally {
+    await h.close();
+  }
+});

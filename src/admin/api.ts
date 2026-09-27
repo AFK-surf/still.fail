@@ -555,6 +555,7 @@ export class AdminApi {
       if (method === "PUT") return send(res, 200, await this.#putSlackApp(id, await body(req), viewer));
       if (method === "POST") return send(res, 200, await this.#createSlackApp(id, await body(req), viewer));
     }
+    if (method === "GET" && path === "/slack/people") return send(res, 200, await this.#slackPeople());
     if (method === "GET" && path === "/slack/create-app-url") {
       const name = url.searchParams.get("name")?.trim();
       if (!name) throw new HttpError(400, "name is required");
@@ -564,6 +565,37 @@ export class AdminApi {
   }
 
   // ── Slack apps ──────────────────────────────────────────────────────────
+
+  /**
+   * The people of the Slack workspaces this station's connects are in, once each by email, for adding them to the
+   * ember workspace: bots and deactivated accounts left out; guests marked. Needs users:read.email to see emails.
+   */
+  async #slackPeople() {
+    const people = new Map<string, { email: string; name: string; image: string | null; guest: boolean; team: string | null }>();
+    const errors: string[] = [];
+    for (const connect of this.#deps.settings.config.connects) {
+      const chat = this.#deps.connections.chats.get(connect.id);
+      if (!chat?.api) continue;
+      let cursor = "";
+      try {
+        do {
+          const page = await chat.api("users.list", { limit: 200, ...(cursor ? { cursor } : {}) }) as { members?: Record<string, any>[]; response_metadata?: { next_cursor?: string } };
+          for (const m of page.members ?? []) {
+            const email = String(m.profile?.email ?? "").toLowerCase();
+            if (m.is_bot || m.deleted || m.id === "USLACKBOT" || !email || people.has(email)) continue;
+            people.set(email, {
+              email, name: String(m.profile?.real_name || m.real_name || m.name || email), image: m.profile?.image_72 ?? null,
+              guest: Boolean(m.is_restricted || m.is_ultra_restricted), team: connect.slack.team?.name ?? null,
+            });
+          }
+          cursor = page.response_metadata?.next_cursor ?? "";
+        } while (cursor);
+      } catch (error) {
+        errors.push(`${connectName(connect)}：${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return { people: [...people.values()].sort((a, b) => Number(a.guest) - Number(b.guest) || a.name.localeCompare(b.name)), errors };
+  }
 
   /**
    * Keeps what each connected connect is known by, its Slack workspace and its bot's name there, as Slack says now:

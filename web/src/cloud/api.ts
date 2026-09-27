@@ -5,9 +5,9 @@ import { useCallback, useRef, useState } from "react";
 import type { ErrorBody } from "../core/client.ts";
 import { core, useTopic, type TopicState } from "../core/react.ts";
 import type { Account } from "./accounts.ts";
-import type { Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
+import type { AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
 
-export type { Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView };
+export type { AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, UserView, WorkspaceSummary, WorkspaceView };
 
 /** One account's `/v1/me`, as the `workspaces` topic lists it (`error` when that account could not be read). */
 export interface AccountWorkspaces {
@@ -46,6 +46,10 @@ export const cloud = {
   deleteWorkspace: (sub: string, id: string) => call<{ ok: true }>(sub, "DELETE", ws(id)),
   invite: (sub: string, id: string, role: Role, email: string) =>
     call<{ token: string; url: string; expires_at: number }>(sub, "POST", `${ws(id)}/invitations`, { role, email }),
+  /** Adds people by email: members at once, or from their first sign-in; no invitation to accept. */
+  addMembers: (sub: string, id: string, role: Role, emails: string[]) =>
+    call<{ joined: string[]; added: string[]; already: string[]; view: WorkspaceView }>(sub, "POST", `${ws(id)}/members`, { role, emails }),
+  removeAdded: (sub: string, id: string, email: string) => call<WorkspaceView>(sub, "DELETE", `${ws(id)}/added/${encodeURIComponent(email)}`),
   revokeInvitation: (sub: string, id: string, invitation: string) => call<{ ok: true }>(sub, "DELETE", `${ws(id)}/invitations/${invitation}`),
   previewInvitation: (sub: string, token: string) =>
     call<{ workspace: string; name: string; role: Role; inviter: string; email: string | null }>(sub, "POST", "/v1/invitations/preview", { token }),

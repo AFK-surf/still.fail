@@ -154,6 +154,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     });
   }
   if (kind === "invitations" && target && method === "DELETE") return directory(() => dir.revokeInvitation(sub, ws, target));
+  if (kind === "members" && !target && method === "POST") return directory(() => dir.addMembers(sub, ws, role(), input.emails));
+  if (kind === "added" && target && method === "DELETE") return directory(() => dir.removeAdded(sub, ws, target));
   if (kind === "members" && target && method === "PATCH") return directory(() => dir.setRole(sub, ws, target, role()));
   if (kind === "members" && target && method === "DELETE") return directory(() => dir.removeMember(sub, ws, target));
   if (kind === "enrollments" && !target && method === "POST") {

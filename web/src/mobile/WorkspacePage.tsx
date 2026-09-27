@@ -1,5 +1,6 @@
 // The workspace itself on a narrow screen: its name, its people (invited, their roles, moved out), and leaving or
 // deleting it. What the desktop's 通用, 成员 and 退出与删除 settings do, on one page in the Android app's manner.
+import { parseEmails } from "../cloud/adding.ts";
 import { useState } from "react";
 import { stamp } from "../api.ts";
 import { cloud, useWorkspace, type LoginSession, type MemberView, type Role, type WorkspaceView } from "../cloud/api.ts";
@@ -39,8 +40,21 @@ export function WorkspaceScreen() {
       <SectionHeader title={`成员 · ${view.members.length} 人`} start={24} />
       <ListCard>
         {view.members.map((m) => <MemberRow key={m.sub} view={view} m={m} me={me.sub} />)}
-        {manager && <ListRow onClick={() => app.sheet({ height: 0.62, content: () => <InviteSheet view={view} /> })}><span className="m-accent m-row-title">＋ 邀请成员</span></ListRow>}
+        {manager && <ListRow onClick={() => app.sheet({ height: 0.62, content: () => <AddSheet view={view} /> })}><span className="m-accent m-row-title">＋ 添加成员</span></ListRow>}
       </ListCard>
+      {manager && view.added.length > 0 && (
+        <>
+          <SectionHeader title="还没登录过" trailing={`${view.added.length} 人`} start={24} />
+          <ListCard>
+            {view.added.map((a) => (
+              <ListRow key={a.email}>
+                <span className="m-grow m-row-text"><span className="m-row-title">{a.email}</span><span className="m-row-note">{ROLE_LABEL[a.role]} · 第一次登录时自动加入</span></span>
+                <button type="button" className="m-link" onClick={() => void cloud.removeAdded(me.sub, view.id, a.email).then(() => app.toast("已移除"), (e: Error) => app.toast(e.message))}>移除</button>
+              </ListRow>
+            ))}
+          </ListCard>
+        </>
+      )}
       {manager && view.invitations.length > 0 && (
         <>
           <SectionHeader title="未接受的邀请" trailing={`${view.invitations.length} 个`} start={24} />
@@ -106,39 +120,43 @@ function removeMember(app: MobileApp, view: WorkspaceView, m: MemberView) {
   });
 }
 
-function InviteSheet({ view }: { view: WorkspaceView }) {
+function AddSheet({ view }: { view: WorkspaceView }) {
   const app = useApp();
   const me = app.entry.account;
-  const [email, setEmail] = useState("");
+  const [text, setText] = useState("");
   const [role, setRole] = useState<Role>("member");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
   const roles: Role[] = view.role === "owner" ? ["member", "admin", "owner"] : ["member", "admin"];
-  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const emails = parseEmails(text);
   return (
     <>
       <SheetGrab />
-      <SheetHead title="邀请成员" />
+      <SheetHead title="添加成员" />
       <div className="m-sheet-scroll m-form">
         {done ? (
           <>
-            <p>已邀请 {email.trim()}。对方用这个邮箱登录 ember 就能看到邀请并加入。</p>
+            <p>{done}</p>
             <div className="m-form-actions"><Button label="完成" primary onClick={() => app.sheet(null)} /></div>
           </>
         ) : (
           <>
-            <p className="m-muted">对方用这个邮箱登录 ember，就会看到加入「{view.name}」的邀请。邀请 7 天内有效。</p>
+            <p className="m-muted">直接加进「{view.name}」，不用对方接受：登录过 ember 的人马上加入，其他人第一次用这个邮箱登录时自动加入。</p>
             <b className="m-form-label">邮箱</b>
-            <Field value={email} onChange={setEmail} placeholder="name@example.com" />
+            <Field value={text} onChange={setText} placeholder="name@example.com，可以粘贴多个" />
             <b className="m-form-label">角色</b>
             {roles.map((r) => <PickRow key={r} label={ROLE_LABEL[r]} sub={ROLE_HINT[r]} checked={role === r} onClick={() => setRole(r)} />)}
             {error && <p className="m-error">{error}</p>}
             <div className="m-form-actions">
               <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-              <Button label="邀请" primary busy={busy} enabled={valid} onClick={() => {
+              <Button label={emails.length > 1 ? `添加 ${emails.length} 人` : "添加"} primary busy={busy} enabled={emails.length > 0} onClick={() => {
                 setBusy(true); setError(null);
-                cloud.invite(me.sub, view.id, role, email.trim()).then(() => setDone(true), (e: Error) => setError(e.message)).finally(() => setBusy(false));
+                cloud.addMembers(me.sub, view.id, role, emails).then((r) => setDone([
+                  r.joined.length ? `${r.joined.length} 人已经加入` : "",
+                  r.added.length ? `${r.added.length} 人第一次登录 ember 时自动加入` : "",
+                  r.already.length ? `${r.already.length} 人本来就在` : "",
+                ].filter(Boolean).join("，") + "。"), (e: Error) => setError(e.message)).finally(() => setBusy(false));
               }} />
             </div>
           </>

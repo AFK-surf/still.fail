@@ -19,6 +19,7 @@ import { useToast } from "../toast.tsx";
 import { About, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, Time } from "../ui.tsx";
 import { signOut, type Account } from "./accounts.ts";
 import { lastChat } from "../lastChat.ts";
+import { parseEmails, useSlackPeople } from "./adding.ts";
 import { cloud, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
 import { Avatar } from "./gate.tsx";
 import { track } from "../telemetry.ts";
@@ -407,8 +408,9 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
   const setRole = useAction(({ sub, role }: { sub: string; role: Role }) => cloud.setRole(account.sub, view.id, sub, role), () => toast("已更改角色"));
   const remove = useAction((sub: string) => cloud.removeMember(account.sub, view.id, sub), () => toast("已移除成员"));
   const revoke = useAction((id: string) => cloud.revokeInvitation(account.sub, view.id, id));
+  const unadd = useAction((email: string) => cloud.removeAdded(account.sub, view.id, email));
   return (
-    <Section title={`${view.members.length} 人`} actions={manager && <Button icon={UserPlus} onClick={() => setInviting(true)}>邀请成员</Button>}>
+    <Section title={`${view.members.length} 人`} actions={manager && <Button icon={UserPlus} onClick={() => setInviting(true)}>添加成员</Button>}>
       <ul className="list">
         {view.members.map((m) => (
           <li key={m.sub} className="list-row">
@@ -430,6 +432,22 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
         ))}
       </ul>
       {(setRole.error || remove.error) && <p className="field-error" role="alert">{(setRole.error ?? remove.error)!.message}</p>}
+      {manager && view.added.length > 0 && (
+        <>
+          <div className="group-head"><strong>还没登录过</strong><span className="muted">{view.added.length} 人 · 第一次登录 ember 时自动加入</span></div>
+          <ul className="list">
+            {view.added.map((a) => (
+              <li key={a.email} className="list-row">
+                <span className="list-row-text">
+                  <span className="list-row-title">{a.email}</span>
+                  <span className="muted">{ROLE_LABEL[a.role]}</span>
+                </span>
+                <Button variant="ghost" busy={unadd.busy && unadd.arg === a.email} onClick={() => unadd.run(a.email)}>移除</Button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {manager && view.invitations.length > 0 && (
         <>
           <div className="group-head"><strong>未接受的邀请</strong><span className="muted">{view.invitations.length} 个</span></div>
@@ -446,37 +464,81 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
           </ul>
         </>
       )}
-      {inviting && <InviteDialog view={view} account={account} onClose={() => setInviting(false)} />}
+      {inviting && <AddDialog view={view} account={account} onClose={() => setInviting(false)} />}
     </Section>
   );
 }
 
-function InviteDialog({ view, account, onClose }: { view: WorkspaceView; account: Account; onClose(): void }) {
+function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: Account; onClose(): void }) {
   const [role, setRole] = useState<Role>("member");
-  const [email, setEmail] = useState("");
-  const invite = useAction(() => cloud.invite(account.sub, view.id, role, email.trim()));
+  const [text, setText] = useState("");
+  const slack = useSlackPeople(view.id);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const inside = new Set([...view.members.map((m) => m.email.toLowerCase()), ...view.added.map((a) => a.email)]);
+  const typed = parseEmails(text);
+  const emails = [...new Set([...typed, ...picked])].filter((e) => !inside.has(e));
+  const add = useAction(() => cloud.addMembers(account.sub, view.id, role, emails));
   const roles: Role[] = view.role === "owner" ? ["member", "admin", "owner"] : ["member", "admin"];
-  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const fromSlack = () => void slack.load();
+  // Once read, the workspace's own Slack people are picked; guests are left to choose.
+  useEffect(() => {
+    if (slack.people) setPicked(new Set(slack.people.filter((p) => !p.guest && !inside.has(p.email)).map((p) => p.email)));
+  }, [slack.people]);
+  const toggle = (email: string) => setPicked((now) => {
+    const next = new Set(now);
+    if (next.has(email)) next.delete(email); else next.add(email);
+    return next;
+  });
+  const done = add.result;
   return (
-    <Dialog open onClose={onClose} title="邀请成员" description={`对方用这个邮箱登录 ember，就会看到加入「${view.name}」的邀请。邀请 7 天内有效。`}
-      footer={invite.result ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
+    <Dialog open onClose={onClose} title="添加成员" description={`直接加进「${view.name}」，不用对方接受：已经登录过 ember 的人马上就是成员，其他人第一次用这个邮箱登录时自动加入。`}
+      footer={done ? <Button variant="primary" onClick={onClose}>完成</Button> : <>
         <Button variant="ghost" onClick={onClose}>取消</Button>
-        <Button variant="primary" disabled={!valid} busy={invite.busy} onClick={() => invite.run()}>邀请</Button>
+        <Button variant="primary" disabled={emails.length === 0} busy={add.busy} onClick={() => add.run()}>{emails.length > 1 ? `添加 ${emails.length} 人` : "添加"}</Button>
       </>}>
-      {!invite.result ? (
+      {!done ? (
         <>
-          <Field label="邮箱" htmlFor="invite-email" hint="对方登录 ember 用的 Google 账号邮箱。">
-            <input id="invite-email" className="input" type="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com"
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && valid) invite.run(); }} />
+          <Field label="邮箱" htmlFor="add-emails" hint="对方登录 ember 用的 Google 账号邮箱；一次可以粘贴多个。">
+            <textarea id="add-emails" className="input" rows={3} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="name@example.com" />
           </Field>
+          {slack.available && (
+            slack.people === null ? (
+              <Button variant="secondary" busy={slack.busy} onClick={fromSlack}>从 Slack 里选人</Button>
+            ) : (
+              <div className="model-pool">
+                <div className="model-pool-tools">
+                  <span className="muted">Slack 里 {slack.people.length} 人，选中 {[...picked].filter((e) => !inside.has(e)).length} 人</span>
+                  <button type="button" className="text-toggle" onClick={() => setPicked(new Set(slack.people!.filter((p) => !inside.has(p.email)).map((p) => p.email)))}>全选</button>
+                  <button type="button" className="text-toggle" onClick={() => setPicked(new Set())}>全不选</button>
+                </div>
+                <ul className="model-pool-list">
+                  {slack.people.map((p) => (
+                    <li key={p.email}>
+                      <label className="model-pool-item" data-on={picked.has(p.email) || inside.has(p.email) || undefined}>
+                        <input type="checkbox" disabled={inside.has(p.email)} checked={picked.has(p.email) || inside.has(p.email)} onChange={() => toggle(p.email)} />
+                        <span>{p.name}</span>
+                        <span className="muted">{p.email}</span>
+                        {inside.has(p.email) ? <span className="muted">已在</span> : p.guest && <span className="muted">访客</span>}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+                {slack.errors.length > 0 && <p className="field-error">{slack.errors.join("；")}</p>}
+              </div>
+            )
+          )}
           <Field label="角色" hint={ROLE_HINT[role]}>
             <Select value={role} onChange={(r) => setRole(r as Role)} label="角色" options={roles.map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
           </Field>
         </>
       ) : (
-        <div className="callout" data-tone="green"><Check {...ICON} /><span>已邀请 {email.trim()}。对方用这个邮箱登录 ember 就能看到邀请并加入。</span></div>
+        <div className="callout" data-tone="green"><Check {...ICON} /><span>{[
+          done.joined.length ? `${done.joined.length} 人已经加入` : "",
+          done.added.length ? `${done.added.length} 人第一次登录 ember 时自动加入` : "",
+          done.already.length ? `${done.already.length} 人本来就在` : "",
+        ].filter(Boolean).join("，")}。</span></div>
       )}
-      {invite.error && <p className="field-error" role="alert">{invite.error.message}</p>}
+      {add.error && <p className="field-error" role="alert">{add.error.message}</p>}
     </Dialog>
   );
 }

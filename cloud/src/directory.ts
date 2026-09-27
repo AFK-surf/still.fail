@@ -16,7 +16,7 @@ import { CODE_TTL_DAYS, isAdmin, newCode, normalizeCode } from "./admin";
 import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
-import type { AccountEvent, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -68,6 +68,8 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS stations (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, name TEXT NOT NULL, enrolled_at INTEGER NOT NULL, enrolled_by TEXT NOT NULL, last_seen INTEGER, version TEXT);
       CREATE TABLE IF NOT EXISTS enrollments (token_hash TEXT PRIMARY KEY, workspace TEXT NOT NULL, name TEXT NOT NULL, created_by TEXT NOT NULL, expires_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS revocations (workspace TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (workspace, kind, id));
+      CREATE TABLE IF NOT EXISTS added (workspace TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, added_by TEXT NOT NULL, added_at INTEGER NOT NULL, PRIMARY KEY (workspace, email));
+      CREATE INDEX IF NOT EXISTS added_by_email ON added (email);
       CREATE TABLE IF NOT EXISTS invite_codes (code TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER, used_by TEXT, used_at INTEGER, workspace TEXT);
     `);
     // users had neither column before invite codes; the table in production gains them here.
@@ -144,11 +146,76 @@ export class Directory extends DurableObject<Env> {
        ON CONFLICT (sub) DO UPDATE SET email = excluded.email, name = excluded.name, picture = excluded.picture, last_seen = excluded.last_seen`,
       identity.sub, identity.email, identity.name, identity.picture, nowSeconds(), nowSeconds(),
     );
+    this.#joinAdded(identity.sub, identity.email);
     if (!old || (old.email === identity.email && old.name === identity.name && old.picture === identity.picture)) return;
     // Members lists show them; invitations they sent show their name; a new email has other invitations.
     for (const row of this.#rows("SELECT workspace FROM members WHERE sub = ?", identity.sub)) this.#changed(row.workspace as string, false);
     const invited = this.#rows("SELECT i.email FROM invitations i WHERE i.created_by = ? AND i.expires_at > ?", identity.sub, nowSeconds()).flatMap((r) => this.#byEmail(r.email as string));
     this.#tell([...invited, ...(old.email === identity.email ? [] : [identity.sub])], LIST);
+  }
+
+  /** An account whose email was added to workspaces: a member of each from now on. */
+  #joinAdded(sub: string, email: string): void {
+    const rows = this.#rows("SELECT workspace, role FROM added WHERE email = ?", email.toLowerCase());
+    if (rows.length === 0) return;
+    this.ctx.storage.transactionSync(() => {
+      for (const row of rows) {
+        this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, ?, ?) ON CONFLICT (workspace, sub) DO NOTHING", row.workspace, sub, row.role, nowSeconds());
+      }
+      this.#run("DELETE FROM added WHERE email = ?", email.toLowerCase());
+      this.#run("UPDATE users SET admitted = 'invitation' WHERE sub = ? AND admitted IS NULL", sub);
+    });
+    for (const row of rows) this.#changed(row.workspace as string, true);
+  }
+
+  /**
+   * Adds people by email, no invitation to accept: those with an account are members at once, the others as soon as they
+   * first sign in with that email. What each became: joined, added (waiting for a first sign-in), or already a member.
+   */
+  addMembers(sub: string, workspace: string, role: Role, emails: unknown): { joined: string[]; added: string[]; already: string[]; view: WorkspaceView } {
+    const mine = this.#role(sub, workspace, MANAGERS);
+    if (!ROLES.includes(role)) fail(400, "invalid_role");
+    if (role === "owner" && mine !== "owner") fail(403, "forbidden");
+    const given = Array.isArray(emails) ? emails : [];
+    const wanted = [...new Set(given.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
+    if (wanted.length === 0 || wanted.some((e) => !/^[^\s@]{1,64}@[^\s@]{1,190}$/.test(e))) fail(400, "invalid_email");
+    const joined: string[] = [];
+    const added: string[] = [];
+    const already: string[] = [];
+    const count = () => (this.#one("SELECT (SELECT COUNT(*) FROM members WHERE workspace = ?) + (SELECT COUNT(*) FROM added WHERE workspace = ?) AS n", workspace, workspace)!.n as number);
+    this.ctx.storage.transactionSync(() => {
+      for (const email of wanted) {
+        if (this.#one("SELECT 1 AS x FROM members m JOIN users u ON u.sub = m.sub WHERE m.workspace = ? AND lower(u.email) = ?", workspace, email)) {
+          already.push(email);
+          continue;
+        }
+        if (count() >= LIMITS.membersPerWorkspace) fail(429, "too_many_members");
+        // An invitation to the same email is replaced by being added.
+        this.#run("DELETE FROM invitations WHERE workspace = ? AND email = ?", workspace, email);
+        const accounts = this.#byEmail(email);
+        if (accounts.length > 0) {
+          for (const account of accounts) {
+            this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, ?, ?) ON CONFLICT (workspace, sub) DO NOTHING", workspace, account, role, nowSeconds());
+            this.#run("UPDATE users SET admitted = 'invitation' WHERE sub = ? AND admitted IS NULL", account);
+          }
+          joined.push(email);
+        } else {
+          this.#run(`INSERT INTO added (workspace, email, role, added_by, added_at) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (workspace, email) DO UPDATE SET role = excluded.role, added_by = excluded.added_by`, workspace, email, role, sub, nowSeconds());
+          added.push(email);
+        }
+      }
+    });
+    this.#changed(workspace, true, joined.flatMap((e) => this.#byEmail(e)));
+    return { joined, added, already, view: this.workspace(sub, workspace) };
+  }
+
+  /** Takes back an email added but not signed in yet. */
+  removeAdded(sub: string, workspace: string, email: string): WorkspaceView {
+    this.#role(sub, workspace, MANAGERS);
+    this.#run("DELETE FROM added WHERE workspace = ? AND email = ?", workspace, email.trim().toLowerCase());
+    this.#changed(workspace, true);
+    return this.workspace(sub, workspace);
   }
 
   me(sub: string): { user: UserView | null; workspaces: WorkspaceSummary[] } {
@@ -212,7 +279,10 @@ export class Directory extends DurableObject<Env> {
     const invitations = MANAGERS.includes(role)
       ? this.#rows("SELECT id, role, email, created_by, expires_at FROM invitations WHERE workspace = ? AND expires_at > ? ORDER BY expires_at", id, nowSeconds()) as unknown as InvitationView[]
       : [];
-    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations };
+    const added = MANAGERS.includes(role)
+      ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
+      : [];
+    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations, added };
   }
 
   renameWorkspace(sub: string, id: string, name: string): WorkspaceView {
@@ -228,7 +298,7 @@ export class Directory extends DurableObject<Env> {
     const told = [...this.#members(id), ...this.#invitees(id)];
     const stations = this.#rows("SELECT id FROM stations WHERE workspace = ?", id).map((r) => r.id as string);
     this.ctx.storage.transactionSync(() => {
-      for (const table of ["members", "invitations", "stations", "enrollments"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
+      for (const table of ["members", "invitations", "added", "stations", "enrollments"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
       this.#run("DELETE FROM workspaces WHERE id = ?", id);
     });
     this.#tell(told, LIST, { type: "workspace", id });

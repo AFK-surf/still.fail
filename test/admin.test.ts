@@ -1014,3 +1014,24 @@ test("a profile just made has its allowance read at once, without waiting for a 
     t.close();
   }
 });
+
+test("the Slack people of the station's connects are listed once each by email, bots and the deactivated left out, guests marked", async () => {
+  const s = await setup();
+  try {
+    const chat = s.connections[0]!;
+    chat.answers.set("users.list", { ok: true, members: [
+      { id: "U1", profile: { real_name: "Ada", email: "Ada@Example.test", image_72: "https://img/ada" } },
+      { id: "U2", is_bot: true, profile: { real_name: "Bot", email: "bot@example.test" } },
+      { id: "U3", deleted: true, profile: { real_name: "Gone", email: "gone@example.test" } },
+      { id: "U4", is_restricted: true, profile: { real_name: "Guest", email: "guest@example.test" } },
+      { id: "U5", profile: { real_name: "No email" } },
+      { id: "USLACKBOT", profile: { real_name: "Slackbot", email: "slackbot@example.test" } },
+    ] });
+    const read = await s.call("GET", "/slack/people");
+    assert.equal(read.status, 200);
+    assert.deepEqual(read.body.people.map((p: any) => [p.email, p.name, p.guest, p.team]), [["ada@example.test", "Ada", false, "Acme"], ["guest@example.test", "Guest", true, "Acme"]]);
+    assert.deepEqual(read.body.errors, []);
+  } finally {
+    s.close();
+  }
+});
