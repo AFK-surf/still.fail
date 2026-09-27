@@ -37,7 +37,7 @@ export interface Profile {
   model?: string;
   /** Models this profile may be used for, chosen by hand from what its check found. None until someone picks. */
   models: string[];
-  /** Uses this machine's own login of its runtime (machine-logins.ts): not edited, deleted or signed in here. */
+  /** Uses this machine's own login of its runtime (machine-logins.ts): not edited or signed in here; removing it stops using that login. */
   machine: boolean;
 }
 

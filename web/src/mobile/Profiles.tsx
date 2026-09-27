@@ -89,7 +89,7 @@ function ProfilePage({ p }: { p: Profile }) {
   );
 }
 
-/** Renaming, checking, refreshing its allowance, deleting it (not while a connect uses it; never one on the machine's login). */
+/** Renaming, checking, refreshing its allowance, deleting it (stopping one on the machine's login); not while a connect uses it. */
 function ProfileMenu({ p }: { p: Profile }) {
   const app = useApp();
   const api = useApi();
@@ -102,10 +102,13 @@ function ProfileMenu({ p }: { p: Profile }) {
         {!p.machine && <PickRow label="改名" onClick={() => ask(app, { title: "Profile 的名字", value: p.name, placeholder: "名字", action: "保存", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast("已改名")) })} />}
         <PickRow label="重新检查" onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast("已检查"), failed); }} />
         <PickRow label="刷新额度" onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast("已刷新额度"), failed); }} />
-        {!p.machine && <PickRow label={p.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile"} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, {
+        <PickRow label={`${p.machine ? "停用" : "删除 Profile"}${p.usedBy.length ? "（还有连接在用）" : ""}`} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, p.machine ? {
+          title: `停用「${p.name}」？`, text: "ember 不再用这台机器上的这份登录；机器上的登录不受影响，之后可以再用。", action: "停用", danger: true,
+          run: () => api.deleteProfile(p.id).then(() => { app.toast("已停用"); app.pop(); }),
+        } : {
           title: `删除「${p.name}」？`, text: "只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。", action: "删除 Profile", danger: true,
           run: () => api.deleteProfile(p.id).then(() => { app.toast("已删除 Profile"); app.pop(); }),
-        })} />}
+        })} />
       </div>
     </>
   );

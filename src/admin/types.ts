@@ -66,7 +66,7 @@ export interface ProfileView {
   usedBy: string[];
   /** Run on the ember host to sign a subscription profile in. */
   loginCommand: string;
-  /** On the machine's own login of its runtime: not edited (but for its models), deleted or signed in here. */
+  /** On the machine's own login of its runtime: not edited (but for its models) or signed in here; removing it stops using that login. */
   machine: boolean;
   /** Latest check; kept across restarts, and checked again at start. */
   check: ProfileCheck | null;

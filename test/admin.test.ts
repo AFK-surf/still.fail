@@ -938,7 +938,7 @@ test("a web service on the machine is reached through /preview/<port>, as it ans
   }
 });
 
-test("a profile on the machine's own login: made from a login kept in a file, its models chosen, never renamed, signed in or deleted", async () => {
+test("a profile on the machine's own login: made from a login kept in a file, its models chosen, never renamed or signed in, and stopped", async () => {
   const login = (runtime: "claude" | "codex", usable: boolean): MachineLogin => ({ runtime, installed: true, loggedIn: true, email: "b@x.com", plan: "pro", usable, quota: null, text: "" });
   const s = await setup({ machineLogins: [login("claude", false), login("codex", true)] });
   try {
@@ -963,8 +963,10 @@ test("a profile on the machine's own login: made from a login kept in a file, it
     assert.equal(profile().machine, true);
     assert.equal((await s.call("GET", "/overview")).body.profiles.find((p: any) => p.id === "machine-codex").machine, true);
     assert.equal((await s.call("POST", "/profiles/machine-codex/login")).status, 400);
-    assert.equal((await s.call("DELETE", "/profiles/machine-codex")).status, 400);
-    assert.ok(profile());
+    // Stopped: the profile goes; it can be made again from the machine's login.
+    assert.equal((await s.call("DELETE", "/profiles/machine-codex")).status, 200);
+    assert.equal(s.settings.config.profiles.some((p) => p.id === "machine-codex"), false);
+    assert.equal((await s.call("POST", "/profiles/machine", { runtime: "codex" })).status, 200);
   } finally {
     s.close();
   }

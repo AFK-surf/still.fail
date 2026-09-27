@@ -45,6 +45,8 @@ export function AccountsPage() {
             );
           })}
         </ul>
+        {/* The machine's own logins not used yet: each one offered as the first ones were. */}
+        <MachineLoginOffers logins={overview.value?.machineLogins} onAdd={(c) => { setInitial(c); setAdding(true); }} />
         </section>
       )}
       <AddAccountDialog key={initial} initial={initial} open={adding} onClose={() => setAdding(false)} />
@@ -183,7 +185,11 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(profile.name);
   const save = useAction((input: ProfileInput) => api.putProfile(profile.id, input));
-  const remove = useAction(() => api.deleteProfile(profile.id), () => { toast("已删除 Profile"); navigate(profilesPage(station)); });
+  const remove = useAction(() => api.deleteProfile(profile.id), () => { toast(profile.machine ? "已停用" : "已删除 Profile"); navigate(profilesPage(station)); });
+  // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
+  const removal = profile.machine
+    ? { item: "停用", title: `停用「${profile.name}」？`, action: "停用", description: `ember 不再用这台机器上 ${MACHINE_RUNTIME[profile.runtime]} 的登录；这台机器上的登录不受影响，之后可以再用。` }
+    : { item: "删除 Profile", title: `删除「${profile.name}」？`, action: "删除 Profile", description: "只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。" };
   const check = useAction(() => api.checkProfile(profile.id));
   const saveThen = (input: ProfileInput, done: () => void) => void save.run(input).then((ok) => { if (ok) done(); });
   const rename = () => {
@@ -218,7 +224,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
             <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={Refresh} disabled={check.busy} data-busy={check.busy || undefined} onClick={() => void check.run()} />
           </p>
         </div>
-        {!profile.machine && <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />}
+        <Menu items={[{ label: profile.usedBy.length ? `${removal.item}（还有连接在用）` : removal.item, icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>
       {(save.error || remove.error) && <p className="field-error" role="alert">{(save.error ?? remove.error)!.message}</p>}
       {/* A subscription that needs signing in, or is signing in: that comes first. */}
@@ -243,7 +249,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
 
       {profile.access.kind === "env" && <EnvSection profile={profile} onSave={(input) => saveThen(input, () => toast("已保存"))} busy={save.busy} />}
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
-        title={`删除「${profile.name}」？`} action="删除 Profile" description="只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。" />
+        title={removal.title} action={removal.action} description={removal.description} />
     </div>
   );
 }
@@ -256,7 +262,7 @@ function MachineAccount({ profile }: { profile: Profile }) {
   const runtime = MACHINE_RUNTIME[profile.runtime];
   return (
     <Section title="账号">
-      <p>{station.name ? `${station.name} 上` : "这台机器上"} {runtime} 的登录<About>要换号、重新登录或登出，在这台机器的 {runtime} 里做；这个 Profile 跟着它变，不能在这里编辑或删除。</About></p>
+      <p>{station.name ? `${station.name} 上` : "这台机器上"} {runtime} 的登录<About>要换号、重新登录或登出，在这台机器的 {runtime} 里做，这个 Profile 跟着它变；不想用了就停用（右上角菜单）。</About></p>
     </Section>
   );
 }

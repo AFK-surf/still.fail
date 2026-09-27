@@ -581,7 +581,7 @@ pub struct Profile {
     pub env: Vec<EnvVar>,
     pub used_by: Vec<String>,
     pub login_command: String,
-    /// On the machine's own login of its runtime: not edited (but for its models), deleted or signed in here.
+    /// On the machine's own login of its runtime: not edited (but for its models) or signed in here; removing it stops using that login.
     #[serde(default)]
     pub machine: bool,
     pub check: Option<ProfileCheck>,

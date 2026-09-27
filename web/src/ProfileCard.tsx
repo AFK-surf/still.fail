@@ -45,10 +45,14 @@ export function MachineLoginCard({ login, action, framed = true }: { login: Mach
     <div className="profile-card" data-framed={framed ? "" : undefined}>
       <Card
         mark={<ProviderLogo runtime={login.runtime} kind="subscription" size={18} />}
-        title={<>{RUNTIME[login.runtime]}{plan && <span className="runtime-tags"><span className="runtime-tag">{plan}</span></span>}</>}
+        title={<>
+          {RUNTIME[login.runtime]}
+          {plan && <span className="runtime-tags"><span className="runtime-tag">{plan}</span></span>}
+          <State pill={<Pill tone={blocked ? "red" : "green"}>{blocked ? "被停用" : "本机已登录"}</Pill>} why={trouble} />
+        </>}
         sub={[login.email ? <span key="email" className="profile-card-email" title={login.email}>{login.email}</span> : "已登录"]}
         quota={quota ? <QuotaBars quota={quota} compact /> : null}
-        state={<State pill={<Pill tone={blocked ? "red" : "green"}>{blocked ? "被停用" : "本机已登录"}</Pill>} why={trouble} />}
+        state={null}
         action={action ?? null}
       />
     </div>
@@ -61,7 +65,7 @@ function State({ pill, why }: { pill: ReactNode; why: string | null | undefined 
 }
 
 function Card({ mark, title, sub, quota, state, action }: {
-  mark: ReactNode; title: ReactNode; sub: ReactNode[]; quota: ReactNode; state: ReactNode; action: ReactNode;
+  mark: ReactNode; title: ReactNode; sub: ReactNode[]; quota: ReactNode; state: ReactNode | null; action: ReactNode;
 }) {
   // Each fact whole on a line where it fits: the line breaks between them.
   const facts = sub.filter(Boolean);
@@ -77,7 +81,7 @@ function Card({ mark, title, sub, quota, state, action }: {
         )}
       </span>
       {quota && <span className="profile-card-quota">{quota}</span>}
-      <span className="profile-card-state">{state}</span>
+      {state && <span className="profile-card-state">{state}</span>}
       {action && <span className="profile-card-action">{action}</span>}
     </div>
   );

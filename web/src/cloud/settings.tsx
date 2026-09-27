@@ -259,19 +259,26 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
           <Section key={station.id}
             title={<span className="station-heading"><StatusDot state={station.online ? "online" : "offline"} label={station.online ? "在线" : "离线"} />{station.name}</span>}
             actions={station.online && online.length > 1 && <Button variant="ghost" icon={Plus} onClick={() => setAdding(station.station)}>添加</Button>}>
-            {!station.online && !overview ? <div className="card"><p className="muted card-foot">离线，还没有读到过它的 Profile。</p></div>
-              : !overview ? <div className="card"><Loading label={`正在连接 ${station.name}…`} fill={false} /></div>
-              : overview.profiles.length === 0 ? <div className="card"><p className="muted card-foot">还没有 Profile。</p></div>
+            {!station.online && !overview ? <p className="muted">离线，还没有读到过它的 Profile。</p>
+              : !overview ? <Loading label={`正在连接 ${station.name}…`} fill={false} />
               : (
-                <ul className="list">
-                  {overview.profiles.map((p) => {
-                    return (
-                      <li key={p.id}>
-                        <ProfileCard profile={p} to={`${base}/settings/accounts/${p.id}`} uses={p.usedBy.length ? `${p.usedBy.length} 个连接在用` : ""} />
-                      </li>
-                    );
-                  })}
-                </ul>
+                <>
+                  {overview.profiles.length === 0 ? <p className="muted">还没有 Profile。</p> : (
+                    <ul className="list">
+                      {overview.profiles.map((p) => (
+                        <li key={p.id}>
+                          <ProfileCard profile={p} to={`${base}/settings/accounts/${p.id}`} uses={p.usedBy.length ? `${p.usedBy.length} 个连接在用` : ""} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {/* The machine's own logins not used yet: each one offered as the first ones were. */}
+                  {station.online && (
+                    <StationContext.Provider value={asStation(station)}>
+                      <MachineLoginOffers logins={overview.machineLogins} onAdd={(c) => { setAddKind(c); setAdding(station.station); }} />
+                    </StationContext.Provider>
+                  )}
+                </>
               )}
           </Section>
         );

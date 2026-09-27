@@ -1541,7 +1541,6 @@ export class AdminApi {
   }
 
   #deleteProfile(id: string, viewer: Viewer) {
-    if (this.#deps.settings.config.profiles.find((p) => p.id === id)?.machine) throw new HttpError(400, "这个 Profile 用的是这台机器自己的登录，不能删除");
     return this.#save(viewer, `delete profile ${id}`, (raw) => {
       const profile = raw.profiles?.find((p) => p.id === id);
       if (!profile) throw new Error(`unknown profile ${id}`);

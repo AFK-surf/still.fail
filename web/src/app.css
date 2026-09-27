@@ -1582,6 +1582,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .profile-card-mark { width: 24px; height: 24px; background: none; }
 .profile-card-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .profile-card-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-card-title .runtime-tags { margin-left: 0; }
 /* What it is wraps rather than cutting off (an account's long address would hide its plan). */
 .profile-card-sub { color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
 /* An address is cut short rather than wrapped: which account it is shows well enough from its start. */
