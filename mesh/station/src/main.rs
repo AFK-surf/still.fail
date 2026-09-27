@@ -254,11 +254,13 @@ async fn run(options: Run) -> Result<()> {
     let listener = local::bind(&data, options.port, options.named).await?;
     tokio::spawn(local::serve(listener, socket.clone(), ready.clone()));
     tokio::spawn(mesh(data.clone(), socket, ready, secret, telemetry));
-    // SIGTERM (launchd, the desktop app) or ^C: the Node part ends its runtimes first.
+    // SIGTERM (launchd, the desktop app) or ^C: the Node part ends its runtimes first. So does a parent's end (the
+    // desktop app's, killed): orphaned, this would hold the machine's station with no app to stop it.
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! {
         _ = term.recv() => {}
         _ = tokio::signal::ctrl_c() => {}
+        _ = orphaned() => info!("parent ended"),
     }
     info!("stopping");
     stop_tx.send_replace(true);
@@ -266,12 +268,39 @@ async fn run(options: Run) -> Result<()> {
     Ok(())
 }
 
+/// Resolves once this process's parent has ended (it is then another's child). launchd's children never are.
+async fn orphaned() {
+    // SAFETY: getppid has no preconditions.
+    let parent = unsafe { libc::getppid() };
+    loop {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        if unsafe { libc::getppid() } != parent {
+            return;
+        }
+    }
+}
+
+/// Another ember-station runs the data directory. `run` then exits with HELD, which the desktop app takes for "this
+/// machine's station is already running" (apps/desktop/src/station.ts).
+#[derive(Debug)]
+struct Held(PathBuf);
+
+impl std::fmt::Display for Held {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "另一个 ember-station 正在运行这个数据目录（{}）；同一台机器上的一个数据目录只能运行一个 station", self.0.display())
+    }
+}
+
+impl std::error::Error for Held {}
+
+const HELD: i32 = 3;
+
 /// Holds `path` locked for as long as the file lives; fails when another process holds it.
 fn lock(path: &Path) -> Result<std::fs::File> {
     let file = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(path)?;
     // SAFETY: flock on a descriptor this function owns.
     if unsafe { libc::flock(std::os::fd::AsRawFd::as_raw_fd(&file), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-        bail!("另一个 ember-station 正在运行这个数据目录（{}）；同一台机器上的一个数据目录只能运行一个 station", path.parent().and_then(Path::parent).unwrap_or(path).display());
+        return Err(Held(path.parent().and_then(Path::parent).unwrap_or(path).to_path_buf()).into());
     }
     Ok(file)
 }
@@ -686,7 +715,12 @@ async fn main() -> Result<()> {
             let Some(app) = app else { usage() };
             let named = port.is_some();
             let port = port.map(|p| p.parse::<u16>()).transpose().context("--port")?.unwrap_or(4760);
-            run(Run { data, app: PathBuf::from(app), node: PathBuf::from(node), port, named }).await
+            let ran = run(Run { data, app: PathBuf::from(app), node: PathBuf::from(node), port, named }).await;
+            if let Some(held) = ran.as_ref().err().and_then(|e| e.downcast_ref::<Held>()) {
+                eprintln!("{held}");
+                std::process::exit(HELD);
+            }
+            ran
         }
         Some("id") => {
             println!("{}", hex::encode(load_key(&data)?.public().as_bytes()));

@@ -19,6 +19,8 @@ node src/main.ts        # Node 24；PATH 里需要 claude 和 codex
 
 station 由 `ember-station`（mesh/station）运行：它在本机提供管理页（4760），并把 Node 部分（src/main.ts）作为子进程启动和看护；Node 部分的管理接口只监听数据目录里的 `run/admin.sock`。4760 被别的程序占了，管理页会改用空闲端口，实际端口写在 `~/.ember/run/ports.json`；`ember start --port N` 指定端口时，被占就报错退出。MCP 端点的 4750 同理（配置里的 `http.port` 指定时被占就报错）。
 
+桌面端自带同一个 station（`scripts/station-bundle.sh` 的布局，放在应用的 Resources/station），随应用启动和退出，数据同样在 `~/.ember`。本机已经有 station 在运行（装过独立的），桌面端就不再启动自己的（ember-station 发现数据目录被占，以退出码 3 结束）。本机的 station 还没加入 workspace 时，打开一个 workspace 会自动加入它（要是 owner 或管理员）；只自动加入一次，之后从 workspace 移除就不会自己再加回来。ember-station 的父进程结束时它也结束，被强行杀掉的桌面端不会留下孤儿 station。
+
 收到 SIGTERM 时会结束所有运行时进程组；正在进行的 turn 会在下次启动时自动恢复。
 
 ## 管理页

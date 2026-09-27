@@ -26,6 +26,7 @@
    验证：本机管理页、mesh 访问、agent 会话都照常；Node 崩溃后会被拉起，期间对外显示离线。
 
 1.5 **桌面端自带 station。** 桌面端打包 `ember-station`（和它需要的 Node 部分），登录后自动把本机加入当前 workspace，随应用启动和退出；已经装过独立 station 的机器用已有的那个，不重复运行。
+   Node 部分照发布包原样带上（包括它自己的 Node），不做瘦身：第 8 步就去掉了。
 
 2. **station 的类型也从 `client/shapes` 来。** Node 的 TypeScript 类型改由同一份定义生成，Rust 那边直接用。station 到 core 这一段也由契约管住。
 

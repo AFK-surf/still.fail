@@ -2,9 +2,10 @@
 # Builds the desktop app for macOS arm64, signed with the Apple Development certificate in the login keychain
 # (so macOS keeps its Local Network grant across updates), into out/mac-arm64/ember.app:
 # the core (client/node) as build/ember_core.node, the web app (`pnpm run
-# build:cloud`, dist/cloud-app without the admin's console) as build/web, the
-# app's own code as build/app, then electron-builder puts them together.
-# CARGO_TARGET_DIR is honoured. SKIP_WEB=1 takes dist/cloud-app as it is. DEV=1 stops at build/: no packing, no
+# build:cloud`, dist/cloud-app without the admin's console) as build/web, a
+# station (scripts/station-bundle.sh) as build/station, the app's own code as
+# build/app, then electron-builder puts them together.
+# CARGO_TARGET_DIR is honoured. SKIP_WEB=1 takes dist/cloud-app and dist/admin as they are. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops at build/: no packing, no
 # signing, for Electron's own app to run as it is (dev.sh).
 set -eu
 # A non-login shell (ssh studio …) has none of these on its PATH.
@@ -16,8 +17,12 @@ target=${CARGO_TARGET_DIR:-$root/client/target}
 # The web app carries PostHog when its key is at hand (docs/telemetry.md), as the cloud's does.
 posthog="$HOME/ember-deploy/posthog.json"
 [ -n "${SKIP_WEB:-}" ] || (cd "$root" && if [ -f "$posthog" ]; then EMBER_POSTHOG="$posthog" pnpm run build:cloud; else pnpm run build:cloud; fi)
+# The station's own page (dist/admin) and ember-station, which keeps its target in mesh/.
+[ -n "${SKIP_WEB:-}${SKIP_STATION:-}" ] || (cd "$root" && pnpm build)
+[ -n "${SKIP_STATION:-}" ] || (cd "$root/mesh" && env -u CARGO_TARGET_DIR cargo build --release -p ember-station)
 rm -rf "$here/build" "$here/out"
-mkdir -p "$here/build"
+mkdir -p "$here/build/station"
+[ -n "${SKIP_STATION:-}" ] || sh "$root/scripts/station-bundle.sh" "$here/build/station"
 cp "$target/aarch64-apple-darwin/release/libember_core_node.dylib" "$here/build/ember_core.node"
 rsync -a --exclude admin-app "$root/dist/cloud-app/" "$here/build/web/"
 cd "$here"

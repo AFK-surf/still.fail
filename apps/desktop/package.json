@@ -34,6 +34,10 @@
       {
         "from": "build/ember_core.node",
         "to": "ember_core.node"
+      },
+      {
+        "from": "build/station/ember",
+        "to": "station"
       }
     ],
     "protocols": [

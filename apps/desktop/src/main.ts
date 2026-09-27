@@ -5,10 +5,14 @@
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through ember://auth/callback.
 import { app, BrowserWindow, ipcMain, MessageChannelMain, net, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync, writeFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
+import { hostname } from "node:os";
 import { join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
+import { LocalStation } from "./station";
 
 const CLOUD_ORIGIN = (process.env.EMBER_CLOUD_ORIGIN ?? "https://ember.3720.org").replace(/\/+$/, "");
 /**
@@ -22,9 +26,10 @@ const APP_ORIGIN = DEV_URL ? new URL(DEV_URL).origin : "app://ember";
 if (DEV_URL) app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-secure", APP_ORIGIN);
 /** Where ember cloud sends a native sign-in back to (cloud/src/auth.ts, APP_REDIRECT). */
 const AUTH_CALLBACK = "ember://auth/callback";
-/** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/ and ember_core.node. */
+/** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/, ember_core.node and station/. */
 const resources = app.isPackaged ? process.resourcesPath : join(__dirname, "..");
 const web = join(resources, "web");
+const station = new LocalStation(join(resources, app.isPackaged ? "station" : "station/ember"));
 
 // A standard, secure origin: the page's absolute paths, storage and clipboard work as on https://.
 protocol.registerSchemesAsPrivileged([
@@ -136,6 +141,44 @@ async function preview(request: Request): Promise<Response> {
   }
 }
 
+// This machine as a station: the one the app runs (station.ts), or one installed here. A page in a workspace says so
+// (web/src/cloud/workspace.tsx); a station in no workspace yet joins it, once: one removed from its workspace later is
+// not joined again by itself. Only the workspace's owner and admins can add stations: for others the cloud says no,
+// and it is tried again in the next workspace they open.
+const joinedOnce = join(app.getPath("userData"), "station-joined");
+let joining = false;
+
+ipcMain.on("station:workspace", (event, account: unknown, workspace: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof account !== "string" || typeof workspace !== "string") return;
+  void joinHere(account, workspace);
+});
+
+async function joinHere(account: string, workspace: string): Promise<void> {
+  if (joining || !station.carried || station.enrolled || existsSync(joinedOnce)) return;
+  joining = true;
+  try {
+    const made = await coreCall("cloud.request", {
+      account, method: "POST", path: `/v1/workspaces/${encodeURIComponent(workspace)}/enrollments`, body: { name: machineName() },
+    }) as { token: string };
+    await station.enroll(CLOUD_ORIGIN, made.token);
+    writeFileSync(joinedOnce, workspace);
+    console.info("this machine joined the workspace as a station", workspace);
+  } catch (error) {
+    console.warn("this machine did not join the workspace as a station", workspace, error instanceof Error ? error.message : error);
+  } finally {
+    joining = false;
+  }
+}
+
+/** The machine's name as the user set it (System Settings, Sharing), for its station's. */
+function machineName(): string {
+  try {
+    return execFileSync("scutil", ["--get", "ComputerName"], { encoding: "utf8" }).trim();
+  } catch {
+    return hostname().replace(/\.local$/, "");
+  }
+}
+
 /** Pages outside the app open in the system browser, as a new tab would. */
 function external(url: string): void {
   if (/^https?:\/\//.test(url)) void shell.openExternal(url);
@@ -206,6 +249,17 @@ if (!app.requestSingleInstanceLock()) {
     protocol.handle("app", serve);
     protocol.handle("ember-preview", preview);
     open();
+    station.start();
+  });
+  // The station stops with the app, its runtimes first; the app quits once it has.
+  let stopped = false;
+  app.on("before-quit", (event) => {
+    if (stopped) return;
+    event.preventDefault();
+    void station.stop().finally(() => {
+      stopped = true;
+      app.quit();
+    });
   });
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) open();

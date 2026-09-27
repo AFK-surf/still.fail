@@ -327,6 +327,8 @@ export interface EmberDesktop {
   openCore(id: number): void;
   /** The host a station's web service is shown at, ember-preview://<host>/ (apps/desktop/src/main.ts, previews). */
   previewHost(station: string, port: number): Promise<string | null>;
+  /** The page is in a workspace, reached as `account`: the app's station joins it when it is in none yet. */
+  inWorkspace(account: string, workspace: string): void;
 }
 
 declare global {

@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld("emberDesktop", {
   openCore: (id: number) => ipcRenderer.send("core:open", id),
   /** The host a station's web service is shown at (ember-preview://<host>/): see main.ts, previews. */
   previewHost: (station: string, port: number): Promise<string | null> => ipcRenderer.invoke("preview:host", station, port),
+  /** The page is in a workspace, reached as `account`: this machine's station may join it (see main.ts). */
+  inWorkspace: (account: string, workspace: string) => ipcRenderer.send("station:workspace", account, workspace),
 });
 
 ipcRenderer.on("core:port", (event, id: number) => window.postMessage({ emberCore: "port", id }, location.origin, event.ports));

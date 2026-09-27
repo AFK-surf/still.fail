@@ -45,6 +45,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
   const people = useMemo(() => new Map((view?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view]);
   useEffect(() => identify(entry.account), [entry.account]);
+  useEffect(() => window.emberDesktop?.inWorkspace(entry.account.sub, entry.id), [entry.account.sub, entry.id]);
   // The views the workspace's pages and settings show, subscribed from the start: a page opened the first time draws at
   // once, with no frame waiting for the core's first answer. What the core keeps in sync is its own call (sync.rs);
   // these only read it.
