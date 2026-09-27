@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs the desktop app from the source on a Mac over ssh (default mba), with no packing or signing: build.sh DEV=1
+# Runs the desktop app from the source on a Mac over ssh (default mini1), with no packing or signing: build.sh DEV=1
 # builds build/, which goes to ~/ember-dev/app there next to Electron's own Electron.app (copied once), and that app
 # runs it. Electron.app keeps its own signature, so macOS keeps the Local Network grant across updates; it is started
 # with `open`, not from ssh, which would make the ssh session the one asking for the network. The app is named ember
@@ -7,7 +7,7 @@
 # localhost:9333 (ssh -L), for looking at what it shows.
 #   sh apps/desktop/dev.sh [host]          (HMR=1: the page from a Vite dev server on this machine, live)
 set -eu
-host=${1:-mba}
+host=${1:-mini1}
 here=$(cd "$(dirname "$0")" && pwd)
 DEV=1 sh "$here/build.sh" >/dev/null
 [ -d "$here/node_modules/electron/dist/Electron.app" ] || node "$here/node_modules/electron/install.js"
