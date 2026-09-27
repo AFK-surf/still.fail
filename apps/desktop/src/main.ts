@@ -131,7 +131,10 @@ async function preview(request: Request): Promise<Response> {
   const headers: [string, string][] = [];
   request.headers.forEach((value, name) => headers.push([name, value]));
   try {
-    // A redirect within the service is followed here: the frame takes none from this handler. Elsewhere it is said.
+    // The frame takes no redirect from this handler. One of a page it goes to (its address must change, a page's own
+    // routes read it): the frame is sent there by a page that goes at once. One of anything else is followed here.
+    // A redirect off the service is said.
+    const page = ["document", "iframe"].includes(request.headers.get("sec-fetch-dest") ?? "");
     let path = url.pathname + url.search;
     let answer: { status: number; headers: [string, string][]; body: string } | null = null;
     for (let hops = 0; hops < 5 && !answer; hops++) {
@@ -141,6 +144,7 @@ async function preview(request: Request): Promise<Response> {
       const next = new URL(location, `http://localhost:${host[1]}${path}`);
       if (next.hostname !== "localhost" && next.hostname !== "127.0.0.1") return plain(502, `这个网页跳到了别的地址：${location}`);
       path = next.pathname + next.search;
+      if (page) return new Response(`<!doctype html><meta charset="utf-8"><script>location.replace(${JSON.stringify(path)})</script>`, { headers: { "content-type": "text/html; charset=utf-8" } });
     }
     if (!answer) return plain(508, "跳转太多次了");
     const empty = request.method === "HEAD" || [101, 204, 205, 304].includes(answer.status);
