@@ -5,6 +5,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AdminApi } from "./admin/api.ts";
+import { MachineLogins } from "./machine-logins.ts";
 import { linkAgentHome, linkTranscripts } from "./agent-home.ts";
 import { Connections } from "./connections.ts";
 import { NameBook } from "./chat/names.ts";
@@ -102,7 +103,10 @@ const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.too
 const logins = new LoginManager(settings.config.dataDir);
 const mesh = new MeshLink({ dataDir: settings.config.dataDir, traces: () => settings.config.telemetry.traces });
 stationId = () => mesh.status().station;
-const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, checkOnStart: true, quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)), codexModels: (profile) => codex.models(profile) });
+// The machine's own Claude Code and Codex logins, read at start and again as pages ask (machine-logins.ts).
+const machineLogins = new MachineLogins();
+void machineLogins.refresh();
+const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, checkOnStart: true, machineLogins: () => machineLogins.get(), quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)), codexModels: (profile) => codex.models(profile) });
 
 settings.onChange((config) => {
   reports.update();

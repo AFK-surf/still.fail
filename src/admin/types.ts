@@ -1,4 +1,5 @@
 // Shapes of the admin API responses, shared with the web client (type-only imports).
+import type { MachineLogin } from "../machine-logins.ts";
 import type { RuntimeKind } from "../config.ts";
 import type { ConnectKind, ConnectMode } from "../config.ts";
 import type { ConnectState } from "../connections.ts";
@@ -100,6 +101,8 @@ export interface Overview {
   disk: { freeBytes: number; totalBytes: number } | null;
   /** Subscription sign-ins that make a profile once they succeed (POST /logins), with the profile each made. */
   logins: { id: string; runtime: RuntimeKind; job: LoginJob | null; created: string | null }[];
+  /** Who this machine's own Claude Code and Codex are signed in as (machine-logins.ts): said where a first profile is asked for. */
+  machineLogins: MachineLogin[];
 }
 
 export interface TurnSummary {
