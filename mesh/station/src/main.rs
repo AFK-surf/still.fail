@@ -371,10 +371,10 @@ const MDNS_SERVICE: &str = "ember";
 async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: watch::Receiver<bool>, secret: String, telemetry: Arc<Telemetry>) -> Result<()> {
     let key = load_key(&data)?;
     let relay: RelayUrl = state.relay_url.parse().context("relay url")?;
-    // ember's relay, and iroh's public ones should it be down; found without ember cloud: on the LAN by mDNS, and
-    // which relay it is on, published to the Mainline DHT (clients look both up: client/core/src/mesh.rs).
-    let relays = iroh::RelayMap::from(relay);
-    relays.extend(&iroh::defaults::prod::default_relay_map());
+    // ember's relay (iroh's public ones only while it is down: `relay_fallback`); found without ember cloud: on the
+    // LAN by mDNS, and which relay it is on, published to the Mainline DHT (clients look both up:
+    // client/core/src/mesh.rs).
+    let relays = iroh::RelayMap::from(relay.clone());
     let endpoint = Endpoint::builder(Minimal)
         .secret_key(key.clone())
         .alpns(vec![ALPN.to_vec()])
@@ -393,6 +393,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: wa
         warn!("no relay link after 15 s; going online at ember cloud anyway");
     }
     tokio::spawn(presence(station.clone(), endpoint.secret_key().clone()));
+    tokio::spawn(relay_fallback(endpoint.clone(), relay));
     if traces {
         tokio::spawn(telemetry.export(station.clone(), endpoint.secret_key().clone()));
     }
@@ -410,6 +411,44 @@ async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: wa
         });
     }
     Ok(())
+}
+
+/// How often ember's relay is checked (`relay_fallback`).
+const RELAY_CHECK: Duration = Duration::from_secs(30);
+
+/// Keeps the station's home relay ember's, which is the one browsers reach (relay-only, they know no other): iroh's
+/// public relays are added only while ember's does not answer, so the station can still be reached (the DHT says
+/// where), and taken away once it does again, so the station goes back home to it. With all of them in the map at once
+/// iroh would pick whichever is nearest, and browsers would lose the station.
+async fn relay_fallback(endpoint: Endpoint, ours: RelayUrl) {
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().expect("http client");
+    let ping = format!("{}/ping", ours.as_str().trim_end_matches('/'));
+    let public: Vec<Arc<iroh::RelayConfig>> = iroh::defaults::prod::default_relay_map().relays();
+    let mut added = false;
+    loop {
+        // Two tries: one lost request is not the relay down.
+        let mut up = false;
+        for _ in 0..2 {
+            if client.get(&ping).send().await.is_ok_and(|r| r.status().is_success()) {
+                up = true;
+                break;
+            }
+        }
+        if !up && !added {
+            warn!(relay = %ours, "ember's relay does not answer; adding iroh's public relays until it does");
+            for config in &public {
+                endpoint.insert_relay(config.url.clone(), config.clone()).await;
+            }
+            added = true;
+        } else if up && added {
+            info!(relay = %ours, "ember's relay answers again; back home to it");
+            for config in &public {
+                endpoint.remove_relay(&config.url).await;
+            }
+            added = false;
+        }
+        tokio::time::sleep(RELAY_CHECK).await;
+    }
 }
 
 /// Keeps the presence socket open, reconnecting with backoff.

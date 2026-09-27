@@ -75,7 +75,7 @@ station 端由 `ember-station`（Rust，iroh 1.0.3，mesh/station）负责：它
 
 ## relay 与发现
 
-relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Worker（`ember-relay`，`cloud/src/relay-worker.ts`）转发 WebSocket 帧并做总量限制。它是单独的 Worker，部署 API 不会断开任何 relay 连接。station 同时挂着 iroh 官方的公共 relay，ember 的 relay 不在时也能被找到。
+relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，前面由 Worker（`ember-relay`，`cloud/src/relay-worker.ts`）转发 WebSocket 帧并做总量限制。它是单独的 Worker，部署 API 不会断开任何 relay 连接。station 平时只以 ember 的 relay 为家（浏览器只认它）；ember 的 relay 连不上时才临时加入 iroh 官方的公共 relay，恢复后撤掉（`relay_fallback`）。
 
 station 在哪、怎么连，设备自己找，不经过 ember cloud：
 
