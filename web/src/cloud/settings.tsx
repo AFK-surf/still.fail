@@ -229,10 +229,22 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
         </StationContext.Provider>
       )}
       {first ? (
-        <FirstOne icon={Key} title="添加第一个 Profile" lead={PROFILE_LEAD}>
-          {online.length === 0 ? <p className="muted">没有在线的 station，等它上线再加。</p>
-            : online.map((s) => <Button key={s.id} variant={online.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => { setAddKind("claude-sub"); setAdding(s.station); }}>{online.length === 1 ? "添加 Profile" : `加到 ${s.name}`}</Button>)}
-          {online.length === 1 && <MachineLoginOffers logins={online[0]!.overview?.machineLogins} onAdd={(c) => { setAddKind(c); setAdding(online[0]!.station); }} />}
+        <FirstOne icon={Key} title="添加第一个 Profile" lead={`${PROFILE_LEAD}Profile 加在某一台 station 上，由那台机器用它来跑。`}>
+          {/* Each station in a row: where a profile is added is part of adding it. */}
+          <div className="first-stations">
+            {stations.map((s) => (
+              <div key={s.id} className="first-station">
+                <div className="first-station-row">
+                  <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
+                  <span className="first-station-name">{s.name}</span>
+                  {s.online
+                    ? <Button variant={stations.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => { setAddKind("claude-sub"); setAdding(s.station); }}>添加 Profile</Button>
+                    : <span className="muted">离线，等它上线再加</span>}
+                </div>
+                {s.online && <MachineLoginOffers logins={s.overview?.machineLogins} onAdd={(c) => { setAddKind(c); setAdding(s.station); }} />}
+              </div>
+            ))}
+          </div>
         </FirstOne>
       ) : stations.map((station) => {
         const { overview } = station;

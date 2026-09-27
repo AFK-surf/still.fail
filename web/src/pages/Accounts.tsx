@@ -104,7 +104,8 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
 export function AddAccountDialog({ open, onClose, initial = "claude-sub" }: { open: boolean; onClose(): void; initial?: Choice }) {
   const api = useApi();
   const link = useLink();
-  const overview = useOverview(useStation().address);
+  const station = useStation();
+  const overview = useOverview(station.address);
   const navigate = useNavigate();
   const toast = useToast();
   // What to add, by whose account it is: a subscription (which one), a key, or variables set by hand for one runtime.
@@ -129,7 +130,7 @@ export function AddAccountDialog({ open, onClose, initial = "claude-sub" }: { op
   const job = pending?.job ?? null;
   const signing = login !== null;
   return (
-    <Dialog open={open} onClose={close} title="添加 Profile"
+    <Dialog open={open} onClose={close} title={station.name ? `给 ${station.name} 添加 Profile` : "添加 Profile"}
       footer={<>
         <Button variant="ghost" onClick={close}>取消</Button>
         {!signing && (kind === "subscription"

@@ -204,7 +204,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
     return (
       <div className="new-chat">
         <div className="new-chat-inner">
-          <FirstOne icon={Key} title={blocked === "profile" ? "先添加一个 Profile" : "勾选要用的模型"}
+          <FirstOne icon={Key} title={blocked === "profile" ? `给 ${station.name || "这台机器"} 添加一个 Profile` : "勾选要用的模型"}
             lead={blocked === "profile" ? PROFILE_LEAD : `${station.name || "这台机器"} 的 Profile 还没有启用模型，勾选之后就能开始对话。`}>
             {blocked === "profile"
               ? <Button variant="primary" icon={Plus} onClick={() => { setProfileKind("claude-sub"); setAddingProfile(true); }}>添加 Profile</Button>
