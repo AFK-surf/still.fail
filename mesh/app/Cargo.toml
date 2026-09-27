@@ -1,0 +1,26 @@
+[package]
+name = "ember-app"
+version.workspace = true
+edition.workspace = true
+description = "ember station's own work, in Rust: its settings, store, agent runtimes, chat connects, hub and sessions, admin API and jobs (taking over from src/*.ts)"
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+ember-shapes = { path = "../../client/shapes" }
+futures-util = "0.3"
+getrandom = "0.3"
+hex = "0.4"
+libc = "0.2"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "multipart"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.26", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
