@@ -939,7 +939,7 @@ test("a web service on the machine is reached through /preview/<port>, as it ans
 });
 
 test("a profile on the machine's own login: made from a login kept in a file, its models chosen, never renamed, signed in or deleted", async () => {
-  const login = (runtime: "claude" | "codex", usable: boolean): MachineLogin => ({ runtime, installed: true, loggedIn: true, email: "b@x.com", plan: "pro", usable, text: "" });
+  const login = (runtime: "claude" | "codex", usable: boolean): MachineLogin => ({ runtime, installed: true, loggedIn: true, email: "b@x.com", plan: "pro", usable, quota: null, text: "" });
   const s = await setup({ machineLogins: [login("claude", false), login("codex", true)] });
   try {
     // Kept only in the keychain: not one to use.
