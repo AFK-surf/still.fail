@@ -10,7 +10,7 @@ import type { ChatView } from "./core/shapes.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Button, Chooser, ChooserItem as Item, FirstOne, transitionTo } from "./ui.tsx";
-import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "./pages/Accounts.tsx";
+import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice as ProfileKind } from "./pages/Accounts.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
@@ -102,7 +102,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   const madeChat = useTopic<ChatView>(madeKey ? { topic: "chat", station: station.address, session: madeKey } : null).value;
   const [leaving, setLeaving] = useState(false);
   const [addingProfile, setAddingProfile] = useState(false);
-  const [profileKind, setProfileKind] = useState<Choice>("claude-sub");
+  const [profileKind, setProfileKind] = useState<ProfileKind>("claude-sub");
   const pick = (next: Partial<Choice>) => {
     const c = { ...choice, ...next };
     setChoice(c);
