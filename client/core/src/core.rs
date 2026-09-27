@@ -87,6 +87,8 @@ struct Inner {
     me_fetches: RefCell<HashMap<String, u64>>,
     /// The live `workspaces` / `workspace` topics, each with the number of its newest fetch.
     live: RefCell<HashMap<Topic, u64>>,
+    /// The newest fetch of each that has come back: one under way while `live` is ahead of it.
+    landed: RefCell<HashMap<Topic, u64>>,
     /// Per account, its ember cloud events socket while an account topic is live.
     sockets: RefCell<HashMap<String, Socket>>,
 }
@@ -168,6 +170,7 @@ impl Core {
                 shown_accounts: RefCell::new(accounts.list()),
                 me_fetches: RefCell::default(),
                 live: RefCell::default(),
+                landed: RefCell::default(),
                 sockets: RefCell::default(),
             }
         });
@@ -741,10 +744,18 @@ impl Inner {
             self.forget_gone_stations(workspace, view);
             self.presence(workspace, view);
         }
+        let landed = self.landed.borrow().get(topic).copied().unwrap_or(0).max(fetch);
+        self.landed.borrow_mut().insert(topic.clone(), landed);
         if self.live.borrow().get(topic) == Some(&fetch) {
             // A workspace goes to the data center; the list of them is put together from the accounts' records.
             self.center.set(topic, value);
         }
+    }
+
+    /// Whether a fetch of `topic` is under way: what it brings may predate an event that came since.
+    fn fetching(&self, topic: &Topic) -> bool {
+        let live = self.live.borrow().get(topic).copied().unwrap_or(0);
+        live > self.landed.borrow().get(topic).copied().unwrap_or(0)
     }
 
     /// The accounts as UIs see them changed (a token refresh alone changes nothing here).
@@ -852,15 +863,23 @@ impl Inner {
                 };
                 // Complete in itself: the station's presence changes in place, and it was last seen now.
                 let now = (self.host.now_ms() / 1000.0).floor() as i64;
-                self.center.update(&Topic::Workspace { workspace: workspace.to_string() }, &mut |view| {
+                let topic = Topic::Workspace { workspace: workspace.to_string() };
+                let mut found = false;
+                self.center.update(&topic, &mut |view| {
                     for station in view.get_mut("stations").and_then(Value::as_array_mut).into_iter().flatten() {
                         if station.get("id").and_then(Value::as_str) == Some(id) {
                             station["online"] = json!(online);
                             station["last_seen"] = json!(now);
+                            found = true;
                         }
                     }
                 });
                 self.stations.set_presence(&format!("{workspace}/{id}"), online);
+                // Not in the view yet (it just joined), or a fetch under way would put back what the cloud said before
+                // this: read it again, which overtakes that fetch.
+                if self.live.borrow().contains_key(&topic) && (!found || self.fetching(&topic)) {
+                    self.spawn_refresh(topic);
+                }
             }
             _ => {}
         }
@@ -1390,13 +1409,17 @@ mod tests {
             assert_eq!(values[&2]["stations"][0]["online"], true);
             assert!(values[&2]["stations"][0]["last_seen"].as_f64().unwrap() > 1.0);
             assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (1, 1));
+            // One the view does not have yet (it joined since): the workspace is read again.
+            host.socket_send("/v1/events", r#"{"type":"station","workspace":"ws","id":"new","online":true}"#);
+            host.settle().await;
+            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (1, 2));
             // `workspaces` reads /v1/me again, `workspace` that workspace; others are not ours.
             host.socket_send("/v1/events", r#"{"type":"workspaces"}"#);
             host.socket_send("/v1/events", r#"{"type":"workspace","id":"ws"}"#);
             host.socket_send("/v1/events", r#"{"type":"workspace","id":"other"}"#);
             host.socket_send("/v1/events", "pong");
             host.settle().await;
-            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (2, 2));
+            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (2, 3));
             apply(&host, &mut values);
             assert_eq!(values[&2]["stations"][0]["online"], false, "as the cloud says now");
 

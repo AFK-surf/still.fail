@@ -39,7 +39,7 @@ export class LocalStation {
     mkdirSync(this.data, { recursive: true });
     const log = openSync(join(this.data, "ember.log"), "a");
     const started = Date.now();
-    const child = spawn(this.#bin, ["run", "--app", this.dir, "--node", join(this.dir, "node", "bin", "node"), "--data", this.data], {
+    const child = spawn(this.#bin, ["run", "--app", this.dir, "--node", join(this.dir, "node", "bin", "node"), "--data", this.data, "--with-parent"], {
       // Opened from Finder the app has launchd's short PATH; the agents it starts (Claude Code, Codex) are found on this
       // one, as an installed station's (cloud/src/install.ts).
       env: { ...process.env, EMBER_DATA: this.data, PATH: `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin` },

@@ -235,6 +235,8 @@ struct Run {
     node: PathBuf,
     port: u16,
     named: bool,
+    /// Ends when the process that started it does (the desktop app).
+    with_parent: bool,
 }
 
 async fn run(options: Run) -> Result<()> {
@@ -254,13 +256,14 @@ async fn run(options: Run) -> Result<()> {
     let listener = local::bind(&data, options.port, options.named).await?;
     tokio::spawn(local::serve(listener, socket.clone(), ready.clone()));
     tokio::spawn(mesh(data.clone(), socket, ready, secret, telemetry));
-    // SIGTERM (launchd, the desktop app) or ^C: the Node part ends its runtimes first. So does a parent's end (the
-    // desktop app's, killed): orphaned, this would hold the machine's station with no app to stop it.
+    // SIGTERM (launchd, the desktop app) or ^C: the Node part ends its runtimes first. So does, with --with-parent, the
+    // parent's end (the desktop app's, killed): orphaned, this would hold the machine's station with no app to stop it.
+    // Run otherwise (launchd, nohup), the parent may well end first.
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! {
         _ = term.recv() => {}
         _ = tokio::signal::ctrl_c() => {}
-        _ = orphaned() => info!("parent ended"),
+        _ = orphaned(), if options.with_parent => info!("parent ended"),
     }
     info!("stopping");
     stop_tx.send_replace(true);
@@ -268,7 +271,7 @@ async fn run(options: Run) -> Result<()> {
     Ok(())
 }
 
-/// Resolves once this process's parent has ended (it is then another's child). launchd's children never are.
+/// Resolves once this process's parent has ended (it is then another's child).
 async fn orphaned() {
     // SAFETY: getppid has no preconditions.
     let parent = unsafe { libc::getppid() };
@@ -691,7 +694,7 @@ async fn answer(
 }
 
 fn usage() -> ! {
-    eprintln!("usage:\n  ember-station run --app DIR [--node PATH] [--port N] [--data DIR]\n  ember-station enroll <ember-cloud-origin> <token> [--data DIR]\n  ember-station id [--data DIR]\n\nrun: --app holds src/main.ts; --port the admin page's (default 4760, a free one when it is taken).");
+    eprintln!("usage:\n  ember-station run --app DIR [--node PATH] [--port N] [--data DIR] [--with-parent]\n  ember-station enroll <ember-cloud-origin> <token> [--data DIR]\n  ember-station id [--data DIR]\n\nrun: --app holds src/main.ts; --port the admin page's (default 4760, a free one when it is taken); --with-parent: end when the parent does.");
     std::process::exit(2);
 }
 
@@ -709,13 +712,14 @@ async fn main() -> Result<()> {
     let app = take("--app");
     let node = take("--node").unwrap_or_else(|| "node".into());
     let port = take("--port");
+    let with_parent = args.iter().position(|a| a == "--with-parent").map(|i| args.remove(i)).is_some();
     match args.first().map(String::as_str) {
         Some("enroll") if args.len() == 3 => enroll(&data, args[1].trim_end_matches('/'), &args[2]).await,
         Some("run") => {
             let Some(app) = app else { usage() };
             let named = port.is_some();
             let port = port.map(|p| p.parse::<u16>()).transpose().context("--port")?.unwrap_or(4760);
-            let ran = run(Run { data, app: PathBuf::from(app), node: PathBuf::from(node), port, named }).await;
+            let ran = run(Run { data, app: PathBuf::from(app), node: PathBuf::from(node), port, named, with_parent }).await;
             if let Some(held) = ran.as_ref().err().and_then(|e| e.downcast_ref::<Held>()) {
                 eprintln!("{held}");
                 std::process::exit(HELD);
