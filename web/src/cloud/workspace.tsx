@@ -14,7 +14,7 @@ import { useTopics } from "../core/react.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
-import { ChatList } from "../Sidebar.tsx";
+import { ChatList, StationTrouble } from "../Sidebar.tsx";
 import { AccountSettings, ConnectsSettings, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
@@ -134,6 +134,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
       <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings/stations`} />
       <div className="nav-foot nav-foot-row">
         <WorkspaceSwitcher current={entry} />
+        <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
         <Tip label="设置" side="top"><NavLink className="icon-btn" to={`/w/${entry.id}/settings`} aria-label="设置"><Settings {...ICON} /></NavLink></Tip>
       </div>
     </nav>

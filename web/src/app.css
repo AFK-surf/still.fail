@@ -75,18 +75,11 @@
 /* A station's link coming back: a small turning ring where the row's mark goes. */
 .row-spinner { width: 11px; height: 11px; border-width: 1.5px; }
 /* Under the list: the stations not working, which or how many; to the stations. */
-/* Stations not working, a card of its own over the foot (it leads to them); the list fades out above it rather than
-   being cut through. */
-.station-trouble {
-  flex: none; align-self: stretch; width: auto; min-width: 0; display: flex; align-items: center; gap: 8px; margin: 0 8px 8px; padding: 7px 8px 7px 10px;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--hover);
-  font-size: var(--text-xs); color: var(--text); text-decoration: none;
-}
-.station-trouble:hover { border-color: var(--muted); }
+/* Stations not working: a mark in the sidebar's foot, beside the settings; its dot says the worst of it. */
+.station-trouble { position: relative; color: var(--muted); }
 .station-trouble[data-state="error"] { color: var(--red); }
-.station-trouble-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.station-trouble-go { flex: none; color: var(--muted); }
-.nav-slider:has(+ .station-trouble) .nav-scroll { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
+.station-trouble-mark { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; padding: 1.5px; border-radius: 50%; background: var(--sidebar); }
+.station-trouble-mark.spinner { width: 9px; height: 9px; padding: 0; }
 .nav-session-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .nav-session-head { display: flex; align-items: center; gap: 6px; min-width: 0; height: 20px; line-height: 20px; }
 .nav-session-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
