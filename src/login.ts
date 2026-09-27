@@ -14,6 +14,7 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Profile } from "./config.ts";
 import { log } from "./log.ts";
+import { fileCredentials } from "./no-keychain.ts";
 
 export type LoginState =
   /** Started; waiting for the command to say where to sign in. */
@@ -80,8 +81,10 @@ export class LoginManager {
     const [command, args] = profile.runtime === "claude"
       ? [this.#commands.claude, ["auth", "login", "--claudeai"]]
       : [this.#commands.codex, ["login", "--device-auth"]];
-    if (profile.runtime === "claude") env.CLAUDE_CONFIG_DIR = profile.home;
-    else env.CODEX_HOME = profile.home;
+    if (profile.runtime === "claude") {
+      env.CLAUDE_CONFIG_DIR = profile.home;
+      Object.assign(env, fileCredentials(env));
+    } else env.CODEX_HOME = profile.home;
 
     const now = Date.now();
     const job: LoginJob = {

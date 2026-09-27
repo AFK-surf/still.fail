@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { RuntimeKind } from "./config.ts";
 import { linkCodexAuth, machineClaudeToken } from "./machine-logins.ts";
+import { fileCredentials } from "./no-keychain.ts";
 
 export type AccessKind = "subscription" | "opencode-go" | "anthropic-api" | "env";
 
@@ -108,7 +109,12 @@ export async function checkProfile(options: {
     }
     if (options.kind === "subscription" && options.runtime === "claude") {
       const machine = options.machine ? { CLAUDE_CODE_OAUTH_TOKEN: (await machineClaudeToken(options.env)).token } : {};
-      const { stdout } = await run("claude", ["auth", "status"], { env: { ...options.env, ...machine, CLAUDE_CONFIG_DIR: options.home }, timeout: 20_000 });
+      // Signed out, it says so and exits 1: its answer is still the JSON on stdout.
+      const { stdout } = await run("claude", ["auth", "status"], { env: options.machine ? { ...options.env, ...machine, CLAUDE_CONFIG_DIR: options.home } : fileCredentials({ ...options.env, CLAUDE_CONFIG_DIR: options.home }), timeout: 20_000 })
+        .catch((error: { stdout?: string; code?: unknown }) => {
+          if (error.code === 1 && error.stdout?.trim().startsWith("{")) return { stdout: error.stdout };
+          throw error;
+        });
       const status = JSON.parse(stdout) as { loggedIn?: boolean; authMethod?: string; email?: string; subscriptionType?: string };
       return status.loggedIn
         ? { state: "ok", detail: ["已登录", status.email, status.subscriptionType].filter(Boolean).join("，"), models: null, checkedAt }

@@ -13,6 +13,7 @@ import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { expandRoute } from "../config.ts";
 import { log } from "../log.ts";
+import { fileCredentials } from "../no-keychain.ts";
 import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken } from "../machine-logins.ts";
 import { spawnGroup, type ProcessRegistry } from "./process.ts";
 import type { AgentDriver, AgentSession, FailureReason, LiveEvent, LiveStepKind, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
@@ -81,6 +82,8 @@ export class ClaudeDriver implements AgentDriver {
     // A machine profile runs on the machine's own login, handed over as its current token (machine-logins.ts).
     const machine = options.profile.machine ? await machineClaudeToken() : null;
     if (machine) env.CLAUDE_CODE_OAUTH_TOKEN = machine.token;
+    // A profile's own login is its home's .credentials.json, never the keychain (no-keychain.ts).
+    else Object.assign(env, fileCredentials(env));
     // Its own root certificates, not the system's: read from the macOS keychain by a process outside the desktop
     // session, they took up to 36 s before a new session could start (4–36 s measured). One the user chose wins.
     if (!env.CLAUDE_CODE_CERT_STORE) env.CLAUDE_CODE_CERT_STORE = "bundled";
