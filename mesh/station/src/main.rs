@@ -241,6 +241,8 @@ async fn run(options: Run) -> Result<()> {
     let data = options.data;
     let socket = data.join("run").join("admin.sock");
     std::fs::create_dir_all(data.join("run"))?;
+    // One station per data directory: a second would take the first one's socket and port away.
+    let _lock = lock(&data.join("run").join("station.lock"))?;
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|e| anyhow!("{e}"))?;
     let secret = B64.encode(bytes);
@@ -262,6 +264,16 @@ async fn run(options: Run) -> Result<()> {
     stop_tx.send_replace(true);
     let _ = supervised.await;
     Ok(())
+}
+
+/// Holds `path` locked for as long as the file lives; fails when another process holds it.
+fn lock(path: &Path) -> Result<std::fs::File> {
+    let file = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(path)?;
+    // SAFETY: flock on a descriptor this function owns.
+    if unsafe { libc::flock(std::os::fd::AsRawFd::as_raw_fd(&file), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+        bail!("另一个 ember-station 正在运行这个数据目录（{}）；同一台机器上的一个数据目录只能运行一个 station", path.parent().and_then(Path::parent).unwrap_or(path).display());
+    }
+    Ok(file)
 }
 
 /// Whether the station's config turns traces on (telemetry.traces in <data>/config.json).

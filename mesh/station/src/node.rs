@@ -48,10 +48,27 @@ pub async fn supervise(launch: Launch, ready: watch::Sender<bool>, telemetry: Ar
         let waiting = wait_ready(&launch.socket, &ready);
         tokio::pin!(waiting);
         let mut waited = false;
+        // Once up, it is asked again every few seconds: a Node part that stops answering (its socket gone, stuck)
+        // is offline, and is started again after three misses.
+        let mut check = tokio::time::interval(Duration::from_secs(5));
+        let mut misses = 0;
         let exited = loop {
             tokio::select! {
                 status = child.wait() => break status,
                 _ = &mut waiting, if !waited => waited = true,
+                _ = check.tick(), if waited => {
+                    if local::healthy(&launch.socket).await {
+                        misses = 0;
+                        ready.send_replace(true);
+                    } else {
+                        misses += 1;
+                        ready.send_replace(false);
+                        if misses >= 3 {
+                            warn!("station's Node part stopped answering; starting it again");
+                            stop(&mut child).await;
+                        }
+                    }
+                }
                 _ = stopping.changed() => {
                     stop(&mut child).await;
                     ready.send_replace(false);
