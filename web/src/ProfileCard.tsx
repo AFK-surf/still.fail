@@ -23,7 +23,7 @@ export function ProfileCard({ profile, uses, to, action, framed }: { profile: Pr
     <Card
       mark={<ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={18} />}
       title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} /></>}
-      sub={[profile.machine ? "本机登录" : ACCESS[profile.access.kind].label, profile.modelsText, uses].filter(Boolean).join(" · ")}
+      sub={[profile.machine ? "本机登录" : ACCESS[profile.access.kind].label, profile.modelsText, uses]}
       quota={quota ? <QuotaBars quota={quota} compact /> : null}
       state={<State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} />}
       action={action ?? (to ? <ChevronRight {...ICON} className="profile-card-chevron" /> : null)}
@@ -46,7 +46,7 @@ export function MachineLoginCard({ login, action, framed = true }: { login: Mach
       <Card
         mark={<ProviderLogo runtime={login.runtime} kind="subscription" size={18} />}
         title={RUNTIME[login.runtime]}
-        sub={[login.email, plan].filter(Boolean).join(" · ") || "已登录"}
+        sub={login.email || plan ? [login.email && <Address key="email" email={login.email} />, plan] : ["已登录"]}
         quota={quota ? <QuotaBars quota={quota} compact /> : null}
         state={<State pill={<Pill tone={blocked ? "red" : "green"}>{blocked ? "被停用" : "本机已登录"}</Pill>} why={trouble} />}
         action={action ?? null}
@@ -60,15 +60,27 @@ function State({ pill, why }: { pill: ReactNode; why: string | null | undefined 
   return why ? <Tip label={why}><span className="profile-card-why" tabIndex={0}>{pill}</span></Tip> : <>{pill}</>;
 }
 
+/** An email address that may break after its @ when it has to, not in the middle of a word. */
+function Address({ email }: { email: string }) {
+  const at = email.indexOf("@");
+  return at < 0 ? <>{email}</> : <>{email.slice(0, at + 1)}<wbr />{email.slice(at + 1)}</>;
+}
+
 function Card({ mark, title, sub, quota, state, action }: {
-  mark: ReactNode; title: ReactNode; sub: string; quota: ReactNode; state: ReactNode; action: ReactNode;
+  mark: ReactNode; title: ReactNode; sub: ReactNode[]; quota: ReactNode; state: ReactNode; action: ReactNode;
 }) {
+  // Each fact whole on a line where it fits: the line breaks between them.
+  const facts = sub.filter(Boolean);
   return (
     <div className="profile-card-grid">
       <span className="mark runtime-mark profile-card-mark">{mark}</span>
       <span className="profile-card-main">
         <span className="profile-card-title">{title}</span>
-        {sub && <span className="profile-card-sub">{sub}</span>}
+        {facts.length > 0 && (
+          <span className="profile-card-sub">
+            {facts.map((f, i) => <span key={i} className="phrase">{f}{i < facts.length - 1 && "\u00a0·\u00a0"}</span>)}
+          </span>
+        )}
       </span>
       {quota && <span className="profile-card-quota">{quota}</span>}
       <span className="profile-card-state">{state}</span>
