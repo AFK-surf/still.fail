@@ -817,3 +817,71 @@ fn transport() -> QuicTransportConfig {
     cubic.initial_window(256 * 1024);
     QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ed25519_dalek::{Signer, SigningKey};
+
+    const WS: &str = "01M3DB2N6P5SY7PJ7RG1F62TRX";
+    const DEVICE: &str = "aa";
+
+    fn key() -> SigningKey {
+        SigningKey::from_bytes(&[7u8; 32])
+    }
+
+    /// The keys a station pins at enrollment, with this one's public half.
+    fn keys() -> Value {
+        json!({ "keys": [{ "kid": "k", "x": B64.encode(key().verifying_key().as_bytes()) }] })
+    }
+
+    /// A credential as ember cloud signs one (cloud/src/grants.ts), with `claims` over the usual ones.
+    fn credential(typ: &str, claims: Value) -> String {
+        let mut body = json!({ "iss": "ember-cloud", "sub": "bob", "email": "bob@x", "name": "Bob", "ws": WS, "role": "member", "device": DEVICE, "sid": "s1", "iat": now() - 10, "exp": now() + 3600 });
+        for (k, v) in claims.as_object().unwrap() {
+            body[k] = v.clone();
+        }
+        let head = B64.encode(json!({ "alg": "EdDSA", "typ": typ, "kid": "k" }).to_string());
+        let body = B64.encode(body.to_string());
+        let signature = key().sign(format!("{head}.{body}").as_bytes());
+        format!("{head}.{body}.{}", B64.encode(signature.to_bytes()))
+    }
+
+    fn check(credential: &str, revocations: &[Revocation]) -> Result<Admitted> {
+        verify_member(credential, &keys(), WS, DEVICE, revocations)
+    }
+
+    #[test]
+    fn a_members_credential_lets_its_device_in_offline() {
+        let admitted = check(&credential("ember-member+jwt", json!({})), &[]).unwrap();
+        assert_eq!((admitted.viewer.sub.as_str(), admitted.viewer.role.as_str(), admitted.sid.as_str()), ("bob", "member", "s1"));
+    }
+
+    #[test]
+    fn it_is_refused_for_another_workspace_device_or_kind_expired_or_tampered() {
+        assert!(check(&credential("ember-member+jwt", json!({ "ws": "OTHER" })), &[]).is_err());
+        assert!(check(&credential("ember-member+jwt", json!({ "device": "bb" })), &[]).is_err());
+        assert!(check(&credential("ember-member+jwt", json!({ "exp": now() - 1 })), &[]).is_err());
+        assert!(check(&credential("ember-grant+jwt", json!({})), &[]).is_err());
+        let good = credential("ember-member+jwt", json!({}));
+        let mut parts: Vec<&str> = good.split('.').collect();
+        let forged = B64.encode(json!({ "iss": "ember-cloud", "sub": "bob", "ws": WS, "role": "owner", "device": DEVICE, "sid": "s1", "iat": now(), "exp": now() + 3600 }).to_string());
+        parts[1] = &forged;
+        assert!(check(&parts.join("."), &[]).is_err(), "a changed body no longer matches its signature");
+    }
+
+    #[test]
+    fn what_ember_cloud_revoked_is_refused_and_what_came_after_is_not() {
+        let issued = now() - 10;
+        let old = credential("ember-member+jwt", json!({ "iat": issued }));
+        let revoked_account = [Revocation { kind: "sub".into(), id: "bob".into(), at: issued }];
+        let revoked_session = [Revocation { kind: "sid".into(), id: "s1".into(), at: issued + 5 }];
+        let someone_else = [Revocation { kind: "sub".into(), id: "carol".into(), at: now() }];
+        assert!(check(&old, &revoked_account).is_err());
+        assert!(check(&old, &revoked_session).is_err());
+        assert!(check(&old, &someone_else).is_ok());
+        // A credential asked for after the revocation (a new role, a new sign-in) is taken.
+        let new = credential("ember-member+jwt", json!({ "iat": issued + 1 }));
+        assert!(check(&new, &revoked_account).is_ok());
+    }
+}
