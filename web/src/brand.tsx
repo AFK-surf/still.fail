@@ -38,6 +38,11 @@ export function SidebarBrand() {
   );
 }
 
+/** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app, whose window has its title bar there. */
+export function PageBrand() {
+  return window.emberDesktop ? null : <Themed name="wordmark" width={81} height={22} alt="ember" className="brand-wordmark" />;
+}
+
 type Pose = "push" | "hop" | "rest";
 const SIDEBAR = "ember.sidebar";
 

@@ -24,7 +24,7 @@ import { ComposerDock } from "../dock.tsx";
 import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
 import { Avatar } from "./gate.tsx";
-import { Illustration, SidebarBrand } from "../brand.tsx";
+import { Illustration, PageBrand, SidebarBrand } from "../brand.tsx";
 import { identify, track } from "../telemetry.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
@@ -122,7 +122,7 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
   return (
     <div className="onboarding">
       <header className="onboarding-bar">
-        <div className="brand brand-compact"><SidebarBrand /></div>
+        <div className="brand brand-compact"><PageBrand /></div>
         <div className="onboarding-account"><WorkspaceSwitcher current={entry} /></div>
       </header>
       <main className="onboarding-main">
