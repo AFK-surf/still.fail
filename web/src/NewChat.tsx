@@ -5,6 +5,8 @@ import { Server } from "./icons.tsx";
 import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useStations, type RuntimeKind, type StationView } from "./api.ts";
+import { useTopic } from "./core/react.ts";
+import type { ChatView } from "./core/shapes.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Chooser, ChooserItem as Item, transitionTo } from "./ui.tsx";
@@ -93,6 +95,11 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   /** What was sent from here, in order: once there is any, the page is the chat's (its messages on their way). */
   const [sent, setSent] = useState<string[]>([]);
   const left = useRef(false);
+  // The chat made, read from here before going to it: its page then has its messages at once (from the core, which
+  // keeps the topic) instead of showing an empty list until they come — over the relay that can take a second or more.
+  const [madeKey, setMadeKey] = useState<string | null>(null);
+  const madeChat = useTopic<ChatView>(madeKey ? { topic: "chat", station: station.address, session: madeKey } : null).value;
+  const [leaving, setLeaving] = useState(false);
   const pick = (next: Partial<Choice>) => {
     const c = { ...choice, ...next };
     setChoice(c);
@@ -110,6 +117,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         ...(choice.profile && entry?.accounts[runtime]?.some((a) => a.id === choice.profile) ? { profile: choice.profile } : {}),
       });
       track("chat_created", { runtime, model, ...(choice.effort ? { effort: choice.effort } : {}), ms: Math.round(performance.now() - at) });
+      setMadeKey(key);
       return { key, thread: thread.id };
     })().catch((error: unknown) => { made.current = null; setMaking(false); throw error; });
     return made.current;
@@ -144,13 +152,24 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         if (sent.length === 0) void transitionTo(() => setSent([text]));
         else setSent((all) => [...all, text]);
       }}
-      onSent={() => {
-        if (left.current) return;
-        left.current = true;
-        // What is being typed goes on in the chat, in the same composer.
-        void made.current?.then(({ key }) => { carry(`${station.address}:${key}`); onCreated(station.address, key); });
-      }} />
+      onSent={() => setLeaving(true)} />
   );
+  // Once the first message is sent, on to the chat as soon as it has what was sent from here (or, whatever it has, after
+  // a while: its page then says it is loading).
+  useEffect(() => {
+    if (!leaving || !madeKey || left.current) return;
+    const go = () => {
+      if (left.current) return;
+      left.current = true;
+      // What is being typed goes on in the chat, in the same composer.
+      carry(`${station.address}:${madeKey}`);
+      onCreated(station.address, madeKey);
+    };
+    const shown = madeChat ? madeChat.messages.filter((m) => m.mine).length + madeChat.outbox.length : 0;
+    if (shown >= sent.length) return go();
+    const late = setTimeout(go, 8000);
+    return () => clearTimeout(late);
+  }, [leaving, madeKey, madeChat, sent.length]);
   if (sent.length) {
     // Laid out as the chat's page (its bar, its list, its composer, its agent's history beside), so it gives way to it
     // without a move.
