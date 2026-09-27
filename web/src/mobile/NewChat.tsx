@@ -85,6 +85,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
   // can follow before the chat is made: they go in order once it is, and the page gives way to the chat.
   const send = () => {
     const text = draft.text.trim();
+    ((window as unknown as { __sends?: unknown[] }).__sends ??= []).push(["new", text.slice(0, 6), sent.length, !!made.current]); // TEMP
     const files = draft.files;
     draft.setText(""); draft.setFiles(() => []); draft.setError(null);
     if (sent.length === 0) void transitionTo(() => setSent([text]));
