@@ -1340,6 +1340,55 @@ mod tests {
         (host, core)
     }
 
+    #[test]
+    fn a_kept_credential_reaches_the_stations_without_ember_cloud() {
+        run(async {
+            let host = FakeHost::new();
+            let account = StoredAccount { sub: "s1".into(), email: "a@x.com".into(), name: "阿一".into(), picture: String::new(), access: "a".into(), refresh: "r".into(), access_expires: now_s() + 3600.0 };
+            host.store(STORAGE_KEY, serde_json::to_vec(&vec![account]).unwrap());
+            let up = Rc::new(Cell::new(true));
+            let asked = Rc::new(Cell::new(0));
+            let (cloud_up, times) = (up.clone(), asked.clone());
+            host.on_fetch(move |req| {
+                let path = req.url.trim_start_matches("https://ember.test");
+                if !cloud_up.get() {
+                    return Err(crate::host::HostError("offline".into()));
+                }
+                match path {
+                    "/v1/me" => json_response(200, json!({"workspaces": [{"id": "ws", "name": "W"}], "invitations": [], "relay_url": "https://relay.test"})),
+                    "/v1/workspaces/ws/credential" => {
+                        times.set(times.get() + 1);
+                        json_response(200, json!({"credential": format!("c{}", times.get()), "issued_at": now_s(), "expires_at": now_s() + 30.0 * 86400.0, "relay_url": "https://relay.test"}))
+                    }
+                    _ => json_response(404, json!({"error": "not_found"})),
+                }
+            });
+            let core = Core::new(host.clone()).await;
+            let inner = core.inner.clone();
+            let credential = |fresh| { let inner = inner.clone(); async move { inner.credential("ws", "dev", fresh).await } };
+            // Asked for once, then kept for the day.
+            assert_eq!(credential(false).await.unwrap().credential, "c1");
+            assert_eq!(credential(false).await.unwrap().credential, "c1");
+            assert_eq!(asked.get(), 1);
+            // A station refused it: a new one.
+            assert_eq!(credential(true).await.unwrap().credential, "c2");
+            // A day old, with ember cloud unreachable: the kept one serves on.
+            let old = Credential { credential: "old".into(), issued_at: now_s() - 2.0 * 86400.0, expires_at: now_s() + 28.0 * 86400.0, relay_url: "https://relay.test".into() };
+            host.store(&format!("{CREDENTIAL_KEY}/s1/ws/dev"), serde_json::to_vec(&old).unwrap());
+            up.set(false);
+            assert_eq!(credential(false).await.unwrap().credential, "old");
+            // Refused, or run out, and no ember cloud: none.
+            assert!(credential(true).await.is_err());
+            let spent = Credential { expires_at: now_s() - 1.0, ..old.clone() };
+            host.store(&format!("{CREDENTIAL_KEY}/s1/ws/dev"), serde_json::to_vec(&spent).unwrap());
+            assert!(credential(false).await.is_err());
+            // A day old, ember cloud back: a new one.
+            host.store(&format!("{CREDENTIAL_KEY}/s1/ws/dev"), serde_json::to_vec(&old).unwrap());
+            up.set(true);
+            assert_eq!(credential(false).await.unwrap().credential, "c3");
+        });
+    }
+
     fn count(host: &FakeHost, path: &str) -> usize {
         host.requests.borrow().iter().filter(|r| r.url.ends_with(path) && r.method == "GET").count()
     }
