@@ -581,6 +581,9 @@ pub struct Profile {
     pub env: Vec<EnvVar>,
     pub used_by: Vec<String>,
     pub login_command: String,
+    /// On the machine's own login of its runtime: not edited (but for its models), deleted or signed in here.
+    #[serde(default)]
+    pub machine: bool,
     pub check: Option<ProfileCheck>,
     pub login: Option<LoginJob>,
     pub quota: Option<Quota>,
@@ -714,6 +717,9 @@ pub struct MachineLogin {
     pub logged_in: bool,
     pub email: Option<String>,
     pub plan: Option<String>,
+    /// A profile can use it as it is (kept in a file, not only in the keychain).
+    #[serde(default)]
+    pub usable: bool,
     /// In a line, as the pages show it.
     pub text: String,
 }

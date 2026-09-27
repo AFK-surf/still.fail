@@ -160,6 +160,8 @@ export function stationApi(t: StationCall) {
     newLogin: (runtime: RuntimeKind) => request<{ id: string; job: Station.LoginJob }>("POST", "/logins", { runtime }),
     newLoginCode: (id: string, code: string) => request<{ job: Station.LoginJob }>("POST", `/logins/${at(id)}/code`, { code }),
     dropLogin: (id: string) => request<{ ok: true }>("DELETE", `/logins/${at(id)}`),
+    /** A profile on the machine's own login of `runtime` (one kept in a file). */
+    useMachineLogin: (runtime: RuntimeKind) => request<{ id: string; overview: Station.Overview }>("POST", "/profiles/machine", { runtime }),
     /** A keyed profile, made only once its key is checked. */
     addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string } }) => request<{ id: string; overview: Station.Overview }>("POST", "/profiles", input),
     slackApp: (connect: string) => request<SlackAppView>("GET", `/connects/${at(connect)}/slack-app`),

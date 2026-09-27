@@ -13,12 +13,13 @@ import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { expandRoute } from "../config.ts";
 import { log } from "../log.ts";
+import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken } from "../machine-logins.ts";
 import { spawnGroup, type ProcessRegistry } from "./process.ts";
 import type { AgentDriver, AgentSession, FailureReason, LiveEvent, LiveStepKind, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
 
 const MCP_TOKEN_VAR = "EMBER_MCP_TOKEN";
 /** Inherited variables that would let a session authenticate as something other than its profile. */
-const SCRUBBED = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"];
+const SCRUBBED = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"];
 
 export function userMessage(text: string): string {
   return JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } });
@@ -77,6 +78,9 @@ export class ClaudeDriver implements AgentDriver {
       // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
       EMBER_RUNTIME_SESSION_ID: sessionId,
     });
+    // A machine profile runs on the machine's own login, handed over as its current token (machine-logins.ts).
+    const machine = options.profile.machine ? await machineClaudeToken() : null;
+    if (machine) env.CLAUDE_CODE_OAUTH_TOKEN = machine.token;
     // Its own root certificates, not the system's: read from the macOS keychain by a process outside the desktop
     // session, they took up to 36 s before a new session could start (4–36 s measured). One the user chose wins.
     if (!env.CLAUDE_CODE_CERT_STORE) env.CLAUDE_CODE_CERT_STORE = "bundled";
@@ -137,6 +141,8 @@ export class ClaudeDriver implements AgentDriver {
       get busy() { return busy; },
       async prompt(text) {
         if (closed) throw new Error("claude session is closed");
+        // Its token cannot refresh itself: about to run out, it is started again (resuming) with the machine's next one.
+        if (machine && machine.expiresAt - Date.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Error("the machine login's token runs out");
         if (busy) throw new Error("a turn is already running");
         busy = true;
         proc.write(userMessage(text));

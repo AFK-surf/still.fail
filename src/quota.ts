@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { machineClaudeToken } from "./machine-logins.ts";
 import type { Profile } from "./config.ts";
 
 export interface QuotaWindow {
@@ -80,7 +81,7 @@ async function claudeToken(home: string): Promise<string | null> {
 }
 
 async function claude(profile: Profile): Promise<ProfileQuota> {
-  const token = await claudeToken(profile.home);
+  const token = profile.machine ? (await machineClaudeToken()).token : await claudeToken(profile.home);
   if (!token) return { state: "unavailable", windows: [], detail: "没找到这个账号的登录凭据，登录后才能查额度", checkedAt: Date.now() };
   const response = await fetch("https://api.anthropic.com/api/oauth/usage", {
     headers: { authorization: `Bearer ${token}`, "anthropic-beta": "oauth-2025-04-20" },

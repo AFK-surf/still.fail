@@ -37,6 +37,8 @@ export interface Profile {
   model?: string;
   /** Models this profile may be used for, chosen by hand from what its check found. None until someone picks. */
   models: string[];
+  /** Uses this machine's own login of its runtime (machine-logins.ts): not edited, deleted or signed in here. */
+  machine: boolean;
 }
 
 export type ConnectKind = "slack";
@@ -133,6 +135,8 @@ export interface RawProfile {
   env?: Record<string, string>;
   model?: string;
   models?: string[];
+  /** Uses this machine's own login of its runtime (a subscription profile of one runtime). */
+  machine?: boolean;
 }
 
 /** config.json as written; parseConfig turns it into a validated Config. */
@@ -173,6 +177,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
       envs: Object.fromEntries(runtimes.map((r) => [r, { ...accessEnv(r, kind, key, p.model), ...customEnv }])), customEnv,
       ...(p.model ? { model: p.model } : {}),
       models: [...new Set((p.models ?? []).filter((m) => typeof m === "string" && m.trim()).map((m) => m.trim()))],
+      machine: p.machine === true,
     };
   });
   unique("profile", profiles.map((p) => p.id));

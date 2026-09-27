@@ -3,7 +3,7 @@
 //
 // Clients follow GET /events instead of asking again on a timer: every change
 // to what the API shows is announced there (see docs/station-storage.md).
-import type { MachineLogins } from "../machine-logins.ts";
+import { linkCodexAuth, type MachineLogins } from "../machine-logins.ts";
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import type { EventEmitter } from "node:events";
@@ -63,7 +63,7 @@ export interface AdminDeps {
   /** Check every profile shortly after start (the real station; tests leave it off). */
   checkOnStart?: boolean;
   /** Who this machine's own Claude Code and Codex are signed in as (machine-logins.ts), for the pages to say. */
-  machineLogins?: Pick<MachineLogins, "get" | "changes">;
+  machineLogins?: Pick<MachineLogins, "get" | "refresh" | "changes">;
 }
 
 /** How often quotas are asked again while someone follows /events, and host info sampled while someone asks for it. */
@@ -464,6 +464,8 @@ export class AdminApi {
       await this.#deps.connections.refreshIdentity(id).catch((error) => log.warn("slack identity refresh failed", { connect: id, error }));
       return send(res, 200, { ok: true });
     }
+    // A profile on the machine's own login of a runtime (machine-logins.ts).
+    if (method === "POST" && path === "/profiles/machine") return send(res, 200, await this.#newMachineProfile(await body(req), viewer));
     // A new keyed profile: made only once its key is checked and works.
     if (method === "POST" && path === "/profiles") return send(res, 200, await this.#newKeyedProfile(await body(req), viewer));
     if (resource === "profiles" && id && !action && method === "PUT") {
@@ -499,6 +501,7 @@ export class AdminApi {
       }
       if (method === "POST") {
         if (profile.access.kind !== "subscription") throw new HttpError(400, "只有订阅账号需要登录");
+        if (profile.machine) throw new HttpError(400, "这个 Profile 用的是这台机器自己的登录，要在机器上登录");
         log.info("login started from the admin page", { profile: id, by: viewerId(viewer) });
         return send(res, 200, { job: this.#deps.logins.start(profile) });
       }
@@ -737,6 +740,32 @@ export class AdminApi {
     return { id, overview };
   }
 
+  /**
+   * A profile on the machine's own login of `runtime`: one a runtime, made when that login is one a profile can use
+   * (kept in a file). Named by its account.
+   */
+  async #newMachineProfile(input: Record<string, any>, viewer: Viewer) {
+    const runtime = input.runtime as RuntimeKind;
+    if (!RUNTIMES.includes(runtime)) throw new HttpError(400, `unknown runtime ${String(input.runtime)}`);
+    const id = `machine-${runtime}`;
+    if (this.#deps.settings.config.profiles.some((p) => p.id === id)) throw new HttpError(409, "已经在用这台机器的登录了");
+    await this.#deps.machineLogins?.refresh();
+    const login = this.#deps.machineLogins?.get().find((l) => l.runtime === runtime);
+    if (!login?.loggedIn) throw new HttpError(400, `这台机器上的 ${runtime === "claude" ? "Claude Code" : "Codex"} 没有登录`);
+    if (!login.usable) throw new HttpError(400, "这台机器的登录存在钥匙串里，不能直接用，要单独登录一次");
+    const home = join(this.#deps.settings.config.dataDir, "homes", id);
+    await mkdir(home, { recursive: true });
+    if (runtime === "codex") linkCodexAuth(home);
+    const name = login.email ? `${login.email}（本机）` : `本机 ${runtime === "claude" ? "Claude Code" : "Codex"}`;
+    log.info("profile on the machine's login made", { profile: id, runtime, by: viewerId(viewer) });
+    const overview = this.#save(viewer, `profile ${id} on the machine's login`, (raw) => ({
+      ...raw,
+      profiles: [...(raw.profiles ?? []), { id, name, runtime, access: { kind: "subscription" }, home: `homes/${id}`, env: {}, machine: true }],
+    }));
+    this.#afterSignIn(id);
+    return { id, overview };
+  }
+
   /** A profile just signed in: checked (which lists its models) and its quota read, so its page shows them at once. */
   #afterSignIn(id: string): void {
     void this.#check(id).catch((error) => log.warn("check after sign-in failed", { profile: id, error }));
@@ -881,6 +910,7 @@ export class AdminApi {
         // Connects whose sessions can run on it: of its runtime, and its models have theirs.
         usedBy: config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model ?? null)).map((c) => c.id),
         loginCommand: loginCommand(p.runtime, p.home),
+        machine: p.machine,
         check: this.#checks.get(p.id) ?? null,
         login: this.#deps.logins.get(p.id),
         quota: this.#quotas.get(p.id) ?? null,
@@ -1438,10 +1468,12 @@ export class AdminApi {
     });
   }
 
-  #putProfile(id: string, input: Record<string, any>, viewer: Viewer) {
+  #putProfile(id: string, given: Record<string, any>, viewer: Viewer) {
     return this.#save(viewer, `profile ${id}`, (raw) => {
       const profiles = raw.profiles ?? [];
       const existing = profiles.find((p) => p.id === id);
+      // One on the machine's login is the machine's: only which of its models are used is chosen here.
+      const input = existing?.machine ? { model: given.model, models: given.models } : given;
       // env: a string sets the value; null removes the key; an omitted key keeps it (so masked secrets survive edits).
       const env: Record<string, string> = { ...existing?.env };
       for (const [key, value] of Object.entries((input.env ?? {}) as Record<string, unknown>)) {
@@ -1461,6 +1493,7 @@ export class AdminApi {
         ...(kind ? { access: { kind, ...(key ? { key } : {}) } } : {}),
         home: typeof input.home === "string" && input.home.trim() ? input.home.trim() : existing?.home ?? `homes/${id}`,
         env,
+        ...(existing?.machine ? { machine: true } : {}),
       };
       const model = input.model === undefined ? existing?.model : input.model;
       if (typeof model === "string" && model.trim()) next.model = model.trim();
@@ -1493,7 +1526,7 @@ export class AdminApi {
   async #check(id: string): Promise<ProfileCheck> {
     const profile = this.#deps.settings.config.profiles.find((p) => p.id === id);
     if (!profile) throw new HttpError(404, `unknown profile ${id}`);
-    let check = await (this.#deps.checkProfile ?? checkProfile)({ runtime: profile.runtime, kind: profile.access.kind, key: profile.access.key, home: profile.home, env: process.env });
+    let check = await (this.#deps.checkProfile ?? checkProfile)({ runtime: profile.runtime, kind: profile.access.kind, key: profile.access.key, home: profile.home, env: process.env, machine: profile.machine });
     if (check.state === "ok" && check.models === null && profile.access.kind === "subscription" && profile.runtime === "codex" && this.#deps.codexModels) {
       const models = await this.#deps.codexModels(profile).catch((error) => {
         log.warn("could not list a subscription's codex models", { profile: id, error });
@@ -1508,6 +1541,7 @@ export class AdminApi {
   }
 
   #deleteProfile(id: string, viewer: Viewer) {
+    if (this.#deps.settings.config.profiles.find((p) => p.id === id)?.machine) throw new HttpError(400, "这个 Profile 用的是这台机器自己的登录，不能删除");
     return this.#save(viewer, `delete profile ${id}`, (raw) => {
       const profile = raw.profiles?.find((p) => p.id === id);
       if (!profile) throw new Error(`unknown profile ${id}`);

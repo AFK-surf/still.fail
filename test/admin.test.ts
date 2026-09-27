@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { EventEmitter } from "node:events";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +14,7 @@ import { InternalChat } from "../src/chat/internal.ts";
 import { slackManifest } from "../src/admin/slack-manifest.ts";
 import { SlackApiError, type SlackApps } from "../src/chat/slack-apps.ts";
 import { LoginManager } from "../src/login.ts";
+import type { MachineLogin } from "../src/machine-logins.ts";
 import { Settings } from "../src/settings.ts";
 import { Store } from "../src/store.ts";
 import { FakeChat, FakeDriver, message, settle } from "./fakes.ts";
@@ -119,7 +121,7 @@ class FakeSlackApps {
   }
 }
 
-async function setup(options: { access?: { teamDomain: string; aud: string }; store?: Store; dataDir?: string; quota?: () => void; spans?: any[]; cloud?: string } = {}) {
+async function setup(options: { access?: { teamDomain: string; aud: string }; store?: Store; dataDir?: string; quota?: () => void; spans?: any[]; cloud?: string; machineLogins?: MachineLogin[] } = {}) {
   const slackApps = new FakeSlackApps();
   const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "ember-admin-"));
   const logins = new LoginManager(dataDir, { claude: fakeLogin, codex: fakeLogin });
@@ -147,6 +149,7 @@ async function setup(options: { access?: { teamDomain: string; aud: string }; st
   const api = new AdminApi({
     settings, store, hub, connections: conns, logins, names: new Map(), slackApps: slackApps as unknown as SlackApps,
     checkProfile: async () => ({ state: "ok", detail: "fake", checkedAt: Date.now(), models: [] }), gate: new AccessGate(() => settings.config.adminAccess, jwks),
+    ...(options.machineLogins ? { machineLogins: { get: () => options.machineLogins!, refresh: async () => {}, changes: new EventEmitter() } } : {}),
     ...(options.quota ? { quota: async () => { options.quota!(); return { state: "ok" as const, windows: [{ label: "5 小时", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: Date.now() }; } } : {}),
     ...(options.cloud ? { mesh: { secret: () => null, status: () => ({ state: "running" as const, origin: options.cloud!, station: "st", workspace: "W", workspaceId: "ws", name: "S" }), span: () => {} } } : {}),
     ...(options.spans ? { mesh: { secret: () => null, status: () => ({ state: "off" as const, origin: null, station: null, workspace: null, workspaceId: null, name: null }), span: (span: object) => options.spans!.push(span) } } : {}),
@@ -932,5 +935,37 @@ test("a web service on the machine is reached through /preview/<port>, as it ans
   } finally {
     service.close();
     t.close();
+  }
+});
+
+test("a profile on the machine's own login: made from a login kept in a file, its models chosen, never renamed, signed in or deleted", async () => {
+  const login = (runtime: "claude" | "codex", usable: boolean): MachineLogin => ({ runtime, installed: true, loggedIn: true, email: "b@x.com", plan: "pro", usable, text: "" });
+  const s = await setup({ machineLogins: [login("claude", false), login("codex", true)] });
+  try {
+    // Kept only in the keychain: not one to use.
+    const keychain = await s.call("POST", "/profiles/machine", { runtime: "claude" });
+    assert.equal(keychain.status, 400);
+    assert.match(keychain.body.error, /钥匙串/);
+    const made = await s.call("POST", "/profiles/machine", { runtime: "codex" });
+    assert.equal(made.status, 200);
+    assert.equal(made.body.id, "machine-codex");
+    const profile = () => s.settings.config.profiles.find((p) => p.id === "machine-codex")!;
+    assert.equal(profile().machine, true);
+    assert.equal(profile().name, "b@x.com（本机）");
+    assert.equal(profile().access.kind, "subscription");
+    assert.ok(lstatSync(join(s.dataDir, "homes", "machine-codex", "auth.json")).isSymbolicLink());
+    assert.equal((await s.call("POST", "/profiles/machine", { runtime: "codex" })).status, 409);
+    // Only its models are chosen here.
+    assert.equal((await s.call("PUT", "/profiles/machine-codex", { name: "renamed", models: ["gpt-x"], access: { kind: "opencode-go", key: "k" } })).status, 200);
+    assert.equal(profile().name, "b@x.com（本机）");
+    assert.deepEqual(profile().models, ["gpt-x"]);
+    assert.equal(profile().access.kind, "subscription");
+    assert.equal(profile().machine, true);
+    assert.equal((await s.call("GET", "/overview")).body.profiles.find((p: any) => p.id === "machine-codex").machine, true);
+    assert.equal((await s.call("POST", "/profiles/machine-codex/login")).status, 400);
+    assert.equal((await s.call("DELETE", "/profiles/machine-codex")).status, 400);
+    assert.ok(profile());
+  } finally {
+    s.close();
   }
 });

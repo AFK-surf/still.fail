@@ -50,7 +50,7 @@ function ProfilePage({ p }: { p: Profile }) {
             <span className="m-row-note m-wrap">{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}{p.check?.time?.checkedAt ? ` · ${p.check.time.checkedAt.ago}检查` : ""}</span>
           </span>
         </div>
-        {p.access.kind === "subscription" && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
+        {p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         <Quota p={p} />
         <Models p={p} onSave={(models) => void save({ models }, "已保存")} />
         <SectionHeader title="使用它的连接" start={24} />
@@ -89,7 +89,7 @@ function ProfilePage({ p }: { p: Profile }) {
   );
 }
 
-/** Renaming, checking, refreshing its allowance, deleting it (not while a connect uses it). */
+/** Renaming, checking, refreshing its allowance, deleting it (not while a connect uses it; never one on the machine's login). */
 function ProfileMenu({ p }: { p: Profile }) {
   const app = useApp();
   const api = useApi();
@@ -99,13 +99,13 @@ function ProfileMenu({ p }: { p: Profile }) {
       <SheetGrab />
       <SheetHead title={p.name} />
       <div className="m-sheet-scroll">
-        <PickRow label="改名" onClick={() => ask(app, { title: "Profile 的名字", value: p.name, placeholder: "名字", action: "保存", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast("已改名")) })} />
+        {!p.machine && <PickRow label="改名" onClick={() => ask(app, { title: "Profile 的名字", value: p.name, placeholder: "名字", action: "保存", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast("已改名")) })} />}
         <PickRow label="重新检查" onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast("已检查"), failed); }} />
         <PickRow label="刷新额度" onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast("已刷新额度"), failed); }} />
-        <PickRow label={p.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile"} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, {
+        {!p.machine && <PickRow label={p.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile"} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, {
           title: `删除「${p.name}」？`, text: "只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。", action: "删除 Profile", danger: true,
           run: () => api.deleteProfile(p.id).then(() => { app.toast("已删除 Profile"); app.pop(); }),
-        })} />
+        })} />}
       </div>
     </>
   );

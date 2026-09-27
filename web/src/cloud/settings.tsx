@@ -243,7 +243,11 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
                     ? <Button variant={stations.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => { setAddKind("claude-sub"); setAdding(s.station); }}>添加 Profile</Button>
                     : <span className="muted">离线，等它上线再加</span>}
                 </div>
-                {s.online && <MachineLoginOffers logins={s.overview?.machineLogins} onAdd={(c) => { setAddKind(c); setAdding(s.station); }} />}
+                {s.online && (
+                  <StationContext.Provider value={asStation(s.station)}>
+                    <MachineLoginOffers logins={s.overview?.machineLogins} onAdd={(c) => { setAddKind(c); setAdding(s.station); }} />
+                  </StationContext.Provider>
+                )}
               </div>
             ))}
           </div>

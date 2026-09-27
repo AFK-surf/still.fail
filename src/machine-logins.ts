@@ -1,10 +1,16 @@
 // Who this machine's own Claude Code and Codex are signed in as (in their usual homes, ~/.claude and ~/.codex), for
-// the pages that ask for a first profile to say so. Only read: ember's profiles never take these credentials over
-// (copying them would fork each vendor's single-use refresh tokens and sign the machine's own CLI out later).
+// the pages that ask for a first profile to say so, and the way a profile uses that login itself (`machine`
+// profiles). Never copied: both vendors rotate single-use refresh tokens, so a copy would sign one side out later.
+// - Codex: the profile's home links auth.json to the machine's; Codex saves it in place (through the link) and reads
+//   it again before refreshing, so both share one login.
+// - Claude Code: a link does not hold (it replaces the file when it refreshes), so the profile's processes are handed
+//   the machine's current access token (CLAUDE_CODE_OAUTH_TOKEN) and never refresh; when it is about to run out, the
+//   machine's own claude is asked for a moment, which refreshes it in its own file.
+// Only logins kept in files: one in the macOS keychain cannot be used so (the pages offer a sign-in instead).
 import { execFile } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { RuntimeKind } from "./config.ts";
@@ -22,6 +28,8 @@ export interface MachineLogin {
   email: string | null;
   /** The subscription's plan (max, pro, plus…), when known. */
   plan: string | null;
+  /** A profile can use it as it is (kept in a file, not only in the keychain). */
+  usable: boolean;
   /** In a line, as the pages show it. */
   text: string;
 }
@@ -76,16 +84,27 @@ function missing(error: unknown): boolean {
   return (error as NodeJS.ErrnoException)?.code === "ENOENT";
 }
 
+const CLAUDE_DROP = ["CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"];
+
+/** Where the machine's Claude Code keeps its login when it keeps it in a file. */
+export function claudeCredentialsFile(env: NodeJS.ProcessEnv = process.env): string {
+  return join(env.HOME || homedir(), ".claude", ".credentials.json");
+}
+
+/** Where the machine's Codex keeps its login when it keeps it in a file. */
+export function codexAuthFile(env: NodeJS.ProcessEnv = process.env): string {
+  return join(env.CODEX_HOME || join(env.HOME || homedir(), ".codex"), "auth.json");
+}
+
 async function claudeLogin(env: NodeJS.ProcessEnv): Promise<MachineLogin> {
-  const base = { runtime: "claude" as const, email: null, plan: null };
+  const base = { runtime: "claude" as const, email: null, plan: null, usable: false };
   try {
-    const { stdout } = await run("claude", ["auth", "status"], {
-      env: machineEnv(env, ["CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]), timeout: 20_000,
-    });
+    const { stdout } = await run("claude", ["auth", "status"], { env: machineEnv(env, CLAUDE_DROP), timeout: 20_000 });
     const status = JSON.parse(stdout) as { loggedIn?: boolean; email?: string; subscriptionType?: string };
     if (!status.loggedIn) return { ...base, installed: true, loggedIn: false, text: `${LABEL.claude} 没有登录` };
     const email = status.email ?? null, plan = status.subscriptionType ?? null;
-    return { ...base, installed: true, loggedIn: true, email, plan, text: said(LABEL.claude, email, plan) };
+    const usable = readClaudeCredentials(env) !== null;
+    return { ...base, installed: true, loggedIn: true, email, plan, usable, text: said(LABEL.claude, email, plan) + (usable ? "" : "，登录存在钥匙串里") };
   } catch (error) {
     // `auth status` exits non-zero when signed out, still printing its JSON.
     const stdout = (error as { stdout?: string }).stdout;
@@ -96,7 +115,7 @@ async function claudeLogin(env: NodeJS.ProcessEnv): Promise<MachineLogin> {
 }
 
 async function codexLogin(env: NodeJS.ProcessEnv): Promise<MachineLogin> {
-  const base = { runtime: "codex" as const, email: null, plan: null };
+  const base = { runtime: "codex" as const, email: null, plan: null, usable: false };
   const home = env.CODEX_HOME || join(env.HOME || homedir(), ".codex");
   let text: string;
   try {
@@ -109,7 +128,78 @@ async function codexLogin(env: NodeJS.ProcessEnv): Promise<MachineLogin> {
   }
   if (!/logged in/i.test(text) || /not logged in/i.test(text)) return { ...base, installed: true, loggedIn: false, text: `${LABEL.codex} 没有登录` };
   const { email, plan } = codexAccount(home);
-  return { ...base, installed: true, loggedIn: true, email, plan, text: said(LABEL.codex, email, plan) };
+  const usable = existsSync(join(home, "auth.json"));
+  return { ...base, installed: true, loggedIn: true, email, plan, usable, text: said(LABEL.codex, email, plan) + (usable ? "" : "，登录存在钥匙串里") };
+}
+
+/** The machine's Claude Code login as its file keeps it: its access token and when that runs out. */
+function readClaudeCredentials(env: NodeJS.ProcessEnv): { token: string; expiresAt: number } | null {
+  try {
+    const o = (JSON.parse(readFileSync(claudeCredentialsFile(env), "utf8")) as { claudeAiOauth?: { accessToken?: string; expiresAt?: number } }).claudeAiOauth;
+    return o?.accessToken ? { token: o.accessToken, expiresAt: Number(o.expiresAt) || 0 } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * How close to running out a token is taken as run out: Claude Code refreshes its own this close to the end, so a
+ * moment of it refreshes then, and a process handed one this close is started again for its next turn.
+ */
+export const CLAUDE_TOKEN_MARGIN_MS = 5 * 60_000;
+
+let refreshing: Promise<void> | null = null;
+
+/**
+ * The machine's Claude Code access token for a profile's process, refreshed first (by the machine's own claude, in
+ * its own file) when it is about to run out. Throws, in words for the chat, when there is none to use.
+ */
+export async function machineClaudeToken(env: NodeJS.ProcessEnv = process.env): Promise<{ token: string; expiresAt: number }> {
+  let credentials = readClaudeCredentials(env);
+  if (!credentials) throw new Error("这台机器上的 Claude Code 没有登录（或者登录存在钥匙串里），要在 station 上重新登录");
+  if (credentials.expiresAt - Date.now() > CLAUDE_TOKEN_MARGIN_MS) return credentials;
+  refreshing ??= refreshClaude(env).finally(() => { refreshing = null; });
+  await refreshing;
+  credentials = readClaudeCredentials(env);
+  if (!credentials || credentials.expiresAt <= Date.now()) throw new Error("这台机器上 Claude Code 的登录过期了，没能刷新：在 station 上运行一次 claude 看看");
+  return credentials;
+}
+
+/**
+ * The machine's own claude, asked for a word with the smallest model: it refreshes its login on the way (in its own
+ * file, as it always does). Kept out of its history.
+ */
+async function refreshClaude(env: NodeJS.ProcessEnv): Promise<void> {
+  log.info("refreshing the machine's Claude Code login");
+  try {
+    const child = execFile("claude", ["-p", "--model", "haiku", "--no-session-persistence", "Reply with one word: ok"], {
+      env: machineEnv(env, CLAUDE_DROP), cwd: tmpdir(), timeout: 120_000,
+    });
+    child.stdin?.end();
+    await new Promise<void>((resolve, reject) => {
+      child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`claude exited (${code})`))));
+      child.on("error", reject);
+    });
+  } catch (error) {
+    log.warn("could not refresh the machine's Claude Code login", { error: String(error) });
+  }
+}
+
+/**
+ * A machine profile's Codex home, sharing the machine's login: its auth.json a link to the machine's. Made again when
+ * something replaced it (a sign-in in the home, say).
+ */
+export function linkCodexAuth(home: string, env: NodeJS.ProcessEnv = process.env): void {
+  const target = codexAuthFile(env);
+  const link = join(home, "auth.json");
+  mkdirSync(home, { recursive: true });
+  try {
+    if (lstatSync(link).isSymbolicLink() && readlinkSync(link) === target) return;
+    rmSync(link, { force: true });
+  } catch {
+    // none yet
+  }
+  symlinkSync(target, link);
 }
 
 /** The account in Codex's auth.json: its id token's email and ChatGPT plan (none for an API key, or in the keyring). */

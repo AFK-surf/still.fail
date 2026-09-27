@@ -5,6 +5,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { RuntimeKind } from "./config.ts";
+import { linkCodexAuth, machineClaudeToken } from "./machine-logins.ts";
 
 export type AccessKind = "subscription" | "opencode-go" | "anthropic-api" | "env";
 
@@ -81,6 +82,8 @@ const run = promisify(execFile);
 /** Asks the provider or runtime whether this profile works, and what models it offers. */
 export async function checkProfile(options: {
   runtime: RuntimeKind; kind: AccessKind; key: string; home: string; env: NodeJS.ProcessEnv;
+  /** On the machine's own login (machine-logins.ts). */
+  machine?: boolean;
 }): Promise<ProfileCheck> {
   const checkedAt = Date.now();
   try {
@@ -104,13 +107,15 @@ export async function checkProfile(options: {
       return { state: "ok", detail: `可用，${models.length} 个模型`, models, checkedAt };
     }
     if (options.kind === "subscription" && options.runtime === "claude") {
-      const { stdout } = await run("claude", ["auth", "status"], { env: { ...options.env, CLAUDE_CONFIG_DIR: options.home }, timeout: 20_000 });
+      const machine = options.machine ? { CLAUDE_CODE_OAUTH_TOKEN: (await machineClaudeToken(options.env)).token } : {};
+      const { stdout } = await run("claude", ["auth", "status"], { env: { ...options.env, ...machine, CLAUDE_CONFIG_DIR: options.home }, timeout: 20_000 });
       const status = JSON.parse(stdout) as { loggedIn?: boolean; authMethod?: string; email?: string; subscriptionType?: string };
       return status.loggedIn
         ? { state: "ok", detail: ["已登录", status.email, status.subscriptionType].filter(Boolean).join("，"), models: null, checkedAt }
         : { state: "login", detail: "还没登录", models: null, checkedAt };
     }
     if (options.kind === "subscription" && options.runtime === "codex") {
+      if (options.machine) linkCodexAuth(options.home, options.env);
       const { stdout, stderr } = await run("codex", ["login", "status"], { env: { ...options.env, CODEX_HOME: options.home }, timeout: 20_000 });
       const text = `${stdout}${stderr}`.trim();
       return /not logged in/i.test(text)

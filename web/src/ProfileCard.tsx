@@ -20,7 +20,7 @@ export function ProfileCard({ profile, uses, to, action, framed }: { profile: Pr
     <Card
       mark={<ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={18} />}
       title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} /></>}
-      sub={[ACCESS[profile.access.kind].label, uses].filter(Boolean).join(" · ")}
+      sub={[profile.machine ? "本机登录" : ACCESS[profile.access.kind].label, uses].filter(Boolean).join(" · ")}
       quota={profile.quota ? <QuotaBars quota={profile.quota} compact /> : null}
       state={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>}
       action={action ?? (to ? <ChevronRight {...ICON} className="profile-card-chevron" /> : null)}

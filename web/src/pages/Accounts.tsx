@@ -68,20 +68,36 @@ export type Choice = keyof typeof CHOICES;
 export const PROFILE_LEAD = <>agent 用它来跑模型：<span className="phrase">一份订阅（Claude、ChatGPT），</span>或者一个模型服务的 key。</>;
 
 /**
- * Where a first profile is asked for: the subscriptions this machine's own Claude Code and Codex are signed in with
- * (the station reads them: src/machine-logins.ts), each offered as the kind to add. The login is not taken over — ember
- * signs in with the same account once more, and the machine's own stays as it was.
+ * Where a first profile is asked for: the accounts this machine's own Claude Code and Codex are signed in with (the
+ * station reads them: src/machine-logins.ts). One kept in a file is used as it is — a profile on the machine's login,
+ * which follows it; one kept only in the keychain cannot be, and is offered as a sign-in with the same account.
  */
 export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] | undefined; onAdd(choice: Choice): void }) {
-  const offers = (logins ?? []).filter((l) => l.loggedIn && l.plan);
+  const api = useApi();
+  const link = useLink();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const overview = useOverview(useStation().address);
+  const use = useAction((runtime: MachineLogin["runtime"]) => api.useMachineLogin(runtime), ({ id }) => {
+    toast("已添加 Profile，用的是这台机器的登录");
+    navigate(link(`/settings/accounts/${id}`));
+  });
+  const taken = new Set(overview.value?.profiles.filter((p) => p.machine).map((p) => p.runtime));
+  const offers = (logins ?? []).filter((l) => l.loggedIn && l.plan && !taken.has(l.runtime));
   if (!offers.length) return null;
+  const keychain = offers.some((l) => !l.usable);
   return (
     <div className="machine-logins">
       <p className="machine-logins-head">这台机器上已经登录了</p>
       {offers.map((l) => (
-        <MachineLoginCard key={l.runtime} login={l} action={<Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>用这个账号</Button>} />
+        <MachineLoginCard key={l.runtime} login={l} action={l.usable
+          ? <Button disabled={use.busy} onClick={() => void use.run(l.runtime)}>用这个账号</Button>
+          : <Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</Button>} />
       ))}
-      <p className="machine-logins-note">会用同一个账号为 ember 单独登录一次，这台机器上原来的登录不受影响。</p>
+      {use.error && <p className="field-error" role="alert">{use.error.message}</p>}
+      <p className="machine-logins-note">
+        {keychain ? "存在钥匙串里的登录不能直接用，要为 ember 单独登录一次，这台机器上原来的登录不受影响。" : "直接用这台机器上的登录，不用再登录；在这台机器上换号或登出，它也跟着变。"}
+      </p>
     </div>
   );
 }
@@ -196,7 +212,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
             <input className="input identity-name-input" value={name} autoFocus aria-label="名称" onChange={(e) => setName(e.target.value)} onBlur={rename}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
-            <h1 className="identity-name">{profile.name}<RuntimeTags runtimes={profile.runtimes} /><IconButton label="改名" icon={Edit} onClick={() => setEditingName(true)} /></h1>
+            <h1 className="identity-name">{profile.name}<RuntimeTags runtimes={profile.runtimes} />{!profile.machine && <IconButton label="改名" icon={Edit} onClick={() => setEditingName(true)} />}</h1>
           )}
           <p className="identity-sub profile-state">
             <Pill tone={profile.checkTone}>{profile.checkText}</Pill>
@@ -206,11 +222,11 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
             <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={Refresh} disabled={check.busy} data-busy={check.busy || undefined} onClick={() => void check.run()} />
           </p>
         </div>
-        <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
+        {!profile.machine && <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />}
       </header>
       {(save.error || remove.error) && <p className="field-error" role="alert">{(save.error ?? remove.error)!.message}</p>}
       {/* A subscription that needs signing in, or is signing in: that comes first. */}
-      {signIn && (latest?.state === "login" || signingIn) && <section className="section"><SignIn profile={profile} needed /></section>}
+      {signIn && !profile.machine && (latest?.state === "login" || signingIn) && <section className="section"><SignIn profile={profile} needed /></section>}
 
       <QuotaSection profile={profile} />
 
@@ -226,13 +242,33 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
         )}
       </Section>
 
-      <AccountSection profile={profile} signedIn={latest?.state !== "login" && !signingIn}
-        onSave={(input, done) => saveThen(input, () => { toast("已保存，正在检查"); done(); })} busy={save.busy} />
+      {profile.machine ? <MachineAccount profile={profile} /> : <AccountSection profile={profile} signedIn={latest?.state !== "login" && !signingIn}
+        onSave={(input, done) => saveThen(input, () => { toast("已保存，正在检查"); done(); })} busy={save.busy} />}
 
       {profile.access.kind === "env" && <EnvSection profile={profile} onSave={(input) => saveThen(input, () => toast("已保存"))} busy={save.busy} />}
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
         title={`删除「${profile.name}」？`} action="删除 Profile" description="只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。" />
     </div>
+  );
+}
+
+const MACHINE_RUNTIME: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex" };
+
+/** A profile on the machine's own login: whose it is, and that it is changed on the machine. */
+function MachineAccount({ profile }: { profile: Profile }) {
+  const station = useStation();
+  const runtime = MACHINE_RUNTIME[profile.runtime];
+  return (
+    <Section title="账号">
+      <div className="card">
+        <div className="card-row">
+          <div className="card-row-text">
+            <strong>{station.name || "这台机器"}上 {runtime} 的登录</strong>
+            <span className="muted">要换号、重新登录或登出，在这台机器的 {runtime} 里做；这个 Profile 跟着它变，不能在这里编辑或删除。</span>
+          </div>
+        </div>
+      </div>
+    </Section>
   );
 }
 

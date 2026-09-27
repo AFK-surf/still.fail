@@ -11,6 +11,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { expandRoute, type Profile } from "../config.ts";
 import { log } from "../log.ts";
+import { linkCodexAuth } from "../machine-logins.ts";
 import { codexOverrides } from "../profiles.ts";
 import { spawnGroup, type GroupProcess, type ProcessRegistry } from "./process.ts";
 import type { AgentDriver, AgentSession, FailureReason, LiveEvent, LivePhase, LiveStepKind, OpenOptions, SessionEvents, TurnOutcome } from "./types.ts";
@@ -96,6 +97,7 @@ class Host {
 
   constructor(profile: Profile, command: string, registry: ProcessRegistry, onExit: () => void) {
     mkdirSync(profile.home, { recursive: true });
+    if (profile.machine) linkCodexAuth(profile.home);
     const env: NodeJS.ProcessEnv = { ...process.env };
     for (const name of SCRUBBED) delete env[name];
     Object.assign(env, expandRoute(profile.envs.codex ?? {}, profile.id), { CODEX_HOME: profile.home });
