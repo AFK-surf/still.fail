@@ -574,7 +574,7 @@ fun NewConnectScreen(station: String) {
                     Steps(listOf(
                         (if (m.install != null) (if (installed?.installed == true) "已装进「${installed.team ?: "工作区"}」。" else "app 已经建好。安装到工作区：在 Slack 里点「允许」，bot token 会自动交给 station。")
                         else "app 已经建好。安装到工作区，然后在 OAuth 页复制 Bot User OAuth Token（xoxb- 开头）。") to (if (installed?.installed == true) null else ({ open(m.install ?: m.installLink) })),
-                        "在 Basic Information 页生成 App-Level Token 并复制（xapp- 开头；权限 Slack 已经勾好）。" to { open(m.appTokenLink) },
+                        "在 Socket Mode 页生成 App-Level Token 并复制（xapp- 开头，权限已经选好）。" to { open(m.appTokenLink) },
                         (if (m.install != null) "把 App-Level Token 填在下面。" else "把两个 token 填在下面。") to null,
                     ))
                     TokenFields(station, tokens, install = m.state)
@@ -583,7 +583,7 @@ fun NewConnectScreen(station: String) {
                 "manual" -> {
                     Steps(listOf(
                         "用 ember 的配置在 Slack 新建一个 app。" to { scope.launch { try { open(api.createAppUrl("ember")) } catch (e: CoreException) { error = e.message } }; Unit },
-                        "在 app 的 Basic Information 页生成 App-Level Token（权限 Slack 已经勾好）。" to null,
+                        "在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。" to null,
                         "在 Install App 页安装到工作区，复制 Bot User OAuth Token。" to null,
                         "把两个 token 填在下面。" to null,
                     ))

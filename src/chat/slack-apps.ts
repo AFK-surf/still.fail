@@ -208,7 +208,8 @@ export async function appIdOf(botToken: string): Promise<string> {
 /** Pages in Slack's app settings a person may need, by app id. */
 export function slackAppLinks(appId: string) {
   const base = `https://api.slack.com/apps/${appId}`;
-  return { settings: base, install: `${base}/install-on-team`, appToken: `${base}/general`, oauth: `${base}/oauth` };
+  // An app-level token is made from the Socket Mode page: there Slack has its scope (connections:write) already picked.
+  return { settings: base, install: `${base}/install-on-team`, appToken: `${base}/socket-mode`, oauth: `${base}/oauth` };
 }
 
 /** Who a configuration token belongs to and in which workspace, as Slack shows them; null if Slack will not say. */

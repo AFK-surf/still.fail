@@ -14,7 +14,7 @@ export function CreateAppSteps({ name }: { name: string }) {
         <span>用 ember 的配置在 Slack 新建一个 app，名字是「{name.trim() || "ember"}」。</span>
         <Button icon={External} onClick={() => void open.run()} busy={open.busy}>在 Slack 创建 app</Button>
       </li>
-      <li>在 app 的 Basic Information 页生成 App-Level Token（权限 Slack 已经勾好）。</li>
+      <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>
       <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
       <li>把两个 token 填在下面。</li>
     </ol>

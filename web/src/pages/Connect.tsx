@@ -521,8 +521,8 @@ function MadeAppSteps({ made }: { made: MadeSlackApp }) {
         </li>
       )}
       <li>
-        <span>在 Basic Information 页生成 App-Level Token 并复制（xapp- 开头；权限 Slack 已经勾好）。</span>
-        <a className="btn btn-secondary" href={links.appToken} target="_blank" rel="noopener"><External {...ICON} />打开 Basic Information</a>
+        <span>在 Socket Mode 页生成 App-Level Token 并复制（xapp- 开头，权限已经选好）。</span>
+        <a className="btn btn-secondary" href={links.appToken} target="_blank" rel="noopener"><External {...ICON} />打开 Socket Mode</a>
       </li>
       <li>{made.install ? "把 App-Level Token 填在下面。" : "把两个 token 填在下面。"}</li>
     </ol>
