@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -159,15 +160,15 @@ private fun Lead(text: String) = Text(text, fontSize = 14.sp, color = C.muted, t
 private fun Error(text: String) = Text(text, fontSize = 13.sp, color = C.red)
 
 @Composable
-private fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
     val on = enabled && !busy
     Row(
-        Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(if (primary) (if (enabled) C.ink else C.line) else C.chip)
+        Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
             .clickable(enabled = on, onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (busy) CircularProgressIndicator(Modifier.size(14.dp), color = if (primary) C.bg else C.muted, strokeWidth = 1.5.dp)
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (primary) C.bg else C.ink)
+        Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (primary && danger && enabled) Color.White else if (primary) C.bg else C.ink)
     }
 }
 
@@ -243,6 +244,8 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
                 PickRow(w.name, "${w.stations} 台 station · ${w.members} 人", checked = w.id == app.workspace) { app.pickWorkspace(w.id); app.sheet = null }
             }
         }
+        val current = byAccount.flatMap { it.workspaces }.firstOrNull { it.id == app.workspace }
+        if (current != null) PickRow("「${current.name}」的设置", "名字、成员、退出") { openWorkspacePage(app) }
         PickRow("＋ 新建 workspace", color = C.accent) { openNewWorkspace(app) }
     }
 }

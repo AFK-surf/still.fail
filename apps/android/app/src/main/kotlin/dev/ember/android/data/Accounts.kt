@@ -29,9 +29,25 @@ data class WorkspaceEntry(val workspace: WorkspaceSummary, val account: Account)
 
 fun List<AccountWorkspaces>.entries(): List<WorkspaceEntry> = flatMap { a -> a.workspaces.map { WorkspaceEntry(it, a.account) } }.distinctBy { it.workspace.id }
 
-@Serializable data class Member(val email: String, val name: String = "")
+val ROLE_HINT = mapOf("owner" to "管理一切，包括成员角色和删除 workspace", "admin" to "邀请成员、添加和移除 station", "member" to "使用 workspace 里的 station")
+
+@Serializable data class Member(val email: String, val name: String = "", val sub: String = "", val picture: String? = null, val role: String = "member")
 
 @Serializable data class WorkspaceStation(val id: String, val name: String = "")
 
-/** The `workspace` topic, as far as the app reads it: its members, to name people by their email, and its stations' names. */
-@Serializable data class WorkspaceView(val id: String, val name: String = "", val members: List<Member> = emptyList(), val stations: List<WorkspaceStation> = emptyList())
+/** An invitation not accepted yet; `time` has its expiry in words (the core's). */
+@Serializable data class Invitation(val id: String, val role: String = "member", val email: String? = null, val time: Map<String, Stamp>? = null)
+
+/**
+ * The `workspace` topic: the viewer's role in it, its members (to name people by their email, and to manage them), its
+ * stations' names, and the invitations not accepted yet.
+ */
+@Serializable data class WorkspaceView(
+    val id: String, val name: String = "", val role: String = "member", val members: List<Member> = emptyList(),
+    val stations: List<WorkspaceStation> = emptyList(), val invitations: List<Invitation> = emptyList(),
+) {
+    val manager get() = role == "owner" || role == "admin"
+}
+
+/** Where an account is signed in to ember (the `loginSessions` topic); `time` has when, in words. */
+@Serializable data class LoginSession(val id: String, val name: String = "", val current: Boolean = false, val time: Map<String, Stamp>? = null)

@@ -65,6 +65,7 @@ import dev.ember.android.ui.Loading
 import dev.ember.android.ui.Mark
 import dev.ember.android.ui.NavBack
 import dev.ember.android.ui.NavBar
+import dev.ember.android.ui.NavButton
 import dev.ember.android.ui.Ring
 import dev.ember.android.ui.SectionHeader
 import dev.ember.android.ui.SlackMark
@@ -125,6 +126,9 @@ fun StationsScreen(current: WorkspaceEntry) {
                 }
             }
         }
+        if (list != null && isManager(current)) ListCard {
+            ListRow(onClick = { openAddStation(app, current, list.map { it.id }) }) { Text("＋ 添加 station", fontSize = 15.sp, color = C.accent) }
+        }
         Spacer(Modifier.height(30.dp))
     }
 }
@@ -135,9 +139,10 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     val s = stations.value?.firstOrNull { it.station == address }
     Column(Modifier.fillMaxSize()) {
+        val manager = isManager(current)
         NavBar("Station", app::pop, s?.name ?: stationName(address), sub = s?.let { st ->
             { Text(st.host?.cpuModel?.ifEmpty { null } ?: if (st.online) "在线" else "离线", fontSize = 11.sp, color = C.muted, maxLines = 1) }
-        })
+        }, trailing = if (s != null && manager) ({ NavButton(Icons.More, { openStationMenu(app, current, s) }) }) else null)
         if (s == null) return Loading(stations.error?.message ?: "正在读取…")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             val host = s.host
@@ -147,6 +152,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                         host.meters.forEach { Ring(it.percent, it.short, it.level) }
                     }
                     Text(host.line, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 8.dp))
+                    s.overview?.processesText?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp)) }
                 }
             } else if (!s.online) {
                 Card {

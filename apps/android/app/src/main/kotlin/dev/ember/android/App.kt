@@ -80,6 +80,8 @@ sealed interface Screen {
     /** A profile's models, to pick which may be used. */
     data class Profile(val address: String, val profile: String) : Screen { override val id = "profile/$address/$profile" }
     data object Me : Screen { override val id = "me" }
+    /** The workspace itself: its name, its people, leaving it. */
+    data object Workspace : Screen { override val id = "workspace" }
 }
 
 class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cloudOrigin: String) {
@@ -191,6 +193,7 @@ private fun Pages(app: AppState, current: dev.ember.android.data.WorkspaceEntry)
                     is Screen.Profile -> ProfileScreen(current, screen.address, screen.profile)
                     is Screen.RunSettings -> dev.ember.android.screens.RunSettingsScreen(screen.station, screen.of, screen.key)
                     Screen.Me -> MeScreen(current)
+                    Screen.Workspace -> dev.ember.android.screens.WorkspaceScreen(current)
                 }
             }
         }

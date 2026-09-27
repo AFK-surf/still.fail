@@ -1096,6 +1096,17 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                 Detail("创建", (view?.thread ?: thread).time?.get("createdAt")?.ago ?: "")
                 (view?.thread ?: thread).lastMessage?.let { Detail("最近消息", it.time?.get("createdAt")?.ago ?: "") }
             }
+            view?.slackUrl?.let { url ->
+                GroupLabel("在 Slack 里")
+                val context = LocalContext.current
+                InfoList {
+                    InfoRow(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }) {
+                        SlackMark(16.dp)
+                        Text("在 Slack 中打开", fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                    }
+                }
+            }
             if (view != null && view.agents.isNotEmpty()) {
                 GroupLabel("参与的 agent · 点开看它的执行历史")
                 InfoList {

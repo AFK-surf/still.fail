@@ -86,6 +86,8 @@ fun MeScreen(current: WorkspaceEntry) {
         val themes = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
         Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },
             Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth(), height = 36.dp, fill = true)
+        SectionHeader("登录的地方", start = 24.dp)
+        Devices(current)
         // Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added.
         SectionHeader("账号", start = 24.dp)
         ListCard {

@@ -81,6 +81,7 @@ object Topics {
     fun chats(scope: String, mine: Boolean) = buildJsonObject { put("topic", "chats"); put("scope", scope); put("mine", mine) }
     fun stations(scope: String) = buildJsonObject { put("topic", "stations"); put("scope", scope) }
     fun workspace(id: String) = buildJsonObject { put("topic", "workspace"); put("workspace", id) }
+    fun loginSessions(account: String) = buildJsonObject { put("topic", "loginSessions"); put("account", account) }
     fun overview(station: String) = buildJsonObject { put("topic", "overview"); put("station", station) }
     fun host(station: String) = buildJsonObject { put("topic", "host"); put("station", station) }
     /** An item's page: its chat, or its agent before it has one. */

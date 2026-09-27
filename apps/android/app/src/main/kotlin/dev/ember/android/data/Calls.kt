@@ -138,7 +138,27 @@ class Cloud(private val core: EmberCore, private val account: String) {
     suspend fun acceptInvitation(id: String): String = call("POST", "/v1/invitations/${at(id)}/accept").jsonObject["id"]!!.jsonPrimitive.content
 
     suspend fun declineInvitation(id: String) { call("POST", "/v1/invitations/${at(id)}/decline") }
+
+    suspend fun renameWorkspace(workspace: String, name: String) { call("PATCH", ws(workspace), buildJsonObject { put("name", name) }) }
+    suspend fun deleteWorkspace(workspace: String) { call("DELETE", ws(workspace)) }
+    /** Leaving a workspace is removing oneself. */
+    suspend fun removeMember(workspace: String, member: String) { call("DELETE", "${ws(workspace)}/members/${at(member)}") }
+    suspend fun setRole(workspace: String, member: String, role: String) { call("PATCH", "${ws(workspace)}/members/${at(member)}", buildJsonObject { put("role", role) }) }
+    suspend fun invite(workspace: String, role: String, email: String) { call("POST", "${ws(workspace)}/invitations", buildJsonObject { put("role", role); put("email", email) }) }
+    suspend fun revokeInvitation(workspace: String, invitation: String) { call("DELETE", "${ws(workspace)}/invitations/${at(invitation)}") }
+    /** A one-time token for a machine to join as a station: the installer's command, and the command for a machine that has ember. */
+    suspend fun enroll(workspace: String, name: String): Enrollment =
+        call("POST", "${ws(workspace)}/enrollments", buildJsonObject { put("name", name) }).jsonObject.let {
+            Enrollment(it["install"]!!.jsonPrimitive.content, it["command"]!!.jsonPrimitive.content)
+        }
+    suspend fun renameStation(workspace: String, station: String, name: String) { call("PATCH", "${ws(workspace)}/stations/${at(station)}", buildJsonObject { put("name", name) }) }
+    suspend fun removeStation(workspace: String, station: String) { call("DELETE", "${ws(workspace)}/stations/${at(station)}") }
+    suspend fun revokeLoginSession(id: String) { call("DELETE", "/v1/auth/sessions/${at(id)}") }
+
+    private fun ws(id: String) = "/v1/workspaces/${at(id)}"
 }
+
+class Enrollment(val install: String, val command: String)
 
 // ember cloud's invite-code errors in Chinese; the core passes their codes through.
 private val INVITE_ERRORS = mapOf(
