@@ -71,9 +71,11 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       // A followed message that was replaced (a streamed reply landing) hands over to the newest.
       if (anchor && !anchor.isConnected) anchor = lastMessage();
       const target = anchor ? Math.min(bottom, Math.max(0, topOf(anchor) - 12)) : Math.max(0, bottom - gap);
+      // Content leaving the bottom (an activity folding away, a message on its way replaced by itself) makes the pane
+      // shorter for a moment, and the browser pulls it up: that is put back at once, as if it never happened.
+      if (settled && placed >= 0 && el.scrollTop < placed - 0.5 && placed <= bottom) place(placed);
       // Following on down glides; anything else (the reader's place kept, the first position) is taken at once.
       const follow = settled && (anchor !== null || gap === 0) && target > el.scrollTop + 0.5;
-      ((window as unknown as { __sl?: unknown[] }).__sl ??= []).push([Math.round(performance.now()), follow ? "F" : "P", Math.round(el.scrollTop), Math.round(target), Math.round(bottom), anchor ? String((anchor as HTMLElement).className).slice(0, 14) : "-", Math.round(gap)]); // TEMP
       if (follow) {
         goal = target;
         atBottom = true;
@@ -87,9 +89,9 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     const onScroll = () => {
       // A glide's own steps are not the reader's, even under a pressed pointer.
       if (reading() && Math.abs(el.scrollTop - placed) >= 1) {
-        ((window as unknown as { __sl?: unknown[] }).__sl ??= []).push([Math.round(performance.now()), "R", Math.round(el.scrollTop), pointerDown, Date.now() - lastInput]); // TEMP
         if (pointerDown) movedWhileDown = true;
         stop();
+        placed = el.scrollTop;
         anchor = null;
         gap = Math.max(0, distance());
         atBottom = gap <= 2;
@@ -103,6 +105,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       // A click (on a message, a button) leaves the pane as it goes; only a drag of it is the reader's move.
       if (!movedWhileDown) return;
       stop();
+      placed = el.scrollTop;
       anchor = null;
       gap = Math.max(0, distance());
       atBottom = gap <= 2;
