@@ -45,6 +45,7 @@ const INPUT_CHARS = 300;
 /** The output rate is told at most this often, over this window (bytes / 4 ≈ tokens, as Zork estimates). */
 const RATE_EVERY_MS = 1_000;
 const RATE_WINDOW_MS = 2_000;
+const RATE_FIRST_MS = 500;
 
 /** A session's recent output, in 250 ms buckets, and when its rate was last told. */
 interface Rate { buckets: [number, number][]; toldAt: number; told: number }
@@ -157,7 +158,8 @@ export class LiveHub {
     for (const key of [...this.#watched.keys()]) this.#unwatch(key);
   }
 
-  /** Output written: its rate is told when a second has passed since it last was (the first output at once). */
+  /** Output written: its rate is told once half a second of it has come (a first few bytes say nothing of the pace),
+   * then when a second has passed since it last was. */
   #counted(key: string, bytes: number): void {
     const now = Date.now();
     let rate = this.#rates.get(key);
@@ -169,6 +171,7 @@ export class LiveHub {
     while (rate.buckets.length && rate.buckets[0]![0] < now - RATE_WINDOW_MS) rate.buckets.shift();
     if (now - rate.toldAt < RATE_EVERY_MS) return;
     const first = rate.buckets[0]![0];
+    if (rate.toldAt === 0 && now - first < RATE_FIRST_MS) return;
     const span = Math.min(RATE_WINDOW_MS, Math.max(250, now - first));
     const total = rate.buckets.reduce((sum, [, b]) => sum + b, 0);
     const tokensPerSecond = Math.max(1, Math.round((total * 1000) / (4 * span)));
