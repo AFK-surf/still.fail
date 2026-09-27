@@ -1,10 +1,10 @@
-import { ArrowLeft, Compose, Key, Monitor, Plug, Settings, Unplug } from "./icons.tsx";
+import { ArrowLeft, ChevronRight, Compose, Key, Monitor, Plug, Settings, Unplug } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation } from "react-router";
 import { useChats, type ChatItem } from "./api.ts";
-import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, Time, Tip } from "./ui.tsx";
+import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, StatusDot, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
 
@@ -65,7 +65,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
           <ChatPane chats={mine} scope={scope} onlyMine newChat={newChat} settings={settings} hidden={!onlyMine} />
         </div>
       </div>
-      {scope !== "local" && <StationTrouble chats={all} to={`${settings}/stations`} />}
+      {scope !== "local" && <StationTrouble chats={all} to={settings} />}
     </>
   );
 }
@@ -78,9 +78,10 @@ function StationTrouble({ chats, to }: { chats: ReturnType<typeof useChats>; to:
   const trouble = chats.value?.trouble;
   if (!trouble) return null;
   return (
-    <NavLink className="nav-row station-trouble" to={to} data-state={trouble.state}>
-      {trouble.state === "reconnecting" ? <span className="spinner row-spinner" aria-hidden="true" /> : <Unplug size={13} />}
+    <NavLink className="station-trouble" to={to} data-state={trouble.state}>
+      {trouble.state === "reconnecting" ? <span className="spinner row-spinner" aria-hidden="true" /> : <StatusDot state={trouble.state === "error" ? "error" : "offline"} />}
       <span className="station-trouble-text">{trouble.text}</span>
+      <ChevronRight size={13} className="station-trouble-go" aria-hidden="true" />
     </NavLink>
   );
 }

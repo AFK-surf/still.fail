@@ -64,10 +64,18 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   useLayoutEffect(put);
   useLayoutEffect(() => {
     let frame = requestAnimationFrame(function follow() { put(); frame = requestAnimationFrame(follow); });
-    const resize = new ResizeObserver(() => setHeight(box.current?.offsetHeight ?? 0));
-    if (box.current) resize.observe(box.current);
-    return () => { cancelAnimationFrame(frame); resize.disconnect(); };
+    return () => cancelAnimationFrame(frame);
   }, []);
+  // Its height, for its place to keep: watched once it is there (the first page to hold a place makes it).
+  const made = spec !== null;
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!made || !el) return;
+    setHeight(el.offsetHeight);
+    const resize = new ResizeObserver(() => setHeight(el.offsetHeight));
+    resize.observe(el);
+    return () => resize.disconnect();
+  }, [made]);
   // Changes only with the height: the places re-render then, not each time a page hands over what it writes to.
   const value = useMemo(() => ({ ...dock, height }), [dock, height]);
   return (
