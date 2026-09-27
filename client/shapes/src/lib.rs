@@ -678,11 +678,33 @@ pub struct SlackTeam {
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct SlackInstall {
-    pub state: String,
+pub struct SlackAppLinks {
+    pub settings: String,
+    pub install: String,
+    pub app_token: String,
+    pub oauth: String,
+}
+
+/// A Slack app ember made that no connect has taken yet, as its maker sees it (never its secrets or tokens).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MadeSlackApp {
     pub app_id: String,
-    pub installed: bool,
+    pub name: String,
+    pub team_id: String,
+    /// The Slack workspace's name, when its configuration token says.
     pub team: Option<String>,
+    #[typeshare(serialized_as = "I54")]
+    pub created: i64,
+    pub links: SlackAppLinks,
+    /// The link that installs it through Slack's OAuth (a station in ember cloud); none when its tokens are copied by hand.
+    pub install: Option<String>,
+    /// Its install's state, what a connect names it by.
+    pub state: Option<String>,
+    pub installed: bool,
+    pub installed_team: Option<String>,
 }
 
 #[typeshare]
@@ -740,7 +762,7 @@ pub struct Overview {
     pub mesh: Option<MeshStatus>,
     pub slack_users: Vec<String>,
     pub slack_teams: Vec<SlackTeam>,
-    pub slack_installs: Vec<SlackInstall>,
+    pub slack_apps: Vec<MadeSlackApp>,
     pub disk: Option<DiskRoom>,
     pub logins: Vec<PendingLogin>,
     /// This machine's own logins (none from a station older than them).

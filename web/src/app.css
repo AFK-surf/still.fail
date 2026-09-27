@@ -1606,3 +1606,5 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .about { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-left: 6px; padding: 0; border: 0; border-radius: 999px; background: none; color: var(--subtle); vertical-align: middle; cursor: help; transition: color var(--dur) var(--ease-out); }
 .about:hover, .about:focus-visible { color: var(--text); }
 .about-text { display: block; line-height: 1.5; }
+/* A list's heading that only names it (not a section of its own): small and quiet, no rule under it. */
+.section-title-quiet { margin: 0 0 6px; font-size: var(--text-xs); font-weight: 500; color: var(--muted); }

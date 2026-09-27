@@ -382,7 +382,9 @@ export function NewConnectScreen() {
   const [step, setStep] = useState<Step>("team");
   const [team, setTeam] = useState<string | null>(null);
   const [appSettings, setAppSettings] = useState(NEW_APP);
-  const [made, setMade] = useState<MadeSlackApp | null>(null);
+  // The app made, as the station keeps it (it outlives this screen until a connect takes it).
+  const [madeId, setMadeId] = useState<string | null>(null);
+  const made: MadeSlackApp | undefined = madeId ? overview?.slackApps.find((a) => a.appId === madeId) : undefined;
   const [tokens, setTokens] = useState<Tokens>(NO_TOKENS);
   const [config, setConfig] = useState("");
   const models = view?.models ?? [];
@@ -394,11 +396,10 @@ export function NewConnectScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const chosen = teams.find((t) => t.teamId === team) ?? (teams.length === 1 ? teams[0] : undefined);
-  const order: Step[] = step === "manual" || (step === "bind" && !made) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
+  const order: Step[] = step === "manual" || (step === "bind" && !madeId) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
   const titles: Record<Step, string> = { team: "选 Slack 工作区", token: "加配置 token", app: "配置 app", install: "安装", manual: "连接 Slack", bind: "绑定模型" };
   const run = (work: () => Promise<unknown>) => { setBusy(true); setError(null); work().catch((e: Error) => setError(e.message)).finally(() => setBusy(false)); };
-  const back = () => ({ team: app.pop, token: () => setStep("team"), app: () => setStep("team"), install: () => setStep("app"), manual: () => setStep("team"), bind: () => setStep(made ? "install" : "manual") }[step]());
-  const installed = made && overview?.slackInstalls.find((i) => i.state === made.state);
+  const back = () => ({ team: app.pop, token: () => setStep("team"), app: () => setStep("team"), install: () => setStep("app"), manual: () => setStep("team"), bind: () => setStep(madeId ? "install" : "manual") }[step]());
   return (
     <div className="m-screen">
       <NavBar back={step === "team" ? "取消" : "上一步"} onBack={back} title="添加连接" sub={<span className="m-navbar-note">{titles[step]} · {Math.max(1, order.indexOf(step) + 1)} / {order.length}</span>} />
@@ -439,14 +440,14 @@ export function NewConnectScreen() {
             <Field value={appSettings.description} onChange={(v) => setAppSettings({ ...appSettings, description: v })} placeholder="Coding agent in your threads" />
             <p className="m-small m-muted">头像、颜色和权限用默认的；建好以后可以在电脑上改。</p>
             <Button label="创建 app" primary busy={busy} enabled={!!appSettings.name.trim() && !!chosen}
-              onClick={() => run(() => api.makeSlackApp({ team: chosen!.teamId, settings: appSettings }).then((r) => { setMade(r); setStep("install"); }))} />
+              onClick={() => run(() => api.makeSlackApp({ team: chosen!.teamId, settings: appSettings }).then((r) => { setMadeId(r.appId); setStep("install"); }))} />
           </>
         )}
         {step === "install" && made && (
           <>
             <ol className="m-steps-list">
               {made.install ? (
-                <li>{installed?.installed ? `已装进「${installed.team ?? "工作区"}」。` : <>app 已经建好。<a href={made.install} target="_blank" rel="noopener">安装到工作区</a>：在 Slack 里点「允许」，bot token 会自动交给 station。</>}</li>
+                <li>{made.installed ? `已装进「${made.installedTeam ?? made.team ?? "工作区"}」。` : <>app 已经建好。<a href={made.install} target="_blank" rel="noopener">安装到工作区</a>：在 Slack 里点「允许」，bot token 会自动交给 station。</>}</li>
               ) : (
                 <li>app 已经建好。<a href={made.links.install} target="_blank" rel="noopener">安装到工作区</a>，然后在 <a href={made.links.oauth} target="_blank" rel="noopener">OAuth 页</a> 复制 Bot User OAuth Token（xoxb- 开头）。</li>
               )}

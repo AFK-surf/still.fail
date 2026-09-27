@@ -39,7 +39,7 @@ export function CloudApp() {
 
 /**
  * Where Slack sends someone who installed an app a station made (its OAuth redirect): the state names the station, and
- * the code goes to it, which takes the bot token. The dialog that made the app sees it installed.
+ * the code goes to it, which takes the bot token and keeps it with the app until a connect takes it.
  */
 function SlackInstalled() {
   const query = useMemo(() => new URLSearchParams(location.search), []);
@@ -60,7 +60,7 @@ function SlackInstalled() {
   if (list && list.length === 0) return <div className="gate"><h1>先登录 ember</h1><p>要用建这个 app 的账号登录，才能把安装交给 station。登录后再从 ember 里点一次「安装到工作区」。</p>{back}</div>;
   if (!result) return <Splash label="正在把安装交给 station…" />;
   if ("error" in result) return <div className="gate"><h1>没能完成安装</h1><p>{result.error}</p>{back}</div>;
-  return <div className="gate"><h1>已装进「{result.team ?? "工作区"}」</h1><p>回到 ember 的对话框，填上 App-Level Token 就能连上。这个页面可以关了。</p></div>;
+  return <div className="gate"><h1>已装进「{result.team ?? "工作区"}」</h1><p>回到 ember：这个 app 在「连接」页等着，填上 App-Level Token 就能连上。这个页面可以关了。</p></div>;
 }
 
 function Home() {

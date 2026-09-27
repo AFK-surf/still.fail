@@ -11,14 +11,13 @@ import type { Attachment, ChatsView, Quote, ChatView, ConnectsView, HistoryView,
 // What is sent to a station, and what its calls answer: its own declarations.
 import type * as Station from "../../src/admin/types.ts";
 import type { ConnectInput, ProfileInput } from "../../src/admin/types.ts";
-import type { AccessKind, RuntimeKind } from "./core/shapes.ts";
+import type { AccessKind, RuntimeKind, SlackAppLinks } from "./core/shapes.ts";
 import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
 
 export type { ConnectInput, ConnectKind, ProfileInput } from "../../src/admin/types.ts";
 export type { SlackAppSettings, SlackGroup, SlackIdentity, TopicState };
 export { CoreError };
 
-export interface SlackAppLinks { settings: string; install: string; appToken: string; oauth: string }
 export type SlackAppView =
   | { state: "no_app"; appId: null; links: null; settings: null; groups: SlackGroup[]; error?: string }
   | { state: "no_config_token"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[] }
@@ -129,7 +128,6 @@ export function useStationCall(station: string): StationCall {
 }
 
 /** The admin API of one station, by what each call does. */
-export interface MadeSlackApp { appId: string; links: SlackAppLinks; install: string | null; state: string | null; iconError: string | null }
 
 export function stationApi(t: StationCall) {
   const { request } = t;
@@ -169,7 +167,10 @@ export function stationApi(t: StationCall) {
       request<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>("PUT", `/connects/${at(connect)}/slack-app`, input),
     /** Makes a Slack app with the workspace's configuration token (ember's manifest, Socket Mode on), for a connect to come. */
     /** `install`: Slack's install link, when the app is installed through OAuth (a station in ember cloud); `state` names it. */
-    makeSlackApp: (input: { team: string; settings: SlackAppSettings; icon?: string }) => request<MadeSlackApp>("POST", "/slack/apps", input),
+    /** The app is kept on the station, waiting for its connect (the overview's `slackApps`); this says which it is. */
+    makeSlackApp: (input: { team: string; settings: SlackAppSettings; icon?: string }) => request<{ appId: string; iconError: string | null }>("POST", "/slack/apps", input),
+    /** Drops an app made here from the waiting ones; it stays in Slack. */
+    dropSlackApp: (appId: string) => request<Station.Overview>("DELETE", `/slack/apps/${at(appId)}`),
     /** Hands Slack's install code to the station that made the app. */
     slackInstalled: (code: string, state: string) => request<{ team: string | null }>("POST", "/slack/installs", { code, state }),
     /** A new Slack connect from its tokens: the station names it as its bot is named in Slack. */

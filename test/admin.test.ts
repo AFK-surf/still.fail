@@ -195,22 +195,34 @@ test("a Slack app made on a station in ember cloud is installed through Slack's 
     assert.equal(sent.manifest.display_information.description, "Hi");
     // Slack sends the person back to ember cloud's page, which hands the code to the station the state names.
     assert.deepEqual(sent.manifest.oauth_config.redirect_urls, ["https://cloud.test/slack/installed"]);
-    const install = new URL(made.install);
+    const install = new URL((await s.call("GET", "/overview")).body.slackApps[0].install);
     // It asks for what the app has on, no more.
     assert.equal(install.searchParams.get("scope"), sent.manifest.oauth_config.scopes.bot.join(","));
     assert.equal(install.searchParams.get("scope")!.split(",").includes("im:write"), false);
     assert.equal(install.searchParams.get("client_id"), "C1");
     assert.equal(install.searchParams.get("redirect_uri"), "https://cloud.test/slack/installed");
-    assert.match(made.state, /^ws\/st~[0-9a-f]{32}$/);
-    assert.equal(install.searchParams.get("state"), made.state);
-    assert.deepEqual((await s.call("GET", "/overview")).body.slackInstalls, [{ state: made.state, appId: "A0NEW", installed: false, team: null }]);
+    assert.match(install.searchParams.get("state")!, /^ws\/st~[0-9a-f]{32}$/);
+    // The app is kept on the station from the moment it is made: its maker sees it waiting, to install and finish any time.
+    const waiting = (await s.call("GET", "/overview")).body.slackApps;
+    assert.equal(waiting.length, 1);
+    assert.deepEqual([waiting[0].appId, waiting[0].name, waiting[0].teamId, waiting[0].install, waiting[0].installed], ["A0NEW", "Helper", "T2", install.href, false]);
+    assert.equal(JSON.stringify(waiting).includes("S1"), false, "its secret stays on the station");
+    assert.equal(made.install, undefined, "what the pages need of it comes with the overview");
+    // Kept in the config: a restart of the station loses nothing.
+    assert.equal(JSON.parse(readFileSync(s.path, "utf8")).slackApps[0].appId, "A0NEW");
     assert.equal((await s.call("POST", "/slack/installs", { code: "c", state: "ws/st~other" })).status, 400, "only an install this station began");
-    assert.deepEqual((await s.call("POST", "/slack/installs", { code: "the-code", state: made.state })).body, { team: "Acme" });
+    assert.deepEqual((await s.call("POST", "/slack/installs", { code: "the-code", state: waiting[0].state })).body, { team: "Acme" });
     assert.equal(asked[0]!.get("code"), "the-code");
     assert.equal(asked[0]!.get("client_secret"), "S1");
     const overview = (await s.call("GET", "/overview")).body;
-    assert.deepEqual(overview.slackInstalls, [{ state: made.state, appId: "A0NEW", installed: true, team: "Acme" }]);
+    assert.deepEqual([overview.slackApps[0].installed, overview.slackApps[0].installedTeam], [true, "Acme"]);
     assert.equal(JSON.stringify(overview).includes("xoxb-installed"), false, "the token stays on the station");
+    // Only its maker sees it, or drops it (it stays in Slack).
+    s.settings.update((raw) => ({ ...raw, slackApps: [...(raw.slackApps ?? []), { appId: "A0BOB", name: "Bob's", teamId: "T3", by: "bob@example.com", created: 1 }] }));
+    assert.deepEqual((await s.call("GET", "/overview")).body.slackApps.map((a: any) => a.appId), ["A0NEW"]);
+    assert.equal((await s.call("DELETE", "/slack/apps/A0BOB")).status, 404);
+    assert.equal((await s.call("DELETE", "/slack/apps/A0NEW")).status, 200);
+    assert.deepEqual((await s.call("GET", "/overview")).body.slackApps, []);
   } finally {
     s.close();
   }

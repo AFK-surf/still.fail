@@ -95,6 +95,8 @@ export interface Config {
   adminAccess: { teamDomain: string; aud: string } | null;
   /** Slack app configuration tokens, each a person's own (`by`), one per Slack workspace: ember makes and edits apps there with them. */
   slackConfigTokens: ConfigToken[];
+  /** Slack apps ember made that no connect has taken yet: kept until one does (or someone drops it), however long. */
+  slackApps: SlackAppMade[];
   /** Shared MEMORY.md and skills/ linked into every profile home. */
   agentHome: string;
   /** Agents' MCP endpoint. `named`: the config sets the port (else it is the usual one, which gives way when taken: ports.ts). */
@@ -139,6 +141,32 @@ export interface RawProfile {
   machine?: boolean;
 }
 
+/**
+ * A Slack app ember made with someone's configuration token (`by`, whose it is), waiting for its connect. Made to be
+ * installed through Slack's OAuth (`oauth`: a station in ember cloud), Slack's code comes back here and becomes its bot
+ * token; else its tokens are copied from Slack by hand.
+ */
+export interface SlackAppMade {
+  appId: string;
+  name: string;
+  /** The Slack workspace it was made in. */
+  teamId: string;
+  by: string;
+  created: number;
+  oauth?: {
+    /** The install link's state: which station and install it is. */
+    state: string;
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    /** The link that installs it. */
+    install: string;
+    /** Once installed. */
+    botToken?: string;
+    installedTeam?: string | null;
+  };
+}
+
 /** config.json as written; parseConfig turns it into a validated Config. */
 export interface RawConfig {
   agentHome?: string;
@@ -146,6 +174,7 @@ export interface RawConfig {
   http?: { host?: string; port?: number };
   connects?: RawConnect[];
   slackConfigTokens?: ConfigToken[];
+  slackApps?: SlackAppMade[];
   profiles?: RawProfile[];
   maxNudges?: number;
   warmMinutes?: number;
@@ -214,6 +243,7 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
       ? { teamDomain: raw.admin.access.teamDomain, aud: raw.admin.access.aud }
       : null,
     slackConfigTokens: (raw.slackConfigTokens ?? []).filter((t) => t.refreshToken && t.teamId && t.by),
+    slackApps: (raw.slackApps ?? []).filter((a) => a.appId && a.by),
     agentHome: isAbsolute(agentHome) ? agentHome : join(dataDir, agentHome),
     http: { host: raw.http?.host ?? "127.0.0.1", port: raw.http?.port ?? 4750, named: raw.http?.port !== undefined },
     connects,

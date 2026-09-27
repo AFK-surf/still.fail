@@ -98,7 +98,12 @@ export interface Overview {
   /** The Slack workspaces ember makes and edits connects' apps in, an app configuration token each (never shown). */
   slackTeams: { teamId: string; name: string; owner: ConfigTokenOwner | null }[];
   /** Slack apps made here, waiting for their connect: `installed` once Slack sent the install back (`team`, where to). */
-  slackInstalls: { state: string; appId: string; installed: boolean; team: string | null }[];
+  /** The Slack apps the viewer made and has not connected yet. */
+  slackApps: {
+    appId: string; name: string; teamId: string; team: string | null; created: number;
+    links: { settings: string; install: string; appToken: string; oauth: string };
+    install: string | null; state: string | null; installed: boolean; installedTeam: string | null;
+  }[];
   /** The data disk's room; null when it cannot be read. */
   disk: { freeBytes: number; totalBytes: number } | null;
   /** Subscription sign-ins that make a profile once they succeed (POST /logins), with the profile each made. */

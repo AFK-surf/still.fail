@@ -4,7 +4,7 @@ import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
 import { CheckCircle, External, Key, Plus, Power, Refresh, Trash, User } from "../icons.tsx";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type SlackInstall, type ConnectMode, type Connect, type ModelOption, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
+import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type ConnectMode, type Connect, type ModelOption, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
 import { MODE } from "../format.ts";
 import { AppFields, ConfigTokenForm, NEW_APP, SlackAppSection } from "./SlackApp.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
@@ -360,7 +360,7 @@ function TokenOwner({ team }: { team: SlackTeam }) {
  * the app-level token; last, the model it runs. Without a configuration token the app is made in Slack by hand and
  * both tokens are pasted.
  */
-export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): void }) {
+export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onClose(): void; resume?: string | undefined }) {
   const api = useApi();
   const station = useStation();
   const link = useLink();
@@ -368,13 +368,16 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const navigate = useNavigate();
   const toast = useToast();
   const teams = overview.value?.slackTeams ?? [];
-  const [step, setStep] = useState<NewStep>("team");
+  // `resume`: an app made before and still waiting on the station, picked up where it was left (installing it).
+  const [step, setStep] = useState<NewStep>(resume ? "install" : "team");
   const [team, setTeam] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [app, setApp] = useState(NEW_APP);
   const [icon, setIcon] = useState<string | null>(null);
   const [iconError, setIconError] = useState<string | null>(null);
-  const [made, setMade] = useState<MadeSlackApp | null>(null);
+  // The app made, as the station keeps it (it outlives this dialog: the connects page lists it until it is connected).
+  const [madeId, setMadeId] = useState<string | null>(resume ?? null);
+  const made: MadeSlackApp | undefined = madeId ? overview.value?.slackApps.find((a) => a.appId === madeId) : undefined;
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
   // The model first; the runtime only when the model runs on more than one.
   const models = useStationModels();
@@ -389,12 +392,12 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   const chosen = teams.find((t) => t.teamId === team) ?? (teams.length === 1 ? teams[0] : undefined);
 
   const close = () => {
-    setStep("team"); setTeam(null); setAdding(false); setApp(NEW_APP); setIcon(null); setIconError(null); setMade(null);
+    setStep("team"); setTeam(null); setAdding(false); setApp(NEW_APP); setIcon(null); setIconError(null); setMadeId(null);
     setTokens(emptyTokens); setModel(""); setPicked(null); setEffort(""); setMode({ mode: "multi-session", requireMention: true });
     onClose();
   };
   const makeApp = useAction(() => api.makeSlackApp({ team: chosen!.teamId, settings: app, ...(icon ? { icon } : {}) }), (result) => {
-    setMade(result); setIconError(result.iconError); setStep("install");
+    setMadeId(result.appId); setIconError(result.iconError); setStep("install");
   });
   const create = useAction(() => api.createConnect({
     kind: "slack", ...mode, bind: { runtime, model: entry?.model ?? "", effort, profile },
@@ -409,7 +412,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
   // Getting a token is a view of its own: when there is none yet, or another is being added.
   const gettingToken = step === "team" && (teams.length === 0 || adding);
   const TITLES: Record<NewStep, string> = { team: teams.length === 0 ? "先拿一个 Slack 配置 token" : adding ? "添加 Slack 配置 token" : "选 Slack 工作区", app: "配置 app", install: "安装", manual: "连接 Slack", bind: "绑定模型" };
-  const order: NewStep[] = step === "manual" || (step === "bind" && !made) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
+  const order: NewStep[] = step === "manual" || (step === "bind" && !madeId) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
   const footer = step === "team" ? (
     <>
       {adding && teams.length > 0
@@ -429,7 +432,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
     </>
   ) : (
     <>
-      <Button variant="ghost" onClick={() => setStep(made ? "install" : "manual")}>上一步</Button>
+      <Button variant="ghost" onClick={() => setStep(madeId ? "install" : "manual")}>上一步</Button>
       <Button variant="primary" disabled={models.length === 0} busy={create.busy} onClick={() => void create.run()}>添加并连接</Button>
     </>
   );
@@ -463,7 +466,7 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
       )}
       {step === "install" && made && (
         <>
-          <MadeAppSteps made={made} installed={overview.value?.slackInstalls.find((i) => i.state === made.state)} />
+          <MadeAppSteps made={made} />
           {iconError && <p className="field-error" role="alert">图标没传上：{iconError}</p>}
           <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} />
         </>
@@ -497,16 +500,16 @@ export function NewConnectDialog({ open, onClose }: { open: boolean; onClose(): 
  * What is left in Slack once ember made the app: installing it, and the app-level token. Installed through Slack's
  * OAuth (`made.install`), Slack sends the bot token back to the station itself; else it is copied from the OAuth page.
  */
-function MadeAppSteps({ made, installed }: { made: MadeSlackApp; installed: SlackInstall | undefined }) {
+function MadeAppSteps({ made }: { made: MadeSlackApp }) {
   const { links } = made;
   return (
     <ol className="steps">
       {made.install ? (
         <li>
-          {installed?.installed
-            ? <span className="verify-ok"><CheckCircle {...ICON} />已装进「{installed.team ?? "工作区"}」</span>
+          {made.installed
+            ? <span className="verify-ok"><CheckCircle {...ICON} />已装进「{made.installedTeam ?? made.team ?? "工作区"}」</span>
             : <span>app 已经建好。把它安装到工作区：在 Slack 里点「允许」，bot token 会自动交给 station。</span>}
-          {!installed?.installed && <a className="btn btn-primary" href={made.install} target="_blank" rel="noopener"><External {...ICON} />安装到工作区</a>}
+          {!made.installed && <a className="btn btn-primary" href={made.install} target="_blank" rel="noopener"><External {...ICON} />安装到工作区</a>}
         </li>
       ) : (
         <li>

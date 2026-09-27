@@ -12,7 +12,7 @@ import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, extname, join, resolve, sep } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Connections } from "../connections.ts";
-import { connectName, RUNTIMES, runtimesOf, type ConnectMode, type RawConfig, type RawConnect, type RawProfile, type RuntimeKind } from "../config.ts";
+import { connectName, RUNTIMES, runtimesOf, type ConnectMode, type RawConfig, type RawConnect, type RawProfile, type RuntimeKind, type SlackAppMade } from "../config.ts";
 import type { Hub } from "../hub.ts";
 import type { LoginManager } from "../login.ts";
 import type { MeshStatus } from "../mesh.ts";
@@ -399,6 +399,7 @@ export class AdminApi {
     if (method === "POST" && path === "/connects") return send(res, 200, await this.#newSlackConnect(await body(req), viewer));
     // A Slack app made with the configuration token before there is a connect for it (the connect comes with its tokens).
     if (method === "POST" && path === "/slack/apps") return send(res, 200, await this.#makeSlackApp(await body(req), viewer));
+    if (resource === "slack" && id === "apps" && action && method === "DELETE") return send(res, 200, this.#dropMadeApp(action, viewer));
     // Slack sent someone back from installing such an app: its code, for the bot token.
     if (method === "POST" && path === "/slack/installs") return send(res, 200, await this.#installed(await body(req)));
     if (resource === "connects" && id && !action && method === "PUT") return send(res, 200, this.#putConnect(id, await body(req), viewer));
@@ -522,7 +523,7 @@ export class AdminApi {
       const pick = (field: "appToken" | "botToken") =>
         typeof input[field] === "string" && input[field].trim() ? input[field].trim() : stored?.[field] ?? "";
       // An app installed through Slack's OAuth (`install`, its state): its bot token is the one it got.
-      const installed = typeof input.install === "string" ? this.#installs.get(input.install)?.botToken : null;
+      const installed = typeof input.install === "string" ? this.#madeApp(input.install)?.oauth?.botToken : null;
       return send(res, 200, await verifySlackTokens({ appToken: pick("appToken"), botToken: installed ?? pick("botToken") }));
     }
     // Development only (EMBER_DEV=1, local visits): hand ember a chat message as if the connect had received it.
@@ -661,8 +662,6 @@ export class AdminApi {
 
   /** Sign-ins with no profile yet, by id: their runtime, their home while signing in, who started them, what they made. */
   readonly #pending = new Map<string, { runtime: RuntimeKind; home: string; by: Viewer; created: string | null }>();
-  /** Slack apps made here to be installed through OAuth, by their state, until a connect takes each (kept in memory only). */
-  readonly #installs = new Map<string, { appId: string; clientId: string; clientSecret: string; redirectUri: string; botToken: string | null; team: string | null }>();
 
   #newLogin(input: Record<string, any>, viewer: Viewer) {
     const runtime = input.runtime as RuntimeKind;
@@ -802,13 +801,28 @@ export class AdminApi {
       throw new HttpError(400, `Slack 没能创建 app：${slackError(error)}`);
     }
     const iconError = typeof input.icon === "string" && input.icon ? await this.#setIcon(by, app.appId, input.icon) : null;
-    const links = slackAppLinks(app.appId);
-    if (!redirectUri || !app.clientId || !app.clientSecret) return { appId: app.appId, links, install: null, state: null, iconError };
-    // Which station it is for goes with it, so ember cloud's page knows where to hand the code.
-    const state = `${mesh!.workspaceId}/${mesh!.station}~${randomBytes(16).toString("hex")}`;
-    this.#installs.set(state, { appId: app.appId, clientId: app.clientId, clientSecret: app.clientSecret, redirectUri, botToken: null, team: null });
-    const install = `https://slack.com/oauth/v2/authorize?${new URLSearchParams({ client_id: app.clientId, scope: (manifest.oauth_config?.scopes?.bot ?? []).join(","), redirect_uri: redirectUri, state })}`;
-    return { appId: app.appId, links, install, state, iconError };
+    // Kept here until a connect takes it: the pages show it, and it can be installed and finished any time later.
+    const made: SlackAppMade = { appId: app.appId, name: manifest.display_information?.name ?? name, teamId: team, by, created: Date.now() };
+    if (redirectUri && app.clientId && app.clientSecret) {
+      // Which station it is for goes with it, so ember cloud's page knows where to hand the code.
+      const state = `${mesh!.workspaceId}/${mesh!.station}~${randomBytes(16).toString("hex")}`;
+      const install = `https://slack.com/oauth/v2/authorize?${new URLSearchParams({ client_id: app.clientId, scope: (manifest.oauth_config?.scopes?.bot ?? []).join(","), redirect_uri: redirectUri, state })}`;
+      made.oauth = { state, clientId: app.clientId, clientSecret: app.clientSecret, redirectUri, install };
+    }
+    this.#save(viewer, `slack app ${app.appId}`, (raw) => ({ ...raw, slackApps: [...(raw.slackApps ?? []), made] }));
+    return { appId: app.appId, iconError };
+  }
+
+  /** A Slack app made here and not connected yet, by its app id or its install's state. */
+  #madeApp(key: string): SlackAppMade | undefined {
+    return this.#deps.settings.config.slackApps.find((a) => a.appId === key || a.oauth?.state === key);
+  }
+
+  /** Drops a made app from the waiting ones (it stays in Slack); only its maker's to drop. */
+  #dropMadeApp(appId: string, viewer: Viewer) {
+    const app = this.#deps.settings.config.slackApps.find((a) => a.appId === appId);
+    if (!app || app.by !== viewerId(viewer)) throw new HttpError(404, "没有这个 app");
+    return this.#save(viewer, `slack app ${appId} dropped`, (raw) => ({ ...raw, slackApps: (raw.slackApps ?? []).filter((a) => a.appId !== appId) }));
   }
 
   /** Sets an app's icon (a PNG data URL); what went wrong, in words, or null. */
@@ -827,11 +841,15 @@ export class AdminApi {
   /** An app made here was installed: its code becomes its bot token, kept here for the connect that takes it. */
   async #installed(input: Record<string, any>) {
     const state = String(input.state ?? "");
-    const pending = this.#installs.get(state);
-    if (!pending) throw new HttpError(400, "这个安装不是这台 station 发起的，或者 station 重启过：回到 ember 重新建一次");
+    const pending = this.#madeApp(state)?.oauth;
+    if (!state || !pending || pending.state !== state) throw new HttpError(400, "这个安装不是这台 station 发起的，或者这个 app 已经连上或移除了");
     try {
       const { botToken, team } = await exchangeInstallCode({ clientId: pending.clientId, clientSecret: pending.clientSecret, code: String(input.code ?? ""), redirectUri: pending.redirectUri });
-      this.#installs.set(state, { ...pending, botToken, team });
+      this.#deps.settings.update((raw) => ({
+        ...raw,
+        slackApps: (raw.slackApps ?? []).map((a) => (a.oauth?.state === state ? { ...a, oauth: { ...a.oauth, botToken, installedTeam: team } } : a)),
+      }));
+      log.info("slack app installed", { state, team });
       this.#overviewChanged();
       return { team };
     } catch (error) {
@@ -842,7 +860,7 @@ export class AdminApi {
   async #newSlackConnect(input: Record<string, any>, viewer: Viewer) {
     const appToken = String(input.slack?.appToken ?? "").trim();
     // Installed through Slack's OAuth: its bot token is here already.
-    const installed = typeof input.slack?.install === "string" ? this.#installs.get(input.slack.install) : undefined;
+    const installed = typeof input.slack?.install === "string" ? this.#madeApp(input.slack.install)?.oauth : undefined;
     if (input.slack?.install && !installed?.botToken) throw new HttpError(400, "app 还没装好：先在 Slack 里安装");
     const botToken = installed?.botToken ?? String(input.slack?.botToken ?? "").trim();
     const { identity, errors } = await verifySlackTokens({ appToken, botToken });
@@ -852,9 +870,11 @@ export class AdminApi {
     const base = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "slack";
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-    const appId = installed?.appId ?? (typeof input.slack?.appId === "string" && input.slack.appId ? input.slack.appId : null);
+    const made = typeof input.slack?.install === "string" ? this.#madeApp(input.slack.install) : typeof input.slack?.appId === "string" ? this.#madeApp(input.slack.appId) : undefined;
+    const appId = made?.appId ?? (typeof input.slack?.appId === "string" && input.slack.appId ? input.slack.appId : null);
     const overview = this.#putConnect(id, { ...input, kind: "slack", slack: { appToken, botToken, team: { id: identity.teamId, name: identity.team }, botName: identity.botName } }, viewer);
-    if (installed) this.#installs.delete(input.slack.install);
+    // Its app is connected now: no longer one waiting.
+    if (made) this.#deps.settings.update((raw) => ({ ...raw, slackApps: (raw.slackApps ?? []).filter((a) => a.appId !== made.appId) }));
     if (appId) {
       this.#save(viewer, `slack app of ${id}`, (raw) => ({
         ...raw,
@@ -930,7 +950,14 @@ export class AdminApi {
       logins: [...this.#pending].map(([id, p]) => ({ id, runtime: p.runtime, job: this.#deps.logins.get(id), created: p.created })),
       machineLogins: this.#deps.machineLogins?.get() ?? [],
       // Slack apps made here and waiting for their connect: whether Slack sent their install back yet (no tokens).
-      slackInstalls: [...this.#installs].map(([state, i]) => ({ state, appId: i.appId, installed: i.botToken !== null, team: i.team })),
+      // The Slack apps the viewer made and has not connected yet (never their secrets or tokens).
+      slackApps: this.#deps.settings.config.slackApps.filter((a) => a.by === viewerId(viewer)).map((a) => ({
+        appId: a.appId, name: a.name, teamId: a.teamId,
+        team: this.#deps.settings.config.slackConfigTokens.find((t) => t.teamId === a.teamId)?.owner?.team ?? null,
+        created: a.created, links: slackAppLinks(a.appId),
+        install: a.oauth?.install ?? null, state: a.oauth?.state ?? null,
+        installed: Boolean(a.oauth?.botToken), installedTeam: a.oauth?.installedTeam ?? null,
+      })),
     };
   }
 
