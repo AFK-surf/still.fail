@@ -367,10 +367,16 @@ async fn mesh(data: PathBuf, socket: PathBuf, ready: watch::Receiver<bool>, secr
 async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: watch::Receiver<bool>, secret: String, telemetry: Arc<Telemetry>) -> Result<()> {
     let key = load_key(&data)?;
     let relay: RelayUrl = state.relay_url.parse().context("relay url")?;
+    // ember's relay, and iroh's public ones should it be down; found without ember cloud: on the LAN by mDNS, and
+    // which relay it is on, published to the Mainline DHT (clients look both up: client/core/src/mesh.rs).
+    let relays = iroh::RelayMap::from(relay);
+    relays.extend(&iroh::defaults::prod::default_relay_map());
     let endpoint = Endpoint::builder(Minimal)
-        .secret_key(key)
+        .secret_key(key.clone())
         .alpns(vec![ALPN.to_vec()])
-        .relay_mode(RelayMode::Custom(relay.into()))
+        .relay_mode(RelayMode::Custom(relays))
+        .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder())
+        .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key))
         .transport_config(transport())
         .bind()
         .await?;

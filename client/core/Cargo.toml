@@ -22,6 +22,9 @@ iroh = { version = "=1.0.3", default-features = false, features = ["tls-ring"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 iroh = { version = "=1.0.3" }
+# Finding stations without ember cloud: on the LAN (mDNS), and which relay they are on (the Mainline DHT).
+iroh-mdns-address-lookup = "=0.4.0"
+iroh-mainline-address-lookup = "=0.5.0"
 
 tokio = { version = "1", features = ["rt", "macros", "time", "net", "io-util"], optional = true }
 

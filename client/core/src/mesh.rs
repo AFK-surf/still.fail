@@ -162,21 +162,36 @@ impl Mesh {
 }
 
 /// The endpoint for a device key. On wasm iroh has no IP transports, so this
-/// is relay-only like mesh/web; natively it also binds UDP and goes direct
-/// once the relay has helped both sides find each other.
+/// is relay-only like mesh/web, through ember's relay. Natively it also binds
+/// UDP and goes direct, and finds stations without ember cloud: on the LAN by
+/// mDNS (no relay needed at all), and which relay a station is on by the
+/// Mainline DHT (a station whose relay is not ember's, ember's being down); the
+/// relays are ember's and iroh's public ones (see `relays`).
 async fn bind(secret: &[u8; 32], relay_url: &str) -> Result<Endpoint> {
-    let relay_mode = if relay_url.is_empty() {
-        RelayMode::Disabled
+    let builder = Endpoint::builder(Minimal).secret_key(SecretKey::from_bytes(secret)).relay_mode(relays(relay_url)?).transport_config(transport());
+    // No relay (tests on localhost): nothing to look up either.
+    #[cfg(not(target_arch = "wasm32"))]
+    let builder = if relay_url.is_empty() {
+        builder
     } else {
-        let relay: RelayUrl = relay_url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))?;
-        RelayMode::Custom(relay.into())
+        builder
+            .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder())
+            .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish())
     };
-    Endpoint::builder(Minimal)
-        .secret_key(SecretKey::from_bytes(secret))
-        .relay_mode(relay_mode)
-        .transport_config(transport())
-        .bind()
-        .await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
+    builder.bind().await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))
+}
+
+/// ember's relay first; natively also iroh's public ones, so a link is made with ember's relay down (the station
+/// then on one of them, as the DHT says). The browser, relay-only, has ember's.
+fn relays(relay_url: &str) -> Result<RelayMode> {
+    if relay_url.is_empty() {
+        return Ok(RelayMode::Disabled);
+    }
+    let ours: RelayUrl = relay_url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))?;
+    let map = iroh::RelayMap::from(ours);
+    #[cfg(not(target_arch = "wasm32"))]
+    map.extend(&iroh::defaults::prod::default_relay_map());
+    Ok(RelayMode::Custom(map))
 }
 
 /// Through a relay a round trip is hundreds of milliseconds, and QUIC's default first window
