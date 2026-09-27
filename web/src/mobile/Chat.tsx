@@ -103,11 +103,9 @@ function Messages({ view, lives, list, floor, draft, here }: {
   if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
   const sentHere = useRef(new Set<string>());
   for (const o of view.outbox) sentHere.current.add(o.text);
-  // Agents at work; a message on its way already counts, for every agent it goes to.
-  const working = view.agents.filter((a) => a.status === "running" || a.status === "queued");
-  const sendingNow = view.outbox.some((o) => o.state === "sending");
-  const busy = working.length ? working : sendingNow ? view.agents : [];
-  const atWork: AgentAtWork[] = busy.map((a) => ({ key: a.session.key, who: a.session.agentText, runtime: a.session.runtime, maker: a.session.maker, activity: lives.get(a.session.key)?.activity ?? null, since: a.since }));
+  const working = view.agents.filter((a) => a.status === "running");
+  // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
+  const atWork: AgentAtWork[] = working.map((a) => ({ key: a.session.key, who: a.session.agentText, runtime: a.session.runtime, maker: a.session.maker, activity: lives.get(a.session.key)?.activity ?? null, since: a.since }));
   const emissions = useEmissions(list);
   const shown = useLinger(atWork, emissions.keeps);
   emissions.take(messages, firstSeq.current, new Set(shown.map((s) => s.agent.key)));

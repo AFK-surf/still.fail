@@ -338,10 +338,9 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         if (youngest > 0 && wait > 0) { delay(wait + 20); now = System.currentTimeMillis() }
     }
 
-    // Agents at work; a message on its way already counts, for every agent it goes to.
-    val working = agents.filter { it.state == ChatState.Running }
-    val sendingNow = view.outbox.any { it.state == "sending" }
-    val busy = working.ifEmpty { if (sendingNow) agents else emptyList() }.map { a -> AgentAtWork(a.key, a.who, a.runtime, a.maker, a.live, a.view.since) }
+    // Only an agent that has taken a message and runs is at work (not one with messages waiting for it): until then
+    // the message itself says it waits.
+    val busy = agents.filter { it.view.status == "running" }.map { a -> AgentAtWork(a.key, a.who, a.runtime, a.maker, a.live, a.view.since) }
     // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
     val lastBusy = remember { mutableStateOf<List<AgentAtWork>>(emptyList()) }
     var leaving by remember { mutableStateOf(false) }

@@ -66,11 +66,9 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
     { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, session, status, live: lives.get(session.key), since }
   ));
   const agentOf = (key: string) => agents.find((a) => a.key === key);
-  const working = agents.filter((a) => a.status === "running" || a.status === "queued");
-  // A message on its way already counts: the activity shows at once (for every agent it goes to) instead of after the station answers.
-  const sendingNow = outbox.some((o) => o.state === "sending");
-  const busyAgents = working.length ? working : sendingNow ? agents : [];
-  const atWork: AgentAtWork[] = busyAgents.map((a) => ({ key: a.key, who: a.who, runtime: a.runtime, maker: a.maker, activity: a.live?.activity ?? null, since: a.since }));
+  const working = agents.filter((a) => a.status === "running");
+  // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
+  const atWork: AgentAtWork[] = working.map((a) => ({ key: a.key, who: a.who, runtime: a.runtime, maker: a.maker, activity: a.live?.activity ?? null, since: a.since }));
   const emissions = useEmissions(list);
   const shown = useLinger(atWork, emissions.keeps);
   emissions.take(messages, firstSeq.current, new Set(shown.map((s) => s.agent.key)));
