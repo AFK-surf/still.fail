@@ -53,9 +53,8 @@ test("the console's host answers only the calls its core makes; other API paths 
     const out = await h.fetchAdmin("/v1/auth/logout", { method: "POST", headers: { authorization: `Bearer ${next.refresh_token}`, "content-type": "application/json" }, body: JSON.stringify({ all: false }) });
     assert.equal(out.status, 200);
     // Neither origin is a wildcard: the API turns away a host it is not routed on.
-    const api = await h.mf.getWorker("api");
     for (const origin of ["https://other.relay.example", "https://admin.relay.example.evil"]) {
-      const response = await api.fetch(`${origin}/v1/me`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
+      const response = await h.fetchWorker("api", `${origin}/v1/me`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
       assert.equal(response.status, 421, origin);
     }
   } finally {

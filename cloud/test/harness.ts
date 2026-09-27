@@ -145,6 +145,8 @@ export async function harness(
   /** A request to the console's host. */
   const fetchAdmin = (path: string, init?: RequestInit) => mf.dispatchFetch(adminOrigin + path, init as any);
   const fetchPreview = (path: string, init?: RequestInit) => mf.dispatchFetch(previewOrigin + path, init as any);
+  /** A request straight to one of the Workers ("api", "relay", "static"), whatever the routes say. */
+  const fetchWorker = async (name: string, url: string, init?: RequestInit) => ((await mf.getWorker(name)) as unknown as { fetch(url: string, init?: RequestInit): Promise<Response> }).fetch(url, init);
   async function begin(sub = "google-test-user", invalid?: string, callback = "http://127.0.0.1:32145/oauth/callback") {
     const verifier = randomSecret(),
       state = randomSecret();
@@ -219,6 +221,7 @@ export async function harness(
     fetch,
     fetchAdmin,
     fetchPreview,
+    fetchWorker,
     begin,
     complete,
     exchange,
