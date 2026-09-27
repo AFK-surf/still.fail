@@ -17,6 +17,8 @@ node src/main.ts        # Node 24；PATH 里需要 claude 和 codex
 | 4750 | agent 的 MCP 端点和 `/health`。不要对外暴露。 |
 | 4760 | 管理页 `/admin`。要从外面访问时，只把 tunnel 指向这个端口。 |
 
+没在配置里写端口时，4750 / 4760 被别的程序占了，station 会改用空闲端口并在日志里说明；实际端口写在 `~/.ember/run/ports.json`。配置里写了端口却被占用，station 会直接报错退出，并说明怎么查是谁占的。
+
 收到 SIGTERM 时会结束所有运行时进程组；正在进行的 turn 会在下次启动时自动恢复。
 
 ## 管理页

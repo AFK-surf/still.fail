@@ -1,6 +1,6 @@
 // ember entry point: node src/main.ts
 import { readFile } from "node:fs/promises";
-import { createServer, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AdminApi } from "./admin/api.ts";
@@ -18,6 +18,7 @@ import { checkQuota } from "./quota.ts";
 import { ClaudeDriver } from "./runtime/claude.ts";
 import { CodexDriver } from "./runtime/codex.ts";
 import { reapStaleGroups } from "./runtime/process.ts";
+import { listen, PortTaken, writePorts } from "./ports.ts";
 import { Settings } from "./settings.ts";
 import { Store } from "./store.ts";
 import { builtKey, ErrorReports } from "./telemetry.ts";
@@ -38,7 +39,29 @@ linkTranscripts(settings.config.dataDir, settings.config.profiles);
 const reaped = await reapStaleGroups(store);
 if (reaped > 0) log.warn("reaped runtime processes left by a previous run", { count: reaped });
 
-const mcpUrl = `http://${settings.config.http.host}:${settings.config.http.port}/mcp`;
+// Both ports first: the agents' MCP endpoint is told to them by its address, and ember-mesh reaches the admin page by
+// its. Each answers once the station is up (503 until then).
+type Handler = (req: IncomingMessage, res: ServerResponse) => void;
+let onMcp: Handler | undefined;
+let onAdmin: Handler | undefined;
+const server = createServer((req, res) => (onMcp ? onMcp(req, res) : res.writeHead(503).end()));
+// The admin page on its own port, the only one a tunnel should point at.
+const adminServer = createServer((req, res) => (onAdmin ? onAdmin(req, res) : res.writeHead(503).end()));
+const { http, adminHttp } = settings.config;
+let ports: { mcp: number; admin: number };
+try {
+  ports = {
+    mcp: await listen(server, http.host, http.port, http.named, "agent 的 MCP 端点"),
+    admin: await listen(adminServer, adminHttp.host, adminHttp.port, adminHttp.named, "管理页"),
+  };
+} catch (error) {
+  if (!(error instanceof PortTaken)) throw error;
+  log.error(error.message);
+  process.exit(1);
+}
+if (ports.mcp !== http.port || ports.admin !== adminHttp.port) log.warn("usual port taken; listening on a free one", { mcp: ports.mcp, admin: ports.admin });
+writePorts(settings.config.dataDir, ports);
+const mcpUrl = `http://${http.host}:${ports.mcp}/mcp`;
 // One chat connection per connect; Slack is the only kind so far.
 // Slack's names for people and channels, kept on disk; learning new ones refreshes what shows them.
 const slackNames = new NameBook(join(settings.config.dataDir, "slack-names.json"));
@@ -67,7 +90,7 @@ const hub: Hub = new Hub({
 });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
 const logins = new LoginManager(settings.config.dataDir);
-const mesh = new MeshSupervisor({ dataDir: settings.config.dataDir, admin: `http://127.0.0.1:${settings.config.adminHttp.port}`, traces: () => settings.config.telemetry.traces });
+const mesh = new MeshSupervisor({ dataDir: settings.config.dataDir, admin: `http://127.0.0.1:${ports.admin}`, traces: () => settings.config.telemetry.traces });
 stationId = () => mesh.status().station;
 const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, checkOnStart: true, quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)), codexModels: (profile) => codex.models(profile) });
 
@@ -108,7 +131,7 @@ async function serveUi(pathname: string, res: ServerResponse): Promise<void> {
 }
 
 // Agents' MCP endpoint: loopback only.
-const server = createServer((req, res) => {
+onMcp = (req, res) => {
   const pathname = new URL(req.url ?? "/", "http://ember").pathname;
   if (pathname === "/mcp") {
     void mcp.handle(req, res).catch((error) => {
@@ -120,20 +143,16 @@ const server = createServer((req, res) => {
   } else {
     res.writeHead(404).end();
   }
-});
-await new Promise<void>((resolve) => server.listen(settings.config.http.port, settings.config.http.host, resolve));
+};
 
-// The admin page on its own port, the only one a tunnel should point at.
-const adminServer = createServer((req, res) => {
+onAdmin = (req, res) => {
   const pathname = new URL(req.url ?? "/", "http://ember").pathname;
   if (pathname.startsWith("/admin/api/")) void admin.handle(req, res);
   else if (pathname === "/admin" || pathname.startsWith("/admin/")) void serveUi(pathname, res);
   else if (pathname === "/") res.writeHead(302, { location: "/admin" }).end();
   else res.writeHead(404).end();
-});
-const { host: adminHost, port: adminPort } = settings.config.adminHttp;
-await new Promise<void>((resolve) => adminServer.listen(adminPort, adminHost, resolve));
-log.info("ember listening", { mcpUrl, admin: `http://${adminHost}:${adminPort}/admin` });
+};
+log.info("ember listening", { mcpUrl, admin: `http://${adminHttp.host}:${ports.admin}/admin` });
 
 await connections.reconcile(settings.config);
 if (connections.chats.size === 0) log.warn("no connect is connected; add or enable one on the admin page");

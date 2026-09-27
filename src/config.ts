@@ -89,15 +89,19 @@ export interface Connect {
 
 export interface Config {
   dataDir: string;
-  /** Where the admin page listens: its own port, so a public tunnel never reaches the agents' MCP endpoint. */
-  adminHttp: { host: string; port: number };
+  /**
+   * Where the admin page listens: its own port, so a public tunnel never reaches the agents' MCP endpoint. `named`:
+   * the config sets the port (else it is the usual one, which gives way when taken: ports.ts).
+   */
+  adminHttp: { host: string; port: number; named: boolean };
   /** Cloudflare Access application guarding the public admin page; null refuses tunneled requests. */
   adminAccess: { teamDomain: string; aud: string } | null;
   /** Slack app configuration tokens, each a person's own (`by`), one per Slack workspace: ember makes and edits apps there with them. */
   slackConfigTokens: ConfigToken[];
   /** Shared MEMORY.md and skills/ linked into every profile home. */
   agentHome: string;
-  http: { host: string; port: number };
+  /** Agents' MCP endpoint; `named` as for the admin page. */
+  http: { host: string; port: number; named: boolean };
   connects: Connect[];
   profiles: Profile[];
   /** How many times a turn that ended without final/block is nudged before giving up. */
@@ -206,13 +210,13 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
   const agentHome = raw.agentHome ?? "agent";
   return {
     dataDir,
-    adminHttp: { host: raw.admin?.host ?? "127.0.0.1", port: raw.admin?.port ?? 4760 },
+    adminHttp: { host: raw.admin?.host ?? "127.0.0.1", port: raw.admin?.port ?? 4760, named: raw.admin?.port !== undefined },
     adminAccess: raw.admin?.access?.teamDomain && raw.admin.access.aud
       ? { teamDomain: raw.admin.access.teamDomain, aud: raw.admin.access.aud }
       : null,
     slackConfigTokens: (raw.slackConfigTokens ?? []).filter((t) => t.refreshToken && t.teamId && t.by),
     agentHome: isAbsolute(agentHome) ? agentHome : join(dataDir, agentHome),
-    http: { host: raw.http?.host ?? "127.0.0.1", port: raw.http?.port ?? 4750 },
+    http: { host: raw.http?.host ?? "127.0.0.1", port: raw.http?.port ?? 4750, named: raw.http?.port !== undefined },
     connects,
     profiles,
     maxNudges: raw.maxNudges ?? 2,
