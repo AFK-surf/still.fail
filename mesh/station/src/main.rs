@@ -781,7 +781,10 @@ fn usage() -> ! {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,iroh=warn".into())).init();
+    // The DHT and mDNS say a lot that is not the station's trouble: a network where the DHT cannot be reached (its
+    // bootstrap fails every second there) still finds stations through the relay and the LAN.
+    let filter = "info,iroh=warn,swarm_discovery=warn,n0_mainline=off,iroh_mainline_address_lookup=error";
+    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| filter.into())).init();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut take = |flag: &str| -> Option<String> {
         let i = args.iter().position(|a| a == flag)?;

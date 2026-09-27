@@ -6,3 +6,8 @@ members = ["station"]
 edition = "2024"
 version = "0.1.0"
 license = "MIT"
+
+# mDNS that works on a machine with several networks, and through a router reflecting it between subnets (vendor/README.md).
+[patch.crates-io]
+swarm-discovery = { path = "../vendor/swarm-discovery" }
+iroh-mdns-address-lookup = { path = "../vendor/iroh-mdns-address-lookup" }
