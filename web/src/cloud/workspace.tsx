@@ -132,10 +132,12 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className="brand brand-compact"><SidebarBrand /></div>
       <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings/stations`} />
-      <div className="nav-foot nav-foot-row">
-        <WorkspaceSwitcher current={entry} />
+      <div className="nav-foot">
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
-        <Tip label="设置" side="top"><NavLink className="icon-btn" to={`/w/${entry.id}/settings`} aria-label="设置"><Settings {...ICON} /></NavLink></Tip>
+        <div className="nav-foot-row">
+          <WorkspaceSwitcher current={entry} />
+          <Tip label="设置" side="top"><NavLink className="icon-btn" to={`/w/${entry.id}/settings`} aria-label="设置"><Settings {...ICON} /></NavLink></Tip>
+        </div>
       </div>
     </nav>
   );

@@ -75,11 +75,12 @@
 /* A station's link coming back: a small turning ring where the row's mark goes. */
 .row-spinner { width: 11px; height: 11px; border-width: 1.5px; }
 /* Under the list: the stations not working, which or how many; to the stations. */
-/* Stations not working: a mark in the sidebar's foot, beside the settings; its dot says the worst of it. */
-.station-trouble { position: relative; color: var(--muted); }
+/* Stations not working: a row at the top of the sidebar's foot, over the account; its dot says the worst of it. */
+.station-trouble { margin-bottom: 4px; color: var(--text); }
 .station-trouble[data-state="error"] { color: var(--red); }
-.station-trouble-mark { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; padding: 1.5px; border-radius: 50%; background: var(--sidebar); }
-.station-trouble-mark.spinner { width: 9px; height: 9px; padding: 0; }
+.station-trouble-mark { width: 16px; flex: none; display: grid; place-items: center; }
+.station-trouble-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.station-trouble-go { flex: none; color: var(--muted); }
 .nav-session-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .nav-session-head { display: flex; align-items: center; gap: 6px; min-width: 0; height: 20px; line-height: 20px; }
 .nav-session-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

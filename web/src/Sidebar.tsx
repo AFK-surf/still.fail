@@ -1,4 +1,4 @@
-import { ArrowLeft, Compose, Key, Monitor, Plug, Settings, Unplug } from "./icons.tsx";
+import { ArrowLeft, ChevronRight, Compose, Key, Monitor, Plug, Settings, Unplug } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
@@ -70,21 +70,21 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
 }
 
 /**
- * The workspace's stations not working as they should (the core's `trouble`), as a mark in the sidebar's foot: the
- * unplugged icon with the worst state's dot (a spinner while one reconnects), which, or how many, in its tooltip. It
- * leads to the stations. Nothing while all work.
+ * The workspace's stations not working as they should (the core's `trouble`): a row at the top of the sidebar's foot,
+ * over the account — which, or how many, and the worst state's dot (a spinner while one reconnects). It leads to the
+ * stations. Nothing while all work.
  */
 export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const trouble = useChats(scope, false).value?.trouble;
   if (!trouble) return null;
   return (
-    <Tip label={trouble.text} side="top">
-      <NavLink className="icon-btn station-trouble" to={to} aria-label={trouble.text} data-state={trouble.state}>
-        <Unplug {...ICON} />
-        {trouble.state === "reconnecting" ? <span className="spinner station-trouble-mark" aria-hidden="true" />
-          : <span className="station-trouble-mark"><StatusDot state={trouble.state === "error" ? "error" : "offline"} /></span>}
-      </NavLink>
-    </Tip>
+    <NavLink className="nav-row station-trouble" to={to} data-state={trouble.state}>
+      <span className="station-trouble-mark">
+        {trouble.state === "reconnecting" ? <span className="spinner row-spinner" aria-hidden="true" /> : <StatusDot state={trouble.state === "error" ? "error" : "offline"} />}
+      </span>
+      <span className="station-trouble-text">{trouble.text}</span>
+      <ChevronRight size={14} className="station-trouble-go" aria-hidden="true" />
+    </NavLink>
   );
 }
 
