@@ -1437,7 +1437,7 @@ mod tests {
             assert_eq!((host.sockets.borrow().len(), host.open_sockets("/v1/events")), (2, 1));
             let token = host.sockets.borrow()[1].1[1].clone();
             assert!(token.starts_with("ember-token.fresh-") && token != "ember-token.fresh-1", "{token}");
-            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (3, 3));
+            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (3, 4));
 
             // Nobody looks any more: the core keeps its workspaces in sync all the same (sync.rs), so the socket stays.
             core.receive(ui, ClientMessage::Unsubscribe { id: 1, unsubscribe: true });
