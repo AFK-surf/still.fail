@@ -103,6 +103,19 @@ fn attr(attrs: &str, name: &str) -> Option<String> {
     None
 }
 
+/// Where an opening tag that starts at `open` ends: its `>`, not one inside a quoted attribute (`you="ember (<@U1>)"`).
+fn tag_end(text: &str, open: usize) -> Option<usize> {
+    let mut quoted = false;
+    for (i, c) in text[open..].char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            '>' if !quoted => return Some(open + i),
+            _ => {}
+        }
+    }
+    None
+}
+
 fn unescape(v: &str) -> String {
     v.replace("&quot;", "\"").replace("&amp;", "&")
 }
@@ -122,7 +135,7 @@ pub fn parse_prompt(text: &str) -> (Vec<Sourced>, String) {
     let mut rest = String::new();
     let mut at = 0;
     while let Some(open) = text[at..].find("<message ").map(|o| o + at) {
-        let Some(head_end) = text[open..].find('>').map(|e| e + open) else { break };
+        let Some(head_end) = tag_end(text, open) else { break };
         let Some((inner, next)) = body(text, head_end + 1, "</message>") else { break };
         let attrs = &text[open + 9..head_end];
         let from = unescape(&attr(attrs, "from").unwrap_or_default());
@@ -144,7 +157,7 @@ pub fn parse_prompt(text: &str) -> (Vec<Sourced>, String) {
     let mut rest = String::new();
     let mut at = 0;
     while let Some(open) = text[at..].find("<slack user=\"").map(|o| o + at) {
-        let Some(head_end) = text[open..].find('>').map(|e| e + open) else { break };
+        let Some(head_end) = tag_end(&text, open) else { break };
         let Some((inner, next)) = body(&text, head_end + 1, "</slack>") else { break };
         let attrs = &text[open + 7..head_end];
         messages.push(Sourced { user: attr(attrs, "user").unwrap_or_default(), name: None, ts: attr(attrs, "ts").unwrap_or_default(), text: inner.to_string(), thread: None, slack: true });
@@ -424,6 +437,9 @@ mod tests {
 
     #[test]
     fn a_prompt_is_the_messages_it_carried_and_embers_words_around_them() {
+        // What the agent is called there, a mention inside a quoted attribute, does not end the tag.
+        let (said, _) = parse_prompt("<message via=\"slack\" connect=\"cl\" you=\"ember (<@UBOT>)\" thread=\"C1/1.0\" from=\"Ada (U1)\" ts=\"1.2\">\nhi\n</message>");
+        assert_eq!((said.len(), said[0].user.as_str(), said[0].ts.as_str(), said[0].text.as_str()), (1, "U1", "1.2", "hi"));
         let (messages, note) = parse_prompt("Heads up.\n<message via=\"slack\" from=\"Ada &amp; Co (U1)\" ts=\"1.2\" thread=\"C1/1.0\">\nhi <@UBOT>\n</message>\n(Thread C1/1.0 had messages before you were brought in; read them.)");
         assert_eq!(note, "Heads up.");
         assert_eq!(messages, vec![Sourced { user: "U1".into(), name: Some("Ada & Co".into()), ts: "1.2".into(), text: "hi <@UBOT>".into(), thread: Some("C1/1.0".into()), slack: true }]);
