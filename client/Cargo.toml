@@ -20,3 +20,4 @@ codegen-units = 1
 swarm-discovery = { path = "../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../vendor/noq-udp" }
+iroh = { path = "../vendor/iroh" }

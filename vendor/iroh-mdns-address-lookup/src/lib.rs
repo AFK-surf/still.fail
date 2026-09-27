@@ -386,6 +386,17 @@ impl MdnsAddressLookup {
                             continue;
                         }
 
+                        // ember: a republish is the same addresses and TXT, seen again; `Peer`'s equality includes
+                        // when it was seen, so each one counted as new and reached the endpoint (every mDNS packet,
+                        // on every interface). It only refreshes what is kept.
+                        if let Some(known) = endpoint_addrs.get_mut(&discovered_endpoint_id)
+                            && known.addrs() == peer_info.addrs()
+                            && known.txt_attributes().eq(peer_info.txt_attributes())
+                        {
+                            *known = peer_info;
+                            continue;
+                        }
+
                         let entry = endpoint_addrs.entry(discovered_endpoint_id);
                         if let std::collections::hash_map::Entry::Occupied(ref entry) = entry
                             && entry.get() == &peer_info
