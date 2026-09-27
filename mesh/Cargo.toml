@@ -13,3 +13,7 @@ swarm-discovery = { path = "../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../vendor/noq-udp" }
 iroh = { path = "../vendor/iroh" }
+
+[profile.release]
+# Symbols stay out of the release (the station package carries this binary).
+strip = true
