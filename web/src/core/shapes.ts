@@ -508,6 +508,8 @@ export interface ChatItem {
 	state?: Badge;
 	/** Where it came from (Slack · workspace · #channel), for a Slack chat. */
 	originText?: string;
+	/** Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online. */
+	offline?: string;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
 }

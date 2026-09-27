@@ -544,6 +544,8 @@ data class ChatItem (
 	val state: Badge? = null,
 	/// Where it came from (Slack · workspace · #channel), for a Slack chat.
 	val originText: String? = null,
+	/// Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online.
+	val offline: String? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
 	val time: Map<String, Stamp>? = null
 )
