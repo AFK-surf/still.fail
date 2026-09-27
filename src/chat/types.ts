@@ -39,10 +39,10 @@ export interface ChatSurface {
    */
   start(handler: (event: ChatEvent) => Promise<void>): Promise<void>;
   /**
-   * Posts Markdown into the thread and returns the posted message's ts.
+   * Posts a message into the thread as written (formatted for the surface: Slack's mrkdwn, or Markdown in ember's chats) and returns the posted message's ts.
    * `files` are attachments already copied into the session's uploads; surfaces that cannot carry files refuse them.
    */
-  post(thread: ThreadRef, markdown: string, files?: Attachment[]): Promise<string>;
+  post(thread: ThreadRef, message: string, files?: Attachment[]): Promise<string>;
   /** A person's display name, or null if unknown. Optional: not every platform can say. */
   userName?(userId: string): Promise<string | null>;
   /** A person's email, where the platform shares it. */

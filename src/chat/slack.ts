@@ -1,7 +1,7 @@
 // Slack over Socket Mode (no public endpoint needed) and the Web API, with no
 // SDK: Node's WebSocket and fetch are enough for what ember uses.
 import { log } from "../log.ts";
-import { splitForSlack, toMrkdwn } from "./mrkdwn.ts";
+import { splitForSlack } from "./mrkdwn.ts";
 import type { ChatEvent, ChatMessage, ChatSurface, InboundMessage, ThreadRef } from "./types.ts";
 import type { Attachment } from "../store.ts";
 import type { NameBook, Person } from "./names.ts";
@@ -147,11 +147,11 @@ export class SlackSurface implements ChatSurface {
     this.#socket?.close();
   }
 
-  /** A long message goes out in parts; the first part's ts stands for the whole. */
-  async post(thread: ThreadRef, markdown: string, files: Attachment[] = []): Promise<string> {
+  /** Posted as written (the agent writes Slack's formatting); a long message goes out in parts, the first part's ts standing for the whole. */
+  async post(thread: ThreadRef, message: string, files: Attachment[] = []): Promise<string> {
     if (files.length) throw new Error("attaching files is not supported in Slack yet; mention the file paths in the text instead");
     let first: string | undefined;
-    for (const text of splitForSlack(toMrkdwn(markdown))) {
+    for (const text of splitForSlack(message)) {
       const posted = await this.#api("chat.postMessage", { channel: thread.channel, thread_ts: thread.threadTs, text, unfurl_links: "false" }, this.#botToken);
       first ??= String(posted.ts);
     }

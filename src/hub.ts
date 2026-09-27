@@ -505,12 +505,12 @@ export class Hub {
     return [
       {
         name: "chat_post",
-        description: "Post a Markdown message to one of your conversations. Set kind to \"final\" when this message completes the work, or \"block\" when it asks a person for something you need.",
+        description: "Post a message to one of your conversations: in Slack's formatting (mrkdwn) for a Slack thread, Markdown for an ember chat. Set kind to \"final\" when this message completes the work, or \"block\" when it asks a person for something you need.",
         inputSchema: {
           type: "object",
           properties: {
             to,
-            text: { type: "string", description: "Markdown message." },
+            text: { type: "string", description: "The message, formatted for where it goes (posted as written)." },
             kind: { type: "string", enum: ["final", "block"], description: "Omit for a progress update." },
             files: { type: "array", items: { type: "string" }, description: "Absolute paths of files on this machine to attach (ember chat only; images show inline). Up to 10, 50 MB each." },
           },

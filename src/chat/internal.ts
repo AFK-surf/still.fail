@@ -33,7 +33,7 @@ export class InternalChat implements ChatSurface {
   async stop(): Promise<void> {}
 
   /** Nothing to send anywhere: the message is recorded under the ts this returns, and the page reads it from there. */
-  async post(thread: ThreadRef, _markdown: string, _files: Attachment[] = []): Promise<string> {
+  async post(thread: ThreadRef, _message: string, _files: Attachment[] = []): Promise<string> {
     if (thread.channel !== INTERNAL_CHANNEL) throw new Error(`no ember chat ${thread.channel}/${thread.threadTs}`);
     return nextTs();
   }
