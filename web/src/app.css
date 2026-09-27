@@ -1177,18 +1177,20 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .agent-activity[data-away] .activity-avatar { visibility: hidden; }
 .chat-list { position: relative; }
 .chat-list > .avatar-flying { position: absolute; z-index: 2; max-width: none; margin: 0; pointer-events: none; }
-/* Waiting its turn, a message takes no room (not even the list's gap); coming out, it grows into its place from its
-   avatar's corner. */
-.msg[data-held], .msg[data-emitting] { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 0fr; margin-top: -14px; }
-.msg[data-held] > *, .msg[data-emitting] > * { min-height: 0; overflow: hidden; }
-.msg[data-held] > * { visibility: hidden; }
-.msg[data-emitting] { grid-template-rows: 1fr; margin-top: 0; animation: emit-grow 380ms var(--ease-out) both; }
-.msg[data-emitting] > * { transform-origin: 12px 12px; animation: emit-out 380ms var(--ease-out) both; }
+/* Waiting its turn, a message takes no room (not even the list's gap), and what it holds does not reach past it (the
+   list's height is only what shows). Coming out, it takes its whole place at once and what it says unrolls from its
+   avatar's corner, drawn by the compositor alone: however long, nothing is laid out again while it moves. */
+.msg[data-held] { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 0fr; margin-top: -14px; overflow: hidden; }
+.msg[data-held] > * { min-height: 0; overflow: hidden; visibility: hidden; }
+.msg[data-emitting] > * { transform-origin: 12px 12px; will-change: transform, clip-path; animation: emit-out 380ms var(--ease-out) both; }
 .msg[data-covered] .msg-head .msg-avatar { visibility: hidden; }
-@keyframes emit-grow { from { grid-template-rows: 0fr; margin-top: -14px; } to { grid-template-rows: 1fr; margin-top: 0; } }
-@keyframes emit-out { from { opacity: 0; transform: scale(.2); } 45% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes emit-out {
+  from { opacity: 0; transform: scale(.35); clip-path: inset(0 0 100% 0); }
+  35% { opacity: 1; }
+  to { opacity: 1; transform: none; clip-path: inset(0 0 0 0); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .agent-activity, .activity-now-text[data-in], .activity-now-text[data-out], .msg[data-emitting], .msg[data-emitting] > * { animation: none; }
+  .agent-activity, .activity-now-text[data-in], .activity-now-text[data-out], .msg[data-emitting] > * { animation: none; }
   .agent-activity, .activity-tail { transition: none; }
   .activity-avatar::after { animation: none; }
 }

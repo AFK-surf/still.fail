@@ -63,12 +63,15 @@ impl Views {
         })
     }
 
-    /// A message on its way to a chat: shown in it at once, as `sending`. Answers its id.
+    /// A message on its way to a chat: shown in it at once, as `sending`. Answers its id. `after` is the chat's newest
+    /// entry then: the message itself comes later than that.
     pub fn outbox_add(&self, station: &str, thread: u64, message: Value) -> String {
         self.sent.set(self.sent.get() + 1);
         let id = format!("out-{}", self.sent.get());
+        let after = self.ok(Topic::Thread { station: station.to_string(), thread }).and_then(|p| p.get("last").and_then(Value::as_u64)).unwrap_or(0);
         let mut entry = message;
         entry["id"] = json!(id);
+        entry["after"] = json!(after);
         entry["createdAt"] = json!(self.host.now_ms().round() as i64);
         entry["state"] = json!("sending");
         self.outbox.borrow_mut().entry((station.to_string(), thread)).or_default().push(entry);
@@ -570,6 +573,9 @@ impl Views {
         let people_seqs: Vec<u64> = messages.iter().filter(|m| m.get("authorKind").and_then(Value::as_str) == Some("person"))
             .filter_map(|m| m.get("seq").and_then(Value::as_u64)).collect();
         let waits = &people_seqs[people_seqs.len().saturating_sub(waiting)..];
+        // What people wrote, as written (before mentions are named): how a message on its way is known once it is in.
+        let written: Vec<(u64, String)> = messages.iter().filter(|m| m.get("authorKind").and_then(Value::as_str) == Some("person"))
+            .filter_map(|m| Some((m.get("seq").and_then(Value::as_u64)?, m.get("text").and_then(Value::as_str).unwrap_or("").to_string()))).collect();
         for m in messages.iter_mut() {
             let kind = m.get("authorKind").and_then(Value::as_str).unwrap_or("").to_string();
             let author = m.get("author").and_then(Value::as_str).unwrap_or("").to_string();
@@ -603,13 +609,29 @@ impl Views {
             }
             m["waiting"] = json!(m.get("seq").and_then(Value::as_u64).is_some_and(|s| waits.contains(&s)));
         }
-        // A sent message leaves the outbox as its own entry (or anything later) arrives.
+        // A sent message leaves the outbox as its own entry (or anything later) arrives. Its entry often comes before the
+        // station has answered the post with its seq: then it is the viewer's first message since it was sent with the
+        // same words, each taken once.
         let newest = page.get("last").and_then(Value::as_u64);
+        let mine: Vec<(u64, &str)> = written.iter()
+            .filter(|(seq, _)| messages.iter().any(|m| m.get("seq").and_then(Value::as_u64) == Some(*seq) && m["mine"] == true))
+            .map(|(seq, text)| (*seq, text.as_str())).collect();
         let at = (station.to_string(), id);
         let outbox = {
             let mut all = self.outbox.borrow_mut();
             let list = all.entry(at.clone()).or_default();
-            list.retain(|m| !m.get("seq").and_then(Value::as_u64).is_some_and(|seq| newest.is_some_and(|n| n >= seq)));
+            let mut taken: Vec<u64> = list.iter().filter_map(|m| m.get("seq").and_then(Value::as_u64)).collect();
+            list.retain(|m| {
+                if let Some(seq) = m.get("seq").and_then(Value::as_u64) {
+                    return !newest.is_some_and(|n| n >= seq);
+                }
+                let after = m.get("after").and_then(Value::as_u64).unwrap_or(0);
+                let text = m.get("text").and_then(Value::as_str).unwrap_or("");
+                match mine.iter().find(|(seq, said)| *seq > after && *said == text && !taken.contains(seq)) {
+                    Some((seq, _)) => { taken.push(*seq); false }
+                    None => true,
+                }
+            });
             let shown = list.clone();
             if list.is_empty() {
                 all.remove(&at);
@@ -1961,6 +1983,38 @@ mod tests {
             let id = views.outbox_add("ws/b", 1, json!({"text": "x"}));
             views.outbox_sent("ws/b", 1, &id, 1);
             assert!(views.outbox_get("ws/b", 1, &id).is_none());
+        });
+    }
+
+    #[test]
+    fn a_sent_message_that_arrives_before_its_seq_leaves_the_outbox_with_it() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, chat_topic("ws/a", 7));
+            t.set(threads("ws/a"), json!([thread(7, &[], t.host.now_ms())]));
+            t.set(page_of("ws/a", 7), page(5, &["早"], Value::Null));
+            t.read(&mut ui, 1).await;
+            let views = t.router.views();
+            let first = views.outbox_add("ws/a", 7, json!({"text": "你好", "attachments": [], "quotes": []}));
+            let second = views.outbox_add("ws/a", 7, json!({"text": "你好", "attachments": [], "quotes": []}));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.clone().unwrap()["outbox"].as_array().unwrap().len(), 2);
+            // Someone else saying the same does not count; the viewer's own entry takes the first of the two, once.
+            let mine = |n: u64, text: &str| { let mut e = entry(n, text); e["author"] = json!("Me@x.com"); e };
+            t.store.update(&page_of("ws/a", 7), &mut |p| {
+                p["entries"].as_array_mut().unwrap().push(entry(6, "你好"));
+                p["entries"].as_array_mut().unwrap().push(mine(7, "你好"));
+                p["last"] = json!(7);
+            });
+            t.read(&mut ui, 1).await;
+            let out = ui.value.clone().unwrap()["outbox"].clone();
+            assert_eq!(out.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect::<Vec<_>>(), vec![second.as_str()]);
+            assert!(views.outbox_get("ws/a", 7, &first).is_none());
+            // The station's answer for the one already gone changes nothing.
+            views.outbox_sent("ws/a", 7, &first, 7);
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.clone().unwrap()["outbox"].as_array().unwrap().len(), 1);
         });
     }
 }

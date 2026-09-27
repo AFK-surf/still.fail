@@ -146,12 +146,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
       </div>
       {/* Over the send button, in line with it; it comes up growing and goes the way it came. */}
       <button type="button" className="m-jump m-floating" data-shown={away || undefined} aria-label="跳到最新"
-        onClick={() => {
-          const pane = list.current;
-          if (!pane) return;
-          pane.dispatchEvent(new WheelEvent("wheel"));
-          pane.scrollTop = pane.scrollHeight;
-        }}><ArrowDown size={18} /></button>
+        onClick={() => list.current?.dispatchEvent(new Event("to-bottom"))}><ArrowDown size={18} /></button>
     </>
   );
 }

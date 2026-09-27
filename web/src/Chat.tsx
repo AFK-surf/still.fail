@@ -85,14 +85,8 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
       <div className="chat-pane">
       {away && (
         <button type="button" className="chat-to-bottom" aria-label="跳到最新"
-          onClick={() => {
-            const pane = list.current;
-            if (!pane) return;
-            // A reader's move: once at the bottom the pane follows new messages again.
-            pane.dispatchEvent(new WheelEvent("wheel"));
-            // At once: a smooth scroll outlasts what scroll.ts takes for the reader's move, and would be pulled back.
-            pane.scrollTop = pane.scrollHeight;
-          }}>
+          // Glides down, and follows new messages again (scroll.ts).
+          onClick={() => list.current?.dispatchEvent(new Event("to-bottom"))}>
           <ArrowDown size={16} strokeWidth={2} />
         </button>
       )}
