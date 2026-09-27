@@ -268,6 +268,6 @@ private fun Toolbar(app: AppState, haze: HazeState, modifier: Modifier) {
         Box(
             Modifier.size(44.dp).clip(CircleShape).background(C.accent).clickable { app.push(Screen.NewChat) },
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Pen, 20.dp, Color.White) }
+        ) { IconIn(Icons.Edit, 20.dp, Color.White) }
     }
 }

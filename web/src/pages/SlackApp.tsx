@@ -3,7 +3,7 @@
 // configuration token. When permissions change, Slack asks a person to approve
 // them; that is the only step left in Slack.
 import { useStation } from "../station.tsx";
-import { ExternalLink, ImageUp, ShieldCheck } from "lucide-react";
+import { External, ImageUpload, ShieldCheck } from "../icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { useTopic } from "../core/react.ts";
 import { useAction, useApi, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
@@ -83,7 +83,7 @@ export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; o
       <li>
         <strong>打开 Slack 的 app 列表</strong>
         <span className="muted">用要放 bot 的那个 Slack 工作区的账号登录。</span>
-        <a className="btn btn-primary" href="https://api.slack.com/apps" target="_blank" rel="noopener"><ExternalLink {...ICON} />打开 api.slack.com/apps</a>
+        <a className="btn btn-primary" href="https://api.slack.com/apps" target="_blank" rel="noopener"><External {...ICON} />打开 api.slack.com/apps</a>
       </li>
       <li>
         <strong>生成配置 token</strong>
@@ -302,7 +302,7 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
     <>
       <div className="app-look">
         <button type="button" className="app-avatar" onClick={() => file.current?.click()} title="上传图片" style={{ background: settings.backgroundColor || undefined }}>
-          {icon ? <img src={icon} alt="头像" /> : <span className="app-avatar-empty"><ImageUp {...ICON} size={20} />{fresh ? "上传" : "保持现在的"}</span>}
+          {icon ? <img src={icon} alt="头像" /> : <span className="app-avatar-empty"><ImageUpload {...ICON} size={20} />{fresh ? "上传" : "保持现在的"}</span>}
         </button>
         <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
           const f = e.target.files?.[0];

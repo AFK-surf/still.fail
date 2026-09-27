@@ -2,7 +2,7 @@
 // Shiki (VS Code's grammars) with their language named and a copy button.
 // Grammars load on demand, one chunk per language, with Shiki's JavaScript
 // regex engine so no wasm is fetched.
-import { Check, Copy } from "lucide-react";
+import { Check, Copy } from "./icons.tsx";
 import { isValidElement, useEffect, useState, type ReactNode } from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";

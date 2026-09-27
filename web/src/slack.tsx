@@ -1,6 +1,6 @@
 // Connecting a Slack connect: create the app from ember's manifest, paste the two
 // tokens, and see who they belong to before anything is saved.
-import { CheckCircle2, ExternalLink } from "lucide-react";
+import { CheckCircle, External } from "./icons.tsx";
 import { useState } from "react";
 import { useAction, useApi, type SlackIdentity } from "./api.ts";
 import { Button, Field, ICON } from "./ui.tsx";
@@ -12,7 +12,7 @@ export function CreateAppSteps({ name }: { name: string }) {
     <ol className="steps">
       <li>
         <span>用 ember 的配置在 Slack 新建一个 app，名字是「{name.trim() || "ember"}」。</span>
-        <Button icon={ExternalLink} onClick={() => void open.run()} busy={open.busy}>在 Slack 创建 app</Button>
+        <Button icon={External} onClick={() => void open.run()} busy={open.busy}>在 Slack 创建 app</Button>
       </li>
       <li>在 app 的 Basic Information 页生成 App-Level Token，勾选 connections:write。</li>
       <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
@@ -66,7 +66,7 @@ export function TokenFields({ value, onChange, connect, masked, install }: {
       <div className="verify-row">
         <Button onClick={() => void verify.run()} busy={verify.busy} disabled={!hasInput}>验证 token</Button>
         {value.verified && (
-          <span className="verify-ok"><CheckCircle2 {...ICON} />连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>
+          <span className="verify-ok"><CheckCircle {...ICON} />连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>
         )}
       </div>
       {errors.length > 0 && <ul className="field-error-list" role="alert">{errors.map((e) => <li key={e}>{e}</li>)}</ul>}

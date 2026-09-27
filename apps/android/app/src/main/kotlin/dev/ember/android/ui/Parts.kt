@@ -323,7 +323,7 @@ fun IconIn(icon: ImageVector, size: Dp = 18.dp, tint: Color = C.ink, modifier: M
 @Composable
 fun NavBack(label: String, onClick: () -> Unit) {
     Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconIn(Icons.Back, 22.dp, C.accent)
+        IconIn(Icons.ChevronLeft, 22.dp, C.accent)
         Text(label, fontSize = 17.sp, color = C.accent)
     }
 }

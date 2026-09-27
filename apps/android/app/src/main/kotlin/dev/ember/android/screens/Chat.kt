@@ -255,7 +255,7 @@ private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, modi
     val app = LocalApp.current
     Column(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = app::pop), contentAlignment = Alignment.Center) { IconIn(Icons.Back, 22.dp, C.accent) }
+            Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = app::pop), contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 22.dp, C.accent) }
             Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 after()
@@ -506,7 +506,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 Modifier.padding(8.dp).size(36.dp).floating(haze, CircleShape)
                     .clickable { scope.launch { follow.jump() } },
                 contentAlignment = Alignment.Center,
-            ) { IconIn(Icons.Down, 18.dp, C.ink) }
+            ) { IconIn(Icons.ArrowDown, 18.dp, C.ink) }
         }
     }
 }
@@ -741,12 +741,8 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
 }
 
 /** A row's icon, by what kind of thing it does. */
-/** A row's mark, by the icon the core names for it (activity.rs). */
-private fun activityIcon(icon: String) = when (icon) {
-    "read" -> Icons.File; "search" -> Icons.Search; "edit" -> Icons.Pen; "command" -> Icons.Terminal; "web" -> Icons.Globe
-    "agent" -> Icons.Spark; "thread" -> Icons.Quote; "think" -> Icons.Spark
-    "received" -> Icons.Received; "said" -> Icons.Said; "send" -> Icons.Send; else -> Icons.Wrench
-}
+/** A row's mark: the icon the core names for it (activity.rs), from ember's set. */
+private fun activityIcon(icon: String) = Icons.byName[icon] ?: Icons.Other
 
 // ── files ──────────────────────────────────────────────────────────────
 
@@ -1029,7 +1025,7 @@ fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: (
             contentAlignment = Alignment.Center,
         ) {
             if (draft.starting) CircularProgressIndicator(Modifier.size(16.dp), color = C.surface, strokeWidth = 2.dp)
-            else IconIn(Icons.Up, 18.dp, if (ready) C.bg else C.surface)
+            else IconIn(Icons.ArrowUp, 18.dp, if (ready) C.bg else C.surface)
         }
     }
 }
@@ -1127,7 +1123,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                                     )
                                 }
                             }
-                            IconIn(Icons.Chevron, 14.dp, C.subtle)
+                            IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                         }
                     }
                 }

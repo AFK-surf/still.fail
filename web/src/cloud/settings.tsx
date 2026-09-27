@@ -2,7 +2,7 @@
 // is reached through (who you are, where you are signed in), and the
 // workspace itself (its name, members, stations, connects and the stations'
 // runtime accounts).
-import { ArrowLeft, Check, KeyRound, LogOut, Plug, Plus, Server, Settings2, Trash2, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Check, Key, LogOut, Plug, Plus, Server, Settings, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
@@ -40,9 +40,9 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
       <div className="nav-heading">Workspace · {entry.name}</div>
       <NavLink className="nav-row" to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
       <NavLink className="nav-row" to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>
-      <NavLink className="nav-row" to={`${base}/profiles`}><KeyRound {...ICON} />Profile</NavLink>
+      <NavLink className="nav-row" to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>
       <NavLink className="nav-row" to={`${base}/members`}><Users {...ICON} />成员</NavLink>
-      <NavLink className="nav-row" to={`${base}/general`}><Settings2 {...ICON} />通用</NavLink>
+      <NavLink className="nav-row" to={`${base}/general`}><Settings {...ICON} />通用</NavLink>
       <div className="nav-heading">离开</div>
       <NavLink className="nav-row" to={`${base}/leave`}><LogOut {...ICON} />退出与删除</NavLink>
     </div>
@@ -159,7 +159,7 @@ export function LeaveSettings({ entry }: { entry: WorkspaceEntry }) {
         {view.role === "owner" && (
           <div className="card card-row">
             <div className="card-row-text"><strong>删除 workspace</strong><span className="muted">所有成员失去访问权限，station 断开与 ember cloud 的连接；station 本机的数据不受影响。</span></div>
-            <Button variant="danger" icon={Trash2} onClick={() => setDeleting(true)}>删除</Button>
+            <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>删除</Button>
           </div>
         )}
       </Section>
@@ -277,7 +277,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
               </span>
               {manager && <Menu items={[
                 { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.run({ id: s.id, name: n.trim() }); } },
-                { label: "从 workspace 移除", icon: Trash2, danger: true, onSelect: () => setRemoving(s) },
+                { label: "从 workspace 移除", icon: Trash, danger: true, onSelect: () => setRemoving(s) },
               ]} />}
             </div>
               {s.online && (
@@ -363,7 +363,7 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
               </div>
             ) : <Pill>{ROLE_LABEL[m.role]}</Pill>}
             {manager && m.sub !== account.sub && (m.role !== "owner" || view.role === "owner") && (
-              <Menu items={[{ label: "移出 workspace", icon: Trash2, danger: true, onSelect: () => { if (window.confirm(`把 ${m.email} 移出「${view.name}」？`)) remove.run(m.sub); } }]} />
+              <Menu items={[{ label: "移出 workspace", icon: Trash, danger: true, onSelect: () => { if (window.confirm(`把 ${m.email} 移出「${view.name}」？`)) remove.run(m.sub); } }]} />
             )}
           </li>
         ))}

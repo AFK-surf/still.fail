@@ -1,7 +1,7 @@
 // Connects, as a settings page: on a station's own page its connects; in
 // ember cloud every station's connects in the workspace. Each shows who added
 // it, and the list can be narrowed to the viewer's own.
-import { Plus } from "lucide-react";
+import { Plus } from "../icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { useState } from "react";
 import { Link } from "react-router";

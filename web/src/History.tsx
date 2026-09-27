@@ -2,7 +2,7 @@
 // (client/core/src/history.rs): messages in and out, state marks and the agent's words stand alone; the tool calls and
 // thinking between them fold into one group. Here it is only drawn.
 import { useToast } from "./toast.tsx";
-import { ArrowDownToLine, ChevronDown, ChevronRight, Send } from "lucide-react";
+import { ChevronDown, ChevronRight, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useApi, useHistory, type HistoryGroup, type HistoryItem, type HistoryView, type Place } from "./api.ts";
@@ -147,7 +147,7 @@ function SlackName({ user, name, bound }: { user: string; name: string; bound: b
 function Received({ from, text, place }: { from: ReactNode; text: string; place?: ReactNode }) {
   return (
     <div className="h-received">
-      <div className="h-label"><ArrowDownToLine {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "ember" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <> · {place}</>}</div>
+      <div className="h-label"><ReceivedIcon {...ICON} size={14} />收到来自 <strong>{from === "ember" ? "ember" : from}</strong> 的{from === "ember" ? "提醒" : "消息"}{place && <> · {place}</>}</div>
       <Fold className="h-quote">{text}</Fold>
     </div>
   );

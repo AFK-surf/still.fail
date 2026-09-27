@@ -1,5 +1,5 @@
 import { profilesPage, useStation, useLink } from "../station.tsx";
-import { ChevronRight, ExternalLink, LogIn, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
@@ -171,17 +171,17 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
             <input className="input identity-name-input" value={name} autoFocus aria-label="名称" onChange={(e) => setName(e.target.value)} onBlur={rename}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
-            <h1 className="identity-name">{profile.name}<RuntimeTags runtimes={profile.runtimes} /><IconButton label="改名" icon={Pencil} onClick={() => setEditingName(true)} /></h1>
+            <h1 className="identity-name">{profile.name}<RuntimeTags runtimes={profile.runtimes} /><IconButton label="改名" icon={Edit} onClick={() => setEditingName(true)} /></h1>
           )}
           <p className="identity-sub profile-state">
             <Pill tone={profile.checkTone}>{profile.checkText}</Pill>
             {/* The pill already says it works; the detail says what else it found. */}
             <span>{latest ? latest.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}</span>
             {latest && <span className="muted"><Time stamp={latest.time?.checkedAt} />检查</span>}
-            <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={RefreshCw} disabled={check.busy} data-busy={check.busy || undefined} onClick={() => void check.run()} />
+            <IconButton label={check.busy ? "正在检查…" : "重新检查"} icon={Refresh} disabled={check.busy} data-busy={check.busy || undefined} onClick={() => void check.run()} />
           </p>
         </div>
-        <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash2, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
+        <Menu items={[{ label: profile.usedBy.length ? "删除 Profile（还有连接在用）" : "删除 Profile", icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>
       {(save.error || remove.error) && <p className="field-error" role="alert">{(save.error ?? remove.error)!.message}</p>}
       {/* A subscription that needs signing in, or is signing in: that comes first. */}
@@ -358,7 +358,7 @@ function DeviceCode({ url, code }: { url: string; code: string }) {
   return (
     <div className="device-code">
       <span className="device-code-value mono">{code}</span>
-      <Button variant="primary" icon={ExternalLink} onClick={go}>{copied ? "已复制，重新打开登录页" : "复制代码并打开登录页"}</Button>
+      <Button variant="primary" icon={External} onClick={go}>{copied ? "已复制，重新打开登录页" : "复制代码并打开登录页"}</Button>
       <p className="muted">在打开的 OpenAI 页面用要给 ember 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续，不用回来点。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
     </div>
   );
@@ -376,7 +376,7 @@ function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: 
         <ol className="steps">
           <li>
             <span>打开授权页面，用要给 ember 使用的 Claude 账号登录并同意。</span>
-            <a className="btn btn-primary" href={job.url} target="_blank" rel="noopener"><ExternalLink {...ICON} />打开授权页面</a>
+            <a className="btn btn-primary" href={job.url} target="_blank" rel="noopener"><External {...ICON} />打开授权页面</a>
           </li>
           <li>
             <span>同意后页面上会显示一段授权码，复制过来：</span>
@@ -403,7 +403,7 @@ function QuotaSection({ profile }: { profile: Profile }) {
   const quota = profile.quota;
   return (
     <Section title="额度" description={quota?.time?.checkedAt ? <><Time stamp={quota.time.checkedAt} />查询，每几分钟自动更新</> : undefined}
-      actions={<Button variant="ghost" icon={RefreshCw} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
+      actions={<Button variant="ghost" icon={Refresh} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
       <div className="card"><QuotaBars quota={quota} /></div>
     </Section>
   );

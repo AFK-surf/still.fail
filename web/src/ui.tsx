@@ -3,7 +3,7 @@
 // instead of styling their own buttons, fields or menus.
 import { Mark } from "./brand.tsx";
 import type { Badge, Maker, Stamp } from "./api.ts";
-import { Check, ChevronDown, ChevronLeft, Copy, MessageCircle, MoreHorizontal, SlidersHorizontal, X } from "lucide-react";
+import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, More, Sliders } from "./icons.tsx";
 import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
@@ -201,7 +201,7 @@ export function Dialog({ open, title, description, onClose, children, footer, wi
           onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}>
           <div className="dialog-head">
             <RDialog.Title className="dialog-title">{title}</RDialog.Title>
-            <RDialog.Close asChild><IconButton label="关闭" icon={X} /></RDialog.Close>
+            <RDialog.Close asChild><IconButton label="关闭" icon={Close} /></RDialog.Close>
           </div>
           {description ? <RDialog.Description className="dialog-lead">{description}</RDialog.Description> : <RDialog.Description className="sr-only">{title}</RDialog.Description>}
           <div className="dialog-body">{children}</div>
@@ -238,7 +238,7 @@ export interface MenuItem { label: string; icon?: IconType; danger?: boolean; di
 export function Menu({ label = "更多操作", items }: { label?: string; items: (MenuItem | "separator")[] }) {
   return (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger asChild><IconButton label={label} icon={MoreHorizontal} /></DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild><IconButton label={label} icon={More} /></DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="popover menu-list" align="end" sideOffset={4} collisionPadding={8}>
           {items.map((item, i) => item === "separator" ? <DropdownMenu.Separator key={i} className="menu-sep" /> : (
@@ -330,11 +330,11 @@ export function Section({ title, actions, children, description }: { title: Reac
   );
 }
 
-const KIND_ICON = { slack: SlackLogo, wechat: MessageCircle } as const;
+const KIND_ICON = { slack: SlackLogo, wechat: Chat } as const;
 
 /** What a connect connects to, as an icon: its kind, not its identity. */
 export function ConnectKindIcon({ kind, size = 16, tile }: { kind: string; size?: number; tile?: boolean }) {
-  const Icon = KIND_ICON[kind as keyof typeof KIND_ICON] ?? MessageCircle;
+  const Icon = KIND_ICON[kind as keyof typeof KIND_ICON] ?? Chat;
   const icon = <Icon size={size} strokeWidth={1.7} aria-hidden="true" />;
   return tile ? <span className="mark kind-mark" style={{ width: size * 2.4, height: size * 2.4 }}>{icon}</span> : <span className="kind-icon">{icon}</span>;
 }
@@ -457,7 +457,7 @@ function OpenCodeMark({ size = 16 }: { size?: number }) {
 /** Whose service a profile runs on: Anthropic or OpenAI for a subscription or an API key, OpenCode for OpenCode Go. */
 export function ProviderLogo({ runtime, kind, size = 16 }: { runtime: "claude" | "codex"; kind: string; size?: number }) {
   if (kind === "opencode-go") return <OpenCodeMark size={size} />;
-  if (kind === "env") return <SlidersHorizontal size={size} strokeWidth={1.7} aria-hidden="true" />;
+  if (kind === "env") return <Sliders size={size} strokeWidth={1.7} aria-hidden="true" />;
   return <ModelLogo maker={runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : { id: "openai", name: "OpenAI" }} runtime={runtime} size={size} />;
 }
 

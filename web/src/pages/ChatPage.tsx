@@ -4,7 +4,7 @@
 import { StationPreview } from "../Preview.tsx";
 import { useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Globe, Info, PanelRightClose, PanelRightOpen, Square, Unplug, X } from "lucide-react";
+import { Close, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
@@ -155,7 +155,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               <a className="icon-btn" href={slackUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
             </Tip>
           )}
-          {!panel && agents[0] && <IconButton label="打开侧栏" icon={PanelRightOpen} onClick={() => openTab(agents[0]!.session.key)} />}
+          {!panel && agents[0] && <IconButton label="打开侧栏" icon={PanelOpen} onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
@@ -172,9 +172,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                     return (
                       <span key={key} className="side-tab-wrap">
                         <Tabs.Trigger className="side-tab" value={key} title={`localhost:${port} 的预览`}>
-                          <span className="side-tab-agent"><Globe size={13} strokeWidth={1.75} />localhost:{port}</span>
+                          <span className="side-tab-agent"><Web size={13} strokeWidth={1.75} />localhost:{port}</span>
                         </Tabs.Trigger>
-                        <button type="button" className="side-tab-close" aria-label={`关闭 localhost:${port} 的预览`} onClick={() => closeTab(key)}><X size={12} strokeWidth={2} /></button>
+                        <button type="button" className="side-tab-close" aria-label={`关闭 localhost:${port} 的预览`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
                   }
@@ -187,13 +187,13 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                       <Tabs.Trigger className="side-tab" value={key} title={`${label} 的执行历史`}>
                         <span className="side-tab-agent"><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={13} />{label}</span>
                       </Tabs.Trigger>
-                      <button type="button" className="side-tab-close" aria-label={`关闭 ${label} 的执行历史`} onClick={() => closeTab(key)}><X size={12} strokeWidth={2} /></button>
+                      <button type="button" className="side-tab-close" aria-label={`关闭 ${label} 的执行历史`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                     </span>
                   );
                 })}
               </Tabs.List>
               {/* The panel's switch stays in the top-right corner, open or closed. */}
-              <IconButton label="收起侧栏" icon={PanelRightClose} onClick={() => saveTabs([])} />
+              <IconButton label="收起侧栏" icon={PanelClose} onClick={() => saveTabs([])} />
             </div>
             {open.map((key) => {
               const port = previewPort(key);
@@ -230,7 +230,7 @@ function OpenPreview({ onOpen }: { onOpen: (port: number) => void }) {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label="预览这台机器上的网页">
         <Popover.Trigger asChild>
-          <button type="button" className="icon-btn" aria-label="预览这台机器上的网页"><Globe {...ICON} /></button>
+          <button type="button" className="icon-btn" aria-label="预览这台机器上的网页"><Web {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
@@ -372,7 +372,7 @@ function SessionActions({ session, status }: { session: Session; status: Status 
   const evict = useAction(() => api.evict(session.key), () => toast("已释放进程"));
   return (
     <>
-      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Square} onClick={() => void stop.run()} disabled={stop.busy} />}
+      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Stop} onClick={() => void stop.run()} disabled={stop.busy} />}
       {session.process === "warm" && <IconButton label="释放进程" icon={Unplug} onClick={() => void evict.run()} disabled={evict.busy} />}
     </>
   );

@@ -1,7 +1,7 @@
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
-import { CheckCircle2, ExternalLink, KeyRound, Plus, Power, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { CheckCircle, External, Key, Plus, Power, Refresh, Trash, User } from "../icons.tsx";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type SlackInstall, type ConnectMode, type Connect, type ModelOption, type Overview, type RuntimeKind, type MadeSlackApp } from "../api.ts";
@@ -77,16 +77,16 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
           </p>
         </div>
         <Menu items={[
-          { label: "重新连接", icon: RefreshCw, onSelect: () => void reconnect.run() },
-          { label: "更换 token", icon: KeyRound, onSelect: () => setReplacing(true) },
-          ...(workspace?.url ? [{ label: "打开 Slack", icon: ExternalLink, onSelect: () => window.open(workspace.url, "_blank", "noopener") }] : []),
+          { label: "重新连接", icon: Refresh, onSelect: () => void reconnect.run() },
+          { label: "更换 token", icon: Key, onSelect: () => setReplacing(true) },
+          ...(workspace?.url ? [{ label: "打开 Slack", icon: External, onSelect: () => window.open(workspace.url, "_blank", "noopener") }] : []),
           "separator",
           connect.enabled
             ? { label: "停用", icon: Power, onSelect: () => save.put({ enabled: false }, () => toast("已停用，Slack 连接已断开")) }
             : { label: "启用", icon: Power, onSelect: () => save.put({ enabled: true }, () => toast("已启用")) },
-          { label: "更改所属用户", icon: UserRound, onSelect: () => setOwning(true) },
+          { label: "更改所属用户", icon: User, onSelect: () => setOwning(true) },
           "separator",
-          { label: "删除连接", icon: Trash2, danger: true, onSelect: () => setDeleting(true) },
+          { label: "删除连接", icon: Trash, danger: true, onSelect: () => setDeleting(true) },
         ]} />
       </header>
       {save.error && <p className="field-error page-error" role="alert">{save.error.message}</p>}
@@ -504,22 +504,22 @@ function MadeAppSteps({ made, installed }: { made: MadeSlackApp; installed: Slac
       {made.install ? (
         <li>
           {installed?.installed
-            ? <span className="verify-ok"><CheckCircle2 {...ICON} />已装进「{installed.team ?? "工作区"}」</span>
+            ? <span className="verify-ok"><CheckCircle {...ICON} />已装进「{installed.team ?? "工作区"}」</span>
             : <span>app 已经建好。把它安装到工作区：在 Slack 里点「允许」，bot token 会自动交给 station。</span>}
-          {!installed?.installed && <a className="btn btn-primary" href={made.install} target="_blank" rel="noopener"><ExternalLink {...ICON} />安装到工作区</a>}
+          {!installed?.installed && <a className="btn btn-primary" href={made.install} target="_blank" rel="noopener"><External {...ICON} />安装到工作区</a>}
         </li>
       ) : (
         <li>
           <span>app 已经建好。把它安装到工作区，然后在 OAuth 页复制 Bot User OAuth Token（xoxb- 开头）。</span>
           <span className="step-actions">
-            <a className="btn btn-primary" href={links.install} target="_blank" rel="noopener"><ExternalLink {...ICON} />安装到工作区</a>
+            <a className="btn btn-primary" href={links.install} target="_blank" rel="noopener"><External {...ICON} />安装到工作区</a>
             <a className="btn btn-secondary" href={links.oauth} target="_blank" rel="noopener">打开 OAuth 页</a>
           </span>
         </li>
       )}
       <li>
         <span>在 Basic Information 页生成 App-Level Token，勾选 connections:write，复制（xapp- 开头）。Slack 没有开放生成它的接口，只能在这里点一下。</span>
-        <a className="btn btn-secondary" href={links.appToken} target="_blank" rel="noopener"><ExternalLink {...ICON} />打开 Basic Information</a>
+        <a className="btn btn-secondary" href={links.appToken} target="_blank" rel="noopener"><External {...ICON} />打开 Basic Information</a>
       </li>
       <li>{made.install ? "把 App-Level Token 填在下面。" : "把两个 token 填在下面。"}</li>
     </ol>

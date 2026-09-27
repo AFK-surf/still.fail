@@ -1,7 +1,7 @@
 // The one way a model is chosen, wherever it is: the model, the runtime (where it can still change, and the model runs
 // on more than one), how hard it thinks, and who runs it (the station's pick, or one profile kept to). One panel, from
 // one control that shows them together. Picks there are a draft until 确定; a panel closed otherwise changes nothing.
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "./icons.tsx";
 import { Popover } from "radix-ui";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ModelOption, RunnableProfile, RuntimeKind } from "./api.ts";

@@ -1,4 +1,4 @@
-import { ArrowLeft, KeyRound, Monitor, Plug, Settings, SquarePen } from "lucide-react";
+import { ArrowLeft, Compose, Key, Monitor, Plug, Settings } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
@@ -37,7 +37,7 @@ function SettingsNav() {
       <NavLink className="nav-row" to={link(lastChat("local", "/chats"))}><ArrowLeft {...ICON} />返回会话</NavLink>
       <div className="nav-heading">设置</div>
       <NavLink className="nav-row" to={link("/settings/connects")} aria-current={connectOpen ? "page" : undefined}><Plug {...ICON} />连接</NavLink>
-      <NavLink className="nav-row" to={link("/settings/accounts")}><KeyRound {...ICON} />Profile</NavLink>
+      <NavLink className="nav-row" to={link("/settings/accounts")}><Key {...ICON} />Profile</NavLink>
       <NavLink className="nav-row" to={link("/settings/device")}><Monitor {...ICON} />设备</NavLink>
     </div>
   );
@@ -56,7 +56,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
   return (
     <>
       <div className="nav-new">
-        <NavLink className="nav-row" to={newChat}><SquarePen {...ICON} />新建对话</NavLink>
+        <NavLink className="nav-row" to={newChat}><Compose {...ICON} />新建对话</NavLink>
         <MineFilter label="会话" mine="我参与的" compact />
       </div>
       <div className="nav-slider">

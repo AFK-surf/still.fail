@@ -3,7 +3,7 @@ import { useAppearance } from "./theme.ts";
 import type { Host, Level, PersonShown, Quota } from "./api.ts";
 import { useOnlyMine } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
-import { Check, ListFilter } from "lucide-react";
+import { Check, Filter } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 
 /**
@@ -20,7 +20,7 @@ export function MineFilter({ label = "筛选", mine = "我创建的", compact }:
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger className={compact ? "mine-filter-btn" : "mine-filter-btn mine-filter-wide"} title={`筛选${label}`} aria-label={`筛选${label}：${onlyMine ? mine : "全部"}`} data-on={onlyMine || undefined}>
-        <ListFilter size={15} strokeWidth={1.8} />{!compact && <span>{onlyMine ? mine : "全部"}</span>}
+        <Filter size={15} strokeWidth={1.8} />{!compact && <span>{onlyMine ? mine : "全部"}</span>}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="popover menu-list chooser-menu" align="end" sideOffset={6} collisionPadding={8}>

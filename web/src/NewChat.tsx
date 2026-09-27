@@ -1,7 +1,7 @@
 // A new chat, after Zork's: say what to do, having picked where it runs
 // (station), on what (runtime and model) and how hard it thinks. The first
 // message (or file) makes the chat and its agent's session on that station.
-import { Server } from "lucide-react";
+import { Server } from "./icons.tsx";
 import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useStations, type RuntimeKind, type StationView } from "./api.ts";

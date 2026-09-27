@@ -4,7 +4,7 @@
 // It is an operator's tool: each page reads when it opens and after each
 // action, nothing more.
 import { useTopic } from "../core/react.ts";
-import { Boxes, Copy, LogOut, Plus, Ticket, Users } from "lucide-react";
+import { Boxes, Copy, LogOut, Plus, Ticket, Users } from "../icons.tsx";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation } from "react-router";
 import { Lockup } from "../brand.tsx";

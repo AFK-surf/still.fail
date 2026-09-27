@@ -6,7 +6,7 @@
 // like any other call, and hands the answer back. No port on the station is
 // open to anyone. The desktop app needs none of that: the frame is at
 // ember-preview://, which the app serves itself through its core.
-import { RotateCw } from "lucide-react";
+import { Retry } from "./icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { useCall } from "./core/react.ts";
 
@@ -33,7 +33,7 @@ function PreviewBar({ port, typed, setTyped, go }: { port: number; typed: string
     <form className="preview-bar" onSubmit={(e) => { e.preventDefault(); go(typed); }}>
       <span className="preview-host">localhost:{port}</span>
       <input className="preview-path" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="路径" spellCheck={false} />
-      <button type="button" className="icon-btn" aria-label="重新载入" title="重新载入" onClick={() => go(typed)}><RotateCw size={14} strokeWidth={1.75} /></button>
+      <button type="button" className="icon-btn" aria-label="重新载入" title="重新载入" onClick={() => go(typed)}><Retry size={14} strokeWidth={1.75} /></button>
     </form>
   );
 }

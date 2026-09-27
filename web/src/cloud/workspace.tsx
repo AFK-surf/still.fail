@@ -2,7 +2,7 @@
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
-import { Check, ChevronsUpDown, LogOut, Plus, Settings, UserPlus } from "lucide-react";
+import { Check, ChevronsUpDown, LogOut, Plus, Settings, UserPlus } from "../icons.tsx";
 import { NewChat } from "../NewChat.tsx";
 import { lastChat, useRememberChat } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";

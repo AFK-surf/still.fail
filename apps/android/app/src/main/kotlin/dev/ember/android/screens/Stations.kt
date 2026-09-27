@@ -109,7 +109,7 @@ fun StationsScreen(current: WorkspaceEntry) {
                             Text(s.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink)
                             Text(s.summary, fontSize = 13.sp, color = C.muted)
                         }
-                        IconIn(Icons.Chevron, 14.dp, C.subtle)
+                        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                     }
                     val host = s.host
                     if (s.online && host != null) {
@@ -197,7 +197,7 @@ private fun ProfileRow(station: String, p: Profile) {
             Text(p.modelsText, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         QuotaRings(p.quota)
-        IconIn(Icons.Chevron, 14.dp, C.subtle)
+        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
     }
 }
 

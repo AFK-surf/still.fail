@@ -2,7 +2,7 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { ArrowDown, ArrowUp, Bot, Brain, ChevronDown, ChevronUp, Download, FileText, Globe, MessagesSquare, Pencil, Plus, Quote as QuoteIcon, Search, Terminal, Wrench, X, ArrowDownToLine, MessageSquare, Send, Sparkle, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, Bot, Brain, Chats, ChevronDown, ChevronUp, Close, Command, Download, Edit, ICONS, Other, Plus, Quote as QuoteIcon, Read, Received, Said, Search, Send, Sparks, Think, Web } from "./icons.tsx";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, type Activity as ActivityView, type Api, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
@@ -415,7 +415,7 @@ function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?
         <span className="quote-card-text"><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className="quote-card-who">{quote.author}：</span>{quote.text}</span>
       </button>
       {comment ?? (quote.comment ? <div className="quote-card-comment">{quote.comment}</div> : null)}
-      {onRemove && <button type="button" className="quote-card-remove" aria-label="移除引用" onClick={onRemove}><X size={12} /></button>}
+      {onRemove && <button type="button" className="quote-card-remove" aria-label="移除引用" onClick={onRemove}><Close size={12} /></button>}
     </div>
   );
 }
@@ -518,7 +518,7 @@ function Lightbox({ open, onClose, url, file }: { open: boolean; onClose(): void
             <span className="lightbox-name">{file.name}</span>
             <span className="lightbox-size">{fileSize(file.size)}</span>
             <a className="lightbox-action" href={url} download={file.name}><Download size={14} />下载</a>
-            <RDialog.Close className="lightbox-action" aria-label="关闭"><X size={14} /></RDialog.Close>
+            <RDialog.Close className="lightbox-action" aria-label="关闭"><Close size={14} /></RDialog.Close>
           </div>
         </RDialog.Content>
       </RDialog.Portal>
@@ -529,12 +529,12 @@ function Lightbox({ open, onClose, url, file }: { open: boolean; onClose(): void
 function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; error?: string | null }) {
   return (
     <span className="file-card" title={file.path ?? file.name} data-error={error ? true : undefined}>
-      {pending ? <span className="spinner" aria-hidden="true" /> : <FileText size={16} aria-hidden="true" />}
+      {pending ? <span className="spinner" aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
       <span className="file-card-text">
         <span className="file-card-name">{file.name}</span>
         <span className="file-card-meta">{error ?? (pending ? "正在上传…" : fileSize(file.size))}</span>
       </span>
-      {onRemove && <button type="button" className="file-card-remove" aria-label={`移除 ${file.name}`} onClick={(e) => { e.stopPropagation(); onRemove(); }}><X size={12} /></button>}
+      {onRemove && <button type="button" className="file-card-remove" aria-label={`移除 ${file.name}`} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span>
   );
 }
@@ -686,7 +686,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
                 <span key={f.id} className="composer-thumb" title={f.error ?? f.name} data-error={f.error ? true : undefined}>
                   <img src={f.preview} alt={f.name} />
                   {!f.done && !f.error && <span className="composer-thumb-busy"><span className="spinner" aria-hidden="true" /></span>}
-                  <button type="button" className="composer-thumb-remove" aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><X size={11} /></button>
+                  <button type="button" className="composer-thumb-remove" aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><Close size={11} /></button>
                 </span>
               ) : <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={remove} />;
             })}
@@ -728,12 +728,6 @@ interface AgentAtWork {
   /** What it is doing, as the core says (null until its live view has come). */
   activity: ActivityView | null; since: number | undefined;
 }
-
-/** A row's mark, by the icon the core names for it (activity.rs). */
-const ACTIVITY_ICON: Record<string, typeof Terminal> = {
-  read: FileText, search: Search, edit: Pencil, command: Terminal, web: Globe, agent: Sparkles,
-  thread: QuoteIcon, think: Sparkle, other: Wrench, received: ArrowDownToLine, said: MessageSquare, send: Send,
-};
 
 const ACTIVITY_COLLAPSED = "ember.activityCollapsed";
 
@@ -777,7 +771,7 @@ function Activity({ agent, collapsed, onToggle, onOpen, leaving }: { agent: Agen
         <div className="activity-window">
           <div key={overflowing ? newest : "fill"} className="activity-rows" data-shift={overflowing || undefined}>
             {shown.map((r) => {
-              const Icon = ACTIVITY_ICON[r.icon] ?? Wrench;
+              const Icon = ICONS[r.icon] ?? Other; // the icon the core names for it (activity.rs)
               return (
                 <button type="button" key={r.key} className="activity-row" data-live={r.live || undefined} onClick={() => onOpen(r.entry ?? undefined)} title="在执行历史里查看">
                   <span className="activity-mark" aria-hidden="true">{r.live ? <span className="spinner" /> : <Icon size={13} />}</span>
