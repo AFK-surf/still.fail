@@ -4,7 +4,7 @@
 // comes from the left instead, a new chat rises from the bottom. Each page is an address, so the browser's back and a
 // link work as the desktop's do; pages under the top one stay as they were left (their scroll, what was typed).
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Route, Routes, useLocation, useNavigate, useNavigationType, type Location } from "react-router";
+import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
 import "./mobile.css";
@@ -41,8 +41,6 @@ export function useApp(): MobileApp {
   if (!app) throw new Error("outside the narrow app");
   return app;
 }
-
-const EASE = "cubic-bezier(.2, .8, .2, 1)";
 
 /** How a page comes in and goes: side by side, from the left (the viewer's own page), or rising (a new chat). */
 type Way = "side" | "left" | "rise";
@@ -82,7 +80,7 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
     if (type !== "REPLACE" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) setMoving({ from: top, to: page, forward });
   }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!moving) return;
+    if (!moving) { from.current = 0; return; }
     const timer = setTimeout(() => setMoving(null), 400);
     return () => clearTimeout(timer);
   }, [moving]);
@@ -108,19 +106,53 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
     reader: setReader,
   };
 
+  // With a finger, the page is swiped back from the screen's left edge: it follows the finger, the page under it shows,
+  // and past a third of the way (or flung) it goes, from where the finger left it.
+  const home_ = top.location.pathname.replace(/\/$/, "") === home;
+  const [swipe, setSwipe] = useState<number | null>(null);
+  const swiping = useRef<{ x: number; at: number; dx: number } | null>(null);
+  const from = useRef(0);
+  const swipeProps = home_ ? {} : {
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType !== "touch" || e.clientX > 24 || sheet || reader) return;
+      swiping.current = { x: e.clientX, at: e.timeStamp, dx: 0 };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
+      const s = swiping.current;
+      if (!s) return;
+      s.dx = Math.max(0, e.clientX - s.x);
+      setSwipe(s.dx);
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
+      const s = swiping.current;
+      swiping.current = null;
+      if (!s) return;
+      const flung = s.dx > 40 && s.dx / Math.max(1, e.timeStamp - s.at) > 0.6;
+      if (s.dx > window.innerWidth / 3 || flung) { from.current = s.dx; setSwipe(null); app.pop(); } else setSwipe(null);
+    },
+    onPointerCancel: () => { swiping.current = null; setSwipe(null); },
+  };
+
   // The page leaving on the way back is no longer in the list; it is drawn until it has gone.
   const shown = moving && !moving.forward && !pages.some((p) => p.key === moving.from.key) ? [...pages, moving.from] : pages;
+  const below = pages.at(-2)?.key;
   return (
     <Context.Provider value={app}>
       <div className="m">
         {shown.map((p) => {
           const isTop = p.key === top.key;
           const inMove = moving && (p.key === moving.from.key || p.key === moving.to.key);
-          const role = !moving ? (isTop ? "top" : "under") : p.key === moving.to.key ? "in" : p.key === moving.from.key ? "out" : "under";
+          const role = !moving ? (isTop ? "top" : swipe !== null && p.key === below ? "peek" : "under") : p.key === moving.to.key ? "in" : p.key === moving.from.key ? "out" : "under";
           const way = moving ? wayOf((moving.forward ? moving.to : moving.from).location.pathname) : "side";
+          const style: React.CSSProperties & Record<string, string | number> = { zIndex: moving ? (p.key === (moving.forward ? moving.to.key : moving.from.key) ? 2 : 1) : isTop ? 1 : 0 };
+          if (swipe !== null && isTop) style.transform = `translateX(${swipe}px)`;
+          if (role === "peek") style.transform = `translateX(calc(-30% + ${swipe! * 0.3}px))`;
+          // A page swiped back leaves from where the finger let it go.
+          if (role === "out" && moving && !moving.forward) style["--m-from"] = `${from.current}px`;
           return (
             <div key={p.key} className="m-page" data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
-              style={{ zIndex: moving ? (p.key === (moving.forward ? moving.to.key : moving.from.key) ? 2 : 1) : isTop ? 1 : 0 }}>
+              data-swiping={(swipe !== null && isTop) || undefined} style={style} {...(isTop ? swipeProps : {})}>
               {routes(p.location)}
             </div>
           );
@@ -134,11 +166,6 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
   );
 }
 
-/** The routes of a workspace as the narrow app has them, for `MobileShell`. */
-export function MobileRoutes({ location, children }: { location: Location; children: ReactNode }) {
-  return <Routes location={location}>{children}</Routes>;
-}
-export { Route };
 
 // ── the sheet ──────────────────────────────────────────────────────────
 
@@ -192,10 +219,35 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     },
     tap: () => setHeight(total() * (height > total() * 0.9 ? 0.55 : 0.94)),
   };
+  // With a finger the sheet's top (its grabber and head) drags it: a draggable sheet between half and full height or
+  // down to close; any other down to close, or back to its height.
+  const base = shown.height * total();
+  const headDrag = {
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType !== "touch" || e.clientY - e.currentTarget.getBoundingClientRect().top > 64 || (e.target as HTMLElement).closest("button, input, textarea, a")) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      from.current = { y: e.clientY, h: height, moved: false };
+      setDragging(true);
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!dragging || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      from.current.moved = true;
+      const next = from.current.h + from.current.y - e.clientY;
+      setHeight(Math.max(120, Math.min(shown.draggable ? total() * 0.94 : base, next)));
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      setDragging(false);
+      if (!from.current.moved) return;
+      if (shown.draggable) return drag.end();
+      if (base - height > 80) close();
+      else setHeight(base);
+    },
+  };
   return (
     <div className="m-overlay" data-open={open || undefined}>
       <div className="m-scrim" onClick={close} />
-      <div className="m-sheet" data-open={open || undefined} data-dragging={dragging || undefined} style={{ height }}>
+      <div className="m-sheet" data-open={open || undefined} data-dragging={dragging || undefined} style={{ height }} {...headDrag}>
         <SheetDragContext.Provider value={drag}>{shown.content()}</SheetDragContext.Provider>
       </div>
     </div>
@@ -294,4 +346,3 @@ function ReaderHost({ spec, close }: { spec: ReaderSpec | null; close: () => voi
   );
 }
 
-export { EASE };

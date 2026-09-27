@@ -111,9 +111,17 @@ function Messages({ view, lives, list, floor, draft, here }: {
   const shown = useLinger(atWork, emissions.keeps);
   emissions.take(messages, firstSeq.current, new Set(shown.map((s) => s.agent.key)));
   const agentOf = (key: string | undefined) => view.agents.find((a) => a.session.key === key);
+  // Words selected with a mouse inside one message offer to quote them.
+  const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number } | null>(null);
   return (
     <>
-      <div className="m-messages" ref={list}>
+      {picked && (
+        <button type="button" className="m-quote-pop" style={{ left: picked.x, top: picked.y }} onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { draft.quote(picked.quote); setPicked(null); window.getSelection()?.removeAllRanges(); }}>
+          <QuoteIcon size={12} strokeWidth={2.2} />引用
+        </button>
+      )}
+      <div className="m-messages" ref={list} onMouseUp={() => setTimeout(() => setPicked(selectedQuote(list.current)), 0)} onScroll={() => setPicked(null)}>
         {view.more && <div className="m-older"><Spinner size={16} /></div>}
         {messages.length === 0 && view.outbox.length === 0 && <p className="m-chat-empty">在这里发消息，这个对话里的 agent 会在这里回复。</p>}
         {messages.map((m) => {
@@ -123,6 +131,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
           return [
             m.seq === divider ? <UnreadLine key={`line-${m.seq}`} /> : null,
             <div key={m.seq} className="msg m-row" data-seq={m.seq} data-ts={m.ts} data-enter={enter}
+              data-author={m.mine ? "你" : m.by.name} data-role={m.authorKind === "agent" ? "agent" : "person"}
               data-held={state === "held" || undefined} data-emitting={state === "emitting" || undefined} data-covered={state === "emitting" || undefined}>
               <Said m={m} agent={agentOf(m.by.agent)} here={here} draft={draft} list={list} />
             </div>,
@@ -144,6 +153,20 @@ function Messages({ view, lives, list, floor, draft, here }: {
         }}><ArrowDown size={18} /></button>
     </>
   );
+}
+
+/** The passage selected inside one message, as a quote of it, and where to offer it (over the selection). */
+function selectedQuote(list: HTMLElement | null): { quote: Omit<Quote, "comment">; x: number; y: number } | null {
+  const selection = window.getSelection();
+  const text = selection?.toString().trim();
+  if (!list || !selection || !text || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  const node = range.commonAncestorContainer;
+  const row = (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[data-author]");
+  if (!row || !list.contains(row)) return null;
+  const rect = range.getBoundingClientRect();
+  const role = row.dataset.role === "agent" ? "agent" as const : "person" as const;
+  return { quote: { author: row.dataset.author!, text, ...(row.dataset.ts ? { ts: row.dataset.ts } : {}), role }, x: rect.left + rect.width / 2, y: rect.top };
 }
 
 function UnreadLine() {
@@ -172,17 +195,21 @@ function useHold(text: string, who: string, ts: string | undefined, role: "agent
     });
   };
   const cancel = () => clearTimeout(timer.current);
+  // A finger holds for the menu; a mouse right-clicks for it (and selects words to quote a passage of them).
+  const touched = useRef(false);
   return {
     pressed,
     props: {
       onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+        touched.current = e.pointerType !== "mouse";
+        if (!touched.current) return;
         const el = e.currentTarget;
         cancel();
         timer.current = setTimeout(() => open(el), 480);
       },
       onPointerUp: cancel, onPointerCancel: cancel, onPointerMove: (e: React.PointerEvent) => { if (Math.abs(e.movementY) > 4 || Math.abs(e.movementX) > 4) cancel(); },
-      // A right click (or a long press where the browser asks for its own menu) opens ours.
-      onContextMenu: (e: React.MouseEvent<HTMLElement>) => { e.preventDefault(); cancel(); open(e.currentTarget); },
+      // A right click opens it; a long press, where the browser asks for its own menu too, already has.
+      onContextMenu: (e: React.MouseEvent<HTMLElement>) => { e.preventDefault(); if (!touched.current) open(e.currentTarget); },
     },
   };
 }

@@ -37,6 +37,10 @@
 .m-page { position: absolute; inset: 0; background: var(--m-bg); }
 .m-page[data-role="under"] { visibility: hidden; pointer-events: none; }
 .m-page[data-role="out"] { pointer-events: none; }
+/* Swiped back with a finger: the page follows it, the one under it shows a little behind. */
+.m-page[data-role="peek"] { pointer-events: none; }
+.m-page[data-role="top"]:not([data-swiping]) { transition: transform 200ms var(--m-standard); }
+.m-page[data-swiping] { box-shadow: -8px 0 24px rgba(0, 0, 0, .12); }
 /* Side by side: the new page pushes in whole from the right, the old goes out whole to the left (and back the other way). */
 .m-page[data-way="side"][data-forward][data-role="in"] { animation: m-from-right 300ms var(--m-standard) both; }
 .m-page[data-way="side"][data-forward][data-role="out"] { animation: m-to-left 300ms var(--m-standard) both; }
@@ -53,7 +57,7 @@
 @keyframes m-from-right { from { transform: translateX(100%); } to { transform: none; } }
 @keyframes m-from-left { from { transform: translateX(-100%); } to { transform: none; } }
 @keyframes m-to-left { from { transform: none; } to { transform: translateX(-100%); } }
-@keyframes m-to-right { from { transform: none; } to { transform: translateX(100%); } }
+@keyframes m-to-right { from { transform: translateX(var(--m-from, 0px)); } to { transform: translateX(100%); } }
 @keyframes m-rise-in { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes m-rise-out { from { transform: none; } to { transform: translateY(100%); } }
 
@@ -225,7 +229,8 @@ button.m-info-row { cursor: pointer; }
 .m-chat-mark { display: grid; place-items: center; width: 14px; flex: none; }
 .m-chat-line2 { display: flex; align-items: center; gap: 8px; height: 20px; }
 .m-chat-last { flex: 1; min-width: 0; display: flex; }
-.m-chat-time { font-size: 12px; color: var(--m-subtle); white-space: nowrap; }
+.m-chat-time { display: none; font-size: 12px; color: var(--m-subtle); white-space: nowrap; }
+.m-chat-time[data-shown] { display: inline; }
 .m-last { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 .m-last-agent { position: relative; display: inline-block; width: 13px; height: 13px; flex: none; }
 .m-last-text { min-width: 0; font-size: 14px; line-height: 20px; color: var(--m-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -527,3 +532,19 @@ button.m-agent-head { cursor: pointer; }
 .m-sign-in p { font-size: 15px; color: var(--m-muted); }
 .m-sign-in small { font-size: 12px; color: var(--m-muted); }
 .m-google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 50px; margin-top: 6px; border: 0; border-radius: 25px; background: var(--m-ink); color: var(--m-bg) !important; font-size: 16px !important; font-weight: 600; cursor: pointer; }
+
+/* A passage selected with a mouse: 引用 over it. */
+.m-quote-pop { position: fixed; z-index: 45; display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 0; border-radius: 999px; background: var(--m-ink); color: var(--m-bg) !important; font-size: 13px !important; transform: translate(-50%, calc(-100% - 8px)); cursor: pointer; }
+
+/* A finger: the small buttons are hit from 44 px round, however small they look. */
+@media (pointer: coarse) {
+  .m :is(.m-nav-button, .m-plus, .m-send, .m-chat-back, .m-h-act, .m-bar-agent, .m-file-remove, .m-draft-quote-source button, .m-draft-thumb button) { position: relative; }
+  .m :is(.m-nav-button, .m-plus, .m-send, .m-chat-back, .m-h-act, .m-bar-agent, .m-file-remove, .m-draft-quote-source button, .m-draft-thumb button)::after { content: ""; position: absolute; inset: min(-6px, calc((100% - 44px) / 2)); }
+  .m-chat-row:active { background: color-mix(in srgb, var(--m-ink) 5%, transparent); }
+}
+/* A mouse: rows light up under it and say when they were active; what is pointed at says what it is. */
+@media (hover: hover) and (pointer: fine) {
+  .m-chat-row:hover { background: color-mix(in srgb, var(--m-ink) 4%, transparent); }
+  .m-chat-row:hover .m-chat-time { display: inline; }
+  .m :is(.m-nav-button, .m-plus, .m-chat-back, .m-h-act, .m-pick-row, .m-list-row, .m-info-row, .m-setting-row, .m-pick-line):hover { background-color: color-mix(in srgb, var(--m-ink) 5%, transparent); }
+}

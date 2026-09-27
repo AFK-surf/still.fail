@@ -91,7 +91,8 @@ function Empty({ view, onlyMine }: { view: ChatsView; onlyMine: boolean }) {
 /**
  * A row: its title (bold while something in it is unread, a blue dot in the margin) and, for an agent that came from
  * Slack, the connect's mark; under it the last thing said, the agent's state on its picture when it said it. Two lines,
- * always the same height. The time shows only while the row is held. One whose station is offline is greyed and says so.
+ * always the same height. The time shows while the row is held (or, with a mouse, pointed at). One whose station is
+ * offline is greyed and says so.
  */
 function ChatRow({ item }: { item: ChatItem }) {
   const app = useApp();
@@ -114,7 +115,7 @@ function ChatRow({ item }: { item: ChatItem }) {
       </span>
       <span className="m-chat-line2">
         <span className="m-chat-last">{item.last && <LastMessage item={item} />}</span>
-        {held && <span className="m-chat-time">{item.time?.lastActiveAt?.ago ?? ""}</span>}
+        <span className="m-chat-time" data-shown={held || undefined}>{item.time?.lastActiveAt?.ago ?? ""}</span>
       </span>
     </button>
   );
