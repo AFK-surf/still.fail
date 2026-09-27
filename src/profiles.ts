@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import type { RuntimeKind } from "./config.ts";
 import { linkCodexAuth, machineClaudeToken } from "./machine-logins.ts";
 import { fileCredentials } from "./no-keychain.ts";
+import { claudeToken } from "./quota.ts";
 
 export type AccessKind = "subscription" | "opencode-go" | "anthropic-api" | "env";
 
@@ -80,6 +81,21 @@ export interface ProfileCheck {
 
 const run = promisify(execFile);
 
+/** The models a Claude subscription's OAuth token may use; null when Anthropic does not say. */
+async function claudeModels(token: string): Promise<string[] | null> {
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/models?limit=100", {
+      headers: { authorization: `Bearer ${token}`, "anthropic-version": "2023-06-01", "anthropic-beta": "oauth-2025-04-20" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return null;
+    const body = await response.json() as { data?: { id: string }[] };
+    return (body.data ?? []).map((m) => m.id);
+  } catch {
+    return null;
+  }
+}
+
 /** Asks the provider or runtime whether this profile works, and what models it offers. */
 export async function checkProfile(options: {
   runtime: RuntimeKind; kind: AccessKind; key: string; home: string; env: NodeJS.ProcessEnv;
@@ -108,7 +124,8 @@ export async function checkProfile(options: {
       return { state: "ok", detail: `可用，${models.length} 个模型`, models, checkedAt };
     }
     if (options.kind === "subscription" && options.runtime === "claude") {
-      const machine = options.machine ? { CLAUDE_CODE_OAUTH_TOKEN: (await machineClaudeToken(options.env)).token } : {};
+      const machineToken = options.machine ? (await machineClaudeToken(options.env)).token : null;
+      const machine = machineToken ? { CLAUDE_CODE_OAUTH_TOKEN: machineToken } : {};
       // Signed out, it says so and exits 1: its answer is still the JSON on stdout.
       const { stdout } = await run("claude", ["auth", "status"], { env: options.machine ? { ...options.env, ...machine, CLAUDE_CONFIG_DIR: options.home } : fileCredentials({ ...options.env, CLAUDE_CONFIG_DIR: options.home }), timeout: 20_000 })
         .catch((error: { stdout?: string; code?: unknown }) => {
@@ -116,9 +133,11 @@ export async function checkProfile(options: {
           throw error;
         });
       const status = JSON.parse(stdout) as { loggedIn?: boolean; authMethod?: string; email?: string; subscriptionType?: string };
-      return status.loggedIn
-        ? { state: "ok", detail: ["已登录", status.email, status.subscriptionType].filter(Boolean).join("，"), models: null, checkedAt }
-        : { state: "login", detail: "还没登录", models: null, checkedAt };
+      if (!status.loggedIn) return { state: "login", detail: "还没登录", models: null, checkedAt };
+      // What the subscription runs, as Anthropic lists it for the account's own token.
+      const token = machineToken ?? await claudeToken(options.home);
+      const models = token ? await claudeModels(token) : null;
+      return { state: "ok", detail: ["已登录", status.email, status.subscriptionType].filter(Boolean).join("，"), models, checkedAt };
     }
     if (options.kind === "subscription" && options.runtime === "codex") {
       if (options.machine) linkCodexAuth(options.home, options.env);

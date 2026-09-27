@@ -4,11 +4,8 @@
 // - Claude subscription: Claude Code's OAuth usage endpoint (what /usage shows),
 //   with the token Claude Code keeps for that config directory;
 // - Anthropic API keys bill per use and have no allowance to show.
-import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import { codexAuthFile, machineClaudeToken } from "./machine-logins.ts";
 import type { Profile } from "./config.ts";
 
@@ -32,7 +29,6 @@ export interface ProfileQuota {
 }
 
 const OPENCODE = "https://opencode.ai/zen/go";
-const run = promisify(execFile);
 
 const at = (value: unknown): number | null => {
   if (typeof value === "number") return value > 1e12 ? value : value * 1000;
@@ -61,26 +57,14 @@ async function opencode(key: string): Promise<ProfileQuota> {
   return { state: "ok", windows, detail: null, checkedAt: Date.now() };
 }
 
-/** The OAuth token Claude Code keeps for this config directory: a credentials file, or the macOS keychain. */
-async function claudeToken(home: string): Promise<string | null> {
-  const fromJson = (text: string) => (JSON.parse(text) as { claudeAiOauth?: { accessToken?: string } }).claudeAiOauth?.accessToken ?? null;
+/** The OAuth token Claude Code keeps for this config directory, in its credentials file (no-keychain.ts). */
+export async function claudeToken(home: string): Promise<string | null> {
   try {
-    return fromJson(await readFile(join(home, ".credentials.json"), "utf8"));
+    const text = await readFile(join(home, ".credentials.json"), "utf8");
+    return (JSON.parse(text) as { claudeAiOauth?: { accessToken?: string } }).claudeAiOauth?.accessToken ?? null;
   } catch {
-    // not stored in a file
+    return null;
   }
-  if (process.platform !== "darwin") return null;
-  const suffix = createHash("sha256").update(home).digest("hex").slice(0, 8);
-  for (const service of [`Claude Code-credentials-${suffix}`, "Claude Code-credentials"]) {
-    try {
-      const { stdout } = await run("security", ["find-generic-password", "-s", service, "-w"], { timeout: 5000 });
-      const token = fromJson(stdout.trim());
-      if (token) return token;
-    } catch {
-      // not this one
-    }
-  }
-  return null;
 }
 
 /** What a provider says when it refuses an account itself, not a token or a request. */
