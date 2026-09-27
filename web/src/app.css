@@ -1576,20 +1576,18 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .profile-card-mark { width: 24px; height: 24px; background: none; }
 .profile-card-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .profile-card-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.profile-card-sub { color: var(--muted); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* What it is wraps rather than cutting off (an account's long address would hide its plan). */
+.profile-card-sub { color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .profile-card-state, .profile-card-action { flex: none; display: flex; align-items: center; }
 .profile-card-chevron { color: var(--muted); }
-/* Narrow: its quota under it (from where its text starts), its action across the whole width. */
-.profile-card-quota { order: 10; flex-basis: 100%; padding-left: 44px; }
+/* Its quota beside its state, however narrow (a ring or two is small); narrow, its action across the whole width. */
+.profile-card-quota { flex: none; display: flex; }
 .profile-card-action { order: 11; flex-basis: 100%; }
 .profile-card-action > .btn { width: 100%; }
 .profile-card-action:has(> .profile-card-chevron) { order: 0; flex-basis: auto; }
 @container (min-width: 420px) {
   .profile-card-action { order: 0; flex-basis: auto; }
   .profile-card-action > .btn { width: auto; }
-}
-@container (min-width: 640px) {
-  .profile-card-quota { order: 0; flex-basis: auto; padding-left: 0; }
 }
 
 /* A quiet mark that says what a thing is on hover (ui.tsx's About), in place of a paragraph. */

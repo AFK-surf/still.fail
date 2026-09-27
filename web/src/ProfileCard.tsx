@@ -1,7 +1,7 @@
 // A profile, or an account that could be one (the station machine's own login), as one card wherever it is listed:
 // the settings' lists, a station's row in the first-profile guide, a narrow column. It lays itself out by its own width
-// (a container query, app.css): in one line when there is room, name and state above what it is and its quota when
-// there is less, and its action on a line of its own when narrow.
+// (a container query, app.css): its quota and state always beside its name, what it is wrapping under the name, and
+// its action on a line of its own when narrow.
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { MachineLogin } from "./core/shapes.ts";
