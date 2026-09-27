@@ -57,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
@@ -134,7 +135,7 @@ fun HomeScreen(current: WorkspaceEntry) {
     }
 }
 
-/** One of the two lists, all or the viewer's: its states (connecting, offline, empty) and its days. */
+/** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
 @Composable
 private fun ChatPane(chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListState, padding: PaddingValues, modifier: Modifier) {
     val view = chats.value
@@ -145,11 +146,9 @@ private fun ChatPane(chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListS
             val stations = view.stations
             val connecting = stations.filter { it.state == "connecting" }
             val failed = stations.filter { it.state == "error" }
-            val offline = stations.filter { it.state == "offline" }
             connecting.forEach { s -> item(key = "c/${s.station}") { Note("正在连接 ${s.name}…") } }
             failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
             if (view.days.isEmpty() && view.loading) item(key = "loading") { Note("正在读取会话…") }
-            if (offline.isNotEmpty()) item(key = "offline") { Note("${offline.joinToString("、") { it.name }} 离线，它们的会话暂时看不到。") }
             if (view.days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(view, onlyMine) }
             for (day in view.days) {
                 item(key = "h/${day.daysAgo}") { SectionHeader(day.label) }
@@ -205,19 +204,23 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
     ) {
         if (item.unread) Box(Modifier.padding(start = 8.dp, top = 19.dp).size(7.dp).clip(CircleShape).background(C.blue).semantics { contentDescription = "有未读消息" })
         Column(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp), verticalArrangement = Arrangement.Center) {
+            // Its station offline: greyed, and marked where a Slack chat's mark goes (the core says so, row by row).
+            val offline = item.offline
+            val dim = if (offline != null) 0.45f else 1f
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     item.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = if (item.unread) FontWeight.SemiBold else FontWeight.Normal,
-                    color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                    color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alpha(dim),
                 )
-                // Only an agent that came from elsewhere (Slack, the only kind of connect) says so.
+                // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too.
                 Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
-                    if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp) }
+                    if (offline != null) Box(Modifier.semantics { contentDescription = offline }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
+                    else if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp) }
                 }
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // The state rides on the agent's picture, when the agent said the last thing; nowhere else.
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item) } }
+                Box(Modifier.weight(1f).alpha(dim), contentAlignment = Alignment.CenterStart) { item.last?.let { LastMessage(item) } }
                 if (held) Text(item.time?.get("lastActiveAt")?.ago ?: "", fontSize = 12.sp, color = C.subtle, maxLines = 1)
             }
         }

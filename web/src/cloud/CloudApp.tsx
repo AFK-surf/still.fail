@@ -13,6 +13,7 @@ import { Callback, SignInPage } from "./gate.tsx";
 import { WorkspaceShell } from "./workspace.tsx";
 import { ROLE_LABEL } from "./settings.tsx";
 import { MobileWorkspace } from "../mobile/index.tsx";
+import { MobileSignIn } from "../mobile/SignIn.tsx";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspaces } from "./api.ts";
 import { Illustration } from "../brand.tsx";
 import { PageViews, track } from "../telemetry.ts";
@@ -64,6 +65,7 @@ function SlackInstalled() {
 
 function Home() {
   const list = useAccounts();
+  const narrow = useNarrow();
   const navigate = useNavigate();
   // In the desktop app: an item's link opened from outside (ember://o/…) comes here, and the page goes there.
   useEffect(() => {
@@ -74,6 +76,7 @@ function Home() {
     return () => window.removeEventListener("message", onMessage);
   }, [navigate]);
   if (!list) return <Splash />;
+  if (list.length === 0 && narrow) return <MobileSignIn />;
   if (list.length === 0) return <SignInPage lead={inviteCode() ? "你拿到了 ember 的邀请码。用 Google 账号登录，就能建一个自己的 workspace。" : undefined} />;
   return (
     <Routes>

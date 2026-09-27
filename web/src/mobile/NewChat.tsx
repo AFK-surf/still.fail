@@ -30,7 +30,7 @@ export function NewChatScreen() {
   const [picked, setPicked] = useState<string | null>(() => localStorage.getItem(`${KEY}.last`));
   const view = online.find((s) => s.station === picked) ?? online[0];
   return (
-    <div className="m-screen m-new-chat">
+    <div className="m-screen m-newchat-screen">
       <NavBar back="取消" onBack={app.pop} title="新对话" />
       {!all ? <Loading text={stations.error?.message ?? "正在读取 station…"} />
         : !view ? (

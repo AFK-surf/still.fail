@@ -30,7 +30,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -92,9 +91,8 @@ private suspend fun AppState.join(account: Account, invite: PendingInvitation) {
 }
 
 /**
- * Signed in, with no workspace yet: the invitations waiting, or, with none, a
- * new workspace of the first account's own — made at once, or after asking for
- * the invite code ember cloud wants.
+ * Signed in, with no workspace yet: the invitations waiting, or, with none, said so; a workspace of the first account's
+ * own is made only when asked for (with the invite code ember cloud wants, once it asks for one).
  */
 @Composable
 fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
@@ -110,7 +108,6 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
     var asked by remember { mutableStateOf(false) }
     if (needsInviteCode(create.error)) asked = true
     val asking = asked && !create.done
-    LaunchedEffect(pending.isEmpty()) { if (pending.isEmpty() && !create.busy && !create.done && create.error == null) make("") }
     Column(
         Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime)).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -141,12 +138,13 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                 InviteCodeForm(create, make)
                 Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
             }
-            create.error != null -> {
-                Title("没能建好 workspace")
-                Lead(create.error!!.message)
-                Button("重试", primary = false) { make("") }
+            else -> {
+                Title("你还不在任何 workspace 里")
+                Lead("可以请已经在用 ember 的人把 ${first.email} 邀请进他们的 workspace，也可以自己建一个。")
+                Button("建一个 workspace", primary = true, busy = create.busy) { make("") }
+                create.error?.let { Error(errorText(it)) }
+                Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
             }
-            else -> Lead("正在为你建一个 workspace…")
         }
     }
 }

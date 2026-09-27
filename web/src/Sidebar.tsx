@@ -1,4 +1,4 @@
-import { ArrowLeft, Compose, Key, Monitor, Plug, Settings } from "./icons.tsx";
+import { ArrowLeft, Compose, Key, Monitor, Plug, Settings, Unplug } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
@@ -69,7 +69,7 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
   );
 }
 
-/** One of the two lists, all or the viewer's: its states (connecting, offline, empty) and its days. */
+/** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
 function ChatPane({ chats, scope, onlyMine, newChat, settings, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; newChat: string; settings: string; hidden: boolean }) {
   const view = chats.value;
   const stations = view?.stations ?? [];
@@ -78,7 +78,6 @@ function ChatPane({ chats, scope, onlyMine, newChat, settings, hidden }: { chats
   const several = scope !== "local";
   const connecting = several ? stations.filter((s) => s.state === "connecting") : [];
   const failed = several ? stations.filter((s) => s.state === "error") : [];
-  const offline = stations.filter((s) => s.state === "offline");
   const loading = !view || view.loading;
   return (
     <div className="nav-scroll" aria-hidden={hidden || undefined} inert={hidden || undefined}>
@@ -86,7 +85,6 @@ function ChatPane({ chats, scope, onlyMine, newChat, settings, hidden }: { chats
       {failed.map((s) => <p key={s.station} className="nav-empty nav-error" title={s.message ?? undefined}>连不上「{s.name}」，正在重试…</p>)}
       {chats.error && !view && <p className="nav-empty nav-error">{chats.error.message}</p>}
       {days.length === 0 && loading && !chats.error && <SkeletonRows />}
-      {offline.length > 0 && <p className="nav-empty">{offline.map((s) => s.name).join("、")} 离线：列出的是之前读到的会话，暂时不能发消息。</p>}
       {days.length === 0 && view && !loading && !failed.length && !connecting.length && (
         <p className="nav-empty">{onlyMine ? "没有你参与的会话。"
           : stations.length ? <>还没有会话。在 Slack 里 @ {stations.length > 1 ? "它们" : "它"}，或者 <NavLink className="inline-link" to={newChat}>新建对话</NavLink>。</>
@@ -110,7 +108,7 @@ function ChatPane({ chats, scope, onlyMine, newChat, settings, hidden }: { chats
 function ChatRow({ item }: { item: ChatItem }) {
   const { connect } = item;
   return (
-    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`} data-unread={item.unread || undefined} onClick={chatClicked}
+    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={chatClicked}
       // Pressing a chat does not take the focus from the composer: it stays there, focused, into the next chat.
       onMouseDown={(e) => e.preventDefault()}>
       {item.unread && <span className="unread-dot" role="img" aria-label="有未读消息" />}
@@ -120,7 +118,10 @@ function ChatRow({ item }: { item: ChatItem }) {
           <span className="nav-session-title">{item.title}</span>
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Slack is the only kind of connect there is. */}
-          {connect && <Tip label={item.originText ?? "Slack"} side="right"><span className="session-kind"><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
+          {/* Its station offline: greyed, and marked there instead (the core says so, row by row). */}
+          {item.offline
+            ? <Tip label={item.offline} side="right"><span className="session-kind" aria-label={item.offline}><Unplug size={12} /></span></Tip>
+            : connect && <Tip label={item.originText ?? "Slack"} side="right"><span className="session-kind"><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
         </span>
         {/* People are in the chat itself; here only the last thing said and when. */}
         <span className="nav-session-meta">

@@ -1488,3 +1488,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 /* A message its agents have not taken yet says so only after a second (most are taken before). */
 .msg-waiting-late { animation: msg-waiting-in 0s linear 1s both; }
 @keyframes msg-waiting-in { from { visibility: hidden; } to { visibility: visible; } }
+
+/* A chat whose station is offline: greyed, its mark saying so (the core marks the row). */
+.nav-session[data-offline] .nav-session-title, .nav-session[data-offline] .nav-session-meta { opacity: .5; }
+.nav-session[data-offline] .session-kind { color: var(--subtle); }

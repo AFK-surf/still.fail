@@ -514,3 +514,16 @@ button.m-agent-head { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .m-page, .m [data-enter], .m-sheet, .m-menu, .m-reader, .m-home-pane, .m-jump, .m-seg-thumb { animation: none !important; transition: none !important; }
 }
+
+/* In the desktop app the window has no title bar: its buttons sit at the top left, over where a phone's status bar is,
+   and the bars at the top move the window. */
+:root[data-desktop] .m { --m-top: 30px; }
+:root[data-desktop] :is(.m-home-bar, .m-chat-bar, .m-navbar, .m-top-back, .m-reader-bar) { -webkit-app-region: drag; }
+:root[data-desktop] :is(.m-home-bar, .m-chat-bar, .m-navbar, .m-top-back, .m-reader-bar) :is(button, a) { -webkit-app-region: no-drag; }
+
+/* Signing in. */
+.m-sign-in { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: calc(40px + var(--m-top)) 30px calc(40px + var(--m-foot)); text-align: center; overflow-y: auto; }
+.m-sign-in h1 { margin: 10px 0 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+.m-sign-in p { font-size: 15px; color: var(--m-muted); }
+.m-sign-in small { font-size: 12px; color: var(--m-muted); }
+.m-google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 50px; margin-top: 6px; border: 0; border-radius: 25px; background: var(--m-ink); color: var(--m-bg) !important; font-size: 16px !important; font-weight: 600; cursor: pointer; }
