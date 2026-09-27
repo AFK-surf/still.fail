@@ -135,9 +135,11 @@ export function StationScreen() {
           {s.overview && (
             <>
               <SectionHeader title="Profile" start={24} />
-              {s.overview.profiles.length === 0
-                ? <Card><span className="m-muted">这台机器还没有 Profile。</span></Card>
-                : <ListCard>{s.overview.profiles.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}</ListCard>}
+              <ListCard>
+                {s.overview.profiles.length === 0 && <ListRow><span className="m-muted m-row-title">这台机器还没有 Profile。</span></ListRow>}
+                {s.overview.profiles.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}
+                {s.online && <ListRow onClick={() => app.push(app.at(`/s/${s.id}/profiles/new`))}><span className="m-accent m-row-title">＋ 添加 Profile</span></ListRow>}
+              </ListCard>
               <SectionHeader title="连接" start={24} />
               <ListCard>
                 {s.overview.connects.map((c) => (
@@ -198,49 +200,5 @@ function ProfileRow({ station, p }: { station: StationView; p: Profile }) {
       <QuotaRings quota={p.quota} />
       <ChevronRight size={14} className="m-subtle" />
     </ListRow>
-  );
-}
-
-/** Which of a profile's models may be used: one per line, a filter when there are many, and all / none of what is shown. */
-export function ProfileScreen() {
-  const app = useApp();
-  const { station: sid = "", id = "" } = useParams();
-  const stations = useStations(app.entry.id);
-  const s = stations.value?.find((x) => x.id === sid);
-  const p = s?.overview?.profiles.find((x) => x.id === id);
-  const call = useStationCall(s?.station ?? `${app.entry.id}/${sid}`);
-  const api = useMemo(() => stationApi(call), [call]);
-  const [filter, setFilter] = useState("");
-  if (!s || !p) return <div className="m-screen"><NavBar back={s?.name ?? "Station"} onBack={app.pop} title={p?.name ?? "Profile"} /><Loading text={stations.error?.message ?? "正在读取…"} /></div>;
-  const available = [...new Set([...(p.check?.models ?? []), ...p.models])];
-  const all = [...new Set([...available, ...p.models])].sort();
-  const shown = all.filter((m) => m.toLowerCase().includes(filter.trim().toLowerCase()));
-  const save = (models: string[]) => { api.putProfile(p.id, { models: [...new Set(models)].sort() } as Parameters<typeof api.putProfile>[1]).catch((e: unknown) => app.toast(`没改成：${e instanceof Error ? e.message : String(e)}`)); };
-  const suffix = filter.trim() ? "筛选结果" : "";
-  return (
-    <div className="m-screen">
-      <NavBar back={s.name} onBack={app.pop} title={p.name} />
-      <div className="m-scroll">
-        <p className="m-profile-note">{all.length === 0 ? "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" : `只有勾选的模型能在新对话和连接里选。${p.modelsText}。`}</p>
-        {all.length > 0 && (
-          <div className="m-profile-tools">
-            {all.length > 10 ? <span className="m-grow"><Field value={filter} onChange={setFilter} placeholder="筛选模型" /></span> : <span className="m-grow" />}
-            <button type="button" className="m-link" onClick={() => save([...p.models, ...shown])}>全选{suffix}</button>
-            <button type="button" className="m-link" onClick={() => save(p.models.filter((m) => !shown.includes(m)))}>全不选{suffix}</button>
-          </div>
-        )}
-        {/* Plain rows on the page, no card behind them. */}
-        {shown.map((m) => {
-          const on = p.models.includes(m);
-          return (
-            <button key={m} type="button" className="m-model-row" onClick={() => save(on ? p.models.filter((x) => x !== m) : [...p.models, m])}>
-              <span className="m-check" data-on={on || undefined}>{on && <Check size={13} />}</span>
-              <span className="m-grow m-mono">{m}</span>
-              {!available.includes(m) && available.length > 0 && <span className="m-row-note">检查里没有了</span>}
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }

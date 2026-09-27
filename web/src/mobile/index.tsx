@@ -13,7 +13,8 @@ import { MeScreen } from "./Me.tsx";
 import { NewChatScreen } from "./NewChat.tsx";
 import { PreviewScreen } from "./Preview.tsx";
 import { Loading } from "./parts.tsx";
-import { ProfileScreen, StationScreen, StationsScreen } from "./Stations.tsx";
+import { StationScreen, StationsScreen } from "./Stations.tsx";
+import { NewProfileScreen, ProfileScreen } from "./Profiles.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
 
 export function MobileWorkspace({ entry }: { entry: Entry }) {
@@ -40,6 +41,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="s/:station/connects/:id" element={<InStation stations={stations}><ConnectScreen /></InStation>} />
       <Route path="s/:station/connects/:id/run" element={<InStation stations={stations}><ConnectRunScreen /></InStation>} />
       <Route path="s/:station/settings/accounts/:id" element={<InStation stations={stations}><ProfileScreen /></InStation>} />
+      <Route path="s/:station/profiles/new" element={<InStation stations={stations}><NewProfileScreen /></InStation>} />
       {/* What the narrow app has no page for (the desktop's settings, a station's bare address) is the list. */}
       <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
     </Routes>

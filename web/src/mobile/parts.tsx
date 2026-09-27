@@ -256,7 +256,7 @@ export function LargeTitle({ small, big }: { small: string; big: string }) {
 
 // ── lists and cards ────────────────────────────────────────────────────
 
-export function SectionHeader({ title, trailing, start = 20 }: { title: string; trailing?: string; start?: number }) {
+export function SectionHeader({ title, trailing, start = 20 }: { title: string; trailing?: string | undefined; start?: number }) {
   return <div className="m-section" style={{ paddingLeft: start }}><b>{title}</b>{trailing !== undefined && <span>{trailing}</span>}</div>;
 }
 
