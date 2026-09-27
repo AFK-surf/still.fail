@@ -226,7 +226,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
         </div>
         <Menu items={[{ label: profile.usedBy.length ? `${removal.item}（还有连接在用）` : removal.item, icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />
       </header>
-      {(save.error || remove.error) && <p className="field-error" role="alert">{(save.error ?? remove.error)!.message}</p>}
+      {save.error && <p className="field-error" role="alert">{save.error.message}</p>}
       {/* A subscription that needs signing in, or is signing in: that comes first. */}
       {signIn && !profile.machine && (latest?.state === "login" || signingIn) && <section className="section"><SignIn profile={profile} needed /></section>}
 
@@ -249,7 +249,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
 
       {profile.access.kind === "env" && <EnvSection profile={profile} onSave={(input) => saveThen(input, () => toast("已保存"))} busy={save.busy} />}
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
-        title={removal.title} action={removal.action} description={removal.description} />
+        title={removal.title} action={removal.action} description={removal.description} error={remove.error?.message} />
     </div>
   );
 }

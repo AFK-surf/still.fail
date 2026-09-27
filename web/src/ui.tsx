@@ -226,8 +226,9 @@ export function Dialog({ open, title, description, onClose, children, footer, wi
 }
 
 /** Asks before something that cannot be undone. `action` names what happens, e.g. "删除连接". */
-export function Confirm({ open, title, description, action, onConfirm, onClose, busy }:
-  { open: boolean; title: ReactNode; description: ReactNode; action: string; onConfirm(): void; onClose(): void; busy?: boolean | undefined }) {
+/** Asks before something that cannot be undone. `error`: why it did not work, said where it was asked (it stays open). */
+export function Confirm({ open, title, description, action, onConfirm, onClose, busy, error }:
+  { open: boolean; title: ReactNode; description: ReactNode; action: string; onConfirm(): void; onClose(): void; busy?: boolean | undefined; error?: string | null | undefined }) {
   return (
     <RAlert.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <RAlert.Portal>
@@ -235,6 +236,7 @@ export function Confirm({ open, title, description, action, onConfirm, onClose, 
         <RAlert.Content className="dialog dialog-alert">
           <RAlert.Title className="dialog-title">{title}</RAlert.Title>
           <RAlert.Description className="dialog-lead">{description}</RAlert.Description>
+          {error && <p className="dialog-error" role="alert">{error}</p>}
           <div className="dialog-foot">
             <RAlert.Cancel asChild><Button variant="ghost">取消</Button></RAlert.Cancel>
             <Button variant="danger-solid" busy={busy ?? false} onClick={onConfirm}>{action}</Button>

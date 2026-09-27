@@ -251,7 +251,7 @@ function CodesPage({ account }: { account: Account }) {
       {making && <NewCodeDialog account={account} onMade={() => {}} onClose={() => setMaking(false)} />}
       <Confirm open={revoking !== null} onClose={() => setRevoking(null)} busy={revoke.busy} onConfirm={() => revoking && revoke.run(revoking)}
         title={`撤回 ${revoking?.code ?? ""}？`} action="撤回邀请码"
-        description={revoke.error?.message ?? "撤回后这个邀请码就不能再用来新建 workspace 了。已经发出去的注册链接也会失效。"} />
+        description="撤回后这个邀请码就不能再用来新建 workspace 了。已经发出去的注册链接也会失效。" error={revoke.error?.message} />
     </Page>
   );
 }

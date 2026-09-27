@@ -196,6 +196,8 @@
 .card-foot { margin: 0; font-size: var(--text-xs); }
 .field-hint { font-size: var(--text-xs); color: var(--muted); }
 .field-error, .field-error-list { font-size: var(--text-xs); color: var(--red); margin: 0; }
+/* Why a dialog's action did not work, just above its buttons. */
+.dialog-error { margin: 12px 0 0; font-size: var(--text-sm); color: var(--red); text-wrap: pretty; }
 .field-error-list { padding-left: 18px; }
 .input, .select {
   width: 100%; min-height: 36px; padding: 7px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-field);

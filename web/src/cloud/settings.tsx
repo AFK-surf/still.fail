@@ -168,10 +168,10 @@ export function LeaveSettings({ entry }: { entry: WorkspaceEntry }) {
         )}
       </Section>
       <Confirm open={leaving} onClose={() => setLeaving(false)} busy={leave.busy} onConfirm={() => leave.run()}
-        title={`退出「${view.name}」？`} action="退出" description={leave.error?.message ?? "退出后你就不能再访问里面的 station，需要重新被邀请才能回来。"} />
+        title={`退出「${view.name}」？`} action="退出" description="退出后你就不能再访问里面的 station，需要重新被邀请才能回来。" error={leave.error?.message} />
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => remove.run()}
         title={`删除「${view.name}」？`} action="删除 workspace"
-        description={remove.error?.message ?? `所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 ember cloud 的连接（station 本机上的数据不受影响）。`} />
+        description={`所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 ember cloud 的连接（station 本机上的数据不受影响）。`} error={remove.error?.message} />
       <Confirm open={signingOut} onClose={() => setSigningOut(false)} onConfirm={() => void signOut(account.sub).then(() => { toast(`已退出 ${account.email}`); navigate("/"); })}
         title={`退出 ${account.email}？`} action="退出账号" description="这个浏览器上不再使用这个账号；它所在的 workspace 也会从这里消失。其他已登录的账号不受影响。" />
     </Page>
@@ -323,7 +323,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
       {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} busy={remove.busy} onConfirm={() => removing && remove.run(removing)}
         title={`移除「${removing?.name ?? ""}」？`} action="移除 station"
-        description="它会断开与 ember cloud 的连接，成员不能再从这里访问它。那台机器上的 ember 和数据不受影响，之后可以重新添加。" />
+        description="它会断开与 ember cloud 的连接，成员不能再从这里访问它。那台机器上的 ember 和数据不受影响，之后可以重新添加。" error={remove.error?.message} />
     </Section>
   );
 }

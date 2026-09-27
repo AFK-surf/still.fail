@@ -100,7 +100,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
       {owning && <OwnerDialog connect={connect} onClose={() => setOwning(false)} />}
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => void remove.run()}
         title={`删除「${connect.name}」？`} action="删除连接"
-        description={`Slack 连接会断开${connect.sessions ? `；它的 ${connect.sessions} 个会话的记录会保留，但不再接收消息` : ""}。Slack 里的 app 需要你自己去删除。`} />
+        description={`Slack 连接会断开${connect.sessions ? `；它的 ${connect.sessions} 个会话的记录会保留，但不再接收消息` : ""}。Slack 里的 app 需要你自己去删除。`} error={remove.error?.message} />
     </div>
   );
 }
