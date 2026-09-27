@@ -85,7 +85,8 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
   const taken = new Set(overview.value?.profiles.filter((p) => p.machine).map((p) => p.runtime));
   const offers = (logins ?? []).filter((l) => l.loggedIn && l.plan && !taken.has(l.runtime));
   if (!offers.length) return null;
-  const keychain = offers.some((l) => !l.usable);
+  const names = (usable: boolean) => offers.filter((l) => l.usable === usable).map((l) => MACHINE_RUNTIME[l.runtime]).join("、");
+  const direct = names(true), keychain = names(false);
   return (
     <div className="machine-logins">
       <p className="machine-logins-head">这台机器上已经登录了</p>
@@ -96,7 +97,8 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
       ))}
       {use.error && <p className="field-error" role="alert">{use.error.message}</p>}
       <p className="machine-logins-note">
-        {keychain ? "存在钥匙串里的登录不能直接用，要为 ember 单独登录一次，这台机器上原来的登录不受影响。" : "直接用这台机器上的登录，不用再登录；在这台机器上换号或登出，它也跟着变。"}
+        {direct && <span className="phrase">{keychain ? `${direct} 直接用这台机器的登录，不用再登录。` : "直接用这台机器上的登录，不用再登录；在这台机器上换号或登出，它也跟着变。"}</span>}
+        {keychain && <span className="phrase">{direct ? `${keychain} 的登录存在钥匙串里，要为 ember 单独登录一次。` : "存在钥匙串里的登录不能直接用，要为 ember 单独登录一次，这台机器上原来的登录不受影响。"}</span>}
       </p>
     </div>
   );
@@ -263,7 +265,7 @@ function MachineAccount({ profile }: { profile: Profile }) {
       <div className="card">
         <div className="card-row">
           <div className="card-row-text">
-            <strong>{station.name || "这台机器"}上 {runtime} 的登录</strong>
+            <strong>{station.name ? `${station.name} 上` : "这台机器上"} {runtime} 的登录</strong>
             <span className="muted">要换号、重新登录或登出，在这台机器的 {runtime} 里做；这个 Profile 跟着它变，不能在这里编辑或删除。</span>
           </div>
         </div>
