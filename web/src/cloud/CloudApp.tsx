@@ -7,11 +7,12 @@ import { Tooltip } from "radix-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from "react-router";
 import { ToastProvider } from "../toast.tsx";
-import { Button, Select, Splash } from "../ui.tsx";
+import { Button, Select, Splash, useNarrow } from "../ui.tsx";
 import { signIn, useAccounts } from "./accounts.ts";
 import { Callback, SignInPage } from "./gate.tsx";
 import { WorkspaceShell } from "./workspace.tsx";
 import { ROLE_LABEL } from "./settings.tsx";
+import { MobileWorkspace } from "../mobile/index.tsx";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspaces } from "./api.ts";
 import { Illustration } from "../brand.tsx";
 import { PageViews, track } from "../telemetry.ts";
@@ -174,14 +175,17 @@ function InviteCodeForm({ create }: { create: { run(code: string): void; busy: b
 /** A workspace by id, through whichever signed-in account belongs to it. */
 function WorkspaceRoute() {
   const { ws = "" } = useParams();
+  const narrow = useNarrow();
   const workspaces = useWorkspaces().value;
   if (!workspaces) return <Splash label="正在打开 workspace…" />;
   const owner = workspaces.find((a) => a.workspaces.some((w) => w.id === ws));
   const found = owner?.workspaces.find((w) => w.id === ws);
   if (!owner || !found) return <div className="gate"><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className="btn btn-secondary" href="/">回到 ember</a></div>;
-  return (
-    <WorkspaceShell key={`${owner.account.sub}/${ws}`} entry={{ id: ws, name: found.name, account: owner.account }} />
-  );
+  const entry = { id: ws, name: found.name, account: owner.account };
+  // A narrow screen is the Android app's (../mobile).
+  return narrow
+    ? <MobileWorkspace key={`${owner.account.sub}/${ws}`} entry={entry} />
+    : <WorkspaceShell key={`${owner.account.sub}/${ws}`} entry={entry} />;
 }
 
 type Preview = Awaited<ReturnType<typeof cloud.previewInvitation>>;

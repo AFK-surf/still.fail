@@ -201,7 +201,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
  * no line, and the chat opens at its bottom. Answers the seq of the message
  * the line goes over.
  */
-function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: ChatMessage[], mine: (m: ChatMessage) => boolean, older: () => Promise<unknown>, returning = false): number | null {
+export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: ChatMessage[], mine: (m: ChatMessage) => boolean, older: () => Promise<unknown>, returning = false): number | null {
   const [open] = useState(() => ({ read: chat.thread?.read ?? 0, at: Date.now() }));
   const unread = (m: ChatMessage) => m.seq > open.read && m.createdAt <= open.at && !mine(m);
   const first = messages[0]?.seq;
@@ -233,7 +233,7 @@ function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messa
 }
 
 /** Whether the reader is scrolled up, away from the newest messages (more than a screenful's corner). */
-function useAwayFromBottom(ref: RefObject<HTMLElement | null>): boolean {
+export function useAwayFromBottom(ref: RefObject<HTMLElement | null>): boolean {
   const [away, setAway] = useState(false);
   useEffect(() => {
     const pane = ref.current;
@@ -260,7 +260,7 @@ const leftAt = new Map<string, { ts: string; offset: number }>();
  * as the message at the top and its offset, so what arrived meanwhile below
  * does not move it. Answers whether this is a return to a known place.
  */
-function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean): boolean {
+export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean): boolean {
   const [saved] = useState(() => leftAt.get(key));
   const restored = useRef(false);
   useEffect(() => {
@@ -296,7 +296,7 @@ function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready
  * stays put: the pane keeps its distance from the bottom as content grows
  * above (scroll.ts).
  */
-function useOlderOnScroll(ref: RefObject<HTMLElement | null>, chat: ChatView, older: () => Promise<unknown>): void {
+export function useOlderOnScroll(ref: RefObject<HTMLElement | null>, chat: ChatView, older: () => Promise<unknown>): void {
   // The oldest message a page was asked before: one request per page.
   const asked = useRef<number | undefined>(undefined);
   const more = chat.more;
@@ -321,7 +321,7 @@ function useOlderOnScroll(ref: RefObject<HTMLElement | null>, chat: ChatView, ol
  * Records how far the viewer has read: up to the newest message, whenever the
  * chat's bottom is in view on a visible page.
  */
-function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
+export function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
   const newest = chat.messages.at(-1)?.seq ?? 0;
   const known = chat.thread?.read ?? 0;
   const sent = useRef(0);
@@ -432,7 +432,7 @@ function fetchFile(api: Api, station: string, sessionKey: string, file: Attachme
 }
 
 /** A file as a blob URL, fetched from the station once and kept while shown. */
-function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean): string | null {
+export function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean): string | null {
   const api = useApi();
   const station = useStation();
   const [url, setUrl] = useState<string | null>(null);
@@ -482,14 +482,14 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
  * proportions (sent with it) within 360×300, or a fixed box for images sent
  * before sizes were recorded.
  */
-function imageBox(file: Attachment): { width: number; height: number } {
+export function imageBox(file: Attachment): { width: number; height: number } {
   if (!file.width || !file.height) return { width: 240, height: 160 };
   const scale = Math.min(1, 360 / file.width, 300 / file.height);
   return { width: Math.max(40, Math.round(file.width * scale)), height: Math.max(40, Math.round(file.height * scale)) };
 }
 
 /** An image at full size over a dimmed page; Esc or a click outside closes it. */
-function Lightbox({ open, onClose, url, file }: { open: boolean; onClose(): void; url: string; file: Attachment }) {
+export function Lightbox({ open, onClose, url, file }: { open: boolean; onClose(): void; url: string; file: Attachment }) {
   return (
     <RDialog.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <RDialog.Portal>
@@ -706,7 +706,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
 }
 
 /** An agent in this chat that is at work: who it is, and what it does now. */
-interface AgentAtWork {
+export interface AgentAtWork {
   key: string; who: string; runtime: RuntimeKind; maker: Maker | undefined;
   /** What it is doing, as the core says (null until its live view has come). */
   activity: ActivityView | null; since: number | undefined;
@@ -720,7 +720,7 @@ const FADE_MS = 220;
  * The activities on screen: every agent at work, and each one that stopped for a moment more (HOLD_MS, then FADE_MS
  * to fold away), each on its own. `keep` holds those whose message is still coming out of their avatar.
  */
-function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { agent: AgentAtWork; leaving: boolean }[] {
+export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { agent: AgentAtWork; leaving: boolean }[] {
   const [, rerender] = useState(0);
   const shown = useRef(new Map<string, { agent: AgentAtWork; stopped: number | null }>());
   const now = Date.now();
@@ -755,7 +755,7 @@ const FLOAT_MS = 240;
 const SPIT_MS = 380;
 const RETURN_MS = 320;
 
-function useEmissions(list: RefObject<HTMLDivElement | null>) {
+export function useEmissions(list: RefObject<HTMLDivElement | null>) {
   const decided = useRef(new Map<number, boolean>());
   const done = useRef(new Set<number>());
   const queue = useRef<{ seq: number; agent: string }[]>([]);
@@ -902,7 +902,7 @@ const CROSS_MS = 240;
  * What an activity shows now, steadied: a new thing (another key) replaces the shown one after it has stayed DWELL_MS,
  * with the one it replaces kept for the crossfade; the same thing's new words (its rate) show at once.
  */
-function useSteady(now: { key: string; text: string }) {
+export function useSteady(now: { key: string; text: string }) {
   const [state, setState] = useState<{ current: { key: string; text: string }; previous: { key: string; text: string } | null; at: number; switched: boolean }>(
     () => ({ current: now, previous: null, at: 0, switched: false }),
   );
@@ -925,7 +925,7 @@ function useSteady(now: { key: string; text: string }) {
 }
 
 /** Seconds (then minutes) since a moment, ticking. */
-function Elapsed({ since }: { since: number }) {
+export function Elapsed({ since }: { since: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);

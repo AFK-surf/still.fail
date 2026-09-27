@@ -361,6 +361,10 @@ impl Views {
                     let mut row = row.clone();
                     row["station"] = json!(s.address);
                     row["stationName"] = json!(s.name);
+                    // Its station offline: the row says so itself (greyed, marked), not the list above it.
+                    if !s.online {
+                        row["offline"] = json!(format!("{} 离线", s.name));
+                    }
                     // What the clients draw of it, decided here (present.rs).
                     let agents = row.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
                     row["state"] = json!(crate::present::row_state(&agents));
@@ -1401,6 +1405,9 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!(ids(&v), vec!["1", "1", "s1"]);
             assert_eq!(v["stations"][1]["state"], "offline");
+            // Each of its rows says so itself; the online station's say nothing.
+            let items = &v["days"][0]["items"];
+            assert_eq!((items[0]["offline"].clone(), items[1]["offline"].clone()), (Value::Null, json!("beta 离线")));
             t.set(workspace(), stations(t.now_s(), true, true));
 
             // One station failing shows as that station's state; the other's rows stay.

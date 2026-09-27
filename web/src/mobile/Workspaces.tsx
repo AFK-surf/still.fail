@@ -1,0 +1,107 @@
+// Switching workspace, as the Android app has it (apps/android/…/screens/Workspaces.kt): a sheet with the invitations
+// waiting, every account's workspaces and a new one; a new workspace in a sheet of its own.
+import { useState } from "react";
+import { signIn, useAccounts } from "../cloud/accounts.ts";
+import { cloud, errorText, needsInviteCode, useAction, useWorkspaces, type AccountWorkspaces, type PendingInvitation } from "../cloud/api.ts";
+import type { Account } from "../cloud/accounts.ts";
+import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
+import { Avatar, Button, Field, PickRow } from "./parts.tsx";
+
+export function openWorkspaces(app: MobileApp) {
+  app.sheet({ height: 0.7, draggable: true, content: () => <WorkspacesSheet /> });
+}
+
+function WorkspacesSheet() {
+  const app = useApp();
+  const byAccount: AccountWorkspaces[] = useWorkspaces().value ?? [];
+  const pending = byAccount.flatMap((a) => a.invitations.map((invite) => ({ account: a.account, invite })));
+  const respond = useAction(async ({ account, invite, join }: { account: Account; invite: PendingInvitation; join: boolean }) => {
+    if (join) {
+      const w = await cloud.acceptInvitationById(account.sub, invite.id);
+      app.toast(`已加入「${invite.name}」`);
+      app.replace(`/w/${w.id}`);
+    } else {
+      await cloud.declineInvitation(account.sub, invite.id);
+      app.toast("已忽略邀请");
+    }
+  });
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title="切换 workspace" />
+      <div className="m-sheet-scroll">
+        {pending.length > 0 && (
+          <>
+            <div className="m-sheet-label">邀请</div>
+            {pending.map(({ account, invite }) => (
+              <div key={invite.id} className="m-invite">
+                <span className="m-grow"><span>{invite.inviter || "有人"}邀请你加入「{invite.name}」</span><small>{account.email}</small></span>
+                <Button label="加入" primary busy={respond.busy && respond.arg?.invite.id === invite.id && respond.arg.join} onClick={() => respond.run({ account, invite, join: true })} />
+                <Button label="忽略" primary={false} busy={respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.join} onClick={() => respond.run({ account, invite, join: false })} />
+              </div>
+            ))}
+            {respond.error && <p className="m-error m-pad">{respond.error.message}</p>}
+          </>
+        )}
+        {byAccount.map(({ account, workspaces }) => (
+          <div key={account.sub}>
+            <div className="m-sheet-account"><Avatar id={account.email} name={account.name || account.email} size={16} picture={account.picture} />{account.email}</div>
+            {workspaces.length === 0 && <p className="m-sheet-none">没有 workspace</p>}
+            {workspaces.map((w) => (
+              <PickRow key={w.id} label={w.name} sub={`${w.stations} 台 station · ${w.members} 人`} checked={w.id === app.entry.id}
+                onClick={() => { app.sheet(null); if (w.id !== app.entry.id) app.replace(`/w/${w.id}`); }} />
+            ))}
+          </div>
+        ))}
+        <PickRow label="＋ 新建 workspace" accent onClick={() => app.sheet({ height: 0.8, content: () => <NewWorkspaceSheet /> })} />
+      </div>
+    </>
+  );
+}
+
+function NewWorkspaceSheet() {
+  const app = useApp();
+  const accounts = useAccounts() ?? [];
+  const [name, setName] = useState("");
+  const [owner, setOwner] = useState<string | null>(null);
+  // Sent every time: ember cloud looks at it only for an account not let in yet, and then asks for it when it is missing or wrong.
+  const [code, setCode] = useState("");
+  const sub = accounts.find((a) => a.sub === owner)?.sub ?? accounts[0]?.sub;
+  const create = useAction(async () => {
+    const w = await cloud.createWorkspace(sub!, name.trim(), code.trim() || undefined);
+    app.replace(`/w/${w.id}`);
+  });
+  const asked = needsInviteCode(create.error);
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title="新建 workspace" />
+      <div className="m-sheet-scroll m-form">
+        <p className="m-muted">workspace 是一组人和他们共用的 station。你会成为它的 owner。</p>
+        <b className="m-form-label">名字</b>
+        <Field value={name} onChange={setName} placeholder="例如：产品团队" />
+        {accounts.length > 1 && (
+          <>
+            <b className="m-form-label">属于哪个账号</b>
+            {accounts.map((a) => <PickRow key={a.sub} label={a.email} checked={a.sub === sub} onClick={() => setOwner(a.sub)} />)}
+          </>
+        )}
+        {asked && (
+          <>
+            <b className="m-form-label">邀请码</b>
+            <Field value={code} onChange={setCode} placeholder="XXXX-XXXX-XXXX" mono />
+            {create.error && code.trim()
+              ? <p className="m-error">{errorText(create.error)}</p>
+              : <p className="m-small m-muted">ember 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。</p>}
+          </>
+        )}
+        {create.error && !asked && <p className="m-error">{create.error.message}</p>}
+        <div className="m-form-actions">
+          <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
+          <Button label="新建" primary busy={create.busy} enabled={!!name.trim() && !!sub} onClick={() => create.run()} />
+        </div>
+        {accounts.length === 0 && <Button label="登录" primary={false} onClick={() => void signIn()} />}
+      </div>
+    </>
+  );
+}

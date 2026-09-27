@@ -289,6 +289,24 @@ export function ChooserItem({ checked, onSelect, children }: { checked: boolean;
 }
 
 /** A back link that only phones show, where an opened page hides the sidebar. */
+/**
+ * Up to this width the app is the phone's: one column, the list or what is opened from it, and a chat's history over
+ * the whole screen (app.css's `max-width: 1100px` blocks say the same).
+ */
+export const NARROW = "(max-width: 1100px)";
+
+/** Whether the screen is narrow (NARROW), following the window as it changes. */
+export function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  useEffect(() => {
+    const query = window.matchMedia(NARROW);
+    const update = () => setNarrow(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
 export function MobileBack({ to, label }: { to: string; label: string }) {
   return <Link className="mobile-back" to={to}><ChevronLeft {...ICON} />{label}</Link>;
 }

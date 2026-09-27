@@ -1030,6 +1030,8 @@ pub struct ChatItem {
     pub state: Option<Badge>,
     /// Where it came from (Slack · workspace · #channel), for a Slack chat.
     pub origin_text: Option<String>,
+    /// Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online.
+    pub offline: Option<String>,
     /// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
     pub time: Option<HashMap<String, Stamp>>,
 }

@@ -27,7 +27,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   // A place as its platform's mark and its name; an ember chat opens its agent's page.
   const where = (place: Place | null): ReactNode => {
     if (!place) return null;
-    const inner = <>{place.surface === "ember" ? <Mark size={13} /> : <SlackLogo size={13} />}{place.name}</>;
+    const inner = <>{place.surface === "ember" ? <Mark size={13} /> : <SlackLogo size={13} />}<span className="h-place-name">{place.name}</span></>;
     return place.session
       ? <Link className="h-place" to={link(`/chats/${encodeURIComponent(place.session)}`)} title="打开对话">{inner}</Link>
       : <span className="h-place">{inner}</span>;

@@ -1,0 +1,336 @@
+// The narrow screen's small parts, as the Android app draws them (apps/android/…/ui/Parts.kt): model marks with their
+// state badge, people's avatars, rings, segmented choices, navigation bars and list cards. Sizes are Android's, a dp
+// or an sp a pixel here.
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import type { Badge as BadgeKind, Maker, Person, Quota, RuntimeKind } from "../api.ts";
+import { Check, ChevronLeft, type IconProps } from "../icons.tsx";
+import { Mark as BrandMark } from "../brand.tsx";
+import { SlackLogo } from "../ui.tsx";
+
+const BASE = import.meta.env.BASE_URL;
+
+export type Icon = (props: IconProps) => ReactNode;
+
+// ── model marks ────────────────────────────────────────────────────────
+
+const MAKERS = new Set(["anthropic", "openai", "deepseek", "qwen", "zhipu", "gemini", "kimi", "minimax", "xai"]);
+/** Marks of one colour, drawn in the page's ink. */
+const MONO = new Set(["anthropic", "openai", "kimi", "xai"]);
+
+/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's. */
+export function MakerIcon({ maker, runtime, size }: { maker?: Maker | undefined; runtime?: RuntimeKind | string | undefined; size: number }) {
+  const id = maker && MAKERS.has(maker.id) ? maker.id : runtime === "codex" ? "openai" : "anthropic";
+  return <img className="m-maker" src={`${BASE}models/${id}.svg`} alt={maker?.name ?? ""} width={size} height={size} data-mono={MONO.has(id) || undefined} />;
+}
+
+/** An agent's state as its mark shows it; done shows none. */
+export type AgentState = "running" | "block" | "failed" | "done";
+
+/** The core's badge (run | block | failed; none when done), as a state. */
+export function stateOf(badge: BadgeKind | undefined): AgentState {
+  return badge === "run" ? "running" : badge === "block" ? "block" : badge === "failed" ? "failed" : "done";
+}
+
+/** A state badge: solid orange = block, a still hollow orange ring = at work, red = failed; done has none. Nothing blinks. */
+export function Badge({ state, size, ring, around, style }: { state: AgentState; size: number; ring: number; around: string; style?: CSSProperties }) {
+  const r = size / 2;
+  const inner = r - ring;
+  const w = Math.min(2.5, inner);
+  return (
+    <svg className="m-badge" width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={style} aria-hidden="true">
+      <circle cx={r} cy={r} r={r} fill={around} />
+      {state === "block" && <circle cx={r} cy={r} r={inner} fill="var(--m-accent)" />}
+      {state === "failed" && <circle cx={r} cy={r} r={inner} fill="var(--m-red)" />}
+      {state === "running" && <circle cx={r} cy={r} r={inner - w / 2} fill="none" stroke="var(--m-accent)" strokeWidth={w} />}
+    </svg>
+  );
+}
+
+/** An agent: its model maker's mark on a soft tile, with its state as a badge. */
+export function ModelMark({ maker, runtime, size = 36, state, around = "var(--m-bg)" }: { maker?: Maker | undefined; runtime: RuntimeKind | string; size?: number; state?: AgentState | undefined; around?: string }) {
+  const xs = size < 30;
+  const badge = xs ? 11 : 15;
+  return (
+    <span className="m-model-mark" style={{ width: size, height: size }}>
+      <span className="m-model-tile" style={{ borderRadius: xs ? 6 : 11 }}>
+        <MakerIcon maker={maker} runtime={runtime} size={Math.round(size * (xs ? 0.6 : 0.56))} />
+      </span>
+      {state && state !== "done" && <Badge state={state} size={badge} ring={xs ? 1.5 : 2} around={around} style={{ position: "absolute", right: -3, bottom: -3 }} />}
+    </span>
+  );
+}
+
+// ── people ─────────────────────────────────────────────────────────────
+
+const AVATAR = ["#5B7BB2", "#2F8F5B", "#B9471F", "#8A6BB0", "#3F8C99", "#B0842F"];
+
+/** Java's String.hashCode, as Android picks an avatar's colour, so a person has the same colour on both. */
+function javaHash(text: string): number {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (Math.imul(31, h) + text.charCodeAt(i)) | 0;
+  return h;
+}
+
+export function avatarColor(id: string): string {
+  const n = AVATAR.length;
+  return AVATAR[((javaHash(id.toLowerCase()) % n) + n) % n]!;
+}
+
+export function initial(name: string): string {
+  return ([...name.trim()][0] ?? "?").toUpperCase();
+}
+
+/** Their picture (a Google account's) once it is here; their initial on their colour until then, or without one. */
+export function Avatar({ id, name, size, picture }: { id: string; name: string; size: number; picture?: string | undefined }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="m-avatar" style={{ width: size, height: size, background: avatarColor(id), fontSize: size * 0.5 }}>
+      {picture && !failed
+        ? <img src={picture} alt={name} referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+        : initial(name)}
+    </span>
+  );
+}
+
+/** People overlapping a little, each ringed in the page's colour. */
+export function PeopleStack({ people, size = 18, ring = "var(--m-bg)" }: { people: Person[]; size?: number; ring?: string }) {
+  return (
+    <span className="m-people">
+      {people.map((p, i) => (
+        <span key={p.id} className="m-people-one" style={{ width: size + 3, height: size + 3, marginLeft: i ? -5 : 0, zIndex: people.length - i, background: ring }}>
+          <Avatar id={p.id} name={p.shown.display} size={size} picture={p.shown.picture} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+// ── rings ──────────────────────────────────────────────────────────────
+
+/** How full, as a colour: the core's level (ok | amber | red). */
+function levelColor(level: string): string {
+  return level === "red" ? "var(--m-red)" : level === "amber" ? "var(--m-warn)" : "var(--m-green)";
+}
+
+/** An arc from the top, clockwise, `from` and `sweep` in degrees. */
+function arc(c: number, r: number, from: number, sweep: number): string {
+  if (sweep >= 359.99) return `M ${c} ${c - r} A ${r} ${r} 0 1 1 ${c - 0.01} ${c - r}`;
+  const at = (deg: number) => {
+    const rad = ((deg - 90) * Math.PI) / 180;
+    return `${c + r * Math.cos(rad)} ${c + r * Math.sin(rad)}`;
+  };
+  return `M ${at(from)} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${at(from + sweep)}`;
+}
+
+/** A percentage as a ring, coloured by the core's level, with its label under it. */
+export function Ring({ percent, label, level, size = 46 }: { percent: number; label: string; level: string; size?: number }) {
+  const w = (5 * size) / 46;
+  const r = size / 2 - w / 2 - 1;
+  const p = Math.max(0, Math.min(100, percent));
+  return (
+    <span className="m-ring">
+      <span className="m-ring-disc" style={{ width: size, height: size }}>
+        <svg width={size} height={size} aria-hidden="true">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--m-line)" strokeWidth={w} />
+          {p > 0 && <path d={arc(size / 2, r, 0, (360 * p) / 100)} fill="none" stroke={levelColor(level)} strokeWidth={w} strokeLinecap="round" />}
+        </svg>
+        <b style={{ fontSize: size < 44 ? 12 : 13 }}>{percent}</b>
+      </span>
+      <span className="m-ring-label">{label}</span>
+    </span>
+  );
+}
+
+/**
+ * An allowance as a ring: what is left, eaten clockwise from the top as it is used; coloured by the core's level. The
+ * number is what is left, and a full one shows none.
+ */
+export function QuotaRing({ left, level, size = 20 }: { left: number; level: string; size?: number }) {
+  const w = 2;
+  const r = size / 2 - w / 2 - 0.5;
+  const used = 100 - left;
+  return (
+    <span className="m-quota-ring" style={{ width: size, height: size }}>
+      <svg width={size} height={size} aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--m-line)" strokeWidth={w} />
+        {left > 0 && <path d={arc(size / 2, r, used * 3.6, (360 * left) / 100)} fill="none" stroke={levelColor(level)} strokeWidth={w} strokeLinecap="round" />}
+      </svg>
+      {left < 100 && <b style={{ fontSize: size * 0.42 }}>{left}</b>}
+    </span>
+  );
+}
+
+/** A profile's allowance in a line: every window (shortest first, as the core puts them), a ring with its mark beside it. */
+export function QuotaRings({ quota }: { quota?: Quota | undefined }) {
+  const windows = quota?.state === "ok" ? quota.windows : [];
+  if (!windows.length) return null;
+  return (
+    <span className="m-quota-rings">
+      {windows.map((w) => (
+        <span key={w.mark} className="m-quota-window"><QuotaRing left={w.left} level={w.level} /><i>{w.mark}</i></span>
+      ))}
+    </span>
+  );
+}
+
+/** Whose service a profile runs on: Anthropic or OpenAI for a subscription or a key, OpenCode for OpenCode Go. */
+export function ProviderMark({ runtime, kind, size = 16 }: { runtime: string; kind?: string | undefined; size?: number }) {
+  if (kind === "opencode-go") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="m-provider">
+        <rect x="6" y="4" width="12" height="16" fill="none" stroke="var(--m-ink)" strokeWidth="2.4" />
+      </svg>
+    );
+  }
+  const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : { id: "openai", name: "OpenAI" };
+  return <MakerIcon maker={maker} runtime={runtime} size={size} />;
+}
+
+// ── controls ───────────────────────────────────────────────────────────
+
+/**
+ * A segmented choice: a track that tints whatever it sits on (the text colour at 6%), and a light thumb that slides to
+ * the chosen option. Without `track` what it sits in (a capsule) is its track.
+ */
+export function Seg({ options, selected, onSelect, height = 30, fill = false, radius = 10, inset = 2, track = true, className }: {
+  options: string[]; selected: number; onSelect: (i: number) => void; height?: number; fill?: boolean; radius?: number; inset?: number; track?: boolean; className?: string;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+  const [thumb, setThumb] = useState<{ x: number; w: number; moved: boolean } | null>(null);
+  useLayoutEffect(() => {
+    const el = row.current?.querySelectorAll<HTMLElement>(".m-seg-option")[selected];
+    if (!el) return;
+    // The first placement jumps; a change of choice slides.
+    setThumb((t) => ({ x: el.offsetLeft, w: el.offsetWidth, moved: t !== null }));
+  }, [selected, options.length]);
+  return (
+    <div className={`m-seg${className ? ` ${className}` : ""}`} data-track={track || undefined} data-fill={fill || undefined}
+      style={{ height, borderRadius: radius, padding: inset }}>
+      <div className="m-seg-row" ref={row}>
+        {thumb && <span className="m-seg-thumb" data-moved={thumb.moved || undefined}
+          style={{ transform: `translateX(${thumb.x}px)`, width: thumb.w, borderRadius: Math.max(0, radius - inset) }} />}
+        {options.map((label, i) => (
+          <button key={label} type="button" className="m-seg-option" data-on={i === selected || undefined} onClick={() => onSelect(i)}>{label}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function Spinner({ size, color }: { size: number; color?: string }) {
+  return <span className="m-spinner" style={{ width: size, height: size, ...(color ? { borderTopColor: color, borderRightColor: color } : {}) }} aria-hidden="true" />;
+}
+
+// ── navigation ─────────────────────────────────────────────────────────
+
+/** Back, in the accent colour, with where it goes back to. */
+export function NavBack({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button type="button" className="m-nav-back" onClick={onClick}><ChevronLeft size={22} />{label}</button>;
+}
+
+/** A bar's button: the icon alone, no disc behind it (a bar's buttons are quiet). */
+export function NavButton({ icon: I, onClick, iconSize = 18, label }: { icon: Icon; onClick: () => void; iconSize?: number; label: string }) {
+  return <button type="button" className="m-nav-button" onClick={onClick} aria-label={label}><I size={iconSize} /></button>;
+}
+
+/** A page's compact bar: back, a centred title, and one action. No line under it: the page's paper runs on. */
+export function NavBar({ back, onBack, title, sub, trailing }: { back: string; onBack: () => void; title: string; sub?: ReactNode; trailing?: ReactNode }) {
+  return (
+    <header className="m-navbar">
+      <span className="m-navbar-back"><NavBack label={back} onClick={onBack} /></span>
+      <span className="m-navbar-title"><b>{title}</b>{sub !== undefined && <span className="m-navbar-sub">{sub}</span>}</span>
+      {trailing !== undefined && <span className="m-navbar-trailing">{trailing}</span>}
+    </header>
+  );
+}
+
+/** Back to the chats, at the top of a large-title page. */
+export function TopBack({ label, onBack }: { label: string; onBack: () => void }) {
+  return <div className="m-top-back"><NavBack label={label} onClick={onBack} /></div>;
+}
+
+/** A page's large title (stations, settings): a small line over a big word. */
+export function LargeTitle({ small, big }: { small: string; big: string }) {
+  return <div className="m-large-title"><span>{small}</span><h1>{big}</h1></div>;
+}
+
+// ── lists and cards ────────────────────────────────────────────────────
+
+export function SectionHeader({ title, trailing, start = 20 }: { title: string; trailing?: string; start?: number }) {
+  return <div className="m-section" style={{ paddingLeft: start }}><b>{title}</b>{trailing !== undefined && <span>{trailing}</span>}</div>;
+}
+
+export function Card({ onClick, children }: { onClick?: () => void; children: ReactNode }) {
+  return onClick
+    ? <button type="button" className="m-card" onClick={onClick}>{children}</button>
+    : <div className="m-card">{children}</div>;
+}
+
+/** Rows on one rounded card; the card groups them, no lines between. */
+export function ListCard({ children }: { children: ReactNode }) {
+  return <div className="m-list-card">{children}</div>;
+}
+
+export function ListRow({ onClick, children }: { onClick?: (() => void) | undefined; children: ReactNode }) {
+  return onClick
+    ? <button type="button" className="m-list-row" onClick={onClick}>{children}</button>
+    : <div className="m-list-row">{children}</div>;
+}
+
+/** A row of a picking sheet: what, a line under it, and a check on the chosen one. */
+export function PickRow({ label, sub, checked = false, enabled = true, accent = false, leading, onClick }: {
+  label: string; sub?: string | undefined; checked?: boolean; enabled?: boolean; accent?: boolean; leading?: ReactNode; onClick: () => void;
+}) {
+  return (
+    <button type="button" className="m-pick-row" disabled={!enabled} data-accent={accent || undefined} onClick={onClick}>
+      {leading}
+      <span className="m-pick-text"><span>{label}</span>{sub !== undefined && <small>{sub}</small>}</span>
+      {checked && <Check size={14} className="m-accent" />}
+    </button>
+  );
+}
+
+export function GroupLabel({ children }: { children: ReactNode }) {
+  return <div className="m-group-label">{children}</div>;
+}
+
+export function InfoList({ children }: { children: ReactNode }) {
+  return <div className="m-info-list">{children}</div>;
+}
+
+export function InfoRow({ onClick, children }: { onClick?: () => void; children: ReactNode }) {
+  return onClick
+    ? <button type="button" className="m-info-row" onClick={onClick}>{children}</button>
+    : <div className="m-info-row">{children}</div>;
+}
+
+/** A line to type in, on a soft frame. */
+export function Field({ value, onChange, placeholder, mono = false }: { value: string; onChange: (v: string) => void; placeholder: string; mono?: boolean }) {
+  return <input className="m-field" data-mono={mono || undefined} value={value} placeholder={placeholder} maxLength={mono ? 32 : 80} onChange={(e) => onChange(e.target.value)} spellCheck={false} />;
+}
+
+export function Button({ label, primary, busy = false, enabled = true, onClick }: { label: string; primary: boolean; busy?: boolean; enabled?: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className="m-button" data-primary={primary || undefined} disabled={!enabled || busy} onClick={onClick}>
+      {busy && <Spinner size={14} />}{label}
+    </button>
+  );
+}
+
+/** Something is on its way: said in words, centred on the page. */
+export function Loading({ text }: { text: string }) {
+  return <div className="m-loading">{text}</div>;
+}
+
+export function Mark({ size = 14 }: { size?: number }) {
+  return <BrandMark size={size} />;
+}
+
+export function SlackMark({ size = 13 }: { size?: number }) {
+  return <SlackLogo size={size} />;
+}
+
+/** A scene beside text that says the same (Android's illustrations, as the web has them). */
+export function Illustration({ name, width }: { name: "new-chat" | "station-offline" | "sign-in"; width: number }) {
+  return <img className="m-illus" src={`${BASE}illus-${name}.svg`} alt="" width={width} />;
+}
