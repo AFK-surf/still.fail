@@ -994,9 +994,10 @@ fun ComposerBar(draft: Draft, placeholder: String, onPlus: () -> Unit, onType: (
     val style = TextStyle(color = C.ink, fontSize = 15.sp, lineHeight = 21.sp)
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Box(
-            Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onPlus),
+            // Its station offline, nothing goes to it: no file either.
+            Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !draft.locked, onClick = onPlus),
             contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Plus, 18.dp) }
+        ) { IconIn(Icons.Plus, 18.dp, if (draft.locked) C.ink.copy(alpha = 0.35f) else C.ink) }
         Box(
             Modifier.weight(1f).heightIn(min = 36.dp).padding(end = 14.dp, top = 7.dp, bottom = 7.dp),
             contentAlignment = Alignment.CenterStart,

@@ -653,9 +653,10 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     <div className="composer-wrap">
       <form className="composer-box" data-multiline={roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0 || undefined} data-dragging={dragging || undefined}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
-        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
+        // Locked (its station offline), no file is taken in.
+        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); add(e.dataTransfer.files); } }}>
+        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); if (!locked) add(e.dataTransfer.files); } }}>
         {quotes.length > 0 && (
           <div className="composer-quotes">
             {quotes.map((q) => (
@@ -686,7 +687,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
         )}
         <textarea ref={input} className="composer-text" rows={1} value={text} placeholder={placeholder} aria-label="消息"
           onChange={(e) => { setText(e.target.value); warm(); }}
-          onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); add(e.clipboardData.files); } }}
+          onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); } }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); return; }
             // Nothing typed: ↑ / ↓ go to the chat above or below, as the sidebar lists them now.
@@ -697,7 +698,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
         <div className="composer-toolbar">
           <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
           <Tip label="发送文件">
-            <button type="button" className="attach-btn" aria-label="发送文件" onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
+            <button type="button" className="attach-btn" aria-label="发送文件" disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
               <Plus size={18} />
             </button>
           </Tip>

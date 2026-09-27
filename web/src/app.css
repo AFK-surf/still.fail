@@ -887,7 +887,8 @@
   display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
   background: none; color: var(--muted); cursor: pointer;
 }
-.attach-btn:hover { background: var(--hover); color: var(--text); }
+.attach-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.attach-btn:disabled { opacity: .4; cursor: default; }
 .composer-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 4px 0; }
 .file-chip {
   display: inline-flex; align-items: center; gap: 6px; max-width: 260px; padding: 4px 6px 4px 8px;

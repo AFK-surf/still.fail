@@ -381,6 +381,7 @@ button.m-agent-head { cursor: pointer; }
 .m-composer-error { padding: 0 6px; font-size: 12px; }
 .m-composer-bar { display: flex; align-items: flex-end; gap: 2px; }
 .m-plus { display: grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--m-ink) !important; cursor: pointer; }
+.m-plus:disabled { opacity: .35; cursor: default; }
 .m-composer-field { flex: 1; min-width: 0; min-height: 36px; box-sizing: border-box; margin: 0; padding: 7px 14px 7px 0; border: 0; background: transparent; color: var(--m-ink); font: inherit; font-size: 16px; line-height: 21px; resize: none; outline: none; }
 .m-composer-field::placeholder { color: var(--m-subtle); }
 .m-send { display: grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: var(--m-line); color: var(--m-surface) !important; cursor: pointer; }
@@ -558,7 +559,7 @@ button.m-agent-head { cursor: pointer; }
 @media (hover: hover) and (pointer: fine) {
   .m-chat-row:hover { background: color-mix(in srgb, var(--m-ink) 4%, transparent); }
   .m-chat-row:hover .m-chat-time { display: inline; }
-  .m :is(.m-nav-button, .m-plus, .m-chat-back, .m-h-act, .m-pick-row, .m-list-row, .m-info-row, .m-setting-row, .m-pick-line):hover { background-color: color-mix(in srgb, var(--m-ink) 5%, transparent); }
+  .m :is(.m-nav-button, .m-plus:not(:disabled), .m-chat-back, .m-h-act, .m-pick-row, .m-list-row, .m-info-row, .m-setting-row, .m-pick-line):hover { background-color: color-mix(in srgb, var(--m-ink) 5%, transparent); }
 }
 
 /* Asking: a destructive action's button in red; a command with its copy button. */

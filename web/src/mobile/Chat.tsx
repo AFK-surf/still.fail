@@ -480,7 +480,7 @@ export function ComposerBar({ draft, placeholder, locked = false, onPlus, onType
   }, [draft.text]);
   return (
     <div className="m-composer-bar">
-      <button type="button" className="m-plus" onClick={onPlus} aria-label="添加文件"><Plus size={18} /></button>
+      <button type="button" className="m-plus" onClick={onPlus} disabled={locked} aria-label="添加文件"><Plus size={18} /></button>
       <textarea ref={field} className="m-composer-field" rows={1} value={draft.text} placeholder={placeholder}
         onChange={(e) => { draft.setText(e.target.value); onType(); }}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && window.matchMedia("(hover: hover)").matches) { e.preventDefault(); if (ready) onSend(); } }} />
@@ -543,9 +543,10 @@ function Composer({ view, here, draft, list }: { view: ChatView; here: Here; dra
     <div className="m-composer" ref={capsule}>
       {/* Files pasted or dropped in go with the message, as ＋ adds them. */}
       <div className="m-floating m-composer-capsule" onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
-        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); upload(e.clipboardData.files); } }}
-        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
-        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); upload(e.dataTransfer.files); } }}>
+        // Offline, nothing goes to the station: files are neither added nor taken in.
+        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!view.offline) upload(e.clipboardData.files); } }}
+        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !view.offline) e.preventDefault(); }}
+        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!view.offline) upload(e.dataTransfer.files); } }}>
         {view.offline && <p className="m-composer-offline">这台 station 离线了：这里是之前读到的内容，暂时不能发消息。</p>}
         <DraftExtras draft={draft} />
         <ComposerBar draft={draft} placeholder="发消息" locked={view.offline}
