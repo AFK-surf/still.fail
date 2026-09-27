@@ -754,22 +754,26 @@ const FOLD_MS = 170;
 const FLOAT_MS = 240;
 const SPIT_MS = 380;
 const RETURN_MS = 320;
-const EASE = "cubic-bezier(.2, .8, .2, 1)";
 
 function useEmissions(list: RefObject<HTMLDivElement | null>) {
   const decided = useRef(new Map<number, boolean>());
   const done = useRef(new Set<number>());
   const queue = useRef<{ seq: number; agent: string }[]>([]);
   const [current, setCurrent] = useState<{ seq: number; agent: string; pose: Pose } | null>(null);
-  const flying = useRef<{ el: HTMLElement; from: { x: number; y: number } } | null>(null);
+  const flying = useRef<HTMLElement | null>(null);
   const reduced = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
 
-  // Where an element is inside the list's content, which is what the flying avatar moves in (scrolling does not move it).
-  const at = (el: Element) => {
+  // Where an element sits in the list's content, by layout: what the flying avatar moves in (scrolling does not move
+  // it), and unmoved by the message's own growing scale.
+  const spot = (el: Element) => {
     const pane = list.current!;
-    const r = el.getBoundingClientRect();
-    const p = pane.getBoundingClientRect();
-    return { x: r.left - p.left + pane.scrollLeft, y: r.top - p.top + pane.scrollTop, w: r.width, h: r.height };
+    let x = 0;
+    let y = 0;
+    for (let n: HTMLElement | null = el as HTMLElement; n && n !== pane; n = n.offsetParent as HTMLElement | null) {
+      x += n.offsetLeft;
+      y += n.offsetTop;
+    }
+    return { x, y };
   };
   const nextAfter = (agent: string | null) => {
     const next = queue.current.shift();
@@ -777,7 +781,7 @@ function useEmissions(list: RefObject<HTMLDivElement | null>) {
     setCurrent(next ? { ...next, pose: next.agent === agent ? "float" : "fold" } : null);
   };
   const finish = (seq: number, agent: string) => {
-    flying.current?.el.remove();
+    flying.current?.remove();
     flying.current = null;
     done.current.add(seq);
     nextAfter(agent);
@@ -795,37 +799,47 @@ function useEmissions(list: RefObject<HTMLDivElement | null>) {
     const landing = message?.querySelector(".msg-head .msg-avatar");
     if (!pane || !avatar || !message || !landing) { finish(seq, agent); return; }
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let frame = 0;
     const go = (to: Pose | null, ms: number) => { timer = setTimeout(() => (to ? setCurrent({ seq, agent, pose: to }) : finish(seq, agent)), ms); };
+    // Each frame the avatar is put between where it set out and where it is going, both read anew: the message growing
+    // moves the one, the activity pushed down the other.
+    const move = (from: () => { x: number; y: number }, to: () => { x: number; y: number }, ms: number, swell = 0) => {
+      const el = flying.current;
+      if (!el) return;
+      const start = from();
+      const begun = performance.now();
+      const step = () => {
+        const t = Math.min(1, (performance.now() - begun) / ms);
+        const e = 1 - (1 - t) ** 3;
+        const end = to();
+        const scale = 1 + swell * Math.sin(Math.PI * Math.min(1, t / 0.6));
+        el.style.transform = `translate(${start.x + (end.x - start.x) * e}px, ${start.y + (end.y - start.y) * e}px) scale(${scale})`;
+        if (t < 1) frame = requestAnimationFrame(step);
+      };
+      step();
+    };
     if (pose === "fold") go("float", FOLD_MS);
     if (pose === "float") {
-      const from = at(avatar);
-      const to = at(landing);
       const el = avatar.cloneNode(true) as HTMLElement;
       el.classList.add("avatar-flying");
-      Object.assign(el.style, { left: `${from.x}px`, top: `${from.y}px`, width: `${from.w}px`, height: `${from.h}px` });
+      Object.assign(el.style, { left: "0", top: "0", width: `${(avatar as HTMLElement).offsetWidth}px`, height: `${(avatar as HTMLElement).offsetHeight}px` });
       pane.append(el);
-      flying.current = { el, from };
-      el.animate([{ transform: "none" }, { transform: `translate(${to.x - from.x}px, ${to.y - from.y}px)` }], { duration: FLOAT_MS, easing: EASE, fill: "forwards" });
+      flying.current = el;
+      move(() => spot(avatar), () => spot(landing), FLOAT_MS);
       go("spit", FLOAT_MS);
     }
-    if (pose === "spit" && flying.current) {
-      const { el, from } = flying.current;
-      const to = at(landing);
-      const there = `translate(${to.x - from.x}px, ${to.y - from.y}px)`;
-      // A small swell as it lets the message out.
-      el.animate([{ transform: `${there} scale(1)` }, { transform: `${there} scale(1.16)`, offset: 0.3 }, { transform: `${there} scale(1)` }], { duration: SPIT_MS * 0.7, easing: EASE, fill: "forwards" });
+    // A small swell as it lets the message out, staying on the message's avatar as the message grows.
+    if (pose === "spit") {
+      move(() => spot(landing), () => spot(landing), SPIT_MS, 0.16);
       go("return", SPIT_MS);
     }
-    if (pose === "return" && flying.current) {
-      const { el, from } = flying.current;
-      const start = at(landing);
-      const end = at(avatar);
-      el.animate([{ transform: `translate(${start.x - from.x}px, ${start.y - from.y}px)` }, { transform: `translate(${end.x - from.x}px, ${end.y - from.y}px)` }], { duration: RETURN_MS, easing: EASE, fill: "forwards" });
+    if (pose === "return") {
+      move(() => spot(landing), () => spot(avatar), RETURN_MS);
       go(null, RETURN_MS);
     }
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); cancelAnimationFrame(frame); };
   }, [current?.seq, current?.pose]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => flying.current?.el.remove(), []);
+  useEffect(() => () => flying.current?.remove(), []);
 
   return {
     /** Agents whose activity must stay while their messages come out. */
