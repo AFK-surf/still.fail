@@ -43,9 +43,9 @@
 - [x] 机器详情（负载、内存、磁盘、agent 进程）
 
 ### 设置 · 连接
-- [x] 连接列表（全部 / 我的）— web 已补，Android 待补
+- [x] 连接列表（全部 / 我的）
 - [x] 连接详情：绑定的模型、模式（多会话 / 单会话）、是否要 @、启用停用、删除
-- [x] 添加 Slack 连接（含创建 Slack app；手机上 app 的头像、颜色、权限用默认的）— web 已补，Android 待补
+- [x] 添加 Slack 连接（含创建 Slack app；手机上 app 的头像、颜色、权限用默认的）
 
 ### 设置 · Profile
 - [x] 添加 Profile：订阅登录（含登录码）、API key、OpenCode Go
