@@ -32,6 +32,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -65,7 +66,12 @@ def read_template(name: str = "wrangler.jsonc") -> dict:
 def wrangler(*args, env=None, capture=False):
     command = ["pnpm", "exec", "wrangler", *args]
     if capture:
-        return subprocess.run(command, cwd=ROOT, env=env, check=True, text=True, capture_output=True).stdout
+        # Kept apart (deploys run side by side), and shown when it fails.
+        done = subprocess.run(command, cwd=ROOT, env=env, text=True, capture_output=True)
+        if done.returncode != 0:
+            print(f"wrangler {' '.join(args)} failed:\n{done.stdout}{done.stderr}", file=sys.stderr, flush=True)
+            raise subprocess.CalledProcessError(done.returncode, command, done.stdout, done.stderr)
+        return done.stdout
     subprocess.run(command, cwd=ROOT, env=env, check=True)
 
 
@@ -155,21 +161,30 @@ def main() -> None:
         "api": {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom()},
         "relay": {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
+    def deploy(part: str, env) -> None:
+        config = {**read_template(PARTS[part]), "account_id": account}
+        if part == "api":
+            config["vars"] = {**config["vars"], "GOOGLE_CLIENT_ID": web["client_id"]}
+        local = ROOT / PARTS[part].replace(".jsonc", ".local.json")
+        local.write_text(json.dumps(config, indent=2) + "\n")
+        print(f"deploying {part} ({config['name']})", flush=True)
+        extra = ["--containers-rollout", "immediate"] if part == "relay" else []
+        wrangler("deploy", "--config", str(local), *extra, env=env, capture=True)
+        if part in secrets_of:
+            with tempfile.TemporaryDirectory(prefix="ember-secrets-") as directory:
+                path = Path(directory) / "secrets.json"
+                write_private(path, secrets_of[part])
+                wrangler("secret", "bulk", str(path), "--config", str(local), env=env, capture=True)
+        print(f"deployed {part}", flush=True)
+
     with docker_env() as env:
-        for part in parts:
-            config = {**read_template(PARTS[part]), "account_id": account}
-            if part == "api":
-                config["vars"] = {**config["vars"], "GOOGLE_CLIENT_ID": web["client_id"]}
-            local = ROOT / PARTS[part].replace(".jsonc", ".local.json")
-            local.write_text(json.dumps(config, indent=2) + "\n")
-            print(f"deploying {part} ({config['name']})", flush=True)
-            extra = ["--containers-rollout", "immediate"] if part == "relay" else []
-            wrangler("deploy", "--config", str(local), *extra, env=env)
-            if part in secrets_of:
-                with tempfile.TemporaryDirectory(prefix="ember-secrets-") as directory:
-                    path = Path(directory) / "secrets.json"
-                    write_private(path, secrets_of[part])
-                    wrangler("secret", "bulk", str(path), "--config", str(local), env=env)
+        # The relay, then the API, in that order (the first split moved paths from one to the other); the static sites,
+        # which depend on nothing, side by side after them (each is mostly wrangler's own round trips).
+        for part in [p for p in parts if p in ("relay", "api")]:
+            deploy(part, env)
+        with ThreadPoolExecutor() as pool:
+            for done in [pool.submit(deploy, p, env) for p in parts if p not in ("relay", "api")]:
+                done.result()
 
     # Cloudflare turns away urllib's default User-Agent. A new custom domain's
     # certificate may take a few minutes; a failure here is not a failed deploy.
