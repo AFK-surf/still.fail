@@ -384,7 +384,7 @@ export function NewConnectScreen() {
   const [appSettings, setAppSettings] = useState(NEW_APP);
   // The app made, as the station keeps it (it outlives this screen until a connect takes it).
   const [madeId, setMadeId] = useState<string | null>(null);
-  const made: MadeSlackApp | undefined = madeId ? overview?.slackApps.find((a) => a.appId === madeId) : undefined;
+  const made: MadeSlackApp | undefined = madeId ? overview?.slackApps?.find((a) => a.appId === madeId) : undefined;
   const [tokens, setTokens] = useState<Tokens>(NO_TOKENS);
   const [config, setConfig] = useState("");
   const models = view?.models ?? [];

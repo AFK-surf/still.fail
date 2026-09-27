@@ -377,7 +377,7 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
   const [iconError, setIconError] = useState<string | null>(null);
   // The app made, as the station keeps it (it outlives this dialog: the connects page lists it until it is connected).
   const [madeId, setMadeId] = useState<string | null>(resume ?? null);
-  const made: MadeSlackApp | undefined = madeId ? overview.value?.slackApps.find((a) => a.appId === madeId) : undefined;
+  const made: MadeSlackApp | undefined = madeId ? overview.value?.slackApps?.find((a) => a.appId === madeId) : undefined;
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
   // The model first; the runtime only when the model runs on more than one.
   const models = useStationModels();
