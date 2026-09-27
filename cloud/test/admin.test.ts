@@ -82,7 +82,7 @@ test("the admin sees every user, workspace and code", async () => {
     const seen = workspaces.find((w: any) => w.id === home.id);
     assert.equal(seen.created_by.email, "alice@example.test");
     assert.deepEqual(seen.members.map((m: any) => [m.email, m.role]), [["alice@example.test", "owner"], ["bob@example.test", "member"]]);
-    assert.deepEqual(seen.stations.map((s: any) => [s.id, s.name, s.online, s.version]), [[station, "studio", false, "0.3.1"]]);
+    assert.deepEqual(seen.stations.map((s: any) => [s.id, s.name, s.version]), [[station, "studio", "0.3.1"]]);
     assert.deepEqual(seen.invitations.map((i: any) => [i.email, i.role, i.inviter]), [["erin@example.test", "admin", "Name of alice"]]);
 
     const { codes } = await (await aliceAdmin("GET", "/v1/admin/invite-codes")).json() as any;

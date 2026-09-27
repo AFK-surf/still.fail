@@ -117,17 +117,17 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     const station = await enrollStation(h, alice, w, "studio");
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "enroll");
 
-    // Presence: open is online, close is offline, pushed at once.
+    // A station's socket is what ember cloud tells it: whether it is up, devices find out over the mesh, so connecting
+    // tells no one.
     const first = await connectStation(h, station);
     assert.equal(first.status, 101);
-    const online: AccountEvent = { type: "station", workspace: w, id: station.id, online: true };
-    await expect(on, { alice: [online], bob: [online] }, "station online");
+    await expect(on, {}, "a station connecting tells no one");
     await first.ping!();
     assert.deepEqual(first.frames![0], { type: "state", workspace: w, workspace_name: "House", name: "studio", grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations });
     // bob's role changed above: the credentials he held then are refused, as the station hears at once on connecting.
     assert.deepEqual(first.frames![0].revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
     let seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
-    assert.deepEqual([seen.online, seen.version], [true, "0.2.0"]);
+    assert.deepEqual([seen.version, "online" in seen], ["0.2.0", false]);
 
     await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { name: "big studio" });
     await expect(on, { alice: [ws], bob: [ws] }, "rename station");
@@ -135,12 +135,10 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     assert.equal(first.frames!.at(-1).name, "big studio", "the station learns its new name");
 
     first.ws!.close(1000);
-    const offline: AccountEvent = { type: "station", workspace: w, id: station.id, online: false };
     await new Promise((resolve) => setTimeout(resolve, 100));
-    await expect(on, { alice: [offline], bob: [offline] }, "station offline");
+    await expect(on, {}, "nor does leaving");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
-    assert.equal(seen.online, false);
-    assert.ok(seen.last_seen >= Math.floor(Date.now() / 1000) - 5, "last online at");
+    assert.ok(seen.last_seen >= Math.floor(Date.now() / 1000) - 5, "last here at");
 
     // A leaver and a removed member hear of it too.
     assert.equal((await bob("DELETE", `/v1/workspaces/${w}/members/${bobSub}`)).status, 200);
@@ -153,9 +151,8 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     const carolSub = ((await (await alice("GET", `/v1/workspaces/${w}`)).json()) as any).members.find((m: any) => m.email === "carol@example.test").sub;
     await alice("DELETE", `/v1/workspaces/${w}/members/${carolSub}`);
     await expect(on, { alice: [list, ws], carol: [list, ws] }, "remove carol");
-    // Bob is no longer a member: its station's presence is not his business.
     const second = await connectStation(h, station);
-    await expect(on, { alice: [online] }, "online after bob left");
+    await expect(on, {}, "connecting again");
 
     // Removing a station closes its socket and it cannot come back.
     await alice("DELETE", `/v1/workspaces/${w}/stations/${station.id}`);
@@ -165,7 +162,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
 
     const other = await enrollStation(h, alice, w, "mini");
     const third = await connectStation(h, other);
-    await expect(on, { alice: [list, ws, { type: "station", workspace: w, id: other.id, online: true }] }, "second station");
+    await expect(on, { alice: [list, ws] }, "second station");
     await alice("DELETE", `/v1/workspaces/${w}`);
     assert.equal(await third.closed, 4004);
     await expect(on, { alice: [list, ws] }, "delete workspace");
@@ -174,7 +171,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
   }
 });
 
-test("a reconnect replaces the old presence socket; a silent one is dropped", { timeout: 20000 }, async () => {
+test("a reconnect replaces the old station socket; a silent one is dropped", { timeout: 20000 }, async () => {
   const h = await harness();
   try {
     const tokens = await h.login("alice");
@@ -188,7 +185,7 @@ test("a reconnect replaces the old presence socket; a silent one is dropped", { 
     const second = await connectStation(h, station);
     assert.equal(await first.closed, 4000);
     await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.deepEqual(await events.take(), [JSON.stringify({ type: "station", workspace: w, id: station.id, online: true })], "no offline in between");
+    assert.deepEqual(await events.take(), [], "a station's socket tells no one");
 
     const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY");
     const directory = directories.get(directories.idFromName("primary"));
@@ -196,8 +193,8 @@ test("a reconnect replaces the old presence socket; a silent one is dropped", { 
     assert.equal(await directory.sweepAt(Date.now() + SILENT_MS - 5000), true, "answered pings keep it");
     assert.equal(await directory.sweepAt(Date.now() + SILENT_MS + 5000), false);
     assert.equal(await second.closed, 4008);
-    assert.deepEqual(await events.take(), [JSON.stringify({ type: "station", workspace: w, id: station.id, online: false })]);
-    assert.equal(((await (await alice("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0].online, false);
+    assert.deepEqual(await events.take(), []);
+    assert.ok(((await (await alice("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0].last_seen >= Math.floor(Date.now() / 1000) - 5);
   } finally {
     await h.close();
   }

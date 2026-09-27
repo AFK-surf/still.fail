@@ -6,7 +6,10 @@
 // It also holds the sockets that make this live (hibernatable, so idle ones
 // cost nothing): each device's `/v1/events` socket, tagged `sub:<account>`,
 // to which every change is pushed as the accounts it affects; and each
-// station's presence socket, tagged `station:<id>` — open is online.
+// station's socket, tagged `station:<id>`: what ember cloud tells the station
+// (its name and workspace, the credential keys, what is revoked). Whether a
+// station is up is not decided here: each device finds it out, reaching the
+// station over the mesh.
 import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import { CODE_TTL_DAYS, isAdmin, newCode, normalizeCode } from "./admin";
@@ -206,7 +209,7 @@ export class Directory extends DurableObject<Env> {
       SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
     const stations = this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", id)
-      .map((row) => ({ ...row, online: this.#presence(row.id as string).length > 0 })) as unknown as StationView[];
+      as unknown as StationView[];
     const invitations = MANAGERS.includes(role)
       ? this.#rows("SELECT id, role, email, created_by, expires_at FROM invitations WHERE workspace = ? AND expires_at > ? ORDER BY expires_at", id, nowSeconds()) as unknown as InvitationView[]
       : [];
@@ -493,7 +496,7 @@ export class Directory extends DurableObject<Env> {
       members: this.#rows(`SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
         FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, w.id) as unknown as MemberView[],
       stations: this.#rows("SELECT id, name, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", w.id)
-        .map((row) => ({ ...row, online: this.#presence(row.id as string).length > 0 })) as unknown as StationView[],
+        as unknown as StationView[],
       invitations: this.#rows(`SELECT i.id, i.role, i.email, i.created_by, i.expires_at, COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter
         FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.workspace = ? AND i.expires_at > ? ORDER BY i.expires_at`, w.id, now) as unknown as AdminWorkspace["invitations"],
     }));
@@ -553,14 +556,12 @@ export class Directory extends DurableObject<Env> {
     const station = request.headers.get("x-ember-station")!;
     const row = this.#one("SELECT workspace FROM stations WHERE id = ?", station);
     if (!row) return Response.json({ error: "station_removed" }, { status: 404 });
-    // One socket per station: a reconnect replaces the one it gave up on, without an offline in between.
-    const wasOnline = this.#presence(station).length > 0;
+    // One socket per station: a reconnect replaces the one it gave up on.
     for (const old of this.#presence(station)) this.#drop(old, CLOSE.replaced, "replaced");
     this.#run("UPDATE stations SET last_seen = ?, version = COALESCE(?, version) WHERE id = ?", nowSeconds(), request.headers.get("x-ember-version"), station);
     this.ctx.acceptWebSocket(pair[1], [`station:${station}`]);
     pair[1].serializeAttachment({ station, at: Date.now() } satisfies Attachment);
     this.#sendState(station);
-    if (!wasOnline) this.#tell(this.#members(row.workspace as string), { type: "station", workspace: row.workspace as string, id: station, online: true });
     if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + SILENT_MS);
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
@@ -597,10 +598,7 @@ export class Directory extends DurableObject<Env> {
 
   #offline(station: string): void {
     if (this.#presence(station).length) return;
-    const row = this.#one("SELECT workspace FROM stations WHERE id = ?", station);
-    if (!row) return;
     this.#run("UPDATE stations SET last_seen = ? WHERE id = ?", nowSeconds(), station);
-    this.#tell(this.#members(row.workspace as string), { type: "station", workspace: row.workspace as string, id: station, online: false });
   }
 
   async webSocketMessage(): Promise<void> {
