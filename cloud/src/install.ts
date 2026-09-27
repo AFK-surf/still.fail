@@ -55,6 +55,8 @@ tar -xzf "$tmp/ember.tar.gz" -C "$tmp"
 # One running at a time: the old one stops before the new one takes its place.
 if [ "$os" = Darwin ]; then
   launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+  # bootout returns before the service is gone; bootstrapping it again before then fails.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1 || break; sleep 1; done
 else
   user_systemd && systemctl --user stop "$unit" 2>/dev/null || true
   [ -f "$data/ember.pid" ] && kill "$(cat "$data/ember.pid")" 2>/dev/null || true
@@ -92,7 +94,12 @@ if [ "$os" = Darwin ]; then
 </dict>
 </plist>
 PLIST
-  launchctl bootstrap "gui/$(id -u)" "$plist"
+  started=""
+  for _ in 1 2 3 4 5; do
+    launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null && { started=yes; break; }
+    sleep 2
+  done
+  [ -n "$started" ] || { echo "launchd 没能启动 ember station（launchctl bootstrap gui/$(id -u) $plist）" >&2; exit 1; }
 else
   if user_systemd; then
     mkdir -p "$unit_dir"
