@@ -972,6 +972,18 @@ data class Live (
 	val offline: Boolean? = null
 )
 
+/// Who the station machine's own Claude Code or Codex is signed in as (only read: ember never takes the login over).
+@Serializable
+data class MachineLogin (
+	val runtime: RuntimeKind,
+	val installed: Boolean,
+	val loggedIn: Boolean,
+	val email: String? = null,
+	val plan: String? = null,
+	/// In a line, as the pages show it.
+	val text: String
+)
+
 @Serializable
 data class MeshStatus (
 	/// off | missing | running | restarting
@@ -1032,6 +1044,8 @@ data class Overview (
 	val slackInstalls: List<SlackInstall>,
 	val disk: DiskRoom? = null,
 	val logins: List<PendingLogin>,
+	/// This machine's own logins (none from a station older than them).
+	val machineLogins: List<MachineLogin>? = null,
 	/// Its agents' processes, in a line.
 	val processesText: String
 )

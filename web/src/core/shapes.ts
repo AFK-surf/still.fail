@@ -892,6 +892,17 @@ export interface Live {
 	offline?: boolean;
 }
 
+/** Who the station machine's own Claude Code or Codex is signed in as (only read: ember never takes the login over). */
+export interface MachineLogin {
+	runtime: RuntimeKind;
+	installed: boolean;
+	loggedIn: boolean;
+	email?: string;
+	plan?: string;
+	/** In a line, as the pages show it. */
+	text: string;
+}
+
 export interface MeshStatus {
 	/** off | missing | running | restarting */
 	state: string;
@@ -946,6 +957,8 @@ export interface Overview {
 	slackInstalls: SlackInstall[];
 	disk?: DiskRoom;
 	logins: PendingLogin[];
+	/** This machine's own logins (none from a station older than them). */
+	machineLogins?: MachineLogin[];
 	/** Its agents' processes, in a line. */
 	processesText: string;
 }
