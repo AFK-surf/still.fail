@@ -620,15 +620,18 @@ impl Views {
         let outbox = {
             let mut all = self.outbox.borrow_mut();
             let list = all.entry(at.clone()).or_default();
-            let mut taken: Vec<u64> = list.iter().filter_map(|m| m.get("seq").and_then(Value::as_u64)).collect();
-            list.retain(|m| {
+            // Sent in order, they arrive in order: one found as entry S, those sent after it come after S.
+            let mut past = 0;
+            list.retain_mut(|m| {
                 if let Some(seq) = m.get("seq").and_then(Value::as_u64) {
+                    past = past.max(seq);
                     return !newest.is_some_and(|n| n >= seq);
                 }
-                let after = m.get("after").and_then(Value::as_u64).unwrap_or(0);
+                let after = m.get("after").and_then(Value::as_u64).unwrap_or(0).max(past);
+                m["after"] = json!(after);
                 let text = m.get("text").and_then(Value::as_str).unwrap_or("");
-                match mine.iter().find(|(seq, said)| *seq > after && *said == text && !taken.contains(seq)) {
-                    Some((seq, _)) => { taken.push(*seq); false }
+                match mine.iter().find(|(seq, said)| *seq > after && *said == text) {
+                    Some((seq, _)) => { past = *seq; false }
                     None => true,
                 }
             });

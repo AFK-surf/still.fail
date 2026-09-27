@@ -366,7 +366,7 @@ button.m-agent-head { cursor: pointer; }
 
 /* The composer: a capsule floating over the list, which runs on around it. */
 .m-composer { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 8px 10px calc(10px + var(--m-foot)); }
-.m-composer-capsule { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 26px; }
+.m-composer-capsule { view-transition-name: composer; display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 26px; }
 .m-composer-offline { padding: 2px 8px; font-size: 13px; color: var(--m-muted); }
 .m-composer-error { padding: 0 6px; font-size: 12px; }
 .m-composer-bar { display: flex; align-items: flex-end; gap: 2px; }

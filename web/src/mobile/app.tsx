@@ -98,7 +98,8 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
     push: (path) => navigate(path),
     // Back through the pages opened here; from the first one (opened by a link), to the list.
     pop: () => (pages.length > 1 ? navigate(-1) : navigate(home, { replace: true })),
-    replace: (path) => navigate(path, { replace: true }),
+    // One page becoming another (a new chat its chat): crossfaded, what both have (the composer) moving between them.
+    replace: (path) => navigate(path, { replace: true, viewTransition: true }),
     home: () => navigate(home),
     sheet: setSheet,
     menu: setMenu,

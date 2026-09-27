@@ -1207,6 +1207,13 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .new-chat .illus { margin-bottom: 4px; }
 @media (max-height: 640px) { .new-chat .illus { display: none; } }
 .new-chat-making { font-size: var(--text-xs); }
+/* A new chat's first message sent, its page becomes the chat: the box it was written in moves down to where the chat's
+   is, and the rest crossfades (App.tsx and cloud/workspace.tsx navigate with a view transition). */
+:is(.new-chat, .chat) .composer-box { view-transition-name: composer; }
+::view-transition-group(composer) { animation-duration: 340ms; animation-timing-function: var(--ease-out); }
+::view-transition-old(composer), ::view-transition-new(composer) { height: 100%; object-fit: none; object-position: left top; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 240ms; }
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; } }
 .composer-choices { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; margin-right: auto; }
 /* The model control takes the room left beside the other choices, and fits itself in it (.model-triple-fit). */
 .composer-choices > :not(.model-triple-fit) { flex: none; }

@@ -76,7 +76,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
             <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
             <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
-            <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`)} />} />
+            <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`, { viewTransition: true })} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
         </main>
