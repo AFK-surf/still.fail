@@ -1942,21 +1942,25 @@ mod tests {
     }
 
     #[test]
-    fn an_offline_station_is_asked_for_nothing_until_it_is_back() {
+    fn a_station_not_reached_is_down_and_asked_for_nothing_until_it_is() {
         run(async {
             let (host, sink, wire, stations) = setup();
             wire.answer("GET /admin/api/overview", 200, json!({"connects": [], "profiles": []}));
-            stations.set_presence(ST, false);
-            for t in [overview(), link()] {
-                stations.start(&t);
-            }
+            // Never reached: down (whatever else says otherwise), and kept so for the next start.
+            *wire.stream_status.borrow_mut() = None;
+            stations.start(&link());
             host.settle().await;
-            assert_eq!(wire.count("GET", "/admin/api/overview"), 0, "offline: nothing asked");
             assert_eq!(sink.get(&link()).unwrap()["state"], "offline");
-            stations.set_presence(ST, true);
+            assert_eq!(host.stored(&format!("{LINK_KEY}/{ST}")).as_deref(), Some(&b"offline"[..]));
+            stations.start(&overview());
             host.settle().await;
+            assert_eq!(wire.count("GET", "/admin/api/overview"), 0, "down: nothing asked");
+            // Reached: what it wants is read.
+            *wire.stream_status.borrow_mut() = Some(200);
+            wait(RECONNECT_MS * 2 + 50).await;
+            assert_eq!(sink.get(&link()).unwrap()["state"], "online");
             assert_eq!(wire.count("GET", "/admin/api/overview"), 1, "back: what it wants is read");
-            assert!(sink.get(&overview()).is_some());
+            assert_eq!(host.stored(&format!("{LINK_KEY}/{ST}")).as_deref(), Some(&b"online"[..]));
         });
     }
 
@@ -2398,15 +2402,17 @@ mod tests {
             *wire.stream_status.borrow_mut() = None;
             wire.end("/admin/api/events");
             host.settle().await;
-            assert_eq!(sink.get(&link()).unwrap()["state"], "offline");
+            // It was up and dropped: coming back, for a few tries.
+            assert_eq!(sink.get(&link()).unwrap()["state"], "reconnecting");
             wait(RECONNECT_MS + 50).await;
-            assert_eq!(sink.get(&link()).unwrap(), json!({"state": "offline", "message": "连不上"}));
+            assert_eq!(sink.get(&link()).unwrap(), json!({"state": "reconnecting", "message": "连不上"}));
             *wire.stream_status.borrow_mut() = Some(403);
             wait(RECONNECT_MS + 50).await;
             assert_eq!(sink.get(&link()).unwrap(), json!({"state": "error", "message": "没有权限"}));
             let s = wire.count("GET", "/admin/api/sessions");
             *wire.stream_status.borrow_mut() = Some(200);
-            wait(RECONNECT_MS + 50).await;
+            // Tries come less often as they miss: twice the wait by now.
+            wait(RECONNECT_MS * 2 + 50).await;
             assert_eq!(sink.get(&link()).unwrap()["state"], "online");
             assert_eq!(wire.count("GET", "/admin/api/sessions"), s + 1, "a reconnect reads the station's topics once");
             // Nothing live: the stream closes and stays closed.

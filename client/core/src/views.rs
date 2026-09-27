@@ -1138,6 +1138,20 @@ fn spent_until(profile: &Value) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_station_is_down_as_its_link_finds_it_or_as_it_was_last_until_then() {
+        let link = |v: Value| down(&v);
+        assert!(link(json!({"state": "offline"})));
+        assert!(!link(json!({"state": "online"})));
+        // Up and dropped: coming back, not down yet; it answered, but no: there.
+        assert!(!link(json!({"state": "reconnecting"})));
+        assert!(!link(json!({"state": "error"})));
+        // Not found out yet this time: as it was last (a station never seen is taken for up while it is tried).
+        assert!(link(json!({"state": "connecting", "last": "offline"})));
+        assert!(!link(json!({"state": "connecting", "last": "online"})));
+        assert!(!link(json!({"state": "connecting"})));
+    }
     use crate::delta;
     use crate::error::CoreError;
     use crate::protocol::{CoreMessage, RequestId};

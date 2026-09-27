@@ -174,10 +174,6 @@ impl Core {
         // Whom each account reaches, as the data center has it from the last run: views put together before the
         // first `/v1/me` answers know whose workspace is whose.
         inner.recompute_owners();
-        // Which stations were offline when last heard of: served from what was kept until their workspace says more.
-        for (workspace, view) in inner.data.records("workspace") {
-            inner.presence(&workspace, &view);
-        }
         // From now on the core keeps its workspaces and stations in sync, whatever the UI shows.
         inner.sync.start();
         let me = Rc::downgrade(&inner);
