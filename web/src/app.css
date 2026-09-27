@@ -1545,11 +1545,10 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .onboarding-foot { margin-top: 20px; font-size: var(--text-sm); }
 .onboarding .callout { width: 100%; text-align: left; }
 
-/* A list's first one to make (ui.tsx's FirstOne): centred, one line, one button. */
-.first-one { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; margin: 24px auto; padding: 40px 24px; max-width: 460px; border: 1px dashed var(--line-strong); border-radius: calc(var(--r-field) + 20px); corner-shape: var(--corner-shape); }
-.first-one-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: color-mix(in oklch, var(--accent) 12%, transparent); color: var(--accent); }
-.first-one-title { margin: 8px 0 0; font-size: var(--text-md); font-weight: 600; }
-.first-one-lead { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
+/* A list's first one to make (ui.tsx's FirstOne): a scene, a title, a line, what to do. */
+.first-one { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; margin: 24px auto; padding: 8px 0 24px; max-width: 480px; }
+.first-one-title { margin: 12px 0 0; font-size: var(--text-md); font-weight: 600; }
+.first-one-lead { margin: 0; max-width: 34em; color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
 .first-one-action { width: 100%; min-width: 0; margin-top: 12px; display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
 
 /* The machine's own logins, offered where a first profile is asked for (pages/Accounts.tsx's MachineLoginOffers). */
@@ -1571,7 +1570,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .profile-card-link:hover { background: var(--list); }
 .profile-card[data-framed] { padding: 10px 12px; border: 1px solid var(--line); border-radius: calc(var(--r-field) + 4px); corner-shape: var(--corner-shape); }
 .profile-card-grid { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 8px; }
-.profile-card-mark { width: 32px; height: 32px; }
+.profile-card-mark { width: 24px; height: 24px; background: none; }
 .profile-card-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .profile-card-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .profile-card-sub { color: var(--muted); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

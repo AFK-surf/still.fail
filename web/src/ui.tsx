@@ -337,10 +337,11 @@ export function Empty({ children }: { children: ReactNode }) {
  * the one thing to do about it. Where it shows, the page's other actions stand back (its add button, its filters), so
  * the eye goes here.
  */
-export function FirstOne({ icon: Icon, title, lead, children }: { icon: (props: { size?: number }) => ReactNode; title: ReactNode; lead?: ReactNode; children: ReactNode }) {
+export function FirstOne({ art, title, lead, children }: { art: ReactNode; title: ReactNode; lead?: ReactNode; children: ReactNode }) {
   return (
     <div className="first-one">
-      <span className="first-one-icon" aria-hidden="true"><Icon size={22} /></span>
+      {/* One of the project's scenes (brand.tsx's Illustration), not an icon on a tinted tile. */}
+      {art}
       <h2 className="first-one-title">{title}</h2>
       {lead && <p className="first-one-lead">{lead}</p>}
       <div className="first-one-action">{children}</div>

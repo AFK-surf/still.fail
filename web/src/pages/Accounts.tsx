@@ -1,3 +1,4 @@
+import { Illustration } from "../brand.tsx";
 import type { MachineLogin } from "../core/shapes.ts";
 import { profilesPage, useStation, useLink } from "../station.tsx";
 import { ChevronRight, Edit, External, Key, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
@@ -28,7 +29,7 @@ export function AccountsPage() {
         {(profiles.length > 0 || !overview.value) && <Button icon={Plus} onClick={() => setAdding(true)}>添加 Profile</Button>}
       </header>
       {overview.value && profiles.length === 0 && (
-        <FirstOne icon={Key} title="添加第一个 Profile" lead={PROFILE_LEAD}>
+        <FirstOne art={<Illustration name="no-profile" />} title="添加第一个 Profile" lead={PROFILE_LEAD}>
           <Button variant="primary" icon={Plus} onClick={() => { setInitial("claude-sub"); setAdding(true); }}>添加 Profile</Button>
           <MachineLoginOffers logins={overview.value.machineLogins} onAdd={(c) => { setInitial(c); setAdding(true); }} />
         </FirstOne>

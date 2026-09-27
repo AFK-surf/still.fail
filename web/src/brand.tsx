@@ -80,9 +80,10 @@ function SidebarBuddy() {
   );
 }
 
-type Illus = "new-chat" | "no-station" | "station-offline" | "sign-in";
+type Illus = "new-chat" | "no-station" | "station-offline" | "sign-in" | "no-profile" | "no-connect";
 const ILLUS_SIZE: Record<Illus, [number, number]> = {
   "new-chat": [320, 160], "no-station": [320, 160], "station-offline": [320, 160], "sign-in": [360, 200],
+  "no-profile": [320, 160], "no-connect": [320, 160],
 };
 
 /**

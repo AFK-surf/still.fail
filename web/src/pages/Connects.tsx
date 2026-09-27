@@ -1,6 +1,7 @@
 // Connects, as a settings page: on a station's own page its connects; in
 // ember cloud every station's connects in the workspace. Each shows who added
 // it, and the list can be narrowed to the viewer's own.
+import { Illustration } from "../brand.tsx";
 import { Key, Plug, Plus } from "../icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { useState } from "react";
@@ -54,11 +55,11 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
       </header>
       <div>
       {first && noProfile ? (
-        <FirstOne icon={Key} title="先添加一个 Profile" lead="连接要用 Profile 来跑模型。先添加一个，再来加连接。">
+        <FirstOne art={<Illustration name="no-profile" />} title="先添加一个 Profile" lead="连接要用 Profile 来跑模型。先添加一个，再来加连接。">
           <Link className="btn btn-primary" to={profiles}>去添加 Profile</Link>
         </FirstOne>
       ) : first ? (
-        <FirstOne icon={Plug} title="添加第一个连接" lead="连接让大家在 Slack 里 @ 到 agent：一个 Slack app，接到一台 station 上。">
+        <FirstOne art={<Illustration name="no-connect" />} title="添加第一个连接" lead="连接让大家在 Slack 里 @ 到 agent：一个 Slack app，接到一台 station 上。">
           {add("添加连接", true) || <p className="muted">{stations.value?.length ? "没有在线的 station，等它上线再加。" : "先添加一台 station。"}</p>}
         </FirstOne>
       ) : <MineFilter label="连接" />}

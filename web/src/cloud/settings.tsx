@@ -2,6 +2,7 @@
 // is reached through (who you are, where you are signed in), and the
 // workspace itself (its name, members, stations, connects and the stations'
 // runtime accounts).
+import { Illustration } from "../brand.tsx";
 import { ArrowLeft, Check, Key, LogOut, Plug, Plus, Server, Settings, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate } from "react-router";
@@ -230,7 +231,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
         </StationContext.Provider>
       )}
       {first ? (
-        <FirstOne icon={Key} title="添加第一个 Profile" lead={`${PROFILE_LEAD}Profile 加在某一台 station 上，由那台机器用它来跑。`}>
+        <FirstOne art={<Illustration name="no-profile" />} title="添加第一个 Profile" lead={`${PROFILE_LEAD}Profile 加在某一台 station 上，由那台机器用它来跑。`}>
           {/* Each station in a row: where a profile is added is part of adding it. */}
           <div className="first-stations">
             {stations.map((s) => (
