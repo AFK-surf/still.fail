@@ -285,7 +285,8 @@ impl SlackSurface {
             let Ok(envelope) = serde_json::from_str::<Value>(&text) else { continue };
             match envelope.get("type").and_then(Value::as_str) {
                 Some("disconnect") => {
-                    info!(reason = %envelope.get("reason").cloned().unwrap_or(Value::Null), "slack asked to reconnect");
+                    let reason = envelope.get("reason").map(Value::to_string).unwrap_or_default();
+                    info!(reason, "slack asked to reconnect");
                     let _ = write.lock().await.close().await;
                     break;
                 }
