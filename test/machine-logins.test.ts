@@ -32,7 +32,9 @@ test("the machine's own logins are read, with the account and plan, from the mac
   mkdirSync(join(env.HOME!, ".claude"));
   writeFileSync(join(env.HOME!, ".claude", ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "at", expiresAt: Date.now() + 3_600_000 } }));
   writeFileSync(join(env.HOME!, ".codex", "auth.json"), JSON.stringify({ tokens: { id_token: idToken({ email: "b@x.com", "https://api.openai.com/auth": { chatgpt_plan_type: "plus" } }) } }));
-  const logins = new MachineLogins({ ...env, CLAUDE_CONFIG_DIR: "/elsewhere" });
+  // Each one's allowance, read as quota.ts would.
+  const usage = async (runtime: string) => ({ state: "ok" as const, windows: [], detail: runtime, checkedAt: 1 });
+  const logins = new MachineLogins({ ...env, CLAUDE_CONFIG_DIR: "/elsewhere" }, usage);
   let changes = 0;
   logins.changes.on("change", () => changes++);
   await logins.refresh();
@@ -40,8 +42,8 @@ test("the machine's own logins are read, with the account and plan, from the mac
   // The pages hear of the first reading, and not of one that says the same.
   assert.equal(changes, 1);
   assert.deepEqual(logins.get(), [
-    { runtime: "claude", installed: true, loggedIn: true, email: "a@x.com", plan: "max", usable: true, text: "Claude Code 已登录 a@x.com（Max）" },
-    { runtime: "codex", installed: true, loggedIn: true, email: "b@x.com", plan: "plus", usable: true, text: "Codex 已登录 b@x.com（Plus）" },
+    { runtime: "claude", installed: true, loggedIn: true, email: "a@x.com", plan: "max", usable: true, quota: { state: "ok", windows: [], detail: "claude", checkedAt: 1 }, text: "Claude Code 已登录 a@x.com（Max）" },
+    { runtime: "codex", installed: true, loggedIn: true, email: "b@x.com", plan: "plus", usable: true, quota: { state: "ok", windows: [], detail: "codex", checkedAt: 1 }, text: "Codex 已登录 b@x.com（Plus）" },
   ]);
 });
 

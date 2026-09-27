@@ -16,12 +16,17 @@ import { ICON, Pill, ProviderLogo, RuntimeTags } from "./ui.tsx";
  * `framed`: a card of its own (not a row of a list); `to`: the whole of it leads there.
  */
 export function ProfileCard({ profile, uses, to, action, framed }: { profile: Profile; uses?: string; to?: string; action?: ReactNode; framed?: boolean }) {
+  const quota = profile.quota;
+  // What else is worth a line: why its allowance could not be read (a refused account first), else how many of its
+  // models are on.
+  const trouble = quota && (quota.state === "blocked" || quota.state === "unavailable") ? quota.detail : null;
   const body = (
     <Card
       mark={<ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={18} />}
       title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} /></>}
-      sub={[profile.machine ? "本机登录" : ACCESS[profile.access.kind].label, uses].filter(Boolean).join(" · ")}
-      quota={profile.quota ? <QuotaBars quota={profile.quota} compact /> : null}
+      sub={[profile.machine ? "本机登录" : ACCESS[profile.access.kind].label, profile.modelsText, uses].filter(Boolean).join(" · ")}
+      detail={trouble ? { text: trouble, tone: quota?.state === "blocked" ? "red" : undefined } : null}
+      quota={quota ? <QuotaBars quota={quota} compact /> : null}
       state={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>}
       action={action ?? (to ? <ChevronRight {...ICON} className="profile-card-chevron" /> : null)}
     />
@@ -32,30 +37,37 @@ export function ProfileCard({ profile, uses, to, action, framed }: { profile: Pr
 
 const RUNTIME: Record<MachineLogin["runtime"], string> = { claude: "Claude Code", codex: "Codex" };
 
-/** The machine's own login, as an account a profile could be made with (`action`: making it). */
+/** The machine's own login, as an account a profile could be made with (`action`: making it), with its allowance. */
 export function MachineLoginCard({ login, action, framed = true }: { login: MachineLogin; action?: ReactNode; framed?: boolean }) {
   const plan = login.plan ? `${login.plan[0]!.toUpperCase()}${login.plan.slice(1)}` : null;
+  const quota = login.quota ?? null;
+  const blocked = quota?.state === "blocked";
+  const trouble = quota && (blocked || quota.state === "unavailable") ? quota.detail : null;
   return (
     <div className="profile-card" data-framed={framed ? "" : undefined}>
       <Card
         mark={<ProviderLogo runtime={login.runtime} kind="subscription" size={18} />}
         title={RUNTIME[login.runtime]}
-        sub={[login.email, plan].filter(Boolean).join(" · ") || "已登录"}
-        quota={null}
-        state={<Pill tone="green">本机已登录</Pill>}
+        sub={[login.email, plan, login.usable ? null : "登录存在钥匙串里"].filter(Boolean).join(" · ") || "已登录"}
+        detail={trouble ? { text: trouble, tone: blocked ? "red" : undefined } : null}
+        quota={quota ? <QuotaBars quota={quota} compact /> : null}
+        state={<Pill tone={blocked ? "red" : "green"}>{blocked ? "被停用" : "本机已登录"}</Pill>}
         action={action ?? null}
       />
     </div>
   );
 }
 
-function Card({ mark, title, sub, quota, state, action }: { mark: ReactNode; title: ReactNode; sub: string; quota: ReactNode; state: ReactNode; action: ReactNode }) {
+function Card({ mark, title, sub, detail, quota, state, action }: {
+  mark: ReactNode; title: ReactNode; sub: string; detail: { text: string; tone: "red" | undefined } | null; quota: ReactNode; state: ReactNode; action: ReactNode;
+}) {
   return (
     <div className="profile-card-grid">
       <span className="mark runtime-mark profile-card-mark">{mark}</span>
       <span className="profile-card-main">
         <span className="profile-card-title">{title}</span>
         {sub && <span className="profile-card-sub">{sub}</span>}
+        {detail && <span className="profile-card-detail" data-tone={detail.tone}>{detail.text}</span>}
       </span>
       {quota && <span className="profile-card-quota">{quota}</span>}
       <span className="profile-card-state">{state}</span>

@@ -535,7 +535,7 @@ pub struct QuotaWindow {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Quota {
-    /// ok | unsupported | unavailable
+    /// ok | unsupported | unavailable | blocked (the provider refuses the account)
     pub state: String,
     pub windows: Vec<QuotaWindow>,
     pub detail: Option<String>,
@@ -720,6 +720,8 @@ pub struct MachineLogin {
     /// A profile can use it as it is (kept in a file, not only in the keychain).
     #[serde(default)]
     pub usable: bool,
+    /// Its allowance, as a profile on it would show (none until read, or when it cannot be).
+    pub quota: Option<Quota>,
     /// In a line, as the pages show it.
     pub text: String,
 }

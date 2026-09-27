@@ -292,7 +292,9 @@ pub fn profile(p: &mut Value) {
     if !p.is_object() {
         return;
     }
-    let (text, tone) = format::check_text(p.get("check").unwrap_or(&Value::Null));
+    // An account its provider refuses (suspended, on hold) says so first, whatever its last check found.
+    let blocked = p.get("quota").and_then(|q| q.get("state")).and_then(Value::as_str) == Some("blocked");
+    let (text, tone) = if blocked { ("被停用", "red") } else { format::check_text(p.get("check").unwrap_or(&Value::Null)) };
     p["checkText"] = json!(text);
     p["checkTone"] = json!(tone);
     // Its models' makers, by model.
@@ -413,6 +415,16 @@ mod tests {
         assert_eq!(session_status(&json!({"lastTurn": {"declared": "block", "outcome": "completed"}})), "block");
         assert_eq!(session_status(&json!({"lastTurn": {"outcome": "completed"}})), "unexpected");
         assert_eq!(session_status(&json!({})), "idle");
+    }
+
+    #[test]
+    fn an_account_its_provider_refuses_says_so_whatever_its_check_found() {
+        let mut p = json!({"check": {"state": "ok"}, "quota": {"state": "blocked", "windows": []}});
+        profile(&mut p);
+        assert_eq!((p["checkText"].as_str(), p["checkTone"].as_str()), (Some("被停用"), Some("red")));
+        let mut ok = json!({"check": {"state": "ok"}, "quota": {"state": "unavailable", "windows": []}});
+        profile(&mut ok);
+        assert_eq!(ok["checkText"], "可用");
     }
 
     #[test]

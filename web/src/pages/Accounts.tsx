@@ -91,7 +91,8 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
     <div className="machine-logins">
       <p className="machine-logins-head">这台机器上已经登录了</p>
       {offers.map((l) => (
-        <MachineLoginCard key={l.runtime} login={l} action={l.usable
+        // A refused account is said so, with nothing to do with it here.
+        <MachineLoginCard key={l.runtime} login={l} action={l.quota?.state === "blocked" ? null : l.usable
           ? <Button disabled={use.busy} onClick={() => void use.run(l.runtime)}>用这个账号</Button>
           : <Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</Button>} />
       ))}

@@ -16,7 +16,7 @@ import { LoginManager } from "./login.ts";
 import { InternalChat } from "./chat/internal.ts";
 import { McpEndpoint } from "./mcp.ts";
 import { MeshLink } from "./mesh.ts";
-import { checkQuota } from "./quota.ts";
+import { checkQuota, machineUsage } from "./quota.ts";
 import { ClaudeDriver } from "./runtime/claude.ts";
 import { CodexDriver } from "./runtime/codex.ts";
 import { reapStaleGroups } from "./runtime/process.ts";
@@ -104,7 +104,7 @@ const logins = new LoginManager(settings.config.dataDir);
 const mesh = new MeshLink({ dataDir: settings.config.dataDir, traces: () => settings.config.telemetry.traces });
 stationId = () => mesh.status().station;
 // The machine's own Claude Code and Codex logins, read at start and again as pages ask (machine-logins.ts).
-const machineLogins = new MachineLogins();
+const machineLogins = new MachineLogins(process.env, machineUsage);
 void machineLogins.refresh();
 const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, checkOnStart: true, machineLogins, quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)), codexModels: (profile) => codex.models(profile) });
 

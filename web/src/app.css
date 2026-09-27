@@ -149,9 +149,9 @@
 .advanced-chevron { margin-left: auto; align-self: center; color: var(--muted); transition: transform var(--dur) var(--ease-out); }
 .advanced-trigger[data-state="open"] .advanced-chevron { transform: rotate(180deg); }
 
-.list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; corner-shape: var(--corner-shape); }
-.list li + li { border-top: 1px solid var(--line); }
-.list-row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 10px 16px; font-size: var(--text-sm); transition: background var(--dur) var(--ease-out); }
+/* Lists stand on spacing, not frames or rules: their rows' text lines up with the page's, a row's ground shows on hover. */
+.list { list-style: none; margin: 0 -12px; padding: 0; display: grid; gap: 2px; }
+.list-row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 10px 12px; border-radius: var(--r-field); corner-shape: var(--corner-shape); font-size: var(--text-sm); transition: background var(--dur) var(--ease-out); }
 .list-row:hover { background: var(--list); }
 .list-row-text { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .list-row-title { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1553,23 +1553,25 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .first-one-action { width: 100%; min-width: 0; margin-top: 12px; display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
 
 /* The machine's own logins, offered where a first profile is asked for (pages/Accounts.tsx's MachineLoginOffers). */
-.machine-logins { width: 100%; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 8px; text-align: left; }
+.machine-logins { width: 100%; margin-top: 20px; display: grid; gap: 4px; text-align: left; }
 .machine-logins-head { margin: 0; font-size: var(--text-xs); color: var(--muted); }
 .machine-logins-note { margin: 0; font-size: var(--text-xs); color: var(--muted); }
 
 /* A first profile to add, station by station (cloud/settings.tsx): where it goes is part of adding it. */
-.first-stations { width: 100%; display: grid; gap: 10px; text-align: left; }
-.first-station { padding: 12px 14px; border: 1px solid var(--line); border-radius: calc(var(--r-field) + 8px); corner-shape: var(--corner-shape); }
+.first-stations { width: 100%; display: grid; gap: 28px; text-align: left; }
 .first-station-row { display: flex; align-items: center; gap: 10px; font-size: var(--text-sm); }
 .first-station-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.first-station .machine-logins { margin-top: 12px; padding-top: 12px; }
+.first-station .machine-logins { margin-top: 14px; }
 
 /* A profile or an account (ProfileCard.tsx), laid out by its own width: in one line when wide; name and state over what
    it is when there is less, its quota on a line below; its action on a line of its own when narrow. */
-.profile-card { container-type: inline-size; display: block; padding: 10px 16px; font-size: var(--text-sm); color: inherit; text-decoration: none; }
+.profile-card { container-type: inline-size; display: block; padding: 10px 12px; border-radius: var(--r-field); corner-shape: var(--corner-shape); font-size: var(--text-sm); color: inherit; text-decoration: none; }
 .profile-card-link { transition: background var(--dur) var(--ease-out); }
 .profile-card-link:hover { background: var(--list); }
-.profile-card[data-framed] { padding: 10px 12px; border: 1px solid var(--line); border-radius: calc(var(--r-field) + 4px); corner-shape: var(--corner-shape); }
+/* Standing alone (not a row of a list): its text lines up with what is around it. */
+.profile-card[data-framed] { margin: 0 -12px; }
+.profile-card-detail { color: var(--muted); font-size: var(--text-xs); }
+.profile-card-detail[data-tone="red"] { color: var(--red); }
 .profile-card-grid { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 8px; }
 .profile-card-mark { width: 24px; height: 24px; background: none; }
 .profile-card-main { flex: 1; min-width: 0; display: grid; gap: 2px; }

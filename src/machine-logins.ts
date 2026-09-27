@@ -14,6 +14,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { RuntimeKind } from "./config.ts";
+import type { ProfileQuota } from "./quota.ts";
 import { log } from "./log.ts";
 
 const run = promisify(execFile);
@@ -30,6 +31,8 @@ export interface MachineLogin {
   plan: string | null;
   /** A profile can use it as it is (kept in a file, not only in the keychain). */
   usable: boolean;
+  /** Its allowance, as a profile on it would show (null until read, or when it cannot be). */
+  quota: ProfileQuota | null;
   /** In a line, as the pages show it. */
   text: string;
 }
@@ -49,9 +52,12 @@ export class MachineLogins {
   #at = 0;
   #reading: Promise<void> | null = null;
   readonly #env: NodeJS.ProcessEnv;
+  readonly #usage: ((runtime: RuntimeKind, env: NodeJS.ProcessEnv) => Promise<ProfileQuota | null>) | undefined;
 
-  constructor(env: NodeJS.ProcessEnv = process.env) {
+  /** `usage`: how a login's allowance is read (quota.ts's machineUsage); none, none is. */
+  constructor(env: NodeJS.ProcessEnv = process.env, usage?: (runtime: RuntimeKind, env: NodeJS.ProcessEnv) => Promise<ProfileQuota | null>) {
     this.#env = env;
+    this.#usage = usage;
   }
 
   get(): MachineLogin[] {
@@ -61,6 +67,8 @@ export class MachineLogins {
 
   refresh(): Promise<void> {
     this.#reading ??= Promise.all([claudeLogin(this.#env), codexLogin(this.#env)])
+      // Each one a profile could use, with its allowance: an account refused (suspended, say) shows before it is used.
+      .then((logins) => Promise.all(logins.map(async (l) => (l.loggedIn && l.usable && this.#usage ? { ...l, quota: await this.#usage(l.runtime, this.#env) } : l))))
       .then((logins) => {
         const changed = JSON.stringify(logins) !== JSON.stringify(this.#value);
         this.#value = logins;
@@ -97,7 +105,7 @@ export function codexAuthFile(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 async function claudeLogin(env: NodeJS.ProcessEnv): Promise<MachineLogin> {
-  const base = { runtime: "claude" as const, email: null, plan: null, usable: false };
+  const base = { runtime: "claude" as const, email: null, plan: null, usable: false, quota: null };
   try {
     const { stdout } = await run("claude", ["auth", "status"], { env: machineEnv(env, CLAUDE_DROP), timeout: 20_000 });
     const status = JSON.parse(stdout) as { loggedIn?: boolean; email?: string; subscriptionType?: string };
@@ -115,7 +123,7 @@ async function claudeLogin(env: NodeJS.ProcessEnv): Promise<MachineLogin> {
 }
 
 async function codexLogin(env: NodeJS.ProcessEnv): Promise<MachineLogin> {
-  const base = { runtime: "codex" as const, email: null, plan: null, usable: false };
+  const base = { runtime: "codex" as const, email: null, plan: null, usable: false, quota: null };
   const home = env.CODEX_HOME || join(env.HOME || homedir(), ".codex");
   let text: string;
   try {
@@ -148,7 +156,10 @@ function readClaudeCredentials(env: NodeJS.ProcessEnv): { token: string; expires
  */
 export const CLAUDE_TOKEN_MARGIN_MS = 5 * 60_000;
 
-let refreshing: Promise<void> | null = null;
+let refreshing: Promise<string> | null = null;
+/** The last refresh that did not give a good token, not tried again for a while (each try is a model call). */
+let failed: { at: number; message: string } | null = null;
+const RETRY_MS = 30 * 60_000;
 
 /**
  * The machine's Claude Code access token for a profile's process, refreshed first (by the machine's own claude, in
@@ -158,31 +169,44 @@ export async function machineClaudeToken(env: NodeJS.ProcessEnv = process.env): 
   let credentials = readClaudeCredentials(env);
   if (!credentials) throw new Error("这台机器上的 Claude Code 没有登录（或者登录存在钥匙串里），要在 station 上重新登录");
   if (credentials.expiresAt - Date.now() > CLAUDE_TOKEN_MARGIN_MS) return credentials;
+  if (failed && Date.now() - failed.at < RETRY_MS && credentials.expiresAt <= Date.now()) throw new Error(failed.message);
   refreshing ??= refreshClaude(env).finally(() => { refreshing = null; });
-  await refreshing;
+  const said = await refreshing;
   credentials = readClaudeCredentials(env);
-  if (!credentials || credentials.expiresAt <= Date.now()) throw new Error("这台机器上 Claude Code 的登录过期了，没能刷新：在 station 上运行一次 claude 看看");
-  return credentials;
+  if (credentials && credentials.expiresAt > Date.now()) {
+    failed = null;
+    return credentials;
+  }
+  // Refused, claude says so (an account on hold, say) rather than refreshing.
+  const message = /on hold|restricted|suspend|disabled|banned/i.test(said)
+    ? `Anthropic 停用了这台机器上的 Claude 账号：${said.trim().split("\n")[0]!.slice(0, 200)}`
+    : "这台机器上 Claude Code 的登录过期了，没能刷新：在 station 上运行一次 claude 看看";
+  failed = { at: Date.now(), message };
+  throw new Error(message);
 }
 
 /**
  * The machine's own claude, asked for a word with the smallest model: it refreshes its login on the way (in its own
  * file, as it always does). Kept out of its history.
  */
-async function refreshClaude(env: NodeJS.ProcessEnv): Promise<void> {
+async function refreshClaude(env: NodeJS.ProcessEnv): Promise<string> {
   log.info("refreshing the machine's Claude Code login");
+  let said = "";
   try {
     const child = execFile("claude", ["-p", "--model", "haiku", "--no-session-persistence", "Reply with one word: ok"], {
       env: machineEnv(env, CLAUDE_DROP), cwd: tmpdir(), timeout: 120_000,
     });
+    child.stdout?.on("data", (chunk: Buffer | string) => { said += String(chunk); });
+    child.stderr?.on("data", (chunk: Buffer | string) => { said += String(chunk); });
     child.stdin?.end();
     await new Promise<void>((resolve, reject) => {
       child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`claude exited (${code})`))));
       child.on("error", reject);
     });
   } catch (error) {
-    log.warn("could not refresh the machine's Claude Code login", { error: String(error) });
+    log.warn("could not refresh the machine's Claude Code login", { error: String(error), said: said.slice(0, 300) });
   }
+  return said;
 }
 
 /**
