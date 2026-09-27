@@ -35,8 +35,13 @@ pub struct EmberCore {
 
 /// Starts a core (client/ffi's `start`): `data_dir` holds accounts and the device key;
 /// `cloud_origin` is ember cloud; `listener(client, json)` gets what the core says to each client.
+/// With `EMBER_LOG` set (a tracing filter, e.g. `iroh=debug`), what the core and iroh log goes to stderr.
 #[napi]
 pub fn start(data_dir: String, cloud_origin: String, listener: Function<Message, ()>) -> napi::Result<EmberCore> {
+    if let Ok(filter) = std::env::var("EMBER_LOG") {
+        // Once per process: a second core (after a panic) keeps the first one's.
+        let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::new(filter)).with_writer(std::io::stderr).try_init();
+    }
     let listener = listener.build_threadsafe_function().callee_handled::<false>().build()?;
     let inner = ember_core_ffi::start(data_dir, cloud_origin, Box::new(Listener(listener)))
         .map_err(|error| napi::Error::from_reason(error.to_string()))?;
