@@ -289,7 +289,7 @@
   z-index: 70; padding: 5px 10px; border-radius: calc(8px * var(--corner-scale)); background: var(--primary); color: var(--on-primary);
   font-size: var(--text-xs); line-height: 1.4; box-shadow: 0 4px 12px var(--shadow); animation: fade 120ms var(--ease-out); corner-shape: var(--corner-shape);
   /* Its own width, capped: a long one wraps (the popper around it sizes to its content, which would be one line). */
-  width: max-content; max-width: min(300px, calc(100vw - 16px)); text-wrap: pretty; overflow-wrap: anywhere; }
+  width: max-content; max-width: min(300px, calc(100vw - 16px)); text-wrap: balance; word-break: keep-all; overflow-wrap: anywhere; }
 .command { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; border-radius: var(--r-field); background: var(--paper); corner-shape: var(--corner-shape); }
 .command code { flex: 1; font-size: var(--text-xs); overflow-x: auto; white-space: nowrap; }
 
