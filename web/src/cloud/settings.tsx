@@ -321,22 +321,56 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
         </Field>
       ) : joined ? (
         <div className="callout" data-tone="green"><Check {...ICON} /><span>「{joined.name}」已加入，现在可以打开它了。</span></div>
-      ) : (
-        <>
-          <ol className="steps">
-            <li><span>在要当 station 的机器（macOS，Apple 芯片）上打开「终端」，执行：</span><CopyCommand text={enroll.result.install} /></li>
-            <li>它会装好 ember、加入这个 workspace，并在后台一直运行（开机自动启动）。几秒后这台机器就会出现在这里。</li>
-            <li>之后在「设置 → Profile」里登录 Claude Code 或 Codex 的账号；那台机器上还没装它们的话，安装结束时会告诉你怎么装。</li>
-          </ol>
-          <details className="manual-app">
-            <summary>这台机器上已经有 ember 了</summary>
-            <p className="muted">在 ember 的目录里执行 <CopyCommand text={`bin/${enroll.result.command}`} />，然后重启 ember。</p>
-          </details>
-          <p className="muted dialog-note"><span className="activity-pulse inline" aria-hidden="true" />等待 station 加入… 命令 1 小时内有效，只能用一次。</p>
-        </>
-      )}
+      ) : <EnrollSteps enrollment={enroll.result} />}
       {enroll.error && <p className="field-error" role="alert">{enroll.error.message}</p>}
     </Dialog>
+  );
+}
+
+/** What to do with an enrollment's command, and that it is awaited. */
+function EnrollSteps({ enrollment }: { enrollment: { install: string; command: string } }) {
+  return (
+    <>
+      <ol className="steps">
+        <li><span>在要当 station 的机器（macOS，Apple 芯片）上打开「终端」，执行：</span><CopyCommand text={enrollment.install} /></li>
+        <li>它会装好 ember、加入这个 workspace，并在后台一直运行（开机自动启动）。几秒后这台机器就会出现在这里。</li>
+        <li>之后在「设置 → Profile」里登录 Claude Code 或 Codex 的账号；那台机器上还没装它们的话，安装结束时会告诉你怎么装。</li>
+      </ol>
+      <details className="manual-app">
+        <summary>这台机器上已经有 ember 了</summary>
+        <p className="muted">在 ember 的目录里执行 <CopyCommand text={`bin/${enrollment.command}`} />，然后重启 ember。</p>
+      </details>
+      <p className="muted dialog-note"><span className="activity-pulse inline" aria-hidden="true" />等待 station 加入… 命令 1 小时内有效，只能用一次。</p>
+    </>
+  );
+}
+
+/**
+ * A workspace's first station, added in the page (a workspace without one: workspace.tsx's Onboarding): its name, then the command
+ * and the wait. The workspace's pages take over once it has joined.
+ */
+export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
+  const { view, manager } = useWorkspace(entry);
+  const [name, setName] = useState("");
+  const enroll = useAction(() => cloud.enroll(entry.account.sub, entry.id, name));
+  const shown = useRef(0);
+  useEffect(() => { if (enroll.result) shown.current = performance.now(); }, [enroll.result]);
+  // Joined: the page is gone (the workspace has a station), so this is said as it goes.
+  useEffect(() => () => { if (shown.current) track("station_added", { ms: Math.round(performance.now() - shown.current), first: true }); }, []);
+  if (!view) return <Loading label="正在读取 workspace…" fill={false} />;
+  if (!manager) return <div className="callout">这个 workspace 还没有 station，等管理员添加。</div>;
+  if (enroll.result) return <div className="onboarding-card"><EnrollSteps enrollment={enroll.result} /></div>;
+  return (
+    <div className="onboarding-card">
+      <Field label="给它起个名字" htmlFor="first-station-name" hint="比如机器名：studio、mac-mini、gpu-box。">
+        <div className="onboarding-row">
+          <input id="first-station-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} maxLength={80}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) enroll.run(); }} />
+          <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>生成命令</Button>
+        </div>
+      </Field>
+      {enroll.error && <p className="field-error" role="alert">{enroll.error.message}</p>}
+    </div>
   );
 }
 

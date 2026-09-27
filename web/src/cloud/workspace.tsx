@@ -15,7 +15,7 @@ import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble } from "../Sidebar.tsx";
-import { AccountSettings, ConnectsSettings, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
+import { AccountSettings, ConnectsSettings, FirstStation, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
@@ -59,6 +59,9 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
     { topic: "loginSessions", account: entry.account.sub },
     ...(found.value ?? []).map((s): Topic => ({ topic: "overview", station: s.station })),
   ]);
+
+  // No station yet: nothing of the workspace's pages works, so none is shown; adding the first station is the page.
+  if (found.value && found.value.length === 0 && !settings) return <Onboarding entry={entry} />;
 
   return (
     <PeopleContext.Provider value={people}>
@@ -107,6 +110,33 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
         <Route path="*" element={<Navigate to="chats" replace />} />
       </Routes>
     </StationContext.Provider>
+  );
+}
+
+/**
+ * A workspace with no station: what a station is and adding the first one, in the page; the workspace switcher (the
+ * account, other workspaces) and the workspace's settings (inviting people) stay at hand. Its pages come once a station
+ * has joined.
+ */
+function Onboarding({ entry }: { entry: WorkspaceEntry }) {
+  return (
+    <div className="onboarding">
+      <header className="onboarding-bar">
+        <div className="brand brand-compact"><SidebarBrand /></div>
+        <div className="onboarding-account"><WorkspaceSwitcher current={entry} /></div>
+      </header>
+      <main className="onboarding-main">
+        <Illustration name="no-station" />
+        <h1 className="onboarding-title">添加第一台 station</h1>
+        <p className="onboarding-lead">station 是一台运行 ember 的机器：agent 在那里干活，连接、会话和模型账号也都在那台机器上。在要用的机器上执行一条命令，它就会加入「{entry.name}」。</p>
+        <FirstStation entry={entry} />
+        <p className="onboarding-foot muted">
+          <Link className="inline-link" to={`/w/${entry.id}/settings/members`}>邀请成员</Link>
+          <span aria-hidden="true"> · </span>
+          <Link className="inline-link" to={`/w/${entry.id}/settings/general`}>workspace 设置</Link>
+        </p>
+      </main>
+    </div>
   );
 }
 

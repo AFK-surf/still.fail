@@ -1522,3 +1522,16 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 /* A chat whose station is offline: greyed, its mark saying so (the core marks the row). */
 .nav-session[data-offline] .nav-session-title, .nav-session[data-offline] .nav-session-meta { opacity: .5; }
 .nav-session[data-offline] .session-kind { color: var(--subtle); }
+
+/* A workspace with no station (cloud/workspace.tsx's Onboarding): one page, adding the first. */
+.onboarding { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: auto; background: var(--canvas); }
+.onboarding-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px 0 0; -webkit-app-region: drag; }
+.onboarding-account { width: 240px; -webkit-app-region: no-drag; }
+.onboarding-main { flex: 1; width: min(560px, calc(100% - 48px)); margin: 0 auto; padding: 24px 0 48px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.onboarding-title { margin: 20px 0 8px; font-size: var(--text-lg); font-weight: 600; }
+.onboarding-lead { margin: 0 0 24px; color: var(--muted); line-height: 1.6; }
+.onboarding-card { width: 100%; text-align: left; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
+.onboarding-row { display: flex; gap: 8px; }
+.onboarding-row .input { flex: 1; min-width: 0; }
+.onboarding-foot { margin-top: 20px; font-size: var(--text-sm); }
+.onboarding .callout { width: 100%; text-align: left; }
