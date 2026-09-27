@@ -14,7 +14,7 @@ function Svg({ size = 24, strokeWidth = 1.75, children, ...rest }: IconProps & {
 }
 
 export function Agent(props: IconProps) {
-  return <Svg {...props}><path d="M13 8H8Q4 8 4 12V17Q4 20.5 8 20.5H13Q17 20.5 17 17V14 M13 10L20 3.5 M15 3.5H20.5V9 M8 16H12" /><circle cx="8" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /></Svg>;
+  return <Svg {...props}><path d="M11 9.5H8Q3.5 9.5 3.5 13.5V17Q3.5 20.5 8 20.5H11Q15.5 20.5 15.5 17V13.5 M14 10L20.5 3.5 M15.5 3.5H20.5V8.5" /><circle cx="7" cy="15" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="15" r="1" fill="currentColor" stroke="none" /></Svg>;
 }
 
 export function ArrowDown(props: IconProps) {
@@ -42,7 +42,7 @@ export function Boxes(props: IconProps) {
 }
 
 export function Brain(props: IconProps) {
-  return <Svg {...props}><path d="M12 6C11 2.5 6 3 5.5 7Q2 8 4 12Q2.5 16 6 17Q6 21.5 10 20Q12 19.5 12 17V6C13 2.5 18 3 18.5 7Q22 8 20 12Q21.5 16 18 17Q18 21.5 14 20Q12 19.5 12 17 M5.5 7Q8.5 7 8.5 10 M4 12Q7 11 8 14 M18.5 7Q15.5 7 15.5 10 M20 12Q17 11 16 14" /></Svg>;
+  return <Svg {...props}><path d="M12 6.5C12 2.5 6 2.5 6 7C3 7 2.5 12 5 13.5C3.5 17 6 21 9 20.5Q12 20.5 12 17V6.5C12 2.5 18 2.5 18 7C21 7 21.5 12 19 13.5C20.5 17 18 21 15 20.5Q12 20.5 12 17 M6 7Q8.5 7 8.5 9.5 M18 7Q15.5 7 15.5 9.5" /></Svg>;
 }
 
 export function Camera(props: IconProps) {
@@ -54,7 +54,7 @@ export function Chat(props: IconProps) {
 }
 
 export function Chats(props: IconProps) {
-  return <Svg {...props}><path d="M15 14.5C14 16 12 16.5 9 16.5H7L3.5 19L4 14.5Q3 13 3 10.5Q3 5 9 5H10 M15 3.5Q21 3.5 21 9Q21 11.5 19.5 13L20 16L16.5 14H15Q9 14 9 9Q9 3.5 15 3.5Z" /></Svg>;
+  return <Svg {...props}><path d="M8 5V4.5Q8 3 10 3H17Q20.5 3 20.5 6.5V11Q20.5 13 18.5 13.5 M7 8H12.5Q16 8 16 11.5V15Q16 18.5 12.5 18.5H9L4 21V17.5Q3 16.5 3 15V12Q3 8 7 8Z" /></Svg>;
 }
 
 export function CheckCircle(props: IconProps) {
@@ -122,7 +122,7 @@ export function Filter(props: IconProps) {
 }
 
 export function ImageUpload(props: IconProps) {
-  return <Svg {...props}><path d="M12 4H8Q3.5 4 3.5 8.5V16Q3.5 20.5 8 20.5H16Q20.5 20.5 20.5 16V13 M4 17L8.5 12L13 16L15.5 13.5 M18 10V3.5 M15 6.5L18 3.5L21 6.5" /><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none" /></Svg>;
+  return <Svg {...props}><path d="M11.5 3.5H7Q3.5 3.5 3.5 7V17Q3.5 20.5 7 20.5H17Q20.5 20.5 20.5 17V13 M4 17L9 12L15 18 M17.5 11V3.5 M14 7L17.5 3.5L21 7" /></Svg>;
 }
 
 export function Info(props: IconProps) {
@@ -130,7 +130,7 @@ export function Info(props: IconProps) {
 }
 
 export function Key(props: IconProps) {
-  return <Svg {...props}><path d="M14 14L7.5 20.5H3.5V16.5L10 10 M7 13L9.5 15.5 M20.5 8.5Q20.5 13.5 15.5 13.5Q10.5 13.5 10.5 8.5Q10.5 3.5 15.5 3.5Q20.5 3.5 20.5 8.5Z" /><circle cx="16" cy="8" r="1" fill="currentColor" stroke="none" /></Svg>;
+  return <Svg {...props}><circle cx="15.5" cy="8.5" r="5" /><path d="M12 12L3.5 20.5 M5 19L7 21 M8 16L10 18" /></Svg>;
 }
 
 export function LogIn(props: IconProps) {
@@ -150,7 +150,7 @@ export function More(props: IconProps) {
 }
 
 export function Other(props: IconProps) {
-  return <Svg {...props}><path d="M14 4C16 3 18 3.5 19 4L15 8L16 11L19 12L20.5 10.5C21 14 18 17 14.5 15.5L9.5 20Q8 21.5 6.5 20L4 17.5Q2.5 16 4 14.5L9 10C7.5 6.5 10.5 3 14 4Z" /></Svg>;
+  return <Svg {...props}><path d="M4.43396 16.73762 L10.58579 10.58579 C12.00000 9.17157 9.66655 7.54523 11.71716 5.49462 L14.19203 3.01974 L15.95980 4.78751 L14.05061 6.69670 A2.3 2.3 0 0 0 17.30330 9.94939 L19.21249 8.04020 L20.98026 9.80797 L18.50538 12.28284 C16.45477 14.33345 14.82843 12.00000 13.41421 13.41421 L7.26238 19.56604 A2 2 0 0 1 4.43396 16.73762 Z" /></Svg>;
 }
 
 export function PanelClose(props: IconProps) {
@@ -182,7 +182,7 @@ export function Quote(props: IconProps) {
 }
 
 export function Read(props: IconProps) {
-  return <Svg {...props}><path d="M18.5 10V7L14.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H12 M13.5 3.7V8H18 M8 11H11 M8 14.5H10" /><path d="M12.5 16.5Q16.5 10.5 20.5 16.5Q16.5 22.5 12.5 16.5Z" /><circle cx="16.5" cy="16.5" r="0.9" fill="currentColor" stroke="none" /></Svg>;
+  return <Svg {...props}><path d="M13.5 3.5H8Q4.5 3.5 4.5 7V17Q4.5 20.5 8 20.5H16Q19.5 20.5 19.5 17V9L13.5 3.5Z M7 13Q12 6.5 17 13Q12 19.5 7 13Z" /><circle cx="12" cy="13" r="1" fill="currentColor" stroke="none" /></Svg>;
 }
 
 export function Received(props: IconProps) {
@@ -214,7 +214,7 @@ export function Server(props: IconProps) {
 }
 
 export function Settings(props: IconProps) {
-  return <Svg {...props}><path d="M10 3.5H14L15 6L17.5 6.5L19.5 8.5L18.5 11L20.5 13V16L17.5 17L16.5 20L13.5 20.5L12 18.5L9.5 20.5L6.5 19L6 16.5L3.5 15V12L5.5 10.5L4.5 8L7 5.5L9 6Z" /><circle cx="12" cy="12" r="3" /></Svg>;
+  return <Svg {...props}><path d="M10.5000 5.0000L10.5000 3.0000L13.5000 3.0000L13.5000 5.0000L15.8891 5.9896L17.3033 4.5754L19.4246 6.6967L18.0104 8.1109L19.0000 10.5000L21.0000 10.5000L21.0000 13.5000L19.0000 13.5000L18.0104 15.8891L19.4246 17.3033L17.3033 19.4246L15.8891 18.0104L13.5000 19.0000L13.5000 21.0000L10.5000 21.0000L10.5000 19.0000L8.1109 18.0104L6.6967 19.4246L4.5754 17.3033L5.9896 15.8891L5.0000 13.5000L3.0000 13.5000L3.0000 10.5000L5.0000 10.5000L5.9896 8.1109L4.5754 6.6967L6.6967 4.5754L8.1109 5.9896Z" /><circle cx="12" cy="12" r="3" /></Svg>;
 }
 
 export function ShieldCheck(props: IconProps) {
@@ -226,7 +226,7 @@ export function Sliders(props: IconProps) {
 }
 
 export function Sparks(props: IconProps) {
-  return <Svg {...props}><path d="M9 7C10 11 11.5 12.5 15.5 13.5C11.5 14.5 10 16 9 20C8 16 6.5 14.5 3 13.5C6.5 12.5 8 11 9 7Z M17.5 3L18.3 5.7L21 6.5L18.3 7.3L17.5 10L16.7 7.3L14 6.5Z" /></Svg>;
+  return <Svg {...props}><path d="M9.5 8C10.5 12 12 13.5 16 14.5C12 15.5 10.5 17 9.5 21C8.5 17 7 15.5 3 14.5C7 13.5 8.5 12 9.5 8Z M17 3C17.5 5.5 18.5 6.5 21 7C18.5 7.5 17.5 8.5 17 11C16.5 8.5 15.5 7.5 13 7C15.5 6.5 16.5 5.5 17 3Z" /></Svg>;
 }
 
 export function Stop(props: IconProps) {
@@ -238,11 +238,11 @@ export function Think(props: IconProps) {
 }
 
 export function Thread(props: IconProps) {
-  return <Svg {...props}><path d="M9.5 4.5H7Q3.5 4.5 3.5 8V16Q3.5 19.5 7 19.5H15L20.5 16V8Q20.5 4.5 17 4.5H14.5" /><path d="M7.5 9H10V12Q10 14.5 7.5 14.5 M14 9H16.5V12Q16.5 14.5 14 14.5" /></Svg>;
+  return <Svg {...props}><path d="M12 3.5C6.5 3.5 3.5 6 3.5 11C3.5 16 6.5 18.5 12 18.5H14L19.5 20.5L18.5 16.5Q20.5 14.5 20.5 11C20.5 6 17.5 3.5 12 3.5Z M8 7.5H16 M8 11H16 M8 14.5H13" /></Svg>;
 }
 
 export function Ticket(props: IconProps) {
-  return <Svg {...props}><path d="M7 5H17Q20.5 5 20.5 8.5V9Q17.5 9 17.5 12Q17.5 15 20.5 15V15.5Q20.5 19 17 19H7Q3.5 19 3.5 15.5V15Q6.5 15 6.5 12Q6.5 9 3.5 9V8.5Q3.5 5 7 5Z M13 8V9 M13 11.5V12.5 M13 15V16" /></Svg>;
+  return <Svg {...props}><path d="M5.5 5H18.5Q20.5 5 20.5 7V9.5A2.5 2.5 0 0 0 20.5 14.5V17Q20.5 19 18.5 19H5.5Q3.5 19 3.5 17V14.5A2.5 2.5 0 0 0 3.5 9.5V7Q3.5 5 5.5 5Z M14 8.5V15.5" /></Svg>;
 }
 
 export function Trash(props: IconProps) {
@@ -250,7 +250,7 @@ export function Trash(props: IconProps) {
 }
 
 export function Unplug(props: IconProps) {
-  return <Svg {...props}><path d="M3 12H5 M5 8H9V16H5Z M9 10H12 M9 14H12 M16 8H18Q21 8 21 12Q21 16 18 16H16Z M13.5 3.5L12.5 5.5 M13.5 20.5L14.5 18.5" /></Svg>;
+  return <Svg {...props}><path d="M8.5 3.5V8 M15.5 3.5V6 M6 8H12 M18 11V12Q18 17 12 17Q6 17 6 12V8 M12 17V20.5 M3.5 20.5L20.5 3.5" /></Svg>;
 }
 
 export function UserPlus(props: IconProps) {
