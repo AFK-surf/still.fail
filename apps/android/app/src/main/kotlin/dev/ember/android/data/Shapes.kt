@@ -1065,7 +1065,7 @@ data class Overview (
 	val mesh: MeshStatus? = null,
 	val slackUsers: List<String>,
 	val slackTeams: List<SlackTeam>,
-	val slackApps: List<MadeSlackApp>,
+	val slackApps: List<MadeSlackApp>? = null,
 	val disk: DiskRoom? = null,
 	val logins: List<PendingLogin>,
 	/// This machine's own logins (none from a station older than them).

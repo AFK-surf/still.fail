@@ -977,7 +977,7 @@ export interface Overview {
 	mesh?: MeshStatus;
 	slackUsers: string[];
 	slackTeams: SlackTeam[];
-	slackApps: MadeSlackApp[];
+	slackApps?: MadeSlackApp[];
 	disk?: DiskRoom;
 	logins: PendingLogin[];
 	/** This machine's own logins (none from a station older than them). */
