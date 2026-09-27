@@ -53,21 +53,25 @@ export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown
   );
 }
 
-/** A profile's allowance, as the core puts its windows (shortest first, each marked): compact, a ring per window. */
-/** `ring`: the size of a compact ring, where a line is lower than a row (the model control). */
-export function QuotaBars({ quota, compact, ring }: { quota: Quota | null | undefined; compact?: boolean; ring?: number }) {
+/**
+ * A profile's allowance, as the core puts its windows (shortest first, each marked): compact, a rounded bar per window
+ * with what is left written in it (its mark too when there is more than one), filled as far as is left.
+ * `small`: where a line is lower than a row (the model control).
+ */
+export function QuotaBars({ quota, compact, small }: { quota: Quota | null | undefined; compact?: boolean; small?: boolean }) {
   if (!quota) return compact ? null : <p className="muted quota-note">还没查过额度。</p>;
   if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className="muted quota-note">{quota.detail ?? "查不到额度。"}</p>;
   if (compact) {
+    const lone = quota.windows.length === 1;
     return (
-      <span className="quota-rings">
+      <span className="quota-chips">
         {quota.windows.map((w) => (
-          <span key={w.label} className="quota-ring-cell">
-            <Tip label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>
-              <span className="quota-ring-hit"><QuotaRing left={w.left} level={w.level} {...(ring ? { size: ring } : {})} /></span>
-            </Tip>
-            <span className="quota-ring-letter">{w.mark}</span>
-          </span>
+          <Tip key={w.label} label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>
+            <span className="quota-chip" data-level={w.level} data-small={small || undefined} tabIndex={0} role="img" aria-label={`${w.label}剩余 ${w.left}%`}>
+              <span className="quota-chip-fill" style={{ width: `${w.left}%` }} />
+              <span className="quota-chip-text">{!lone && <span className="quota-chip-mark">{w.mark}</span>}{w.left}%</span>
+            </span>
+          </Tip>
         ))}
       </span>
     );

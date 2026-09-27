@@ -87,7 +87,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
                 {shown && <ProviderLogo runtime={value.runtime} kind={shown.kind ?? "env"} size={13} />}
                 <span className="triple-account-name">{value.profile ? shown?.name ?? value.profile : shown ? `自动 · ${shown.name}` : "自动分配"}</span>
                 {!value.profile && <span className="triple-account-short">自动</span>}
-                {shown && <span className="triple-rings"><QuotaBars quota={shown.quota} compact ring={15} /></span>}
+                {shown && <span className="triple-rings"><QuotaBars quota={shown.quota} compact small /></span>}
               </span>
             </>
           )}

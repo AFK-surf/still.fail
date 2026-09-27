@@ -612,11 +612,17 @@
 .quota-fill[data-level="red"] { background: var(--red); }
 .quota-compact { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .quota-compact .quota-track { width: 48px; }
-.quota-rings { display: inline-flex; gap: 6px; flex: none; }
-.quota-ring-cell { display: grid; justify-items: center; gap: 1px; }
-.quota-ring-letter { font-size: 9px; line-height: 1; font-weight: 600; color: var(--subtle); }
+/* A window of an allowance, compact: a rounded bar, filled as far as is left, what is left written in it. */
+.quota-chips { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.quota-chip { position: relative; display: inline-flex; align-items: center; height: 20px; padding: 0 7px; overflow: hidden; border-radius: calc(6px * var(--corner-scale)); corner-shape: var(--corner-shape);
+  background: var(--neutral-bg); color: var(--green); font-size: 11px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; cursor: default; }
+.quota-chip[data-level="amber"] { color: var(--amber); }
+.quota-chip[data-level="red"] { color: var(--red); }
+.quota-chip[data-small] { height: 16px; padding: 0 5px; font-size: 10px; }
+.quota-chip-fill { position: absolute; inset: 0 auto 0 0; background: currentColor; opacity: .16; }
+.quota-chip-text { position: relative; display: inline-flex; gap: 4px; }
+.quota-chip-mark { color: var(--muted); }
 /* Blocks, not inline: a ring with no number inside would sit on its bottom edge instead of the others' text line. */
-.quota-ring-hit { display: block; }
 .quota-ring { position: relative; display: grid; place-items: center; flex: none; width: 26px; height: 26px; color: var(--green); }
 .quota-ring[data-level="amber"] { color: var(--amber); }
 .quota-ring[data-level="red"] { color: var(--red); }
@@ -693,7 +699,7 @@
 .run-account .chooser-chevron { flex: none; color: var(--muted); }
 .run-option-text { display: grid; gap: 1px; flex: 1; min-width: 0; }
 .run-option-text .muted { font-size: var(--text-xs); white-space: normal; max-width: 260px; }
-.chooser-item .quota-rings { margin-left: 12px; }
+.chooser-item .quota-chips { margin-left: 12px; }
 .run-model { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-left: -8px; padding: 0 8px 0 0; height: 30px; border: 0; border-radius: calc(8px * var(--corner-scale)); background: none; color: var(--text); font: inherit; font-size: var(--text-sm); cursor: pointer; corner-shape: var(--corner-shape); }
 .run-model:hover, .run-model[data-state="open"] { background: var(--hover); }
 .run-model .run-chip { display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; white-space: nowrap; }
@@ -709,9 +715,8 @@
 .run-picker-option:hover { background: var(--hover); }
 .run-picker-option[aria-pressed="true"] { background: var(--hover); font-weight: 600; }
 .run-picker-note { margin: 0 8px 6px; max-width: 240px; font-size: var(--text-xs); color: var(--amber); }
-.run-picker-option .quota-rings { margin-left: auto; padding-left: 12px; }
-.run-chip .quota-rings { margin-left: 4px; }
-.run-chip .quota-ring-letter { display: none; }
+.run-picker-option .quota-chips { margin-left: auto; padding-left: 12px; }
+.run-chip .quota-chips { margin-left: 4px; }
 .run-usage { margin: 0; font-size: var(--text-xs); }
 .run-station p { margin: 0; font-size: var(--text-xs); }
 .run-station .resource-rings { margin-top: 8px; }
@@ -1447,16 +1452,13 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .model-triple .triple-part { display: inline-flex; align-items: center; gap: 5px; flex: none; }
 .model-triple .triple-part::before { content: "·"; color: var(--muted); margin-right: 1px; }
 .model-triple .triple-account-short { display: none; }
-.model-triple .quota-rings { margin-left: 2px; align-items: center; }
-.model-triple .quota-ring-letter { display: none; }
-.model-triple .quota-ring-cell { display: flex; align-items: center; }
+.model-triple .quota-chips { margin-left: 2px; }
 .model-triple .triple-rings { display: inline-flex; align-items: center; }
 .model-triple[data-drop~="name"] .triple-account-name { display: none; }
 .model-triple[data-drop~="name"] .triple-account-short { display: inline; }
 .model-triple[data-drop~="account"] .triple-account { display: none; }
 .model-triple[data-drop~="runtime"] .triple-runtime { display: none; }
 .model-triple[data-drop~="effort"] .triple-effort { display: none; }
-.model-triple .quota-ring-letter { display: none; }
 .model-triple .chooser-chevron { color: var(--muted); flex: none; }
 .composer .model-triple, .new-chat .model-triple { border-color: transparent; height: 28px; font-size: var(--text-xs); }
 .run-picker-spent { font-size: var(--text-xs); color: var(--amber); }
@@ -1488,7 +1490,6 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 @media (prefers-reduced-motion: reduce) { .sidebar-buddy, .shell { transition: none; } .sidebar-buddy[data-pose="hop"] img { animation: none; } }
 .model-triple .quota-ring-number { display: none; }
 /* In a row of a list, a ring's mark sits beside it, so the ring is on the row's line. */
-:is(.run-picker-option, .chooser-item) .quota-ring-cell { display: flex; align-items: center; gap: 3px; }
 /* Where it heads text, the control's text lines up with the text under it (its border and padding stand out). */
 :is(.session-details, .card) > .model-triple-fit { margin-left: -11px; }
 .team-more { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
