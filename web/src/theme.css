@@ -148,8 +148,11 @@ body {
   line-break: strict;
   text-wrap: pretty;
 }
-/* Headings and the short lines under them break evenly, never one long line and a stub. */
-h1, h2, h3, .page-sub, .first-one-title, .first-one-lead, .onboarding-lead, .new-chat-sub { text-wrap: balance; }
+/* Headings and the short lines under them break evenly, never one long line and a stub, and only where the words
+   allow: at punctuation and spaces, not inside a word (模|型) or a bracket; a run too long for the line still breaks. */
+h1, h2, h3, .page-sub, .first-one-title, .first-one-lead, .onboarding-lead, .new-chat-sub, .enroll-hint, .machine-logins-note, .dialog-lead {
+  text-wrap: balance; word-break: keep-all; overflow-wrap: anywhere;
+}
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: inherit; text-decoration: none; }
 code, pre, .mono { font-family: var(--font-mono); }
