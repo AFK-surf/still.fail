@@ -8,6 +8,7 @@ import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
 } from "radix-ui";
+import { flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router";
 import { forwardRef, useEffect, useId, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type ReactNode } from "react";
 
@@ -523,4 +524,13 @@ export function Time({ stamp, className, fixed = false }: { stamp: Stamp | undef
       {absolute ? stamp.full : stamp.ago}
     </time>
   );
+}
+
+/**
+ * One page becoming another in a view transition (what both have and name moves between them; the rest crossfades):
+ * `go` navigates, rendered at once so the new page is what the transition shows. Plainly without the API or motion.
+ */
+export function transitionTo(go: () => void): void {
+  if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return go();
+  document.startViewTransition(() => flushSync(go));
 }

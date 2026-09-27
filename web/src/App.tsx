@@ -10,7 +10,7 @@ import { DevicePage } from "./pages/Device.tsx";
 import { ChatPage } from "./pages/ChatPage.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
-import { Loading } from "./ui.tsx";
+import { Loading, transitionTo } from "./ui.tsx";
 import { Mark } from "./brand.tsx";
 
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
@@ -71,5 +71,5 @@ function LegacyBot() {
 /** A new chat on this station. */
 function LocalNewChat() {
   const navigate = useNavigate();
-  return <NewChat scope="local" onCreated={(_, session) => navigate(`/chats/${encodeURIComponent(session)}`, { viewTransition: true })} />;
+  return <NewChat scope="local" onCreated={(_, session) => transitionTo(() => navigate(`/chats/${encodeURIComponent(session)}`))} />;
 }

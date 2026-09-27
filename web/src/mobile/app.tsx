@@ -3,6 +3,7 @@
 // one pushes in whole from the right and the old goes out to the left (and back the other way); the viewer's own page
 // comes from the left instead, a new chat rises from the bottom. Each page is an address, so the browser's back and a
 // link work as the desktop's do; pages under the top one stay as they were left (their scroll, what was typed).
+import { transitionTo } from "../ui.tsx";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
@@ -99,7 +100,7 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
     // Back through the pages opened here; from the first one (opened by a link), to the list.
     pop: () => (pages.length > 1 ? navigate(-1) : navigate(home, { replace: true })),
     // One page becoming another (a new chat its chat): crossfaded, what both have (the composer) moving between them.
-    replace: (path) => navigate(path, { replace: true, viewTransition: true }),
+    replace: (path) => transitionTo(() => navigate(path, { replace: true })),
     home: () => navigate(home),
     sheet: setSheet,
     menu: setMenu,
