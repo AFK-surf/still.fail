@@ -131,9 +131,18 @@ async function preview(request: Request): Promise<Response> {
   const headers: [string, string][] = [];
   request.headers.forEach((value, name) => headers.push([name, value]));
   try {
-    const answer = await coreCall("station.preview", {
-      station, port: Number(host[1]), method: request.method, path: url.pathname + url.search, headers, body,
-    }) as { status: number; headers: [string, string][]; body: string };
+    // A redirect within the service is followed here: the frame takes none from this handler. Elsewhere it is said.
+    let path = url.pathname + url.search;
+    let answer: { status: number; headers: [string, string][]; body: string } | null = null;
+    for (let hops = 0; hops < 5 && !answer; hops++) {
+      const got = await coreCall("station.preview", { station, port: Number(host[1]), method: request.method, path, headers, body }) as { status: number; headers: [string, string][]; body: string };
+      const location = got.status >= 300 && got.status < 400 ? got.headers.find(([k]) => k.toLowerCase() === "location")?.[1] : undefined;
+      if (!location) { answer = got; break; }
+      const next = new URL(location, `http://localhost:${host[1]}${path}`);
+      if (next.hostname !== "localhost" && next.hostname !== "127.0.0.1") return plain(502, `这个网页跳到了别的地址：${location}`);
+      path = next.pathname + next.search;
+    }
+    if (!answer) return plain(508, "跳转太多次了");
     const empty = request.method === "HEAD" || [101, 204, 205, 304].includes(answer.status);
     return new Response(empty ? null : Buffer.from(answer.body, "base64"), { status: answer.status, headers: answer.headers });
   } catch (error) {
