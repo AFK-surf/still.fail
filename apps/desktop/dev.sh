@@ -26,5 +26,6 @@ if [ -n "${HMR:-}" ]; then
   fi
   dev="--dev-url=http://$ip:5173"
 fi
-ssh "$host" "pkill -f 'ember-dev/Electron.app/Contents/MacOS/Electron' || true; sleep 1; open -n -a ~/ember-dev/Electron.app --args ~/ember-dev/app --remote-debugging-port=9333 $dev"
+# The old one must be gone first: a second instance finds its single-instance lock and quits at once.
+ssh "$host" "pkill -f 'ember-dev/Electron.app/Contents/MacOS/Electron' || true; for i in \$(seq 1 30); do pgrep -f 'ember-dev/Electron.app/Contents/MacOS/Electron' >/dev/null || break; sleep 0.5; done; open -n -a ~/ember-dev/Electron.app --args ~/ember-dev/app --remote-debugging-port=9333 $dev"
 echo "running on $host"
