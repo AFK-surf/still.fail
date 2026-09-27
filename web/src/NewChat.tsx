@@ -44,7 +44,14 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
   });
   const view = online.find((s) => s.id === stationId) ?? online[0];
   if (!stations.value) {
-    return <div className="new-chat"><div className="new-chat-inner"><Illustration name="new-chat" /><h1 className="new-chat-title">新对话</h1><p className={stations.error ? "field-error" : "muted"}>{stations.error?.message ?? "正在读取 station…"}</p></div></div>;
+    // Laid out as the page will be (the composer's place held, the words under it), so nothing moves when it comes.
+    return (
+      <div className="new-chat"><div className="new-chat-inner">
+        <Illustration name="new-chat" /><h1 className="new-chat-title">新对话</h1><p className="new-chat-sub">说要做什么。它会在选好的 station 上用选好的模型开一个新会话。</p>
+        <div className="composer-wrap"><div className="composer-box new-chat-held" /></div>
+        <p className={`new-chat-status${stations.error ? " field-error" : ""}`}>{stations.error?.message ?? "正在读取 station…"}</p>
+      </div></div>
+    );
   }
   if (!view) {
     return <div className="new-chat"><div className="new-chat-inner"><Illustration name="station-offline" /><h1 className="new-chat-title">新对话</h1><p className="muted">没有在线的 station。到设置里添加一台，或者启动已添加的 station。</p></div></div>;
@@ -129,7 +136,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         <Illustration name="new-chat" />
         <h1 className="new-chat-title">新对话</h1>
         <p className="new-chat-sub">说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
-        {!view.overview ? <p className="muted">正在读取 {station.name} 的 Profile…</p>
+        {!view.overview ? null
           : profiles.length === 0 ? <p className="field-error">这台 station 还没有 Profile，先到 <Link className="inline-link" to={profilesPage(station)}>设置 → Profile</Link> 里加一个。</p>
           : !runtimes.length && <p className="field-error">这台 station 的 Profile 都还没有启用模型。到 <Link className="inline-link" to={profilesPage(station)}>设置 → Profile</Link> 里勾选可以用的模型。</p>}
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
@@ -143,7 +150,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         <Composer thread={null} sessionKey={null} ensureChat={ensureChat} placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
           onSending={(text) => { setSending(text); firstMessage.text = text; }}
           onSent={() => { void made.current?.then(({ key }) => onCreated(station.address, key)); }} />
-        {making && <p className="muted new-chat-making">正在 {station.name} 上创建会话…</p>}
+        {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
+        <p className="new-chat-status">{making ? `正在 ${station.name} 上创建会话…` : !view.overview ? `正在读取 ${station.name} 的 Profile…` : ""}</p>
       </div>
     </div>
   );

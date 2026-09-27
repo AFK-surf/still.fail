@@ -1216,7 +1216,8 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .new-chat .composer-box { min-height: 96px; }
 .new-chat .illus { margin-bottom: 4px; }
 @media (max-height: 640px) { .new-chat .illus { display: none; } }
-.new-chat-making { font-size: var(--text-xs); }
+.new-chat-status { min-height: 1.5em; margin: 0; font-size: var(--text-xs); color: var(--muted); }
+.new-chat-held { border: 1px solid var(--line); }
 /* A new chat's first message sent, its page becomes the chat: the box it was written in moves down to where the chat's
    is, and the rest crossfades (App.tsx and cloud/workspace.tsx navigate with a view transition). */
 :is(.new-chat, .chat) .composer-box { view-transition-name: composer; }
