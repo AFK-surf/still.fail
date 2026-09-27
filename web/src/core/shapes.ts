@@ -623,11 +623,22 @@ export interface StationState {
 	message?: string;
 }
 
+/** What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting. */
+export interface StationTrouble {
+	text: string;
+	state: string;
+}
+
 export interface ChatsView {
 	me: Me;
 	stations: StationState[];
 	loading: boolean;
 	days: ChatDay[];
+	/**
+	 * The stations not working as they should, in a line ("MBA 离线", "正在重连 Studio", "2 台 station 异常"), for a
+	 * corner of the list; absent while all are (a station first connecting is not one).
+	 */
+	trouble?: StationTrouble;
 }
 
 export interface ConfigTokenOwner {

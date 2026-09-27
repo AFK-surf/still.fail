@@ -664,12 +664,22 @@ data class StationState (
 	val message: String? = null
 )
 
+/// What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting.
+@Serializable
+data class StationTrouble (
+	val text: String,
+	val state: String
+)
+
 @Serializable
 data class ChatsView (
 	val me: Me,
 	val stations: List<StationState>,
 	val loading: Boolean,
-	val days: List<ChatDay>
+	val days: List<ChatDay>,
+	/// The stations not working as they should, in a line ("MBA 离线", "正在重连 Studio", "2 台 station 异常"), for a
+	/// corner of the list; absent while all are (a station first connecting is not one).
+	val trouble: StationTrouble? = null
 )
 
 @Serializable
