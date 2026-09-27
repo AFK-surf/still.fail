@@ -1,10 +1,8 @@
-// The station's two local ports: agents' MCP endpoint and the admin page. A port the config names is the station's to
-// keep: taken, starting fails and says by what. Unnamed, the usual one (4750, 4760) is taken if free, else any free
-// one: another program on the machine (an old ssh tunnel, a second ember) must not keep the station from starting.
-// The ports it got are written to <data>/run/ports.json, for whatever looks for the station on this machine.
-import { mkdirSync, writeFileSync } from "node:fs";
+// The agents' MCP endpoint's port (the admin page's is ember-station's: mesh/station/src/local.rs, alike). A port the
+// config names is the station's to keep: taken, starting fails and says by what. Unnamed, the usual one (4750) is
+// taken if free, else any free one: another program on the machine (an old ssh tunnel, a second ember) must not keep
+// the station from starting.
 import type { Server } from "node:http";
-import { join } from "node:path";
 
 export class PortTaken extends Error {}
 
@@ -29,10 +27,4 @@ function listenOn(server: Server, host: string, port: number): Promise<number> {
       resolve(typeof address === "object" && address ? address.port : port);
     });
   });
-}
-
-/** Where the station can be reached on this machine now. */
-export function writePorts(dataDir: string, ports: { mcp: number; admin: number }): void {
-  mkdirSync(join(dataDir, "run"), { recursive: true });
-  writeFileSync(join(dataDir, "run", "ports.json"), `${JSON.stringify(ports)}\n`);
 }

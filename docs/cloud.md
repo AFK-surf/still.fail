@@ -52,7 +52,7 @@ Google OAuth（`openid email profile`），沿用 zork 的会话实现：access 
 
 连接上用 ALPN `ember/admin/1`。第一个流交换授权；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。
 
-station 端由 `ember-mesh`（Rust，iroh 1.0.3）负责：ember 启动并看护它，它把请求转给本机管理 API，带上已验证的用户身份；ember 据此记录「谁」做了操作、在管理页对话里说了话。
+station 端由 `ember-station`（Rust，iroh 1.0.3，mesh/station）负责：它运行整个 station（把 Node 部分作为子进程看护），把 mesh 上来的请求经 Unix socket 转给 Node 部分的管理 API，带上已验证的用户身份；Node 部分据此记录「谁」做了操作、在管理页对话里说了话。
 
 ## 网页版
 
@@ -79,4 +79,4 @@ relay 沿用 zork 的做法：Cloudflare Container 里跑官方 `iroh-relay`，�
 
 `cloud/deploy.py`（在 studio 上运行，需要 `wrangler login` 和 OrbStack 的 docker）：构建网页版（含 wasm）、部署 Worker 和 relay 容器、写入密钥、检查 `/healthz`。线上地址 `https://ember.3720.org`，和 zork 同一个 Cloudflare 账号，Google 登录用单独的 OAuth 客户端（`524783491799-bm55…`，和 zork 同一个 Google Cloud 项目），客户端 JSON 在 studio 的 `~/ember-deploy/google-oauth.json`。密钥在 studio 的 `~/ember-deploy/keys.json`，丢了会让所有人重新登录、所有 station 需要重新加入。Axiom 的写入令牌和数据集在 `~/ember-deploy/axiom.json`（`{dataset, token}`），部署时写成 Worker 的 `AXIOM_TOKEN` / `AXIOM_DATASET`；客户端和 station 的 trace 发到 `POST /v1/telemetry/traces`，由 Worker 转给 Axiom，令牌不出 Worker（见 `docs/telemetry.md`）。
 
-本地联调（不需要 Cloudflare）：`cloud/test/dev.ts` 起一个本地控制面（Google 用模拟），配合 `iroh-relay --dev`；`/tmp/mesh-e2e.sh`（studio）把 relay、控制面、`ember-mesh`、管理 API 和无头浏览器串起来跑一遍。
+本地联调（不需要 Cloudflare）：`cloud/test/dev.ts` 起一个本地控制面（Google 用模拟），配合 `iroh-relay --dev`；`/tmp/mesh-e2e.sh`（studio）把 relay、控制面、`ember-station`、管理 API 和无头浏览器串起来跑一遍。

@@ -89,18 +89,13 @@ export interface Connect {
 
 export interface Config {
   dataDir: string;
-  /**
-   * Where the admin page listens: its own port, so a public tunnel never reaches the agents' MCP endpoint. `named`:
-   * the config sets the port (else it is the usual one, which gives way when taken: ports.ts).
-   */
-  adminHttp: { host: string; port: number; named: boolean };
   /** Cloudflare Access application guarding the public admin page; null refuses tunneled requests. */
   adminAccess: { teamDomain: string; aud: string } | null;
   /** Slack app configuration tokens, each a person's own (`by`), one per Slack workspace: ember makes and edits apps there with them. */
   slackConfigTokens: ConfigToken[];
   /** Shared MEMORY.md and skills/ linked into every profile home. */
   agentHome: string;
-  /** Agents' MCP endpoint; `named` as for the admin page. */
+  /** Agents' MCP endpoint. `named`: the config sets the port (else it is the usual one, which gives way when taken: ports.ts). */
   http: { host: string; port: number; named: boolean };
   connects: Connect[];
   profiles: Profile[];
@@ -143,7 +138,7 @@ export interface RawProfile {
 /** config.json as written; parseConfig turns it into a validated Config. */
 export interface RawConfig {
   agentHome?: string;
-  admin?: { host?: string; port?: number; access?: { teamDomain?: string; aud?: string } };
+  admin?: { access?: { teamDomain?: string; aud?: string } };
   http?: { host?: string; port?: number };
   connects?: RawConnect[];
   slackConfigTokens?: ConfigToken[];
@@ -210,7 +205,6 @@ export function parseConfig(raw: RawConfig, dataDir: string): Config {
   const agentHome = raw.agentHome ?? "agent";
   return {
     dataDir,
-    adminHttp: { host: raw.admin?.host ?? "127.0.0.1", port: raw.admin?.port ?? 4760, named: raw.admin?.port !== undefined },
     adminAccess: raw.admin?.access?.teamDomain && raw.admin.access.aud
       ? { teamDomain: raw.admin.access.teamDomain, aud: raw.admin.access.aud }
       : null,

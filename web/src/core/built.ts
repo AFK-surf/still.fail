@@ -5,4 +5,5 @@ import { BUILT_AT as CORE_BUILT_AT } from "./pkg/built.js";
 
 declare const __BUILT_AT__: number;
 
-export const BUILT_AT = Math.max(__BUILT_AT__, CORE_BUILT_AT);
+// Outside a Vite build (the core's tests under Node) the page has no build of its own.
+export const BUILT_AT = Math.max(typeof __BUILT_AT__ === "number" ? __BUILT_AT__ : 0, CORE_BUILT_AT);

@@ -54,7 +54,7 @@ export class AccessGate {
 
   readonly #meshSecret: () => string | null;
 
-  /** `meshSecret` is what ember-mesh sends to prove a request came through it. */
+  /** `meshSecret` is what ember-station sends to prove a request came through its mesh. */
   constructor(config: () => AccessConfig | null, fetchJwks: FetchJwks = defaultFetch, meshSecret: () => string | null = () => null) {
     this.#config = config;
     this.#fetch = fetchJwks;
@@ -75,9 +75,10 @@ export class AccessGate {
 
   #mesh(req: IncomingMessage, supplied: string): MeshViewer {
     const secret = this.#meshSecret();
-    const remote = req.socket.remoteAddress ?? "";
-    const loopback = remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1";
-    if (!secret || !loopback || supplied.length !== secret.length || !timingSafeEqual(Buffer.from(supplied), Buffer.from(secret))) {
+    // From this machine only: the admin socket (ember-station's; no address), or loopback.
+    const remote = req.socket.remoteAddress;
+    const local = remote === undefined || remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1";
+    if (!secret || !local || supplied.length !== secret.length || !timingSafeEqual(Buffer.from(supplied), Buffer.from(secret))) {
       throw new AccessDenied("mesh 请求无效");
     }
     try {

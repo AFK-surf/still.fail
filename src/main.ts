@@ -1,5 +1,6 @@
 // ember entry point: node src/main.ts
 import { readFile } from "node:fs/promises";
+import { rmSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,12 +14,12 @@ import { log } from "./log.ts";
 import { LoginManager } from "./login.ts";
 import { InternalChat } from "./chat/internal.ts";
 import { McpEndpoint } from "./mcp.ts";
-import { MeshSupervisor } from "./mesh.ts";
+import { MeshLink } from "./mesh.ts";
 import { checkQuota } from "./quota.ts";
 import { ClaudeDriver } from "./runtime/claude.ts";
 import { CodexDriver } from "./runtime/codex.ts";
 import { reapStaleGroups } from "./runtime/process.ts";
-import { listen, PortTaken, writePorts } from "./ports.ts";
+import { listen, PortTaken } from "./ports.ts";
 import { Settings } from "./settings.ts";
 import { Store } from "./store.ts";
 import { builtKey, ErrorReports } from "./telemetry.ts";
@@ -39,29 +40,38 @@ linkTranscripts(settings.config.dataDir, settings.config.profiles);
 const reaped = await reapStaleGroups(store);
 if (reaped > 0) log.warn("reaped runtime processes left by a previous run", { count: reaped });
 
-// Both ports first: the agents' MCP endpoint is told to them by its address, and ember-mesh reaches the admin page by
-// its. Each answers once the station is up (503 until then).
+// This is the station's Node part, run by ember-station (mesh/station): it answers the admin API on a Unix socket only
+// ember-station connects to (EMBER_ADMIN_SOCKET), which serves the admin page here and relays clients' requests.
+const adminSocket = process.env.EMBER_ADMIN_SOCKET;
+if (!adminSocket) {
+  log.error("run ember through ember-station (`ember start`), which gives this process its admin socket");
+  process.exit(1);
+}
+// Both listen first: the agents' MCP endpoint is told to them by its address. Each answers once the station is up
+// (503 until then); /healthz says when it is, for ember-station.
 type Handler = (req: IncomingMessage, res: ServerResponse) => void;
 let onMcp: Handler | undefined;
 let onAdmin: Handler | undefined;
+let up = false;
 const server = createServer((req, res) => (onMcp ? onMcp(req, res) : res.writeHead(503).end()));
-// The admin page on its own port, the only one a tunnel should point at.
-const adminServer = createServer((req, res) => (onAdmin ? onAdmin(req, res) : res.writeHead(503).end()));
-const { http, adminHttp } = settings.config;
-let ports: { mcp: number; admin: number };
+const adminServer = createServer((req, res) => {
+  if (req.url === "/healthz") res.writeHead(up ? 200 : 503).end();
+  else if (onAdmin) onAdmin(req, res);
+  else res.writeHead(503).end();
+});
+const { http } = settings.config;
+let mcpPort: number;
 try {
-  ports = {
-    mcp: await listen(server, http.host, http.port, http.named, "agent 的 MCP 端点"),
-    admin: await listen(adminServer, adminHttp.host, adminHttp.port, adminHttp.named, "管理页"),
-  };
+  mcpPort = await listen(server, http.host, http.port, http.named, "agent 的 MCP 端点");
 } catch (error) {
   if (!(error instanceof PortTaken)) throw error;
   log.error(error.message);
   process.exit(1);
 }
-if (ports.mcp !== http.port || ports.admin !== adminHttp.port) log.warn("usual port taken; listening on a free one", { mcp: ports.mcp, admin: ports.admin });
-writePorts(settings.config.dataDir, ports);
-const mcpUrl = `http://${http.host}:${ports.mcp}/mcp`;
+if (mcpPort !== http.port) log.warn("the MCP endpoint's usual port is taken; listening on a free one", { port: mcpPort });
+rmSync(adminSocket, { force: true });
+await new Promise<void>((resolve) => adminServer.listen(adminSocket, resolve));
+const mcpUrl = `http://${http.host}:${mcpPort}/mcp`;
 // One chat connection per connect; Slack is the only kind so far.
 // Slack's names for people and channels, kept on disk; learning new ones refreshes what shows them.
 const slackNames = new NameBook(join(settings.config.dataDir, "slack-names.json"));
@@ -90,7 +100,7 @@ const hub: Hub = new Hub({
 });
 const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, hub.tools());
 const logins = new LoginManager(settings.config.dataDir);
-const mesh = new MeshSupervisor({ dataDir: settings.config.dataDir, admin: `http://127.0.0.1:${ports.admin}`, traces: () => settings.config.telemetry.traces });
+const mesh = new MeshLink({ dataDir: settings.config.dataDir, traces: () => settings.config.telemetry.traces });
 stationId = () => mesh.status().station;
 const admin = new AdminApi({ settings, store, hub, connections, logins, names, mesh, checkOnStart: true, quota: (profile) => checkQuota(profile, (p) => codex.rateLimits(p)), codexModels: (profile) => codex.models(profile) });
 
@@ -152,12 +162,19 @@ onAdmin = (req, res) => {
   else if (pathname === "/") res.writeHead(302, { location: "/admin" }).end();
   else res.writeHead(404).end();
 };
-log.info("ember listening", { mcpUrl, admin: `http://${adminHttp.host}:${ports.admin}/admin` });
+log.info("ember listening", { mcpUrl, admin: adminSocket });
 
 await connections.reconcile(settings.config);
 if (connections.chats.size === 0) log.warn("no connect is connected; add or enable one on the admin page");
 await hub.recover();
 mesh.start();
+up = true;
+
+// Ends with the ember-station that runs it: orphaned, it would hold the station's runtimes with nobody to reach them.
+const parent = process.ppid;
+setInterval(() => {
+  if (process.ppid !== parent) void shutdown("ember-station gone");
+}, 2000).unref();
 
 let stopping = false;
 async function shutdown(signal: string): Promise<void> {
@@ -165,7 +182,7 @@ async function shutdown(signal: string): Promise<void> {
   stopping = true;
   log.info("shutting down", { signal });
   logins.stopAll();
-  await mesh.stop();
+  mesh.stop();
   await connections.stopAll();
   await hub.shutdown();
   server.close();

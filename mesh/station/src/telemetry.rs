@@ -1,10 +1,10 @@
-//! The station's traces: ember-mesh's own spans (a request stream from
-//! accepted to fully answered) and the admin API's, which ember hands over as
-//! JSON lines on stdin. Batched, and sent at most every EXPORT to ember
-//! cloud's `/v1/telemetry/traces`, signed with the station's key like the
-//! presence socket; ember cloud forwards them to Axiom. A batch that cannot
-//! be sent is dropped. Off unless the station's config turns traces on
-//! (ember passes EMBER_MESH_TRACES=1).
+//! The station's traces: the mesh's own spans (a request stream from
+//! accepted to fully answered) and the admin API's, which the Node part hands
+//! over as JSON lines on its fd 3 (node.rs). Batched, and sent at most every
+//! EXPORT to ember cloud's `/v1/telemetry/traces`, signed with the station's
+//! key like the presence socket; ember cloud forwards them to Axiom. A batch
+//! that cannot be sent is dropped. Off unless the station's config turns
+//! traces on (telemetry.traces).
 
 use std::{
     sync::{Arc, Mutex},
@@ -118,9 +118,13 @@ impl Telemetry {
         self.waiting.notify_one();
     }
 
-    /// Takes the admin API's spans from ember (stdin, one JSON span per line) until stdin closes.
-    pub async fn read_station_spans(self: Arc<Self>) {
-        let mut lines = tokio::io::BufReader::new(tokio::io::stdin()).lines();
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Takes the admin API's spans from the Node part (one JSON span per line) until it closes them.
+    pub async fn read_station_spans(self: Arc<Self>, from: impl tokio::io::AsyncRead + Unpin) {
+        let mut lines = tokio::io::BufReader::new(from).lines();
         while let Ok(Some(line)) = lines.next_line().await {
             if let Ok(span) = serde_json::from_str::<Value>(&line)
                 && span.is_object()

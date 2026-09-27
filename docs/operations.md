@@ -17,7 +17,7 @@ node src/main.ts        # Node 24；PATH 里需要 claude 和 codex
 | 4750 | agent 的 MCP 端点和 `/health`。不要对外暴露。 |
 | 4760 | 管理页 `/admin`。要从外面访问时，只把 tunnel 指向这个端口。 |
 
-没在配置里写端口时，4750 / 4760 被别的程序占了，station 会改用空闲端口并在日志里说明；实际端口写在 `~/.ember/run/ports.json`。配置里写了端口却被占用，station 会直接报错退出，并说明怎么查是谁占的。
+station 由 `ember-station`（mesh/station）运行：它在本机提供管理页（4760），并把 Node 部分（src/main.ts）作为子进程启动和看护；Node 部分的管理接口只监听数据目录里的 `run/admin.sock`。4760 被别的程序占了，管理页会改用空闲端口，实际端口写在 `~/.ember/run/ports.json`；`ember start --port N` 指定端口时，被占就报错退出。MCP 端点的 4750 同理（配置里的 `http.port` 指定时被占就报错）。
 
 收到 SIGTERM 时会结束所有运行时进程组；正在进行的 turn 会在下次启动时自动恢复。
 
@@ -48,7 +48,7 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
 
 ```json
 {
-  "admin": { "port": 4760, "access": { "teamDomain": "…", "aud": "…" } },
+  "admin": { "access": { "teamDomain": "…", "aud": "…" } },
   "connects": [
     { "id": "ds", "name": "ember", "kind": "slack", "mode": "multi-session",
       "bind": { "runtime": "claude", "profiles": ["claude-ocg"], "model": "deepseek-flash" },

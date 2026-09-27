@@ -1,10 +1,11 @@
-//! ember-mesh: an ember station's way into ember cloud.
+//! ember-station: an ember station, as launchd (or the desktop app) runs it.
 //!
-//! `enroll` redeems a one-time token from a workspace admin, proving this
-//! station holds its iroh key. `run` keeps the station reachable: it holds a
-//! presence socket to ember cloud (connected is online), accepts iroh connections from clients that present a
-//! grant signed by ember cloud, and relays each stream's request to the
-//! station's local admin API with the verified identity attached.
+//! `run` runs the station: its Node part (src/main.ts) as a child, watched and started again when it ends (node.rs);
+//! the admin page on a loopback port for a browser here (local.rs); and, once the station is in a workspace, its way
+//! into ember cloud. It holds a presence socket to ember cloud (connected is online) while the Node part is up,
+//! accepts iroh connections from clients that present a grant signed by ember cloud, and relays each stream's request
+//! to the Node part's admin API, on its Unix socket, with the verified identity attached. `enroll` redeems a one-time
+//! token from a workspace admin, proving this station holds its iroh key.
 //!
 //! Wire format on ALPN `ember/admin/1`: the first bidirectional stream carries
 //! grants (one JSON line each, answered with one JSON line; a later line
@@ -13,6 +14,8 @@
 //! answered by a JSON head line `{"status","headers"}` and the response body.
 //! A request's `traceparent` header is passed on to the admin API (see telemetry.rs).
 
+mod local;
+mod node;
 mod telemetry;
 
 use std::{
@@ -30,6 +33,9 @@ use iroh::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use bytes::Bytes;
+use http_body_util::{BodyExt, Full};
+use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::{self, Message, client::IntoClientRequest};
 use tracing::{info, warn};
 
@@ -214,15 +220,70 @@ async fn write_line(send: &mut SendStream, value: &Value) -> Result<()> {
 struct Station {
     data: PathBuf,
     state: Mutex<CloudState>,
-    admin: String,
+    /// The Node part's admin API, and whether it answers now.
+    socket: PathBuf,
+    ready: watch::Receiver<bool>,
     secret: String,
     removed: Mutex<bool>,
     telemetry: Arc<Telemetry>,
 }
 
-async fn run(data: &Path, admin: String, secret: String, traces: bool) -> Result<()> {
-    let key = load_key(data)?;
-    let state = load_state(data)?;
+/// What `run` is given: where the data is, the app with the Node part and its interpreter, and the admin page's port.
+struct Run {
+    data: PathBuf,
+    app: PathBuf,
+    node: PathBuf,
+    port: u16,
+    named: bool,
+}
+
+async fn run(options: Run) -> Result<()> {
+    let data = options.data;
+    let socket = data.join("run").join("admin.sock");
+    std::fs::create_dir_all(data.join("run"))?;
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).map_err(|e| anyhow!("{e}"))?;
+    let secret = B64.encode(bytes);
+    let telemetry = Telemetry::new(traces_on(&data));
+    let (ready_tx, ready) = watch::channel(false);
+    let (stop_tx, stopping) = watch::channel(false);
+    let launch = node::Launch { node: options.node, app: options.app, data: data.clone(), socket: socket.clone(), secret: secret.clone() };
+    let supervised = tokio::spawn(node::supervise(launch, ready_tx, telemetry.clone(), stopping));
+    let listener = local::bind(&data, options.port, options.named).await?;
+    tokio::spawn(local::serve(listener, socket.clone(), ready.clone()));
+    tokio::spawn(mesh(data.clone(), socket, ready, secret, telemetry));
+    // SIGTERM (launchd, the desktop app) or ^C: the Node part ends its runtimes first.
+    let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    tokio::select! {
+        _ = term.recv() => {}
+        _ = tokio::signal::ctrl_c() => {}
+    }
+    info!("stopping");
+    stop_tx.send_replace(true);
+    let _ = supervised.await;
+    Ok(())
+}
+
+/// Whether the station's config turns traces on (telemetry.traces in <data>/config.json).
+fn traces_on(data: &Path) -> bool {
+    std::fs::read(data.join("config.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).is_some_and(|c| c["telemetry"]["traces"] == true)
+}
+
+/// The station's way into ember cloud, once it is in a workspace (enrolled: `ember station enroll`).
+async fn mesh(data: PathBuf, socket: PathBuf, ready: watch::Receiver<bool>, secret: String, telemetry: Arc<Telemetry>) {
+    let state = loop {
+        match load_state(&data) {
+            Ok(state) if load_key(&data).is_ok() => break state,
+            _ => tokio::time::sleep(Duration::from_secs(2)).await,
+        }
+    };
+    if let Err(error) = serve_mesh(data, state, socket, ready, secret, telemetry).await {
+        warn!(%error, "mesh stopped");
+    }
+}
+
+async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: watch::Receiver<bool>, secret: String, telemetry: Arc<Telemetry>) -> Result<()> {
+    let key = load_key(&data)?;
     let relay: RelayUrl = state.relay_url.parse().context("relay url")?;
     let endpoint = Endpoint::builder(Minimal)
         .secret_key(key)
@@ -231,9 +292,9 @@ async fn run(data: &Path, admin: String, secret: String, traces: bool) -> Result
         .transport_config(transport())
         .bind()
         .await?;
-    info!(station = %endpoint.id(), workspace = %state.workspace_name, "ember-mesh listening");
-    let telemetry = Telemetry::new(traces);
-    let station = Arc::new(Station { data: data.to_path_buf(), state: Mutex::new(state), admin, secret, removed: Mutex::new(false), telemetry: telemetry.clone() });
+    info!(station = %endpoint.id(), workspace = %state.workspace_name, "mesh listening");
+    let traces = telemetry.enabled();
+    let station = Arc::new(Station { data, state: Mutex::new(state), socket, ready, secret, removed: Mutex::new(false), telemetry: telemetry.clone() });
     // Online at ember cloud only once the relay can reach us: a device that saw "online" and connected before
     // our relay link was up had its first packets dropped and waited out QUIC's retransmits (~3 s).
     if tokio::time::timeout(std::time::Duration::from_secs(15), endpoint.online()).await.is_err() {
@@ -241,7 +302,6 @@ async fn run(data: &Path, admin: String, secret: String, traces: bool) -> Result
     }
     tokio::spawn(presence(station.clone(), endpoint.secret_key().clone()));
     if traces {
-        tokio::spawn(telemetry.clone().read_station_spans());
         tokio::spawn(telemetry.export(station.clone(), endpoint.secret_key().clone()));
     }
     while let Some(incoming) = endpoint.accept().await {
@@ -263,7 +323,14 @@ async fn run(data: &Path, admin: String, secret: String, traces: bool) -> Result
 /// Keeps the presence socket open, reconnecting with backoff.
 async fn presence(station: Arc<Station>, key: SecretKey) {
     let mut backoff = Duration::from_secs(1);
+    let mut ready = station.ready.clone();
     loop {
+        // Online only while the station answers: its Node part up.
+        let up = *ready.borrow();
+        if !up {
+            let _ = ready.wait_for(|up| *up).await.map(|_| ());
+            backoff = Duration::from_secs(1);
+        }
         let started = Instant::now();
         match connect(&station, &key).await {
             Ok(()) => info!("ember cloud closed the presence socket"),
@@ -305,8 +372,15 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
     let mut ping = tokio::time::interval(PING);
     ping.tick().await;
     let mut answered = true;
+    let mut ready = station.ready.clone();
     loop {
         tokio::select! {
+            // Its Node part went down: offline until it is back.
+            _ = async { let _ = ready.wait_for(|up| !*up).await; } => {
+                info!("station not answering; going offline at ember cloud");
+                let _ = socket.close(None).await;
+                return Ok(());
+            }
             frame = socket.next() => match frame {
                 Some(Ok(Message::Text(text))) if text.as_str() == "pong" => answered = true,
                 Some(Ok(Message::Text(text))) => apply_state(station, text.as_str()),
@@ -414,7 +488,6 @@ async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
     };
     tokio::spawn(renew);
 
-    let client = reqwest::Client::builder().build()?;
     loop {
         let (send, recv) = match conn.accept_bi().await {
             Ok(streams) => streams,
@@ -427,9 +500,9 @@ async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
             conn.close(3u32.into(), b"grant_expired");
             return Ok(());
         }
-        let (station, client) = (station.clone(), client.clone());
+        let station = station.clone();
         tokio::spawn(async move {
-            if let Err(error) = relay_request(&station, &client, &viewer, (accepted, via), send, recv).await {
+            if let Err(error) = relay_request(&station, &viewer, (accepted, via), send, recv).await {
                 info!(%error, "request failed");
             }
         });
@@ -483,7 +556,7 @@ impl Traced<'_> {
 
 /// One request stream: to the local admin API, with the verified viewer attached, and back. A span of the caller's
 /// trace when it records one: from the stream's acceptance to its answer's last byte (an event stream's: to its head).
-async fn relay_request(station: &Station, client: &reqwest::Client, viewer: &Viewer, accepted: Accepted, mut send: SendStream, mut recv: RecvStream) -> Result<()> {
+async fn relay_request(station: &Station, viewer: &Viewer, accepted: Accepted, mut send: SendStream, mut recv: RecvStream) -> Result<()> {
     let mut carry = Vec::new();
     let head = read_line(&mut recv, &mut carry).await?.ok_or_else(|| anyhow!("empty request"))?;
     let method = head["method"].as_str().unwrap_or("GET").to_uppercase();
@@ -494,7 +567,7 @@ async fn relay_request(station: &Station, client: &reqwest::Client, viewer: &Vie
     let traceparent = span.as_ref().map(|s| s.traceparent()).or(theirs.map(str::to_string));
     let mut traced = Traced { station, span, method: &method, path: &path, via: accepted.1 };
     let mut outcome = Outcome::default();
-    let result = answer(station, client, viewer, &head, traceparent, carry, &mut send, &mut recv, &mut outcome, &mut traced).await;
+    let result = answer(station, viewer, &head, traceparent, carry, &mut send, &mut recv, &mut outcome, &mut traced).await;
     traced.end(&outcome, false, result.as_ref().err());
     result
 }
@@ -502,7 +575,6 @@ async fn relay_request(station: &Station, client: &reqwest::Client, viewer: &Vie
 #[allow(clippy::too_many_arguments)]
 async fn answer(
     station: &Station,
-    client: &reqwest::Client,
     viewer: &Viewer,
     head: &Value,
     traceparent: Option<String>,
@@ -529,8 +601,10 @@ async fn answer(
         }
     }
     outcome.received = body.len();
-    let mut request = client
-        .request(method.parse()?, format!("{}{}", station.admin, path))
+    let mut request = hyper::Request::builder()
+        .method(method)
+        .uri(path)
+        .header("host", "ember")
         .header("x-ember-mesh", &station.secret)
         .header("x-ember-viewer", B64.encode(serde_json::to_vec(viewer)?));
     if let Some(ct) = head["headers"]["content-type"].as_str() {
@@ -539,15 +613,20 @@ async fn answer(
     if let Some(traceparent) = traceparent {
         request = request.header("traceparent", traceparent);
     }
-    if !body.is_empty() {
-        request = request.body(body);
-    }
-    let response = match request.send().await {
+    let request = request.body(Full::new(Bytes::from(body)))?;
+    let unreachable = |error: String| json!({ "error": format!("station unreachable: {error}") });
+    let up = *station.ready.borrow();
+    let response = if !up {
+        Err(anyhow!("not started"))
+    } else {
+        local::request(&station.socket, request).await
+    };
+    let response = match response {
         Ok(r) => r,
         Err(error) => {
             outcome.status = 502;
             write_line(send, &json!({ "status": 502, "headers": { "content-type": "application/json" } })).await?;
-            send.write_all(json!({ "error": format!("station unreachable: {error}") }).to_string().as_bytes()).await?;
+            send.write_all(unreachable(error.to_string()).to_string().as_bytes()).await?;
             send.finish()?;
             return Ok(());
         }
@@ -559,18 +638,19 @@ async fn answer(
     if content_type.starts_with("text/event-stream") {
         traced.end(outcome, true, None);
     }
-    let mut stream = response.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        send.write_all(&chunk).await?;
-        outcome.sent += chunk.len();
+    let mut body = response.into_body();
+    while let Some(frame) = body.frame().await {
+        if let Ok(chunk) = frame?.into_data() {
+            send.write_all(&chunk).await?;
+            outcome.sent += chunk.len();
+        }
     }
     send.finish()?;
     Ok(())
 }
 
 fn usage() -> ! {
-    eprintln!("usage:\n  ember-mesh enroll <ember-cloud-origin> <token> [--data DIR]\n  ember-mesh run [--data DIR] [--admin URL]\n  ember-mesh id [--data DIR]\n\nrun reads the admin secret from EMBER_MESH_SECRET; EMBER_MESH_TRACES=1 sends traces to ember cloud.");
+    eprintln!("usage:\n  ember-station run --app DIR [--node PATH] [--port N] [--data DIR]\n  ember-station enroll <ember-cloud-origin> <token> [--data DIR]\n  ember-station id [--data DIR]\n\nrun: --app holds src/main.ts; --port the admin page's (default 4760, a free one when it is taken).");
     std::process::exit(2);
 }
 
@@ -585,12 +665,16 @@ async fn main() -> Result<()> {
         value
     };
     let data = PathBuf::from(take("--data").unwrap_or_else(|| format!("{}/.ember", std::env::var("HOME").unwrap_or_default())));
-    let admin = take("--admin").unwrap_or_else(|| "http://127.0.0.1:4760".into());
+    let app = take("--app");
+    let node = take("--node").unwrap_or_else(|| "node".into());
+    let port = take("--port");
     match args.first().map(String::as_str) {
         Some("enroll") if args.len() == 3 => enroll(&data, args[1].trim_end_matches('/'), &args[2]).await,
         Some("run") => {
-            let secret = std::env::var("EMBER_MESH_SECRET").context("EMBER_MESH_SECRET is not set")?;
-            run(&data, admin, secret, std::env::var("EMBER_MESH_TRACES").is_ok_and(|v| v == "1")).await
+            let Some(app) = app else { usage() };
+            let named = port.is_some();
+            let port = port.map(|p| p.parse::<u16>()).transpose().context("--port")?.unwrap_or(4760);
+            run(Run { data, app: PathBuf::from(app), node: PathBuf::from(node), port, named }).await
         }
         Some("id") => {
             println!("{}", hex::encode(load_key(&data)?.public().as_bytes()));

@@ -1,6 +1,8 @@
 #!/bin/sh
 # ember's command line, from a clone or from an installed release (~/.ember/app, see cloud/src/install.ts).
-#   ember start                                        runs the station (the release's service does this)
+#   ember start [--port N]                             runs the station (the release's service does this): ember-station,
+#                                                      which runs src/main.ts and serves the admin page (4760, or a free
+#                                                      port when that is taken; --port insists on one)
 #   ember station enroll <ember-cloud-origin> <token>  joins a workspace in ember cloud
 #   ember station id
 set -eu
@@ -8,13 +10,13 @@ set -eu
 self=$(readlink -f "$0" 2>/dev/null || echo "$0")
 here=$(cd "$(dirname "$self")/.." && pwd)
 data=${EMBER_DATA:-$HOME/.ember}
-mesh=${EMBER_MESH_BIN:-$here/mesh/target/release/ember-mesh}
+station=${EMBER_STATION_BIN:-$here/mesh/target/release/ember-station}
 # A release brings its own Node.
 node=node
 [ -x "$here/node/bin/node" ] && node="$here/node/bin/node"
 case "${1:-} ${2:-}" in
-  "start "*) cd "$here" && exec "$node" src/main.ts ;;
-  "station enroll") shift 2; exec "$mesh" enroll "$@" --data "$data" ;;
-  "station id") exec "$mesh" id --data "$data" ;;
-  *) echo "usage: ember start | ember station enroll <ember-cloud-origin> <token> | ember station id" >&2; exit 2 ;;
+  "start "*) shift; exec "$station" run --app "$here" --node "$(command -v "$node")" --data "$data" "$@" ;;
+  "station enroll") shift 2; exec "$station" enroll "$@" --data "$data" ;;
+  "station id") exec "$station" id --data "$data" ;;
+  *) echo "usage: ember start [--port N] | ember station enroll <ember-cloud-origin> <token> | ember station id" >&2; exit 2 ;;
 esac

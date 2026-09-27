@@ -1,11 +1,16 @@
 [package]
-name = "ember-mesh"
+name = "ember-station"
 version.workspace = true
 edition.workspace = true
-description = "Connects an ember station to ember cloud over iroh"
+description = "ember station: runs the station (its Node part as a child), serves its admin page here, and connects it to ember cloud over iroh"
 
 [dependencies]
 anyhow = "1"
+bytes = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["http1", "client", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+libc = "0.2"
 base64 = "0.22"
 ed25519-dalek = "2"
 hex = "0.4"

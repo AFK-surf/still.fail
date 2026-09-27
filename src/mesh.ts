@@ -1,23 +1,16 @@
-// Runs ember-mesh, which makes this station reachable through ember cloud.
-// Once the station is enrolled (<dataDir>/mesh/cloud.json exists, written by
-// `ember station enroll`), ember starts ember-mesh and keeps it running. It
-// watches the mesh directory, so an enrollment made while ember runs is
-// picked up as it is written, and the binary's directory, so a build made
-// after enrolling starts it. Each start gets a fresh secret, which ember-mesh
-// presents on every request it relays so the admin API can tell them from
-// other local callers. With traces on, ember-mesh sends the admin API's spans
-// with its own: they go to it on stdin, one JSON line each.
-import { spawn, type ChildProcess } from "node:child_process";
-import { randomBytes } from "node:crypto";
+// The station's way into ember cloud is the process that runs this one: ember-station (mesh/station), which relays
+// clients' requests here, each with the secret it gave this process (EMBER_MESH_SECRET) and the viewer it verified.
+// What it knows of the workspace is in <dataDir>/mesh/cloud.json (written by `ember station enroll`, kept up to date
+// by ember cloud); this reads it, and watches it, so an enrollment or a rename shows at once. With traces on, the
+// admin API's spans go to ember-station on fd 3, one JSON line each, and it sends them with its own.
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, readFileSync, watch, type FSWatcher } from "node:fs";
-import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createWriteStream, mkdirSync, readFileSync, watch, type FSWatcher, type WriteStream } from "node:fs";
+import { basename, join } from "node:path";
 import { log } from "./log.ts";
 
 export interface MeshStatus {
-  /** off: not enrolled; missing: enrolled but no ember-mesh binary; running / restarting. */
-  state: "off" | "missing" | "running" | "restarting";
+  /** off: not in a workspace; running: in one, reachable through ember cloud while this station runs. */
+  state: "off" | "running";
   origin: string | null;
   station: string | null;
   /** The workspace's name, as it was when the station joined. */
@@ -26,155 +19,74 @@ export interface MeshStatus {
   name: string | null;
 }
 
-const REPO_BINARY = join(dirname(fileURLToPath(import.meta.url)), "..", "mesh", "target", "release", "ember-mesh");
-
-export class MeshSupervisor {
+export class MeshLink {
   readonly #dataDir: string;
-  readonly #binary: string;
-  readonly #admin: string;
+  readonly #secret: string | null;
   readonly #traces: () => boolean;
-  #secret: string | null = null;
-  /** The running ember-mesh takes spans. */
-  #tracing = false;
-  #child: ChildProcess | null = null;
-  #timer: ReturnType<typeof setTimeout> | null = null;
-  #watchers: FSWatcher[] = [];
-  #binaryWatched = false;
-  #failures = 0;
-  #stopped = false;
+  #spans: WriteStream | null = null;
+  #watcher: FSWatcher | null = null;
   /** Emits "change" whenever status() may say something new. */
   readonly changes = new EventEmitter();
 
-  /** `traces`: whether the station's config turns traces on, asked at each start of ember-mesh. */
-  constructor(options: { dataDir: string; admin: string; binary?: string; traces?: () => boolean }) {
+  /** `traces`: whether the station's config turns traces on, asked for each span. */
+  constructor(options: { dataDir: string; secret?: string | null; traces?: () => boolean }) {
     this.#dataDir = options.dataDir;
-    this.#admin = options.admin;
+    this.#secret = options.secret ?? process.env.EMBER_MESH_SECRET ?? null;
     this.#traces = options.traces ?? (() => false);
-    this.#binary = options.binary ?? process.env.EMBER_MESH_BIN ?? REPO_BINARY;
   }
 
   get #statePath(): string {
     return join(this.#dataDir, "mesh", "cloud.json");
   }
 
+  /** What ember-station presents on the requests it relays; null when none runs this process. */
   secret(): string | null {
-    return this.#child ? this.#secret : null;
+    return this.#secret;
   }
 
-  /** A span of the admin API, for ember-mesh to send; dropped while traces are off or ember-mesh is not running. */
+  /** A span of the admin API, for ember-station to send; dropped while traces are off. */
   span(span: object): void {
-    if (this.#tracing && this.#child?.stdin?.writable) this.#child.stdin.write(`${JSON.stringify(span)}\n`);
+    if (this.#spans && this.#traces()) this.#spans.write(`${JSON.stringify(span)}\n`);
   }
 
   status(): MeshStatus {
-    let state: Record<string, string> = {};
+    let state: Record<string, string>;
     try {
       state = JSON.parse(readFileSync(this.#statePath, "utf8")) as Record<string, string>;
     } catch {
       return { state: "off", origin: null, station: null, workspace: null, workspaceId: null, name: null };
     }
     return {
-      state: this.#child ? "running" : existsSync(this.#binary) ? "restarting" : "missing",
+      state: "running",
       origin: state.origin ?? null, station: state.station ?? null, workspace: state.workspace_name ?? null, workspaceId: state.workspace ?? null, name: state.name ?? null,
     };
   }
 
   start(): void {
-    this.#stopped = false;
-    const dir = dirname(this.#statePath);
+    const dir = join(this.#dataDir, "mesh");
     mkdirSync(dir, { recursive: true });
-    this.#watch(dir, false, (file) => {
-      if (file !== basename(this.#statePath)) return;
-      this.changes.emit("change");
-      this.#tick();
-    });
-    this.#tick();
-  }
-
-  /**
-   * Waits for the binary to be built. Its directory may not exist before the
-   * first build (mesh/target/release): the nearest of it and two parents that
-   * does is watched, with what is below it.
-   */
-  #watchBinary(): void {
-    if (this.#binaryWatched) return;
-    let near = dirname(this.#binary);
-    for (let up = 0; up < 2 && !existsSync(near); up++) near = dirname(near);
-    if (!existsSync(near)) {
-      log.warn("nothing to watch for the ember-mesh binary; restart ember once it is built", { binary: this.#binary });
-      return;
-    }
-    this.#binaryWatched = true;
-    this.#watch(near, near !== dirname(this.#binary), () => {
-      if (existsSync(this.#binary) && !this.#child && !this.#timer) this.#tick();
-    });
-  }
-
-  #watch(dir: string, recursive: boolean, onEvent: (file: string | null) => void): void {
     try {
-      const watcher = watch(dir, { recursive, persistent: false }, (_event, file) => onEvent(file));
-      watcher.on("error", (error) => log.warn("cannot watch for ember-mesh changes", { dir, error }));
-      this.#watchers.push(watcher);
+      this.#watcher = watch(dir, { persistent: false }, (_event, file) => {
+        if (file === basename(this.#statePath)) this.changes.emit("change");
+      });
+      this.#watcher.on("error", (error) => log.warn("cannot watch the mesh directory", { error }));
     } catch (error) {
-      log.warn("cannot watch for ember-mesh changes", { dir, error });
+      log.warn("cannot watch the mesh directory", { error });
+    }
+    // Run by ember-station, fd 3 is its pipe for spans.
+    if (this.#secret) {
+      this.#spans = createWriteStream("", { fd: 3 });
+      this.#spans.on("error", (error) => {
+        log.warn("cannot hand spans to ember-station", { error });
+        this.#spans = null;
+      });
     }
   }
 
-  #tick(): void {
-    if (this.#stopped || this.#child) return;
-    if (!existsSync(this.#statePath)) return; // the mesh directory's watcher calls again on enrollment
-    if (!existsSync(this.#binary)) {
-      log.warn("station is enrolled but ember-mesh is not built; run `cargo build --release` in mesh/", { binary: this.#binary });
-      this.changes.emit("change");
-      this.#watchBinary(); // which calls again once it is built
-      return;
-    }
-    this.#secret = randomBytes(32).toString("base64url");
-    const tracing = this.#traces();
-    const child = spawn(this.#binary, ["run", "--data", this.#dataDir, "--admin", this.#admin], {
-      env: { ...process.env, EMBER_MESH_SECRET: this.#secret, RUST_LOG: process.env.RUST_LOG ?? "info,iroh=warn", ...(tracing ? { EMBER_MESH_TRACES: "1" } : {}) },
-      stdio: [tracing ? "pipe" : "ignore", "pipe", "pipe"],
-    });
-    // A span written as it exits is lost, like any span that cannot be sent.
-    child.stdin?.on("error", () => {});
-    this.#child = child;
-    this.#tracing = tracing;
-    this.changes.emit("change");
-    const started = Date.now();
-    const relay = (chunk: Buffer) => {
-      for (const line of chunk.toString("utf8").split("\n")) if (line.trim()) log.info("ember-mesh", { line: line.replace(/\x1b\[[0-9;]*m/g, "").slice(0, 500) });
-    };
-    child.stdout!.on("data", relay);
-    child.stderr!.on("data", relay);
-    child.on("error", (error) => log.error("ember-mesh failed to start", { error }));
-    child.on("exit", (code, signal) => {
-      this.#child = null;
-      this.#secret = null;
-      this.changes.emit("change");
-      if (this.#stopped) return;
-      this.#failures = Date.now() - started > 60_000 ? 0 : this.#failures + 1;
-      const delay = Math.min(60_000, 1000 * 2 ** this.#failures);
-      log.warn("ember-mesh exited; restarting", { code, signal, inMs: delay });
-      this.#timer = setTimeout(() => {
-        this.#timer = null;
-        this.#tick();
-      }, delay);
-    });
-    log.info("ember-mesh started", { binary: this.#binary });
-  }
-
-  async stop(): Promise<void> {
-    this.#stopped = true;
-    if (this.#timer) clearTimeout(this.#timer);
-    for (const watcher of this.#watchers) watcher.close();
-    this.#watchers = [];
-    this.#binaryWatched = false;
-    const child = this.#child;
-    if (!child) return;
-    await new Promise<void>((resolve) => {
-      child.once("exit", () => resolve());
-      child.kill("SIGTERM");
-      setTimeout(() => { child.kill("SIGKILL"); resolve(); }, 5000).unref();
-    });
+  stop(): void {
+    this.#watcher?.close();
+    this.#watcher = null;
+    this.#spans?.end();
+    this.#spans = null;
   }
 }
