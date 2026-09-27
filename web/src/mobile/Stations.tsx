@@ -43,13 +43,16 @@ export function StationsScreen() {
           ) : null}
         </Card>
       ))}
-      {manager && list && (
-        <ListCard>
+      <ListCard>
+        <ListRow onClick={() => app.push(app.at("/settings/connects"))}>
+          <span className="m-grow m-row-title">连接</span><span className="m-row-note">Slack app 和它们绑定的模型</span><ChevronRight size={14} className="m-subtle" />
+        </ListRow>
+        {manager && list && (
           <ListRow onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={list.map((s) => s.id)} /> })}>
             <span className="m-accent m-row-title">＋ 添加 station</span>
           </ListRow>
-        </ListCard>
-      )}
+        )}
+      </ListCard>
       <div style={{ height: 30 }} />
     </div>
   );
@@ -138,7 +141,7 @@ export function StationScreen() {
               <SectionHeader title="连接" start={24} />
               <ListCard>
                 {s.overview.connects.map((c) => (
-                  <ListRow key={c.id}>
+                  <ListRow key={c.id} onClick={() => app.push(app.at(`/s/${s.id}/connects/${encodeURIComponent(c.id)}`))}>
                     {c.kind === "slack" ? <SlackMark size={14} /> : <Mark size={14} />}
                     <span className="m-grow m-row-title">{c.name}</span>
                     <span className="m-row-note">{connectionText(c.connection.state)}</span>

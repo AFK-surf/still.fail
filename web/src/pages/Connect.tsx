@@ -218,7 +218,7 @@ function RunSection({ item }: { item: ConnectItem }) {
 }
 
 /** What switching to `next` does to this connect's conversations, in plain words. */
-function consequences(connect: Connect, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
+export function consequences(connect: Connect, next: { mode: ConnectMode; requireMention: boolean }, running: number): string[] {
   const out: string[] = [];
   if (connect.mode === "multi-session" && next.mode === "single-session") {
     out.push("之后它收到的消息都进同一个会话；已有的每个 thread 的会话不再收到新消息，包括这些 thread 里的回复。记录会保留。");

@@ -408,7 +408,7 @@ export function RunSettingsScreen() {
 }
 
 /** A line that leads to a list: what is chosen, and an arrow. */
-function SettingRow({ onClick, leading, children }: { onClick: () => void; leading?: ReactNode; children: ReactNode }) {
+export function SettingRow({ onClick, leading, children }: { onClick: () => void; leading?: ReactNode; children: ReactNode }) {
   return (
     <button type="button" className="m-setting-row" onClick={onClick}>
       {leading}
@@ -419,7 +419,7 @@ function SettingRow({ onClick, leading, children }: { onClick: () => void; leadi
 }
 
 /** Every model it can move to, by who made it (the core says); a filter once there are many. */
-function ModelList({ models, runtime, picked, onPick }: { models: ModelOption[]; runtime: string; picked: string | null; onPick: (m: string) => void }) {
+export function ModelList({ models, runtime, picked, onPick }: { models: ModelOption[]; runtime: string; picked: string | null; onPick: (m: string) => void }) {
   const [filter, setFilter] = useState("");
   const shown = models.filter((m) => m.model.toLowerCase().includes(filter.trim().toLowerCase()));
   const groups = new Map<string, ModelOption[]>();
@@ -440,7 +440,7 @@ function ModelList({ models, runtime, picked, onPick }: { models: ModelOption[];
 }
 
 /** Who can run the model picked: the station's pick, or one kept to, with its quota. */
-function AccountList({ accounts, runtime, picked, onPick }: { accounts: RunnableProfile[]; runtime: string; picked: string | null; onPick: (p: string | null) => void }) {
+export function AccountList({ accounts, runtime, picked, onPick }: { accounts: RunnableProfile[]; runtime: string; picked: string | null; onPick: (p: string | null) => void }) {
   return (
     <div className="m-scroll m-pad-x-18">
       <p className="m-small m-muted m-account-note">自动分配时，额度用完或登录失效会换一个；指定了就一直用它。</p>

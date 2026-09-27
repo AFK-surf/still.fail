@@ -6,6 +6,7 @@ import { useStations } from "../api.ts";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { MobileShell, type Entry } from "./app.tsx";
 import { ChatScreen } from "./Chat.tsx";
+import { ConnectRunScreen, ConnectScreen, ConnectsScreen, NewConnectScreen } from "./Connects.tsx";
 import { RunSettingsScreen } from "./History.tsx";
 import { Home } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
@@ -26,6 +27,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="new" element={<NewChatScreen />} />
       <Route path="settings/stations" element={<StationsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
+      <Route path="settings/connects" element={<ConnectsScreen />} />
       {/* The desktop's 通用, 成员 and 退出与删除 are one page here. */}
       <Route path="settings/general" element={<WorkspaceScreen />} />
       <Route path="settings/members" element={<WorkspaceScreen />} />
@@ -34,6 +36,9 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="s/:station/chats/:chat/run/:agent" element={<InStation stations={stations}><RunSettingsScreen /></InStation>} />
       <Route path="s/:station/chats/:chat/preview/:port" element={<InStation stations={stations}><PreviewScreen /></InStation>} />
       <Route path="s/:station/overview" element={<InStation stations={stations}><StationScreen /></InStation>} />
+      <Route path="s/:station/connects/new" element={<InStation stations={stations}><NewConnectScreen /></InStation>} />
+      <Route path="s/:station/connects/:id" element={<InStation stations={stations}><ConnectScreen /></InStation>} />
+      <Route path="s/:station/connects/:id/run" element={<InStation stations={stations}><ConnectRunScreen /></InStation>} />
       <Route path="s/:station/settings/accounts/:id" element={<InStation stations={stations}><ProfileScreen /></InStation>} />
       {/* What the narrow app has no page for (the desktop's settings, a station's bare address) is the list. */}
       <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
