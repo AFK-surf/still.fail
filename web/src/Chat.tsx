@@ -30,7 +30,7 @@ export const sentStyle = (text: string) => (firstMessage.text !== null && text =
 
 /** Goes (`go`) from a new chat to the chat it made, its first message the anchor: waits for the chat to show it. */
 export function toFirstMessage(go: () => void): void {
-  void transitionTo(go, () => document.querySelector('[style*="sent-message"]') !== null).then(() => { firstMessage.text = null; });
+  void transitionTo(go, () => document.querySelector(':is(.chat-list, .m-messages) [style*="sent-message"]') !== null).then(() => { firstMessage.text = null; });
 }
 
 export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
