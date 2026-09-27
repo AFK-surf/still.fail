@@ -2,6 +2,7 @@ package dev.ember.android
 
 import android.content.Context
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -23,6 +24,25 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var app by mutableStateOf<AppState?>(null)
+
+    /**
+     * Android drops the multicast that reaches the phone unless an app holds this: the core's mDNS would never hear a
+     * station on the LAN answer. Held while the app is on screen (it costs battery), as that is when it connects.
+     */
+    private val multicast: WifiManager.MulticastLock? by lazy {
+        (applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)
+            ?.createMulticastLock("ember-mdns")?.apply { setReferenceCounted(false) }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        multicast?.acquire()
+    }
+
+    override fun onStop() {
+        multicast?.release()
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
