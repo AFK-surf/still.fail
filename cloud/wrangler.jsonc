@@ -17,8 +17,8 @@
   "routes": [
     { "pattern": "ember.3720.org/v1/*", "zone_name": "3720.org" },
     { "pattern": "admin.ember.3720.org/v1/*", "zone_name": "3720.org" },
-    { "pattern": "ember.3720.org/healthz", "zone_name": "3720.org" },
-    { "pattern": "ember.3720.org/install.sh", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/healthz*", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/install.sh*", "zone_name": "3720.org" },
     { "pattern": "ember.3720.org/releases/*", "zone_name": "3720.org" },
     { "pattern": "ember.3720.org/.well-known/*", "zone_name": "3720.org" },
   ],

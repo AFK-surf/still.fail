@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { harness } from "./harness.ts";
 
-// One Worker, two hosts: the web app and everything else on the main one; the
-// admin's console, and what its client core needs to sign in, on its own.
+// ember cloud's Workers on its hosts: the static sites (the web app, the admin's console, the preview host) on each
+// host's Custom Domain, and the API's and the relay's paths routed to their Workers ahead of them.
 
-test("each host serves its own web app, with client-side routes falling back to that app's index.html", async () => {
+test("each host serves its own static site, the API and the relay on their paths ahead of it", async () => {
   const h = await harness();
   try {
     const text = async (response: { status: number; text(): Promise<string> }) => [response.status, await response.text()];
@@ -16,11 +16,20 @@ test("each host serves its own web app, with client-side routes falling back to 
     assert.deepEqual(await text(await h.fetchAdmin("/codes")), [200, "<title>ember 管理后台</title>"]);
     assert.deepEqual(await text(await h.fetchAdmin("/auth/callback?code=x&state=y")), [200, "<title>ember 管理后台</title>"]);
     assert.deepEqual(await text(await h.fetchAdmin("/assets/console.js")), [200, "// the console"]);
-    // The console's files are not the main host's, nor the web app's the console host's.
-    for (const path of ["/admin-app", "/admin-app/", "/admin-app/assets/console.js"]) assert.equal((await h.fetch(path)).status, 404, path);
+    // Each site's files are its own.
     assert.deepEqual(await text(await h.fetchAdmin("/assets/app.js")), [200, "<title>ember 管理后台</title>"]);
-    assert.equal((await h.fetch("/", { method: "POST" })).status, 404);
-    assert.equal((await h.fetchAdmin("/", { method: "POST" })).status, 404);
+    assert.deepEqual(await text(await h.fetch("/assets/console.js")), [200, "<title>ember</title>"]);
+    assert.deepEqual(await text(await h.fetchPreview("/_ember/frame")), [200, "<title>ember preview</title>"]);
+    assert.equal((await h.fetchPreview("/_ember/sw.js")).headers.get("service-worker-allowed"), "/");
+    assert.equal((await h.fetchPreview("/anything")).status, 404);
+    // The API's and the relay's paths are theirs on the main host.
+    assert.equal(((await (await h.fetch("/healthz")).json()) as { service: string }).service, "ember-cloud");
+    assert.equal(((await (await h.fetch("/ping")).json()) as { service: string }).service, "ember-relay");
+    assert.equal((await h.fetch("/generate_204", { headers: { "x-iroh-challenge": "abc" } })).headers.get("x-iroh-response"), "response abc");
+    assert.equal((await h.fetch("/v1/nothing-here")).status, 404);
+    assert.match((await h.fetch("/install.sh")).headers.get("content-type") ?? "", /shellscript/);
+    // The static sites take no writes.
+    assert.equal((await h.fetch("/", { method: "POST" })).status, 405);
   } finally {
     await h.close();
   }
@@ -43,9 +52,10 @@ test("the console's host answers only the calls its core makes; other API paths 
     const next = (await refreshed.json()) as { refresh_token: string };
     const out = await h.fetchAdmin("/v1/auth/logout", { method: "POST", headers: { authorization: `Bearer ${next.refresh_token}`, "content-type": "application/json" }, body: JSON.stringify({ all: false }) });
     assert.equal(out.status, 200);
-    // Neither origin is a wildcard.
+    // Neither origin is a wildcard: the API turns away a host it is not routed on.
+    const api = await h.mf.getWorker("api");
     for (const origin of ["https://other.relay.example", "https://admin.relay.example.evil"]) {
-      const response = await h.mf.dispatchFetch(`${origin}/v1/me`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
+      const response = await api.fetch(`${origin}/v1/me`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
       assert.equal(response.status, 421, origin);
     }
   } finally {

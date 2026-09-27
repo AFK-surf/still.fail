@@ -8,9 +8,9 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "routes": [
-    { "pattern": "ember.3720.org/relay", "zone_name": "3720.org" },
-    { "pattern": "ember.3720.org/ping", "zone_name": "3720.org" },
-    { "pattern": "ember.3720.org/generate_204", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/relay*", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/ping*", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/generate_204*", "zone_name": "3720.org" },
     { "pattern": "ember.3720.org/v1/admin/relay/*", "zone_name": "3720.org" },
   ],
   "preview_urls": false,

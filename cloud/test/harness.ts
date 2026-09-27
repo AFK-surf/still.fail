@@ -72,7 +72,7 @@ export async function harness(
         ...common,
         name: "relay",
         script: await bundle("test/relay-worker.ts"),
-        routes: [`${host}/relay`, `${host}/ping`, `${host}/generate_204`, `${host}/v1/admin/relay/*`],
+        routes: [`${host}/relay*`, `${host}/ping*`, `${host}/generate_204*`, `${host}/v1/admin/relay/*`],
         bindings: { PUBLIC_ORIGIN: origin, ADMIN_TOKEN: adminToken },
         serviceBindings: options.relay ? { TEST_RELAY: { external: { address: new URL(options.relay).host, http: {} } } } : {},
         durableObjects: { RELAY: { className: "Relay", useSQLite: true }, RELAY_BUDGET: { className: "RelayBudget", useSQLite: true } },
@@ -80,7 +80,7 @@ export async function harness(
         ...common,
         name: "api",
         script: await bundle("test/worker.ts"),
-        routes: [`${host}/v1/*`, `${adminHost}/v1/*`, `${host}/healthz`, `${host}/install.sh`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`],
+        routes: [`${host}/v1/*`, `${adminHost}/v1/*`, `${host}/healthz*`, `${host}/install.sh*`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`],
         bindings: {
         PUBLIC_ORIGIN: origin,
         ADMIN_ORIGIN: adminOrigin,

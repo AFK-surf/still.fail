@@ -15,7 +15,7 @@ test("native relay works without Google configuration or credentials", { timeout
     assert.equal((await h.fetch("/v1/admin/relay/restart", { method: "POST", headers: { authorization: "Bearer " + h.adminToken } })).status, 200);
     assert.equal((await h.fetch("/relay")).status, 426);
     assert.equal((await h.fetch("/relay", { method: "POST" })).status, 405);
-    assert.equal((await h.mf.dispatchFetch("https://wrong.example/relay", { headers: upgrade })).status, 421);
+    assert.equal((await (await h.mf.getWorker("relay")).fetch("https://wrong.example/relay", { headers: upgrade })).status, 421);
     const response = await h.fetch("/relay", { headers: upgrade });
     assert.equal(response.status, 101);
     const socket = response.webSocket!;
