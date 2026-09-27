@@ -3,6 +3,7 @@
 // served at /releases/<file>), puts it in ~/.ember/app (the data around it stays), links `ember` into ~/.local/bin,
 // joins the workspace the token is for, and runs the station as a service of the user (launchd), started at login and
 // again if it stops. Claude Code and Codex are the machine's own: it says how to get them when they are missing.
+// Without a token, on a station already in a workspace, it updates the station (`ember update` runs it so).
 
 /** The installer for an ember cloud at `origin`. */
 export function installScript(origin: string): string {
@@ -21,15 +22,17 @@ const SCRIPT = `#!/bin/sh
 set -eu
 origin="__ORIGIN__"
 token="\${1:-}"
-if [ -z "$token" ]; then
+data="\${EMBER_DATA:-$HOME/.ember}"
+# A station already in a workspace is only updated: no token, and it stays the same station.
+if [ -z "$token" ] && [ ! -f "$data/mesh/cloud.json" ]; then
   echo "用法：curl -fsSL $origin/install.sh | sh -s -- <token>（token 在 ember 的「添加 station」里生成）" >&2
+  echo "已经加入 workspace 的 station 更新时不需要 token：ember update" >&2
   exit 2
 fi
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) platform=darwin-arm64 ;;
   *) echo "暂时只支持 macOS（Apple 芯片）的机器，这台是 $(uname -s) $(uname -m)。" >&2; exit 1 ;;
 esac
-data="\${EMBER_DATA:-$HOME/.ember}"
 app="$data/app"
 label="org.3720.ember.station"
 plist="$HOME/Library/LaunchAgents/$label.plist"
@@ -50,8 +53,10 @@ rm -rf "$app.old"
 mkdir -p "$HOME/.local/bin"
 ln -sf "$app/bin/ember" "$HOME/.local/bin/ember"
 
-echo "加入 workspace…"
-"$app/bin/ember" station enroll "$origin" "$token"
+if [ -n "$token" ]; then
+  echo "加入 workspace…"
+  "$app/bin/ember" station enroll "$origin" "$token"
+fi
 
 # The agents it starts are found on this PATH (Claude Code, Codex, and what they run).
 agent_path="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin"

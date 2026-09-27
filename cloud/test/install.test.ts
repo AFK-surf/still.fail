@@ -8,3 +8,9 @@ test("the installer braces every variable that words follow, so no shell takes a
   assert.deepEqual(script.match(/\$[A-Za-z_][A-Za-z0-9_]*(?=[^\x00-\x7f])/g) ?? [], []);
   assert.match(script, /程序：\$\{app\}（/);
 });
+
+test("without a token the installer only updates a station already in a workspace", () => {
+  const script = installScript("https://ember.test");
+  assert.match(script, /if \[ -z "\$token" \] && \[ ! -f "\$data\/mesh\/cloud.json" \]; then/);
+  assert.match(script, /if \[ -n "\$token" \]; then\n  echo "加入 workspace…"/);
+});

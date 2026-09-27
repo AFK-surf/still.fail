@@ -3,6 +3,7 @@
 #   ember start [--port N]                             runs the station (the release's service does this): ember-station,
 #                                                      which runs src/main.ts and serves the admin page (4760, or a free
 #                                                      port when that is taken; --port insists on one)
+#   ember update                                       updates this station to ember cloud's latest release
 #   ember station enroll <ember-cloud-origin> <token>  joins a workspace in ember cloud
 #   ember station id
 set -eu
@@ -16,7 +17,12 @@ node=node
 [ -x "$here/node/bin/node" ] && node="$here/node/bin/node"
 case "${1:-} ${2:-}" in
   "start "*) shift; exec "$station" run --app "$here" --node "$(command -v "$node")" --data "$data" "$@" ;;
+  "update "*)
+    # From the ember cloud the station is in (its installer, without a token, updates).
+    origin=$(sed -n 's/.*"origin": *"\([^"]*\)".*/\1/p' "$data/mesh/cloud.json" 2>/dev/null | head -1)
+    [ -n "$origin" ] || { echo "这台 station 还没有加入 workspace，无从更新" >&2; exit 1; }
+    curl -fsSL "$origin/install.sh" | sh ;;
   "station enroll") shift 2; exec "$station" enroll "$@" --data "$data" ;;
   "station id") exec "$station" id --data "$data" ;;
-  *) echo "usage: ember start [--port N] | ember station enroll <ember-cloud-origin> <token> | ember station id" >&2; exit 2 ;;
+  *) echo "usage: ember start [--port N] | ember update | ember station enroll <ember-cloud-origin> <token> | ember station id" >&2; exit 2 ;;
 esac
