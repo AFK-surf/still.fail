@@ -249,6 +249,9 @@ pub struct Sockets {
     v4: Option<Arc<UdpSocket>>,
     v6: Option<Arc<UdpSocket>>,
     interface_sockets_v4: Arc<RwLock<HashMap<Ipv4Addr, Arc<UdpSocket>>>>,
+    /// ember: whether the last send reached no interface, so that is said once (it recurs with every announcement:
+    /// a Mac that has not let the process reach the local network fails each time).
+    failing: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Sockets {
@@ -274,6 +277,7 @@ impl Sockets {
                     v4: socket_v4(None).ok().map(Arc::new),
                     v6: socket_v6().ok().map(Arc::new),
                     interface_sockets_v4: interface_sockets_v4.clone(),
+                    failing: Default::default(),
                 };
                 if socket.v4.is_none() && socket.v6.is_none() {
                     return Err(SocketError::CannotBind);
@@ -290,6 +294,7 @@ impl Sockets {
                     .then(|| socket_v6().map(Arc::new))
                     .transpose()?,
                 interface_sockets_v4: interface_sockets_v4.clone(),
+                failing: Default::default(),
             },
         };
         for addr in sockets.get_all_interface_addresses_v4() {
@@ -466,6 +471,7 @@ impl Sockets {
 
     async fn send_msg_multi_interface_v4(&self, bytes: &[u8], msg: &Message) {
         let mut sent_count = 0;
+        let mut last_error = None;
 
         // Send on all IPv4 interface-specific sockets
         let interfaces = self.interface_sockets_v4.read().unwrap().clone();
@@ -473,6 +479,7 @@ impl Sockets {
             if let Err(e) = socket.send_to(bytes, (MDNS_IPV4, MDNS_PORT)).await {
                 // ember: debug, not error (vendor/README.md).
                 tracing::debug!("error sending mDNS on interface {}: {}", addr, e);
+                last_error = Some(e);
             } else {
                 tracing::debug!(
                     addr = %addr,
@@ -486,8 +493,14 @@ impl Sockets {
             }
         }
 
+        // ember: said when it starts failing (and when it works again), not with every announcement.
+        use std::sync::atomic::Ordering;
         if sent_count == 0 {
-            tracing::error!("failed to send mDNS on any IPv4 interface in multi-interface mode");
+            if !self.failing.swap(true, Ordering::Relaxed) {
+                tracing::warn!(error = ?last_error, "mDNS reaches no IPv4 interface (on macOS: the process may not have been let reach the local network); retrying quietly");
+            }
+        } else if self.failing.swap(false, Ordering::Relaxed) {
+            tracing::info!("mDNS reaches the local network again");
         }
     }
 }

@@ -10,7 +10,8 @@ change is marked `ember:` in the source. Drop a crate here once upstream has the
   - src/sender.rs: the first query goes out 20–120 ms after starting (RFC 6762 §5.2) instead of a whole cadence
     (0.7 s, pushed back further by others' queries) later.
   - src/socket.rs: a failed send on one interface (a VM bridge that takes no multicast) is logged at debug, not
-    error, as it recurs with every announcement.
+    error, and failing on every interface is said once when it starts (and once when it ends), not with every
+    announcement: both recur with each one (twice a second on a Mac that denies the process the local network).
 - **iroh-mdns-address-lookup 0.4.0** (src/lib.rs)
   - Multicast goes out on, and is received from, every local IPv4 interface (swarm-discovery's `add_interface_v4`),
     not only the default route's. A machine on two networks (studio: wired 192.168.0.x, Wi-Fi 192.168.20.x) was
