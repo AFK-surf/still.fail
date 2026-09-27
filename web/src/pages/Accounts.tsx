@@ -65,7 +65,7 @@ export const CHOICES = {
 export type Choice = keyof typeof CHOICES;
 
 /** What a profile is, in a line, where the first one is asked for. */
-export const PROFILE_LEAD = "agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。";
+export const PROFILE_LEAD = <>agent 用它来跑模型：一份订阅<span className="nobr">（Claude、ChatGPT）</span>，或者一个模型服务的 key。</>;
 
 /**
  * Where a first profile is asked for: the subscriptions this machine's own Claude Code and Codex are signed in with
