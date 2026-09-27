@@ -4,3 +4,5 @@
 
 pub mod config;
 pub mod profiles;
+pub mod settings;
+pub mod store;

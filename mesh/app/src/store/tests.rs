@@ -1,0 +1,316 @@
+//! test/store.test.ts, ported.
+
+use super::*;
+
+fn memory() -> Store {
+    Store::open(":memory:", None).unwrap()
+}
+
+fn session(store: &Store, key: &str) {
+    store
+        .insert_session(&NewSession {
+            key: key.into(),
+            connect: "ds".into(),
+            runtime: "claude".into(),
+            profile: "cc".into(),
+            workspace: format!("/w/{key}"),
+            token: key.into(),
+            created_at: 1,
+            last_active_at: 1,
+            ..NewSession::default()
+        })
+        .unwrap();
+}
+
+fn say(store: &Store, thread: i64, ts: &str, kind: AuthorKind, author: &str, text: &str) -> (i64, bool) {
+    store.insert_message(NewMessage::new(thread, ts, kind, author, text)).unwrap()
+}
+
+fn drain(rx: &mut broadcast::Receiver<StoreChange>) -> Vec<StoreChange> {
+    let mut out = Vec::new();
+    while let Ok(change) = rx.try_recv() {
+        out.push(change);
+    }
+    out
+}
+
+#[test]
+fn a_database_of_another_schema_version_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ember.db");
+    let db = Connection::open(&path).unwrap();
+    db.execute_batch("CREATE TABLE sessions (key TEXT); PRAGMA user_version = 8;").unwrap();
+    drop(db);
+    let error = Store::open(path.to_str().unwrap(), None).err().unwrap().to_string();
+    assert!(error.contains("schema version 8; this ember uses 12"), "{error}");
+}
+
+#[test]
+fn a_message_is_recorded_once_and_delivered_to_every_session_in_its_thread() {
+    let store = memory();
+    session(&store, "a");
+    session(&store, "b");
+    let thread = store.open_thread("slack:T1", "C1", "1.1", None, None).unwrap();
+    assert_eq!(store.open_thread("slack:T1", "C1", "1.1", None, None).unwrap().id, thread.id);
+    store.join_thread(thread.id, "a", "ds").unwrap();
+    assert!(!store.join_thread(thread.id, "a", "ds").unwrap());
+    store.join_thread(thread.id, "b", "gpt").unwrap();
+    let first = say(&store, thread.id, "1.1", AuthorKind::Person, "U1", "hi");
+    assert_eq!(first, (1, true));
+    assert_eq!(say(&store, thread.id, "1.1", AuthorKind::Person, "U1", "hi"), (1, false));
+    let both = vec!["a".to_string(), "b".to_string()];
+    assert_eq!(store.deliver(thread.id, first.0, &both).unwrap(), both);
+    assert!(store.deliver(thread.id, first.0, &both).unwrap().is_empty());
+    let pending: Vec<_> = store.pending_messages("b").unwrap().into_iter().map(|m| (m.message.text, m.connect)).collect();
+    assert_eq!(pending, vec![("hi".to_string(), "gpt".to_string())]);
+    store.mark_delivered("a", &[(thread.id, first.0)]).unwrap();
+    assert_eq!(store.sessions_with_pending().unwrap(), vec!["b".to_string()]);
+    assert_eq!(store.latest_thread("a").unwrap().unwrap().thread.id, thread.id);
+    assert_eq!(store.session_thread("b", "C1", "1.1").unwrap().unwrap().connect, "gpt");
+    assert_eq!(store.session_thread("b", "C9", "1.1").unwrap(), None);
+}
+
+fn plain(entries: &[EntryRow]) -> Vec<(i64, EntryKind, String, String)> {
+    entries
+        .iter()
+        .map(|e| (e.n, e.kind, e.target.map(|t| t.to_string()).or(e.ts.clone()).unwrap_or_default(), e.text.clone().unwrap_or_default()))
+        .collect()
+}
+
+#[test]
+fn a_thread_is_a_log_edits_are_entries_of_their_own() {
+    let store = memory();
+    let thread = store.open_thread("slack:T1", "C1", "1.1", None, None).unwrap();
+    let other = store.open_thread("slack:T1", "C1", "2.1", None, None).unwrap();
+    for ts in ["1.1", "1.2", "1.3"] {
+        say(&store, thread.id, ts, AuthorKind::Person, "U1", ts);
+    }
+    say(&store, other.id, "2.1", AuthorKind::Person, "U1", "elsewhere");
+    assert_eq!(store.last_entry(thread.id).unwrap(), 3);
+    assert!(store.entries_after(thread.id, 3).unwrap().is_empty());
+    assert_eq!(store.edit_message("slack:T1", "C1", "1.1", "1.1", "1.1 edited").unwrap(), Some(thread.id));
+    assert_eq!(store.edit_message("slack:T1", "C1", "1.1", "1.1", "1.1 edited").unwrap(), None, "the same words are no change");
+    assert_eq!(store.edit_message("slack:T1", "C1", "1.1", "1.2", "1.2 edited").unwrap(), Some(thread.id));
+    assert_eq!(store.edit_message("slack:T1", "C1", "1.1", "9.9", "never seen").unwrap(), None);
+    let mut new = NewMessage::new(thread.id, "1.4", AuthorKind::Agent, "a", "new");
+    new.declared = Some("final".into());
+    store.insert_message(new).unwrap();
+    let s = |x: &str| x.to_string();
+    assert_eq!(
+        plain(&store.entries_after(thread.id, 3).unwrap()),
+        vec![(4, EntryKind::Edit, s("1"), s("1.1 edited")), (5, EntryKind::Edit, s("2"), s("1.2 edited")), (6, EntryKind::Message, s("1.4"), s("new"))]
+    );
+    // What was read stays true: the message entries are as they were said.
+    assert_eq!(plain(&store.entries_between(thread.id, 1, 2).unwrap()), vec![(1, EntryKind::Message, s("1.1"), s("1.1")), (2, EntryKind::Message, s("1.2"), s("1.2"))]);
+    assert_eq!(store.entries_between(thread.id, 5, 9).unwrap().iter().map(|e| e.n).collect::<Vec<_>>(), vec![5, 6]);
+    assert_eq!(store.entries_before(thread.id, Some(4), 2).unwrap().iter().map(|e| e.n).collect::<Vec<_>>(), vec![2, 3]);
+    assert_eq!(store.entries_before(thread.id, None, 2).unwrap().iter().map(|e| e.n).collect::<Vec<_>>(), vec![5, 6]);
+    assert_eq!(store.entries_after(other.id, 0).unwrap().iter().map(|e| e.n).collect::<Vec<_>>(), vec![1], "each thread counts from 1");
+    // Merged: the latest edit's words.
+    let merged: Vec<_> = store.messages_before(thread.id, None, 10).unwrap().into_iter().map(|m| (m.n, m.text, m.edited_at.is_some())).collect();
+    assert_eq!(merged, vec![(1, s("1.1 edited"), true), (2, s("1.2 edited"), true), (3, s("1.3"), false), (6, s("new"), false)]);
+    assert_eq!(store.messages_before(thread.id, Some(3), 1).unwrap().into_iter().map(|m| m.ts).collect::<Vec<_>>(), vec![s("1.2")]);
+    assert_eq!(store.last_message(thread.id).unwrap().unwrap().declared.as_deref(), Some("final"));
+}
+
+#[test]
+fn a_message_still_pending_reaches_the_agent_as_it_reads_at_delivery() {
+    let store = memory();
+    session(&store, "a");
+    let thread = store.open_thread("slack:T1", "C1", "1.1", None, None).unwrap();
+    store.join_thread(thread.id, "a", "ds").unwrap();
+    for ts in ["1.1", "1.2"] {
+        let (n, _) = say(&store, thread.id, ts, AuthorKind::Person, "U1", ts);
+        store.deliver(thread.id, n, &["a".to_string()]).unwrap();
+    }
+    store.edit_message("slack:T1", "C1", "1.1", "1.1", "edited").unwrap();
+    let pending: Vec<_> = store.pending_messages("a").unwrap().into_iter().map(|m| (m.message.n, m.message.text)).collect();
+    assert_eq!(pending, vec![(1, "edited".to_string()), (2, "1.2".to_string())]);
+    assert_eq!(store.session_stats(Some("a")).unwrap()["a"].first_text.as_deref(), Some("edited"));
+}
+
+#[test]
+fn reads_move_forward_only_and_unread_counts_skip_the_viewers_own() {
+    let store = memory();
+    session(&store, "a");
+    let thread = store.open_thread("slack:T1", "C1", "1.1", None, None).unwrap();
+    store.join_thread(thread.id, "a", "ds").unwrap();
+    let (mine, _) = say(&store, thread.id, "1.2", AuthorKind::Person, "me@x", "q");
+    say(&store, thread.id, "1.3", AuthorKind::Agent, "a", "answer");
+    say(&store, thread.id, "1.4", AuthorKind::Person, "you@x", "also");
+    store.edit_message("slack:T1", "C1", "1.1", "1.3", "answer, edited").unwrap();
+    let view = |viewer: &str| store.list_threads(viewer, Some("a"), None).unwrap().remove(0);
+    let me = view("me@x");
+    assert_eq!((me.unread, me.read, me.last), (2, 0, 4));
+    assert_eq!(store.unread_count("me@x", thread.id).unwrap(), 2, "an edit is no message of its own");
+    assert_eq!(view("you@x").unread, 2);
+    assert_eq!(store.set_read("me@x", thread.id, mine + 1).unwrap(), mine + 1);
+    assert_eq!(store.set_read("me@x", thread.id, mine).unwrap(), mine + 1, "never back");
+    let me = view("me@x");
+    assert_eq!((me.unread, me.read), (1, mine + 1));
+    assert_eq!(view("you@x").unread, 2, "each viewer reads for themselves");
+    assert_eq!((view("me@x").last_message.unwrap().ts, view("you@x").last_message.unwrap().text), ("1.4".to_string(), "also".to_string()));
+    // Its people, and the first thing one of them said.
+    assert_eq!((view("me@x").people, view("me@x").first_text), (vec!["slack:ds:me@x".to_string(), "slack:ds:you@x".to_string()], Some("q".to_string())));
+    let slack = store.open_thread("slack:T1", "C1", "2.1", None, None).unwrap();
+    store.join_thread(slack.id, "a", "ds").unwrap();
+    say(&store, slack.id, "2.1", AuthorKind::Agent, "a", "hello");
+    say(&store, slack.id, "2.2", AuthorKind::Person, "U2", "<@UBOT> 看看");
+    say(&store, slack.id, "2.3", AuthorKind::Person, "U1", "嗯");
+    say(&store, slack.id, "2.4", AuthorKind::Person, "U2", "再看");
+    let slack_view = store.list_threads("me@x", None, Some(slack.id)).unwrap().remove(0);
+    assert_eq!((slack_view.people, slack_view.first_text), (vec!["slack:ds:U2".to_string(), "slack:ds:U1".to_string()], Some("<@UBOT> 看看".to_string())));
+    assert_eq!(store.list_threads("me@x", None, None).unwrap().iter().map(|t| t.thread.id).collect::<Vec<_>>(), vec![slack.id, thread.id], "the latest said first");
+}
+
+#[test]
+fn archiving_writes_a_thread_out_to_a_zstd_file_and_back() {
+    let archive = tempfile::tempdir().unwrap();
+    let store = Store::open(":memory:", Some(archive.path())).unwrap();
+    session(&store, "a");
+    session(&store, "b");
+    let shared = store.open_thread("slack:T1", "C1", "1.1", None, None).unwrap();
+    let own = store.open_thread("ember", "EMBER", "2.1", None, None).unwrap();
+    store.join_thread(shared.id, "a", "ds").unwrap();
+    store.join_thread(shared.id, "b", "ds").unwrap();
+    store.join_thread(own.id, "a", "ember").unwrap();
+    let at = |mut m: NewMessage, at: i64| {
+        m.at = Some(at);
+        m
+    };
+    store.insert_message(at(NewMessage::new(own.id, "2.2", AuthorKind::Person, "local", "看看"), 1)).unwrap();
+    store.insert_message(at(NewMessage::new(own.id, "2.3", AuthorKind::Agent, "a", "好"), 2)).unwrap();
+    store.insert_message(at(NewMessage::new(shared.id, "1.1", AuthorKind::Person, "U1", "hi"), 3)).unwrap();
+    let before = store.list_threads("local", None, Some(own.id)).unwrap().remove(0);
+    let entries = store.entries_after(own.id, 0).unwrap();
+    let file = archive.path().join("threads").join(format!("{}.jsonl.zst", own.id));
+
+    store.set_archived("a", true).unwrap();
+    assert!(file.exists(), "every session of it is archived");
+    assert!(!archive.path().join("threads").join(format!("{}.jsonl.zst", shared.id)).exists(), "b still takes part");
+    let text = String::from_utf8(zstd::decode_all(&std::fs::read(&file).unwrap()[..]).unwrap()).unwrap();
+    let written: Vec<EntryRow> = text.trim().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(written, entries);
+    // The same shape the TypeScript station wrote: its archives read here, and back.
+    assert!(text.lines().next().unwrap().starts_with(&format!("{{\"thread\":{},\"n\":1,\"kind\":\"message\",\"target\":null,\"ts\":\"2.2\",\"authorKind\":\"person\"", own.id)));
+    // Out of the database, read from the file the same way.
+    assert_eq!(store.entries_after(own.id, 0).unwrap(), entries);
+    assert_eq!(store.entries_before(own.id, None, 1).unwrap(), entries[1..].to_vec());
+    assert_eq!(store.entries_between(own.id, 2, 2).unwrap(), entries[1..].to_vec());
+    assert_eq!(store.list_threads("local", None, Some(own.id)).unwrap().remove(0), before);
+    assert_eq!(store.participants(Some("a")).unwrap()["a"], vec!["local".to_string(), "slack:ds:U1".to_string()]);
+
+    store.set_archived("a", false).unwrap();
+    assert!(!file.exists(), "shown again: back in the database");
+    assert_eq!(store.entries_after(own.id, 0).unwrap(), entries);
+
+    // Someone writing in an archived thread brings it back first.
+    store.set_archived("a", true).unwrap();
+    let mut heard = store.subscribe();
+    assert_eq!(say(&store, own.id, "2.4", AuthorKind::Person, "local", "还在吗"), (3, true));
+    assert!(!file.exists());
+    assert_eq!(store.entries_after(own.id, 0).unwrap().iter().map(|e| e.n).collect::<Vec<_>>(), vec![1, 2, 3]);
+    let appended: Vec<Vec<i64>> = drain(&mut heard)
+        .into_iter()
+        .filter_map(|c| match c {
+            StoreChange::Thread { entries, .. } => Some(entries.iter().map(|e| e.n).collect()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(appended, vec![vec![3]]);
+
+    // Deleting the session removes an archived thread's file with it.
+    store.set_archived("a", true).unwrap();
+    store.set_archived("b", true).unwrap();
+    assert!(archive.path().join("threads").join(format!("{}.jsonl.zst", shared.id)).exists());
+    let mut removed = store.subscribe();
+    store.delete_session("a").unwrap();
+    let gone: Vec<i64> = drain(&mut removed).into_iter().filter_map(|c| if let StoreChange::ThreadRemoved(id) = c { Some(id) } else { None }).collect();
+    assert_eq!(gone, vec![own.id]);
+    assert!(!file.exists());
+    assert_eq!(store.entries_after(shared.id, 0).unwrap().into_iter().map(|e| e.text.unwrap()).collect::<Vec<_>>(), vec!["hi".to_string()], "b's archived thread stays");
+}
+
+#[test]
+fn thread_ids_are_never_used_again() {
+    let store = memory();
+    session(&store, "a");
+    let thread = store.open_thread("ember", "EMBER", "1.1", None, None).unwrap();
+    store.join_thread(thread.id, "a", "ember").unwrap();
+    store.delete_session("a").unwrap();
+    assert!(store.open_thread("ember", "EMBER", "2.1", None, None).unwrap().id > thread.id);
+}
+
+#[test]
+fn deleting_removes_the_sessions_rows_and_the_threads_only_it_was_in() {
+    let store = memory();
+    session(&store, "a");
+    session(&store, "b");
+    let shared = store.open_thread("slack:T1", "C1", "1.1", None, None).unwrap();
+    let own = store.open_thread("ember", "EMBER", "2.1", None, None).unwrap();
+    store.join_thread(shared.id, "a", "ds").unwrap();
+    store.join_thread(shared.id, "b", "ds").unwrap();
+    store.join_thread(own.id, "a", "ember").unwrap();
+    let (said, _) = say(&store, shared.id, "1.1", AuthorKind::Person, "U1", "hi");
+    store.deliver(shared.id, said, &["a".to_string(), "b".to_string()]).unwrap();
+    say(&store, own.id, "2.2", AuthorKind::Person, "local", "mine");
+    store.set_read("local", own.id, 99).unwrap();
+    store.start_turn("t", "a", "input").unwrap();
+    store.set_binding("team", Some("a")).unwrap();
+    store.set_archived("a", true).unwrap();
+    assert!(store.get_session("a").unwrap().unwrap().archived_at.unwrap() > 0);
+    store.set_archived("a", false).unwrap();
+    assert_eq!(store.get_session("a").unwrap().unwrap().archived_at, None);
+    let mut events = store.subscribe();
+    store.delete_session("a").unwrap();
+    let said: Vec<String> = drain(&mut events)
+        .into_iter()
+        .filter_map(|c| match c {
+            StoreChange::SessionRemoved(key) => Some(format!("removed {key}")),
+            StoreChange::ThreadRemoved(id) => Some(format!("thread removed {id}")),
+            StoreChange::Thread { id, .. } => Some(format!("thread {id}")),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(said, vec!["removed a".to_string(), format!("thread removed {}", own.id), format!("thread {}", shared.id)]);
+    assert_eq!(store.get_session("a").unwrap(), None);
+    assert_eq!(store.get_thread(own.id).unwrap(), None);
+    assert!(store.entries_after(own.id, 0).unwrap().is_empty());
+    assert_eq!(store.thread_sessions(shared.id).unwrap().into_iter().map(|m| m.session).collect::<Vec<_>>(), vec!["b".to_string()]);
+    assert_eq!(store.pending_messages("b").unwrap().len(), 1, "the other session keeps its delivery");
+    assert!(store.list_turns("a").unwrap().is_empty());
+    assert_eq!(store.binding("team").unwrap(), None);
+}
+
+#[test]
+fn the_store_announces_what_changed() {
+    let store = memory();
+    let mut seen = store.subscribe();
+    session(&store, "a");
+    let thread = store.open_thread("ember", "EMBER", "1.1", None, None).unwrap();
+    store.join_thread(thread.id, "a", "ember").unwrap();
+    let (n, _) = say(&store, thread.id, "1.2", AuthorKind::Person, "local", "hi");
+    store.deliver(thread.id, n, &["a".to_string()]).unwrap();
+    store.set_read("local", thread.id, n).unwrap();
+    store.record_process(42, 1, "claude", "x").unwrap();
+    store.forget_process(42).unwrap();
+    store.forget_process(42).unwrap();
+    let changes = drain(&mut seen);
+    let kinds: Vec<&str> = changes
+        .iter()
+        .map(|c| match c {
+            StoreChange::Session(_) => "session",
+            StoreChange::Thread { .. } => "thread",
+            StoreChange::Read { .. } => "read",
+            StoreChange::Processes => "processes",
+            _ => "other",
+        })
+        .collect();
+    assert_eq!(kinds, vec!["session", "session", "thread", "thread", "session", "read", "processes", "processes"]);
+    assert_eq!(changes[2], StoreChange::Thread { id: thread.id, entries: vec![] });
+    match &changes[3] {
+        StoreChange::Thread { id, entries } => assert_eq!((*id, entries.iter().map(|e| (e.n, e.text.clone().unwrap())).collect::<Vec<_>>()), (thread.id, vec![(1, "hi".to_string())])),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(changes[5], StoreChange::Read { viewer: "local".into(), thread: thread.id, n });
+}
