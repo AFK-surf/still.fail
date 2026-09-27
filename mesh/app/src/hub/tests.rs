@@ -879,13 +879,13 @@ async fn a_session_changes_profile_model_and_effort_by_hand_and_is_taken_on_by_a
     r.accept(&m).await;
     settle().await;
     let key = session_key("cl", "C1", &m.thread_ts);
-    let with = |id: &str, name: &str, models: &[&str]| {
+    fn with(id: &'static str, name: &'static str, models: &'static [&'static str]) -> impl FnOnce(&mut Config) {
         move |c: &mut Config| {
             let mut p = c.profiles[0].clone();
             (p.id, p.name, p.models) = (id.to_string(), name.to_string(), models.iter().map(|s| s.to_string()).collect());
             c.profiles.push(p);
         }
-    };
+    }
     let change = |profile: Option<Option<&str>>, model: Option<&str>, effort: Option<&str>| SessionChange {
         profile: profile.map(|p| p.map(String::from)),
         model: model.map(|m| Some(m.to_string())),
@@ -966,7 +966,7 @@ async fn the_slack_thread_a_turn_works_for_says_what_the_agent_is_doing_until_th
     settle().await;
     let session = r.claude.last();
     let live = |event: LiveEvent| session.events.send(RuntimeEvent::Live(event)).unwrap();
-    live(LiveEvent::Start { tool: Some("Bash".into()), ..LiveEvent::start("t1", LiveStepKind::Tool) });
+    live(LiveEvent::Start { id: "t1".into(), step: LiveStepKind::Tool, tool: Some("Bash".into()), input: None, subagent: None, parent: None });
     live(LiveEvent::End { id: "t1".into() });
     session.complete();
     settle().await;
