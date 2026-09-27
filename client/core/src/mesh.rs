@@ -35,6 +35,8 @@ use crate::trace::{Kind, Tracer};
 pub const DEVICE_KEY: &str = "device";
 pub const ALPN: &[u8] = b"ember/admin/1";
 pub const RENEW_MS: u64 = 5 * 60_000;
+/// How long a link is tried before the station is taken for not there.
+pub const CONNECT_TIMEOUT_MS: u64 = 10_000;
 
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD: usize = 64 * 1024;
@@ -227,6 +229,18 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station
             addr = addr.with_relay_url(relay);
         }
         endpoint.connect(addr, ALPN).await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))
+    };
+    // A station that is not there is never said to be gone (a relay drops what is sent to someone not on it): the
+    // try gives up after CONNECT_TIMEOUT_MS rather than QUIC's idle 30 s, so it is known to be down soon.
+    let connecting = {
+        let timeout = host.sleep(CONNECT_TIMEOUT_MS);
+        async move {
+            pin_mut!(connecting);
+            match futures::future::select(connecting, timeout).await {
+                Either::Left((connected, _)) => connected,
+                Either::Right(_) => Err(mesh_error("连不上这台 station：没有回应".into())),
+            }
+        }
     };
     let (credential, conn) = futures::join!(credentials(device.clone(), fresh), connecting);
     let conn = conn?;
