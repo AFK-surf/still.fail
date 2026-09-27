@@ -244,7 +244,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
                     : <span className="muted">离线，等它上线再加</span>}
                 </div>
                 {s.online && (
-                  <StationContext.Provider value={asStation(s.station)}>
+                  <StationContext.Provider value={asStation(s)}>
                     <MachineLoginOffers logins={s.overview?.machineLogins} onAdd={(c) => { setAddKind(c); setAdding(s.station); }} />
                   </StationContext.Provider>
                 )}
