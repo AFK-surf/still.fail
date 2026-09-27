@@ -29,3 +29,11 @@ test("the base group cannot be turned off", () => {
   const next = applySettings(slackManifest("ember"), { groups: { base: false } as never });
   assert.equal(settingsOf(next).groups.base, true);
 });
+
+test("any edit gives an older app what the always-on group has now", () => {
+  const old = { display_information: { name: "gpt" }, oauth_config: { scopes: { bot: ["app_mentions:read", "chat:write", "workflow.steps:execute"] } }, settings: { event_subscriptions: { bot_events: ["app_mention"] } } };
+  const next = applySettings(old, { name: "gpt" });
+  assert.ok(next.oauth_config.scopes.bot.includes("assistant:write"));
+  assert.ok(next.oauth_config.scopes.bot.includes("workflow.steps:execute"), "scopes ember does not know stay");
+  assert.equal(settingsOf(next).groups.base, true);
+});

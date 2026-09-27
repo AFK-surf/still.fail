@@ -224,8 +224,10 @@ pub fn apply_settings(manifest: &Value, edit: &SlackAppEdit) -> Value {
     if let Some(v) = &edit.background_color {
         set_or_delete(info, "background_color", v.trim());
     }
-    if let Some(given) = &edit.groups {
+    // Every save puts in what "base" has now (an app made before a scope joined it gets it), and the groups as edited.
+    {
         let now = settings_of(manifest).groups;
+        let given = edit.groups.clone().unwrap_or_default();
         let on: Vec<&SlackGroup> = SLACK_GROUPS.iter().filter(|g| g.id == "base" || given.get(g.id).copied().unwrap_or(now[g.id])).collect();
         let keep_scopes: Vec<String> = unique(on.iter().flat_map(|g| g.scopes.iter().map(|s| s.to_string())));
         let keep_events: Vec<String> = unique(on.iter().flat_map(|g| g.events.iter().map(|s| s.to_string())));

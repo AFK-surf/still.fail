@@ -110,8 +110,9 @@ export function applySettings(manifest: Manifest, edit: Partial<SlackAppSettings
   if (edit.description !== undefined) setOrDelete(next.display_information, "description", edit.description.trim());
   if (edit.longDescription !== undefined) setOrDelete(next.display_information, "long_description", edit.longDescription.trim());
   if (edit.backgroundColor !== undefined) setOrDelete(next.display_information, "background_color", edit.backgroundColor.trim());
-  if (edit.groups) {
-    const on = SLACK_GROUP_IDS.filter((g) => g === "base" || (edit.groups![g] ?? settingsOf(manifest).groups[g]));
+  // Every save puts in what "base" has now (an app made before a scope joined it gets it), and the groups as edited.
+  {
+    const on = SLACK_GROUP_IDS.filter((g) => g === "base" || (edit.groups?.[g] ?? settingsOf(manifest).groups[g]));
     const keepScopes = new Set<string>(on.flatMap((g) => SLACK_GROUPS[g].scopes));
     const keepEvents = new Set<string>(on.flatMap((g) => SLACK_GROUPS[g].events));
     const known = new Set<string>(SLACK_GROUP_IDS.flatMap((g) => SLACK_GROUPS[g].scopes));
