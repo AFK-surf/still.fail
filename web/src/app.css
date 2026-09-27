@@ -1229,10 +1229,9 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 ::view-transition-group(composer) { animation-duration: 340ms; animation-timing-function: var(--ease-out); }
 ::view-transition-old(composer), ::view-transition-new(composer) { height: 100%; object-fit: none; object-position: left top; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; }
-/* The first message: sent, it waits over the composer as a bubble, then moves to its place at the chat's top. */
-.new-chat-sent { justify-self: stretch; display: flex; flex-direction: column; align-items: flex-end; text-align: left; animation: enter-up 220ms var(--ease-out) both; }
-::view-transition-group(sent-message) { animation-duration: 420ms; animation-timing-function: var(--ease-out); }
-::view-transition-old(sent-message), ::view-transition-new(sent-message) { height: 100%; }
+/* A new chat that looks like its chat already gives way to it without a move. */
+:root[data-still]::view-transition-group(*), :root[data-still]::view-transition-old(*), :root[data-still]::view-transition-new(*) { animation: none; }
+:root[data-still]::view-transition-old(*) { display: none; }
 @media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; } }
 .composer-choices { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; margin-right: auto; }
 /* The model control takes the room left beside the other choices, and fits itself in it (.model-triple-fit). */

@@ -21,16 +21,11 @@ interface AgentHere { key: string; who: string; runtime: RuntimeKind; maker: Mak
  * `ensureChat` makes the chat with the first message, which `onSent` then follows.
  */
 /**
- * The first message of a chat just made, on its way from the new chat's page to the chat's: its bubble there and its
- * bubble here are one (a view transition's `sent-message`), the eye's anchor as the page becomes the chat.
+ * From a new chat, whose page already looks like the chat (its first messages on their way), to the chat itself: the
+ * page is kept until the chat shows them, then gives way at once.
  */
-export const firstMessage: { text: string | null } = { text: null };
-/** The anchor's name, on the one bubble that is the first message. */
-export const sentStyle = (text: string) => (firstMessage.text !== null && text === firstMessage.text ? { viewTransitionName: "sent-message" } : undefined);
-
-/** Goes (`go`) from a new chat to the chat it made, its first message the anchor: waits for the chat to show it. */
-export function toFirstMessage(go: () => void): void {
-  void transitionTo(go, () => document.querySelector(':is(.chat-list, .m-messages) [style*="sent-message"]') !== null).then(() => { firstMessage.text = null; });
+export function toMadeChat(go: () => void): void {
+  void transitionTo(go, () => document.querySelector(":is(.chat-list, .m-messages) :is(.msg-mine, .m-mine)") !== null, true);
 }
 
 export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
@@ -117,7 +112,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
             return [line, (
               <div key={m.seq} className="msg msg-mine" data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
                 <Quotes quotes={m.quotes} />
-                {m.text && <div className="msg-bubble" style={sentStyle(m.text)}><div className="msg-plain">{m.text}</div></div>}
+                {m.text && <div className="msg-bubble"><div className="msg-plain">{m.text}</div></div>}
                 <Files owner={ownerOf} files={m.attachments} />
                 {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
                 {m.waiting
@@ -164,7 +159,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
         {outbox.map((o) => (
           <div key={o.id} className="msg msg-mine" data-author="你" data-role="person" data-enter>
             <Quotes quotes={o.quotes} />
-            {o.text && <div className="msg-bubble" style={sentStyle(o.text)}><div className="msg-plain">{o.text}</div></div>}
+            {o.text && <div className="msg-bubble"><div className="msg-plain">{o.text}</div></div>}
             <Files owner={ownerOf} files={o.attachments} />
             {o.state === "failed"
               ? <span className="msg-time msg-failed">发送失败{o.error ? `：${o.error}` : ""}

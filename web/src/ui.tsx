@@ -529,14 +529,16 @@ export function Time({ stamp, className, fixed = false }: { stamp: Stamp | undef
 /**
  * One page becoming another in a view transition (what both have and name moves between them; the rest crossfades):
  * `go` navigates, rendered at once; with `ready`, the new page is waited for (a little) until it shows what the
- * transition lands on. Plainly without the API or motion. Resolves when it is over.
+ * transition lands on. `still`: the two look alike, so nothing moves, the old stays until the new is ready and gives
+ * way to it at once. Plainly without the API or motion. Resolves when it is over.
  */
-export function transitionTo(go: () => void, ready?: () => boolean): Promise<void> {
+export function transitionTo(go: () => void, ready?: () => boolean, still = false): Promise<void> {
   if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { go(); return Promise.resolve(); }
+  if (still) document.documentElement.dataset.still = "";
   const transition = document.startViewTransition(async () => {
     flushSync(go);
     const until = performance.now() + 800;
     while (ready && !ready() && performance.now() < until) await new Promise((r) => setTimeout(r, 16));
   });
-  return transition.finished.catch(() => {});
+  return transition.finished.catch(() => {}).finally(() => { if (still) delete document.documentElement.dataset.still; });
 }

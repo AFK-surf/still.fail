@@ -6,7 +6,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
-import { Activity, fileSize, sentStyle, Lightbox, useAwayFromBottom, useEmissions, useFileUrl, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
+import { Activity, fileSize, Lightbox, useAwayFromBottom, useEmissions, useFileUrl, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Web } from "../icons.tsx";
 import { Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
@@ -69,7 +69,7 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
 }
 
 /** The bar's frame, the same while the chat loads and once it has: back, the title, what follows it, and "…". */
-function BarFrame({ title, more, onMore, children }: { title: string; more: boolean; onMore?: () => void; children?: ReactNode }) {
+export function BarFrame({ title, more, onMore, children }: { title: string; more: boolean; onMore?: () => void; children?: ReactNode }) {
   const app = useApp();
   return (
     <header className="m-chat-bar m-glass">
@@ -227,7 +227,7 @@ function Said({ m, agent, here, draft, list }: { m: ChatMessage; agent: ChatAgen
     return (
       <div className="m-mine">
         {m.quotes.map((q, i) => <QuoteCard key={i} q={q} onJump={jump} />)}
-        {m.text && <div className="m-bubble" style={sentStyle(m.text)} data-pressed={hold.pressed || undefined} {...hold.props}>{m.text}</div>}
+        {m.text && <div className="m-bubble" data-pressed={hold.pressed || undefined} {...hold.props}>{m.text}</div>}
         <Files here={here} files={m.attachments} />
         {m.waiting
           ? <span className="m-meta m-waiting"><Spinner size={10} />等待 agent 接收</span>
@@ -267,7 +267,7 @@ function Out({ o, here }: { o: Outgoing; here: Here }) {
   return (
     <div className="m-mine">
       {o.quotes.map((q, i) => <QuoteCard key={i} q={q} />)}
-      {o.text && <div className="m-bubble" style={sentStyle(o.text)}>{o.text}</div>}
+      {o.text && <div className="m-bubble">{o.text}</div>}
       <Files here={here} files={o.attachments} />
       {o.state === "failed" ? (
         <span className="m-failed">

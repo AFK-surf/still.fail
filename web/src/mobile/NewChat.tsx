@@ -6,12 +6,13 @@ import { stationApi, useStationCall, useStations, type ModelOption, type Runtime
 import { useCall } from "../core/react.ts";
 import { RUNTIME_LABEL } from "../format.ts";
 import { Server } from "../icons.tsx";
-import { firstMessage, toFirstMessage } from "../Chat.tsx";
+import { toMadeChat } from "../Chat.tsx";
+import { transitionTo } from "../ui.tsx";
 import { stationBase } from "../station.tsx";
 import { useNavigate } from "react-router";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { ComposerBar, DraftExtras, openAttach, useDraft, useUpload } from "./Chat.tsx";
-import { Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow } from "./parts.tsx";
+import { BarFrame, ComposerBar, DraftExtras, openAttach, useDraft, useUpload } from "./Chat.tsx";
+import { Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow, Spinner } from "./parts.tsx";
 import { Buddy } from "./Stations.tsx";
 
 /** What the new chat runs on; kept per station for next time. */
@@ -71,38 +72,66 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
     for (const p of profiles) if (!p.check && !checked.current.has(p.id)) { checked.current.add(p.id); api.checkProfile(p.id).catch(() => {}); }
   }, [profiles, api]);
   const [making, setMaking] = useState(false);
-  const [sending, setSending] = useState<string | null>(null);
+  /** What was sent from here, in order: once there is any, the page is the chat's (its messages on their way). */
+  const [sent, setSent] = useState<string[]>([]);
+  const made = useRef<Promise<{ key: string; thread: { id: number } }> | null>(null);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
   const navigate = useNavigate();
   const problem = !view.overview ? `正在读取 ${view.name} 的 Profile…`
     : profiles.length === 0 ? "这台 station 还没有 Profile，先在电脑上到 设置 → Profile 里加一个。"
     : view.models.length === 0 ? "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。" : null;
+  // The first message makes the page the chat's at once: the scene fades, the message is where the chat has it. More
+  // can follow before the chat is made: they go in order once it is, and the page gives way to the chat.
   const send = () => {
     const text = draft.text.trim();
     const files = draft.files;
     draft.setText(""); draft.setFiles(() => []); draft.setError(null);
-    draft.setStarting(true);
-    setSending(text); firstMessage.text = text;
-    void (async () => {
-      let made: { key: string; thread: { id: number } };
-      try {
+    if (sent.length === 0) void transitionTo(() => setSent([text]));
+    else setSent((all) => [...all, text]);
+    if (!made.current) {
+      const making = (async () => {
         if (!model || !runtime) throw new Error("先在 Profile 里启用模型");
         setMaking(true);
-        made = await api.newChat({ runtime: runtime as RuntimeKind, model, ...(effort ? { effort } : {}) });
-      } catch (error) {
-        // No chat to send into: the draft comes back.
-        draft.setText(text); draft.setFiles(() => files); draft.setError(error instanceof Error ? error.message : String(error));
-        setSending(null); firstMessage.text = null;
-        return;
-      } finally {
-        draft.setStarting(false);
-        setMaking(false);
-      }
-      call("chat.send", { station: view.station, thread: made.thread.id, text, attachments: files.flatMap((f) => (f.done ? [f.done] : [])), quotes: [] }).catch(() => {});
-      // The new item's page, by its agent (its address from now on).
-      // Its first message the anchor: the bubble over the composer moves to its place in the chat.
-      toFirstMessage(() => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(made.key)}`, { replace: true }));
-    })();
+        try { return await api.newChat({ runtime: runtime as RuntimeKind, model, ...(effort ? { effort } : {}) }); } finally { setMaking(false); }
+      })();
+      made.current = making;
+      making.then(
+        // The new item's page, by its agent (its address from now on).
+        (m) => toMadeChat(() => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(m.key)}`, { replace: true })),
+        // No chat to send into: what was sent comes back to the composer.
+        (error: unknown) => {
+          made.current = null;
+          setSent((all) => { draft.setText(all.join("\n\n")); return []; });
+          draft.setError(error instanceof Error ? error.message : String(error));
+        },
+      );
+    }
+    const making = made.current;
+    queue.current = queue.current.then(() => making).then((m) =>
+      call("chat.send", { station: view.station, thread: m.thread.id, text, attachments: files.flatMap((f) => (f.done ? [f.done] : [])), quotes: [] })).catch(() => {});
   };
+  if (sent.length) {
+    // Laid out as the chat's page (its list, its bar, its composer), so it gives way to it without a move.
+    return (
+      <div className="m-chat m-new-as-chat">
+        <div className="m-messages">
+          {sent.map((text, i) => (
+            <div key={i} className="m-mine">
+              <div className="m-bubble">{text}</div>
+              <span className="m-meta m-waiting"><Spinner size={10} />正在发送</span>
+            </div>
+          ))}
+        </div>
+        <BarFrame title={sent[0]!} more={false} />
+        <div className="m-composer">
+          <div className="m-floating m-composer-capsule">
+            <DraftExtras draft={draft} />
+            <ComposerBar draft={draft} placeholder="发消息" onPlus={() => openAttach(app, upload)} onType={() => {}} onSend={send} />
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <>
       <div className="m-new-body">
@@ -111,7 +140,6 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
         <p className="m-muted">说要做什么。它会在 {view.name} 上用选好的模型开一个新会话。</p>
         {problem && <p className="m-new-problem" data-wait={!view.overview || undefined}>{problem}</p>}
         {making && <p className="m-muted m-small">正在 {view.name} 上创建会话…</p>}
-        {sending !== null && <div className="m-mine m-new-sent"><div className="m-bubble" style={{ viewTransitionName: "sent-message" }}>{sending}</div></div>}
       </div>
       {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
       {entry?.spent && (

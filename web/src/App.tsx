@@ -11,7 +11,7 @@ import { ChatPage } from "./pages/ChatPage.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
 import { Loading } from "./ui.tsx";
-import { toFirstMessage } from "./Chat.tsx";
+import { toMadeChat } from "./Chat.tsx";
 import { Mark } from "./brand.tsx";
 
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
@@ -72,5 +72,5 @@ function LegacyBot() {
 /** A new chat on this station. */
 function LocalNewChat() {
   const navigate = useNavigate();
-  return <NewChat scope="local" onCreated={(_, session) => toFirstMessage(() => navigate(`/chats/${encodeURIComponent(session)}`))} />;
+  return <NewChat scope="local" onCreated={(_, session) => toMadeChat(() => navigate(`/chats/${encodeURIComponent(session)}`))} />;
 }

@@ -19,7 +19,7 @@ import { AccountSettings, ConnectsSettings, GeneralSettings, LeaveSettings, Memb
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
-import { toFirstMessage } from "../Chat.tsx";
+import { toMadeChat } from "../Chat.tsx";
 import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
 import { Avatar } from "./gate.tsx";
@@ -77,7 +77,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
             <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
             <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
-            <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toFirstMessage(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
+            <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
         </main>
