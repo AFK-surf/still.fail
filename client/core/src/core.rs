@@ -22,7 +22,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use futures::future::{AbortHandle, Abortable, LocalBoxFuture, Shared, join_all};
 use futures::{FutureExt, StreamExt};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
@@ -336,10 +336,18 @@ fn credentials(core: Weak<Inner>) -> StationCredentials {
     })
 }
 
-/// Where a device's member credentials are kept (`<key>/<account>/<workspace>/<device>`), and how long one serves
-/// before a new one is asked for.
+/// Where a device's member credentials are kept (`<key>/<account>/<workspace>`, a [`KeptCredential`]), and how long
+/// one serves before a new one is asked for.
 const CREDENTIAL_KEY: &str = "credential";
 const CREDENTIAL_FOR_S: f64 = 24.0 * 60.0 * 60.0;
+
+/// A credential as kept, with the device it names: one for another device key (the page's, taken over) is no use.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct KeptCredential {
+    device: String,
+    #[serde(flatten)]
+    credential: Credential,
+}
 
 fn gone() -> CoreError {
     CoreError::new("closed", "核心已关闭")
@@ -485,16 +493,17 @@ impl Inner {
     /// on serving until it runs out (30 days).
     async fn credential(&self, workspace: &str, device: &str, fresh: bool) -> Result<Credential> {
         let sub = self.owner(workspace).await?;
-        let key = format!("{CREDENTIAL_KEY}/{sub}/{workspace}/{device}");
+        let key = format!("{CREDENTIAL_KEY}/{sub}/{workspace}");
         let now = self.host.now_ms() / 1000.0;
-        let kept = self.host.storage_get(&key).await.ok().flatten().and_then(|bytes| serde_json::from_slice::<Credential>(&bytes).ok());
-        let kept = kept.filter(|c| c.expires_at > now + 60.0 && !fresh);
+        let kept = self.host.storage_get(&key).await.ok().flatten().and_then(|bytes| serde_json::from_slice::<KeptCredential>(&bytes).ok());
+        let kept = kept.filter(|k| k.device == device).map(|k| k.credential).filter(|c| c.expires_at > now + 60.0 && !fresh);
         if let Some(c) = kept.as_ref().filter(|c| now - c.issued_at < CREDENTIAL_FOR_S) {
             return Ok(c.clone());
         }
         match self.cloud.credential(&sub, workspace, device).await {
             Ok(credential) => {
-                let _ = self.host.storage_set(&key, serde_json::to_vec(&credential).unwrap_or_default()).await;
+                let kept = KeptCredential { device: device.to_string(), credential: credential.clone() };
+                let _ = self.host.storage_set(&key, serde_json::to_vec(&kept).unwrap_or_default()).await;
                 Ok(credential)
             }
             Err(error) => kept.ok_or(error),
@@ -616,8 +625,15 @@ impl Inner {
     fn recompute_owners(&self) {
         let accounts = self.accounts.list();
         self.mes.borrow_mut().retain(|sub, _| accounts.iter().any(|a| &a.sub == sub));
-        for (sub, _) in self.data.records("me") {
+        for (sub, me) in self.data.records("me") {
             if !accounts.iter().any(|a| a.sub == sub) {
+                // Signed out: its credentials go too (a station would take them for 30 days).
+                for workspace in me.get("workspaces").and_then(Value::as_array).into_iter().flatten() {
+                    if let Some(id) = workspace.get("id").and_then(Value::as_str) {
+                        let (host, key) = (self.host.clone(), format!("{CREDENTIAL_KEY}/{sub}/{id}"));
+                        self.host.spawn(async move { let _ = host.storage_delete(&key).await; }.boxed_local());
+                    }
+                }
                 self.data.forget_record("me", &sub);
             }
         }
@@ -1314,6 +1330,7 @@ mod tests {
             let core = Core::new(host.clone()).await;
             let inner = core.inner.clone();
             let credential = |fresh| { let inner = inner.clone(); async move { inner.credential("ws", "dev", fresh).await } };
+            let kept = |c: &Credential| KeptCredential { device: "dev".into(), credential: c.clone() };
             // Asked for once, then kept for the day.
             assert_eq!(credential(false).await.unwrap().credential, "c1");
             assert_eq!(credential(false).await.unwrap().credential, "c1");
@@ -1322,18 +1339,25 @@ mod tests {
             assert_eq!(credential(true).await.unwrap().credential, "c2");
             // A day old, with ember cloud unreachable: the kept one serves on.
             let old = Credential { credential: "old".into(), issued_at: now_s() - 2.0 * 86400.0, expires_at: now_s() + 28.0 * 86400.0, relay_url: "https://relay.test".into() };
-            host.store(&format!("{CREDENTIAL_KEY}/s1/ws/dev"), serde_json::to_vec(&old).unwrap());
+            host.store(&format!("{CREDENTIAL_KEY}/s1/ws"), serde_json::to_vec(&kept(&old)).unwrap());
             up.set(false);
             assert_eq!(credential(false).await.unwrap().credential, "old");
             // Refused, or run out, and no ember cloud: none.
             assert!(credential(true).await.is_err());
             let spent = Credential { expires_at: now_s() - 1.0, ..old.clone() };
-            host.store(&format!("{CREDENTIAL_KEY}/s1/ws/dev"), serde_json::to_vec(&spent).unwrap());
+            host.store(&format!("{CREDENTIAL_KEY}/s1/ws"), serde_json::to_vec(&kept(&spent)).unwrap());
             assert!(credential(false).await.is_err());
             // A day old, ember cloud back: a new one.
-            host.store(&format!("{CREDENTIAL_KEY}/s1/ws/dev"), serde_json::to_vec(&old).unwrap());
+            host.store(&format!("{CREDENTIAL_KEY}/s1/ws"), serde_json::to_vec(&kept(&old)).unwrap());
             up.set(true);
             assert_eq!(credential(false).await.unwrap().credential, "c3");
+            // One for another device key (the page's taken over): a new one.
+            host.store(&format!("{CREDENTIAL_KEY}/s1/ws"), serde_json::to_vec(&KeptCredential { device: "other".into(), credential: old.clone() }).unwrap());
+            assert_eq!(credential(false).await.unwrap().credential, "c4");
+            // Signed out: it goes.
+            inner.accounts.sign_out("s1").await.unwrap();
+            pass(10).await;
+            assert_eq!(host.stored(&format!("{CREDENTIAL_KEY}/s1/ws")), None);
         });
     }
 
