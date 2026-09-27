@@ -12,6 +12,8 @@ export function installScript(origin: string): string {
 /** A release's file, as the bucket keeps it: ember-station-<platform>.tar.gz. */
 export const RELEASE_FILE = /^ember-station-(darwin-arm64|linux-x64)\.tar\.gz$/;
 
+// A variable is always braced where words follow it ("\${app}（…）"): sh may take the first byte of a non-ASCII
+// character for part of its name, and set -u stops the script there.
 const SCRIPT = `#!/bin/sh
 # Installs ember's station on this machine and joins it to a workspace in ember cloud:
 #   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token>
@@ -73,14 +75,14 @@ launchctl bootstrap "gui/$(id -u)" "$plist"
 
 echo
 echo "ember station 已安装并在后台运行，几秒后会出现在 workspace 里。"
-echo "  程序：$app（命令 ember 在 ~/.local/bin）"
+echo "  程序：\${app}（命令 ember 在 ~/.local/bin）"
 echo "  数据和日志：$data"
 missing=""
 command -v claude >/dev/null 2>&1 || missing="$missing Claude Code"
 command -v codex >/dev/null 2>&1 || missing="$missing Codex"
 if [ -n "$missing" ]; then
   echo
-  echo "这台机器上还没有：$missing。station 用它们来跑 agent，装一个就能用："
+  echo "这台机器上还没有：\${missing}。station 用它们来跑 agent，装一个就能用："
   echo "  Claude Code：curl -fsSL https://claude.ai/install.sh | bash"
   echo "  Codex：      npm install -g @openai/codex（需要 Node）"
   echo "装好之后，在 ember 的「设置 → Profile」里登录账号。"
