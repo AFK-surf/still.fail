@@ -12,3 +12,8 @@ change is marked `ember:` in the source. Drop a crate here once upstream has the
 - **iroh-mdns-address-lookup 0.4.0** (src/lib.rs): multicast goes out on, and is received from, every local IPv4
   interface (swarm-discovery's `add_interface_v4`), not only the default route's. A machine on two networks (studio:
   wired 192.168.0.x, Wi-Fi 192.168.20.x) was only announced on the first.
+- **noq-udp 1.3.0** (src/unix.rs): on Apple platforms a datagram's source address is set with `IP_PKTINFO`. It was
+  set with `IP_RECVDSTADDR`, which macOS ignores on send, so a reply left from the address the routing table picked.
+  On a machine with two addresses on one network (studio: 192.168.20.10 on the wired VLAN, 192.168.20.107 on Wi-Fi) a
+  device that had dialed one got the answer from the other, and the handshake never finished: the station dropped
+  what came back as sent to the wrong interface.

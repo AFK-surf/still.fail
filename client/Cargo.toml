@@ -15,7 +15,8 @@ opt-level = "s"
 lto = true
 codegen-units = 1
 
-# mDNS that works on a machine with several networks, and through a router reflecting it between subnets (vendor/README.md).
+# The LAN on a machine with several networks or addresses, and through a router reflecting mDNS (vendor/README.md).
 [patch.crates-io]
 swarm-discovery = { path = "../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../vendor/iroh-mdns-address-lookup" }
+noq-udp = { path = "../vendor/noq-udp" }
