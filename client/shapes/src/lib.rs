@@ -762,6 +762,7 @@ pub struct Overview {
     pub mesh: Option<MeshStatus>,
     pub slack_users: Vec<String>,
     pub slack_teams: Vec<SlackTeam>,
+    #[serde(default)]
     pub slack_apps: Vec<MadeSlackApp>,
     pub disk: Option<DiskRoom>,
     pub logins: Vec<PendingLogin>,
