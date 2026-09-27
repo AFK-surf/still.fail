@@ -324,6 +324,9 @@ impl MdnsAddressLookup {
                             address_lookup.add_interface_v4(*new);
                         }
                         interfaces = now;
+                        if !advertise {
+                            continue;
+                        }
 
                         let addrs =
                             MdnsAddressLookup::socketaddrs_to_addrs(data.ip_addrs());
@@ -613,9 +616,8 @@ impl AddressLookup for MdnsAddressLookup {
     }
 
     fn publish(&self, data: &EndpointData) {
-        if self.advertise {
-            self.local_addrs.set(Some(data.clone())).ok();
-        }
+        // ember: also without advertising: the addresses say which interfaces to query and listen on.
+        self.local_addrs.set(Some(data.clone())).ok();
     }
 }
 

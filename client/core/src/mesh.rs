@@ -32,6 +32,10 @@ use crate::error::{CoreError, Result};
 use crate::host::Host;
 use crate::trace::{Kind, Tracer};
 
+/// The mDNS service stations announce themselves under (mesh/station's `MDNS_SERVICE`).
+#[cfg(not(target_arch = "wasm32"))]
+const MDNS_SERVICE: &str = "ember";
+
 pub const DEVICE_KEY: &str = "device";
 pub const ALPN: &[u8] = b"ember/admin/1";
 pub const RENEW_MS: u64 = 5 * 60_000;
@@ -177,7 +181,10 @@ async fn bind(secret: &[u8; 32], relay_url: &str) -> Result<Endpoint> {
         builder
     } else {
         builder
-            .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder())
+            // Stations on the LAN, among ember's own (`_ember._udp`, as the station announces itself: mesh/station); a
+            // device is never dialed, so it only asks. Answers to a query stop after a few, so every endpoint that
+            // answers is one more a station may be crowded out by for a round (0.7 s).
+            .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
             .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish())
     };
     builder.bind().await.map_err(|e| mesh_error(format!("无法启动本机的 mesh 端点：{e}")))

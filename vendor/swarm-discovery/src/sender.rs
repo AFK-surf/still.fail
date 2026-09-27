@@ -48,15 +48,23 @@ pub async fn sender(
     let mut swarm_size = 1;
     let mut extra_delay = Duration::ZERO;
     let mut has_responded = false;
+    // ember: the first query goes out 20–120 ms after starting (RFC 6762 §5.2), not a whole cadence later: a peer
+    // just started wants to know who is there now (a device dialing a station it has not seen yet).
+    let mut first = true;
 
     loop {
         let me = ctx.me();
+        let starting = std::mem::replace(&mut first, false);
         let timeout = tokio::spawn(async move {
             // grow the interval from which the randomized part is draw
             // with the swarm size to keep the number of duplicates low
             let interval = tau * swarm_size as u32 / 10;
             let millionth = rng().random_range(0..1_000_000);
-            let delay = tau + interval / 1_000_000 * millionth;
+            let delay = if starting {
+                Duration::from_millis(rng().random_range(20..120))
+            } else {
+                tau + interval / 1_000_000 * millionth
+            };
             tracing::debug!(?delay, "waiting for query");
             tokio::time::sleep(delay).await;
             me.send(MdnsMsg::Timeout(timeout_count));

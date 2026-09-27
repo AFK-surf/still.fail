@@ -364,6 +364,10 @@ async fn mesh(data: PathBuf, socket: PathBuf, ready: watch::Receiver<bool>, secr
     }
 }
 
+/// The mDNS service this station announces itself under: ember's own, not iroh's shared `irohv1`, where any iroh
+/// app's endpoints answer too and a query's answers stop after a few (client/core/src/mesh.rs asks for it).
+const MDNS_SERVICE: &str = "ember";
+
 async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: watch::Receiver<bool>, secret: String, telemetry: Arc<Telemetry>) -> Result<()> {
     let key = load_key(&data)?;
     let relay: RelayUrl = state.relay_url.parse().context("relay url")?;
@@ -375,7 +379,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: wa
         .secret_key(key.clone())
         .alpns(vec![ALPN.to_vec()])
         .relay_mode(RelayMode::Custom(relays))
-        .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder())
+        .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE))
         .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key))
         .transport_config(transport())
         .bind()

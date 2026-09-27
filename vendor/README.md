@@ -7,12 +7,15 @@ change is marked `ember:` in the source. Drop a crate here once upstream has the
   - src/receiver.rs: a peer's addresses are read from the answers as well as the additionals, and records with
     mDNS's cache-flush bit count as class IN. A router reflecting mDNS between subnets sends the addresses on as
     answers, which 0.6.3 dropped, so a station on the other subnet was never found.
+  - src/sender.rs: the first query goes out 20–120 ms after starting (RFC 6762 §5.2) instead of a whole cadence
+    (0.7 s, pushed back further by others' queries) later.
   - src/socket.rs: a failed send on one interface (a VM bridge that takes no multicast) is logged at debug, not
     error, as it recurs with every announcement.
 - **iroh-mdns-address-lookup 0.4.0** (src/lib.rs)
   - Multicast goes out on, and is received from, every local IPv4 interface (swarm-discovery's `add_interface_v4`),
     not only the default route's. A machine on two networks (studio: wired 192.168.0.x, Wi-Fi 192.168.20.x) was
     only announced on the first.
+  - Without advertising (ember's devices: they only look stations up), the interfaces are still joined.
   - A republish (same addresses and TXT) is not a new discovery: `Peer`'s equality includes when it was seen, so
     every mDNS packet reached the endpoint as new addresses (also reported upstream-side in rayfish/rayfish#161).
 - **iroh 1.0.3** (src/socket/remote_map/remote_state.rs): the Initial packets sent to every known path before one
