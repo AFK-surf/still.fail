@@ -114,7 +114,7 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
   const from = useRef(0);
   const swipeProps = home_ ? {} : {
     onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.pointerType !== "touch" || e.clientX > 24 || sheet || reader) return;
+      if (e.pointerType !== "touch" || sheet || reader) return;
       swiping.current = { x: e.clientX, at: e.timeStamp, dx: 0 };
       e.currentTarget.setPointerCapture(e.pointerId);
     },
@@ -152,11 +152,13 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
           if (role === "out" && moving && !moving.forward) style["--m-from"] = `${from.current}px`;
           return (
             <div key={p.key} className="m-page" data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
-              data-swiping={(swipe !== null && isTop) || undefined} style={style} {...(isTop ? swipeProps : {})}>
+              data-swiping={(swipe !== null && isTop) || undefined} style={style}>
               {routes(p.location)}
             </div>
           );
         })}
+        {/* Where a swipe back starts: a strip along the left edge that the browser leaves to it (a finger only). */}
+        {!home_ && !moving && <div className="m-edge" {...swipeProps} />}
         <SheetHost spec={sheet} close={() => setSheet(null)} />
         <ReaderHost spec={reader} close={() => setReader(null)} />
         <MenuHost spec={menu} close={() => { menu?.onDismiss?.(); setMenu(null); }} />
