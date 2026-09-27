@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(route("/admin/api/sessions/slack:T1:C1:1790000000.0001/live?from=3"), "/admin/api/sessions/:id/live");
         assert_eq!(route("/admin/api/sessions/abc/files?name=报告.pdf"), "/admin/api/sessions/:id/files");
         assert_eq!(route("/admin/api/profiles/cc/check"), "/admin/api/profiles/:id/check");
-        assert_eq!(route("/v1/workspaces/01J8ZK4Q3M5N6P7R8S9T0V1W2X/stations/9f3a/grant"), "/v1/workspaces/:id/stations/:id/grant");
+        assert_eq!(route("/v1/workspaces/01J8ZK4Q3M5N6P7R8S9T0V1W2X/stations/9f3a"), "/v1/workspaces/:id/stations/:id");
         assert_eq!(route("/v1/invitations/preview"), "/v1/invitations/preview");
         assert_eq!(route("/admin/api/events"), "/admin/api/events");
     }

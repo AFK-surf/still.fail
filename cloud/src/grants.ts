@@ -1,24 +1,26 @@
-// Grants: what lets a client into a station. An Ed25519-signed JWT naming the
-// account, the workspace, its role there, the station and the client's device
-// key. Stations verify it offline with the public key they pinned when they
-// enrolled, and check the device against the iroh connection's peer.
+// A member's credential: what lets a device into its workspace's stations. An Ed25519-signed JWT naming the account,
+// the workspace, its role there, the device's key and the sign-in session it was asked for with. Stations verify it
+// offline with the public key they pinned when they enrolled (and check the device against the iroh connection's
+// peer), so once a device has one it reaches its stations without ember cloud — on a LAN, or with the cloud down —
+// until it runs out. It lasts MEMBER_TTL_SEC and a device asks for a new one each day it can; what is revoked
+// meanwhile (a member removed, a role changed, a session signed out) stations learn from ember cloud (directory.ts).
 import { importJWK, SignJWT, type JWK } from "jose";
 import { nowSeconds } from "./auth";
 import type { Env } from "./env";
 
-export const GRANT_TTL_SEC = 10 * 60;
-export const GRANT_ISSUER = "ember-cloud";
+export const MEMBER_TTL_SEC = 30 * 24 * 60 * 60;
+export const CREDENTIAL_ISSUER = "ember-cloud";
 
-export interface GrantClaims {
+export interface MemberClaims {
   sub: string;
   email: string;
   name: string;
   ws: string;
   role: string;
-  /** Target station's iroh public key (hex). */
-  aud: string;
   /** The client's iroh public key (hex). */
   device: string;
+  /** The sign-in session it was asked for with: signing that session out revokes it. */
+  sid: string;
 }
 
 function privateJwk(env: Env): JWK & { kid: string } {
@@ -33,21 +35,20 @@ export function grantKeys(env: Env): { keys: JWK[] } {
   return { keys: [{ ...rest, alg: "EdDSA", use: "sig" }] };
 }
 
-export async function signGrant(env: Env, claims: GrantClaims): Promise<{ grant: string; expires_at: number }> {
+export async function signCredential(env: Env, claims: MemberClaims): Promise<{ credential: string; issued_at: number; expires_at: number }> {
   const jwk = privateJwk(env);
   const key = await importJWK(jwk, "EdDSA");
   const now = nowSeconds();
-  const expires = now + GRANT_TTL_SEC;
-  const { aud, sub, ...rest } = claims;
-  const grant = await new SignJWT(rest)
-    .setProtectedHeader({ alg: "EdDSA", typ: "ember-grant+jwt", kid: jwk.kid })
-    .setIssuer(GRANT_ISSUER)
+  const expires = now + MEMBER_TTL_SEC;
+  const { sub, ...rest } = claims;
+  const credential = await new SignJWT(rest)
+    .setProtectedHeader({ alg: "EdDSA", typ: "ember-member+jwt", kid: jwk.kid })
+    .setIssuer(CREDENTIAL_ISSUER)
     .setSubject(sub)
-    .setAudience(aud)
     .setIssuedAt(now)
     .setExpirationTime(expires)
     .sign(key);
-  return { grant, expires_at: expires };
+  return { credential, issued_at: now, expires_at: expires };
 }
 
 const hexBytes = (hex: string) => Uint8Array.from(hex.match(/../g)!, (b) => parseInt(b, 16));

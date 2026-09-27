@@ -1,15 +1,17 @@
 //! This device's iroh endpoint and its links to stations.
 //!
 //! One endpoint per core (its secret key is the device key, kept in storage
-//! under [`DEVICE_KEY`]). A link to a station is opened with a grant from ember
-//! cloud and renewed every [`RENEW_MS`] on the control stream; a closed link is
-//! reopened on the next request. Wire format: mesh/station/src/main.rs — ALPN
-//! `ember/admin/1`; the first bi-stream carries `{"grant": …}` lines, each
+//! under [`DEVICE_KEY`]). A link to a station is opened with this device's
+//! member credential for the station's workspace (ember cloud's, 30 days, kept
+//! on the device: see `core.rs`) and presented again every [`RENEW_MS`] on the
+//! control stream, so a new one reaches stations already linked; a closed link
+//! is reopened on the next request. Wire format: mesh/station/src/main.rs — ALPN
+//! `ember/admin/1`; the first bi-stream carries `{"credential": …}` lines, each
 //! further bi-stream one request: a JSON head line `{method, path, headers}`
 //! then the body; the reply is a JSON head line `{status, headers}` then the
 //! body, streamed. The web build is relay-only (browsers have no UDP).
 //!
-//! Error codes: `grant_refused` when the station turned the grant down,
+//! Error codes: `credential_refused` when the station turned the credential down,
 //! `mesh` for everything on the way (unreachable, stream broken).
 
 use std::cell::{Cell, RefCell};
@@ -25,7 +27,7 @@ use iroh::endpoint::{ConnectionError, QuicTransportConfig, RecvStream, SendStrea
 use iroh::{Endpoint, EndpointAddr, PublicKey, RelayMode, RelayUrl, SecretKey};
 use serde_json::{Value, json};
 
-use crate::cloud::Grant;
+use crate::cloud::Credential;
 use crate::error::{CoreError, Result};
 use crate::host::Host;
 use crate::trace::{Kind, Tracer};
@@ -37,8 +39,9 @@ pub const RENEW_MS: u64 = 5 * 60_000;
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD: usize = 64 * 1024;
 
-/// Gets a fresh grant for a station, for this device's id (hex).
-pub type GrantSource = Rc<dyn Fn(String) -> LocalBoxFuture<'static, Result<Grant>>>;
+/// This device's credential for a station's workspace, for its id (hex); `fresh` asks ember cloud for a new one
+/// rather than the one kept (the station refused that one).
+pub type CredentialSource = Rc<dyn Fn(String, bool) -> LocalBoxFuture<'static, Result<Credential>>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestHead {
@@ -83,7 +86,7 @@ impl Mesh {
         Ok(Rc::new(Mesh { host, tracer, relay_url: relay_url.to_string(), endpoint: RefCell::new(endpoint), links: RefCell::default() }))
     }
 
-    /// The device key's public half, hex: what grants name.
+    /// The device key's public half, hex: what credentials name.
     pub fn device_id(&self) -> String {
         hex::encode(self.endpoint.borrow().id().as_bytes())
     }
@@ -93,21 +96,24 @@ impl Mesh {
         self.endpoint.borrow().clone()
     }
 
-    /// The link to a station, opening it (or reopening a closed one) with a grant from `grants`.
-    pub async fn link(&self, station_id: &str, grants: GrantSource) -> Result<Rc<Link>> {
+    /// The link to a station, opening it (or reopening a closed one) with a credential from `credentials`.
+    pub async fn link(&self, station_id: &str, credentials: CredentialSource) -> Result<Rc<Link>> {
         let existing = self.links.borrow().get(station_id).cloned();
+        // Opening anew after the station refused the credential: a new one is asked of ember cloud.
+        let mut fresh = false;
         if let Some(opening) = existing {
             match opening.peek() {
                 None => return opening.await,
                 Some(Ok(link)) if link.usable() => return Ok(link.clone()),
-                // Failed, closed, or its grant could not be renewed: open anew.
-                Some(_) => {}
+                // Failed, closed, or its credential refused: open anew.
+                Some(Ok(link)) => fresh = link.refused.borrow().is_some(),
+                Some(Err(error)) => fresh = error.code == "credential_refused",
             }
         }
-        // A span of the request that needed the link; the grant it asks ember cloud for is part of it.
+        // A span of the request that needed the link; the credential it asks ember cloud for is part of it.
         let mut span = self.tracer.span("mesh.connect", Kind::Internal);
         span.set("ember.station", station_id.to_string());
-        let opening = self.tracer.instrument(Some(span.context()), open(self.host.clone(), self.endpoint(), self.relay_url.clone(), station_id.to_string(), grants));
+        let opening = self.tracer.instrument(Some(span.context()), open(self.host.clone(), self.endpoint(), self.relay_url.clone(), station_id.to_string(), credentials, fresh));
         let opening = async move {
             let link = opening.await;
             match &link {
@@ -185,15 +191,15 @@ pub fn transport() -> QuicTransportConfig {
     QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build()
 }
 
-/// Connects, presents the first grant, and starts renewing it.
+/// Connects, presents the first credential, and starts renewing it.
 ///
-/// Nothing waits on anything it does not need: the grant is asked of ember
+/// Nothing waits on anything it does not need: the credential is asked of ember
 /// cloud while the connection is being made (to the relay this device already
-/// uses), and the link is handed out as soon as the grant is sent — the
-/// station reads a connection's first stream (the grant) before any request
+/// uses), and the link is handed out as soon as the credential is sent — the
+/// station reads a connection's first stream (the credential) before any request
 /// stream, so requests can follow at once. If it refuses, it closes the
 /// connection, the requests on it fail, and the next `Mesh::link` starts over.
-async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station_id: String, grants: GrantSource) -> Result<Rc<Link>> {
+async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station_id: String, credentials: CredentialSource, fresh: bool) -> Result<Rc<Link>> {
     let id: [u8; 32] = hex::decode(&station_id).ok().and_then(|b| b.try_into().ok()).ok_or_else(|| CoreError::invalid(format!("station id 不对：{station_id}")))?;
     let id = PublicKey::from_bytes(&id).map_err(|_| CoreError::invalid(format!("station id 不对：{station_id}")))?;
     let device = hex::encode(endpoint.id().as_bytes());
@@ -207,20 +213,20 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station
         }
         endpoint.connect(addr, ALPN).await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))
     };
-    let (grant, conn) = futures::join!(grants(device.clone()), connecting);
+    let (credential, conn) = futures::join!(credentials(device.clone(), fresh), connecting);
     let conn = conn?;
-    let grant = match grant {
-        Ok(grant) => grant,
+    let credential = match credential {
+        Ok(credential) => credential,
         Err(error) => {
-            conn.close(0u32.into(), b"no grant");
+            conn.close(0u32.into(), b"no credential");
             return Err(error);
         }
     };
     let (send, recv) = conn.open_bi().await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))?;
     let mut control = Control { send, recv, carry: Vec::new() };
-    control.send_grant(&grant.grant).await?;
+    control.send(&credential.credential).await?;
     let link = Rc::new(Link { conn, control: Mutex::new(control), renewal_failed: Cell::new(false), refused: RefCell::new(None) });
-    // The station's answer to the first grant, while requests already go: a refusal closes the link.
+    // The station's answer to the first credential, while requests already go: a refusal closes the link.
     let answered = link.clone();
     host.spawn(
         async move {
@@ -228,19 +234,19 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station
             if let Err(error) = answer {
                 answered.renewal_failed.set(true);
                 *answered.refused.borrow_mut() = Some(error);
-                answered.conn.close(0u32.into(), b"grant refused");
+                answered.conn.close(0u32.into(), b"credential refused");
             }
         }
         .boxed_local(),
     );
-    host.spawn(renew(host.clone(), link.clone(), grants, device).boxed_local());
+    host.spawn(renew(host.clone(), link.clone(), credentials, device).boxed_local());
     Ok(link)
 }
 
-/// Presents a fresh grant every RENEW_MS until the link closes. If one cannot
-/// be had or is refused, the link is left to run out its current grant and
+/// Presents a fresh credential every RENEW_MS until the link closes. If one cannot
+/// be had or is refused, the link is left to run out its current credential and
 /// the next `Mesh::link` opens another.
-async fn renew(host: Rc<dyn Host>, link: Rc<Link>, grants: GrantSource, device: String) {
+async fn renew(host: Rc<dyn Host>, link: Rc<Link>, credentials: CredentialSource, device: String) {
     loop {
         let wait = host.sleep(RENEW_MS);
         let closed = link.conn.closed();
@@ -248,8 +254,8 @@ async fn renew(host: Rc<dyn Host>, link: Rc<Link>, grants: GrantSource, device: 
         if let Either::Right(_) = futures::future::select(wait, closed).await {
             return;
         }
-        let renewed = match grants(device.clone()).await {
-            Ok(grant) => link.control.lock().await.exchange(&grant.grant).await.map(|_| ()),
+        let renewed = match credentials(device.clone(), false).await {
+            Ok(credential) => link.control.lock().await.exchange(&credential.credential).await.map(|_| ()),
             Err(error) => Err(error),
         };
         if renewed.is_err() {
@@ -259,7 +265,7 @@ async fn renew(host: Rc<dyn Host>, link: Rc<Link>, grants: GrantSource, device: 
     }
 }
 
-/// The control stream: grant lines out, answers back.
+/// The control stream: credential lines out, answers back.
 struct Control {
     send: SendStream,
     recv: RecvStream,
@@ -267,24 +273,24 @@ struct Control {
 }
 
 impl Control {
-    /// Sends a grant line and returns the station's answer; fails if it refused.
-    async fn exchange(&mut self, grant: &str) -> Result<Value> {
-        self.send_grant(grant).await?;
+    /// Sends a credential line and returns the station's answer; fails if it refused.
+    async fn exchange(&mut self, credential: &str) -> Result<Value> {
+        self.send(credential).await?;
         self.answer().await
     }
 
-    async fn send_grant(&mut self, grant: &str) -> Result<()> {
-        let line = format!("{}\n", json!({ "grant": grant }));
+    async fn send(&mut self, credential: &str) -> Result<()> {
+        let line = format!("{}\n", json!({ "credential": credential }));
         self.send.write_all(line.as_bytes()).await.map_err(|e| mesh_error(format!("授权没送到 station：{e}")))
     }
 
-    /// The station's answer to the grant last sent; fails if it refused.
+    /// The station's answer to the credential last sent; fails if it refused.
     async fn answer(&mut self) -> Result<Value> {
         let answer = read_line(&mut self.recv, &mut self.carry).await?.ok_or_else(|| mesh_error("station 关闭了授权通道".into()))?;
         let answer: Value = serde_json::from_str(&answer).map_err(|e| mesh_error(format!("station 的授权答复看不懂：{e}")))?;
         if let Some(error) = answer.get("error") {
             let reason = error.as_str().map(str::to_string).unwrap_or_else(|| error.to_string());
-            return Err(CoreError::new("grant_refused", format!("station 拒绝了授权：{reason}")));
+            return Err(CoreError::new("credential_refused", format!("station 拒绝了授权：{reason}")));
         }
         Ok(answer)
     }
@@ -313,7 +319,7 @@ pub struct Link {
     conn: iroh::endpoint::Connection,
     control: Mutex<Control>,
     renewal_failed: Cell<bool>,
-    /// The station's refusal of the first grant, once it answered: what the link's requests fail with.
+    /// The station's refusal of the first credential, once it answered: what the link's requests fail with.
     refused: RefCell<Option<CoreError>>,
 }
 
@@ -321,7 +327,7 @@ impl Link {
     /// One request on its own stream.
     pub async fn request(&self, head: RequestHead, body: Vec<u8>) -> Result<Reply> {
         let result = self.send_request(head, body).await;
-        // A request lost to a refused grant says so, not just that the connection went.
+        // A request lost to a refused credential says so, not just that the connection went.
         match (&result, self.refused.borrow().as_ref()) {
             (Err(_), Some(refused)) => Err(refused.clone()),
             _ => result,
@@ -364,7 +370,7 @@ impl Link {
         self.conn.paths().iter().find(|p| p.is_selected()).map(|p| if p.is_relay() { "relay" } else { "direct" })
     }
 
-    /// Open, and its grant still being renewed.
+    /// Open, and its credential still being renewed.
     fn usable(&self) -> bool {
         self.conn.close_reason().is_none() && !self.renewal_failed.get()
     }
@@ -374,8 +380,9 @@ impl Link {
 fn close_message(reason: &ConnectionError) -> String {
     match reason {
         ConnectionError::ApplicationClosed(close) => match &close.reason[..] {
-            b"grant_refused" => "station 拒绝了授权".into(),
-            b"grant_expired" => "授权已过期".into(),
+            b"credential_refused" => "station 拒绝了授权".into(),
+            b"credential_revoked" => "授权已被撤销".into(),
+            b"credential_expired" => "授权已过期".into(),
             b"station_removed" => "这台 station 已被移出 workspace".into(),
             other => format!("station 断开了连接：{}", String::from_utf8_lossy(other)),
         },
@@ -491,7 +498,7 @@ mod tests {
         tokio::task::LocalSet::new().block_on(&runtime, body);
     }
 
-    /// A station on localhost: accepts grants starting with "ok", echoes requests.
+    /// A station on localhost: accepts credentials starting with "ok", echoes requests.
     struct Station {
         endpoint: Endpoint,
         grants: Rc<RefCell<Vec<String>>>,
@@ -538,7 +545,7 @@ mod tests {
         let Ok((mut send, mut recv)) = conn.accept_bi().await else { return };
         let mut carry = Vec::new();
         let answer = |line: &str, grants: &Rc<RefCell<Vec<String>>>| {
-            let grant = serde_json::from_str::<Value>(line).unwrap()["grant"].as_str().unwrap().to_string();
+            let grant = serde_json::from_str::<Value>(line).unwrap()["credential"].as_str().unwrap().to_string();
             grants.borrow_mut().push(grant.clone());
             if grant.starts_with("ok") { json!({ "ok": true, "station": "测试" }) } else { json!({ "error": "grant signature invalid" }) }
         };
@@ -548,7 +555,7 @@ mod tests {
         if reply.get("error").is_some() {
             send.finish().ok();
             tokio::time::sleep(Duration::from_millis(200)).await;
-            conn.close(1u32.into(), b"grant_refused");
+            conn.close(1u32.into(), b"credential_refused");
             return;
         }
         let renewals = grants.clone();
@@ -581,11 +588,11 @@ mod tests {
     }
 
     /// Grants "<prefix>-1", "<prefix>-2", … and counts them.
-    fn grants(prefix: &'static str, count: Rc<Cell<u32>>) -> GrantSource {
-        Rc::new(move |device: String| {
+    fn grants(prefix: &'static str, count: Rc<Cell<u32>>) -> CredentialSource {
+        Rc::new(move |device: String, _fresh: bool| {
             assert_eq!(device.len(), 64);
             count.set(count.get() + 1);
-            let grant = Grant { grant: format!("{prefix}-{}", count.get()), expires_at: 0.0, station: String::new(), station_name: String::new(), relay_url: String::new() };
+            let grant = Credential { credential: format!("{prefix}-{}", count.get()), issued_at: 0.0, expires_at: 0.0, relay_url: String::new() };
             async move { Ok(grant) }.boxed_local()
         })
     }
@@ -608,7 +615,7 @@ mod tests {
             let (mesh, station) = setup(host.clone()).await;
             assert_eq!(host.stored(DEVICE_KEY).map(|k| k.len()), Some(32));
             let link = mesh.link(&station.id(), grants("ok", Rc::default())).await.unwrap();
-            // Requests follow the grant without waiting for its answer; by the reply the station has read it.
+            // Requests follow the credential without waiting for its answer; by the reply the station has read it.
             let mut reply = link.request(head("/admin/api/sessions"), b"{\"a\":1}".to_vec()).await.unwrap();
             assert_eq!(*station.grants.borrow(), vec!["ok-1".to_string()]);
             assert_eq!(reply.status, 200);
@@ -634,9 +641,9 @@ mod tests {
             // The link comes at once; its requests fail with the station's refusal.
             let link = mesh.link(&station.id(), grants("bad", count.clone())).await.unwrap();
             let error = link.request(head("/admin/api/sessions"), Vec::new()).await.err().unwrap();
-            assert_eq!(error.code, "grant_refused");
+            assert_eq!(error.code, "credential_refused");
             assert!(error.message.contains("station 拒绝了授权"), "{}", error.message);
-            // A refused link is not kept: the next call opens another, with a fresh grant.
+            // A refused link is not kept: the next call opens another, with a fresh credential.
             let again = mesh.link(&station.id(), grants("bad", count.clone())).await.unwrap();
             assert!(!Rc::ptr_eq(&link, &again));
             assert_eq!(count.get(), 2);
@@ -709,11 +716,11 @@ mod tests {
     fn a_refused_renewal_makes_the_next_link_reopen() {
         run(async {
             let (mesh, station) = setup(Rc::new(QuickHost(FakeHost::new()))).await;
-            let refuse_later: GrantSource = {
+            let refuse_later: CredentialSource = {
                 let count = Rc::new(Cell::new(0));
-                Rc::new(move |_device: String| {
+                Rc::new(move |_device: String, _fresh: bool| {
                     count.set(count.get() + 1);
-                    let grant = Grant { grant: if count.get() == 1 { "ok".into() } else { "revoked".into() }, expires_at: 0.0, station: String::new(), station_name: String::new(), relay_url: String::new() };
+                    let grant = Credential { credential: if count.get() == 1 { "ok".into() } else { "revoked".into() }, issued_at: 0.0, expires_at: 0.0, relay_url: String::new() };
                     async move { Ok(grant) }.boxed_local()
                 })
             };

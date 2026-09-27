@@ -13,7 +13,7 @@ async function key() {
   return { id, sign };
 }
 
-test("accounts own workspaces, invite each other, enroll stations and get grants for them", async () => {
+test("accounts own workspaces, invite each other, enroll stations and get credentials for them", async () => {
   const h = await harness();
   try {
     const alice = h.as(await h.login("alice"));
@@ -68,19 +68,33 @@ test("accounts own workspaces, invite each other, enroll stations and get grants
     const presence = await connect();
     assert.equal(presence.status, 101);
     presence.webSocket!.accept();
+    const told: any[] = [];
+    presence.webSocket!.addEventListener("message", (event) => told.push(JSON.parse(event.data as string)));
 
-    // A grant names who, where, with what role, from which device; stations verify it offline.
+    // A member's credential names who, where, with what role, from which device and session; stations verify it
+    // offline, for 30 days, whichever of the workspace's stations it is shown to.
     const device = await key();
-    const granted = await (await bob("POST", `/v1/workspaces/${home.id}/stations/${station.id}/grant`, { device: device.id })).json() as any;
+    const issued = await (await bob("POST", `/v1/workspaces/${home.id}/credential`, { device: device.id })).json() as any;
     const keys = await (await h.fetch("/.well-known/ember-grant-keys")).json() as any;
     assert.equal(keys.keys[0].d, undefined, "no private half");
-    const { payload } = await jwtVerify(granted.grant, await importJWK(keys.keys[0], "EdDSA"), { issuer: "ember-cloud", audience: station.id });
+    const { payload, protectedHeader } = await jwtVerify(issued.credential, await importJWK(keys.keys[0], "EdDSA"), { issuer: "ember-cloud" });
     assert.deepEqual([payload.ws, payload.role, payload.device, payload.email, payload.name], [home.id, "admin", device.id, "bob@example.test", "Name of bob"]);
-    assert.equal((await carol("POST", `/v1/workspaces/${home.id}/stations/${station.id}/grant`, { device: device.id })).status, 404);
+    assert.deepEqual([protectedHeader.typ, payload.exp! - payload.iat!, typeof payload.sid, issued.expires_at - issued.issued_at], ["ember-member+jwt", 30 * 86400, "string", 30 * 86400]);
+    assert.equal((await carol("POST", `/v1/workspaces/${home.id}/credential`, { device: device.id })).status, 404);
 
-    // Removing a member or a station ends what it could reach.
+    // Removing a member: no new credential, and the stations are told to refuse the ones it holds.
     assert.equal((await alice("DELETE", `/v1/workspaces/${home.id}/members/${bobSub}`)).status, 200);
-    assert.equal((await bob("POST", `/v1/workspaces/${home.id}/stations/${station.id}/grant`, { device: device.id })).status, 404);
+    assert.equal((await bob("POST", `/v1/workspaces/${home.id}/credential`, { device: device.id })).status, 404);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const revoke = told.find((frame) => frame.type === "revoke");
+    assert.deepEqual([revoke?.kind, revoke?.id, typeof revoke?.at], ["sub", bobSub, "number"]);
+    // A station connecting later hears it with its state.
+    const again = await connect();
+    again.webSocket!.accept();
+    const later: any[] = [];
+    again.webSocket!.addEventListener("message", (event) => later.push(JSON.parse(event.data as string)));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(later.find((frame) => frame.type === "state")?.revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
     assert.equal((await alice("DELETE", `/v1/workspaces/${home.id}/stations/${station.id}`)).status, 200);
     assert.equal((await connect()).status, 404);
   } finally {

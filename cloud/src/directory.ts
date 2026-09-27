@@ -24,6 +24,9 @@ export const ENROLLMENT_TTL_SEC = 60 * 60;
 const LIMITS = { workspacesPerUser: 32, membersPerWorkspace: 200, stationsPerWorkspace: 64, openInvitations: 50 };
 
 export const EVENTS_PROTOCOL = "ember-events";
+/** How long a revocation is kept and told: a day more than a credential lasts (grants.ts). */
+const REVOCATION_DAYS = 31;
+
 /** How often a station sends "ping" on its presence socket (the runtime answers "pong" without waking this object). */
 export const PING_SEC = 30;
 /** A station socket unanswered this long is taken for dead. */
@@ -61,6 +64,7 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS invitations (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, role TEXT NOT NULL, email TEXT, created_by TEXT NOT NULL, expires_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS stations (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, name TEXT NOT NULL, enrolled_at INTEGER NOT NULL, enrolled_by TEXT NOT NULL, last_seen INTEGER, version TEXT);
       CREATE TABLE IF NOT EXISTS enrollments (token_hash TEXT PRIMARY KEY, workspace TEXT NOT NULL, name TEXT NOT NULL, created_by TEXT NOT NULL, expires_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS revocations (workspace TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (workspace, kind, id));
       CREATE TABLE IF NOT EXISTS invite_codes (code TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER, used_by TEXT, used_at INTEGER, workspace TEXT);
     `);
     // users had neither column before invite codes; the table in production gains them here.
@@ -328,6 +332,8 @@ export class Directory extends DurableObject<Env> {
     if (!current) fail(404, "member_not_found");
     if (current!.role === "owner" && role !== "owner") this.#keepAnOwner(workspace);
     this.#run("UPDATE members SET role = ? WHERE workspace = ? AND sub = ?", role, workspace, target);
+    // The credentials it holds name its old role: its stations take none of them from now on (it gets a new one).
+    this.#revoke(workspace, "sub", target);
     this.#changed(workspace, false);
     this.#tell([target], LIST);
     return this.workspace(sub, workspace);
@@ -344,6 +350,7 @@ export class Directory extends DurableObject<Env> {
     }
     if (row!.role === "owner") this.#keepAnOwner(workspace);
     this.#run("DELETE FROM members WHERE workspace = ? AND sub = ?", workspace, target);
+    this.#revoke(workspace, "sub", target);
     this.#changed(workspace, true, [target]);
   }
 
@@ -411,12 +418,42 @@ export class Directory extends DurableObject<Env> {
     return this.#one("SELECT 1 AS found FROM stations WHERE id = ?", station) !== undefined;
   }
 
-  access(sub: string, workspace: string, station: string): { role: Role; station_name: string } {
-    const role = this.#role(sub, workspace);
-    const row = this.#one("SELECT name FROM stations WHERE id = ? AND workspace = ?", station, workspace);
-    if (!row) fail(404, "station_not_found");
-    return { role, station_name: row!.name as string };
+  /** A member's role, which its credential names (grants.ts). */
+  memberRole(sub: string, workspace: string): Role {
+    return this.#role(sub, workspace);
   }
+
+  // ── revocations ─────────────────────────────────────────────────────────
+  // A member's credential lasts 30 days and stations check it offline, so what takes one back is told to them: every
+  // credential of an account (`sub`) or of a sign-in session (`sid`) issued up to `at` is refused from then on. Each
+  // station hears it at once if connected, and all of its workspace's (of the last 31 days) when it connects.
+
+  /** Takes back an account's credentials in a workspace, or one session's. */
+  #revoke(workspace: string, kind: "sub" | "sid", id: string): void {
+    const at = nowSeconds();
+    this.#run("INSERT INTO revocations (workspace, kind, id, at) VALUES (?, ?, ?, ?) ON CONFLICT (workspace, kind, id) DO UPDATE SET at = excluded.at", workspace, kind, id, at);
+    this.#run("DELETE FROM revocations WHERE at < ?", at - REVOCATION_DAYS * 86400);
+    const frame = JSON.stringify({ type: "revoke", kind, id, at });
+    for (const row of this.#rows("SELECT id FROM stations WHERE workspace = ?", workspace)) {
+      for (const ws of this.#presence(row.id as string)) {
+        try {
+          ws.send(frame);
+        } catch {
+          // Closing already: it hears all of them when it connects again.
+        }
+      }
+    }
+  }
+
+  /** Sessions signed out (all of an account's with none named): their credentials go, in every workspace of the account. */
+  revokeSessions(sub: string, sids: string[] | null): void {
+    for (const row of this.#rows("SELECT workspace FROM members WHERE sub = ?", sub)) {
+      const workspace = row.workspace as string;
+      if (sids === null) this.#revoke(workspace, "sub", sub);
+      else for (const sid of sids) this.#revoke(workspace, "sid", sid);
+    }
+  }
+
 
   // ── the admin's console ─────────────────────────────────────────────────
   // The caller has checked that the account is the admin's (admin.ts).
@@ -553,7 +590,8 @@ export class Directory extends DurableObject<Env> {
     if (!sockets.length) return;
     const row = this.#one("SELECT s.workspace, w.name AS workspace_name, s.name FROM stations s JOIN workspaces w ON w.id = s.workspace WHERE s.id = ?", station);
     if (!row) return;
-    const frame = JSON.stringify({ type: "state", ...row, grant_keys: grantKeys(this.env) });
+    const revocations = this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace as string, nowSeconds() - REVOCATION_DAYS * 86400);
+    const frame = JSON.stringify({ type: "state", ...row, grant_keys: grantKeys(this.env), revocations });
     for (const ws of sockets) ws.send(frame);
   }
 

@@ -1,6 +1,6 @@
 //! `Core`: takes messages from connected UIs, answers calls, keeps
 //! subscriptions. Construction wires the modules together: accounts → cloud →
-//! mesh links (grants come from cloud as the account that reaches the
+//! mesh links (member credentials come from cloud as the account that reaches the
 //! workspace) → stations; the store routes topics to accounts (accounts,
 //! workspaces, workspace), stations (everything with a station) or the views.
 //!
@@ -27,14 +27,14 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use crate::accounts::{AccountView, Accounts};
-use crate::cloud::Cloud;
+use crate::cloud::{Cloud, Credential};
 use crate::data::{Center, Data};
 use crate::error::{CoreError, Result};
 use crate::host::Host;
 use crate::kept::Kept;
-use crate::mesh::{GrantSource, Mesh};
+use crate::mesh::{CredentialSource, Mesh};
 use crate::protocol::{ClientId, ClientMessage, CoreMessage, RequestId, Topic};
-use crate::station::{self, MeshSource, StationAddr, StationGrants, Stations, TopicSink};
+use crate::station::{self, MeshSource, StationAddr, StationCredentials, Stations, TopicSink};
 use crate::store::{Source, Store};
 use crate::sync::Sync;
 use crate::trace::{self, Kind, Span, Tracer};
@@ -142,7 +142,7 @@ impl Core {
                 })
             });
             let center = Rc::new(Center { store: store.clone(), data: data.clone() });
-            let wire = station::wire(host.clone(), mesh_source(me.clone()), grants(me.clone()));
+            let wire = station::wire(host.clone(), mesh_source(me.clone()), credentials(me.clone()));
             let kept = Kept::new(host.clone());
             let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone());
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
@@ -331,22 +331,22 @@ fn mesh_source(core: Weak<Inner>) -> MeshSource {
     })
 }
 
-/// Grants for a station, asked for as whichever account reaches its workspace.
-fn grants(core: Weak<Inner>) -> StationGrants {
-    Rc::new(move |workspace: &str, station: &str| {
-        let (core, workspace, station) = (core.clone(), workspace.to_string(), station.to_string());
-        let source: GrantSource = Rc::new(move |device: String| {
-            let (core, workspace, station) = (core.clone(), workspace.clone(), station.clone());
-            async move {
-                let core = core.upgrade().ok_or_else(gone)?;
-                let sub = core.owner(&workspace).await?;
-                core.cloud.grant(&sub, &workspace, &station, &device).await
-            }
-            .boxed_local()
+/// This device's member credential for a workspace, as whichever account reaches it (`Inner::credential`).
+fn credentials(core: Weak<Inner>) -> StationCredentials {
+    Rc::new(move |workspace: &str| {
+        let (core, workspace) = (core.clone(), workspace.to_string());
+        let source: CredentialSource = Rc::new(move |device: String, fresh: bool| {
+            let (core, workspace) = (core.clone(), workspace.clone());
+            async move { core.upgrade().ok_or_else(gone)?.credential(&workspace, &device, fresh).await }.boxed_local()
         });
         source
     })
 }
+
+/// Where a device's member credentials are kept (`<key>/<account>/<workspace>/<device>`), and how long one serves
+/// before a new one is asked for.
+const CREDENTIAL_KEY: &str = "credential";
+const CREDENTIAL_FOR_S: f64 = 24.0 * 60.0 * 60.0;
 
 fn gone() -> CoreError {
     CoreError::new("closed", "核心已关闭")
@@ -486,10 +486,38 @@ impl Inner {
         result
     }
 
+    /// This device's member credential for a workspace, kept on the device: what gets it into the workspace's
+    /// stations with no ember cloud on the way (on a LAN, or the cloud down). Kept, it serves for a day; then, or when
+    /// a station refused it (`fresh`), a new one is asked for — and if ember cloud cannot be reached, the kept one goes
+    /// on serving until it runs out (30 days).
+    async fn credential(&self, workspace: &str, device: &str, fresh: bool) -> Result<Credential> {
+        let sub = self.owner(workspace).await?;
+        let key = format!("{CREDENTIAL_KEY}/{sub}/{workspace}/{device}");
+        let now = self.host.now_ms() / 1000.0;
+        let kept = self.host.storage_get(&key).await.ok().flatten().and_then(|bytes| serde_json::from_slice::<Credential>(&bytes).ok());
+        let kept = kept.filter(|c| c.expires_at > now + 60.0 && !fresh);
+        if let Some(c) = kept.as_ref().filter(|c| now - c.issued_at < CREDENTIAL_FOR_S) {
+            return Ok(c.clone());
+        }
+        match self.cloud.credential(&sub, workspace, device).await {
+            Ok(credential) => {
+                let _ = self.host.storage_set(&key, serde_json::to_vec(&credential).unwrap_or_default()).await;
+                Ok(credential)
+            }
+            Err(error) => kept.ok_or(error),
+        }
+    }
+
     /// The relay the mesh uses, from any account's `/v1/me`.
     async fn relay_url(&self) -> Result<String> {
         if let Some(url) = self.relay_url.borrow().clone() {
             return Ok(url);
+        }
+        // As last heard (kept on the device): the mesh comes up without ember cloud.
+        for account in self.accounts.list() {
+            if let Some(url) = self.data.record("me", &account.sub).and_then(|me| me.get("relay_url")?.as_str().map(str::to_string)) {
+                return Ok(url);
+            }
         }
         let mut last = CoreError::signed_out("还没有登录的账号");
         for (_, me) in self.load_me().await {

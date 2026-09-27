@@ -2,13 +2,14 @@
 //!
 //! `run` runs the station: its Node part (src/main.ts) as a child, watched and started again when it ends (node.rs);
 //! the admin page on a loopback port for a browser here (local.rs); and, once the station is in a workspace, its way
-//! into ember cloud. It holds a presence socket to ember cloud (connected is online) while the Node part is up,
-//! accepts iroh connections from clients that present a grant signed by ember cloud, and relays each stream's request
-//! to the Node part's admin API, on its Unix socket, with the verified identity attached. `enroll` redeems a one-time
-//! token from a workspace admin, proving this station holds its iroh key.
+//! into ember cloud. It holds a presence socket to ember cloud (connected is online) while the Node part is up — which
+//! also brings what ember cloud revokes — accepts iroh connections from clients that present a member's credential
+//! signed by ember cloud (checked offline: the cloud need not be reachable), and relays each stream's request to the
+//! Node part's admin API, on its Unix socket, with the verified identity attached. `enroll` redeems a one-time token
+//! from a workspace admin, proving this station holds its iroh key.
 //!
 //! Wire format on ALPN `ember/admin/1`: the first bidirectional stream carries
-//! grants (one JSON line each, answered with one JSON line; a later line
+//! credentials (`{"credential": …}`, one JSON line each, answered with one JSON line; a later line
 //! renews). Every other stream is one request: a JSON head line
 //! `{"method","path","headers"}`, then the body until the stream finishes;
 //! answered by a JSON head line `{"status","headers"}` and the response body.
@@ -62,6 +63,17 @@ struct CloudState {
     name: String,
     relay_url: String,
     grant_keys: Value,
+    /// What ember cloud took back (a member removed, a role changed, a session signed out): credentials of that
+    /// account (`sub`) or session (`sid`) issued up to `at` are refused. Kept, so it holds with the cloud away.
+    #[serde(default)]
+    revocations: Vec<Revocation>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+struct Revocation {
+    kind: String,
+    id: String,
+    at: u64,
 }
 
 fn mesh_dir(data: &Path) -> PathBuf {
@@ -138,13 +150,14 @@ async fn enroll(data: &Path, origin: &str, token: &str) -> Result<()> {
         name: text("name"),
         relay_url: text("relay_url"),
         grant_keys: body["grant_keys"].clone(),
+        revocations: Vec::new(),
     };
     save_state(data, &state)?;
     println!("已加入 workspace「{}」，这台 station 叫「{}」（{}）。", state.workspace_name, state.name, &station[..12]);
     Ok(())
 }
 
-/// Who a verified grant speaks for.
+/// Who a verified credential speaks for.
 #[derive(Clone, Serialize)]
 struct Viewer {
     sub: String,
@@ -155,42 +168,65 @@ struct Viewer {
     device: String,
 }
 
-/// Verifies an ember cloud grant for this station and the connecting device.
-fn verify_grant(grant: &str, keys: &Value, station: &str, workspace: &str, device: &str) -> Result<(Viewer, u64)> {
-    let mut parts = grant.split('.');
-    let (Some(head), Some(body), Some(sig), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else { bail!("malformed grant") };
+/// A credential that checked out: who, until when, and what could take it back (when issued, which session).
+#[derive(Clone)]
+struct Admitted {
+    viewer: Viewer,
+    exp: u64,
+    iat: u64,
+    sid: String,
+}
+
+impl Admitted {
+    /// Whether ember cloud took it back since it was issued.
+    fn revoked(&self, revocations: &[Revocation]) -> bool {
+        revocations.iter().any(|r| self.iat <= r.at && ((r.kind == "sub" && r.id == self.viewer.sub) || (r.kind == "sid" && r.id == self.sid)))
+    }
+}
+
+/// Verifies a member's credential (ember cloud's, for this station's workspace, 30 days) for the connecting device,
+/// offline: with the key pinned at enrollment, and what was revoked since.
+fn verify_member(credential: &str, keys: &Value, workspace: &str, device: &str, revocations: &[Revocation]) -> Result<Admitted> {
+    let mut parts = credential.split('.');
+    let (Some(head), Some(body), Some(sig), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else { bail!("malformed credential") };
     let header: Value = serde_json::from_slice(&B64.decode(head)?)?;
-    if header["alg"] != "EdDSA" {
-        bail!("unexpected grant algorithm");
+    if header["alg"] != "EdDSA" || header["typ"] != "ember-member+jwt" {
+        bail!("not a member's credential");
     }
     let kid = header["kid"].as_str();
     let jwk = keys["keys"]
         .as_array()
         .and_then(|keys| keys.iter().find(|k| kid.is_none() || k["kid"].as_str() == kid))
-        .ok_or_else(|| anyhow!("unknown grant key"))?;
-    let x: [u8; 32] = B64.decode(jwk["x"].as_str().unwrap_or_default())?.try_into().map_err(|_| anyhow!("bad grant key"))?;
+        .ok_or_else(|| anyhow!("unknown credential key"))?;
+    let x: [u8; 32] = B64.decode(jwk["x"].as_str().unwrap_or_default())?.try_into().map_err(|_| anyhow!("bad credential key"))?;
     let key = ed25519_dalek::VerifyingKey::from_bytes(&x)?;
     let signature = ed25519_dalek::Signature::from_slice(&B64.decode(sig)?)?;
-    key.verify_strict(format!("{head}.{body}").as_bytes(), &signature).map_err(|_| anyhow!("grant signature invalid"))?;
+    key.verify_strict(format!("{head}.{body}").as_bytes(), &signature).map_err(|_| anyhow!("credential signature invalid"))?;
     let claims: Value = serde_json::from_slice(&B64.decode(body)?)?;
     let text = |k: &str| claims[k].as_str().unwrap_or_default().to_string();
-    let exp = claims["exp"].as_u64().unwrap_or(0);
     if text("iss") != "ember-cloud" {
-        bail!("grant not issued by ember cloud");
-    }
-    if text("aud") != station {
-        bail!("grant is for another station");
+        bail!("credential not issued by ember cloud");
     }
     if text("ws") != workspace {
-        bail!("grant is for another workspace");
+        bail!("credential is for another workspace");
     }
     if text("device") != device {
-        bail!("grant is for another device");
+        bail!("credential is for another device");
     }
+    let exp = claims["exp"].as_u64().unwrap_or(0);
     if exp <= now() {
-        bail!("grant expired");
+        bail!("credential expired");
     }
-    Ok((Viewer { sub: text("sub"), email: text("email"), name: text("name"), role: text("role"), workspace: text("ws"), device: device.to_string() }, exp))
+    let admitted = Admitted {
+        viewer: Viewer { sub: text("sub"), email: text("email"), name: text("name"), role: text("role"), workspace: text("ws"), device: device.to_string() },
+        exp,
+        iat: claims["iat"].as_u64().unwrap_or(0),
+        sid: text("sid"),
+    };
+    if admitted.revoked(revocations) {
+        bail!("credential revoked");
+    }
+    Ok(admitted)
 }
 
 /// Reads one newline-terminated JSON line; returns it and whatever followed.
@@ -457,21 +493,32 @@ fn removed(station: &Station) {
     *station.removed.lock().unwrap() = true;
 }
 
-/// ember cloud says where the station is and what it is called: on connect and whenever that changes.
+/// ember cloud says where the station is and what it is called (on connect and whenever that changes, with every
+/// revocation it keeps), and what it takes back as it does.
 fn apply_state(station: &Station, text: &str) {
     let Ok(body) = serde_json::from_str::<Value>(text) else { return };
-    if body["type"] != "state" {
-        return;
-    }
     let mut guard = station.state.lock().unwrap();
     let s = &mut *guard;
-    for (field, key) in [(&mut s.workspace, "workspace"), (&mut s.workspace_name, "workspace_name"), (&mut s.name, "name")] {
-        if let Some(value) = body[key].as_str() {
-            *field = value.to_string();
+    match body["type"].as_str() {
+        Some("state") => {
+            for (field, key) in [(&mut s.workspace, "workspace"), (&mut s.workspace_name, "workspace_name"), (&mut s.name, "name")] {
+                if let Some(value) = body[key].as_str() {
+                    *field = value.to_string();
+                }
+            }
+            if body["grant_keys"].is_object() {
+                s.grant_keys = body["grant_keys"].clone();
+            }
+            if let Ok(all) = serde_json::from_value::<Vec<Revocation>>(body["revocations"].clone()) {
+                s.revocations = all;
+            }
         }
-    }
-    if body["grant_keys"].is_object() {
-        s.grant_keys = body["grant_keys"].clone();
+        Some("revoke") => {
+            let Ok(revocation) = serde_json::from_value::<Revocation>(body.clone()) else { return };
+            s.revocations.retain(|r| !(r.kind == revocation.kind && r.id == revocation.id));
+            s.revocations.push(revocation);
+        }
+        _ => return,
     }
     let _ = save_state(&station.data, s);
 }
@@ -482,51 +529,54 @@ async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
         bail!("station removed");
     }
     let device = hex::encode(conn.remote_id().as_bytes());
-    // The first stream carries the grant; nothing else is served before it checks out.
+    // The first stream carries the credential; nothing else is served before it checks out.
     let (mut send, mut recv) = conn.accept_bi().await?;
     let mut carry = Vec::new();
-    let check = |line: &Value| -> Result<(Viewer, u64)> {
-        let s = station.state.lock().unwrap();
-        verify_grant(line["grant"].as_str().unwrap_or_default(), &s.grant_keys, &s.station, &s.workspace, &device)
+    let check = {
+        let (station, device) = (station.clone(), device.clone());
+        move |line: &Value| -> Result<Admitted> {
+            let s = station.state.lock().unwrap();
+            verify_member(line["credential"].as_str().unwrap_or_default(), &s.grant_keys, &s.workspace, &device, &s.revocations)
+        }
     };
-    let first = read_line(&mut recv, &mut carry).await?.ok_or_else(|| anyhow!("no grant"))?;
-    let (viewer, exp) = match check(&first) {
+    let first = read_line(&mut recv, &mut carry).await?.ok_or_else(|| anyhow!("no credential"))?;
+    let admitted = match check(&first) {
         Ok(v) => v,
         Err(error) => {
             write_line(&mut send, &json!({ "error": error.to_string() })).await.ok();
             send.finish().ok();
             tokio::time::sleep(Duration::from_millis(200)).await;
-            conn.close(1u32.into(), b"grant_refused");
+            conn.close(1u32.into(), b"credential_refused");
             return Err(error);
         }
     };
     let station_name = station.state.lock().unwrap().name.clone();
-    write_line(&mut send, &json!({ "ok": true, "station": station_name, "expires_at": exp })).await?;
-    info!(email = %viewer.email, device = %&device[..12], "client connected");
-    let current = Arc::new(Mutex::new((viewer, exp)));
+    write_line(&mut send, &json!({ "ok": true, "station": station_name, "expires_at": admitted.exp })).await?;
+    info!(email = %admitted.viewer.email, device = %&device[..12], "client connected");
+    let current = Arc::new(Mutex::new(admitted));
 
-    // Renewals on the grant stream; the connection closes when the grant runs out.
+    // Renewals on the credential stream; the connection closes when the credential runs out or is revoked.
     let renew = {
-        let (current, station, conn, device) = (current.clone(), station.clone(), conn.clone(), device.clone());
+        let (current, station, conn, check) = (current.clone(), station.clone(), conn.clone(), check.clone());
         async move {
             loop {
                 tokio::select! {
                     line = read_line(&mut recv, &mut carry) => {
                         let Ok(Some(line)) = line else { break };
-                        let verified = {
-                            let s = station.state.lock().unwrap();
-                            verify_grant(line["grant"].as_str().unwrap_or_default(), &s.grant_keys, &s.station, &s.workspace, &device)
-                        };
-                        let reply = match verified {
-                            Ok((viewer, exp)) => { *current.lock().unwrap() = (viewer, exp); json!({ "ok": true, "expires_at": exp }) }
+                        let reply = match check(&line) {
+                            Ok(admitted) => { let exp = admitted.exp; *current.lock().unwrap() = admitted; json!({ "ok": true, "expires_at": exp }) }
                             Err(error) => json!({ "error": error.to_string() }),
                         };
                         if write_line(&mut send, &reply).await.is_err() { break }
                     }
                     _ = tokio::time::sleep(Duration::from_secs(5)) => {}
                 }
-                if current.lock().unwrap().1 <= now() {
-                    conn.close(3u32.into(), b"grant_expired");
+                let (expired, revoked) = {
+                    let admitted = current.lock().unwrap();
+                    (admitted.exp <= now(), admitted.revoked(&station.state.lock().unwrap().revocations))
+                };
+                if expired || revoked {
+                    conn.close(3u32.into(), if revoked { b"credential_revoked".as_slice() } else { b"credential_expired".as_slice() });
                     break;
                 }
             }
@@ -541,11 +591,12 @@ async fn serve(station: Arc<Station>, conn: Connection) -> Result<()> {
         };
         let accepted = (SystemTime::now(), Instant::now());
         let via = conn.paths().iter().find(|p| p.is_selected()).map(|p| if p.is_relay() { "relay" } else { "direct" });
-        let (viewer, exp) = current.lock().unwrap().clone();
-        if exp <= now() {
-            conn.close(3u32.into(), b"grant_expired");
+        let admitted = current.lock().unwrap().clone();
+        if admitted.exp <= now() || admitted.revoked(&station.state.lock().unwrap().revocations) {
+            conn.close(3u32.into(), b"credential_expired");
             return Ok(());
         }
+        let viewer = admitted.viewer;
         let station = station.clone();
         tokio::spawn(async move {
             if let Err(error) = relay_request(&station, &viewer, (accepted, via), send, recv).await {

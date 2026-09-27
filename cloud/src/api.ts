@@ -7,7 +7,7 @@ import { isAdmin } from "./admin";
 import { bearerToken, denied, readJson, reply, verifyToken, type Claims } from "./auth";
 import { EVENTS_PROTOCOL, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
-import { grantKeys, signGrant, validKeyHex, verifyKeySignature } from "./grants";
+import { grantKeys, signCredential, validKeyHex, verifyKeySignature } from "./grants";
 import { receiveTraces } from "./tracing";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
@@ -163,17 +163,18 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       return { ...made, install: `curl -fsSL ${env.PUBLIC_ORIGIN}/install.sh | sh -s -- ${made.token}`, command: `ember station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
     });
   }
+  // A member's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
+  if (kind === "credential" && !target && method === "POST") {
+    if (!validKeyHex(input.device)) return reply({ error: "invalid_device" }, 400);
+    return directory(async () => {
+      const role = await dir.memberRole(sub, ws);
+      const signed = await signCredential(env, { sub, email: claims.email, name: claims.name ?? "", ws, role, device: input.device as string, sid: claims.sid });
+      return { ...signed, relay_url: env.RELAY_URL || env.PUBLIC_ORIGIN };
+    });
+  }
   if (kind === "stations" && target && validKeyHex(target)) {
     if (!action && method === "PATCH") return directory(() => dir.renameStation(sub, ws, target, text("name")));
     if (!action && method === "DELETE") return directory(() => dir.removeStation(sub, ws, target));
-    if (action === "grant" && method === "POST") {
-      if (!validKeyHex(input.device)) return reply({ error: "invalid_device" }, 400);
-      return directory(async () => {
-        const access = await dir.access(sub, ws, target);
-        const signed = await signGrant(env, { sub, email: claims.email, name: claims.name ?? "", ws, role: access.role, aud: target, device: input.device as string });
-        return { ...signed, station: target, station_name: access.station_name, relay_url: env.RELAY_URL || env.PUBLIC_ORIGIN };
-      });
-    }
   }
   return reply({ error: "not_found" }, 404);
 }

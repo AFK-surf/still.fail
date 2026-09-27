@@ -34,7 +34,7 @@ use crate::entries::n_of;
 use crate::error::{CoreError, Result};
 use crate::host::{Host, HttpRequest};
 use crate::kept::{Kept, Log};
-use crate::mesh::{GrantSource, Mesh, RequestHead};
+use crate::mesh::{CredentialSource, Mesh, RequestHead};
 use crate::protocol::Topic;
 use crate::store::{Source, Store};
 use crate::trace::{Kind, Span, SpanContext, Tracer, route};
@@ -164,17 +164,18 @@ impl StationWire for HttpWire {
 /// This device's endpoint, bound when first needed.
 pub type MeshSource = Rc<dyn Fn() -> LocalBoxFuture<'static, Result<Rc<Mesh>>>>;
 /// Grants for one station, given (workspace, station): the caller decides which account asks.
-pub type StationGrants = Rc<dyn Fn(&str, &str) -> GrantSource>;
+/// This device's credential for a workspace's stations (every one of them takes the same).
+pub type StationCredentials = Rc<dyn Fn(&str) -> CredentialSource>;
 
 /// Remote stations, over mesh links.
 pub struct MeshWire {
     mesh: MeshSource,
-    grants: StationGrants,
+    credentials: StationCredentials,
 }
 
 impl MeshWire {
-    pub fn new(mesh: MeshSource, grants: StationGrants) -> Rc<MeshWire> {
-        Rc::new(MeshWire { mesh, grants })
+    pub fn new(mesh: MeshSource, credentials: StationCredentials) -> Rc<MeshWire> {
+        Rc::new(MeshWire { mesh, credentials })
     }
 }
 
@@ -184,10 +185,10 @@ impl StationWire for MeshWire {
             return async { Err(CoreError::invalid("本地站点不走 mesh")) }.boxed_local();
         };
         let mesh = (self.mesh)();
-        let grants = (self.grants)(&workspace, &station);
+        let credentials = (self.credentials)(&workspace);
         async move {
             let mesh = mesh.await?;
-            let link = mesh.link(&station, grants).await?;
+            let link = mesh.link(&station, credentials).await?;
             let reply = link.request(head, body).await?;
             let (status, headers) = (reply.status, reply.headers.clone());
             let body = futures::stream::unfold(reply, |mut reply| async move { reply.next().await.map(|chunk| (chunk, reply)) });
@@ -219,8 +220,8 @@ impl StationWire for RoutedWire {
 }
 
 /// The real wire: HTTP for `local`, mesh links for the rest.
-pub fn wire(host: Rc<dyn Host>, mesh: MeshSource, grants: StationGrants) -> Rc<dyn StationWire> {
-    RoutedWire::new(HttpWire::new(host), MeshWire::new(mesh, grants))
+pub fn wire(host: Rc<dyn Host>, mesh: MeshSource, credentials: StationCredentials) -> Rc<dyn StationWire> {
+    RoutedWire::new(HttpWire::new(host), MeshWire::new(mesh, credentials))
 }
 
 // ── where topic values go ───────────────────────────────────────────────────
@@ -547,7 +548,7 @@ impl Stations {
         }
         headers.push(("traceparent".into(), span.context().traceparent()));
         let head = RequestHead { method: method.to_string(), path, headers };
-        // Under the request's span: opening the link it needs (a grant, a connection) shows as part of it.
+        // Under the request's span: opening the link it needs (a credential, a connection) shows as part of it.
         let reply = self.tracer.instrument(Some(span.context()), self.wire.request(station, head, body));
         (span, reply)
     }

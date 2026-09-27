@@ -9,7 +9,7 @@
 // Development-only routes (never in the Worker), on either port:
 //   /__dev/login?user=alice  signs that account into the browser (on that origin) and goes to /
 //   /__dev/account?user=alice  that account as JSON, for the core's `migrate` (native apps)
-//   /__dev/grant?device=hex  a grant for the first station of alice's first workspace
+//   /__dev/credential?device=hex  a member's credential for alice's first workspace
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect } from "node:net";
@@ -62,12 +62,10 @@ async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
       location.replace("/");</script>`);
     return;
   }
-  if (url.pathname === "/__dev/grant") {
-    const view = await (await alice("GET", `/v1/workspaces/${workspace.id}`)).json() as { stations: { id: string }[] };
+  if (url.pathname === "/__dev/credential") {
     const headers = { "access-control-allow-origin": "*", "content-type": "application/json" };
-    if (!view.stations[0]) return void res.writeHead(409, headers).end(JSON.stringify({ error: "no station enrolled yet" }));
-    const granted = await alice("POST", `/v1/workspaces/${workspace.id}/stations/${view.stations[0].id}/grant`, { device: url.searchParams.get("device") });
-    return void res.writeHead(granted.status, headers).end(await granted.text());
+    const issued = await alice("POST", `/v1/workspaces/${workspace.id}/credential`, { device: url.searchParams.get("device") });
+    return void res.writeHead(issued.status, headers).end(await issued.text());
   }
   // Everything else is the Worker's, on the host it was asked on.
   const chunks: Buffer[] = [];

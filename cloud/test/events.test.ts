@@ -123,7 +123,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     const online: AccountEvent = { type: "station", workspace: w, id: station.id, online: true };
     await expect(on, { alice: [online], bob: [online] }, "station online");
     await first.ping!();
-    assert.deepEqual(first.frames![0], { type: "state", workspace: w, workspace_name: "House", name: "studio", grant_keys: first.frames![0].grant_keys });
+    assert.deepEqual(first.frames![0], { type: "state", workspace: w, workspace_name: "House", name: "studio", grant_keys: first.frames![0].grant_keys, revocations: [] });
     let seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.deepEqual([seen.online, seen.version], [true, "0.2.0"]);
 

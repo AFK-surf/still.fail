@@ -114,7 +114,7 @@ export class Account extends DurableObject<Env> {
       if (session.refreshHash !== hash || session.generation !== claims.gen) {
         // A validly signed older refresh credential outside the exact retry is
         // evidence of reuse. Revoke the family, including its access credentials.
-        this.revoke(data, session.id);
+        await this.revoke(data, session.id);
         return reply({ error: "refresh_reused" }, 401);
       }
       session.generation++;
@@ -133,9 +133,11 @@ export class Account extends DurableObject<Env> {
     });
   }
 
-  private revoke(data: AccountData, id?: string) {
+  /** Ends one session, or all of them; the stations of the account's workspaces stop taking their credentials too. */
+  private async revoke(data: AccountData, id?: string) {
     data.sessions = id ? data.sessions.filter((s) => s.id !== id) : [];
     this.save(data);
+    await this.env.DIRECTORY.getByName("primary").revokeSessions(data.sub, id ? [id] : null);
   }
 
   async logout(token: string, all: boolean): Promise<Response> {
@@ -148,7 +150,7 @@ export class Account extends DurableObject<Env> {
     if (!data || data.sub !== claims.sub) return denied();
     const session = this.session(data, claims);
     if (all && (!session || session.refreshHash !== hash)) return denied();
-    this.revoke(data, all ? undefined : claims.sid);
+    await this.revoke(data, all ? undefined : claims.sid);
     await this.schedule(data);
     return reply({ revoked: true, scope: all ? "account" : "session" });
   }
@@ -157,7 +159,7 @@ export class Account extends DurableObject<Env> {
     const data = this.data();
     if (!data) return reply({ error: "account_not_found" }, 404);
     data.blocked = blocked;
-    if (blocked) this.revoke(data);
+    if (blocked) await this.revoke(data);
     else this.save(data);
     await this.schedule(data);
     return reply({ blocked: data.blocked });
@@ -218,7 +220,7 @@ export class Account extends DurableObject<Env> {
       });
     const target = /^\/v1\/auth\/sessions\/([0-7][0-9A-HJKMNP-TV-Z]{25})$/.exec(path)?.[1];
     if (target && request.method === "DELETE") {
-      this.revoke(data!, target);
+      await this.revoke(data!, target);
       await this.schedule(data!);
       return reply({ revoked: true });
     }

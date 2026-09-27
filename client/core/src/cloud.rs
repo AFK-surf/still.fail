@@ -12,13 +12,13 @@ use crate::error::{CoreError, Result};
 use crate::host::{Host, HttpRequest};
 use crate::trace::{Kind, Tracer, route};
 
-/// POST /v1/workspaces/:ws/stations/:st/grant {device} answers this.
+/// A member's credential for this device (POST /v1/workspaces/:ws/credential {device}): every station of the
+/// workspace takes it, checking it offline, until `expires_at` (30 days; seconds).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Grant {
-    pub grant: String,
+pub struct Credential {
+    pub credential: String,
+    pub issued_at: f64,
     pub expires_at: f64,
-    pub station: String,
-    pub station_name: String,
     pub relay_url: String,
 }
 
@@ -98,8 +98,8 @@ impl Cloud {
         self.request(sub, "GET", "/v1/me", None).await
     }
 
-    pub async fn grant(&self, sub: &str, workspace: &str, station: &str, device: &str) -> Result<Grant> {
-        let path = format!("/v1/workspaces/{}/stations/{}/grant", encode_component(workspace), encode_component(station));
+    pub async fn credential(&self, sub: &str, workspace: &str, device: &str) -> Result<Credential> {
+        let path = format!("/v1/workspaces/{}/credential", encode_component(workspace));
         let answer = self.request(sub, "POST", &path, Some(json!({ "device": device }))).await?;
         serde_json::from_value(answer).map_err(|e| CoreError::new("bad_response", format!("ember cloud 的回复无法解析：{e}")))
     }
@@ -198,17 +198,15 @@ mod tests {
     }
 
     #[test]
-    fn grant_posts_the_device() {
+    fn a_credential_is_asked_for_the_device() {
         run(async {
             let host = FakeHost::new();
-            host.on_fetch(|_| {
-                json_response(200, json!({ "grant": "g", "expires_at": 10.0, "station": "st1", "station_name": "书房", "relay_url": "https://relay" }))
-            });
+            host.on_fetch(|_| json_response(200, json!({ "credential": "c", "issued_at": 1.0, "expires_at": 10.0, "relay_url": "https://relay" })));
             let cloud = cloud(&host).await;
-            let grant = cloud.grant("s", "ws 1", "st1", "dev-key").await.unwrap();
-            assert_eq!(grant.station_name, "书房");
+            let credential = cloud.credential("s", "ws 1", "dev-key").await.unwrap();
+            assert_eq!((credential.credential.as_str(), credential.expires_at), ("c", 10.0));
             let request = host.requests.borrow()[0].clone();
-            assert_eq!((request.method.as_str(), request.url.as_str()), ("POST", "https://ember.test/v1/workspaces/ws%201/stations/st1/grant"));
+            assert_eq!((request.method.as_str(), request.url.as_str()), ("POST", "https://ember.test/v1/workspaces/ws%201/credential"));
             assert_eq!(serde_json::from_slice::<Value>(request.body.as_deref().unwrap()).unwrap(), json!({ "device": "dev-key" }));
         });
     }
