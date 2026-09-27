@@ -3,7 +3,7 @@
 // becoming its chat, one chat to the next) moves it without making it again. What is typed, the focus, a composition
 // under way all stay. What is typed is kept by chat (its `draftKey`): each chat has its own, and a new chat's goes on
 // into the chat it makes.
-import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Composer, type ComposerProps } from "./Chat.tsx";
 import { StationContext, type Station } from "./station.tsx";
 
@@ -45,8 +45,8 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     if (el.style.top !== top) el.style.top = top;
     if (el.style.width !== width) el.style.width = width;
   };
-  // Without a place for a while (not a chat page), it is put away; for a moment (one page giving way to the next) it
-  // stays where it was, focus and all.
+  // Without a place (not a chat page), it is put away by the next frame; while a new chat hands its draft on to the chat
+  // it makes (the chat page may take a moment to hold a place), it stays where it was, focus and all.
   const [shown, setShown] = useState(true);
   const away = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [dock] = useState<Dock>(() => ({
@@ -55,7 +55,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
       if (slot.current !== at) return;
       slot.current = null;
       clearTimeout(away.current);
-      away.current = setTimeout(() => { if (!slot.current) setShown(false); }, 1000);
+      away.current = setTimeout(() => { if (!slot.current) setShown(false); }, carry.current ? 1000 : 16);
     },
     height: 0,
     carryTo(key) { carry.current = key; },
@@ -76,13 +76,22 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     resize.observe(el);
     return () => resize.disconnect();
   }, [made]);
+  // The frame its layout changes with the page (a chat's foot, a new chat's roomy box) it changes at once: eased, its
+  // corners showed as a jump (app.css eases them as it grows while typed in).
+  const [settled, setSettled] = useState(spec?.variant);
+  const switching = spec !== null && spec.variant !== settled;
+  useEffect(() => {
+    if (!switching) return;
+    const frame = requestAnimationFrame(() => setSettled(spec.variant));
+    return () => cancelAnimationFrame(frame);
+  }, [switching, spec?.variant]);
   // Changes only with the height: the places re-render then, not each time a page hands over what it writes to.
   const value = useMemo(() => ({ ...dock, height }), [dock, height]);
   return (
     <DockContext.Provider value={value}>
       {children}
       {spec && (
-        <div ref={box} className="composer-dock" data-variant={spec.variant} hidden={!shown}>
+        <div ref={box} className="composer-dock" data-variant={spec.variant} data-switching={switching || undefined} hidden={!shown}>
           <StationContext.Provider value={spec.station}>
             <Composer {...spec} carry={carry} />
           </StationContext.Provider>

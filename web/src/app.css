@@ -1224,6 +1224,7 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .composer-dock .composer, .composer-dock .composer-wrap { border-top: 0; }
 .composer-dock[data-variant="new"] .composer-wrap { padding: 0; text-align: left; }
 .composer-dock[data-variant="new"] .composer-box { min-height: 96px; }
+.composer-dock[data-switching] .composer-box { transition: none; }
 .new-chat .illus { margin-bottom: 4px; }
 @media (max-height: 640px) { .new-chat .illus { display: none; } }
 .new-chat-status { min-height: 1.5em; margin: 0; font-size: var(--text-xs); color: var(--muted); }
