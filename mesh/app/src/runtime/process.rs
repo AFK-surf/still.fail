@@ -141,6 +141,13 @@ impl GroupProcess {
         let _ = tokio::time::timeout(grace, self.exited()).await;
         if group_alive(self.pgid) {
             signal_group(self.pgid, libc::SIGKILL);
+            // Gone once the system has taken them away, a moment after.
+            for _ in 0..100 {
+                if !group_alive(self.pgid) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
         }
         let _ = self.store.forget_process(self.pgid as i64);
     }
