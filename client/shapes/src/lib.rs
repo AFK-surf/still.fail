@@ -400,6 +400,9 @@ pub struct SlackIdentity {
     pub url: String,
     pub bot_user_id: String,
     pub bot_name: String,
+    /// Its bot's picture (the app's icon), when Slack says.
+    #[serde(default)]
+    pub bot_image: Option<String>,
 }
 
 /// A connect's link to Slack: disabled | no_tokens | starting | connected | reconnecting (`botUserId`, `lastError`,
@@ -455,6 +458,9 @@ pub struct Connect {
     pub id: String,
     pub name: String,
     pub team: Option<String>,
+    /// Its bot's picture in Slack, as last seen.
+    #[serde(default)]
+    pub bot_image: Option<String>,
     pub enabled: bool,
     pub kind: String,
     /// multi-session | single-session

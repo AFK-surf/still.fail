@@ -26,6 +26,8 @@ export interface ConnectView {
   /** What it is known by: its bot's name in its Slack workspace (`team`, as last seen; null before it connected). */
   name: string;
   team: string | null;
+  /** Its bot's picture in Slack, as last seen; null before it connected or when Slack does not say. */
+  botImage: string | null;
   enabled: boolean;
   kind: ConnectKind;
   mode: ConnectMode;

@@ -305,10 +305,11 @@ export function ChooserItem({ checked, onSelect, children }: { checked: boolean;
 
 /** A back link that only phones show, where an opened page hides the sidebar. */
 /**
- * Up to this width the app is the phone's: one column, the list or what is opened from it, and a chat's history over
- * the whole screen (app.css's `max-width: 1100px` blocks say the same).
+ * A phone's screen, where the app is the phone's (mobile/): one column, the list or what is opened from it. Taller than
+ * wide and narrow both: a small laptop's window, however narrow, stays the desktop app (whose own narrow widths only
+ * fold its side panels over the page: app.css's `max-width: 1100px` blocks).
  */
-export const NARROW = "(max-width: 1100px)";
+export const NARROW = "(orientation: portrait) and (max-width: 700px)";
 
 /** Whether the screen is narrow (NARROW), following the window as it changes. */
 export function useNarrow(): boolean {
@@ -387,6 +388,12 @@ export function ConnectKindIcon({ kind, size = 16, tile }: { kind: string; size?
   const Icon = KIND_ICON[kind as keyof typeof KIND_ICON] ?? Chat;
   const icon = <Icon size={size} strokeWidth={1.7} aria-hidden="true" />;
   return tile ? <span className="mark kind-mark" style={{ width: size * 2.4, height: size * 2.4 }}>{icon}</span> : <span className="kind-icon">{icon}</span>;
+}
+
+/** A connect as its people see it in Slack: its bot's picture; its kind's icon until Slack has said what that is. */
+export function ConnectAvatar({ connect, size = 28 }: { connect: { kind: string; botImage?: string | null | undefined }; size?: number }) {
+  if (!connect.botImage) return <ConnectKindIcon kind={connect.kind} size={Math.round(size * 0.6)} tile={size > 32} />;
+  return <img className="bot-avatar" src={connect.botImage} width={size} height={size} alt="" loading="lazy" referrerPolicy="no-referrer" />;
 }
 
 /** Slack's mark in its own colours, sized like the line icons around it. */

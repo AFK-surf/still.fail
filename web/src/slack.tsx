@@ -30,25 +30,48 @@ export interface TokenState {
 
 export const emptyTokens: TokenState = { appToken: "", botToken: "", verified: null };
 
+/** Checking tokens as the button that goes on is pressed: `then(go)` verifies (unless already verified) and goes on if they are right. */
+export interface TokenCheck {
+  then(go: () => void): void;
+  busy: boolean;
+  errors: string[];
+  error: string | null;
+  /** There is something to check (or, for an existing connect, the stored tokens). */
+  ready: boolean;
+}
+
 /**
- * Token inputs with a verify step. For an existing connect (`connect`), a blank field
- * means "keep the stored token", and verification uses the stored one. An app installed through Slack's OAuth
- * (`install`, its state) has its bot token on the station already: only the app-level token is asked for.
+ * The tokens' check. For an existing connect (`connect`), a blank field means "keep the stored token", and the check
+ * uses the stored one. An app installed through Slack's OAuth (`install`, its state) has its bot token on the station.
  */
-export function TokenFields({ value, onChange, connect, masked, install }: {
-  value: TokenState; onChange(value: TokenState): void; connect?: string; masked?: { appToken: string; botToken: string }; install?: string | undefined;
-}) {
+export function useTokenCheck(value: TokenState, onChange: (value: TokenState) => void, { connect, install }: { connect?: string; install?: string | undefined } = {}): TokenCheck {
   const api = useApi();
   const [errors, setErrors] = useState<string[]>([]);
-  const verify = useAction(() => api.verifySlack({ ...(connect ? { connect } : {}), ...(install ? { install } : {}), appToken: value.appToken, botToken: value.botToken }), (result) => {
-    setErrors(result.errors);
-    onChange({ ...value, verified: result.errors.length === 0 ? result.identity : null });
-  });
-  const edit = (patch: Partial<TokenState>) => {
-    setErrors([]);
-    onChange({ ...value, ...patch, verified: null });
+  const verify = useAction(() => api.verifySlack({ ...(connect ? { connect } : {}), ...(install ? { install } : {}), appToken: value.appToken, botToken: value.botToken }));
+  return {
+    then(go) {
+      if (value.verified) return go();
+      void verify.run().then((result) => {
+        if (!result) return;
+        setErrors(result.errors);
+        if (result.errors.length === 0) {
+          onChange({ ...value, verified: result.identity });
+          go();
+        }
+      });
+    },
+    busy: verify.busy,
+    errors: value.verified ? [] : errors,
+    error: verify.error?.message ?? null,
+    ready: Boolean(value.appToken || (!install && value.botToken) || connect),
   };
-  const hasInput = Boolean(value.appToken || value.botToken || connect);
+}
+
+/** Token inputs; checked by the button that goes on (`check`, useTokenCheck), whose failures are said under them. */
+export function TokenFields({ value, onChange, masked, install, check }: {
+  value: TokenState; onChange(value: TokenState): void; masked?: { appToken: string; botToken: string }; install?: string | undefined; check: TokenCheck;
+}) {
+  const edit = (patch: Partial<TokenState>) => onChange({ ...value, ...patch, verified: null });
   return (
     <div className="token-fields">
       <Field label="App-Level Token" htmlFor="app-token">
@@ -63,14 +86,9 @@ export function TokenFields({ value, onChange, connect, masked, install }: {
             placeholder={masked?.botToken ? `已保存 ${masked.botToken}，留空保持不变` : "xoxb-…"} />
         </Field>
       )}
-      <div className="verify-row">
-        <Button onClick={() => void verify.run()} busy={verify.busy} disabled={!hasInput}>验证 token</Button>
-        {value.verified && (
-          <span className="verify-ok"><CheckCircle {...ICON} />连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>
-        )}
-      </div>
-      {errors.length > 0 && <ul className="field-error-list" role="alert">{errors.map((e) => <li key={e}>{e}</li>)}</ul>}
-      {verify.error && <p className="field-error" role="alert">{verify.error.message}</p>}
+      {value.verified && <span className="verify-ok"><CheckCircle {...ICON} />连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>}
+      {check.errors.length > 0 && <ul className="field-error-list" role="alert">{check.errors.map((e) => <li key={e}>{e}</li>)}</ul>}
+      {check.error && <p className="field-error" role="alert">{check.error}</p>}
     </div>
   );
 }

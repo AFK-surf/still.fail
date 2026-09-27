@@ -11,9 +11,9 @@ import { ModelTriple } from "../ModelTriple.tsx";
 import { OwnerLabel } from "../components.tsx";
 import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
-import { CreateAppSteps, emptyTokens, TokenFields, type TokenState } from "../slack.tsx";
+import { CreateAppSteps, emptyTokens, TokenFields, useTokenCheck, type TokenState } from "../slack.tsx";
 import { useToast } from "../toast.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, Section, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectAvatar, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, Section, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
 
 export function ConnectPage() {
   const { id } = useParams();
@@ -66,7 +66,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
       <BackLink to={`${station.settings}/connects`} label="连接" />
       {/* Who it is and whether it is up; what is done to it less often is in the menu. */}
       <header className="identity">
-        <ConnectKindIcon kind={connect.kind} size={22} tile />
+        <ConnectAvatar connect={connect} size={52} />
         <div className="identity-text">
           <h1 className="identity-name">{connect.name}</h1>
           <p className="identity-sub">
@@ -110,16 +110,17 @@ function SlackSection({ connect }: { connect: Connect }) {
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
+  const check = useTokenCheck(tokens, setTokens);
   const c = connect.connection;
   if (c.state === "no_tokens") {
     return (
       <Section title="接上 Slack" description="这个连接还没接上 Slack。">
         <div className="card">
           <CreateAppSteps name={connect.name} />
-          <TokenFields value={tokens} onChange={setTokens} />
+          <TokenFields value={tokens} onChange={setTokens} check={check} />
           <div className="card-actions">
-            <Button variant="primary" disabled={!tokens.verified} busy={save.busy}
-              onClick={() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { setTokens(emptyTokens); toast("已保存 token，正在连接"); })}>保存并连接</Button>
+            <Button variant="primary" disabled={!check.ready} busy={check.busy || save.busy}
+              onClick={() => check.then(() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { setTokens(emptyTokens); toast("已保存 token，正在连接"); }))}>保存并连接</Button>
           </div>
         </div>
       </Section>
@@ -136,14 +137,15 @@ function TokenDialog({ connect, onClose }: { connect: Connect; onClose(): void }
   const toast = useToast();
   const save = useSaveConnect(connect.id);
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
+  const check = useTokenCheck(tokens, setTokens, { connect: connect.id });
   return (
-    <Dialog open onClose={onClose} title="更换 Slack token" description="只换其中一个也可以，另一个留空会沿用已保存的。保存前先验证。"
+    <Dialog open onClose={onClose} title="更换 Slack token" description="只换其中一个也可以，另一个留空会沿用已保存的。"
       footer={<>
         <Button variant="ghost" onClick={onClose}>取消</Button>
-        <Button variant="primary" disabled={!tokens.verified} busy={save.busy}
-          onClick={() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { toast("已保存 token，正在重新连接"); onClose(); })}>保存并重新连接</Button>
+        <Button variant="primary" disabled={!check.ready} busy={check.busy || save.busy}
+          onClick={() => check.then(() => save.put({ slack: { appToken: tokens.appToken, botToken: tokens.botToken } }, () => { toast("已保存 token，正在重新连接"); onClose(); }))}>保存并重新连接</Button>
       </>}>
-      <TokenFields value={tokens} onChange={setTokens} connect={connect.id} masked={connect.slack} />
+      <TokenFields value={tokens} onChange={setTokens} masked={connect.slack} check={check} />
       {save.error && <p className="field-error" role="alert">{save.error.message}</p>}
     </Dialog>
   );
@@ -379,6 +381,7 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
   const [madeId, setMadeId] = useState<string | null>(resume ?? null);
   const made: MadeSlackApp | undefined = madeId ? overview.value?.slackApps?.find((a) => a.appId === madeId) : undefined;
   const [tokens, setTokens] = useState<TokenState>(emptyTokens);
+  const check = useTokenCheck(tokens, setTokens, { install: made?.state ?? undefined });
   // The model first; the runtime only when the model runs on more than one.
   const models = useStationModels();
   const [model, setModel] = useState("");
@@ -428,7 +431,7 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
   ) : step === "install" || step === "manual" ? (
     <>
       <Button variant="ghost" onClick={step === "manual" ? () => setStep("team") : close}>{step === "manual" ? "上一步" : "取消"}</Button>
-      <Button variant="primary" disabled={!tokens.verified} onClick={() => setStep("bind")}>下一步</Button>
+      <Button variant="primary" disabled={!check.ready} busy={check.busy} onClick={() => check.then(() => setStep("bind"))}>下一步</Button>
     </>
   ) : (
     <>
@@ -468,13 +471,13 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
         <>
           <MadeAppSteps made={made} />
           {iconError && <p className="field-error" role="alert">图标没传上：{iconError}</p>}
-          <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} />
+          <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} check={check} />
         </>
       )}
       {step === "manual" && (
         <>
           <CreateAppSteps name="ember" />
-          <TokenFields value={tokens} onChange={setTokens} />
+          <TokenFields value={tokens} onChange={setTokens} check={check} />
         </>
       )}
       {step === "bind" && (

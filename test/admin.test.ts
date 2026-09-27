@@ -21,7 +21,7 @@ import { FakeChat, FakeDriver, message, settle } from "./fakes.ts";
 
 class FakeConnection extends FakeChat implements Connection {
   readonly status = { connected: true, lastError: null };
-  readonly identity = { team: "Acme", teamId: "T1", url: "https://acme.slack.com/", botUserId: "UBOT", botName: "ember" };
+  readonly identity = { team: "Acme", teamId: "T1", url: "https://acme.slack.com/", botUserId: "UBOT", botName: "ember", botImage: "https://avatars.slack-edge.com/ember_72.png" };
   started = 0;
   stopped = 0;
   override async start(): Promise<void> {
@@ -173,9 +173,14 @@ test("a Slack app made on a station in ember cloud is installed through Slack's 
   const real = globalThis.fetch;
   const asked: URLSearchParams[] = [];
   t.mock.method(globalThis, "fetch", async (url: string | URL, init?: RequestInit) => {
+    // Slack, as far as installing and connecting an app goes.
+    const said = (body: object) => new Response(JSON.stringify({ ok: true, ...body }));
+    if (String(url) === "https://slack.com/api/auth.test") return said({ user_id: "UBOT", team_id: "T2", team: "Acme", user: "helper" });
+    if (String(url) === "https://slack.com/api/users.info") return said({ user: { id: "UBOT", name: "helper", real_name: "Helper", profile: {} } });
+    if (String(url) === "https://slack.com/api/apps.connections.open") return said({ url: "wss://x" });
     if (String(url) !== "https://slack.com/api/oauth.v2.access") return real(url, init);
     asked.push(new URLSearchParams(String(init?.body)));
-    return new Response(JSON.stringify({ ok: true, access_token: "xoxb-installed", team: { name: "Acme" } }));
+    return said({ access_token: "xoxb-installed", team: { name: "Acme" } });
   });
   try {
     const owner = (team: string) => ({ team, teamDomain: null, teamIcon: null, user: "Ada", email: "ada@example.com", image: null });
@@ -217,6 +222,19 @@ test("a Slack app made on a station in ember cloud is installed through Slack's 
     const overview = (await s.call("GET", "/overview")).body;
     assert.deepEqual([overview.slackApps[0].installed, overview.slackApps[0].installedTeam], [true, "Acme"]);
     assert.equal(JSON.stringify(overview).includes("xoxb-installed"), false, "the token stays on the station");
+    // Made without Socket Mode (so its maker turns it on in Slack, where the app-level token comes with its scope picked),
+    // and so without events; the connect that takes it puts both in.
+    assert.equal(sent.manifest.settings.socket_mode_enabled, false);
+    assert.equal(sent.manifest.settings.event_subscriptions, undefined);
+    s.slackApps.manifest = structuredClone(sent.manifest);
+    const connected = await s.call("POST", "/connects", { kind: "slack", mode: "multi-session", bind: { runtime: "claude" }, slack: { appToken: "xapp-1-new", install: waiting[0].state } });
+    assert.equal(connected.status, 200, JSON.stringify(connected.body));
+    const turnedOn = s.slackApps.updates.at(-1);
+    assert.equal(turnedOn.settings.socket_mode_enabled, true);
+    assert.ok(turnedOn.settings.event_subscriptions.bot_events.includes("app_mention"));
+    assert.deepEqual((await s.call("GET", "/overview")).body.slackApps, [], "connected: no longer waiting");
+    // Another one, to drop.
+    await s.call("POST", "/slack/apps", { team: "T2", settings: { name: "Helper" } });
     // Only its maker sees it, or drops it (it stays in Slack).
     s.settings.update((raw) => ({ ...raw, slackApps: [...(raw.slackApps ?? []), { appId: "A0BOB", name: "Bob's", teamId: "T3", by: "bob@example.com", created: 1 }] }));
     assert.deepEqual((await s.call("GET", "/overview")).body.slackApps.map((a: any) => a.appId), ["A0NEW"]);

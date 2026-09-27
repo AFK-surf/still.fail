@@ -17,6 +17,8 @@ export interface SlackIdentity {
   url: string;
   botUserId: string;
   botName: string;
+  /** Its bot's picture (the app's icon), as Slack shows it; null when Slack does not say. */
+  botImage: string | null;
 }
 
 /**
@@ -51,7 +53,8 @@ async function identityOf(auth: Record<string, any>, userInfo: (id: string) => P
   const botUserId = String(auth.user_id ?? "");
   const user = await userInfo(botUserId).then((d) => d.user, () => null);
   const shown = [user?.profile?.display_name, user?.real_name, user?.profile?.real_name].find((n) => typeof n === "string" && n.trim());
-  return { team: String(auth.team ?? ""), teamId: String(auth.team_id ?? ""), url: String(auth.url ?? ""), botUserId, botName: shown ? String(shown) : String(auth.user ?? "") };
+  const image = [user?.profile?.image_72, user?.profile?.image_48, user?.profile?.image_original].find((u) => typeof u === "string" && u.startsWith("https://"));
+  return { team: String(auth.team ?? ""), teamId: String(auth.team_id ?? ""), url: String(auth.url ?? ""), botUserId, botName: shown ? String(shown) : String(auth.user ?? ""), botImage: image ? String(image) : null };
 }
 
 async function slackApi(method: string, params: Record<string, string>, token: string): Promise<Record<string, any>> {

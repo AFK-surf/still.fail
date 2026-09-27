@@ -9,6 +9,7 @@ import { MODE, RUNTIME_LABEL } from "../format.ts";
 import { ChevronRight, More } from "../icons.tsx";
 import { consequences } from "../pages/Connect.tsx";
 import { NEW_APP } from "../pages/SlackApp.tsx";
+import { useTokenCheck, type TokenCheck } from "../slack.tsx";
 import { stationBase, useOnlyMine, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { AccountList, ModelList, SettingRow } from "./History.tsx";
@@ -24,7 +25,7 @@ function Presence({ state }: { state: string }) {
 export function ConnectRow({ connect: c, onClick }: { connect: Connect; onClick: () => void }) {
   return (
     <ListRow onClick={onClick}>
-      <SlackMark size={16} />
+      {c.botImage ? <img className="bot-avatar" src={c.botImage} width={30} height={30} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <SlackMark size={16} />}
       <span className="m-grow m-row-text">
         <span className="m-row-title">{c.name}{c.team && <span className="m-row-aside"> · {c.team}</span>}</span>
         <span className="m-row-note">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>
@@ -249,18 +250,19 @@ function TokensSheet({ connect }: { connect: Connect }) {
   const app = useApp();
   const api = useApi();
   const [tokens, setTokens] = useState<Tokens>(NO_TOKENS);
+  const check = useTokenCheck(tokens, setTokens, { connect: connect.id });
   const [busy, setBusy] = useState(false);
   return (
     <>
       <SheetGrab />
       <SheetHead title="Slack token" />
       <div className="m-sheet-scroll m-form">
-        <p className="m-muted m-small">只换其中一个也可以，另一个留空会沿用已保存的。保存前先验证。</p>
-        <TokenFields value={tokens} onChange={setTokens} connect={connect.id} masked={connect.slack} />
+        <p className="m-muted m-small">只换其中一个也可以，另一个留空会沿用已保存的。</p>
+        <TokenFields value={tokens} onChange={setTokens} masked={connect.slack} check={check} />
         <div className="m-form-actions">
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-          <Button label="保存并连接" primary busy={busy} enabled={!!tokens.verified}
-            onClick={() => { setBusy(true); api.putConnect(connect.id, { slack: { appToken: tokens.appToken, botToken: tokens.botToken } }).then(() => { app.toast("已保存 token，正在连接"); app.sheet(null); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false)); }} />
+          <Button label="保存并连接" primary busy={busy || check.busy} enabled={check.ready}
+            onClick={() => check.then(() => { setBusy(true); api.putConnect(connect.id, { slack: { appToken: tokens.appToken, botToken: tokens.botToken } }).then(() => { app.toast("已保存 token，正在连接"); app.sheet(null); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false)); })} />
         </div>
       </div>
     </>
@@ -271,18 +273,8 @@ function TokensSheet({ connect }: { connect: Connect }) {
  * The two tokens with a verify step. For an existing connect a blank field keeps the stored token. An app installed
  * through Slack's OAuth (`install`) has its bot token on the station already: only the app-level token is asked for.
  */
-function TokenFields({ value, onChange, connect, masked, install }: { value: Tokens; onChange: (t: Tokens) => void; connect?: string; masked?: { appToken: string; botToken: string }; install?: string | undefined }) {
-  const api = useApi();
-  const [errors, setErrors] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const edit = (patch: Partial<Tokens>) => { setErrors([]); onChange({ ...value, ...patch, verified: null }); };
-  const verify = () => {
-    setBusy(true);
-    api.verifySlack({ ...(connect ? { connect } : {}), ...(install ? { install } : {}), appToken: value.appToken, botToken: value.botToken }).then((r) => {
-      setErrors(r.errors);
-      onChange({ ...value, verified: r.errors.length === 0 ? r.identity : null });
-    }, (e: Error) => setErrors([e.message])).finally(() => setBusy(false));
-  };
+function TokenFields({ value, onChange, masked, install, check }: { value: Tokens; onChange: (t: Tokens) => void; masked?: { appToken: string; botToken: string }; install?: string | undefined; check: TokenCheck }) {
+  const edit = (patch: Partial<Tokens>) => onChange({ ...value, ...patch, verified: null });
   return (
     <div className="m-form-group">
       <b className="m-form-label">App-Level Token</b>
@@ -295,11 +287,8 @@ function TokenFields({ value, onChange, connect, masked, install }: { value: Tok
             placeholder={masked?.botToken ? `已保存 ${masked.botToken}，留空不变` : "xoxb-…"} />
         </>
       )}
-      <div className="m-verify">
-        <Button label="验证 token" primary={false} busy={busy} enabled={!!(value.appToken || value.botToken || connect)} onClick={verify} />
-        {value.verified && <span className="m-green m-small">连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>}
-      </div>
-      {errors.map((e) => <p key={e} className="m-error">{e}</p>)}
+      {value.verified && <span className="m-green m-small">连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>}
+      {[...check.errors, ...(check.error ? [check.error] : [])].map((e) => <p key={e} className="m-error">{e}</p>)}
     </div>
   );
 }
@@ -386,6 +375,7 @@ export function NewConnectScreen() {
   const [madeId, setMadeId] = useState<string | null>(null);
   const made: MadeSlackApp | undefined = madeId ? overview?.slackApps?.find((a) => a.appId === madeId) : undefined;
   const [tokens, setTokens] = useState<Tokens>(NO_TOKENS);
+  const check = useTokenCheck(tokens, setTokens, { install: made?.state ?? undefined });
   const [config, setConfig] = useState("");
   const models = view?.models ?? [];
   const [model, setModel] = useState<ModelOption | null>(null);
@@ -454,8 +444,8 @@ export function NewConnectScreen() {
               <li>在 <a href={made.links.appToken} target="_blank" rel="noopener">Socket Mode</a> 页生成 App-Level Token 并复制（xapp- 开头，权限已经选好）。</li>
               <li>{made.install ? "把 App-Level Token 填在下面。" : "把两个 token 填在下面。"}</li>
             </ol>
-            <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} />
-            <Button label="下一步" primary enabled={!!tokens.verified} onClick={() => setStep("bind")} />
+            <TokenFields value={tokens} onChange={setTokens} install={made.state ?? undefined} check={check} />
+            <Button label="下一步" primary busy={check.busy} enabled={check.ready} onClick={() => check.then(() => setStep("bind"))} />
           </>
         )}
         {step === "manual" && (
@@ -466,8 +456,8 @@ export function NewConnectScreen() {
               <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
               <li>把两个 token 填在下面。</li>
             </ol>
-            <TokenFields value={tokens} onChange={setTokens} />
-            <Button label="下一步" primary enabled={!!tokens.verified} onClick={() => setStep("bind")} />
+            <TokenFields value={tokens} onChange={setTokens} check={check} />
+            <Button label="下一步" primary busy={check.busy} enabled={check.ready} onClick={() => check.then(() => setStep("bind"))} />
           </>
         )}
         {step === "bind" && (

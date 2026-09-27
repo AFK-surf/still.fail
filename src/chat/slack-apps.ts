@@ -128,6 +128,27 @@ export function applySettings(manifest: Manifest, edit: Partial<SlackAppSettings
   return next;
 }
 
+/**
+ * A manifest with Socket Mode off or on. Off, it has no events either (Slack asks events of an app without Socket Mode
+ * to go to a URL): an app made so lets its maker turn Socket Mode on in Slack, which is where Slack makes the app-level
+ * token with its scope already picked. On, its events are those of the groups it has on.
+ */
+export function withSocketMode(manifest: Manifest, on: boolean): Manifest {
+  const next: Manifest = structuredClone(manifest);
+  next.settings ??= {};
+  next.settings.socket_mode_enabled = on;
+  if (!on) {
+    delete next.settings.event_subscriptions;
+    return next;
+  }
+  const groups = settingsOf(manifest).groups;
+  const events = SLACK_GROUP_IDS.filter((g) => g === "base" || groups[g]).flatMap((g) => SLACK_GROUPS[g].events);
+  const known = new Set<string>(SLACK_GROUP_IDS.flatMap((g) => SLACK_GROUPS[g].events));
+  const others: string[] = (next.settings.event_subscriptions?.bot_events ?? []).filter((e: string) => !known.has(e));
+  next.settings.event_subscriptions = { ...next.settings.event_subscriptions, bot_events: unique([...others, ...events]) };
+  return next;
+}
+
 function setOrDelete(target: Record<string, unknown>, key: string, value: string): void {
   if (value) target[key] = value;
   else delete target[key];

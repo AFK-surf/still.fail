@@ -1608,3 +1608,6 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .about-text { display: block; line-height: 1.5; }
 /* A list's heading that only names it (not a section of its own): small and quiet, no rule under it. */
 .section-title-quiet { margin: 0 0 6px; font-size: var(--text-xs); font-weight: 500; color: var(--muted); }
+
+/* A bot's picture, as Slack shows it: a rounded square. */
+.bot-avatar { flex: none; display: block; border-radius: calc(22% * var(--corner-scale)); corner-shape: var(--corner-shape); object-fit: cover; background: var(--neutral-bg); }

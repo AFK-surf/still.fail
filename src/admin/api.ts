@@ -22,7 +22,7 @@ import type { ProfileQuota } from "../quota.ts";
 import type { Profile } from "../config.ts";
 import { INTERNAL_CONNECT } from "../chat/internal.ts";
 import { EMBER_SURFACE } from "../store.ts";
-import { appIdOf, applySettings, exchangeInstallCode, rotateConfigToken, ownerOfConfigToken, type ConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
+import { appIdOf, applySettings, exchangeInstallCode, withSocketMode, rotateConfigToken, ownerOfConfigToken, type ConfigToken, SLACK_GROUP_IDS, SlackApiError, slackAppLinks, SlackApps, settingsOf, type SlackAppSettings } from "../chat/slack-apps.ts";
 import { log } from "../log.ts";
 import { parseTraceparent, route, serverSpan } from "../tracing.ts";
 import type { Settings } from "../settings.ts";
@@ -574,15 +574,17 @@ export class AdminApi {
       const state = this.#deps.connections.state(c);
       const seen = "workspace" in state ? state.workspace : null;
       if (!seen?.teamId) return [];
-      const same = c.slack.team?.id === seen.teamId && c.slack.team.name === seen.team && c.slack.botName === seen.botName;
-      return same ? [] : [{ id: c.id, team: { id: seen.teamId, name: seen.team }, botName: seen.botName }];
+      const same = c.slack.team?.id === seen.teamId && c.slack.team.name === seen.team && c.slack.botName === seen.botName && (c.slack.botImage ?? null) === (seen.botImage ?? null);
+      return same ? [] : [{ id: c.id, team: { id: seen.teamId, name: seen.team }, botName: seen.botName, botImage: seen.botImage ?? null }];
     });
     if (changed.length === 0) return;
     this.#deps.settings.update((raw) => ({
       ...raw,
       connects: (raw.connects ?? []).map((c) => {
         const seen = changed.find((x) => x.id === c.id);
-        return seen ? { ...c, slack: { ...c.slack, team: seen.team, botName: seen.botName } } : c;
+        if (!seen) return c;
+        const { botImage: _, ...slack } = c.slack ?? {};
+        return { ...c, slack: { ...slack, team: seen.team, botName: seen.botName, ...(seen.botImage ? { botImage: seen.botImage } : {}) } };
       }),
     }));
   }
@@ -796,7 +798,9 @@ export class AdminApi {
     const manifest = applySettings(slackManifest(name, undefined, redirectUri ?? undefined), { ...settings, name });
     let app: { appId: string; clientId: string; clientSecret: string };
     try {
-      app = await this.#apps.createApp(by, team, manifest);
+      // Made without Socket Mode: its maker turns it on in Slack, which makes the app-level token with its scope picked;
+      // the connect that takes it puts Socket Mode and its events in (#socketModeOn).
+      app = await this.#apps.createApp(by, team, withSocketMode(manifest, false));
     } catch (error) {
       throw new HttpError(400, `Slack 没能创建 app：${slackError(error)}`);
     }
@@ -811,6 +815,16 @@ export class AdminApi {
     }
     this.#save(viewer, `slack app ${app.appId}`, (raw) => ({ ...raw, slackApps: [...(raw.slackApps ?? []), made] }));
     return { appId: app.appId, iconError };
+  }
+
+  /** An app made here, being connected: Socket Mode and its events on in its manifest (Slack has it off until then). */
+  async #socketModeOn(made: SlackAppMade): Promise<void> {
+    try {
+      const current = await this.#apps.exportManifest(made.by, made.appId);
+      await this.#apps.updateManifest(made.by, made.appId, withSocketMode(current, true));
+    } catch (error) {
+      throw new HttpError(400, `Slack 没能打开 app 的 Socket Mode 和事件：${slackError(error)}`);
+    }
   }
 
   /** A Slack app made here and not connected yet, by its app id or its install's state. */
@@ -865,14 +879,15 @@ export class AdminApi {
     const botToken = installed?.botToken ?? String(input.slack?.botToken ?? "").trim();
     const { identity, errors } = await verifySlackTokens({ appToken, botToken });
     if (!identity || errors.length) throw new HttpError(400, errors.join("；") || "token 不对");
+    const made = typeof input.slack?.install === "string" ? this.#madeApp(input.slack.install) : typeof input.slack?.appId === "string" ? this.#madeApp(input.slack.appId) : undefined;
+    if (made) await this.#socketModeOn(made);
     const name = identity.botName || "ember";
     const taken = new Set(this.#deps.settings.config.connects.map((c) => c.id));
     const base = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "slack";
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-    const made = typeof input.slack?.install === "string" ? this.#madeApp(input.slack.install) : typeof input.slack?.appId === "string" ? this.#madeApp(input.slack.appId) : undefined;
     const appId = made?.appId ?? (typeof input.slack?.appId === "string" && input.slack.appId ? input.slack.appId : null);
-    const overview = this.#putConnect(id, { ...input, kind: "slack", slack: { appToken, botToken, team: { id: identity.teamId, name: identity.team }, botName: identity.botName } }, viewer);
+    const overview = this.#putConnect(id, { ...input, kind: "slack", slack: { appToken, botToken, team: { id: identity.teamId, name: identity.team }, botName: identity.botName, ...(identity.botImage ? { botImage: identity.botImage } : {}) } }, viewer);
     // Its app is connected now: no longer one waiting.
     if (made) this.#deps.settings.update((raw) => ({ ...raw, slackApps: (raw.slackApps ?? []).filter((a) => a.appId !== made.appId) }));
     if (appId) {
@@ -915,7 +930,7 @@ export class AdminApi {
       mesh: this.#deps.mesh?.status() ?? null,
       connects: config.connects.map((c) => ({
         // What it is known by: its bot's name in its Slack workspace, and that workspace.
-        id: c.id, name: connectName(c), team: c.slack.team?.name ?? null, enabled: c.enabled, kind: c.kind, mode: c.mode, requireMention: c.requireMention,
+        id: c.id, name: connectName(c), team: c.slack.team?.name ?? null, botImage: c.slack.botImage ?? null, enabled: c.enabled, kind: c.kind, mode: c.mode, requireMention: c.requireMention,
         bind: { runtime: c.bind.runtime, model: c.bind.model ?? null, effort: c.bind.effort ?? null, profile: c.bind.profile ?? null },
         slack: { appToken: mask(c.slack.appToken), botToken: mask(c.slack.botToken) },
         connection: this.#deps.connections.state(c),
@@ -1473,7 +1488,8 @@ export class AdminApi {
           ? { slack: {
             ...(appToken ? { appToken } : {}), ...(botToken ? { botToken } : {}), ...(existing?.slack?.appId ? { appId: existing.slack.appId } : {}),
             // Who it is in Slack: given with new tokens (as they were verified), else as last seen.
-            ...(input.slack?.team ? { team: input.slack.team, botName: input.slack.botName } : existing?.slack?.team ? { team: existing.slack.team, botName: existing.slack.botName } : {}),
+            ...(input.slack?.team ? { team: input.slack.team, botName: input.slack.botName, ...(input.slack.botImage ? { botImage: input.slack.botImage } : {}) }
+              : existing?.slack?.team ? { team: existing.slack.team, botName: existing.slack.botName, ...(existing.slack.botImage ? { botImage: existing.slack.botImage } : {}) } : {}),
           } }
           : {}),
         bind: {

@@ -9,7 +9,7 @@ import { Link } from "react-router";
 import { useAction, useApi, useConnects, useStations, type MadeSlackApp } from "../api.ts";
 import { MineFilter, OwnerLabel } from "../components.tsx";
 import { profilesPage, StationContext, stationBase, useOnlyMine, type Station } from "../station.tsx";
-import { About, Button, Confirm, ConnectKindIcon, FirstOne, Menu, MobileBack, SlackLogo, StatusDot } from "../ui.tsx";
+import { About, Button, Confirm, ConnectAvatar, FirstOne, Menu, MobileBack, SlackLogo, StatusDot } from "../ui.tsx";
 import { NewConnectDialog } from "./Connect.tsx";
 
 /** The connects of a scope (a workspace, or "local"), from the core's `connects` view; `settings` is where the scope's settings live. */
@@ -88,7 +88,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
           {shown.map(({ connect: c, station, stationName }) => (
             <li key={`${station}/${c.id}`}>
               <Link className="list-row" to={`${stationBase(station)}/connects/${c.id}`}>
-                <ConnectKindIcon kind={c.kind} />
+                <ConnectAvatar connect={c} />
                 <span className="list-row-text">
                   <span className="list-row-title">{c.name}{c.team && <span className="connect-team"><SlackLogo size={11} />{c.team}</span>}</span>
                   <span className="muted">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>

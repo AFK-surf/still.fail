@@ -83,7 +83,7 @@ export interface Connect {
    * appId is known once ember created the app or looked it up. `team` and `botName`: the Slack workspace and the bot's
    * name there, as last seen connected; together they are what a connect is known by.
    */
-  slack: { appToken: string; botToken: string; appId?: string; team?: SlackPlace; botName?: string };
+  slack: { appToken: string; botToken: string; appId?: string; team?: SlackPlace; botName?: string; botImage?: string };
   /** Who added it from the admin page: an email, or "local"; absent for older or hand-written ones. */
   createdBy?: { id: string; name: string };
   bind: Binding;
@@ -119,7 +119,7 @@ export interface RawConnect {
   kind?: ConnectKind;
   mode?: ConnectMode;
   requireMention?: boolean;
-  slack?: { appToken?: string; botToken?: string; appId?: string; team?: SlackPlace; botName?: string };
+  slack?: { appToken?: string; botToken?: string; appId?: string; team?: SlackPlace; botName?: string; botImage?: string };
   createdBy?: { id: string; name: string };
   bind: { runtime: RuntimeKind; model?: string; effort?: string; profile?: string };
 }

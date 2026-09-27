@@ -9,7 +9,7 @@ import { ACCESS, ACCESS_KINDS, KEYED } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import { MachineLoginCard, ProfileCard } from "../ProfileCard.tsx";
-import { About, Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time, Tip } from "../ui.tsx";
+import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time, Tip } from "../ui.tsx";
 
 
 export function AccountsPage() {
@@ -238,7 +238,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
         {users.length === 0 ? <p className="muted">还没有连接使用这个 Profile。</p> : (
           <ul className="list">
             {users.map((c) => (
-              <li key={c.id}><Link className="list-row" to={link(`/connects/${c.id}`)}><ConnectKindIcon kind={c.kind} /><span className="list-row-title">{c.name}</span><span className="muted">{c.bind.model ?? profile.model ?? "默认模型"}</span></Link></li>
+              <li key={c.id}><Link className="list-row" to={link(`/connects/${c.id}`)}><ConnectAvatar connect={c} size={24} /><span className="list-row-title">{c.name}</span><span className="muted">{c.bind.model ?? profile.model ?? "默认模型"}</span></Link></li>
             ))}
           </ul>
         )}
