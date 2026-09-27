@@ -131,7 +131,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
     <nav className="sidebar" aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className="brand brand-compact"><SidebarBrand /></div>
-      <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings/stations`} />
+      <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} />
       <div className="nav-foot">
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
         <div className="nav-foot-row">
