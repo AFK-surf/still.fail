@@ -131,6 +131,9 @@ pub fn present(live: &Value) -> Value {
                 match tool_name(&tool) {
                     "chat_post" => replying = true,
                     "chat_state" => {}
+                    // A call whose input has not come yet would only say its verb (运行) and then, a moment later,
+                    // what it runs: until then what was shown stays.
+                    _ if str_of(s, "input").trim().is_empty() && kind_of(&tool) != "other" => {}
                     _ => call = Some((str_of(s, "id"), call_text(&tool, &str_of(s, "input")))),
                 }
             }
@@ -142,7 +145,7 @@ pub fn present(live: &Value) -> Value {
     let (key, text) = if let Some((id, text)) = call {
         (id, text)
     } else if replying {
-        ("reply".to_string(), "正在回复".to_string())
+        ("reply".to_string(), if rate > 0 { format!("正在回复 · ≈ {rate} token/s") } else { "正在回复".to_string() })
     } else {
         let (key, text) = match phase {
             _ if thinking => ("think", "思考中"),
@@ -185,6 +188,11 @@ mod tests {
         assert_eq!(now(json!({"phase": {"phase": "thinking"}})), ("think".into(), "思考中".into()));
         assert_eq!(now(json!({"phase": {"phase": "starting"}})), ("starting".into(), "正在启动".into()));
         assert_eq!(now(json!({})), ("busy".into(), "处理中".into()));
+        // Writing its reply, at its rate.
+        assert_eq!(now(json!({"steps": [{"id": "p", "step": "tool", "tool": "mcp__ember__chat_post", "input": "{\"to"}], "rate": 55})), ("reply".into(), "正在回复 · ≈ 55 token/s".into()));
+        // A call whose input has not come yet changes nothing: what the turn was doing still shows, until it says what it runs.
+        assert_eq!(now(json!({"steps": [{"id": "b", "step": "tool", "tool": "Bash", "input": ""}], "phase": {"phase": "thinking"}})), ("think".into(), "思考中".into()));
+        assert_eq!(now(json!({"steps": [{"id": "b", "step": "tool", "tool": "Bash", "input": "{\"command\":\"ls\"}"}]})), ("b".into(), "运行 ls".into()));
         // A call's own description says it best.
         assert_eq!(call_text("Bash", "{\"command\":\"npm i\",\"description\":\"安装依赖\"}"), "安装依赖");
         assert_eq!(epoch_ms("1970-01-02T00:00:01.500Z"), Some(86_401_500.0));

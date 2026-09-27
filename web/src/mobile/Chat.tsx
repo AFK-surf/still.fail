@@ -6,7 +6,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
-import { Elapsed, fileSize, Lightbox, useAwayFromBottom, useEmissions, useFileUrl, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useSteady, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
+import { Activity, fileSize, sentStyle, Lightbox, useAwayFromBottom, useEmissions, useFileUrl, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Web } from "../icons.tsx";
 import { Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
@@ -140,7 +140,8 @@ function Messages({ view, lives, list, floor, draft, here }: {
         })}
         {view.outbox.map((o) => <div key={o.id} className="msg m-row" data-enter><Out o={o} here={here} /></div>)}
         {shown.map(({ agent, leaving }) => (
-          <Activity key={agent.key} agent={agent} leaving={leaving} pose={emissions.poseOf(agent.key)} onOpen={() => openHistory(app, here.station, here.key, agent.key)} />
+          <Activity key={agent.key} agent={agent} leaving={leaving} pose={emissions.poseOf(agent.key)} className="m-activity"
+            mark={<ModelMark maker={agent.maker} runtime={agent.runtime} size={20} />} onOpen={() => openHistory(app, here.station, here.key, agent.key)} />
         ))}
         <div ref={floor} className="chat-floor" aria-hidden="true" />
       </div>
@@ -228,7 +229,7 @@ function Said({ m, agent, here, draft, list }: { m: ChatMessage; agent: ChatAgen
     return (
       <div className="m-mine">
         {m.quotes.map((q, i) => <QuoteCard key={i} q={q} onJump={jump} />)}
-        {m.text && <div className="m-bubble" data-pressed={hold.pressed || undefined} {...hold.props}>{m.text}</div>}
+        {m.text && <div className="m-bubble" style={sentStyle(m.text)} data-pressed={hold.pressed || undefined} {...hold.props}>{m.text}</div>}
         <Files here={here} files={m.attachments} />
         {m.waiting
           ? <span className="m-meta m-waiting"><Spinner size={10} />等待 agent 接收</span>
@@ -268,7 +269,7 @@ function Out({ o, here }: { o: Outgoing; here: Here }) {
   return (
     <div className="m-mine">
       {o.quotes.map((q, i) => <QuoteCard key={i} q={q} />)}
-      {o.text && <div className="m-bubble">{o.text}</div>}
+      {o.text && <div className="m-bubble" style={sentStyle(o.text)}>{o.text}</div>}
       <Files here={here} files={o.attachments} />
       {o.state === "failed" ? (
         <span className="m-failed">
@@ -296,28 +297,6 @@ function QuoteCard({ q, onJump }: { q: Quote; onJump?: (ts: string) => void }) {
 }
 
 // ── the running turn ───────────────────────────────────────────────────
-
-/**
- * An agent at work, in one line: its mark, ringed while it works, and what it does now (as the core says), with how
- * long its turn has run. No name: the mark says whose. A message it posts comes out of the mark (../Chat.tsx).
- */
-function Activity({ agent, leaving, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
-  const now = useSteady(agent.activity?.now ?? { key: "busy", text: "处理中" });
-  return (
-    <div className="msg agent-activity m-activity" data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined}>
-      <button type="button" className="activity-line" onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
-        <span className="activity-avatar m-activity-mark" aria-hidden="true"><ModelMark maker={agent.maker} runtime={agent.runtime} size={20} /></span>
-        <span className="activity-tail">
-          <span className="activity-now">
-            {now.previous && <span key={`was-${now.previous.key}`} className="activity-now-text" data-out="">{now.previous.text}</span>}
-            <span key={now.current.key} className="activity-now-text" data-in={now.switched || undefined}>{now.current.text}</span>
-          </span>
-          {agent.since ? <span className="activity-elapsed"><Elapsed since={agent.since} /></span> : null}
-        </span>
-      </button>
-    </div>
-  );
-}
 
 // ── files ──────────────────────────────────────────────────────────────
 

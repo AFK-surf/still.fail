@@ -62,9 +62,9 @@
 .nav-session { align-items: flex-start; padding-top: 7px; padding-bottom: 7px; }
 /* A chat's picture: its agent's mark, or two of its agents' overlapping, its state at the corner. */
 .row-picture { position: relative; flex: none; width: 30px; height: 30px; margin-top: 4px; }
-.row-agent { position: absolute; display: grid; place-items: center; border-radius: 50%; background: var(--neutral-bg); }
+.row-agent { position: absolute; display: grid; place-items: center; }
 .row-picture[data-count="1"] .row-agent { inset: 0; }
-.row-picture[data-count="2"] .row-agent { width: 20px; height: 20px; box-shadow: 0 0 0 1.5px var(--sidebar); }
+.row-picture[data-count="2"] .row-agent { width: 16px; height: 16px; }
 .row-picture[data-count="2"] .row-agent:first-child { left: 0; top: 0; }
 .row-picture[data-count="2"] .row-agent:last-child { right: 0; bottom: 0; }
 .row-picture[data-badge]::after { content: ""; position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--sidebar); }
@@ -1222,7 +1222,11 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 :is(.new-chat, .chat) .composer-box { view-transition-name: composer; }
 ::view-transition-group(composer) { animation-duration: 340ms; animation-timing-function: var(--ease-out); }
 ::view-transition-old(composer), ::view-transition-new(composer) { height: 100%; object-fit: none; object-position: left top; }
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: 240ms; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; }
+/* The first message: sent, it waits over the composer as a bubble, then moves to its place at the chat's top. */
+.new-chat-sent { justify-self: stretch; display: flex; flex-direction: column; align-items: flex-end; text-align: left; animation: enter-up 220ms var(--ease-out) both; }
+::view-transition-group(sent-message) { animation-duration: 420ms; animation-timing-function: var(--ease-out); }
+::view-transition-old(sent-message), ::view-transition-new(sent-message) { height: 100%; }
 @media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; } }
 .composer-choices { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; margin-right: auto; }
 /* The model control takes the room left beside the other choices, and fits itself in it (.model-triple-fit). */

@@ -6,7 +6,9 @@ import { stationApi, useStationCall, useStations, type ModelOption, type Runtime
 import { useCall } from "../core/react.ts";
 import { RUNTIME_LABEL } from "../format.ts";
 import { Server } from "../icons.tsx";
+import { firstMessage, toFirstMessage } from "../Chat.tsx";
 import { stationBase } from "../station.tsx";
+import { useNavigate } from "react-router";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ComposerBar, DraftExtras, openAttach, useDraft, useUpload } from "./Chat.tsx";
 import { Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow } from "./parts.tsx";
@@ -68,6 +70,8 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
     for (const p of profiles) if (!p.check && !checked.current.has(p.id)) { checked.current.add(p.id); api.checkProfile(p.id).catch(() => {}); }
   }, [profiles, api]);
   const [making, setMaking] = useState(false);
+  const [sending, setSending] = useState<string | null>(null);
+  const navigate = useNavigate();
   const problem = !view.overview ? `正在读取 ${view.name} 的 Profile…`
     : profiles.length === 0 ? "这台 station 还没有 Profile，先在电脑上到 设置 → Profile 里加一个。"
     : view.models.length === 0 ? "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。" : null;
@@ -76,6 +80,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
     const files = draft.files;
     draft.setText(""); draft.setFiles(() => []); draft.setError(null);
     draft.setStarting(true);
+    setSending(text); firstMessage.text = text;
     void (async () => {
       let made: { key: string; thread: { id: number } };
       try {
@@ -85,6 +90,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
       } catch (error) {
         // No chat to send into: the draft comes back.
         draft.setText(text); draft.setFiles(() => files); draft.setError(error instanceof Error ? error.message : String(error));
+        setSending(null); firstMessage.text = null;
         return;
       } finally {
         draft.setStarting(false);
@@ -92,7 +98,8 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
       }
       call("chat.send", { station: view.station, thread: made.thread.id, text, attachments: files.flatMap((f) => (f.done ? [f.done] : [])), quotes: [] }).catch(() => {});
       // The new item's page, by its agent (its address from now on).
-      app.replace(`${stationBase(view.station)}/chats/${encodeURIComponent(made.key)}`);
+      // Its first message the anchor: the bubble over the composer moves to its place in the chat.
+      toFirstMessage(() => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(made.key)}`, { replace: true }));
     })();
   };
   return (
@@ -103,6 +110,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
         <p className="m-muted">说要做什么。它会在 {view.name} 上用选好的模型开一个新会话。</p>
         {problem && <p className="m-new-problem" data-wait={!view.overview || undefined}>{problem}</p>}
         {making && <p className="m-muted m-small">正在 {view.name} 上创建会话…</p>}
+        {sending !== null && <div className="m-mine m-new-sent"><div className="m-bubble" style={{ viewTransitionName: "sent-message" }}>{sending}</div></div>}
       </div>
       {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
       {entry?.spent && (

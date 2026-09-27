@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, 
 import { useApi, useChatSend, type Activity as ActivityView, type Api, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
-import { Avatar, ModelLogo, Time, Tip } from "./ui.tsx";
+import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
 import { useStickToBottom } from "./scroll.ts";
@@ -20,6 +20,19 @@ interface AgentHere { key: string; who: string; runtime: RuntimeKind; maker: Mak
  * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
  * `ensureChat` makes the chat with the first message, which `onSent` then follows.
  */
+/**
+ * The first message of a chat just made, on its way from the new chat's page to the chat's: its bubble there and its
+ * bubble here are one (a view transition's `sent-message`), the eye's anchor as the page becomes the chat.
+ */
+export const firstMessage: { text: string | null } = { text: null };
+/** The anchor's name, on the one bubble that is the first message. */
+export const sentStyle = (text: string) => (firstMessage.text !== null && text === firstMessage.text ? { viewTransitionName: "sent-message" } : undefined);
+
+/** Goes (`go`) from a new chat to the chat it made, its first message the anchor: waits for the chat to show it. */
+export function toFirstMessage(go: () => void): void {
+  void transitionTo(go, () => document.querySelector('[style*="sent-message"]') !== null).then(() => { firstMessage.text = null; });
+}
+
 export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
   chat: ChatView; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
   ensureChat?: () => Promise<{ key: string; thread: number }>; onSent?: (thread: number) => void;
@@ -106,7 +119,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
             return [line, (
               <div key={m.seq} className="msg msg-mine" data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
                 <Quotes quotes={m.quotes} />
-                {m.text && <div className="msg-bubble"><div className="msg-plain">{m.text}</div></div>}
+                {m.text && <div className="msg-bubble" style={sentStyle(m.text)}><div className="msg-plain">{m.text}</div></div>}
                 <Files owner={ownerOf} files={m.attachments} />
                 {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
                 {m.waiting
@@ -153,7 +166,7 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
         {outbox.map((o) => (
           <div key={o.id} className="msg msg-mine" data-author="你" data-role="person" data-enter>
             <Quotes quotes={o.quotes} />
-            {o.text && <div className="msg-bubble"><div className="msg-plain">{o.text}</div></div>}
+            {o.text && <div className="msg-bubble" style={sentStyle(o.text)}><div className="msg-plain">{o.text}</div></div>}
             <Files owner={ownerOf} files={o.attachments} />
             {o.state === "failed"
               ? <span className="msg-time msg-failed">发送失败{o.error ? `：${o.error}` : ""}
@@ -534,7 +547,7 @@ interface Pending { id: number; name: string; size: number; done: Attachment | n
  * or dropped) go to the workspace of a session in the chat on the station as
  * soon as they are added.
  */
-export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, toolbar, placeholder = "发消息", locked = false, roomy = false }: {
+export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = "发消息", locked = false, roomy = false }: {
   /** The chat written to, and its session; both null for a new chat, made by `ensureChat` with the first message. */
   thread: number | null;
   sessionKey: string | null;
@@ -543,6 +556,8 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   focusQuote?: string | null; onFocused?(): void;
   ensureChat?: () => Promise<{ key: string; thread: number }>;
   onSent?: (thread: number) => void;
+  /** A new chat's first message leaving the composer (null: it came back, the chat not made). */
+  onSending?: (text: string | null) => void;
   /** Choices shown in the toolbar, between attach and send (a new chat's station, model and effort). */
   toolbar?: ReactNode;
   placeholder?: string;
@@ -581,6 +596,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     const attachments = files.flatMap((f) => (f.done ? [f.done] : []));
     const sent = quotes.map(({ author, text: t, comment, ts, role }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}) }));
     setText(""); setFiles([]); setQuotes(() => []); setSendError(null);
+    if (thread === null) onSending?.(value);
     let to: number;
     try {
       setStarting(thread === null);
@@ -588,6 +604,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     } catch (error) {
       // No chat to send into (a new one could not be made): the draft comes back.
       setText(kept.text); setFiles(kept.files); setQuotes(() => kept.quotes);
+      onSending?.(null);
       setSendError(error instanceof Error ? error : new Error(String(error)));
       return;
     } finally {
@@ -870,16 +887,20 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
  * long its turn has run. No name: the avatar says whose. What it does changes by crossfading, and each thing stays a
  * moment, so a passing 请求中 does not flicker by. The line opens its history.
  */
-function Activity({ agent, leaving, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
+export function Activity({ agent, leaving, pose, onOpen, mark, className }: {
+  agent: AgentAtWork; leaving: boolean; pose: { folded: boolean; away: boolean }; onOpen(): void;
+  /** Its avatar, drawn as the agent's messages draw theirs (a message comes out of it onto theirs); the pane's class. */
+  mark?: ReactNode; className?: string;
+}) {
   const now = useSteady(agent.activity?.now ?? { key: "busy", text: "处理中" });
   return (
-    <div className="msg agent-activity" data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined}>
+    <div className={`msg agent-activity${className ? ` ${className}` : ""}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined}>
       <button type="button" className="activity-line" onClick={onOpen} title="打开执行历史" aria-label={`${agent.who}：${now.current.text}`}>
-        <span className="activity-avatar" aria-hidden="true"><span className="msg-avatar msg-avatar-agent"><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>
+        <span className="activity-avatar" aria-hidden="true">{mark ?? <span className="msg-avatar msg-avatar-agent"><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span>}</span>
         <span className="activity-tail">
           <span className="activity-now">
-            {now.previous && <span key={`was-${now.previous.key}`} className="activity-now-text" data-out="">{now.previous.text}</span>}
-            <span key={now.current.key} className="activity-now-text" data-in={now.switched || undefined}>{now.current.text}</span>
+            {now.previous && <span key={`was-${now.n - 1}`} className="activity-now-text" data-out="">{now.previous.text}</span>}
+            <span key={now.n} className="activity-now-text" data-in={now.switched || undefined}>{now.current.text}</span>
           </span>
           {agent.since ? <span className="activity-elapsed"><Elapsed since={agent.since} /></span> : null}
         </span>
@@ -897,19 +918,28 @@ const CROSS_MS = 240;
  * with the one it replaces kept for the crossfade; the same thing's new words (its rate) show at once.
  */
 export function useSteady(now: { key: string; text: string }) {
-  const [state, setState] = useState<{ current: { key: string; text: string }; previous: { key: string; text: string } | null; at: number; switched: boolean }>(
-    () => ({ current: now, previous: null, at: 0, switched: false }),
+  type Shown = { key: string; text: string };
+  // `n` counts the crossfades: what shows is known by it, so words changing in place (a rate, or another thing saying
+  // the same) do not make it come in again.
+  const [state, setState] = useState<{ current: Shown; previous: Shown | null; at: number; switched: boolean; n: number }>(
+    () => ({ current: now, previous: null, at: 0, switched: false, n: 0 }),
   );
   const latest = useRef(now);
   latest.current = now;
   useEffect(() => {
-    if (now.key === state.current.key) {
-      if (now.text !== state.current.text) setState((s) => ({ ...s, current: now }));
+    // The same thing, or another saying the same words: nothing to fade, the words change at once.
+    if (now.key === state.current.key || now.text === state.current.text) {
+      if (now.key !== state.current.key || now.text !== state.current.text) setState((s) => ({ ...s, current: now }));
       return;
     }
-    const timer = setTimeout(() => setState((s) => ({ current: latest.current, previous: s.current, at: Date.now(), switched: true })), Math.max(0, state.at + DWELL_MS - Date.now()));
+    const timer = setTimeout(() => setState((s) => {
+      const next = latest.current;
+      // Back to what shows while it stayed (请求中, a moment of 思考中, 请求中 again): nothing changes.
+      if (next.text === s.current.text) return { ...s, current: next };
+      return { current: next, previous: s.current, at: Date.now(), switched: true, n: s.n + 1 };
+    }), Math.max(0, state.at + DWELL_MS - Date.now()));
     return () => clearTimeout(timer);
-  }, [now.key, now.text, state.current.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [now.key, now.text, state.current.key, state.current.text]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!state.previous) return;
     const timer = setTimeout(() => setState((s) => ({ ...s, previous: null })), CROSS_MS);

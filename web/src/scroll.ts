@@ -70,7 +70,9 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       const bottom = Math.max(0, el.scrollHeight - el.clientHeight);
       // A followed message that was replaced (a streamed reply landing) hands over to the newest.
       if (anchor && !anchor.isConnected) anchor = lastMessage();
-      const target = anchor ? Math.min(bottom, Math.max(0, topOf(anchor) - 12)) : Math.max(0, bottom - gap);
+      // A followed message stops just under what covers the pane's top (a floating bar: its `scroll-padding-top`).
+      const cover = parseFloat(getComputedStyle(el).scrollPaddingTop) || 0;
+      const target = anchor ? Math.min(bottom, Math.max(0, topOf(anchor) - cover - 12)) : Math.max(0, bottom - gap);
       // Content leaving the bottom (an activity folding away, a message on its way replaced by itself) makes the pane
       // shorter for a moment, and the browser pulls it up: that is put back at once, as if it never happened.
       if (settled && placed >= 0 && el.scrollTop < placed - 0.5 && placed <= bottom) place(placed);

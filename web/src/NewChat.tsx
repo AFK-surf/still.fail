@@ -5,7 +5,7 @@ import { Server } from "./icons.tsx";
 import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useStations, type RuntimeKind, type StationView } from "./api.ts";
-import { Composer } from "./Chat.tsx";
+import { Composer, firstMessage } from "./Chat.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Chooser, ChooserItem as Item } from "./ui.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
@@ -83,6 +83,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   }, [profiles, api]);
   const made = useRef<Promise<{ key: string; thread: number }> | null>(null);
   const [making, setMaking] = useState(false);
+  const [sending, setSending] = useState<string | null>(null);
   const pick = (next: Partial<Choice>) => {
     const c = { ...choice, ...next };
     setChoice(c);
@@ -137,7 +138,10 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
             {entry.model} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。
           </p>
         )}
+        {/* The first message, sent: a bubble over the composer until the chat it made takes it (Chat.tsx firstMessage). */}
+        {sending !== null && <div className="msg msg-mine new-chat-sent"><div className="msg-bubble" style={{ viewTransitionName: "sent-message" }}><div className="msg-plain">{sending}</div></div></div>}
         <Composer thread={null} sessionKey={null} ensureChat={ensureChat} placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
+          onSending={(text) => { setSending(text); firstMessage.text = text; }}
           onSent={() => { void made.current?.then(({ key }) => onCreated(station.address, key)); }} />
         {making && <p className="muted new-chat-making">正在 {station.name} 上创建会话…</p>}
       </div>

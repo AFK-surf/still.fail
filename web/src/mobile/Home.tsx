@@ -135,8 +135,8 @@ function AgentsPicture({ item }: { item: ChatItem }) {
   return (
     <span className="m-row-picture" data-count={agents.length || 1} aria-hidden="true">
       {agents.length === 0
-        ? <span className="m-row-agent"><Mark size={18} /></span>
-        : agents.map((a) => <span key={a.key} className="m-row-agent"><MakerIcon maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 13 : 19} /></span>)}
+        ? <span className="m-row-agent"><Mark size={26} /></span>
+        : agents.map((a) => <span key={a.key} className="m-row-agent"><MakerIcon maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 18 : 28} /></span>)}
       {state !== "done" && <Badge state={state} size={10} ring={2} around="var(--m-bg)" style={{ position: "absolute", right: -2, bottom: -2 }} />}
     </span>
   );

@@ -241,13 +241,10 @@ private fun AgentsPicture(item: ChatItem, modifier: Modifier) {
     val agents = item.agents.take(2)
     Box(modifier.size(40.dp)) {
         when {
-            agents.isEmpty() -> Box(Modifier.fillMaxSize().clip(CircleShape).background(C.chip), contentAlignment = Alignment.Center) { Mark(18.dp) }
-            agents.size == 1 -> Box(Modifier.fillMaxSize().clip(CircleShape).background(C.chip), contentAlignment = Alignment.Center) { MakerIcon(agents[0].maker, agents[0].runtime, 19.dp) }
+            agents.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Mark(26.dp) }
+            agents.size == 1 -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { MakerIcon(agents[0].maker, agents[0].runtime, 28.dp) }
             else -> agents.forEachIndexed { i, a ->
-                Box(
-                    Modifier.align(if (i == 0) Alignment.TopStart else Alignment.BottomEnd).size(29.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(C.chip),
-                    contentAlignment = Alignment.Center,
-                ) { MakerIcon(a.maker, a.runtime, 13.dp) }
+                Box(Modifier.align(if (i == 0) Alignment.TopStart else Alignment.BottomEnd).size(21.dp), contentAlignment = Alignment.Center) { MakerIcon(a.maker, a.runtime, 18.dp) }
             }
         }
         badgeState(item.state)?.let { state -> Box(Modifier.align(Alignment.BottomEnd).offset(2.dp, 2.dp)) { Badge(state, 10.dp, 2.dp, C.bg) } }
