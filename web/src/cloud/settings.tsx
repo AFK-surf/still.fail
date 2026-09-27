@@ -343,9 +343,9 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
 function EnrollSteps({ enrollment }: { enrollment: { install: string } }) {
   return (
     <>
-      <p>在那台 Mac（Apple 芯片）的「终端」里执行：</p>
+      <p>在那台机器的终端里执行：</p>
       <CopyCommand text={enrollment.install} />
-      <p className="enroll-hint">装过 ember 的机器也用这条命令。</p>
+      <p className="enroll-hint">macOS（Apple 芯片）和 Linux 都行；装过 ember 的机器也用这条命令。</p>
       <div className="enroll-wait" role="status">
         <span className="spinner" aria-hidden="true" />
         <span><strong>等待这台机器加入</strong><span className="muted">执行命令后会自动继续 · 命令 1 小时内有效</span></span>

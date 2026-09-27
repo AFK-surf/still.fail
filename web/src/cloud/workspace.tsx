@@ -128,7 +128,7 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
       <main className="onboarding-main">
         <Illustration name="no-station" />
         <h1 className="onboarding-title">添加第一台 station</h1>
-        <p className="onboarding-lead">agent 在你的机器上干活。先把一台 Mac 加进来。</p>
+        <p className="onboarding-lead">agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。</p>
         <FirstStation entry={entry} />
         <p className="onboarding-foot muted">
           <Link className="inline-link" to={`/w/${entry.id}/settings/members`}>邀请成员</Link>

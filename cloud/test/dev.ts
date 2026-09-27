@@ -50,6 +50,15 @@ for (const name of ["studio", "mac-mini"]) {
 
 async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", base);
+  // Station releases as scripts/release.sh leaves them with RELEASE_DIR=dist/releases (the Worker's bucket is not here).
+  const release = /^\/releases\/(ember-station-[a-z0-9-]+\.tar\.gz)$/.exec(url.pathname)?.[1];
+  if (release) {
+    try {
+      return void res.writeHead(200, { "content-type": "application/gzip" }).end(await readFile(join(dist, "releases", release)));
+    } catch {
+      return void res.writeHead(404).end("no such release in dist/releases");
+    }
+  }
   if (url.pathname === "/__dev/account") {
     const account = await signIn(url.searchParams.get("user") ?? "alice");
     return void res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(account));

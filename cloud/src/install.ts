@@ -13,7 +13,7 @@ export function installScript(origin: string): string {
 }
 
 /** A release's file, as the bucket keeps it: ember-station-<platform>.tar.gz. */
-export const RELEASE_FILE = /^ember-station-(darwin-arm64|linux-x64)\.tar\.gz$/;
+export const RELEASE_FILE = /^ember-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
 
 // A variable is always braced where words follow it ("\${app}（…）"): sh may take the first byte of a non-ASCII
 // character for part of its name, and set -u stops the script there.
