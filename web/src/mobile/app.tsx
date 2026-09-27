@@ -64,16 +64,18 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
   const [moving, setMoving] = useState<{ from: Page; to: Page; forward: boolean } | null>(null);
   const top = pages.at(-1)!;
   useLayoutEffect(() => {
-    if (location.key === top.key) return;
+    if (location.key === top.location.key) return;
     const page = { key: location.key, location };
-    const at = pages.findIndex((p) => p.key === location.key);
+    const at = pages.findIndex((p) => p.location.key === location.key);
     let next: Page[];
     let forward = true;
     if (type === "POP" && at >= 0) {
       next = pages.slice(0, at + 1);
       forward = false;
     } else if (type === "REPLACE") {
-      next = [...pages.slice(0, -1), page];
+      // The page becoming another in place (a new chat its chat) stays the same page: what is on it that both have (the
+      // composer, with what is typed) is kept.
+      next = [...pages.slice(0, -1), { key: top.key, location }];
     } else {
       next = [...pages, page];
     }

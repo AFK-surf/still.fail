@@ -5,12 +5,11 @@ import { Navigate, Route, Routes, useParams, type Location } from "react-router"
 import { useStations } from "../api.ts";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { MobileShell, type Entry } from "./app.tsx";
-import { ChatScreen } from "./Chat.tsx";
+import { ChatHost } from "./ChatHost.tsx";
 import { ConnectRunScreen, ConnectScreen, NewConnectScreen } from "./Connects.tsx";
 import { RunSettingsScreen } from "./History.tsx";
 import { Home } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
-import { NewChatScreen } from "./NewChat.tsx";
 import { PreviewScreen } from "./Preview.tsx";
 import { Loading } from "./parts.tsx";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
@@ -25,14 +24,15 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
   const routes = (location: Location) => (
     <Routes location={location}>
       <Route index element={<Home />} />
-      <Route path="new" element={<NewChatScreen />} />
+      {/* A new chat and a chat are one page (ChatHost.tsx): as one becomes the other, its composer stays. */}
+      <Route path="new" element={<ChatHost stations={stations} />} />
       <Route path="settings/stations" element={<StationsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
       {/* The desktop's 通用, 成员 and 退出与删除 are one page here. */}
       <Route path="settings/general" element={<WorkspaceScreen />} />
       <Route path="settings/members" element={<WorkspaceScreen />} />
       <Route path="settings/leave" element={<WorkspaceScreen />} />
-      <Route path="s/:station/chats/:chat" element={<InStation stations={stations}><ChatScreen /></InStation>} />
+      <Route path="s/:station/chats/:chat" element={<ChatHost stations={stations} />} />
       <Route path="s/:station/chats/:chat/run/:agent" element={<InStation stations={stations}><RunSettingsScreen /></InStation>} />
       <Route path="s/:station/chats/:chat/preview/:port" element={<InStation stations={stations}><PreviewScreen /></InStation>} />
       <Route path="s/:station/overview" element={<InStation stations={stations}><StationScreen /></InStation>} />

@@ -6,6 +6,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
+import { useHost, type HostComposer } from "./ChatHost.tsx";
 import { Activity, fileSize, Lightbox, useAwayFromBottom, useEmissions, useFileUrl, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Web } from "../icons.tsx";
 import { Prose } from "../Prose.tsx";
@@ -41,13 +42,14 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   const station = useStation();
   const list = useRef<HTMLDivElement>(null);
   const floor = useRef<HTMLDivElement>(null);
-  const draft = useDraft();
+  // The page's composer is its host's (ChatHost.tsx): kept as a new chat becomes this chat.
+  const { draft, use } = useHost();
   const here: Here = { station: station.address, key: sessionKey, view };
+  useComposer(view, here, draft, use);
   return (
     <div className="m-chat">
       <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} />
       <ChatBar view={view} here={here} />
-      <Composer view={view} here={here} draft={draft} list={list} />
     </div>
   );
 }
@@ -492,30 +494,16 @@ export function ComposerBar({ draft, placeholder, locked = false, onPlus, onType
 }
 
 /**
- * Where people write to the chat. The composer empties at once: the message lives in the chat's outbox until the
- * station has it (a failure shows there too). Before the agent has a chat, the first message makes one, bound to the
- * agent, and the page stays (the core shows the chat at the same address).
+ * What the chat's composer (its host's, ChatHost.tsx) writes to: this chat. The composer empties at once: the message
+ * lives in the chat's outbox until the station has it (a failure shows there too). Before the agent has a chat, the
+ * first message makes one, bound to the agent, and the page stays (the core shows the chat at the same address).
  */
-function Composer({ view, here, draft, list }: { view: ChatView; here: Here; draft: Draft; list: RefObject<HTMLDivElement | null> }) {
-  const app = useApp();
+function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostComposer) => void) {
   const api = useApi();
   const call = useStationCall(here.station);
   const sending = useChatSend();
-  const upload = useUpload(draft, here.station);
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);
-  const capsule = useRef<HTMLDivElement>(null);
-  // The list keeps its end clear of the capsule, whatever its height.
-  useLayoutEffect(() => {
-    const el = capsule.current;
-    const pane = list.current;
-    if (!el || !pane) return;
-    const set = () => pane.parentElement?.style.setProperty("--m-bottom", `${el.offsetHeight}px`);
-    set();
-    const observer = new ResizeObserver(set);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [list]);
   const send = () => {
     const text = draft.text.trim();
     const files = draft.files;
@@ -539,29 +527,15 @@ function Composer({ view, here, draft, list }: { view: ChatView; here: Here; dra
       sending.send(thread, text, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ id: _, ...q }) => q)).catch(() => {});
     })();
   };
-  return (
-    <div className="m-composer" ref={capsule}>
-      {/* Files pasted or dropped in go with the message, as ＋ adds them. */}
-      <div className="m-floating m-composer-capsule" onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
-        // Offline, nothing goes to the station: files are neither added nor taken in.
-        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!view.offline) upload(e.clipboardData.files); } }}
-        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !view.offline) e.preventDefault(); }}
-        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!view.offline) upload(e.dataTransfer.files); } }}>
-        {view.offline && <p className="m-composer-offline">这台 station 离线了：这里是之前读到的内容，暂时不能发消息。</p>}
-        <DraftExtras draft={draft} />
-        <ComposerBar draft={draft} placeholder="发消息" locked={view.offline}
-          onPlus={() => openAttach(app, upload)}
-          // Typing starts the session's runtime, so a cold start overlaps the writing.
-          onType={() => {
-            if (!keeper || Date.now() - warmed.current < 60_000) return;
-            warmed.current = Date.now();
-            api.warm(keeper).catch(() => {});
-          }}
-          onSend={send} />
-        {draft.error && <p className="m-error m-composer-error">{draft.error}</p>}
-      </div>
-    </div>
-  );
+  useLayoutEffect(() => use({
+    station: here.station, placeholder: "发消息", offline: view.offline, send,
+    // Typing starts the session's runtime, so a cold start overlaps the writing.
+    type: () => {
+      if (!keeper || Date.now() - warmed.current < 60_000) return;
+      warmed.current = Date.now();
+      api.warm(keeper).catch(() => {});
+    },
+  }));
 }
 
 // ── the chat's own sheet ───────────────────────────────────────────────

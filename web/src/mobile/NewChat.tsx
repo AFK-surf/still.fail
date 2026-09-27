@@ -1,7 +1,7 @@
 // A new chat on a narrow screen, as the Android app has it (apps/android/…/screens/NewChat.kt): it rises from the
 // bottom; say what to do, having picked where it runs (station), on what (model) and how hard it thinks. The first
 // message (or file) makes the session on that station; then the page becomes the chat.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { stationApi, useStationCall, useStations, type ModelOption, type RuntimeKind, type StationView } from "../api.ts";
 import { useCall } from "../core/react.ts";
 import { RUNTIME_LABEL } from "../format.ts";
@@ -11,7 +11,8 @@ import { transitionTo } from "../ui.tsx";
 import { stationBase } from "../station.tsx";
 import { useNavigate } from "react-router";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { BarFrame, ComposerBar, DraftExtras, openAttach, useDraft, useUpload } from "./Chat.tsx";
+import { BarFrame } from "./Chat.tsx";
+import { useHost } from "./ChatHost.tsx";
 import { Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow, Spinner } from "./parts.tsx";
 import { Buddy } from "./Stations.tsx";
 
@@ -51,11 +52,11 @@ export function NewChatScreen() {
 
 function NewChatOn({ view, stations, onStation }: { view: StationView; stations: StationView[]; onStation: (s: string) => void }) {
   const app = useApp();
-  const draft = useDraft();
+  // The page's composer is its host's (ChatHost.tsx): kept as this new chat becomes its chat.
+  const { draft, use } = useHost();
   const call = useCall();
   const stationCall = useStationCall(view.station);
   const api = useMemo(() => stationApi(stationCall), [stationCall]);
-  const upload = useUpload(draft, view.station);
   const [choice, setChoice] = useState<Choice | null>(() => lastChoice(view.station));
   // The model first, from what the station's profiles have enabled; the runtime only when it runs on more than one. A
   // remembered model or runtime no longer there gives way to the first that is.
@@ -110,8 +111,9 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
     queue.current = queue.current.then(() => making).then((m) =>
       call("chat.send", { station: view.station, thread: m.thread.id, text, attachments: files.flatMap((f) => (f.done ? [f.done] : [])), quotes: [] })).catch(() => {});
   };
+  useLayoutEffect(() => use({ station: view.station, placeholder: sent.length ? "发消息" : "做任何事", offline: false, send }));
   if (sent.length) {
-    // Laid out as the chat's page (its list, its bar, its composer), so it gives way to it without a move.
+    // Laid out as the chat's page (its list and bar; the composer is the host's), so it gives way to it without a move.
     return (
       <div className="m-chat m-new-as-chat">
         <div className="m-messages">
@@ -123,12 +125,6 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
           ))}
         </div>
         <BarFrame title={sent[0]!} more={false} />
-        <div className="m-composer">
-          <div className="m-floating m-composer-capsule">
-            <DraftExtras draft={draft} />
-            <ComposerBar draft={draft} placeholder="发消息" onPlus={() => openAttach(app, upload)} onType={() => {}} onSend={send} />
-          </div>
-        </div>
       </div>
     );
   }
@@ -162,14 +158,6 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
               <Chooser label={effort || "默认深度"} onClick={() => pickEffort(app, efforts, effort, (e) => pick({ runtime, model, effort: e }))} />
             </>
           )}
-        </div>
-        <div className="m-floating m-composer-capsule" onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
-          onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); upload(e.clipboardData.files); } }}
-          onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
-          onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); upload(e.dataTransfer.files); } }}>
-          <DraftExtras draft={draft} />
-          <ComposerBar draft={draft} placeholder="做任何事" onPlus={() => openAttach(app, upload)} onType={() => {}} onSend={send} />
-          {draft.error && <p className="m-error m-composer-error">{draft.error}</p>}
         </div>
       </div>
     </>

@@ -294,7 +294,11 @@ button.m-info-row { cursor: pointer; }
 
 /* ── a chat ─────────────────────────────────────────────────────────── */
 
-.m-chat { position: absolute; inset: 0; background: var(--m-bg); --m-bottom: 72px; }
+.m-chat { position: absolute; inset: 0; background: var(--m-bg); }
+/* A new chat and a chat: one page, what is above and one composer at the foot (ChatHost.tsx; --m-bottom is its height). */
+.m-chat-host { position: absolute; inset: 0; --m-bottom: 72px; }
+.m-composer.m-host-composer { z-index: 6; }
+.m-newchat-screen { padding-bottom: var(--m-bottom); box-sizing: border-box; }
 .m-chat-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; padding: calc(var(--m-top) + 6px) 16px 8px 4px; }
 .m-chat-back { display: grid; place-items: center; flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--m-accent) !important; cursor: pointer; }
 .m-chat-bar-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding-right: 8px; }
@@ -498,7 +502,7 @@ button.m-agent-head { cursor: pointer; }
 .m-new-problem { margin-top: 6px !important; font-size: 13px !important; color: var(--m-red); }
 .m-new-problem[data-wait] { color: var(--m-muted); }
 .m-new-spent { margin: 0 12px; padding: 8px 12px; border-radius: 12px; background: color-mix(in srgb, var(--m-warn) 12%, transparent); font-size: 13px; }
-.m-new-bottom { display: flex; flex-direction: column; gap: 4px; flex: none; padding: 8px 10px calc(10px + var(--m-foot)); }
+.m-new-bottom { display: flex; flex-direction: column; gap: 4px; flex: none; padding: 8px 10px 0; }
 .m-choosers { display: flex; gap: 6px; overflow-x: auto; padding: 6px 2px; scrollbar-width: none; }
 .m-choosers::-webkit-scrollbar { display: none; }
 .m-chooser { display: inline-flex; align-items: center; gap: 6px; flex: none; height: 30px; box-sizing: border-box; padding: 0 11px; border-radius: 15px; font-size: 13px !important; white-space: nowrap; cursor: pointer; }
