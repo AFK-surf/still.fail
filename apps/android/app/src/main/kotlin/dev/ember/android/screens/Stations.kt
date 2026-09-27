@@ -74,7 +74,7 @@ import kotlinx.coroutines.launch
 
 /** The buddy's face for a station: at work, idle, or asleep. */
 @Composable
-private fun Buddy(s: StationView, size: Int = 40) {
+internal fun Buddy(s: StationView, size: Int = 40) {
     val dark = C.dark
     val face = when {
         !s.online -> if (dark) R.drawable.buddy_offline_dark else R.drawable.buddy_offline
@@ -126,13 +126,8 @@ fun StationsScreen(current: WorkspaceEntry) {
                 }
             }
         }
-        ListCard {
-            ListRow(onClick = { app.push(Screen.Connects) }) {
-                Text("连接", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                Text("Slack app 和它们绑定的模型", fontSize = 13.sp, color = C.muted)
-                IconIn(Icons.ChevronRight, 14.dp, C.subtle)
-            }
-            if (list != null && isManager(current)) ListRow(onClick = { openAddStation(app, current, list.map { it.id }) }) { Text("＋ 添加 station", fontSize = 15.sp, color = C.accent) }
+        if (list != null && isManager(current)) ListCard {
+            ListRow(onClick = { openAddStation(app, current, list.map { it.id }) }) { Text("＋ 添加 station", fontSize = 15.sp, color = C.accent) }
         }
         Spacer(Modifier.height(30.dp))
     }
@@ -177,18 +172,13 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 }
                 SectionHeader("连接", start = 24.dp)
                 ListCard {
-                    overview.connects.forEach { c ->
-                        ListRow(onClick = { app.push(Screen.Connect(address, c.id)) }) {
-                            if (c.kind == "slack") SlackMark(14.dp) else Mark(14.dp)
-                            Text(c.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                            Text(connectionText(c.connection.state), fontSize = 13.sp, color = C.muted)
-                        }
-                    }
+                    overview.connects.forEach { c -> ConnectRow(address, c) }
                     ListRow {
                         Mark(14.dp)
                         Text("ember 对话", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                         Text("内置", fontSize = 13.sp, color = C.muted)
                     }
+                    if (s.online) ListRow(onClick = { app.push(Screen.NewConnect(address)) }) { Text("＋ 添加连接", fontSize = 15.sp, color = C.accent) }
                 }
             }
             Spacer(Modifier.height(30.dp))
@@ -196,9 +186,6 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
     }
 }
 
-private fun connectionText(state: String) = when (state) {
-    "connected" -> "在线"; "reconnecting" -> "重连中"; "starting" -> "连接中"; "error" -> "连接失败"; "no_tokens" -> "未连接 Slack"; else -> "已停用"
-}
 
 
 /** A profile on its station's page: its allowance and how many of its models are enabled; its page picks them. */

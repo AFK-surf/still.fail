@@ -116,7 +116,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
     <>
       {station.name && (
         <Chooser side="top" label={<><Server size={13} />{station.name}</>} title="在哪台 station 上运行">
-          {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}>{s.name}</Item>)}
+          {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={13} />{s.name}</Item>)}
         </Chooser>
       )}
       {!runtime || !model ? (

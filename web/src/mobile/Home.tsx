@@ -34,7 +34,11 @@ export function Home() {
           {invited && <span className="m-dot" aria-label="有邀请" />}
           <ChevronDown size={16} />
         </button>
-        <NavButton icon={Server} iconSize={20} label="Station" onClick={() => app.push(app.at("/settings/stations"))} />
+        {/* A station not working marks it: grey offline, orange coming back, red failing (the core's `trouble`); its page says which. */}
+        <span className="m-home-station">
+          <NavButton icon={Server} iconSize={20} label={all.value?.trouble ? `Station：${all.value.trouble.text}` : "Station"} onClick={() => app.push(app.at("/settings/stations"))} />
+          {all.value?.trouble && <span className="m-trouble-dot" data-state={all.value.trouble.state} aria-hidden="true" />}
+        </span>
       </header>
       {/* One capsule floating over the list, round at both ends like what is in it: the switch fills it, and the new-chat
           button closes it at the right, a disc in the accent. */}

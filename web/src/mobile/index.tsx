@@ -6,7 +6,7 @@ import { useStations } from "../api.ts";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { MobileShell, type Entry } from "./app.tsx";
 import { ChatScreen } from "./Chat.tsx";
-import { ConnectRunScreen, ConnectScreen, ConnectsScreen, NewConnectScreen } from "./Connects.tsx";
+import { ConnectRunScreen, ConnectScreen, NewConnectScreen } from "./Connects.tsx";
 import { RunSettingsScreen } from "./History.tsx";
 import { Home } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
@@ -28,7 +28,6 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="new" element={<NewChatScreen />} />
       <Route path="settings/stations" element={<StationsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
-      <Route path="settings/connects" element={<ConnectsScreen />} />
       {/* The desktop's 通用, 成员 and 退出与删除 are one page here. */}
       <Route path="settings/general" element={<WorkspaceScreen />} />
       <Route path="settings/members" element={<WorkspaceScreen />} />

@@ -129,7 +129,14 @@ fun HomeScreen(current: WorkspaceEntry) {
                 if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = "有邀请" })
                 IconIn(Icons.ChevronDown, 16.dp, C.muted)
             }
-            NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
+            // A station not working marks it: grey offline, orange coming back, red failing (the core's `trouble`); its page says which.
+            Box {
+                NavButton(Icons.Server, { app.push(Screen.Stations) }, 20.dp)
+                all.value?.trouble?.let { t ->
+                    val dot = when (t.state) { "reconnecting" -> C.accent; "error" -> C.red; else -> C.subtle }
+                    Box(Modifier.align(Alignment.TopEnd).offset((-3).dp, 3.dp).size(13.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(dot).semantics { contentDescription = t.text })
+                }
+            }
         }
         Toolbar(app, haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height })
     }

@@ -236,7 +236,7 @@ private fun pickStation(app: AppState, stations: List<StationView>, current: Str
         SheetHead("在哪台 station 上跑")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             stations.forEach { s ->
-                PickRow(s.name, checked = s.station == current) { onPick(s.station); app.sheet = null }
+                PickRow(s.name, s.summary, checked = s.station == current, leading = { Buddy(s, 36) }) { onPick(s.station); app.sheet = null }
             }
         }
     }
@@ -259,7 +259,7 @@ private fun pickRuntime(app: AppState, runtimes: List<String>, current: String, 
         SheetGrab()
         SheetHead("用哪个运行时")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            runtimes.forEach { rt -> PickRow(RUNTIME_LABEL[rt] ?: rt, checked = rt == current) { onPick(rt); app.sheet = null } }
+            runtimes.forEach { rt -> PickRow(RUNTIME_LABEL[rt] ?: rt, checked = rt == current, leading = { ModelMark(null, rt, 36.dp) }) { onPick(rt); app.sheet = null } }
         }
     }
 }

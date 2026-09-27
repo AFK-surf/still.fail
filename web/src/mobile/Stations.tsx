@@ -8,13 +8,14 @@ import { Check, ChevronRight, More } from "../icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
 import { useDark } from "../theme.ts";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
+import { ConnectRow } from "./Connects.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Button, Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, NavButton, PickRow, QuotaRings, Ring, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
 
 const BASE = import.meta.env.BASE_URL;
 
 /** The buddy's face for a station: at work, idle, or asleep. */
-function Buddy({ s, size = 40 }: { s: StationView; size?: number }) {
+export function Buddy({ s, size = 40 }: { s: StationView; size?: number }) {
   const dark = useDark();
   const face = !s.online ? "offline" : (s.overview?.counts.running ?? 0) > 0 ? "working" : "idle";
   return <img className="m-buddy" src={`${BASE}${face}${dark ? "-dark" : ""}.svg`} alt="" width={size} height={size} />;
@@ -44,9 +45,6 @@ export function StationsScreen() {
         </Card>
       ))}
       <ListCard>
-        <ListRow onClick={() => app.push(app.at("/settings/connects"))}>
-          <span className="m-grow m-row-title">连接</span><span className="m-row-note">Slack app 和它们绑定的模型</span><ChevronRight size={14} className="m-subtle" />
-        </ListRow>
         {manager && list && (
           <ListRow onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={list.map((s) => s.id)} /> })}>
             <span className="m-accent m-row-title">＋ 添加 station</span>
@@ -142,14 +140,9 @@ export function StationScreen() {
               </ListCard>
               <SectionHeader title="连接" start={24} />
               <ListCard>
-                {s.overview.connects.map((c) => (
-                  <ListRow key={c.id} onClick={() => app.push(app.at(`/s/${s.id}/connects/${encodeURIComponent(c.id)}`))}>
-                    {c.kind === "slack" ? <SlackMark size={14} /> : <Mark size={14} />}
-                    <span className="m-grow m-row-title">{c.name}</span>
-                    <span className="m-row-note">{connectionText(c.connection.state)}</span>
-                  </ListRow>
-                ))}
+                {s.overview.connects.map((c) => <ConnectRow key={c.id} connect={c} onClick={() => app.push(app.at(`/s/${s.id}/connects/${encodeURIComponent(c.id)}`))} />)}
                 <ListRow><Mark size={14} /><span className="m-grow m-row-title">ember 对话</span><span className="m-row-note">内置</span></ListRow>
+                {s.online && <ListRow onClick={() => app.push(app.at(`/s/${s.id}/connects/new`))}><span className="m-accent m-row-title">＋ 添加连接</span></ListRow>}
               </ListCard>
             </>
           )}
@@ -185,10 +178,6 @@ function StationMenu({ s }: { s: StationView }) {
       </div>
     </>
   );
-}
-
-function connectionText(state: string): string {
-  return ({ connected: "在线", reconnecting: "重连中", starting: "连接中", error: "连接失败", no_tokens: "未连接 Slack" } as Record<string, string>)[state] ?? "已停用";
 }
 
 /** A profile on its station's page: its allowance and how many of its models are enabled; its page picks them. */

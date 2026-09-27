@@ -12,6 +12,7 @@ import { useNavigate } from "react-router";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ComposerBar, DraftExtras, openAttach, useDraft, useUpload } from "./Chat.tsx";
 import { Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow } from "./parts.tsx";
+import { Buddy } from "./Stations.tsx";
 
 /** What the new chat runs on; kept per station for next time. */
 interface Choice { runtime: string; model: string; effort: string }
@@ -156,7 +157,7 @@ function pickStation(app: MobileApp, stations: StationView[], current: string, o
   app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab /><SheetHead title="在哪台 station 上跑" />
-      <div className="m-sheet-scroll">{stations.map((s) => <PickRow key={s.station} label={s.name} checked={s.station === current} onClick={() => { onPick(s.station); app.sheet(null); }} />)}</div>
+      <div className="m-sheet-scroll">{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.station); app.sheet(null); }} />)}</div>
     </>
   ) });
 }
@@ -179,7 +180,7 @@ function pickRuntime(app: MobileApp, runtimes: string[], current: string, onPick
   app.sheet({ height: 0.36, content: () => (
     <>
       <SheetGrab /><SheetHead title="用哪个运行时" />
-      <div className="m-sheet-scroll">{runtimes.map((rt) => <PickRow key={rt} label={RUNTIME_LABEL[rt as RuntimeKind] ?? rt} checked={rt === current} onClick={() => { onPick(rt); app.sheet(null); }} />)}</div>
+      <div className="m-sheet-scroll">{runtimes.map((rt) => <PickRow key={rt} label={RUNTIME_LABEL[rt as RuntimeKind] ?? rt} checked={rt === current} leading={<ModelMark runtime={rt as RuntimeKind} size={36} />} onClick={() => { onPick(rt); app.sheet(null); }} />)}</div>
     </>
   ) });
 }

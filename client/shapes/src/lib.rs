@@ -932,6 +932,15 @@ pub struct StationState {
     pub message: Option<String>,
 }
 
+/// What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StationTrouble {
+    pub text: String,
+    pub state: String,
+}
+
 /// An agent of a sidebar row, with what its mark shows.
 #[typeshare]
 #[skip_serializing_none]
@@ -1059,6 +1068,9 @@ pub struct ChatsView {
     pub stations: Vec<StationState>,
     pub loading: bool,
     pub days: Vec<ChatDay>,
+    /// The stations not working as they should, in a line ("MBA 离线", "正在重连 Studio", "2 台 station 异常"), for a
+    /// corner of the list; absent while all are (a station first connecting is not one).
+    pub trouble: Option<StationTrouble>,
 }
 
 /// Used up until a time (or no one knows when), in words.

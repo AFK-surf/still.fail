@@ -20,48 +20,17 @@ function Presence({ state }: { state: string }) {
   return <span className="m-presence" data-state={state} />;
 }
 
-export function ConnectsScreen() {
-  const app = useApp();
-  const [onlyMine, setOnlyMine] = useOnlyMine();
-  const connects = useConnects(app.entry.id, onlyMine);
-  const stations = (useStations(app.entry.id).value ?? []).filter((s) => s.online);
-  const items = connects.value?.items ?? [];
-  const many = (useStations(app.entry.id).value ?? []).length > 1;
-  const add = () => {
-    if (stations.length === 1) return app.push(app.at(`/s/${stations[0]!.id}/connects/new`));
-    app.sheet({ height: 0.45, content: () => (
-      <>
-        <SheetGrab /><SheetHead title="加在哪台 station 上" />
-        <div className="m-sheet-scroll">{stations.map((s) => <PickRow key={s.id} label={s.name} onClick={() => app.push(app.at(`/s/${s.id}/connects/new`))} />)}</div>
-      </>
-    ) });
-  };
+/** A connect in its station's list: its mark and name, how it runs, and its presence. */
+export function ConnectRow({ connect: c, onClick }: { connect: Connect; onClick: () => void }) {
   return (
-    <div className="m-screen m-scroll">
-      <TopBack label="会话" onBack={app.pop} />
-      <LargeTitle small="设置" big="连接" />
-      <p className="m-page-note">连接是人找到 ember 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</p>
-      <div className="m-pad-x-12 m-seg-block">
-        <Seg options={["全部", "我添加的"]} selected={onlyMine ? 1 : 0} onSelect={(i) => setOnlyMine(i === 1)} height={36} fill />
-      </div>
-      <ListCard>
-        {items.length === 0 && (
-          <ListRow><span className="m-muted m-row-title">{connects.error?.message ?? (!connects.value || connects.value.loading ? "正在读取…" : onlyMine ? "没有你添加的连接。" : "还没有连接。")}</span></ListRow>
-        )}
-        {items.map(({ connect: c, station, stationName }) => (
-          <ListRow key={`${station}/${c.id}`} onClick={() => app.push(`${stationBase(station)}/connects/${encodeURIComponent(c.id)}`)}>
-            <SlackMark size={16} />
-            <span className="m-grow m-row-text">
-              <span className="m-row-title">{c.name}{c.team && <span className="m-row-aside"> · {c.team}</span>}</span>
-              <span className="m-row-note">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.bind.model}` : ""}{many ? ` · ${stationName}` : ""}</span>
-            </span>
-            <span className="m-row-status"><Presence state={c.presence} />{c.statusText}</span>
-          </ListRow>
-        ))}
-        {stations.length > 0 && <ListRow onClick={add}><span className="m-accent m-row-title">＋ 添加连接</span></ListRow>}
-      </ListCard>
-      <div style={{ height: 30 }} />
-    </div>
+    <ListRow onClick={onClick}>
+      <SlackMark size={16} />
+      <span className="m-grow m-row-text">
+        <span className="m-row-title">{c.name}{c.team && <span className="m-row-aside"> · {c.team}</span>}</span>
+        <span className="m-row-note">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>
+      </span>
+      <span className="m-row-status"><Presence state={c.presence} />{c.statusText}</span>
+    </ListRow>
   );
 }
 

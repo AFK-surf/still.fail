@@ -81,7 +81,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
           {options.length === 0 ? <span className="triple-model">没有可用模型</span> : (
             <>
               <span className="triple-model"><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={13} /><span className="triple-model-name">{value.model || "选模型"}</span></span>
-              {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className="triple-part triple-runtime">{RUNTIME_LABEL[value.runtime]}</span>}
+              {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className="triple-part triple-runtime"><RuntimeLogo runtime={value.runtime} size={13} />{RUNTIME_LABEL[value.runtime]}</span>}
               <span className="triple-part triple-effort" data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
               <span className="triple-part triple-account">
                 {shown && <ProviderLogo runtime={value.runtime} kind={shown.kind ?? "env"} size={13} />}

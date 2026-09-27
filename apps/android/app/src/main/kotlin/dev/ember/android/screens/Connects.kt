@@ -102,46 +102,17 @@ fun PresenceDot(state: String) {
     })
 }
 
+/** A connect in its station's list: its mark and name, how it runs, and its presence. */
 @Composable
-fun ConnectsScreen(current: WorkspaceEntry) {
+fun ConnectRow(station: String, c: Connect) {
     val app = LocalApp.current
-    var onlyMine by remember { mutableStateOf(false) }
-    val connects by rememberTopic<ConnectsView>(app.core, Topics.connects(current.workspace.id, onlyMine))
-    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
-    val online = stations.value.orEmpty().filter { it.online }
-    val many = stations.value.orEmpty().size > 1
-    val items = connects.value?.items.orEmpty()
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack("会话", app::pop)
-        LargeTitle("设置", "连接")
-        Text("连接是人找到 ember 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 10.dp))
-        Seg(listOf("全部", "我添加的"), if (onlyMine) 1 else 0, { onlyMine = it == 1 }, Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth(), height = 36.dp, fill = true)
-        ListCard {
-            if (items.isEmpty()) ListRow {
-                Text(connects.error?.message ?: if (connects.value == null || connects.value!!.loading) "正在读取…" else if (onlyMine) "没有你添加的连接。" else "还没有连接。", fontSize = 15.sp, color = C.muted)
-            }
-            items.forEach { item ->
-                val c = item.connect
-                ListRow(onClick = { app.push(Screen.Connect(item.station, c.id)) }) {
-                    SlackMark(16.dp)
-                    Column(Modifier.weight(1f)) {
-                        Text(c.name + (c.team?.let { " · $it" } ?: ""), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(listOfNotNull(c.modeText, c.runtimeText, c.bind.model, item.stationName.takeIf { many }).joinToString(" · "), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) { PresenceDot(c.presence); Text(c.statusText, fontSize = 12.sp, color = C.muted) }
-                }
-            }
-            if (online.isNotEmpty()) ListRow(onClick = {
-                if (online.size == 1) app.push(Screen.NewConnect(online.first().station))
-                else app.sheet = SheetSpec(0.45f) {
-                    SheetGrab(); SheetHead("加在哪台 station 上")
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-                        online.forEach { s -> PickRow(s.name) { app.push(Screen.NewConnect(s.station)) } }
-                    }
-                }
-            }) { Text("＋ 添加连接", fontSize = 15.sp, color = C.accent) }
+    ListRow(onClick = { app.push(Screen.Connect(station, c.id)) }) {
+        SlackMark(16.dp)
+        Column(Modifier.weight(1f)) {
+            Text(c.name + (c.team?.let { " · $it" } ?: ""), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(c.modeText, c.runtimeText, c.bind.model).joinToString(" · "), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Spacer(Modifier.height(30.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) { PresenceDot(c.presence); Text(c.statusText, fontSize = 12.sp, color = C.muted) }
     }
 }
 

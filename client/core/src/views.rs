@@ -347,6 +347,7 @@ impl Views {
             self.ok(Topic::Workspace { workspace: scope.to_string() }).and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default()
         };
         let mut states = Vec::new();
+        let mut troubles: Vec<(&str, String)> = Vec::new();
         let mut rows = Vec::new();
         let mut loading = false;
         for s in &stations {
@@ -414,7 +415,7 @@ impl Views {
                 let link = self.link(&s.address, true);
                 let link_state = link["state"].as_str().unwrap_or("connecting");
                 let link_message = link["message"].clone();
-                match read {
+                match &read {
                     Some(Err(error)) => ("error", json!(error.message)),
                     // Rows already read stay in view while the link comes back.
                     Some(Ok(_)) => match link_state {
@@ -428,10 +429,30 @@ impl Views {
                     }
                 }
             };
+            // What is wrong with it, if anything: offline, failing, or its link coming back (with what was read of it
+            // there to show; a station first connecting is only loading).
+            let wrong = match state {
+                "offline" => Some(("offline", format!("{} 离线", s.name))),
+                "error" => Some(("error", format!("连不上 {}", s.name))),
+                "connecting" if matches!(read, Some(Ok(_))) => Some(("reconnecting", format!("正在重连 {}", s.name))),
+                _ => None,
+            };
+            if let Some(w) = wrong {
+                troubles.push(w);
+            }
             states.push(json!({ "station": s.address, "id": s.id, "name": s.name, "state": state, "message": message }));
         }
         let days = self.days(rows);
-        Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days })))
+        // One says itself; several are counted, marked by the worst.
+        let trouble = match troubles.as_slice() {
+            [] => Value::Null,
+            [(state, text)] => json!({ "text": text, "state": state }),
+            all => {
+                let worst = ["error", "offline", "reconnecting"].into_iter().find(|w| all.iter().any(|(s, _)| s == w)).unwrap_or("offline");
+                json!({ "text": format!("{} 台 station 异常", all.len()), "state": worst })
+            }
+        };
+        Some(Ok(json!({ "me": me, "stations": states, "loading": loading, "days": days, "trouble": trouble })))
     }
 
     /// Rows newest first, grouped by the viewer's local calendar day.
@@ -1437,6 +1458,8 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!(ids(&v), vec!["1", "1", "s1"]);
             assert_eq!(v["stations"][1]["state"], "offline");
+            // The list's corner says which station is wrong.
+            assert_eq!(v["trouble"], json!({"text": "beta 离线", "state": "offline"}));
             // Each of its rows says so itself; the online station's say nothing.
             let items = &v["days"][0]["items"];
             assert_eq!((items[0]["offline"].clone(), items[1]["offline"].clone()), (Value::Null, json!("beta 离线")));
@@ -1455,6 +1478,7 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!((v["stations"][0]["state"].as_str(), v["stations"][0]["message"].as_str()), (Some("connecting"), Some("连接断开了")));
             assert_eq!(ids(&v).len(), 2);
+            assert_eq!(v["trouble"], json!({"text": "正在重连 alpha", "state": "reconnecting"}));
             // Its rows say so themselves; the other station's say nothing. Failing and retried, the same, in other words.
             let reconnecting = |v: &Value| v["days"][0]["items"].as_array().unwrap().iter().map(|i| (i["station"].as_str().unwrap().to_string(), i["reconnecting"].clone())).collect::<Vec<_>>();
             assert!(reconnecting(&v).contains(&("ws/a".into(), json!("正在重连 alpha…"))), "{v}");

@@ -65,7 +65,23 @@ export function ChatList({ scope, newChat, settings }: { scope: string; newChat:
           <ChatPane chats={mine} scope={scope} onlyMine newChat={newChat} settings={settings} hidden={!onlyMine} />
         </div>
       </div>
+      {scope !== "local" && <StationTrouble chats={all} to={`${settings}/stations`} />}
     </>
+  );
+}
+
+/**
+ * The workspace's stations not working as they should, in a line under the list (the core's `trouble`): which, or how
+ * many, and the worst of it. It leads to the stations. Nothing while all work.
+ */
+function StationTrouble({ chats, to }: { chats: ReturnType<typeof useChats>; to: string }) {
+  const trouble = chats.value?.trouble;
+  if (!trouble) return null;
+  return (
+    <NavLink className="nav-row station-trouble" to={to} data-state={trouble.state}>
+      {trouble.state === "reconnecting" ? <span className="spinner row-spinner" aria-hidden="true" /> : <Unplug size={13} />}
+      <span className="station-trouble-text">{trouble.text}</span>
+    </NavLink>
   );
 }
 
