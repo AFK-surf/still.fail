@@ -20,6 +20,7 @@ import { PeopleContext, profilesPage, StationContext, stationBase, type Station 
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
 import { toMadeChat } from "../Chat.tsx";
+import { ComposerDock } from "../dock.tsx";
 import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
 import { Avatar } from "./gate.tsx";
@@ -66,6 +67,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
           ? <nav className="sidebar" aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className="brand brand-compact"><SidebarBrand /></div><SettingsNav entry={entry} /><div className="nav-foot"><WorkspaceSwitcher current={entry} /></div></nav>
           : <WorkspaceSidebar entry={entry} />}
         <main className="main">
+          <ComposerDock>
           <Routes>
             <Route index element={<WorkspaceHome id={entry.id} stations={found.value && stations} />} />
             <Route path="settings" element={<Navigate to="stations" replace />} />
@@ -80,6 +82,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
+          </ComposerDock>
         </main>
       </div>
     </PeopleContext.Provider>

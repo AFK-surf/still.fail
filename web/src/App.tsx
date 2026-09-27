@@ -12,6 +12,7 @@ import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
 import { Loading } from "./ui.tsx";
 import { toMadeChat } from "./Chat.tsx";
+import { ComposerDock } from "./dock.tsx";
 import { Mark } from "./brand.tsx";
 
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
@@ -44,6 +45,7 @@ export function App() {
       <div className="shell" data-detail={detail}>
         <Sidebar />
         <main className="main">
+          <ComposerDock>
           <Routes>
             <Route path="/" element={<Navigate to="/chats" replace />} />
             <Route path="/chats/:chat?" element={<ChatPage />} />
@@ -57,6 +59,7 @@ export function App() {
             <Route path="/settings/accounts/:id" element={<AccountPage />} />
             <Route path="*" element={<Navigate to="/chats" replace />} />
           </Routes>
+          </ComposerDock>
         </main>
       </div>
       </Tooltip.Provider>

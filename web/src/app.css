@@ -4,7 +4,7 @@
 /* ── shell ─────────────────────────────────────────────────────────── */
 
 .shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); height: 100vh; height: 100dvh; }
-.main { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.main { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .gate { height: 100%; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 24px; text-align: center; }
 .gate h1 { margin: 8px 0 0; font-size: var(--text-md); }
 .gate p { margin: 0; color: var(--muted); max-width: 36em; }
@@ -1217,15 +1217,19 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .new-chat-inner > .composer-wrap, .new-chat-inner > form, .new-chat-inner > .composer { justify-self: stretch; text-align: left; }
 .new-chat-title { margin: 0; font-size: var(--text-lg); font-weight: 600; }
 .new-chat-sub { margin: 0 0 8px; color: var(--muted); font-size: var(--text-sm); }
-.new-chat .composer-wrap { padding: 0; }
-.new-chat .composer-box { min-height: 96px; }
+/* The chat pages' one composer (dock.tsx) sits over its place on the page, laid out for a new chat or a chat. */
+.composer-slot { flex: none; }
+.new-chat-inner > .composer-slot { justify-self: stretch; }
+.composer-dock { position: absolute; z-index: 3; view-transition-name: composer; }
+.composer-dock .composer, .composer-dock .composer-wrap { border-top: 0; }
+.composer-dock[data-variant="new"] .composer-wrap { padding: 0; text-align: left; }
+.composer-dock[data-variant="new"] .composer-box { min-height: 96px; }
 .new-chat .illus { margin-bottom: 4px; }
 @media (max-height: 640px) { .new-chat .illus { display: none; } }
 .new-chat-status { min-height: 1.5em; margin: 0; font-size: var(--text-xs); color: var(--muted); }
 .new-chat-held { border: 1px solid var(--line); }
 /* A new chat's first message sent, its page becomes the chat: the box it was written in moves down to where the chat's
    is, and the rest crossfades (App.tsx and cloud/workspace.tsx navigate with a view transition). */
-:is(.new-chat, .chat) .composer-box { view-transition-name: composer; }
 ::view-transition-group(composer) { animation-duration: 340ms; animation-timing-function: var(--ease-out); }
 ::view-transition-old(composer), ::view-transition-new(composer) { height: 100%; object-fit: none; object-position: left top; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; }

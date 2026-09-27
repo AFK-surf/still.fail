@@ -5,7 +5,7 @@ import { Server } from "./icons.tsx";
 import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useStations, type RuntimeKind, type StationView } from "./api.ts";
-import { Composer } from "./Chat.tsx";
+import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Chooser, ChooserItem as Item, transitionTo } from "./ui.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
@@ -132,8 +132,11 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
     </>
   ), [stations, station, view, runtime, choice, model]);
 
+  const carry = useCarryDraft();
+  // The chat pages' one composer (dock.tsx): here in the page, then, once something is sent, at the foot as the chat's.
   const composer = (
-    <Composer thread={null} sessionKey={null} ensureChat={ensureChat} placeholder={sent.length ? "发消息" : "做任何事"} {...(sent.length ? {} : { toolbar })} locked={!runtime || !model} roomy={!sent.length}
+    <ComposerSlot variant={sent.length ? "chat" : "new"} station={station} draftKey={`new:${station.address}`} thread={null} sessionKey={null} ensureChat={ensureChat}
+      placeholder={sent.length ? "发消息" : "做任何事"} {...(sent.length ? {} : { toolbar })} locked={!runtime || !model} roomy={!sent.length}
       // The first message makes the page the chat's at once: the scene fades, the message is where the chat has it,
       // the composer goes down to where the chat's is. More can follow before the chat is made; they go in order.
       onSending={(text) => {
@@ -144,7 +147,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       onSent={() => {
         if (left.current) return;
         left.current = true;
-        void made.current?.then(({ key }) => onCreated(station.address, key));
+        // What is being typed goes on in the chat, in the same composer.
+        void made.current?.then(({ key }) => { carry(`${station.address}:${key}`); onCreated(station.address, key); });
       }} />
   );
   if (sent.length) {

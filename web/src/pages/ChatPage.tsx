@@ -159,7 +159,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
         </div>
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
-      <ChatPanel chat={chat} lives={lives} onOpenHistory={openHistory} {...firstMessage} />
+      <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} {...firstMessage} />
       </div>
         {panel && shown && (
           <Tabs.Root className="side-panel" value={shown} onValueChange={setActive} data-opening={opening || undefined} onAnimationEnd={(e) => { if (e.target === e.currentTarget) setOpening(false); }}>

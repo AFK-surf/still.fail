@@ -3,11 +3,12 @@
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Download, Edit, Plus, Quote as QuoteIcon, Read, Received, Said, Search, Send, Sparks, Think, Web } from "./icons.tsx";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, type Activity as ActivityView, type Api, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { ComposerSlot } from "./dock.tsx";
 import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
 import { useStickToBottom } from "./scroll.ts";
@@ -28,8 +29,9 @@ export function toMadeChat(go: () => void): void {
   void transitionTo(go, () => document.querySelector(":is(.chat-list, .m-messages) :is(.msg-mine, .m-mine)") !== null, true);
 }
 
-export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
-  chat: ChatView; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
+export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent }: {
+  /** Whose draft the composer shows here. */
+  chat: ChatView; draftKey: string; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
   ensureChat?: () => Promise<{ key: string; thread: number }>; onSent?: (thread: number) => void;
 }) {
   const station = useStation();
@@ -184,7 +186,8 @@ export function ChatPanel({ chat, lives, onOpenHistory, ensureChat, onSent }: {
         </button>
       )}
       {chat.offline && <p className="offline-notice" role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
-      <Composer thread={id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)}
+      {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
+      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)}
         locked={chat.offline} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
@@ -540,7 +543,8 @@ interface Pending { id: number; name: string; size: number; done: Attachment | n
  * or dropped) go to the workspace of a session in the chat on the station as
  * soon as they are added.
  */
-export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = "发消息", locked = false, roomy = false }: {
+/** What the composer writes to, and how it shows. */
+export interface ComposerProps {
   /** The chat written to, and its session; both null for a new chat, made by `ensureChat` with the first message. */
   thread: number | null;
   sessionKey: string | null;
@@ -558,7 +562,16 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   locked?: boolean;
   /** Text above, toolbar below, even for one line (a new chat, whose toolbar holds choices). */
   roomy?: boolean;
-}) {
+  /** Whose draft it shows: changing it keeps what is typed for the one before and brings back the next one's. */
+  draftKey?: string;
+  /** A key whose draft goes on from what is typed now, instead of its own (a new chat becoming its chat). */
+  carry?: MutableRefObject<string | null>;
+}
+
+/** Drafts put away as the composer moved to another chat, by key. */
+const drafts = new Map<string, { text: string; files: Pending[] }>();
+
+export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = "发消息", locked = false, roomy = false, draftKey, carry }: ComposerProps}) {
   const api = useApi();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
@@ -583,6 +596,18 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   const chat = useChatSend();
   const [starting, setStarting] = useState(false);
   const [sendError, setSendError] = useState<Error | null>(null);
+  // Another chat: what is typed is kept for the one before, and the next one's comes back; unless it is to go on.
+  const shownKey = useRef(draftKey);
+  useLayoutEffect(() => {
+    const before = shownKey.current;
+    if (before === draftKey) return;
+    shownKey.current = draftKey;
+    if (carry && draftKey !== undefined && carry.current === draftKey) { carry.current = null; return; }
+    if (before !== undefined && (text || files.length)) drafts.set(before, { text, files });
+    const next = draftKey === undefined ? undefined : drafts.get(draftKey);
+    if (draftKey !== undefined) drafts.delete(draftKey);
+    setText(next?.text ?? ""); setFiles(next?.files ?? []); setSendError(null);
+  }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // The composer empties at once: the message lives in the chat's outbox until the station has it (a failure shows there too).
   const send = async (value: string) => {
     const kept = { text, files, quotes };
