@@ -1496,7 +1496,7 @@ mod tests {
             t.set(link("ws/b"), json!({"state": "online"}));
             t.read(&mut ui, 1).await;
             // One wrong station says itself.
-            assert_eq!(ui.value.as_ref().unwrap()["trouble"], json!({"text": "gamma 离线", "state": "offline"}));
+            assert_eq!(ui.value.as_ref().unwrap()["trouble"], json!({"text": "gamma 离线", "state": "offline"}), "{}", ui.value.as_ref().unwrap()["stations"]);
 
             // One station failing shows as that station's state; the other's rows stay.
             t.store.set(&rows("ws/a"), Err(CoreError::new("http_500", "坏了")));
