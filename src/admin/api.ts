@@ -3,7 +3,7 @@
 //
 // Clients follow GET /events instead of asking again on a timer: every change
 // to what the API shows is announced there (see docs/station-storage.md).
-import type { MachineLogin } from "../machine-logins.ts";
+import type { MachineLogins } from "../machine-logins.ts";
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import type { EventEmitter } from "node:events";
@@ -63,7 +63,7 @@ export interface AdminDeps {
   /** Check every profile shortly after start (the real station; tests leave it off). */
   checkOnStart?: boolean;
   /** Who this machine's own Claude Code and Codex are signed in as (machine-logins.ts), for the pages to say. */
-  machineLogins?: () => MachineLogin[];
+  machineLogins?: Pick<MachineLogins, "get" | "changes">;
 }
 
 /** How often quotas are asked again while someone follows /events, and host info sampled while someone asks for it. */
@@ -199,6 +199,7 @@ export class AdminApi {
       this.#rowsChanged();
     });
     deps.mesh?.changes?.on("change", () => this.#overviewChanged());
+    deps.machineLogins?.changes.on("change", () => this.#overviewChanged());
     const { changes } = deps.store;
     changes.on("session", (key: string) => {
       this.#dirtySessions.add(key);
@@ -897,7 +898,7 @@ export class AdminApi {
       disk: diskRoom(config.dataDir),
       // Sign-ins that will make a profile when they succeed (POST /logins), with the profile they made once they did.
       logins: [...this.#pending].map(([id, p]) => ({ id, runtime: p.runtime, job: this.#deps.logins.get(id), created: p.created })),
-      machineLogins: this.#deps.machineLogins?.() ?? [],
+      machineLogins: this.#deps.machineLogins?.get() ?? [],
       // Slack apps made here and waiting for their connect: whether Slack sent their install back yet (no tokens).
       slackInstalls: [...this.#installs].map(([state, i]) => ({ state, appId: i.appId, installed: i.botToken !== null, team: i.team })),
     };

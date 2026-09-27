@@ -2,6 +2,7 @@
 // the pages that ask for a first profile to say so. Only read: ember's profiles never take these credentials over
 // (copying them would fork each vendor's single-use refresh tokens and sign the machine's own CLI out later).
 import { execFile } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -30,8 +31,12 @@ const FRESH_MS = 2 * 60_000;
 
 const LABEL: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex" };
 
-/** The machine's logins, read now and then: `get` answers at once with the last reading and reads again when it is old. */
+/**
+ * The machine's logins, read now and then: `get` answers at once with the last reading and reads again when it is old;
+ * `changes` says "change" when a reading differs from the last.
+ */
 export class MachineLogins {
+  readonly changes = new EventEmitter();
   #value: MachineLogin[] = [];
   #at = 0;
   #reading: Promise<void> | null = null;
@@ -48,7 +53,12 @@ export class MachineLogins {
 
   refresh(): Promise<void> {
     this.#reading ??= Promise.all([claudeLogin(this.#env), codexLogin(this.#env)])
-      .then((logins) => { this.#value = logins; this.#at = Date.now(); })
+      .then((logins) => {
+        const changed = JSON.stringify(logins) !== JSON.stringify(this.#value);
+        this.#value = logins;
+        this.#at = Date.now();
+        if (changed) this.changes.emit("change");
+      })
       .catch((error: unknown) => log.warn("could not read the machine's logins", { error: String(error) }))
       .finally(() => { this.#reading = null; });
     return this.#reading;

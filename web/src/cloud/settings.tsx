@@ -231,7 +231,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
         </StationContext.Provider>
       )}
       {first ? (
-        <FirstOne art={<Illustration name="no-profile" />} title="添加第一个 Profile" lead={<>{PROFILE_LEAD}Profile 加在<span className="nobr">某一台 station</span> 上，由那台机器用它来跑。</>}>
+        <FirstOne art={<Illustration name="no-profile" />} title="添加第一个 Profile" lead={<>{PROFILE_LEAD}<span className="phrase">Profile 加在某一台 station 上，由那台机器用它来跑。</span></>}>
           {/* Each station in a row: where a profile is added is part of adding it. */}
           <div className="first-stations">
             {stations.map((s) => (

@@ -31,7 +31,12 @@ test("the machine's own logins are read, with the account and plan, from the mac
   mkdirSync(join(env.HOME!, ".codex"));
   writeFileSync(join(env.HOME!, ".codex", "auth.json"), JSON.stringify({ tokens: { id_token: idToken({ email: "b@x.com", "https://api.openai.com/auth": { chatgpt_plan_type: "plus" } }) } }));
   const logins = new MachineLogins({ ...env, CLAUDE_CONFIG_DIR: "/elsewhere" });
+  let changes = 0;
+  logins.changes.on("change", () => changes++);
   await logins.refresh();
+  await logins.refresh();
+  // The pages hear of the first reading, and not of one that says the same.
+  assert.equal(changes, 1);
   assert.deepEqual(logins.get(), [
     { runtime: "claude", installed: true, loggedIn: true, email: "a@x.com", plan: "max", text: "Claude Code 已登录 a@x.com（Max）" },
     { runtime: "codex", installed: true, loggedIn: true, email: "b@x.com", plan: "plus", text: "Codex 已登录 b@x.com（Plus）" },

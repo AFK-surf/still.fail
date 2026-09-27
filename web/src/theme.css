@@ -153,8 +153,9 @@ body {
 h1, h2, h3, .page-sub, .first-one-title, .first-one-lead, .onboarding-lead, .new-chat-sub, .enroll-hint, .machine-logins-note, .dialog-lead {
   text-wrap: balance; word-break: keep-all; overflow-wrap: anywhere;
 }
-/* A phrase kept on one line (a parenthetical, a name with its qualifier). */
-.nobr { white-space: nowrap; }
+/* A phrase that moves to the next line whole (a parenthetical, a sentence after another), and only breaks inside when
+   it is wider than the line. */
+.phrase { display: inline-block; }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: inherit; text-decoration: none; }
 code, pre, .mono { font-family: var(--font-mono); }
