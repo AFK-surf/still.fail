@@ -166,3 +166,10 @@ fn iso_times_are_read_to_the_millisecond() {
     assert_eq!(parse_iso("1970-01-01T00:00:00Z"), Some(0));
     assert_eq!(parse_iso("2026-09-27T00:00:02.500Z"), Some(1_790_467_202_500));
 }
+
+#[test]
+fn iso_round_trips() {
+    for at in ["2026-09-27T00:00:02.500Z", "2024-02-29T23:59:59.999Z", "1970-01-01T00:00:00.000Z"] {
+        assert_eq!(iso(parse_iso(at).unwrap()), at);
+    }
+}

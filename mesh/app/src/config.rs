@@ -27,6 +27,11 @@ pub fn efforts(runtime: RuntimeKind) -> &'static [&'static str] {
     }
 }
 
+/// The runtime a stored name is (sessions keep it as text).
+pub fn runtime_named(name: &str) -> Option<RuntimeKind> {
+    RUNTIMES.into_iter().find(|r| runtime_name(*r) == name)
+}
+
 pub fn runtime_name(runtime: RuntimeKind) -> &'static str {
     match runtime {
         RuntimeKind::Claude => "claude",

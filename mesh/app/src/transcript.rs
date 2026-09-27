@@ -544,6 +544,23 @@ pub fn parse_iso(at: &str) -> Option<i64> {
     Some(((days * 86_400 + h * 3600 + mi * 60 + s) * 1000) + ms)
 }
 
+/// An ISO timestamp of milliseconds since the epoch, as JavaScript's toISOString writes it.
+pub fn iso(ms: i64) -> String {
+    let (days, rest) = (ms.div_euclid(86_400_000), ms.rem_euclid(86_400_000));
+    // The civil date of a day count (Howard Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    let (h, mi, s, milli) = (rest / 3_600_000, rest / 60_000 % 60, rest / 1000 % 60, rest % 1000);
+    format!("{y:04}-{m:02}-{d:02}T{h:02}:{mi:02}:{s:02}.{milli:03}Z")
+}
+
 /// Reads a transcript as it grows: each read returns the timeline entries of the lines written since the last one,
 /// and the usage so far. Lines are independent, so parsing only the new ones gives what a full read would. Everything
 /// read is kept, so watchers joining later are served from memory.
