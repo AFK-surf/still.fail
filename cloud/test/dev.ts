@@ -78,7 +78,16 @@ async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
   res.writeHead(response.status, Object.fromEntries(response.headers)).end(Buffer.from(await response.arrayBuffer()));
 }
 
-const server = createServer((req, res) => void serve(origin, req, res));
+/** A request that fails (the Worker's sign-in rate limit, say) answers 500 rather than ending the dev cloud. */
+function handle(base: string) {
+  return (req: IncomingMessage, res: ServerResponse) => void serve(base, req, res).catch((error: unknown) => {
+    console.error(`${req.method} ${req.url}: ${String(error)}`);
+    if (!res.headersSent) res.writeHead(500, { "content-type": "text/plain" });
+    res.end(String(error));
+  });
+}
+
+const server = createServer(handle(origin));
 // The upgrade goes to miniflare byte for byte, Host included, so the Worker sees this origin.
 server.on("upgrade", (req, socket, head) => {
   const upstream = connect(port + 1, "127.0.0.1", () => {
@@ -92,8 +101,8 @@ server.on("upgrade", (req, socket, head) => {
   socket.on("error", () => upstream.destroy());
 });
 server.listen(port, "127.0.0.1", () => console.log(`READY ember cloud (dev) on :${port}`));
-createServer((req, res) => void serve(adminOrigin, req, res)).listen(adminPort, "127.0.0.1", () => console.log(`READY admin console (dev) on :${adminPort}`));
-createServer((req, res) => void serve(previewOrigin, req, res)).listen(previewPort, "127.0.0.1", () => console.log(`READY preview host (dev) on :${previewPort}`));
+createServer(handle(adminOrigin)).listen(adminPort, "127.0.0.1", () => console.log(`READY admin console (dev) on :${adminPort}`));
+createServer(handle(previewOrigin)).listen(previewPort, "127.0.0.1", () => console.log(`READY preview host (dev) on :${previewPort}`));
 
 /** An account as the web app kept it in localStorage (what `migrate` takes). */
 async function signIn(user: string) {
