@@ -1458,12 +1458,15 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!(ids(&v), vec!["1", "1", "s1"]);
             assert_eq!(v["stations"][1]["state"], "offline");
-            // The list's corner says which station is wrong.
-            assert_eq!(v["trouble"], json!({"text": "beta 离线", "state": "offline"}));
+            // Under the list, what is wrong: beta and gamma offline, counted.
+            assert_eq!(v["trouble"], json!({"text": "2 台 station 异常", "state": "offline"}));
             // Each of its rows says so itself; the online station's say nothing.
             let items = &v["days"][0]["items"];
             assert_eq!((items[0]["offline"].clone(), items[1]["offline"].clone()), (Value::Null, json!("beta 离线")));
             t.set(workspace(), stations(t.now_s(), true, true));
+            t.read(&mut ui, 1).await;
+            // One wrong station says itself.
+            assert_eq!(ui.value.as_ref().unwrap()["trouble"], json!({"text": "gamma 离线", "state": "offline"}));
 
             // One station failing shows as that station's state; the other's rows stay.
             t.store.set(&rows("ws/a"), Err(CoreError::new("http_500", "坏了")));
@@ -1478,7 +1481,8 @@ mod tests {
             let v = ui.value.clone().unwrap();
             assert_eq!((v["stations"][0]["state"].as_str(), v["stations"][0]["message"].as_str()), (Some("connecting"), Some("连接断开了")));
             assert_eq!(ids(&v).len(), 2);
-            assert_eq!(v["trouble"], json!({"text": "正在重连 alpha", "state": "reconnecting"}));
+            // alpha coming back and gamma offline: counted, marked by the worse.
+            assert_eq!(v["trouble"], json!({"text": "2 台 station 异常", "state": "offline"}));
             // Its rows say so themselves; the other station's say nothing. Failing and retried, the same, in other words.
             let reconnecting = |v: &Value| v["days"][0]["items"].as_array().unwrap().iter().map(|i| (i["station"].as_str().unwrap().to_string(), i["reconnecting"].clone())).collect::<Vec<_>>();
             assert!(reconnecting(&v).contains(&("ws/a".into(), json!("正在重连 alpha…"))), "{v}");
