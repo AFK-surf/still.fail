@@ -352,7 +352,7 @@ export interface Draft {
   quotes: DraftQuote[]; setQuotes: (f: (q: DraftQuote[]) => DraftQuote[]) => void;
   files: Pending[]; setFiles: (f: (p: Pending[]) => Pending[]) => void;
   focusQuote: number | null; setFocusQuote: (id: number | null) => void;
-  quote: (q: Quote) => void;
+  quote: (q: Omit<Quote, "comment">) => void;
   starting: boolean; setStarting: (on: boolean) => void;
   error: string | null; setError: (e: string | null) => void;
   focus: number; bumpFocus: () => void;
@@ -577,7 +577,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
       <div className="m-sheet-scroll m-pad-18">
         <InfoList>
           <InfoDetail label="来自" value={view.place ? `Slack · ${view.place}` : "ember 对话"} />
-          <InfoDetail label="发起" value={thread.creator?.shown.display ?? "未记录"} />
+          <InfoDetail label="发起" value={thread.creator?.shown?.display ?? "未记录"} />
           <InfoDetail label="参与" value={`${view.people.length} 人`} extra={view.people.length ? <PeopleStack people={view.people.slice(0, 8)} size={16} ring="var(--m-surface2)" /> : null} />
           <InfoDetail label="创建" value={thread.time?.createdAt?.ago ?? ""} />
           {thread.lastMessage && <InfoDetail label="最近消息" value={thread.lastMessage.time?.createdAt?.ago ?? ""} />}
