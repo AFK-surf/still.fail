@@ -332,6 +332,8 @@ data class Profile (
 	val env: List<EnvVar>,
 	val usedBy: List<String>,
 	val loginCommand: String,
+	/// On the machine's own login of its runtime: not edited (but for its models), deleted or signed in here.
+	val machine: Boolean? = null,
 	val check: ProfileCheck? = null,
 	val login: LoginJob? = null,
 	val quota: Quota? = null,
@@ -980,6 +982,8 @@ data class MachineLogin (
 	val loggedIn: Boolean,
 	val email: String? = null,
 	val plan: String? = null,
+	/// A profile can use it as it is (kept in a file, not only in the keychain).
+	val usable: Boolean? = null,
 	/// In a line, as the pages show it.
 	val text: String
 )

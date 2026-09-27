@@ -310,6 +310,8 @@ export interface Profile {
 	env: EnvVar[];
 	usedBy: string[];
 	loginCommand: string;
+	/** On the machine's own login of its runtime: not edited (but for its models), deleted or signed in here. */
+	machine?: boolean;
 	check?: ProfileCheck;
 	login?: LoginJob;
 	quota?: Quota;
@@ -899,6 +901,8 @@ export interface MachineLogin {
 	loggedIn: boolean;
 	email?: string;
 	plan?: string;
+	/** A profile can use it as it is (kept in a file, not only in the keychain). */
+	usable?: boolean;
 	/** In a line, as the pages show it. */
 	text: string;
 }
