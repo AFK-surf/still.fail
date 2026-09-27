@@ -7,11 +7,11 @@ edition = "2024"
 version = "0.1.0"
 license = "MIT"
 
-# The browser build (client/wasm/build.sh): small over fast (then wasm-opt -Oz
-# there). A profile of its own so native release builds keep the defaults.
+# The browser build (client/wasm/build.sh): small over fast. A profile of its
+# own so native release builds keep the defaults.
 [profile.wasm-release]
 inherits = "release"
-opt-level = "z"
+opt-level = "s"
 lto = true
 codegen-units = 1
 
