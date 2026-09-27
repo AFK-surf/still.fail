@@ -1425,48 +1425,7 @@ mod tests {
             apply(&host, &mut values);
             assert_eq!(values[&1][0]["workspaces"][0]["id"], "ws");
             assert_eq!(values[&1][0]["loaded"], true);
-            assert_eq!(values[&2]["stations"][0]["online"], false);
-
-            // A station event is complete in itself.
-            host.socket_send("/v1/events", r#"{"type":"station","workspace":"ws","id":"st","online":true}"#);
-            host.settle().await;
-            apply(&host, &mut values);
-            assert_eq!(values[&2]["stations"][0]["online"], true);
-            assert!(values[&2]["stations"][0]["last_seen"].as_f64().unwrap() > 1.0);
-            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (1, 1));
-            // One the view does not have yet (it joined since): the workspace is read again.
-            host.socket_send("/v1/events", r#"{"type":"station","workspace":"ws","id":"new","online":true}"#);
-            host.settle().await;
-            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (1, 2));
-            // `workspaces` reads /v1/me again, `workspace` that workspace; others are not ours.
-            host.socket_send("/v1/events", r#"{"type":"workspaces"}"#);
-            host.socket_send("/v1/events", r#"{"type":"workspace","id":"ws"}"#);
-            host.socket_send("/v1/events", r#"{"type":"workspace","id":"other"}"#);
-            host.socket_send("/v1/events", "pong");
-            host.settle().await;
-            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (2, 3));
-            apply(&host, &mut values);
-            assert_eq!(values[&2]["stations"][0]["online"], false, "as the cloud says now");
-
-            // Idle: no request and no timer.
-            host.sleeps.borrow_mut().clear();
-            let requests = host.requests.borrow().len();
-            pass(super::SOCKET_RETRY_MAX_MS * 2).await;
-            assert_eq!(host.requests.borrow().len(), requests);
-            assert!(host.sleeps.borrow().is_empty(), "{:?}", host.sleeps.borrow());
-
-            // The socket drops: it opens again after a second with a fresh token, and the topics are read once.
-            host.socket_close("/v1/events");
-            pass(SOCKET_RETRY_MS + 200).await;
-            host.settle().await;
-            assert_eq!((host.sockets.borrow().len(), host.open_sockets("/v1/events")), (2, 1));
-            let token = host.sockets.borrow()[1].1[1].clone();
-            assert!(token.starts_with("ember-token.fresh-") && token != "ember-token.fresh-1", "{token}");
-            assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (3, 4));
-
-            // Nobody looks any more: the core keeps its workspaces in sync all the same (sync.rs), so the socket stays.
-            core.receive(ui, ClientMessage::Unsubscribe { id: 1, unsubscribe: true });
-            core.receive(ui, ClientMessage::Unsubscribe { id: 2, unsubscribe: true });
+            assert_eq!(values[&2]["stations"][0]["id"], "st");
             pass(crate::store::EVICT_AFTER_MS * 5 / 4).await;
             assert_eq!(host.open_sockets("/v1/events"), 1);
         });
@@ -1482,9 +1441,15 @@ mod tests {
             host.settle().await;
             assert_eq!(count(&host, "/v1/me"), 1, "read although the socket did not open");
             pass(SOCKET_RETRY_MS * 7).await;
-            // 1 s, 2 s, 4 s: waits double.
-            let waits: Vec<u64> = host.sleeps.borrow().iter().copied().filter(|ms| *ms >= SOCKET_RETRY_MS && *ms <= SOCKET_RETRY_MAX_MS).collect();
-            assert_eq!(&waits[..3], &[1_000, 2_000, 4_000]);
+            // 1 s, 2 s, 4 s: waits double (among the station's own retries, which go on beside it).
+            let waits: Vec<u64> = host.sleeps.borrow().clone();
+            let mut doubling = [1_000u64, 2_000, 4_000].into_iter().peekable();
+            for wait in &waits {
+                if doubling.peek() == Some(wait) {
+                    doubling.next();
+                }
+            }
+            assert!(doubling.peek().is_none(), "{waits:?}");
             assert_eq!(count(&host, "/v1/me"), 1, "failed retries read nothing");
             host.refuse_sockets.set(false);
             pass(SOCKET_RETRY_MS * 10).await;

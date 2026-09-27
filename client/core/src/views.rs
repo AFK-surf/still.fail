@@ -1282,12 +1282,13 @@ mod tests {
         topics
     }
 
-    /// `a` and `b` online as asked, `c` never seen.
-    fn stations(now_s: f64, a_online: bool, b_online: bool) -> Value {
+    /// The workspace's three stations: `a` and `b` seen by ember cloud a while ago, `c` never. Whether each is up is
+    /// the device's own finding: their `link` topics.
+    fn stations(now_s: f64) -> Value {
         json!({"id": "ws", "stations": [
-            {"id": "a", "name": "alpha", "online": a_online, "last_seen": now_s as i64 - 10, "version": "0.4.0"},
-            {"id": "b", "name": "beta", "online": b_online, "last_seen": now_s as i64 - 1000, "version": null},
-            {"id": "c", "name": "gamma", "online": false, "last_seen": null, "version": null},
+            {"id": "a", "name": "alpha", "last_seen": now_s as i64 - 10, "version": "0.4.0"},
+            {"id": "b", "name": "beta", "last_seen": now_s as i64 - 1000, "version": null},
+            {"id": "c", "name": "gamma", "last_seen": null, "version": null},
         ]})
     }
 
@@ -1439,18 +1440,21 @@ mod tests {
             assert_eq!(t.started(), vec![workspace()]);
             assert!(ui.value.is_none(), "nothing to show before the workspace is read");
 
-            t.set(workspace(), stations(t.now_s(), true, true));
+            t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![rows("ws/a"), link("ws/a"), overview("ws/a"), rows("ws/b"), link("ws/b"), overview("ws/b")]), "each station's rows (and its overview, for who the viewer is there), nothing to join them with");
+            let each = |st: &str| vec![rows(st), link(st), overview(st)];
+            assert_eq!(sorted(t.started()), sorted([each("ws/a"), each("ws/b"), each("ws/c")].concat()), "each station's rows (and its overview, for who the viewer is there), nothing to join them with; every station is tried");
             let v = ui.value.clone().unwrap();
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
             assert_eq!(v["loading"], true);
             assert_eq!(v["stations"], json!([
                 {"station": "ws/a", "id": "a", "name": "alpha", "state": "connecting"},
                 {"station": "ws/b", "id": "b", "name": "beta", "state": "connecting"},
-                {"station": "ws/c", "id": "c", "name": "gamma", "state": "offline"},
+                {"station": "ws/c", "id": "c", "name": "gamma", "state": "connecting"},
             ]));
             assert_eq!(v["days"], json!([]));
+            // gamma is not reached: down.
+            t.set(link("ws/c"), json!({"state": "offline"}));
 
             // Both stations' rows, merged newest first; each as the station has it, with its station.
             let now = t.host.now_ms();
@@ -1477,9 +1481,9 @@ mod tests {
             shown["agents"] = json!([{"key": "s1", "runtime": "claude", "model": "opus", "process": "cold", "pending": 0}]);
             assert_eq!(plain(&items[2]), plain(&shown));
 
-            // A station going offline keeps its chats listed, as they were read (the data center keeps them); it only
+            // A station found down keeps its chats listed, as they were read (the data center keeps them); it only
             // says it is offline.
-            t.set(workspace(), stations(t.now_s(), true, false));
+            t.set(link("ws/b"), json!({"state": "offline"}));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             assert_eq!(ids(&v), vec!["1", "1", "s1"]);
@@ -1489,7 +1493,7 @@ mod tests {
             // Each of its rows says so itself; the online station's say nothing.
             let items = &v["days"][0]["items"];
             assert_eq!((items[0]["offline"].clone(), items[1]["offline"].clone()), (Value::Null, json!("beta 离线")));
-            t.set(workspace(), stations(t.now_s(), true, true));
+            t.set(link("ws/b"), json!({"state": "online"}));
             t.read(&mut ui, 1).await;
             // One wrong station says itself.
             assert_eq!(ui.value.as_ref().unwrap()["trouble"], json!({"text": "gamma 离线", "state": "offline"}));
@@ -1502,7 +1506,7 @@ mod tests {
             assert_eq!(ids(&v), vec!["1"]);
             // The link dropping, with rows read: reconnecting, rows kept.
             t.set(rows("ws/a"), json!([row("1", now - 1000.0)]));
-            t.set(link("ws/a"), json!({"state": "offline", "message": "连接断开了"}));
+            t.set(link("ws/a"), json!({"state": "reconnecting", "message": "连接断开了"}));
             t.read(&mut ui, 1).await;
             let v = ui.value.clone().unwrap();
             assert_eq!((v["stations"][0]["state"].as_str(), v["stations"][0]["message"].as_str()), (Some("connecting"), Some("连接断开了")));
@@ -1516,7 +1520,7 @@ mod tests {
             t.set(link("ws/a"), json!({"state": "error", "message": "没有权限"}));
             t.read(&mut ui, 1).await;
             assert!(reconnecting(ui.value.as_ref().unwrap()).contains(&("ws/a".into(), json!("连不上 alpha，正在重试"))));
-            t.set(link("ws/a"), json!({"state": "connected"}));
+            t.set(link("ws/a"), json!({"state": "online"}));
             t.read(&mut ui, 1).await;
             assert!(reconnecting(ui.value.as_ref().unwrap()).iter().all(|(_, r)| r.is_null()));
 
@@ -1533,15 +1537,16 @@ mod tests {
             let t = setup();
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
-            t.set(workspace(), stations(t.now_s(), true, false));
+            t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
             t.started();
-            // `b` comes online, `a` goes offline.
-            t.set(workspace(), stations(t.now_s(), false, true));
+            // `a` leaves the workspace.
+            let mut without_a = stations(t.now_s());
+            without_a["stations"].as_array_mut().unwrap().remove(0);
+            t.set(workspace(), without_a);
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![rows("ws/b"), link("ws/b"), overview("ws/b")]));
-            let states: Vec<&str> = ui.value.as_ref().unwrap()["stations"].as_array().unwrap().iter().map(|s| s["state"].as_str().unwrap()).collect();
-            assert_eq!(states, vec!["offline", "connecting", "offline"]);
+            let listed: Vec<&str> = ui.value.as_ref().unwrap()["stations"].as_array().unwrap().iter().map(|s| s["id"].as_str().unwrap()).collect();
+            assert_eq!(listed, vec!["b", "c"]);
             // `a`'s topics are let go: stopped after the grace, like a UI unsubscribing.
             assert!(t.stopped().is_empty());
             tokio::time::sleep(std::time::Duration::from_millis(EVICT_AFTER_MS * 5 / 4 / SPEEDUP)).await;
@@ -1591,7 +1596,7 @@ mod tests {
             let mut all = Ui::default();
             let mut mine = Ui::default();
             t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
-            t.set(workspace(), stations(t.now_s(), true, true));
+            t.set(workspace(), stations(t.now_s()));
             t.read(&mut all, 1).await;
             let now = t.host.now_ms();
             let with = |id: &str, at: f64, is_mine: bool| {
@@ -1646,7 +1651,7 @@ mod tests {
             let t = setup();
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Chats { scope: "ws".into(), mine: false });
-            t.set(workspace(), stations(t.now_s(), true, true));
+            t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
             let (computed, messages) = (t.router.computed.get(), ui.messages);
             for st in ["ws/a", "ws/b"] {
@@ -1672,15 +1677,17 @@ mod tests {
             let t = setup();
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Stations { scope: "ws".into() });
-            t.set(workspace(), stations(t.now_s(), true, false));
+            t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![workspace(), link("ws/a"), overview("ws/a"), host_of("ws/a")]));
+            let each = |st: &str| vec![link(st), overview(st), host_of(st)];
+            let watched = sorted([vec![workspace()], each("ws/a"), each("ws/b"), each("ws/c")].concat());
+            assert_eq!(sorted(t.started()), watched);
             t.store.unsubscribe(1, 1);
             // The view itself goes after the grace, then what it watched after another.
             tokio::time::sleep(std::time::Duration::from_millis(EVICT_AFTER_MS * 5 / 4 / SPEEDUP)).await;
             assert!(t.stopped().is_empty());
             tokio::time::sleep(std::time::Duration::from_millis(EVICT_AFTER_MS * 5 / 4 / SPEEDUP)).await;
-            assert_eq!(t.stopped(), sorted(vec![workspace(), link("ws/a"), overview("ws/a"), host_of("ws/a")]));
+            assert_eq!(t.stopped(), watched);
             assert!(t.store.live_topics().is_empty());
         });
     }
@@ -1691,7 +1698,7 @@ mod tests {
             let t = setup();
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Stations { scope: "ws".into() });
-            t.set(workspace(), stations(t.now_s(), true, false));
+            t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
             let overview_a = overview_of(vec![], vec![
                 // Its week used up: its models are spent until it refills.
@@ -1704,6 +1711,8 @@ mod tests {
             t.set(overview("ws/a"), overview_a.clone());
             t.set(host_of("ws/a"), host_info("studio"));
             t.set(link("ws/a"), json!({"state": "error", "message": "没有权限"}));
+            // beta is not reached: down.
+            t.set(link("ws/b"), json!({"state": "offline"}));
             t.read(&mut ui, 1).await;
             let v = ui.value.unwrap();
             let seen = t.now_s();
@@ -1742,9 +1751,10 @@ mod tests {
             let t = setup();
             let mut ui = Ui::default();
             t.subscribe(1, Topic::Connects { scope: "ws".into(), mine: false });
-            t.set(workspace(), stations(t.now_s(), true, true));
+            t.set(workspace(), stations(t.now_s()));
             t.read(&mut ui, 1).await;
-            assert_eq!(sorted(t.started()), sorted(vec![workspace(), overview("ws/a"), overview("ws/b"), sessions("ws/a"), sessions("ws/b"), threads("ws/a"), threads("ws/b")]));
+            let each = |st: &str| vec![overview(st), sessions(st), threads(st)];
+            assert_eq!(sorted(t.started()), sorted([vec![workspace()], each("ws/a"), each("ws/b"), each("ws/c")].concat()));
             let me = json!({"id": "Me@x.com", "email": "Me@x.com"});
             assert_eq!(ui.value.as_ref().unwrap(), &json!({"me": me, "items": [], "loading": true}));
             let c1 = with(connect("c1", "one"), json!({"createdBy": {"id": "me@x.com", "name": "我"}}));

@@ -2359,7 +2359,7 @@ mod tests {
             wire.answer("GET /admin/api/threads/7/entries?after=4", 200, json!({"last": 5, "entries": [entry(5, "e")]}));
             wire.end("/admin/api/events");
             host.settle().await;
-            assert_eq!(sink.get(&link()).unwrap()["state"], "offline");
+            assert_eq!(sink.get(&link()).unwrap()["state"], "reconnecting");
             wait(RECONNECT_MS + 50).await;
             assert_eq!(sink.get(&link()).unwrap()["state"], "online");
             assert_eq!(texts(&sink, 7), vec!["a", "b", "c", "d", "e"]);
