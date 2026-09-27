@@ -571,7 +571,7 @@ export interface ComposerProps {
 /** Drafts put away as the composer moved to another chat, by key. */
 const drafts = new Map<string, { text: string; files: Pending[] }>();
 
-export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = "发消息", locked = false, roomy = false, draftKey, carry }: ComposerProps}) {
+export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = "发消息", locked = false, roomy = false, draftKey, carry }: ComposerProps) {
   const api = useApi();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
