@@ -256,13 +256,7 @@ function MachineAccount({ profile }: { profile: Profile }) {
   const runtime = MACHINE_RUNTIME[profile.runtime];
   return (
     <Section title="账号">
-      <div className="card">
-        <div className="card-row">
-          <div className="card-row-text">
-            <strong>{station.name ? `${station.name} 上` : "这台机器上"} {runtime} 的登录<About>要换号、重新登录或登出，在这台机器的 {runtime} 里做；这个 Profile 跟着它变，不能在这里编辑或删除。</About></strong>
-          </div>
-        </div>
-      </div>
+      <p>{station.name ? `${station.name} 上` : "这台机器上"} {runtime} 的登录<About>要换号、重新登录或登出，在这台机器的 {runtime} 里做；这个 Profile 跟着它变，不能在这里编辑或删除。</About></p>
     </Section>
   );
 }
@@ -458,9 +452,9 @@ function QuotaSection({ profile }: { profile: Profile }) {
   const refresh = useAction(() => api.refreshQuota(profile.id));
   const quota = profile.quota;
   return (
-    <Section title="额度" description={quota?.time?.checkedAt ? <><Time stamp={quota.time.checkedAt} />查询，每几分钟自动更新</> : undefined}
+    <Section title={<>额度{quota?.time?.checkedAt && <About><Time stamp={quota.time.checkedAt} />查询，每几分钟自动更新</About>}</>}
       actions={<Button variant="ghost" icon={Refresh} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
-      <div className="card"><QuotaBars quota={quota} /></div>
+      <QuotaBars quota={quota} />
     </Section>
   );
 }
@@ -490,9 +484,7 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
   const choosing = picked ?? enabled.size === 0;
   const on = [...enabled].sort();
   return (
-    <Section title="模型" description={all.length
-      ? "只有启用的模型能在新对话和连接里选。"
-      : "检查过 Profile 后，这里会列出它能用的模型，启用后才能使用。"}
+    <Section title={<>模型<About>{all.length ? "只有启用的模型能在新对话和连接里选。" : "检查过 Profile 后，这里会列出它能用的模型，启用后才能使用。"}</About></>}
       actions={all.length > 0 && <Button variant="ghost" onClick={() => setChoosing(!choosing)}>{choosing ? "收起" : `选择模型（${enabled.size} / ${all.length}）`}</Button>}>
       {/* What it can be used for now, first; the whole list only when choosing. */}
       {all.length > 0 && !choosing && (
