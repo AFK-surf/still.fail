@@ -209,7 +209,9 @@ data class SlackIdentity (
 	val teamId: String,
 	val url: String,
 	val botUserId: String,
-	val botName: String
+	val botName: String,
+	/// Its bot's picture (the app's icon), when Slack says.
+	val botImage: String? = null
 )
 
 /// A connect's link to Slack: disabled | no_tokens | starting | connected | reconnecting (`botUserId`, `lastError`,
@@ -240,6 +242,8 @@ data class Connect (
 	val id: String,
 	val name: String,
 	val team: String? = null,
+	/// Its bot's picture in Slack, as last seen.
+	val botImage: String? = null,
 	val enabled: Boolean,
 	val kind: String,
 	/// multi-session | single-session

@@ -195,6 +195,8 @@ export interface SlackIdentity {
 	url: string;
 	botUserId: string;
 	botName: string;
+	/** Its bot's picture (the app's icon), when Slack says. */
+	botImage?: string;
 }
 
 /**
@@ -224,6 +226,8 @@ export interface Connect {
 	id: string;
 	name: string;
 	team?: string;
+	/** Its bot's picture in Slack, as last seen. */
+	botImage?: string;
 	enabled: boolean;
 	kind: string;
 	/** multi-session | single-session */
