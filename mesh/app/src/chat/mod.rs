@@ -4,6 +4,7 @@
 pub mod internal;
 pub mod names;
 pub mod slack;
+pub mod slack_apps;
 pub mod status;
 
 use std::sync::Arc;
