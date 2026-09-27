@@ -12,6 +12,7 @@ import { MeScreen } from "./Me.tsx";
 import { NewChatScreen } from "./NewChat.tsx";
 import { Loading } from "./parts.tsx";
 import { ProfileScreen, StationScreen, StationsScreen } from "./Stations.tsx";
+import { WorkspaceScreen } from "./WorkspacePage.tsx";
 
 export function MobileWorkspace({ entry }: { entry: Entry }) {
   const found = useStations(entry.id);
@@ -24,6 +25,10 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="new" element={<NewChatScreen />} />
       <Route path="settings/stations" element={<StationsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
+      {/* The desktop's 通用, 成员 and 退出与删除 are one page here. */}
+      <Route path="settings/general" element={<WorkspaceScreen />} />
+      <Route path="settings/members" element={<WorkspaceScreen />} />
+      <Route path="settings/leave" element={<WorkspaceScreen />} />
       <Route path="s/:station/chats/:chat" element={<InStation stations={stations}><ChatScreen /></InStation>} />
       <Route path="s/:station/chats/:chat/run/:agent" element={<InStation stations={stations}><RunSettingsScreen /></InStation>} />
       <Route path="s/:station/overview" element={<InStation stations={stations}><StationScreen /></InStation>} />

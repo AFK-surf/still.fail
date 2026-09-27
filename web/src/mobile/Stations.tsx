@@ -4,10 +4,12 @@
 import { useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { stationApi, useStationCall, useStations, type Profile, type StationView } from "../api.ts";
-import { Check, ChevronRight } from "../icons.tsx";
+import { Check, ChevronRight, More } from "../icons.tsx";
+import { cloud, useWorkspace } from "../cloud/api.ts";
 import { useDark } from "../theme.ts";
-import { useApp } from "./app.tsx";
-import { Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, QuotaRings, Ring, SectionHeader, SlackMark, TopBack } from "./parts.tsx";
+import { SheetGrab, SheetHead, useApp } from "./app.tsx";
+import { ask, CommandBox, confirm } from "./sheets.tsx";
+import { Button, Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, NavButton, PickRow, QuotaRings, Ring, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -22,6 +24,7 @@ export function StationsScreen() {
   const app = useApp();
   const stations = useStations(app.entry.id);
   const list = stations.value;
+  const manager = useManager();
   return (
     <div className="m-screen m-scroll">
       <TopBack label="会话" onBack={app.pop} />
@@ -40,8 +43,68 @@ export function StationsScreen() {
           ) : null}
         </Card>
       ))}
+      {manager && list && (
+        <ListCard>
+          <ListRow onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={list.map((s) => s.id)} /> })}>
+            <span className="m-accent m-row-title">＋ 添加 station</span>
+          </ListRow>
+        </ListCard>
+      )}
       <div style={{ height: 30 }} />
     </div>
+  );
+}
+
+/**
+ * Adding a station: a name, then the command to run on that machine (which installs ember and joins it); the sheet
+ * waits for it to join.
+ */
+function AddStationSheet({ known }: { known: string[] }) {
+  const app = useApp();
+  const me = app.entry.account;
+  const stations = useStations(app.entry.id).value ?? [];
+  const [name, setName] = useState("");
+  const [made, setMade] = useState<{ install: string; command: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const joined = made && stations.find((s) => !known.includes(s.id));
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title="添加 station" />
+      <div className="m-sheet-scroll m-form">
+        {!made ? (
+          <>
+            <p className="m-muted">station 是一台运行 ember 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 ember 并加入。</p>
+            <b className="m-form-label">名字</b>
+            <Field value={name} onChange={setName} placeholder="比如机器名：studio、mac-mini" />
+            {error && <p className="m-error">{error}</p>}
+            <div className="m-form-actions">
+              <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
+              <Button label="生成命令" primary busy={busy} enabled={!!name.trim()} onClick={() => {
+                setBusy(true); setError(null);
+                cloud.enroll(me.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message)).finally(() => setBusy(false));
+              }} />
+            </div>
+          </>
+        ) : joined ? (
+          <>
+            <p>「{joined.name}」已加入，现在可以打开它了。</p>
+            <div className="m-form-actions"><Button label="完成" primary onClick={() => app.sheet(null)} /></div>
+          </>
+        ) : (
+          <>
+            <p>在要当 station 的机器（macOS，Apple 芯片）上打开「终端」，执行：</p>
+            <CommandBox text={made.install} />
+            <p className="m-muted m-small">它会装好 ember、加入这个 workspace，并在后台一直运行（开机自动启动）。之后在电脑上的「设置 → Profile」里登录 Claude Code 或 Codex 的账号。</p>
+            <b className="m-form-label">这台机器上已经有 ember 了</b>
+            <p className="m-muted m-small">在 ember 的目录里执行下面这行，然后重启 ember：</p>
+            <CommandBox text={`bin/${made.command}`} />
+            <p className="m-muted m-small m-waiting"><Spinner size={10} />等待 station 加入… 命令 1 小时内有效，只能用一次。</p>
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -50,15 +113,18 @@ export function StationScreen() {
   const { station: id = "" } = useParams();
   const stations = useStations(app.entry.id);
   const s = stations.value?.find((x) => x.id === id);
+  const manager = useManager();
   return (
     <div className="m-screen">
-      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s ? <span className="m-navbar-note">{s.host?.cpuModel || (s.online ? "在线" : "离线")}</span> : undefined} />
+      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s ? <span className="m-navbar-note">{s.host?.cpuModel || (s.online ? "在线" : "离线")}</span> : undefined}
+        trailing={s && manager ? <NavButton icon={More} label="更多" onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
       {!s ? <Loading text={stations.error?.message ?? "正在读取…"} /> : (
         <div className="m-scroll m-station-page">
           {s.online && s.host ? (
             <Card>
               <span className="m-station-rings m-rings-18">{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} />)}</span>
               <span className="m-station-line">{s.host.line}</span>
+              {s.overview?.processesText && <span className="m-station-line">{s.overview.processesText}</span>}
             </Card>
           ) : !s.online ? (
             <Card><span className="m-station-offline"><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 ember 就会重新连上</span></span></Card>
@@ -86,6 +152,33 @@ export function StationScreen() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Whether the viewer may add, rename and remove stations: the workspace's owner and admins. */
+function useManager(): boolean {
+  const app = useApp();
+  const role = useWorkspace(app.entry.id).value?.role;
+  return role === "owner" || role === "admin";
+}
+
+function StationMenu({ s }: { s: StationView }) {
+  const app = useApp();
+  const me = app.entry.account;
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={s.name} />
+      <div className="m-sheet-scroll">
+        <PickRow label="改名" onClick={() => ask(app, { title: "station 的名字", value: s.name, placeholder: "比如机器名：studio", action: "保存",
+          run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast("已改名")) })} />
+        <PickRow label="从 workspace 移除" accent onClick={() => confirm(app, {
+          title: `移除「${s.name}」？`, action: "移除 station", danger: true,
+          text: "它会断开与 ember cloud 的连接，成员不能再从这里访问它。那台机器上的 ember 和数据不受影响，之后可以重新添加。",
+          run: () => cloud.removeStation(me.sub, app.entry.id, s.id).then(() => { app.toast("已移除 station"); app.pop(); }),
+        })} />
+      </div>
+    </>
   );
 }
 

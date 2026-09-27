@@ -6,6 +6,7 @@ import { Check } from "../icons.tsx";
 import { useAppearance, type Appearance } from "../theme.ts";
 import { useApp } from "./app.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, TopBack } from "./parts.tsx";
+import { Devices } from "./WorkspacePage.tsx";
 
 const THEMES: [Appearance, string][] = [["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]];
 
@@ -39,6 +40,8 @@ export function MeScreen() {
       <div className="m-pad-x-12 m-seg-block">
         <Seg options={THEMES.map(([, label]) => label)} selected={Math.max(0, THEMES.findIndex(([v]) => v === appearance))} onSelect={(i) => setAppearance(THEMES[i]![0])} height={36} fill />
       </div>
+      <SectionHeader title="登录的地方" start={24} />
+      <Devices />
       {/* Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added. */}
       <SectionHeader title="账号" start={24} />
       <ListCard>

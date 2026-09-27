@@ -53,6 +53,7 @@ function WorkspacesSheet() {
             ))}
           </div>
         ))}
+        <PickRow label={`「${app.entry.name}」的设置`} sub="名字、成员、退出" onClick={() => app.push(app.at("/settings/general"))} />
         <PickRow label="＋ 新建 workspace" accent onClick={() => app.sheet({ height: 0.8, content: () => <NewWorkspaceSheet /> })} />
       </div>
     </>

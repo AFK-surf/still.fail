@@ -23,7 +23,7 @@ import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", admin: "管理员", member: "成员" };
-const ROLE_HINT: Record<Role, string> = {
+export const ROLE_HINT: Record<Role, string> = {
   owner: "管理一切，包括成员角色和删除 workspace",
   admin: "邀请成员、添加和移除 station",
   member: "使用 workspace 里的 station",

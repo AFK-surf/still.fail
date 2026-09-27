@@ -550,3 +550,10 @@ button.m-agent-head { cursor: pointer; }
   .m-chat-row:hover .m-chat-time { display: inline; }
   .m :is(.m-nav-button, .m-plus, .m-chat-back, .m-h-act, .m-pick-row, .m-list-row, .m-info-row, .m-setting-row, .m-pick-line):hover { background-color: color-mix(in srgb, var(--m-ink) 5%, transparent); }
 }
+
+/* Asking: a destructive action's button in red; a command with its copy button. */
+.m-danger-button[data-danger] .m-button { background: var(--m-red); color: #fff !important; }
+.m-command { display: flex; align-items: flex-start; gap: 8px; padding: 10px 10px 10px 12px; border-radius: 12px; background: var(--m-surface2); border: 1px solid var(--m-line); }
+.m-command code { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; user-select: all; }
+.m-command button { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: var(--m-chip); cursor: pointer; }
+.m-you { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; background: var(--m-accent-bg); color: var(--m-accent-ink); font-size: 12px; vertical-align: 1px; }

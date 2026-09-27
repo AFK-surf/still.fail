@@ -609,6 +609,12 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
           <InfoDetail label="创建" value={thread.time?.createdAt?.ago ?? ""} />
           {thread.lastMessage && <InfoDetail label="最近消息" value={thread.lastMessage.time?.createdAt?.ago ?? ""} />}
         </InfoList>
+        {view.slackUrl && (
+          <>
+            <GroupLabel>在 Slack 里</GroupLabel>
+            <InfoList><a className="m-info-row" href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className="m-grow">在 Slack 中打开</span><ChevronRight size={14} className="m-subtle" /></a></InfoList>
+          </>
+        )}
         {view.agents.length > 0 && (
           <>
             <GroupLabel>参与的 agent · 点开看它的执行历史</GroupLabel>
