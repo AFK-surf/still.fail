@@ -104,7 +104,6 @@ pub struct MdnsAddressLookup {
     #[allow(dead_code)]
     handle: Arc<AbortOnDropHandle<()>>,
     sender: mpsc::Sender<Message>,
-    advertise: bool,
     /// When `local_addrs` changes, we re-publish our info.
     local_addrs: Watchable<Option<EndpointData>>,
 }
@@ -482,7 +481,6 @@ impl MdnsAddressLookup {
         Ok(Self {
             handle: Arc::new(AbortOnDropHandle::new(handle)),
             sender: send,
-            advertise,
             local_addrs,
         })
     }

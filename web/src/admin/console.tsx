@@ -10,7 +10,7 @@ import { Navigate, NavLink, Route, Routes, useLocation } from "react-router";
 import { Lockup } from "../brand.tsx";
 import { stamp } from "../api.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, StatusDot, Tip, Time, ICON, type Tone } from "../ui.tsx";
+import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, Tip, Time, ICON, type Tone } from "../ui.tsx";
 import { signOut, useAccounts, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type Admission, type AdminUser, type AdminWorkspace, type InviteCodeView } from "../cloud/api.ts";
 import { Avatar } from "../cloud/gate.tsx";
@@ -140,10 +140,9 @@ function UserItem({ user }: { user: AdminUser }) {
 function WorkspacesPage({ account }: { account: Account }) {
   const workspaces = useList(account.sub, "workspaces", (v) => v.workspaces as AdminWorkspace[]);
   const list = workspaces.data;
-  const online = list?.reduce((n, w) => n + w.stations.filter((s) => s.online).length, 0) ?? 0;
   const stations = list?.reduce((n, w) => n + w.stations.length, 0) ?? 0;
   return (
-    <Page title="Workspace" lead={list && `${list.length} 个 workspace，${stations} 台 station（${online} 台在线）。`}>
+    <Page title="Workspace" lead={list && `${list.length} 个 workspace，${stations} 台 station。`}>
       <Failed error={workspaces.error} />
       {!list ? !workspaces.error && <Loading label="正在读取…" fill={false} /> : (
         <ul className="admin-list">{list.map((w) => <WorkspaceItem key={w.id} workspace={w} />)}</ul>
@@ -175,10 +174,11 @@ function WorkspaceItem({ workspace: w }: { workspace: AdminWorkspace }) {
         <div className="admin-group-label">Station {w.stations.length}</div>
         {w.stations.length === 0 && <div className="admin-line muted">还没有 station</div>}
         {w.stations.map((s) => (
+          // Whether a station is up is for the devices to find out over the mesh; ember cloud only knows when it last
+          // came to it (or left).
           <div key={s.id} className="admin-line">
-            <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
             <span className="admin-line-text">{s.name}<span className="muted">{s.version ? `ember-mesh ${s.version}` : ""}</span></span>
-            <span className="muted">{s.online ? "在线" : s.last_seen ? <><Time stamp={stamp(s, "last_seen")} />在线</> : "还没上线"}</span>
+            <span className="muted">{s.last_seen ? <>上次连 ember cloud：<Time stamp={stamp(s, "last_seen")} /></> : "还没连过 ember cloud"}</span>
           </div>
         ))}
       </div>
