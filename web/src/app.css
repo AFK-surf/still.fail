@@ -287,7 +287,9 @@
 .thread-item .muted { font-size: var(--text-xs); }
 .tooltip {
   z-index: 70; padding: 5px 10px; border-radius: calc(8px * var(--corner-scale)); background: var(--primary); color: var(--on-primary);
-  font-size: var(--text-xs); line-height: 1.4; box-shadow: 0 4px 12px var(--shadow); animation: fade 120ms var(--ease-out); corner-shape: var(--corner-shape); }
+  font-size: var(--text-xs); line-height: 1.4; box-shadow: 0 4px 12px var(--shadow); animation: fade 120ms var(--ease-out); corner-shape: var(--corner-shape);
+  /* Its own width, capped: a long one wraps (the popper around it sizes to its content, which would be one line). */
+  width: max-content; max-width: min(300px, calc(100vw - 16px)); text-wrap: pretty; overflow-wrap: anywhere; }
 .command { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; border-radius: var(--r-field); background: var(--paper); corner-shape: var(--corner-shape); }
 .command code { flex: 1; font-size: var(--text-xs); overflow-x: auto; white-space: nowrap; }
 
@@ -1593,4 +1595,4 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 /* A quiet mark that says what a thing is on hover (ui.tsx's About), in place of a paragraph. */
 .about { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-left: 6px; padding: 0; border: 0; border-radius: 999px; background: none; color: var(--subtle); vertical-align: middle; cursor: help; transition: color var(--dur) var(--ease-out); }
 .about:hover, .about:focus-visible { color: var(--text); }
-.about-text { display: block; max-width: 280px; line-height: 1.5; text-wrap: pretty; }
+.about-text { display: block; line-height: 1.5; }

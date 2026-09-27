@@ -549,6 +549,7 @@ button.m-agent-head { cursor: pointer; }
 .m-sign-in p { font-size: 15px; color: var(--m-muted); }
 .m-sign-in small { font-size: 12px; color: var(--m-muted); }
 .m-google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 50px; margin-top: 6px; border: 0; border-radius: 25px; background: var(--m-ink); color: var(--m-bg) !important; font-size: 16px !important; font-weight: 600; cursor: pointer; }
+.m-google-mark { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: #fff; }
 
 /* A passage selected with a mouse: 引用 over it. */
 .m-quote-pop { position: fixed; z-index: 45; display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 0; border-radius: 999px; background: var(--m-ink); color: var(--m-bg) !important; font-size: 13px !important; transform: translate(-50%, calc(-100% - 8px)); cursor: pointer; }

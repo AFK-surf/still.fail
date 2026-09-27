@@ -3,10 +3,11 @@ package dev.ember.android.screens
 import android.content.Context
 import android.os.Build
 import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -107,12 +109,11 @@ fun SignInScreen() {
     }
 }
 
+/** Google's "G", on white as Google asks for it on a dark button. */
 @Composable
 private fun GoogleDot() {
-    Canvas(Modifier.size(18.dp)) {
-        listOf(Color(0xFFEA4335), Color(0xFFFBBC05), Color(0xFF34A853), Color(0xFF4285F4)).forEachIndexed { i, c ->
-            drawArc(c, -90f + 90f * i, 90f, true)
-        }
+    Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+        Image(painterResource(R.drawable.google_g), contentDescription = null, modifier = Modifier.size(16.dp))
     }
 }
 
