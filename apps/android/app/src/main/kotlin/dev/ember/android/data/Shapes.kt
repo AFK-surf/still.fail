@@ -308,7 +308,7 @@ data class QuotaWindow (
 /// An allowance: its windows shortest first.
 @Serializable
 data class Quota (
-	/// ok | unsupported | unavailable
+	/// ok | unsupported | unavailable | blocked (the provider refuses the account)
 	val state: String,
 	val windows: List<QuotaWindow>,
 	val detail: String? = null,
@@ -984,6 +984,8 @@ data class MachineLogin (
 	val plan: String? = null,
 	/// A profile can use it as it is (kept in a file, not only in the keychain).
 	val usable: Boolean? = null,
+	/// Its allowance, as a profile on it would show (none until read, or when it cannot be).
+	val quota: Quota? = null,
 	/// In a line, as the pages show it.
 	val text: String
 )

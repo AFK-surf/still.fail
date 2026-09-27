@@ -287,7 +287,7 @@ export interface QuotaWindow {
 
 /** An allowance: its windows shortest first. */
 export interface Quota {
-	/** ok | unsupported | unavailable */
+	/** ok | unsupported | unavailable | blocked (the provider refuses the account) */
 	state: string;
 	windows: QuotaWindow[];
 	detail?: string;
@@ -903,6 +903,8 @@ export interface MachineLogin {
 	plan?: string;
 	/** A profile can use it as it is (kept in a file, not only in the keychain). */
 	usable?: boolean;
+	/** Its allowance, as a profile on it would show (none until read, or when it cannot be). */
+	quota?: Quota;
 	/** In a line, as the pages show it. */
 	text: string;
 }
