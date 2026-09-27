@@ -1512,7 +1512,7 @@ mod tests {
                 "/admin/api/sessions/k1" => json_response(200, json!({ "session": session("k1"), "threads": [], "turns": [] })),
                 "/admin/api/overview" => json_response(200, json!({
                     "viewer": { "via": "local" }, "connects": [], "profiles": [], "processes": [], "counts": { "sessions": 1, "running": 0, "warm": 0 },
-                    "mesh": null, "slackUsers": [], "slackTeams": [], "slackInstalls": [], "disk": null, "logins": [],
+                    "mesh": null, "slackUsers": [], "slackTeams": [], "slackApps": [], "disk": null, "logins": [],
                 })),
                 "/v1/telemetry/traces" => json_response(202, json!({})),
                 _ => json_response(404, json!({})),

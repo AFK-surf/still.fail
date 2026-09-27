@@ -1343,7 +1343,7 @@ mod tests {
         json!({
             "viewer": {"via": "local"}, "connects": connects, "profiles": profiles, "processes": [],
             "counts": {"sessions": 0, "running": 0, "warm": 0}, "mesh": null, "slackUsers": [], "slackTeams": [],
-            "slackInstalls": [], "disk": null, "logins": [],
+            "slackApps": [], "disk": null, "logins": [],
         })
     }
 
