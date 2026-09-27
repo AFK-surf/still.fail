@@ -533,7 +533,7 @@ test("a connect's Slack app is edited through its manifest; new permissions need
     const app = await t.call("GET", "/connects/ds/slack-app");
     assert.equal(app.body.state, "ok");
     assert.equal(app.body.settings.name, "ember");
-    assert.equal(app.body.links.install, "https://api.slack.com/apps/A0DS/install-on-team");
+    assert.equal(app.body.links.install, "https://app.slack.com/app-settings/T0/A0DS/install-on-team");
     const renamed = await t.call("PUT", "/connects/ds/slack-app", { name: "ember-ds", description: "DS agent" });
     assert.equal(renamed.body.permissionsUpdated, false);
     assert.equal(t.slackApps.manifest.display_information.name, "ember-ds");

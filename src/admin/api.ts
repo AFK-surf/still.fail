@@ -603,6 +603,11 @@ export class AdminApi {
     return team;
   }
 
+  /** The Slack workspace a connect's app is in, as last seen. */
+  #teamOf(connectId: string): string | null {
+    return this.#deps.settings.config.connects.find((c) => c.id === connectId)?.slack.team?.id ?? null;
+  }
+
   async #appId(connectId: string): Promise<string | null> {
     const connect = this.#deps.settings.config.connects.find((c) => c.id === connectId);
     if (!connect) throw new HttpError(404, `unknown connect ${connectId}`);
@@ -625,7 +630,7 @@ export class AdminApi {
       return { state: "no_app" as const, appId: null, links: null, settings: null, groups: SLACK_GROUP_IDS, error: slackError(error) };
     }
     if (!appId) return { state: "no_app" as const, appId: null, links: null, settings: null, groups: SLACK_GROUP_IDS };
-    const links = slackAppLinks(appId);
+    const links = slackAppLinks(appId, this.#teamOf(connectId));
     if (!this.#apps.configured(viewerId(viewer))) return { state: "no_config_token" as const, appId, links, settings: null, groups: SLACK_GROUP_IDS };
     try {
       return { state: "ok" as const, appId, links, settings: settingsOf(await this.#apps.exportManifest(viewerId(viewer), appId)), groups: SLACK_GROUP_IDS };
@@ -659,7 +664,7 @@ export class AdminApi {
       setTimeout(refresh, 8000).unref();
     }
     log.info("slack app updated from the admin page", { connect: connectId, appId, permissionsUpdated, by: viewerId(viewer) });
-    return { permissionsUpdated, iconError, links: slackAppLinks(appId) };
+    return { permissionsUpdated, iconError, links: slackAppLinks(appId, this.#teamOf(connectId)) };
   }
 
   /** Sign-ins with no profile yet, by id: their runtime, their home while signing in, who started them, what they made. */
@@ -906,8 +911,9 @@ export class AdminApi {
     if (await this.#appId(connectId)) throw new HttpError(400, "这个连接已经有 Slack app 了");
     const name = typeof input.name === "string" && input.name.trim() ? input.name.trim() : connectName(connect);
     let appId: string;
+    const team = this.#teamFor(input, viewer);
     try {
-      ({ appId } = await this.#apps.createApp(viewerId(viewer), this.#teamFor(input, viewer), slackManifest(name)));
+      ({ appId } = await this.#apps.createApp(viewerId(viewer), team, slackManifest(name)));
     } catch (error) {
       throw new HttpError(400, `Slack 没能创建 app：${slackError(error)}`);
     }
@@ -915,7 +921,7 @@ export class AdminApi {
       ...raw,
       connects: (raw.connects ?? []).map((c) => (c.id === connectId ? { ...c, slack: { ...c.slack, appId } } : c)),
     }));
-    return { appId, links: slackAppLinks(appId) };
+    return { appId, links: slackAppLinks(appId, team) };
   }
 
   // ── reads ───────────────────────────────────────────────────────────────
@@ -969,7 +975,7 @@ export class AdminApi {
       slackApps: this.#deps.settings.config.slackApps.filter((a) => a.by === viewerId(viewer)).map((a) => ({
         appId: a.appId, name: a.name, teamId: a.teamId,
         team: this.#deps.settings.config.slackConfigTokens.find((t) => t.teamId === a.teamId)?.owner?.team ?? null,
-        created: a.created, links: slackAppLinks(a.appId),
+        created: a.created, links: slackAppLinks(a.appId, a.teamId),
         install: a.oauth?.install ?? null, state: a.oauth?.state ?? null,
         installed: Boolean(a.oauth?.botToken), installedTeam: a.oauth?.installedTeam ?? null,
       })),

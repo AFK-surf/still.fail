@@ -128,7 +128,8 @@ export class Hub {
         if (single) this.#store.setBinding(connect.id, key);
         // As the broker did: a new session says first where it can be followed. Once, as it starts; not waited for.
         const link = single ? null : this.#link(key);
-        if (link) void chat.post(message, `[在 ember 里查看这个会话](${link})`).catch((error) => log.warn("session link not posted", { session: key, error }));
+        // In Slack's own link form: what the station posts is sent as written (the agents write mrkdwn themselves).
+        if (link) void chat.post(message, `<${link}|在 ember 里查看这个会话>`).catch((error) => log.warn("session link not posted", { session: key, error }));
       } catch (error) {
         log.error("cannot create session", { session: key, error });
         await chat.post(message, `⚠️ 无法创建会话：${error instanceof Error ? error.message : String(error)}`);

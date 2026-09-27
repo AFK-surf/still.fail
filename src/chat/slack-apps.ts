@@ -227,8 +227,14 @@ export async function appIdOf(botToken: string): Promise<string> {
 }
 
 /** Pages in Slack's app settings a person may need, by app id. */
-export function slackAppLinks(appId: string) {
-  const base = `https://api.slack.com/apps/${appId}`;
+export function slackAppLinks(appId: string, teamId: string | null) {
+  // Slack keeps an app's settings under its workspace (app.slack.com/app-settings/<team>/<app>/<page>); without the
+  // workspace, its list of apps is where to find it.
+  if (!teamId) {
+    const apps = "https://api.slack.com/apps";
+    return { settings: apps, install: apps, appToken: apps, oauth: apps };
+  }
+  const base = `https://app.slack.com/app-settings/${teamId}/${appId}`;
   // An app-level token is made from the Socket Mode page: there Slack has its scope (connections:write) already picked.
   return { settings: base, install: `${base}/install-on-team`, appToken: `${base}/socket-mode`, oauth: `${base}/oauth` };
 }

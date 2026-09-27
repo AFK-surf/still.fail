@@ -46,7 +46,7 @@ test("a new session first says where it can be followed (multi-session connects 
   await accept(m);
   await settle();
   assert.equal(chat.posts.length, 1);
-  assert.match(chat.posts[0]!.text, /^\[在 ember 里查看这个会话\]\(https:\/\/ember\.test\/o\/ws\/st\/cl%3AC1%3A[\d.]+\)$/);
+  assert.match(chat.posts[0]!.text, /^<https:\/\/ember\.test\/o\/ws\/st\/cl%3AC1%3A[\d.]+\|在 ember 里查看这个会话>$/);
   assert.deepEqual(chat.posts[0]!.thread, { channel: "C1", threadTs: m.threadTs });
   // Its next message is the same session: nothing more.
   await accept(message({ text: "<@UBOT> and the tests", threadTs: m.threadTs }));

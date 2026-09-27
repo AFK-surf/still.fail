@@ -57,7 +57,8 @@ impl SessionScope {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionRow {
     pub key: String,
     /// The connect that started it ("ember" for the page). Replies go through the connect each thread came from.
@@ -78,6 +79,7 @@ pub struct SessionRow {
     pub effort: Option<String>,
     pub runtime_session_id: Option<String>,
     pub workspace: String,
+    #[serde(skip)]
     pub token: String,
     /// A turn was running when this was last written; true after a crash means the turn was cut off.
     pub running: bool,
@@ -107,7 +109,8 @@ pub struct NewSession {
 }
 
 /// A place people talk: a Slack thread, or a chat on the station's page.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct ThreadRow {
     pub id: i64,
     /// "slack:<team id>" (or "slack:<connect id>" while the team is unknown), or "ember".
@@ -128,7 +131,8 @@ pub struct SessionThread {
 }
 
 /// A session in a thread, and the connect it posts there through.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct Membership {
     pub thread: i64,
     pub session: String,
@@ -268,7 +272,8 @@ pub struct ThreadSummary {
     pub first_text: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct TurnSummary {
     pub kind: String,
     pub outcome: Option<String>,
@@ -299,7 +304,8 @@ pub struct ProfileStatus {
     pub quota: Option<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct ProcessRow {
     pub pgid: i64,
     pub started_at: i64,

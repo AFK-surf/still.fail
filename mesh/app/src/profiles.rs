@@ -144,3 +144,138 @@ pub struct ProfileQuota {
     pub detail: Option<String>,
     pub checked_at: i64,
 }
+
+// ── checks ─────────────────────────────────────────────────────────────────
+
+/// What a profile check is given: the account and where it lives.
+pub struct CheckOptions<'a> {
+    pub runtime: RuntimeKind,
+    pub kind: AccessKind,
+    pub key: &'a str,
+    pub home: &'a std::path::Path,
+    pub env: &'a crate::machine_logins::Env,
+    /// On the machine's own login (machine_logins.rs).
+    pub machine: bool,
+}
+
+fn check(state: &str, detail: impl Into<String>, models: Option<Vec<String>>) -> ProfileCheck {
+    ProfileCheck { state: state.into(), detail: detail.into(), models, checked_at: crate::store::now_ms() }
+}
+
+fn http() -> reqwest::Client {
+    reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build().unwrap_or_default()
+}
+
+/// The ids of a `/v1/models` answer.
+async fn model_ids(response: reqwest::Response) -> anyhow::Result<Vec<String>> {
+    let body: serde_json::Value = response.json().await?;
+    Ok(body["data"].as_array().map(|a| a.iter().filter_map(|m| m["id"].as_str().map(String::from)).collect()).unwrap_or_default())
+}
+
+/// The models a Claude subscription's OAuth token may use; None when Anthropic does not say.
+async fn claude_models(token: &str) -> Option<Vec<String>> {
+    let response = http()
+        .get("https://api.anthropic.com/v1/models?limit=100")
+        .bearer_auth(token)
+        .header("anthropic-version", "2023-06-01")
+        .header("anthropic-beta", "oauth-2025-04-20")
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    model_ids(response).await.ok()
+}
+
+/// Runs a runtime's own status command; its output, or why it could not run.
+async fn status_of(command: &str, args: &[&str], env: &crate::machine_logins::Env) -> anyhow::Result<std::process::Output> {
+    let run = tokio::process::Command::new(command).args(args).env_clear().envs(env).stdin(std::process::Stdio::null()).kill_on_drop(true).output();
+    Ok(tokio::time::timeout(std::time::Duration::from_secs(20), run).await.map_err(|_| anyhow::anyhow!("{command} {} timed out", args.join(" ")))??)
+}
+
+/// Asks the provider or runtime whether this profile works, and what models it offers. (checkProfile)
+pub async fn check_profile(o: CheckOptions<'_>) -> ProfileCheck {
+    match check_inner(&o).await {
+        Ok(check) => check,
+        Err(e) => check("failed", format!("检查失败：{e}"), None),
+    }
+}
+
+async fn check_inner(o: &CheckOptions<'_>) -> anyhow::Result<ProfileCheck> {
+    match (o.kind, o.runtime) {
+        (AccessKind::OpencodeGo, _) => {
+            // The model list answers any key; the usage is the key's own, so it is what tells a key that works.
+            let usage = http().get(format!("{OPENCODE}/v1/usage")).bearer_auth(o.key).send().await?;
+            if !usage.status().is_success() {
+                return Ok(check("failed", format!("OpenCode Go 拒绝了这个 key（{}）", usage.status().as_u16()), None));
+            }
+            let response = http().get(format!("{OPENCODE}/v1/models")).bearer_auth(o.key).send().await?;
+            if !response.status().is_success() {
+                return Ok(check("failed", format!("读不到 OpenCode Go 的模型（{}）", response.status().as_u16()), None));
+            }
+            let mut models = model_ids(response).await?;
+            models.sort();
+            Ok(check("ok", format!("可用，{} 个模型", models.len()), Some(models)))
+        }
+        (AccessKind::AnthropicApi, _) => {
+            let response = http()
+                .get("https://api.anthropic.com/v1/models?limit=100")
+                .header("x-api-key", o.key)
+                .header("anthropic-version", "2023-06-01")
+                .send()
+                .await?;
+            if !response.status().is_success() {
+                return Ok(check("failed", format!("Anthropic 拒绝了这个 key（{}）", response.status().as_u16()), None));
+            }
+            let models = model_ids(response).await?;
+            Ok(check("ok", format!("可用，{} 个模型", models.len()), Some(models)))
+        }
+        (AccessKind::Subscription, RuntimeKind::Claude) => {
+            let mut env = o.env.clone();
+            env.insert("CLAUDE_CONFIG_DIR".into(), o.home.to_string_lossy().into_owned());
+            let machine_token = if o.machine { Some(crate::machine_logins::machine_claude_token(o.env).await?.0) } else { None };
+            match &machine_token {
+                Some(token) => {
+                    env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.clone());
+                }
+                None => crate::no_keychain::file_credentials(&mut env),
+            }
+            let output = status_of("claude", &["auth", "status"], &env).await?;
+            // Signed out, it says so and exits 1: its answer is still the JSON on stdout.
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if !output.status.success() && !(output.status.code() == Some(1) && stdout.trim_start().starts_with('{')) {
+                anyhow::bail!("Command failed: claude auth status\n{}", String::from_utf8_lossy(&output.stderr));
+            }
+            let status: serde_json::Value = serde_json::from_str(&stdout)?;
+            if status["loggedIn"] != true {
+                return Ok(check("login", "还没登录", None));
+            }
+            // What the subscription runs, as Anthropic lists it for the account's own token.
+            let token = machine_token.or_else(|| crate::quota::claude_token(o.home));
+            let models = match token {
+                Some(token) => claude_models(&token).await,
+                None => None,
+            };
+            let detail: Vec<&str> = ["已登录", status["email"].as_str().unwrap_or(""), status["subscriptionType"].as_str().unwrap_or("")].into_iter().filter(|s| !s.is_empty()).collect();
+            Ok(check("ok", detail.join("，"), models))
+        }
+        (AccessKind::Subscription, RuntimeKind::Codex) => {
+            if o.machine {
+                crate::machine_logins::link_codex_auth(o.home, o.env)?;
+            }
+            let mut env = o.env.clone();
+            env.insert("CODEX_HOME".into(), o.home.to_string_lossy().into_owned());
+            let output = status_of("codex", &["login", "status"], &env).await?;
+            let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)).trim().to_string();
+            if text.to_lowercase().contains("not logged in") {
+                return Ok(check("login", "还没登录", None));
+            }
+            if !output.status.success() {
+                anyhow::bail!("Command failed: codex login status\n{text}");
+            }
+            Ok(check("ok", text.lines().next().unwrap_or("已登录").to_string(), None))
+        }
+        _ => Ok(check("unknown", "自定义环境变量，ember 无法自动检查", None)),
+    }
+}

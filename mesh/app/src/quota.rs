@@ -133,7 +133,7 @@ async fn opencode(key: &str) -> Result<ProfileQuota> {
 }
 
 /// The OAuth token Claude Code keeps in this config directory.
-fn claude_token(home: &Path) -> Option<String> {
+pub fn claude_token(home: &Path) -> Option<String> {
     let text = std::fs::read_to_string(home.join(".credentials.json")).ok()?;
     let value: Value = serde_json::from_str(&text).ok()?;
     value.get("claudeAiOauth")?.get("accessToken")?.as_str().filter(|t| !t.is_empty()).map(String::from)

@@ -250,10 +250,11 @@ impl Hub {
                 return Ok(());
             }
             // As the broker did: a new session says first where it can be followed. Once, as it starts; not waited for.
+            // In Slack's own link form: what the station posts is sent as written (the agents write mrkdwn themselves).
             if let Some(link) = (!single).then(|| (self.link)(&key)).flatten() {
                 let (chat, here, key) = (chat.clone(), here.clone(), key.clone());
                 tokio::spawn(async move {
-                    if let Err(e) = chat.post(&here, &format!("[在 ember 里查看这个会话]({link})"), &[]).await {
+                    if let Err(e) = chat.post(&here, &format!("<{link}|在 ember 里查看这个会话>"), &[]).await {
                         warn!(session = key, error = %e, "session link not posted");
                     }
                 });

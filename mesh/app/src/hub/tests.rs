@@ -336,7 +336,7 @@ async fn a_new_session_first_says_where_it_can_be_followed_multi_session_connect
     settle().await;
     let posts = r.chat.posts.lock().unwrap().clone();
     assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].1, format!("[在 ember 里查看这个会话](https://ember.test/o/ws/st/cl%3AC1%3A{})", m.thread_ts));
+    assert_eq!(posts[0].1, format!("<https://ember.test/o/ws/st/cl%3AC1%3A{}|在 ember 里查看这个会话>", m.thread_ts));
     assert_eq!(posts[0].0, ThreadRef::new("C1", &m.thread_ts));
     // Its next message is the same session: nothing more.
     r.accept(&InboundMessage { thread_ts: m.thread_ts.clone(), ..say("<@UBOT> and the tests") }).await;

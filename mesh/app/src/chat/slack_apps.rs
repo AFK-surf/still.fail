@@ -464,8 +464,14 @@ pub struct SlackAppLinks {
     pub oauth: String,
 }
 
-pub fn slack_app_links(app_id: &str) -> SlackAppLinks {
-    let base = format!("https://api.slack.com/apps/{app_id}");
+pub fn slack_app_links(app_id: &str, team_id: Option<&str>) -> SlackAppLinks {
+    // Slack keeps an app's settings under its workspace (app.slack.com/app-settings/<team>/<app>/<page>); without the
+    // workspace, its list of apps is where to find it.
+    let Some(team_id) = team_id else {
+        let apps = "https://api.slack.com/apps".to_string();
+        return SlackAppLinks { settings: apps.clone(), install: apps.clone(), app_token: apps.clone(), oauth: apps };
+    };
+    let base = format!("https://app.slack.com/app-settings/{team_id}/{app_id}");
     // An app-level token is made from the Socket Mode page: there Slack has its scope (connections:write) already picked.
     SlackAppLinks { settings: base.clone(), install: format!("{base}/install-on-team"), app_token: format!("{base}/socket-mode"), oauth: format!("{base}/oauth") }
 }
