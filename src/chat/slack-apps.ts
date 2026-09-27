@@ -268,6 +268,9 @@ export class SlackApps {
   /** Makes the app in one of this person's workspaces (`team`); its OAuth credentials come only now, once. */
   async createApp(by: string, team: string, manifest: Manifest): Promise<{ appId: string; clientId: string; clientSecret: string }> {
     const data = await call("apps.manifest.create", await this.#token(by, team), { manifest: JSON.stringify(manifest) });
+    // What Slack answers beyond what is read here, by shape only (never a value): whether an app-level token comes with
+    // a Socket Mode app is not documented (its errors name one: failed_generating_app_token).
+    log.info("slack app made", { shape: shapeOf(data) });
     const appId = String(data.app_id);
     this.#owner.set(`${by}|${appId}`, team);
     return { appId, clientId: String(data.credentials?.client_id ?? ""), clientSecret: String(data.credentials?.client_secret ?? "") };
@@ -319,4 +322,12 @@ export class SlackApps {
     }
     return rotating;
   }
+}
+
+/** A JSON value's shape, for the log: its keys, and of each string only its kind (an xapp-/xoxb-/… token, or text). */
+function shapeOf(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(shapeOf);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, shapeOf(v)]));
+  if (typeof value === "string") return /^x[a-z]{3}-/.test(value) ? `${value.slice(0, 5)}…` : "string";
+  return typeof value;
 }
