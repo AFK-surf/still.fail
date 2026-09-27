@@ -41,6 +41,12 @@ use crate::trace::{Kind, Span, SpanContext, Tracer, route};
 
 /// How long a failed or ended stream waits before it is opened again.
 pub const RECONNECT_MS: u64 = 2_000;
+/// A station not reached is tried again at RECONNECT_MS, doubling up to this.
+pub const RECONNECT_MAX_MS: u64 = 60_000;
+/// How many tries in a row a station that was up may miss (`reconnecting`) before it is taken for down (`offline`).
+pub const MISSES: u32 = 3;
+/// Where a station's last settled link state (online, offline) is kept, by station.
+const LINK_KEY: &str = "link";
 /// A topic whose first read failed in passing is read again after this, besides when the link comes back.
 pub const RETRY_MS: u64 = 3_000;
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone though nothing
@@ -463,9 +469,6 @@ pub struct Stations {
     kept: Rc<Kept>,
     me: Weak<Stations>,
     stations: RefCell<HashMap<String, StationState>>,
-    /// Stations their workspace says are offline: their topics are served from what was kept (the data center, the
-    /// device's logs), and nothing is asked of them until they are back.
-    offline: RefCell<HashSet<String>>,
 }
 
 /// A failed request's span.
@@ -487,7 +490,7 @@ fn answered(span: &mut Span, reply: &WireReply) {
 
 impl Stations {
     pub fn new(host: Rc<dyn Host>, sink: Rc<dyn TopicSink>, wire: Rc<dyn StationWire>, tracer: Rc<Tracer>, kept: Rc<Kept>) -> Rc<Stations> {
-        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, me: me.clone(), stations: RefCell::default(), offline: RefCell::default() })
+        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, me: me.clone(), stations: RefCell::default() })
     }
 
     /// One JSON call to the admin API (path without the `/admin/api` prefix); a write answers once the live topics
@@ -839,42 +842,24 @@ impl Stations {
         });
     }
 
-    /// A station went offline or came back, as its workspace says. Offline: its streams and requests end and its link
-    /// says so; its topics keep what they have. Back: what its topics want is read again and its stream opens.
-    pub fn set_presence(&self, station: &str, online: bool) {
-        let changed = if online { self.offline.borrow_mut().remove(station) } else { self.offline.borrow_mut().insert(station.to_string()) };
-        if !changed {
-            return;
-        }
-        if !online {
-            if let Some(s) = self.stations.borrow_mut().get_mut(station) {
-                for task in s.events.take().map(|(t, _)| t).into_iter().chain(s.replaced.take()) {
-                    task.abort();
-                }
-                for (_, task) in s.tasks.drain() {
-                    task.abort();
-                }
-                s.stale = true;
-            }
-            self.set_link(station, json!({ "state": "offline", "message": null }));
-            return;
-        }
-        let topics: Vec<Topic> = self.stations.borrow().get(station).map(|s| s.topics.iter().cloned().collect()).unwrap_or_default();
-        for topic in &topics {
-            match topic {
-                Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } | Topic::Thread { .. } => self.refetch(topic),
-                _ => {}
-            }
-        }
-        self.open_events(station, true);
-    }
-
-    /// Whether the station can be asked for anything now (not offline).
+    /// Whether the station is worth asking now: not while its link has found it down (`offline`) — its topics are
+    /// served from what was kept (the data center, the device's logs) and read again when the link is back. Whether it
+    /// is up is this device's own finding, by reaching it (the events stream), not anyone else's say.
     fn reachable(&self, station: &str) -> bool {
-        !self.offline.borrow().contains(station)
+        self.stations.borrow().get(station).is_none_or(|s| s.link.get("state").and_then(Value::as_str) != Some("offline"))
     }
 
     fn set_link(&self, station: &str, value: Value) {
+        // What it settled on (up, or down) is kept, so the next start shows it until the link finds out anew.
+        if let Some(state @ ("online" | "offline")) = value.get("state").and_then(Value::as_str) {
+            let was = self.stations.borrow().get(station).and_then(|s| s.link.get("state").and_then(Value::as_str).map(str::to_string));
+            if was.as_deref() != Some(state) {
+                let (host, key, state) = (self.host.clone(), format!("{LINK_KEY}/{station}"), state.to_string());
+                self.spawn(async move {
+                    let _ = host.storage_set(&key, state.into_bytes()).await;
+                });
+            }
+        }
         let live = {
             let mut stations = self.stations.borrow_mut();
             let Some(s) = stations.get_mut(station) else { return };
@@ -973,6 +958,10 @@ impl Stations {
         let mut first = true;
         // How the last stream ended and how long it lasted: on the reconnect's span, so a stream that keeps ending shows why.
         let mut previous: Option<(String, f64)> = None;
+        // Tries in a row that did not reach it, and whether it was reached before: a station that was up and dropped
+        // is coming back (`reconnecting`) for a few tries; one not reached for MISSES, or never, is down (`offline`).
+        let mut misses: u32 = 0;
+        let mut reached = false;
         loop {
             // Replaced before it opened: its successor asks instead.
             if !self.is_current(&station, generation) {
@@ -993,6 +982,8 @@ impl Stations {
             }
             match opened {
                 Ok(mut body) => {
+                    misses = 0;
+                    reached = true;
                     self.set_link(&station, json!({ "state": "online" }));
                     // Down for a while: what changed meanwhile was not told.
                     if self.set_stale(&station, false) {
@@ -1021,18 +1012,22 @@ impl Stations {
                     }
                     previous = Some((why.clone(), self.host.now_ms() - opened_at));
                     self.set_stale(&station, true);
-                    self.set_link(&station, json!({ "state": "offline", "message": if why == "ended" { "连接断开了".to_string() } else { why } }));
+                    self.set_link(&station, json!({ "state": "reconnecting", "message": if why == "ended" { "连接断开了".to_string() } else { why } }));
                 }
                 Err(error) => {
                     failed(&mut span, &error);
                     span.end();
                     previous = Some((format!("open failed: {}", error.message), 0.0));
                     self.set_stale(&station, true);
-                    let state = if error.status.is_some() { "error" } else { "offline" };
+                    misses += 1;
+                    // It answered, but no (refused, failing): it is there. Not reached at all: coming back, or down.
+                    let state = if error.status.is_some() { "error" } else if reached && misses < MISSES { "reconnecting" } else { "offline" };
                     self.set_link(&station, json!({ "state": state, "message": error.message }));
                 }
             }
-            self.host.sleep(RECONNECT_MS).await;
+            // Not reached: less and less often, up to RECONNECT_MAX_MS.
+            let wait = RECONNECT_MS.saturating_mul(1u64 << misses.saturating_sub(1).min(8)).min(RECONNECT_MAX_MS);
+            self.host.sleep(wait).await;
         }
     }
 
@@ -1632,18 +1627,18 @@ impl Source for Stations {
             return;
         }
         match topic {
-            Topic::Link { .. } if !self.reachable(&station) => {
-                let (this, station) = (self.rc(), station.clone());
-                self.spawn(async move { this.set_link(&station, json!({ "state": "offline", "message": null })) });
-            }
             Topic::Link { .. } => {
-                // The state as it is when this runs: the events stream may have moved on.
+                // The state as it is when this runs: the events stream may have moved on. Not found out yet this time:
+                // how it was last (kept), for the views to show meanwhile.
                 let (this, station) = (self.rc(), station.clone());
                 self.spawn(async move {
+                    let last = this.host.storage_get(&format!("{LINK_KEY}/{station}")).await.ok().flatten().and_then(|b| String::from_utf8(b).ok());
                     let link = this.stations.borrow().get(&station).map(|s| s.link.clone());
-                    if let Some(link) = link {
-                        this.set_link(&station, link);
+                    let Some(mut link) = link else { return };
+                    if link.get("state").and_then(Value::as_str) == Some("connecting") && let Some(last) = last {
+                        link["last"] = json!(last);
                     }
+                    this.set_link(&station, link);
                 });
             }
             Topic::Overview { .. } | Topic::Sessions { .. } | Topic::Threads { .. } | Topic::ChatRows { .. } | Topic::Session { .. } | Topic::SlackApp { .. } => self.refetch(topic),

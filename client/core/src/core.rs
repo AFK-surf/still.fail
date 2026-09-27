@@ -87,8 +87,6 @@ struct Inner {
     me_fetches: RefCell<HashMap<String, u64>>,
     /// The live `workspaces` / `workspace` topics, each with the number of its newest fetch.
     live: RefCell<HashMap<Topic, u64>>,
-    /// The newest fetch of each that has come back: one under way while `live` is ahead of it.
-    landed: RefCell<HashMap<Topic, u64>>,
     /// Per account, its ember cloud events socket while an account topic is live.
     sockets: RefCell<HashMap<String, Socket>>,
 }
@@ -170,7 +168,6 @@ impl Core {
                 shown_accounts: RefCell::new(accounts.list()),
                 me_fetches: RefCell::default(),
                 live: RefCell::default(),
-                landed: RefCell::default(),
                 sockets: RefCell::default(),
             }
         });
@@ -654,16 +651,6 @@ impl Inner {
     }
 
     /// A workspace's stations as it lists them now: what is kept of the others in it goes.
-    /// Tells the stations module which of a workspace's stations are online: an offline one is served from what was
-    /// kept, and asked for nothing until it is back.
-    fn presence(&self, workspace: &str, view: &Value) {
-        for station in view.get("stations").and_then(Value::as_array).into_iter().flatten() {
-            if let Some(id) = station.get("id").and_then(Value::as_str) {
-                self.stations.set_presence(&format!("{workspace}/{id}"), station.get("online").and_then(Value::as_bool).unwrap_or(false));
-            }
-        }
-    }
-
     fn forget_gone_stations(&self, workspace: &str, view: &Value) {
         let ids: HashSet<String> = view.get("stations").and_then(Value::as_array).into_iter().flatten().filter_map(|s| Some(s.get("id")?.as_str()?.to_string())).collect();
         let workspace = workspace.to_string();
@@ -770,20 +757,11 @@ impl Inner {
         };
         if let (Topic::Workspace { workspace }, Ok(view)) = (topic, &value) {
             self.forget_gone_stations(workspace, view);
-            self.presence(workspace, view);
         }
-        let landed = self.landed.borrow().get(topic).copied().unwrap_or(0).max(fetch);
-        self.landed.borrow_mut().insert(topic.clone(), landed);
         if self.live.borrow().get(topic) == Some(&fetch) {
             // A workspace goes to the data center; the list of them is put together from the accounts' records.
             self.center.set(topic, value);
         }
-    }
-
-    /// Whether a fetch of `topic` is under way: what it brings may predate an event that came since.
-    fn fetching(&self, topic: &Topic) -> bool {
-        let live = self.live.borrow().get(topic).copied().unwrap_or(0);
-        live > self.landed.borrow().get(topic).copied().unwrap_or(0)
     }
 
     /// The accounts as UIs see them changed (a token refresh alone changes nothing here).
@@ -880,32 +858,6 @@ impl Inner {
                 let Some(id) = event.get("id").and_then(Value::as_str) else { return };
                 let topic = Topic::Workspace { workspace: id.to_string() };
                 if self.live.borrow().contains_key(&topic) {
-                    self.spawn_refresh(topic);
-                }
-            }
-            Some("station") => {
-                let (Some(workspace), Some(id), Some(online)) =
-                    (event.get("workspace").and_then(Value::as_str), event.get("id").and_then(Value::as_str), event.get("online").and_then(Value::as_bool))
-                else {
-                    return;
-                };
-                // Complete in itself: the station's presence changes in place, and it was last seen now.
-                let now = (self.host.now_ms() / 1000.0).floor() as i64;
-                let topic = Topic::Workspace { workspace: workspace.to_string() };
-                let mut found = false;
-                self.center.update(&topic, &mut |view| {
-                    for station in view.get_mut("stations").and_then(Value::as_array_mut).into_iter().flatten() {
-                        if station.get("id").and_then(Value::as_str) == Some(id) {
-                            station["online"] = json!(online);
-                            station["last_seen"] = json!(now);
-                            found = true;
-                        }
-                    }
-                });
-                self.stations.set_presence(&format!("{workspace}/{id}"), online);
-                // Not in the view yet (it just joined), or a fetch under way would put back what the cloud said before
-                // this: read it again, which overtakes that fetch.
-                if self.live.borrow().contains_key(&topic) && (!found || self.fetching(&topic)) {
                     self.spawn_refresh(topic);
                 }
             }

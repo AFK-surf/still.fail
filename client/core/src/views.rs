@@ -42,6 +42,15 @@ pub struct Views {
 }
 
 /// A station of a scope, as the workspace lists it.
+/// Whether a station is taken for down: its link found it so, or — not found out yet this time — it was, last.
+fn down(link: &Value) -> bool {
+    match link.get("state").and_then(Value::as_str) {
+        Some("offline") => true,
+        Some("connecting") => link.get("last").and_then(Value::as_str) == Some("offline"),
+        _ => false,
+    }
+}
+
 struct StationInfo {
     address: String,
     id: String,
@@ -277,10 +286,11 @@ impl Views {
         let stations = workspace.get("stations").and_then(Value::as_array).into_iter().flatten().filter_map(|s| {
             let id = s.get("id")?.as_str()?.to_string();
             let last_seen = s.get("last_seen").cloned().unwrap_or(Value::Null);
-            // Connected to ember cloud right now (its presence socket), as the cloud says.
-            let online = s.get("online").and_then(Value::as_bool).unwrap_or(false);
+            let address = format!("{scope}/{id}");
+            // Up as this device finds it, reaching it over the mesh: not as anyone else says.
+            let online = !down(&self.link(&address));
             Some(StationInfo {
-                address: format!("{scope}/{id}"),
+                address,
                 name: s.get("name").and_then(Value::as_str).unwrap_or(&id).to_string(),
                 id,
                 online,
@@ -322,13 +332,15 @@ impl Views {
         self.store.value(&topic)?.ok()
     }
 
-    /// The station's link as `{ state, message }`.
-    fn link(&self, station: &str, online: bool) -> Value {
-        if !online {
-            return json!({ "state": "offline", "message": null });
-        }
+    /// The station's link as `{ state, message, last }`: connecting (`last`: how it was last, kept), online,
+    /// reconnecting (it was up and dropped), offline (not reached), error (it answers, but no).
+    fn link(&self, station: &str) -> Value {
         match self.store.value(&Topic::Link { station: station.to_string() }) {
-            Some(Ok(link)) => json!({ "state": link.get("state").cloned().unwrap_or(json!("connecting")), "message": link.get("message").cloned().unwrap_or(Value::Null) }),
+            Some(Ok(link)) => json!({
+                "state": link.get("state").cloned().unwrap_or(json!("connecting")),
+                "message": link.get("message").cloned().unwrap_or(Value::Null),
+                "last": link.get("last").cloned().unwrap_or(Value::Null),
+            }),
             Some(Err(error)) => json!({ "state": "error", "message": error.message }),
             None => json!({ "state": "connecting", "message": null }),
         }
@@ -370,9 +382,9 @@ impl Views {
                     if !s.online {
                         row["offline"] = json!(format!("{} 离线", s.name));
                     } else {
-                        match self.link(&s.address, true)["state"].as_str().unwrap_or("connecting") {
+                        match self.link(&s.address)["state"].as_str().unwrap_or("connecting") {
                             "error" => row["reconnecting"] = json!(format!("连不上 {}，正在重试", s.name)),
-                            "offline" => row["reconnecting"] = json!(format!("正在重连 {}…", s.name)),
+                            "reconnecting" => row["reconnecting"] = json!(format!("正在重连 {}…", s.name)),
                             _ => {}
                         }
                     }
@@ -412,7 +424,7 @@ impl Views {
             let (state, message) = if !s.online {
                 ("offline", Value::Null)
             } else {
-                let link = self.link(&s.address, true);
+                let link = self.link(&s.address);
                 let link_state = link["state"].as_str().unwrap_or("connecting");
                 let link_message = link["message"].clone();
                 match &read {
@@ -420,7 +432,7 @@ impl Views {
                     // Rows already read stay in view while the link comes back.
                     Some(Ok(_)) => match link_state {
                         "error" => ("error", link_message),
-                        "offline" => ("connecting", link_message),
+                        "reconnecting" => ("connecting", link_message),
                         _ => ("online", Value::Null),
                     },
                     None => {
@@ -509,7 +521,7 @@ impl Views {
             json!({
                 "station": s.address, "id": s.id, "name": s.name, "summary": summary,
                 "online": s.online, "lastSeen": s.last_seen, "version": s.version,
-                "link": self.link(&s.address, s.online),
+                "link": self.link(&s.address),
                 "runtimes": runtimes(overview.as_ref()),
                 "models": models(overview.as_ref(), self.host.now_ms()),
                 "overview": shown, "host": host,
@@ -706,7 +718,7 @@ impl Views {
             // Entries before those loaded (the thread counts from 1).
             "more": page.get("first").and_then(Value::as_u64).is_some_and(|first| first > 1),
             "outbox": outbox,
-            "link": self.link(station, true),
+            "link": self.link(station),
             "offline": self.offline(station),
             "thread": thread,
         })))
@@ -840,7 +852,7 @@ impl Views {
             "messages": [],
             "more": false,
             "outbox": [],
-            "link": self.link(station, true),
+            "link": self.link(station),
             "offline": self.offline(station),
         })))
     }

@@ -2,9 +2,10 @@
 //! subscriptions read what the core has; they do not decide what is asked
 //! for. The core keeps, for as long as it runs:
 //!
-//! - the accounts' workspaces, and each workspace (its stations, who is online);
-//! - of each station: its link, overview, chat rows, sessions and threads (an
-//!   offline station is asked for nothing: see `Stations::set_presence`);
+//! - the accounts' workspaces, and each workspace (its stations);
+//! - of each station: its link — whether it is up is this device's finding,
+//!   reaching it — overview, chat rows, sessions and threads (one its link
+//!   found down is asked for nothing until it is back: `Stations::reachable`);
 //! - the live state of every agent at work, as the chat rows say.
 //!
 //! Messages are kept by the stations module itself: the latest chats' pages
