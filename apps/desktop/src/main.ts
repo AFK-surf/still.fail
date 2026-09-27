@@ -134,7 +134,9 @@ async function preview(request: Request): Promise<Response> {
     // The frame takes no redirect from this handler. One of a page it goes to (its address must change, a page's own
     // routes read it): the frame is sent there by a page that goes at once. One of anything else is followed here.
     // A redirect off the service is said.
-    const page = ["document", "iframe"].includes(request.headers.get("sec-fetch-dest") ?? "");
+    // A custom scheme's requests may come without Sec-Fetch-Dest: a page is then what asks for HTML.
+    const dest = request.headers.get("sec-fetch-dest");
+    const page = dest ? ["document", "iframe"].includes(dest) : (request.headers.get("accept") ?? "").includes("text/html");
     let path = url.pathname + url.search;
     let answer: { status: number; headers: [string, string][]; body: string } | null = null;
     for (let hops = 0; hops < 5 && !answer; hops++) {
