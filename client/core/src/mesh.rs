@@ -668,13 +668,13 @@ mod tests {
     }
 
     #[test]
-    fn reopens_a_closed_link_with_a_fresh_grant() {
+    fn reopens_a_closed_link_with_a_new_credential() {
         run(async {
             let (mesh, station) = setup(FakeHost::new()).await;
             let count = Rc::new(Cell::new(0));
             let first = mesh.link(&station.id(), grants("ok", count.clone())).await.unwrap();
             first.request(head("/admin/api/overview"), Vec::new()).await.unwrap();
-            station.conns.borrow()[0].close(3u32.into(), b"grant_expired");
+            station.conns.borrow()[0].close(3u32.into(), b"credential_expired");
             for _ in 0..100 {
                 if first.closed().is_some() {
                     break;
