@@ -310,7 +310,7 @@ export interface Profile {
 	env: EnvVar[];
 	usedBy: string[];
 	loginCommand: string;
-	/** On the machine's own login of its runtime: not edited (but for its models), deleted or signed in here. */
+	/** On the machine's own login of its runtime: not edited (but for its models) or signed in here; removing it stops using that login. */
 	machine?: boolean;
 	check?: ProfileCheck;
 	login?: LoginJob;
