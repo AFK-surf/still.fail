@@ -80,8 +80,21 @@ const ILLUS_SIZE: Record<Illus, [number, number]> = {
   "new-chat": [320, 160], "no-station": [320, 160], "station-offline": [320, 160], "sign-in": [360, 200],
 };
 
+/**
+ * The scenes, fetched and decoded as the app starts and kept: the first page to show one (a new chat) draws it in its
+ * first frame, instead of an empty box that fills a moment later.
+ */
+export const illustrationUrl = (name: Illus) => `${BASE}illus-${name}.svg`;
+const decoded = (Object.keys(ILLUS_SIZE) as Illus[]).map((name) => {
+  const img = new Image();
+  img.src = illustrationUrl(name);
+  void img.decode().catch(() => {});
+  return img;
+});
+void decoded;
+
 /** A scene beside text that says the same, hence no alt. */
 export function Illustration({ name }: { name: Illus }) {
   const [width, height] = ILLUS_SIZE[name];
-  return <img className="illus" src={`${BASE}illus-${name}.svg`} alt="" width={width} height={height} />;
+  return <img className="illus" src={illustrationUrl(name)} alt="" width={width} height={height} decoding="sync" />;
 }

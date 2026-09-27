@@ -4,7 +4,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Badge as BadgeKind, Maker, Person, Quota, RuntimeKind } from "../api.ts";
 import { Check, ChevronLeft, type IconProps } from "../icons.tsx";
-import { Mark as BrandMark } from "../brand.tsx";
+import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
 import { SlackLogo } from "../ui.tsx";
 
 const BASE = import.meta.env.BASE_URL;
@@ -332,5 +332,6 @@ export function SlackMark({ size = 13 }: { size?: number }) {
 
 /** A scene beside text that says the same (Android's illustrations, as the web has them). */
 export function Illustration({ name, width }: { name: "new-chat" | "station-offline" | "sign-in"; width: number }) {
-  return <img className="m-illus" src={`${BASE}illus-${name}.svg`} alt="" width={width} />;
+  // Decoded as the app starts (../brand.tsx), drawn in its first frame.
+  return <img className="m-illus" src={illustrationUrl(name)} alt="" width={width} decoding="sync" />;
 }
