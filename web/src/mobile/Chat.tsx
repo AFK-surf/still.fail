@@ -7,10 +7,11 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
 import { Elapsed, fileSize, Lightbox, useAwayFromBottom, useEmissions, useFileUrl, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useSteady, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
-import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon } from "../icons.tsx";
+import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Web } from "../icons.tsx";
 import { Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
-import { useStation } from "../station.tsx";
+import { stationBase, useStation } from "../station.tsx";
+import { ask } from "./sheets.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { openHistory } from "./History.tsx";
 import { Avatar, GroupLabel, InfoList, InfoRow, Mark, ModelMark, NavButton, PeopleStack, SlackMark, Spinner, stateOf } from "./parts.tsx";
@@ -568,7 +569,11 @@ function Composer({ view, here, draft, list }: { view: ChatView; here: Here; dra
   };
   return (
     <div className="m-composer" ref={capsule}>
-      <div className="m-floating m-composer-capsule" onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}>
+      {/* Files pasted or dropped in go with the message, as ＋ adds them. */}
+      <div className="m-floating m-composer-capsule" onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
+        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); upload(e.clipboardData.files); } }}
+        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
+        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); upload(e.dataTransfer.files); } }}>
         {view.offline && <p className="m-composer-offline">这台 station 离线了：这里是之前读到的内容，暂时不能发消息。</p>}
         <DraftExtras draft={draft} />
         <ComposerBar draft={draft} placeholder="发消息" locked={view.offline}
@@ -608,6 +613,17 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
           <InfoDetail label="参与" value={`${view.people.length} 人`} extra={view.people.length ? <PeopleStack people={view.people.slice(0, 8)} size={16} ring="var(--m-surface2)" /> : null} />
           <InfoDetail label="创建" value={thread.time?.createdAt?.ago ?? ""} />
           {thread.lastMessage && <InfoDetail label="最近消息" value={thread.lastMessage.time?.createdAt?.ago ?? ""} />}
+        </InfoList>
+        <GroupLabel>这台机器上的网页</GroupLabel>
+        <InfoList>
+          <InfoRow onClick={() => ask(app, { title: "预览这台机器上的网页", value: "", placeholder: "端口，例如 3000", action: "打开",
+            hint: "agent 在这台机器上启动的网页服务（开发服务器、报告），在这里打开看。",
+            run: async (port) => {
+              if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535) throw new Error("端口是 1 到 65535 之间的数字");
+              app.push(`${stationBase(here.station)}/chats/${encodeURIComponent(here.key)}/preview/${port}`);
+            } })}>
+            <Web size={16} /><span className="m-grow">预览网页</span><ChevronRight size={14} className="m-subtle" />
+          </InfoRow>
         </InfoList>
         {view.slackUrl && (
           <>

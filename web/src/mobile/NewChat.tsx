@@ -126,7 +126,10 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
             </>
           )}
         </div>
-        <div className="m-floating m-composer-capsule" onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}>
+        <div className="m-floating m-composer-capsule" onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
+          onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); upload(e.clipboardData.files); } }}
+          onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
+          onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); upload(e.dataTransfer.files); } }}>
           <DraftExtras draft={draft} />
           <ComposerBar draft={draft} placeholder="做任何事" onPlus={() => openAttach(app, upload)} onType={() => {}} onSend={send} />
           {draft.error && <p className="m-error m-composer-error">{draft.error}</p>}

@@ -1096,6 +1096,20 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                 Detail("创建", (view?.thread ?: thread).time?.get("createdAt")?.ago ?: "")
                 (view?.thread ?: thread).lastMessage?.let { Detail("最近消息", it.time?.get("createdAt")?.ago ?: "") }
             }
+            GroupLabel("这台机器上的网页")
+            InfoList {
+                InfoRow(onClick = {
+                    ask(app, "预览这台机器上的网页", "", "端口，例如 3000", "打开") { port ->
+                        val n = port.toIntOrNull()
+                        if (n == null || n !in 1..65535) throw CoreException("invalid_port", "端口是 1 到 65535 之间的数字", null)
+                        app.push(Screen.Preview(station, n))
+                    }
+                }) {
+                    IconIn(Icons.Web, 16.dp)
+                    Text("预览网页", fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                }
+            }
             view?.slackUrl?.let { url ->
                 GroupLabel("在 Slack 里")
                 val context = LocalContext.current

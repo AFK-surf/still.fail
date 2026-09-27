@@ -557,3 +557,8 @@ button.m-agent-head { cursor: pointer; }
 .m-command code { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; user-select: all; }
 .m-command button { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: var(--m-chip); cursor: pointer; }
 .m-you { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; background: var(--m-accent-bg); color: var(--m-accent-ink); font-size: 12px; vertical-align: 1px; }
+
+/* A web service on the station, full screen under its bar. */
+.m-preview .preview { flex: 1; min-height: 0; padding-bottom: var(--m-foot); }
+.m-preview .preview-bar { padding: 4px 10px 6px 14px; }
+.m-preview .preview-path { font-size: 16px; }
