@@ -77,10 +77,10 @@ pub async fn proxy_preview(method: &str, headers: &[(String, String)], body: req
         .filter_map(|(name, value)| {
             let mut value = value.to_str().ok()?.to_string();
             // A redirect to the service itself stays on the preview's path.
-            if name.as_str() == "location" {
-                if let Some(origin) = service.iter().find(|o| value.starts_with(o.as_str())) {
-                    value = value[origin.len()..].to_string();
-                }
+            if name.as_str() == "location"
+                && let Some(origin) = service.iter().find(|o| value.starts_with(o.as_str()))
+            {
+                value = value[origin.len()..].to_string();
             }
             Some((name.as_str().to_string(), value))
         })
