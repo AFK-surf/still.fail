@@ -65,6 +65,7 @@ pub fn spawn_group(spec: Spawn, store: Arc<Store>, on_line: impl Fn(String) + Se
             debug!(runtime, label, line = &line[..line.len().min(2000)], "runtime stderr");
         }
     });
+    let stdin = child.stdin.take();
     let (tx, exited) = watch::channel(None);
     tokio::spawn(async move {
         let status = child.wait().await;
@@ -80,7 +81,7 @@ pub fn spawn_group(spec: Spawn, store: Arc<Store>, on_line: impl Fn(String) + Se
         };
         let _ = tx.send(Some(said));
     });
-    Ok(Arc::new(GroupProcess { pgid, stdin: AsyncMutex::new(child.stdin.take()), exited, killing: Mutex::new(false), store }))
+    Ok(Arc::new(GroupProcess { pgid, stdin: AsyncMutex::new(stdin), exited, killing: Mutex::new(false), store }))
 }
 
 fn signal_name(signal: i32) -> String {
@@ -127,14 +128,13 @@ impl GroupProcess {
 
     /// SIGTERM the whole group, SIGKILL whatever is left after `grace`.
     pub async fn kill(&self, grace: Duration) {
-        {
+        let already = {
             let mut killing = self.killing.lock().unwrap();
-            if *killing {
-                drop(killing);
-                self.exited().await;
-                return;
-            }
-            *killing = true;
+            std::mem::replace(&mut *killing, true)
+        };
+        if already {
+            self.exited().await;
+            return;
         }
         signal_group(self.pgid, libc::SIGTERM);
         // The leader's exit is the signal the group is done; what outlives it, or a leader that ignores SIGTERM, is killed.

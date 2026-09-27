@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
-use ember_shapes::{AccessKind, RuntimeKind};
+use ember_shapes::RuntimeKind;
 use serde_json::{Value, json};
 use tokio::sync::{Mutex as AsyncMutex, oneshot};
 use tracing::{debug, info, warn};
@@ -362,7 +362,8 @@ impl AgentDriver for CodexDriver {
                         end_turn(&sink_state, &sink_events, outcome);
                     }
                     "error" if params.get("willRetry") != Some(&Value::Bool(true)) => {
-                        warn!(thread = sink_thread, error = %params.get("error").cloned().unwrap_or(Value::Null), "codex turn error");
+                        let error = params.get("error").cloned().unwrap_or(Value::Null).to_string();
+                        warn!(thread = sink_thread, error, "codex turn error");
                     }
                     _ => {}
                 }
@@ -490,7 +491,7 @@ const TOOL_ITEMS: [&str; 5] = ["commandExecution", "fileChange", "mcpToolCall", 
 impl LiveFromCodex {
     pub fn feed(&mut self, method: &str, params: &Value) -> Vec<LiveEvent> {
         let mut out = Vec::new();
-        let mut to = |me: &mut Self, next: LivePhase, out: &mut Vec<LiveEvent>| {
+        let to = |me: &mut Self, next: LivePhase, out: &mut Vec<LiveEvent>| {
             if me.phase != Some(next) {
                 me.phase = Some(next);
                 out.push(LiveEvent::Phase { phase: next });
@@ -631,6 +632,5 @@ mod tests {
         assert_eq!(classify_codex_error(&json!("unauthorized")), FailureReason::Auth);
         assert_eq!(classify_codex_error(&json!({ "usageLimitExceeded": {} })), FailureReason::RateLimit);
         assert_eq!(classify_codex_error(&json!(null)), FailureReason::Model);
-        let _ = AccessKind::Env;
     }
 }
