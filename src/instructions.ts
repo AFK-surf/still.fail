@@ -74,7 +74,10 @@ export function formatInbound(messages: readonly PendingMessage[], options: { ne
   for (const m of messages) {
     const address = threadAddress(m.channel, m.threadTs);
     const from = options.names?.get(m.author);
-    if (options.newThreads?.has(m.thread) && m.ts !== m.threadTs && !hinted.has(m.thread)) {
+    // Something was said before it: earlier entries of the thread, or (Slack) a reply rather than the thread's first
+    // message. A chat on ember's page gets its own id apart from its first message's, so only its entries tell.
+    const before = m.n > 1 || (m.surface !== EMBER_SURFACE && m.ts !== m.threadTs);
+    if (options.newThreads?.has(m.thread) && before && !hinted.has(m.thread)) {
       hinted.add(m.thread);
       lines.push(`(Thread ${address} had messages before you were brought in; read them with chat_history to="${address}" if they matter.)`);
     }

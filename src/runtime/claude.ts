@@ -77,6 +77,9 @@ export class ClaudeDriver implements AgentDriver {
       // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
       EMBER_RUNTIME_SESSION_ID: sessionId,
     });
+    // Its own root certificates, not the system's: read from the macOS keychain by a process outside the desktop
+    // session, they took up to 36 s before a new session could start (4–36 s measured). One the user chose wins.
+    if (!env.CLAUDE_CODE_CERT_STORE) env.CLAUDE_CODE_CERT_STORE = "bundled";
 
     let busy = false;
     let aborting = false;
