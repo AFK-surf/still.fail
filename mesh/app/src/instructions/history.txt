@@ -1,0 +1,20 @@
+<message via="web" thread="EMBER/1.0" from="Ada (U1)" ts="101.0">
+[Quote] From a message from U2 99.0 in this conversation:
+> line1
+> line2
+Their comment on it: see
+
+hi "there" & you
+
+Attached files:
+- /w/uploads/a.png (a.png, 3 bytes)
+</message>
+<message via="web" thread="EMBER/1.0" from="you" ts="101.0">
+hi "there" & you
+</message>
+<message via="web" thread="EMBER/1.0" from="other" bot ts="101.0">
+hi "there" & you
+</message>
+<message via="web" thread="EMBER/1.0" from="ember" bot ts="101.0">
+hi "there" & you
+</message>

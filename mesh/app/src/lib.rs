@@ -6,6 +6,7 @@ pub mod agent_home;
 pub mod chat;
 pub mod config;
 pub mod connections;
+pub mod instructions;
 pub mod machine_logins;
 pub mod pool;
 pub mod profiles;
