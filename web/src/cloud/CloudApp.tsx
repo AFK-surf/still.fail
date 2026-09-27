@@ -85,9 +85,9 @@ function Home() {
 }
 
 /**
- * Straight into a workspace: the first one, or, for an account with none and
- * no invitations, a new one of its own — with the invite code it came with,
- * or, lacking one, after asking for it.
+ * Straight into a workspace: the first one. An account in none is shown its
+ * invitations, or told it is in none; a workspace of its own is made only when
+ * it asks for one (with the invite code it came with, or after asking for it).
  */
 function Landing() {
   const workspaces = useWorkspaces().value;
@@ -110,9 +110,6 @@ function Landing() {
   // Only once every account has answered does "no workspace" mean none: not before, not after a failure.
   const ready = workspaces !== undefined && workspaces.every((a) => a.loaded);
   const failed = workspaces?.find((a) => a.error)?.error;
-  useEffect(() => {
-    if (ready && !first && pending.length === 0 && !create.busy && !create.result && !create.error) create.run(inviteCode());
-  }, [ready, first, pending.length]); // eslint-disable-line react-hooks/exhaustive-deps
   if (first) return <Navigate to={`/w/${first.id}`} replace />;
   if (ready && pending.length > 0) {
     return (
@@ -142,8 +139,19 @@ function Landing() {
       </div>
     );
   }
-  if (create.error) return <div className="gate"><h1>没能建好 workspace</h1><p>{create.error.message}</p><Button onClick={() => create.run(inviteCode())}>重试</Button></div>;
-  return <Splash label={ready ? "正在为你建一个 workspace…" : failed ? `没能读取你的 workspace：${failed.message}` : "正在读取你的 workspace…"} now={Boolean(failed)} />;
+  if (ready) {
+    return (
+      <div className="gate invite-page">
+        <Illustration name="sign-in" />
+        <h1>你还不在任何 workspace 里</h1>
+        <p>可以请已经在用 ember 的人把 {list[0]!.email} 邀请进他们的 workspace，也可以自己建一个。</p>
+        <Button variant="primary" busy={create.busy} onClick={() => create.run(inviteCode())}>建一个 workspace</Button>
+        {create.error && <p className="field-error" role="alert">{errorText(create.error)}</p>}
+        <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
+      </div>
+    );
+  }
+  return <Splash label={failed ? `没能读取你的 workspace：${failed.message}` : "正在读取你的 workspace…"} now={Boolean(failed)} />;
 }
 
 /** Asks for the invite code a new workspace needs; what the last try said stands under it. */
