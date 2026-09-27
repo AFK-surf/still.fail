@@ -632,6 +632,12 @@ export class Store {
     return this.threadAt(t.surface, t.channel, t.threadTs)!;
   }
 
+  /** The thread a platform message is in: the one it was said in, else the one it starts. */
+  threadOfMessage(surface: string, channel: string, ts: string): ThreadRow | undefined {
+    const row = this.#db.prepare(`SELECT t.* FROM entries e JOIN threads t ON t.id = e.thread WHERE t.surface = ? AND t.channel = ? AND e.ts = ? LIMIT 1`).get(surface, channel, ts) as Row | undefined;
+    return row ? toThread(row) : this.threadAt(surface, channel, ts);
+  }
+
   /** Makes a session take part in a thread, posting through `connect`. False if it already did. */
   joinThread(thread: number, session: string, connect: string): boolean {
     const joined = this.#db.prepare("INSERT OR IGNORE INTO thread_sessions (thread, session, connect, joined_at) VALUES (?, ?, ?, ?)")

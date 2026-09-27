@@ -50,6 +50,8 @@ export interface ChatSurface {
    * `messageTs`: the message that started the work.
    */
   working?(thread: ThreadRef, messageTs: string | null, status: string): void;
+  /** Calls the platform's API as the bot (Slack's Web API): what the agent reaches through slack_api. */
+  api?(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>>;
   /** A person's email, where the platform shares it. */
   userEmail?(userId: string): Promise<string | null>;
   /** What is already known of a person or a channel, without waiting (unknown ones are fetched in the background). */

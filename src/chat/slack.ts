@@ -305,6 +305,13 @@ export class SlackSurface implements ChatSurface {
     };
   }
 
+  /** Any Web API method as the bot; values that are not strings (blocks, arrays) go as JSON, as Slack takes them. */
+  api(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const form = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null)
+      .map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]));
+    return this.#api(method, form, this.#botToken);
+  }
+
   working(thread: ThreadRef, messageTs: string | null, status: string): void {
     const key = `${thread.channel}/${thread.threadTs}`;
     let line = this.#working.get(key);

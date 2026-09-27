@@ -597,3 +597,32 @@ test("the Slack thread a turn works for says what the agent is doing, until the 
   assert.equal(chat.statuses[0]!.thread, `C1/${m.threadTs}`);
   assert.equal(chat.statuses[0]!.ts, m.ts, "the message that started it, for the fallback reaction");
 });
+
+test("slack_api calls Slack as the session's bot; a thread it writes in becomes its own, one another session has is refused", async () => {
+  const { chat, claude, call, accept, store } = setup();
+  const mine = message({ text: "<@UBOT> look around" });
+  const theirs = message({ text: "<@UBOT> something else" });
+  await accept(mine);
+  await accept(theirs);
+  await settle();
+  const key = sessionKey("cl", "C1", mine.threadTs);
+  chat.answers.set("conversations.history", { ok: true, messages: [{ ts: "1.1", text: "hello" }] });
+  assert.equal(await call(key, "slack_api", { method: "conversations.history", params: { channel: "C1", limit: 1 } }), JSON.stringify({ ok: true, messages: [{ ts: "1.1", text: "hello" }] }));
+  assert.deepEqual(chat.calls.at(-1), { method: "conversations.history", params: { channel: "C1", limit: 1 } });
+  // Not the app itself, and not another session's thread.
+  await assert.rejects(call(key, "slack_api", { method: "apps.manifest.update", params: {} }), /not for agents/);
+  await assert.rejects(call(key, "slack_api", { method: "chat.postMessage", params: { channel: "C1", thread_ts: theirs.threadTs, text: "hi" } }), /another session's/);
+  // A new message: its thread is this session's now, and a reply there comes to it.
+  chat.answers.set("chat.postMessage", { ok: true, ts: "7777.1" });
+  await call(key, "slack_api", { method: "chat.postMessage", params: { channel: "C2", text: "a new topic" } });
+  const started = store.threadAt("slack:T1", "C2", "7777.1")!;
+  assert.deepEqual(store.threadSessions(started.id).map((m) => m.session), [key]);
+  assert.deepEqual(store.messagesBefore(started.id, undefined, 5).map((m) => [m.authorKind, m.text]), [["agent", "a new topic"]]);
+  const agent = claude.sessions.find((x) => x.options.route === key)!;
+  await call(key, "chat_state", { kind: "final" });
+  agent.end();
+  await settle();
+  await accept(message({ channel: "C2", threadTs: "7777.1", ts: "7777.2", addressed: false, text: "a reply to it" }));
+  await settle();
+  assert.match(agent.prompts.at(-1) ?? "", /a reply to it/);
+});

@@ -534,6 +534,21 @@ export class Hub {
         },
       },
       {
+        name: "slack_api",
+        description: "Call any Slack Web API method as your Slack bot, e.g. conversations.history, users.info, reactions.add, chat.update, conversations.open then chat.postMessage for a direct message. Writes in a thread another session takes part in are refused; posting in a thread nobody else is in, or a new message, makes that thread one of your conversations (its replies come to you). Prefer chat_post to answer the thread you are working in.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            method: { type: "string", description: "The Web API method, e.g. \"conversations.replies\"." },
+            params: { type: "object", description: "Its arguments as Slack documents them (blocks and other structures as JSON values).", additionalProperties: true },
+            to: { type: "string", description: "CHANNEL/THREAD_TS of one of your Slack conversations: whose bot to call as. Default: this session's own connect." },
+          },
+          required: ["method"],
+          additionalProperties: false,
+        },
+        run: async (key, args) => this.#slackApi(key, String(args.method ?? "").trim(), (args.params && typeof args.params === "object" ? args.params : {}) as Record<string, unknown>, typeof args.to === "string" && args.to ? target(key, args.to).connect : undefined),
+      },
+      {
         name: "chat_state",
         description: "Record that this turn ends as final (work done) or block (waiting on a person) without posting another message.",
         inputSchema: {
@@ -580,6 +595,47 @@ export class Hub {
         },
       },
     ];
+  }
+
+  /**
+   * A Slack Web API call from session `key` (slack_api), as the bot of `via` (else the session's own connect). Writes
+   * keep to the threads rule: not in a thread another session of the same bot takes part in; one it writes in becomes its own.
+   */
+  async #slackApi(key: string, method: string, params: Record<string, unknown>, via?: string): Promise<string> {
+    if (!/^[a-z][a-zA-Z]*(\.[a-zA-Z]+)+$/.test(method)) throw new Error(`not a Slack method: ${JSON.stringify(method)}`);
+    if (/^(admin|apps|oauth)\./.test(method) || method === "auth.revoke") throw new Error(`${method} is not for agents: it manages the Slack app itself`);
+    const connect = via ?? this.#store.getSession(key)?.connect;
+    if (!connect || connect === INTERNAL_CONNECT) throw new Error("this session has no Slack connect: give to= one of your Slack conversations");
+    const chat = this.#chat(connect);
+    if (!chat.api) throw new Error(`connect ${connect} cannot call Slack's API`);
+    const channel = typeof params.channel === "string" ? params.channel : typeof params.channel_id === "string" ? params.channel_id : null;
+    const surface = this.#surface(connect);
+    // A write lands in a thread: the one named, the one its message is in, or (a new message) the one it starts.
+    const write = /^(chat\.(postMessage|postEphemeral|scheduleMessage|update|delete|meMessage)|reactions\.(add|remove)|pins\.(add|remove)|files\.completeUploadExternal|assistant\.threads\.)/.test(method);
+    const named = typeof params.thread_ts === "string" ? params.thread_ts : null;
+    const about = typeof params.ts === "string" ? params.ts : typeof params.timestamp === "string" ? params.timestamp : null;
+    let threadTs: string | null = null;
+    if (write && channel) {
+      threadTs = named ?? (about ? this.#store.threadOfMessage(surface, channel, about)?.threadTs ?? about : null);
+      const known = threadTs ? this.#store.threadAt(surface, channel, threadTs) : undefined;
+      // Another session of the same bot there: the thread is its (other bots' sessions keep to their own).
+      const others = known ? this.#store.threadSessions(known.id).filter((m) => m.session !== key && m.connect === connect) : [];
+      if (others.length) throw new Error(`${channel}/${threadTs} is another session's conversation: this session cannot write there`);
+    }
+    const result = await chat.api(method, params);
+    if (write && channel) {
+      // Its thread is the session's now: a new message starts one.
+      const root = threadTs ?? (typeof result.ts === "string" ? result.ts : null);
+      if (root) {
+        const thread = this.#store.openThread({ surface, channel, threadTs: root, createdBy: key });
+        if (this.#store.joinThread(thread.id, key, connect)) log.info("session took part in a thread through slack_api", { session: key, channel, threadTs: root, method });
+        if (method === "chat.postMessage" && typeof result.ts === "string") {
+          this.#store.insertMessage({ thread: thread.id, ts: result.ts, authorKind: "agent", author: key, text: typeof params.text === "string" ? params.text : "" });
+        }
+      }
+    }
+    const text = JSON.stringify(result);
+    return text.length > 60_000 ? `${text.slice(0, 60_000)}… (cut at 60000 characters; ask for less, e.g. a smaller limit)` : text;
   }
 
   #connect(id: string): Connect {

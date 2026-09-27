@@ -12,6 +12,13 @@ export class FakeChat implements ChatSurface {
   readonly posts: { thread: ThreadRef; text: string }[] = [];
   /** What it was told the agent is doing, per thread ("" once done). */
   readonly statuses: { thread: string; ts: string | null; status: string }[] = [];
+  /** Web API calls made through it, and what each answers (by method; default ok with a fresh ts). */
+  readonly calls: { method: string; params: Record<string, unknown> }[] = [];
+  readonly answers = new Map<string, Record<string, unknown>>();
+  async api(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    this.calls.push({ method, params });
+    return this.answers.get(method) ?? { ok: true, ts: `${9_500_000 + postCounter++}.000300` };
+  }
   working(thread: ThreadRef, messageTs: string | null, status: string): void {
     this.statuses.push({ thread: `${thread.channel}/${thread.threadTs}`, ts: messageTs, status });
   }
