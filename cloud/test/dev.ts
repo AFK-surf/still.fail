@@ -1,9 +1,9 @@
-// A local ember cloud for trying the whole path without Cloudflare: the
-// Worker in miniflare (Google mocked) behind a small server on :8787 (PORT),
-// and on :8789 (ADMIN_PORT) as the admin console's host. The Worker serves
-// both web apps from dist/cloud-app (`pnpm run build:cloud`) as it does on
-// Cloudflare. WebSockets (/v1/events, station presence) are piped to
-// miniflare itself, listening on PORT + 1.
+// A local ember cloud for trying the whole path without Cloudflare: its Workers
+// in miniflare (Google mocked; see harness.ts) behind a small server on :8787
+// (PORT), on :8789 (ADMIN_PORT) as the admin console's host and :8790 as the
+// preview host. The static sites come from dist/cloud-web, dist/cloud-admin and
+// dist/cloud-preview (`pnpm run build:cloud`) as on Cloudflare. WebSockets
+// (/v1/events, the relay) are piped to miniflare itself, listening on PORT + 1.
 //   RELAY=http://127.0.0.1:3340 pnpm exec tsx test/dev.ts
 // The console's admin is alice (ADMIN_EMAIL=bob@example.test makes it bob).
 // Development-only routes (never in the Worker), on either port:
@@ -24,15 +24,15 @@ const adminOrigin = `http://127.0.0.1:${adminPort}`;
 // The preview host: another port, so another origin (see src/preview.ts).
 const previewPort = port + 3;
 const previewOrigin = `http://127.0.0.1:${previewPort}`;
-const app = join(import.meta.dirname, "..", "..", "dist", "cloud-app");
+const dist = join(import.meta.dirname, "..", "..", "dist");
 const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".wasm": "application/wasm", ".woff2": "font/woff2" };
 
-/** The assets binding over dist/cloud-app: a directory's index.html for its path with a slash, 404 for anything else. */
+/** The static sites' files as the stand-in static Worker asks for them (/web/…, /admin/…, /preview/…); 404 for anything else. */
 async function assets(request: Request): Promise<Response> {
-  const path = normalize(decodeURIComponent(new URL(request.url).pathname));
-  const file = path.endsWith("/") ? `${path}index.html` : path;
+  const [, site, ...rest] = normalize(decodeURIComponent(new URL(request.url).pathname)).split("/");
+  const file = rest.join("/");
   try {
-    const body = await readFile(join(app, file));
+    const body = await readFile(join(dist, `cloud-${site}`, file));
     return new MFResponse(body, { headers: { "content-type": TYPES[extname(file)] ?? "application/octet-stream" } }) as unknown as Response;
   } catch {
     return new MFResponse("Not found", { status: 404 }) as unknown as Response;
