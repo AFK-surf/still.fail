@@ -7,7 +7,7 @@ import { useWorkspaces } from "../cloud/api.ts";
 import { ChevronDown, Edit, Server, Unplug } from "../icons.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { Avatar, Badge, Illustration, MakerIcon, Mark, NavButton, SectionHeader, Seg, SlackMark, stateOf } from "./parts.tsx";
+import { Avatar, Badge, Illustration, MakerIcon, Mark, NavButton, SectionHeader, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { openWorkspaces } from "./Workspaces.tsx";
 
 export function Home() {
@@ -55,9 +55,9 @@ function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine:
     <div className="m-home-pane">
       {!view ? <Note text={chats.error?.message ?? "正在读取会话…"} error={!!chats.error} /> : (
         <>
-          {view.stations.filter((s) => s.state === "connecting").map((s) => <Note key={`c/${s.station}`} text={`正在连接 ${s.name}…`} />)}
-          {view.stations.filter((s) => s.state === "error").map((s) => <Note key={`e/${s.station}`} text={`连不上「${s.name}」，正在重试…`} error />)}
-          {view.days.length === 0 && view.loading && <Note text="正在读取会话…" />}
+          {/* A station's link coming back is said on its rows; only with no rows to show does the list say it. */}
+          {view.days.length === 0 && (view.loading || view.stations.some((s) => s.state === "connecting")) && <Note text="正在读取会话…" />}
+          {view.days.length === 0 && !view.loading && view.stations.filter((s) => s.state === "error").map((s) => <Note key={`e/${s.station}`} text={`连不上「${s.name}」，正在重试…`} error />)}
           {view.days.length === 0 && !view.loading && !view.stations.some((s) => s.state === "error" || s.state === "connecting") && <Empty view={view} onlyMine={onlyMine} />}
           {view.days.map((day) => (
             <section key={day.daysAgo}>
@@ -107,37 +107,42 @@ function ChatRow({ item }: { item: ChatItem }) {
       onPointerUp={release} onPointerCancel={release} onPointerLeave={release} onContextMenu={(e) => e.preventDefault()}
       onClick={() => { if (!longPressed.current) app.push(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`); }}>
       {item.unread && <span className="m-unread" aria-label="有未读消息" />}
+      <AgentsPicture item={item} />
+      <span className="m-chat-text">
       <span className="m-chat-line1">
         <span className="m-chat-title" data-unread={item.unread || undefined}>{item.title}</span>
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
         {item.offline ? <span className="m-chat-mark" title={item.offline}><Unplug size={13} /></span>
+          : item.reconnecting ? <span className="m-chat-mark" title={item.reconnecting} aria-label={item.reconnecting}><Spinner size={11} /></span>
           : <span className="m-chat-mark">{item.connect && <span title={item.originText ?? "Slack"}><SlackMark size={13} /></span>}</span>}
       </span>
       <span className="m-chat-line2">
         <span className="m-chat-last">{item.last && <LastMessage item={item} />}</span>
         <span className="m-chat-time" data-shown={held || undefined}>{item.time?.lastActiveAt?.ago ?? ""}</span>
       </span>
+      </span>
     </button>
   );
 }
 
-/** The last thing said, on one line: a small picture of who said it, then what, in the secondary colour. */
-function LastMessage({ item }: { item: ChatItem }) {
-  // Who said it, and an agent's state on its picture, are the core's (present.rs).
-  const last = item.last!;
-  const by = last.by;
-  const name = by?.label || by?.name || last.author;
+/**
+ * Who is in a chat, as its row's picture: its agent's mark, or two of its agents' overlapping, with its state (the
+ * core's) at the corner. A chat with no agent yet shows ember's.
+ */
+function AgentsPicture({ item }: { item: ChatItem }) {
+  const agents = item.agents.slice(0, 2);
+  const state = stateOf(item.state ?? undefined);
   return (
-    <span className="m-last" aria-label={`${name}：${last.preview}`}>
-      {by?.kind === "ember" ? <Mark size={13} />
-        : by?.kind === "agent" ? (
-          <span className="m-last-agent">
-            <MakerIcon maker={by.maker} runtime={by.runtime} size={13} />
-            {stateOf(by.state) !== "done" && <Badge state={stateOf(by.state)} size={8} ring={1.5} around="var(--m-bg)" style={{ position: "absolute", right: -3, bottom: -3 }} />}
-          </span>
-        )
-        : <Avatar id={last.author} name={name} size={13} picture={by?.picture} />}
-      <span className="m-last-text">{last.preview}</span>
+    <span className="m-row-picture" data-count={agents.length || 1} aria-hidden="true">
+      {agents.length === 0
+        ? <span className="m-row-agent"><Mark size={18} /></span>
+        : agents.map((a) => <span key={a.key} className="m-row-agent"><MakerIcon maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 13 : 19} /></span>)}
+      {state !== "done" && <Badge state={state} size={10} ring={2} around="var(--m-bg)" style={{ position: "absolute", right: -2, bottom: -2 }} />}
     </span>
   );
+}
+
+/** The last thing said, on one line, in the secondary colour (the row's picture says who is in it). */
+function LastMessage({ item }: { item: ChatItem }) {
+  return <span className="m-last"><span className="m-last-text">{item.last!.preview}</span></span>;
 }

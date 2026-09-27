@@ -146,9 +146,9 @@ private fun ChatPane(chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListS
             val stations = view.stations
             val connecting = stations.filter { it.state == "connecting" }
             val failed = stations.filter { it.state == "error" }
-            connecting.forEach { s -> item(key = "c/${s.station}") { Note("正在连接 ${s.name}…") } }
-            failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
-            if (view.days.isEmpty() && view.loading) item(key = "loading") { Note("正在读取会话…") }
+            // A station's link coming back is said on its rows; only with no rows to show does the list say it.
+            if (view.days.isEmpty() && (view.loading || connecting.isNotEmpty())) item(key = "loading") { Note("正在读取会话…") }
+            if (view.days.isEmpty() && !view.loading) failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
             if (view.days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(view, onlyMine) }
             for (day in view.days) {
                 item(key = "h/${day.daysAgo}") { SectionHeader(day.label) }
@@ -193,7 +193,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
     val app = LocalApp.current
     var held by remember { mutableStateOf(false) }
     Box(
-        Modifier.fillMaxWidth().height(62.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
+        Modifier.fillMaxWidth().height(66.dp).background(if (held) C.ink.copy(alpha = 0.05f) else androidx.compose.ui.graphics.Color.Transparent)
             .pointerInput(item.station, item.id) {
                 detectTapGestures(
                     onPress = { tryAwaitRelease(); held = false },
@@ -203,10 +203,12 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
             },
     ) {
         if (item.unread) Box(Modifier.padding(start = 8.dp, top = 19.dp).size(7.dp).clip(CircleShape).background(C.blue).semantics { contentDescription = "有未读消息" })
-        Column(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp), verticalArrangement = Arrangement.Center) {
-            // Its station offline: greyed, and marked where a Slack chat's mark goes (the core says so, row by row).
-            val offline = item.offline
-            val dim = if (offline != null) 0.45f else 1f
+        // Its station offline: greyed, and marked where a Slack chat's mark goes (the core says so, row by row).
+        val offline = item.offline
+        val dim = if (offline != null) 0.45f else 1f
+        Row(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        AgentsPicture(item, Modifier.alpha(dim))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     item.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = if (item.unread) FontWeight.SemiBold else FontWeight.Normal,
@@ -214,7 +216,9 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
                 )
                 // Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too.
                 Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
+                    val reconnecting = item.reconnecting
                     if (offline != null) Box(Modifier.semantics { contentDescription = offline }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
+                    else if (reconnecting != null) Box(Modifier.semantics { contentDescription = reconnecting }) { Spinner(11.dp) }
                     else if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp) }
                 }
             }
@@ -224,34 +228,41 @@ private fun ChatRow(item: ChatItem, view: ChatsView) {
                 if (held) Text(item.time?.get("lastActiveAt")?.ago ?: "", fontSize = 12.sp, color = C.subtle, maxLines = 1)
             }
         }
+        }
     }
 }
 
-/** The last thing said, on one line: a small picture of who said it, then what, in the secondary colour. */
+/**
+ * Who is in a chat, as its row's picture: its agent's mark, or two of its agents' overlapping, with its state (the
+ * core's) at the corner. A chat with no agent yet shows ember's.
+ */
+@Composable
+private fun AgentsPicture(item: ChatItem, modifier: Modifier) {
+    val agents = item.agents.take(2)
+    Box(modifier.size(40.dp)) {
+        when {
+            agents.isEmpty() -> Box(Modifier.fillMaxSize().clip(CircleShape).background(C.chip), contentAlignment = Alignment.Center) { Mark(18.dp) }
+            agents.size == 1 -> Box(Modifier.fillMaxSize().clip(CircleShape).background(C.chip), contentAlignment = Alignment.Center) { MakerIcon(agents[0].maker, agents[0].runtime, 19.dp) }
+            else -> agents.forEachIndexed { i, a ->
+                Box(
+                    Modifier.align(if (i == 0) Alignment.TopStart else Alignment.BottomEnd).size(29.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(C.chip),
+                    contentAlignment = Alignment.Center,
+                ) { MakerIcon(a.maker, a.runtime, 13.dp) }
+            }
+        }
+        badgeState(item.state)?.let { state -> Box(Modifier.align(Alignment.BottomEnd).offset(2.dp, 2.dp)) { Badge(state, 10.dp, 2.dp, C.bg) } }
+    }
+}
+
+/** The last thing said, on one line, in the secondary colour (the row's picture says who is in it). */
 @Composable
 private fun LastMessage(item: ChatItem) {
-    // Who said it, and an agent's state on its picture, are the core's (present.rs).
-    val last = item.last!!
-    val by = last.by
-    val name = by?.label?.ifEmpty { null } ?: by?.name ?: last.author
-    val text = last.preview
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "$name：$text" }) {
-        when (by?.kind) {
-            "ember" -> Mark(13.dp)
-            "agent" -> Box {
-                MakerIcon(by.maker, by.runtime, 13.dp)
-                badgeState(by.state)?.let { state -> Box(Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp)) { Badge(state, 8.dp, 1.5.dp, C.bg) } }
-            }
-            else -> Avatar(last.author, name, 13.dp, picture = by?.picture)
-        }
-        // The line's own height, its glyphs centred in it: level with the picture and the state's dot.
-        Text(
-            text, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
-                androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
-            )),
-        )
-    }
+    Text(
+        item.last!!.preview, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+            androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+        )),
+    )
 }
 
 @Composable
