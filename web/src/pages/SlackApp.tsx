@@ -155,12 +155,12 @@ const MAKERS: Avatar[] = [
 
 /**
  * ember's buddy at the jobs a bot is made for, so people tell bots apart by what they do (web/public/avatars/:
- * index.json, and each as <id>.png with a small <id>.thumb.png).
+ * index.json, and each as <id>.webp (1024 px, for the icon) with a small <id>.thumb.webp (128 px, for the list)).
  */
 let buddies: Promise<Avatar[]> | null = null;
 function loadBuddies(): Promise<Avatar[]> {
   buddies ??= fetch(`${BASE}avatars/index.json`).then((r) => r.json() as Promise<{ id: string; label: string; bg: string }[]>)
-    .then((list) => list.map((a) => ({ ...a, src: `${BASE}avatars/${a.id}.png`, thumb: `${BASE}avatars/${a.id}.thumb.png` })), () => []);
+    .then((list) => list.map((a) => ({ ...a, src: `${BASE}avatars/${a.id}.webp`, thumb: `${BASE}avatars/${a.id}.thumb.webp` })), () => []);
   return buddies;
 }
 function useBuddies(): Avatar[] | null {
