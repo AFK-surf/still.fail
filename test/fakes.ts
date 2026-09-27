@@ -10,6 +10,11 @@ export class FakeChat implements ChatSurface {
   readonly botName = "ember";
   readonly workspace: string | null;
   readonly posts: { thread: ThreadRef; text: string }[] = [];
+  /** What it was told the agent is doing, per thread ("" once done). */
+  readonly statuses: { thread: string; ts: string | null; status: string }[] = [];
+  working(thread: ThreadRef, messageTs: string | null, status: string): void {
+    this.statuses.push({ thread: `${thread.channel}/${thread.threadTs}`, ts: messageTs, status });
+  }
   /** What the platform says was in a thread before ember saw it, by thread ts. */
   readonly earlier = new Map<string, ChatMessage[]>();
   constructor(botUserId = "UBOT", workspace: string | null = "T1") {

@@ -5,16 +5,17 @@ import { randomUUID } from "node:crypto";
 import type { Profile, RuntimeKind } from "./config.ts";
 import type { ChatSurface } from "./chat/types.ts";
 import { formatInbound, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, sessionInstructions } from "./instructions.ts";
+import { toolStatus } from "./chat/slack-status.ts";
 import { log } from "./log.ts";
 import type { AgentDriver, AgentSession, LiveEvent, TurnOutcome } from "./runtime/types.ts";
-import type { PendingMessage, SessionRow, Store, TurnKind } from "./store.ts";
+import { EMBER_SURFACE, type PendingMessage, type SessionRow, type Store, type TurnKind } from "./store.ts";
 
 export type DeclaredState = "final" | "block";
 
 export interface SessionDeps {
   store: Store;
   /** A connect's chat connection, when it is connected. A session hears from and answers through several. */
-  chat(connect: string): Pick<ChatSurface, "post" | "botUserId" | "botName" | "userName"> | undefined;
+  chat(connect: string): Pick<ChatSurface, "post" | "botUserId" | "botName" | "userName" | "working"> | undefined;
   drivers: Record<RuntimeKind, AgentDriver>;
   profile(id: string): Profile | undefined;
   /** The profile a session's runtime starts on now: its own while usable, else another that can take it on. */
@@ -155,12 +156,52 @@ export class SessionActor {
     if (pending.length === 0) return;
     const text = await this.#format(pending);
     if (this.#agent?.busy) {
-      if (await this.#agent.steer(text)) this.#delivered(pending);
+      if (await this.#agent.steer(text)) {
+        this.#workFor(pending);
+        this.#delivered(pending);
+      }
       return; // otherwise delivered when the turn ends
     }
     this.#nudges = 0;
+    this.#workFor(pending);
     await this.#startTurn("input", text);
     this.#delivered(pending);
+  }
+
+  /** The chat threads the running turn works for, each with the message that brought it in: they are told what it does. */
+  #workingFor: { connect: string; thread: { channel: string; threadTs: string }; ts: string | null }[] = [];
+  /** Tool calls under way in the running turn, by id: what the status line says. */
+  readonly #tools = new Map<string, string>();
+
+  #workFor(messages: readonly PendingMessage[]): void {
+    for (const m of messages) {
+      if (m.surface === EMBER_SURFACE) continue;
+      const at = this.#workingFor.find((w) => w.connect === m.connect && w.thread.channel === m.channel && w.thread.threadTs === m.threadTs);
+      if (at) at.ts = m.ts ?? at.ts;
+      else this.#workingFor.push({ connect: m.connect, thread: { channel: m.channel, threadTs: m.threadTs }, ts: m.ts ?? null });
+    }
+    this.#say("正在思考…");
+  }
+
+  #say(status: string): void {
+    for (const w of this.#workingFor) this.#deps.chat(w.connect)?.working?.(w.thread, w.ts, status);
+  }
+
+  /** A live step of the running turn, for its threads' status line. */
+  #onLive(event: LiveEvent): void {
+    if (this.#workingFor.length === 0) return;
+    if (event.kind === "start" && event.step === "tool" && event.tool) this.#tools.set(event.id, event.tool);
+    else if (event.kind === "end") this.#tools.delete(event.id);
+    else if (event.kind !== "phase") return;
+    const tool = [...this.#tools.values()].at(-1);
+    this.#say(tool ? toolStatus(tool) : "正在思考…");
+  }
+
+  /** The turn is over: its threads' status line goes. */
+  #doneWorking(): void {
+    this.#say("");
+    this.#workingFor = [];
+    this.#tools.clear();
   }
 
   #delivered(messages: readonly PendingMessage[]): void {
@@ -222,6 +263,7 @@ export class SessionActor {
       if (this.#turn) this.#deps.store.endTurn(this.#turn.id, "failed", `other: ${message}`, null);
       this.#turn = undefined;
       this.#deps.store.setRunning(this.key, false);
+      this.#doneWorking();
       await this.#notice(`⚠️ 无法启动 agent：${message}`);
       throw error;
     }
@@ -257,9 +299,13 @@ export class SessionActor {
       }),
       turnEnded: (outcome: TurnOutcome) => {
         this.#deps.live?.turnEnded(this.key);
+        this.#doneWorking();
         void this.#enqueue(() => this.#onTurnEnded(agent, outcome));
       },
-      live: (event: LiveEvent) => this.#deps.live?.event(this.key, event),
+      live: (event: LiveEvent) => {
+        this.#deps.live?.event(this.key, event);
+        this.#onLive(event);
+      },
       closed: (reason: string) => void this.#enqueue(async () => {
         if (this.#agent === agent) {
           log.info("session runtime closed", { session: this.key, reason });

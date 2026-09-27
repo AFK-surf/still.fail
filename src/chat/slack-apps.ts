@@ -10,9 +10,9 @@ import { log } from "../log.ts";
 export const SLACK_GROUPS = {
   base: {
     label: "读取和回复消息",
-    description: "被 @ 时收到消息，读取所在频道、私信和群聊的消息并回复。",
+    description: "被 @ 时收到消息，读取所在频道、私信和群聊的消息并回复，干活时在 thread 里显示进度。",
     scopes: ["app_mentions:read", "chat:write", "channels:history", "groups:history", "im:history", "mpim:history",
-      "channels:read", "groups:read", "im:read", "mpim:read", "users:read"],
+      "channels:read", "groups:read", "im:read", "mpim:read", "users:read", "assistant:write"],
     events: ["app_mention", "message.channels", "message.groups", "message.im", "message.mpim"],
   },
   public: {

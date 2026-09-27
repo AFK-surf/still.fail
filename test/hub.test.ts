@@ -582,3 +582,18 @@ test("a connect or a new chat can keep its sessions to one profile; otherwise th
   const auto = hub.newSession({ runtime: "claude", createdBy: "local" }).key;
   assert.equal(store.getSession(auto)!.profilePinned, false);
 });
+
+test("the Slack thread a turn works for says what the agent is doing, until the turn ends", async () => {
+  const { claude, chat, accept } = setup();
+  const m = message({ text: "<@UBOT> fix the build" });
+  await accept(m);
+  await settle();
+  const session = claude.last;
+  session.events.live?.({ kind: "start", id: "t1", step: "tool", tool: "Bash" });
+  session.events.live?.({ kind: "end", id: "t1" });
+  session.end();
+  await settle();
+  assert.deepEqual(chat.statuses.map((s) => s.status), ["正在思考…", "正在运行命令…", "正在思考…", ""]);
+  assert.equal(chat.statuses[0]!.thread, `C1/${m.threadTs}`);
+  assert.equal(chat.statuses[0]!.ts, m.ts, "the message that started it, for the fallback reaction");
+});

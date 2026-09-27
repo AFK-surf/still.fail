@@ -45,6 +45,11 @@ export interface ChatSurface {
   post(thread: ThreadRef, message: string, files?: Attachment[]): Promise<string>;
   /** A person's display name, or null if unknown. Optional: not every platform can say. */
   userName?(userId: string): Promise<string | null>;
+  /**
+   * Says in the thread what the agent working for it is doing ("" when it is done), best effort and never waited on.
+   * `messageTs`: the message that started the work.
+   */
+  working?(thread: ThreadRef, messageTs: string | null, status: string): void;
   /** A person's email, where the platform shares it. */
   userEmail?(userId: string): Promise<string | null>;
   /** What is already known of a person or a channel, without waiting (unknown ones are fetched in the background). */

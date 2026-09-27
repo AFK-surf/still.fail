@@ -2,6 +2,7 @@
 // SDK: Node's WebSocket and fetch are enough for what ember uses.
 import { log } from "../log.ts";
 import { splitForSlack } from "./mrkdwn.ts";
+import { ThreadStatus } from "./slack-status.ts";
 import type { ChatEvent, ChatMessage, ChatSurface, InboundMessage, ThreadRef } from "./types.ts";
 import type { Attachment } from "../store.ts";
 import type { NameBook, Person } from "./names.ts";
@@ -86,6 +87,8 @@ export class SlackSurface implements ChatSurface {
   #connected = false;
   #lastError: string | null = null;
   readonly #statusListeners = new Set<() => void>();
+  /** Each thread an agent works for: its status line (slack-status.ts). */
+  readonly #working = new Map<string, ThreadStatus>();
 
   readonly #book: NameBook | undefined;
 
@@ -300,6 +303,17 @@ export class SlackSurface implements ChatSurface {
       text,
       addressed: event.type === "app_mention" || event.channel_type === "im" || text.includes(`<@${this.botUserId}>`),
     };
+  }
+
+  working(thread: ThreadRef, messageTs: string | null, status: string): void {
+    const key = `${thread.channel}/${thread.threadTs}`;
+    let line = this.#working.get(key);
+    if (!line) {
+      line = new ThreadStatus((method, params) => this.#api(method, params, this.#botToken), thread.channel, thread.threadTs);
+      this.#working.set(key, line);
+    }
+    line.say(status, messageTs);
+    if (status === "" && this.#working.size > 200) this.#working.delete(key);
   }
 
   #api(method: string, params: Record<string, string>, token: string): Promise<Record<string, any>> {
