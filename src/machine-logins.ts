@@ -35,8 +35,11 @@ export class MachineLogins {
   #value: MachineLogin[] = [];
   #at = 0;
   #reading: Promise<void> | null = null;
+  readonly #env: NodeJS.ProcessEnv;
 
-  constructor(readonly env: NodeJS.ProcessEnv = process.env) {}
+  constructor(env: NodeJS.ProcessEnv = process.env) {
+    this.#env = env;
+  }
 
   get(): MachineLogin[] {
     if (Date.now() - this.#at > FRESH_MS) void this.refresh();
@@ -44,7 +47,7 @@ export class MachineLogins {
   }
 
   refresh(): Promise<void> {
-    this.#reading ??= Promise.all([claudeLogin(this.env), codexLogin(this.env)])
+    this.#reading ??= Promise.all([claudeLogin(this.#env), codexLogin(this.#env)])
       .then((logins) => { this.#value = logins; this.#at = Date.now(); })
       .catch((error: unknown) => log.warn("could not read the machine's logins", { error: String(error) }))
       .finally(() => { this.#reading = null; });
