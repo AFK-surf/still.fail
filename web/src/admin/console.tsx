@@ -10,7 +10,7 @@ import { Navigate, NavLink, Route, Routes, useLocation } from "react-router";
 import { Lockup } from "../brand.tsx";
 import { stamp } from "../api.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, Tip, Time, ICON, type Tone } from "../ui.tsx";
+import { About, Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, Tip, Time, ICON, type Tone } from "../ui.tsx";
 import { signOut, useAccounts, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type Admission, type AdminUser, type AdminWorkspace, type InviteCodeView } from "../cloud/api.ts";
 import { Avatar } from "../cloud/gate.tsx";
@@ -80,7 +80,7 @@ function Page({ title, lead, children }: { title: string; lead?: string | undefi
   return (
     <div className="page page-narrow">
       <MobileBack to="/" label="管理后台" />
-      <header className="page-head"><div><h1>{title}</h1>{lead && <p className="page-sub">{lead}</p>}</div></header>
+      <header className="page-head"><div><h1>{title}{lead && <About>{lead}</About>}</h1></div></header>
       {children}
     </div>
   );

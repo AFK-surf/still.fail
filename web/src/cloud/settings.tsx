@@ -16,7 +16,7 @@ import { ProfileCard } from "../ProfileCard.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, Time } from "../ui.tsx";
+import { About, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, Time } from "../ui.tsx";
 import { signOut, type Account } from "./accounts.ts";
 import { lastChat } from "../lastChat.ts";
 import { cloud, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
@@ -57,7 +57,7 @@ function Page({ title, lead, back, actions, children }: { title: string; lead?: 
   return (
     <div className="page page-narrow">
       <MobileBack to={back} label="设置" />
-      <header className="page-head"><div><h1>{title}</h1>{lead && <p className="page-sub">{lead}</p>}</div>{actions}</header>
+      <header className="page-head"><div><h1>{title}{lead && <About>{lead}</About>}</h1></div>{actions}</header>
       {children}
     </div>
   );
@@ -231,7 +231,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
         </StationContext.Provider>
       )}
       {first ? (
-        <FirstOne art={<Illustration name="no-profile" />} title="添加第一个 Profile" lead={<>{PROFILE_LEAD}<span className="phrase">Profile 加在某一台 station 上，由那台机器用它来跑。</span></>}>
+        <FirstOne art={<Illustration name="no-profile" />} title="添加第一个 Profile" lead={PROFILE_LEAD}>
           {/* Each station in a row: where a profile is added is part of adding it. */}
           <div className="first-stations">
             {stations.map((s) => (
@@ -355,9 +355,8 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
 function EnrollSteps({ enrollment }: { enrollment: { install: string } }) {
   return (
     <>
-      <p>在那台机器的终端里执行：</p>
+      <p>在那台机器的终端里执行<About>macOS（Apple 芯片）和 Linux 都行；装过 ember 的机器也用这条命令。</About></p>
       <CopyCommand text={enrollment.install} />
-      <p className="enroll-hint">macOS（Apple 芯片）和 Linux 都行；装过 ember 的机器也用这条命令。</p>
       <div className="enroll-wait" role="status">
         <span className="spinner" aria-hidden="true" />
         <span><strong>等待这台机器加入</strong><span className="muted">执行命令后会自动继续 · 命令 1 小时内有效</span></span>

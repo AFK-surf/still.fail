@@ -9,7 +9,7 @@ import { Link } from "react-router";
 import { useConnects, useStations } from "../api.ts";
 import { MineFilter, OwnerLabel } from "../components.tsx";
 import { profilesPage, StationContext, stationBase, useOnlyMine, type Station } from "../station.tsx";
-import { Button, ConnectKindIcon, FirstOne, MobileBack, SlackLogo, StatusDot } from "../ui.tsx";
+import { About, Button, ConnectKindIcon, FirstOne, MobileBack, SlackLogo, StatusDot } from "../ui.tsx";
 import { NewConnectDialog } from "./Connect.tsx";
 
 /** The connects of a scope (a workspace, or "local"), from the core's `connects` view; `settings` is where the scope's settings live. */
@@ -48,8 +48,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
       <MobileBack to={settings} label="设置" />
       <header className="page-head">
         <div>
-          <h1>连接</h1>
-          <p className="page-sub">连接是人找到 ember 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</p>
+          <h1>连接<About>连接是人找到 ember 的地方，比如一个 Slack app。每个连接在一台 station 上，绑定一个模型。</About></h1>
         </div>
         {!first && add("添加连接")}
       </header>

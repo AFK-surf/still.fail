@@ -9,7 +9,7 @@ import { ACCESS, ACCESS_KINDS, KEYED } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import { MachineLoginCard, ProfileCard } from "../ProfileCard.tsx";
-import { Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time } from "../ui.tsx";
+import { About, Button, Choices, Confirm, ConnectKindIcon, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time, Tip } from "../ui.tsx";
 
 
 export function AccountsPage() {
@@ -23,8 +23,7 @@ export function AccountsPage() {
       <MobileBack to={link("/chats")} label="对话" />
       <header className="page-head">
         <div>
-          <h1>Profile</h1>
-          <p className="page-sub">Profile 是 agent 用来跑模型的账号：一份订阅，或者一个模型服务的 key。一个账号能跑哪些运行时，ember 会自己配好。</p>
+          <h1>Profile<About>Profile 是 agent 用来跑模型的账号：一份订阅，或者一个模型服务的 key。一个账号能跑哪些运行时，ember 会自己配好。</About></h1>
         </div>
         {(profiles.length > 0 || !overview.value) && <Button icon={Plus} onClick={() => setAdding(true)}>添加 Profile</Button>}
       </header>
@@ -85,22 +84,16 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
   const taken = new Set(overview.value?.profiles.filter((p) => p.machine).map((p) => p.runtime));
   const offers = (logins ?? []).filter((l) => l.loggedIn && l.plan && !taken.has(l.runtime));
   if (!offers.length) return null;
-  const names = (usable: boolean) => offers.filter((l) => l.usable === usable).map((l) => MACHINE_RUNTIME[l.runtime]).join("、");
-  const direct = names(true), keychain = names(false);
   return (
     <div className="machine-logins">
       <p className="machine-logins-head">这台机器上已经登录了</p>
       {offers.map((l) => (
         // A refused account is said so, with nothing to do with it here.
         <MachineLoginCard key={l.runtime} login={l} action={l.quota?.state === "blocked" ? null : l.usable
-          ? <Button disabled={use.busy} onClick={() => void use.run(l.runtime)}>用这个账号</Button>
-          : <Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</Button>} />
+          ? <Tip label="直接用这台机器的登录，不用再登录；在这台机器上换号或登出，它也跟着变"><Button disabled={use.busy} onClick={() => void use.run(l.runtime)}>用这个账号</Button></Tip>
+          : <Tip label="这份登录存在钥匙串里，不能直接用：为 ember 单独登录一次，这台机器上原来的登录不受影响"><Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</Button></Tip>} />
       ))}
       {use.error && <p className="field-error" role="alert">{use.error.message}</p>}
-      <p className="machine-logins-note">
-        {direct && <span className="phrase">{keychain ? `${direct} 直接用这台机器的登录，不用再登录。` : "直接用这台机器上的登录，不用再登录；在这台机器上换号或登出，它也跟着变。"}</span>}
-        {keychain && <span className="phrase">{direct ? `${keychain} 的登录存在钥匙串里，要为 ember 单独登录一次。` : "存在钥匙串里的登录不能直接用，要为 ember 单独登录一次，这台机器上原来的登录不受影响。"}</span>}
-      </p>
     </div>
   );
 }
@@ -266,8 +259,7 @@ function MachineAccount({ profile }: { profile: Profile }) {
       <div className="card">
         <div className="card-row">
           <div className="card-row-text">
-            <strong>{station.name ? `${station.name} 上` : "这台机器上"} {runtime} 的登录</strong>
-            <span className="muted">要换号、重新登录或登出，在这台机器的 {runtime} 里做；这个 Profile 跟着它变，不能在这里编辑或删除。</span>
+            <strong>{station.name ? `${station.name} 上` : "这台机器上"} {runtime} 的登录<About>要换号、重新登录或登出，在这台机器的 {runtime} 里做；这个 Profile 跟着它变，不能在这里编辑或删除。</About></strong>
           </div>
         </div>
       </div>

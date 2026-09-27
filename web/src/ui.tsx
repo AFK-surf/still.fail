@@ -3,7 +3,7 @@
 // instead of styling their own buttons, fields or menus.
 import { Mark } from "./brand.tsx";
 import type { Badge, Maker, Stamp } from "./api.ts";
-import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, More, Sliders } from "./icons.tsx";
+import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, Info, More, Sliders } from "./icons.tsx";
 import {
   AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
@@ -51,6 +51,18 @@ export function Tip({ label, children, side = "bottom" }: { label: ReactNode; ch
         <Tooltip.Content className="tooltip" side={side} sideOffset={6} collisionPadding={8}>{label}</Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>
+  );
+}
+
+/**
+ * What a thing is, for whoever wants to know: a quiet mark beside it that says so on hover (or focus), in place of a
+ * paragraph everyone has to read past.
+ */
+export function About({ children, side = "bottom" }: { children: ReactNode; side?: "top" | "bottom" | "left" | "right" }) {
+  return (
+    <Tip label={<span className="about-text">{children}</span>} side={side}>
+      <button type="button" className="about" aria-label="说明"><Info size={14} strokeWidth={1.8} /></button>
+    </Tip>
   );
 }
 

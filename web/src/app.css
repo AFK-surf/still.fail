@@ -1555,7 +1555,6 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 /* The machine's own logins, offered where a first profile is asked for (pages/Accounts.tsx's MachineLoginOffers). */
 .machine-logins { width: 100%; margin-top: 20px; display: grid; gap: 4px; text-align: left; }
 .machine-logins-head { margin: 0; font-size: var(--text-xs); color: var(--muted); }
-.machine-logins-note { margin: 0; font-size: var(--text-xs); color: var(--muted); }
 
 /* A first profile to add, station by station (cloud/settings.tsx): where it goes is part of adding it. */
 .first-stations { width: 100%; display: grid; gap: 28px; text-align: left; }
@@ -1570,8 +1569,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .profile-card-link:hover { background: var(--list); }
 /* Standing alone (not a row of a list): its text lines up with what is around it. */
 .profile-card[data-framed] { margin: 0 -12px; }
-.profile-card-detail { color: var(--muted); font-size: var(--text-xs); }
-.profile-card-detail[data-tone="red"] { color: var(--red); }
+.profile-card-why { display: inline-flex; cursor: help; border-radius: 999px; }
 .profile-card-grid { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 8px; }
 .profile-card-mark { width: 24px; height: 24px; background: none; }
 .profile-card-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
@@ -1591,3 +1589,8 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 @container (min-width: 640px) {
   .profile-card-quota { order: 0; flex-basis: auto; padding-left: 0; }
 }
+
+/* A quiet mark that says what a thing is on hover (ui.tsx's About), in place of a paragraph. */
+.about { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-left: 6px; padding: 0; border: 0; border-radius: 999px; background: none; color: var(--subtle); vertical-align: middle; cursor: help; transition: color var(--dur) var(--ease-out); }
+.about:hover, .about:focus-visible { color: var(--text); }
+.about-text { display: block; max-width: 280px; line-height: 1.5; text-wrap: pretty; }

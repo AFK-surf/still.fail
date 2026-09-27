@@ -9,7 +9,7 @@ import type { Profile } from "./api.ts";
 import { QuotaBars } from "./components.tsx";
 import { ACCESS } from "./format.ts";
 import { ChevronRight } from "./icons.tsx";
-import { ICON, Pill, ProviderLogo, RuntimeTags } from "./ui.tsx";
+import { ICON, Pill, ProviderLogo, RuntimeTags, Tip } from "./ui.tsx";
 
 /**
  * A profile: its name and runtimes, what it is and who uses it (`uses`, said by the page), its quota and its check.
@@ -17,17 +17,15 @@ import { ICON, Pill, ProviderLogo, RuntimeTags } from "./ui.tsx";
  */
 export function ProfileCard({ profile, uses, to, action, framed }: { profile: Profile; uses?: string; to?: string; action?: ReactNode; framed?: boolean }) {
   const quota = profile.quota;
-  // What else is worth a line: why its allowance could not be read (a refused account first), else how many of its
-  // models are on.
+  // Why its allowance could not be read (a refused account, a sign-in gone stale), shown on its state's hover.
   const trouble = quota && (quota.state === "blocked" || quota.state === "unavailable") ? quota.detail : null;
   const body = (
     <Card
       mark={<ProviderLogo runtime={profile.runtime} kind={profile.access.kind} size={18} />}
       title={<>{profile.name}<RuntimeTags runtimes={profile.runtimes} /></>}
       sub={[profile.machine ? "本机登录" : ACCESS[profile.access.kind].label, profile.modelsText, uses].filter(Boolean).join(" · ")}
-      detail={trouble ? { text: trouble, tone: quota?.state === "blocked" ? "red" : undefined } : null}
       quota={quota ? <QuotaBars quota={quota} compact /> : null}
-      state={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>}
+      state={<State pill={<Pill tone={profile.checkTone}>{profile.checkText}</Pill>} why={trouble} />}
       action={action ?? (to ? <ChevronRight {...ICON} className="profile-card-chevron" /> : null)}
     />
   );
@@ -48,18 +46,22 @@ export function MachineLoginCard({ login, action, framed = true }: { login: Mach
       <Card
         mark={<ProviderLogo runtime={login.runtime} kind="subscription" size={18} />}
         title={RUNTIME[login.runtime]}
-        sub={[login.email, plan, login.usable ? null : "登录存在钥匙串里"].filter(Boolean).join(" · ") || "已登录"}
-        detail={trouble ? { text: trouble, tone: blocked ? "red" : undefined } : null}
+        sub={[login.email, plan].filter(Boolean).join(" · ") || "已登录"}
         quota={quota ? <QuotaBars quota={quota} compact /> : null}
-        state={<Pill tone={blocked ? "red" : "green"}>{blocked ? "被停用" : "本机已登录"}</Pill>}
+        state={<State pill={<Pill tone={blocked ? "red" : "green"}>{blocked ? "被停用" : "本机已登录"}</Pill>} why={trouble} />}
         action={action ?? null}
       />
     </div>
   );
 }
 
-function Card({ mark, title, sub, detail, quota, state, action }: {
-  mark: ReactNode; title: ReactNode; sub: string; detail: { text: string; tone: "red" | undefined } | null; quota: ReactNode; state: ReactNode; action: ReactNode;
+/** Its state, and why when something is wrong (what the provider said), on hover rather than in the card. */
+function State({ pill, why }: { pill: ReactNode; why: string | null | undefined }) {
+  return why ? <Tip label={why}><span className="profile-card-why" tabIndex={0}>{pill}</span></Tip> : <>{pill}</>;
+}
+
+function Card({ mark, title, sub, quota, state, action }: {
+  mark: ReactNode; title: ReactNode; sub: string; quota: ReactNode; state: ReactNode; action: ReactNode;
 }) {
   return (
     <div className="profile-card-grid">
@@ -67,7 +69,6 @@ function Card({ mark, title, sub, detail, quota, state, action }: {
       <span className="profile-card-main">
         <span className="profile-card-title">{title}</span>
         {sub && <span className="profile-card-sub">{sub}</span>}
-        {detail && <span className="profile-card-detail" data-tone={detail.tone}>{detail.text}</span>}
       </span>
       {quota && <span className="profile-card-quota">{quota}</span>}
       <span className="profile-card-state">{state}</span>
