@@ -598,3 +598,16 @@ button.m-agent-head { cursor: pointer; }
 .m-steps-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.55; }
 .m-steps-list a, .m-steps-list .m-link { color: var(--m-accent); }
 .m-step-alt { align-self: flex-start; }
+
+/* A profile: its head (whether it works), a device code, variables, what is folded. */
+.m-profile-head { display: flex; align-items: flex-start; gap: 12px; }
+.m-profile-head .m-grow { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.m-check-pill { margin-left: 0; font-size: 12px; }
+.m-pill[data-tone="green"] { color: var(--m-green); background: color-mix(in srgb, var(--m-green) 12%, transparent); }
+.m-pill[data-tone="amber"] { color: var(--m-warn); background: color-mix(in srgb, var(--m-warn) 14%, transparent); }
+.m-pill[data-tone="neutral"] { color: var(--m-muted); background: var(--m-chip); }
+.m-device-code { align-self: flex-start; padding: 8px 14px; border-radius: 10px; background: var(--m-chip); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 22px; letter-spacing: 2px; }
+.m-env-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto; gap: 6px; align-items: center; }
+.m-details summary { font-size: 13px; color: var(--m-muted); cursor: pointer; padding: 4px 0; }
+.m-details .m-command { margin-top: 6px; }
+.m-card.m-form-group { gap: 10px; }

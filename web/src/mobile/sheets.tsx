@@ -36,11 +36,11 @@ function Confirm({ title, text, action, danger = false, run }: { title: string; 
 }
 
 /** Asks for a line (a name); `run` gets it trimmed. */
-export function ask(app: MobileApp, spec: { title: string; value: string; placeholder: string; action: string; hint?: string; run: (value: string) => Promise<unknown> }) {
+export function ask(app: MobileApp, spec: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; run: (value: string) => Promise<unknown> }) {
   app.sheet({ height: 0.42, content: () => <Ask {...spec} /> });
 }
 
-function Ask({ title, value: first, placeholder, action, hint, run }: { title: string; value: string; placeholder: string; action: string; hint?: string; run: (value: string) => Promise<unknown> }) {
+function Ask({ title, value: first, placeholder, action, hint, secret = false, run }: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; run: (value: string) => Promise<unknown> }) {
   const app = useApp();
   const [value, setValue] = useState(first);
   const [busy, setBusy] = useState(false);
@@ -54,7 +54,9 @@ function Ask({ title, value: first, placeholder, action, hint, run }: { title: s
       <SheetGrab />
       <SheetHead title={title} />
       <div className="m-sheet-scroll m-form">
-        <Field value={value} onChange={setValue} placeholder={placeholder} />
+        {secret
+          ? <input className="m-field" data-mono type="password" autoComplete="off" spellCheck={false} value={value} placeholder={placeholder} onChange={(e) => setValue(e.target.value.trim())} />
+          : <Field value={value} onChange={setValue} placeholder={placeholder} />}
         {hint && <p className="m-small m-muted">{hint}</p>}
         {error && <p className="m-error">{error}</p>}
         <div className="m-form-actions">

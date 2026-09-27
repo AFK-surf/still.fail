@@ -53,7 +53,7 @@ export function AccountsPage() {
 }
 
 /** What can be added, by whose account it is; `runtime` only where the account is for one (a subscription, variables). */
-const CHOICES = {
+export const CHOICES = {
   "claude-sub": { kind: "subscription", runtime: "claude", title: "Claude 订阅", description: "Claude Pro / Max，跑 Claude Code。在浏览器里登录一次。" },
   "chatgpt-sub": { kind: "subscription", runtime: "codex", title: "ChatGPT 订阅", description: "ChatGPT Plus / Pro，跑 Codex。用设备码登录一次。" },
   "opencode-go": { kind: "opencode-go", runtime: null, title: "OpenCode Go", description: "一个 key，Claude Code 和 Codex 都能用。" },
