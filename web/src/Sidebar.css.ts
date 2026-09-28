@@ -99,21 +99,14 @@ export const navSession = style({
   },
 });
 
-/**
- * Who is in a chat: its agent's mark, or two of them overlapping, with its state (block, run, failed) as a badge at
- * the corner.
- */
+/** Who is in a chat: its agent's mark, or two of them overlapping, with its state at the corner (ChatMark.tsx). */
 export const rowPicture = style({
   position: "relative", flex: "none", width: 30, height: 30, marginTop: 4,
+  vars: { "--mark-around": vars.sidebar },
   selectors: {
-    "&[data-badge]::after": {
-      content: "\"\"", position: "absolute", right: -2, bottom: -2, width: 9, height: 9, boxSizing: "border-box",
-      borderRadius: "50%", border: `2px solid ${vars.sidebar}`,
-    },
-    '&[data-badge="block"]::after': { background: vars.accent },
-    '&[data-badge="run"]::after': { background: vars.sidebar, boxShadow: `inset 0 0 0 1.5px ${vars.accent}` },
-    '&[data-badge="failed"]::after': { background: vars.red },
     [`${navSession}[data-offline] &`]: { opacity: 0.5 },
+    [`${navSessionWrap}:hover ${navSession}:not([aria-current="page"]) &`]: { vars: { "--mark-around": vars.hover } },
+    [`${navSession}[aria-current="page"] &`]: { vars: { "--mark-around": vars.selected } },
   },
 });
 export const rowAgent = style({
@@ -166,8 +159,6 @@ export const sessionKind = style({
 globalStyle(`${sessionKind} ${kindIcon}`, { width: 14, height: 14 });
 // The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks.
 globalStyle(`${sessionKind} ${kindMark}`, { margin: -1 });
-/** Unread: a blue dot in the row's left margin, beside the title, taking no room from it. */
-export const unreadDot = style({ position: "absolute", left: 2, top: 14, width: 6, height: 6, borderRadius: "50%", background: vars.blue });
 /** Archive, beside a row while pointed at: centred on the title line (20px tall, 7px down the row). */
 export const rowArchive = style({
   position: "absolute", top: 5, right: 6, width: 24, height: 24, opacity: 0, pointerEvents: "none",

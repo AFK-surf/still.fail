@@ -8,6 +8,7 @@ import { useToast } from "./toast.tsx";
 import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, StatusDot, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
+import { ChatMark } from "./ChatMark.tsx";
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { archiveKey, PendingArchives } from "./pendingArchives.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -162,8 +163,8 @@ function useScrolling() {
 
 /**
  * A chat in the list: its title (bold while something in it is unread) and
- * where it came from, then the last thing said in it, when, and its agents'
- * state as a dot (block before work before failure).
+ * where it came from, then the last thing said in it and when; its state as a
+ * mark on its picture (ChatMark.tsx).
  */
 function ChatRow({ item }: { item: ChatItem }) {
   const { connect } = item;
@@ -173,7 +174,6 @@ function ChatRow({ item }: { item: ChatItem }) {
     <NavLink className={`${nav.navRow} ${nav.navSession}`} to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={chatClicked}
       // Pressing a chat does not take the focus from the composer: it stays there, focused, into the next chat.
       onMouseDown={(e) => e.preventDefault()}>
-      {item.unread && <span className={nav.unreadDot} role="img" aria-label="有未读消息" />}
       <AgentsPicture item={item} />
       <span className={nav.navSessionText}>
         {/* Where the chat happens sits at the title's end, top right. */}
@@ -232,15 +232,16 @@ function ArchiveButton({ item, to }: { item: ChatItem; to: string }) {
 
 /**
  * Who is in a chat, as its row's picture: its agent's mark, or two of its agents' overlapping (more are in the chat
- * itself), with its state (block, run, failed: the core's) at the corner. A chat with no agent yet shows ember's.
+ * itself), with the chat's state at the corner. A chat with no agent yet shows ember's.
  */
 function AgentsPicture({ item }: { item: ChatItem }) {
   const agents = item.agents.slice(0, 2);
   return (
-    <span className={nav.rowPicture} data-count={agents.length || 1} data-badge={item.state ?? undefined} title={item.agents.map((a) => a.agentText).join("、") || undefined} aria-hidden="true">
+    <span className={nav.rowPicture} data-count={agents.length || 1} title={item.agents.map((a) => a.agentText).join("、") || undefined}>
       {agents.length === 0
-        ? <span className={nav.rowAgent}><Mark size={20} /></span>
-        : agents.map((a) => <span key={a.key} className={nav.rowAgent}><ModelLogo maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 14 : 22} /></span>)}
+        ? <span className={nav.rowAgent} aria-hidden="true"><Mark size={20} /></span>
+        : agents.map((a) => <span key={a.key} className={nav.rowAgent} aria-hidden="true"><ModelLogo maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 14 : 22} /></span>)}
+      <ChatMark item={item} />
     </span>
   );
 }

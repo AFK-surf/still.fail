@@ -68,16 +68,13 @@ export const mChatRow = style({
     },
   },
 });
-export const mUnread = style({
-  position: "absolute", left: "8px", top: "19px", width: "7px", height: "7px", borderRadius: "50%",
-  background: "var(--m-blue)",
-});
 export const mChatText = style({
   display: "flex", flexDirection: "column", justifyContent: "center", flex: "1", minWidth: "0",
 });
 /** A chat's picture: its agent's mark, or two of its agents' overlapping, its state at the corner. */
 export const mRowPicture = style({
   position: "relative", flex: "none", width: "40px", height: "40px",
+  vars: { "--mark-around": "var(--m-bg)" },
   selectors: {
     [`${mChatRow}[data-offline] &`]: { opacity: ".45" },
   },

@@ -7,7 +7,8 @@ import { useWorkspaces } from "../cloud/api.ts";
 import { ChevronDown, Edit, Server, Unplug } from "../icons.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { Avatar, Badge, Illustration, MakerIcon, Mark, NavButton, SectionHeader, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
+import { Avatar, Illustration, MakerIcon, Mark, NavButton, SectionHeader, Seg, SlackMark, Spinner } from "./parts.tsx";
+import { ChatMark } from "../ChatMark.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { openWorkspaces } from "./Workspaces.tsx";
 import * as css from "./Home.css.ts";
@@ -104,8 +105,8 @@ function Empty({ view, onlyMine }: { view: ChatsView; onlyMine: boolean }) {
 }
 
 /**
- * A row: its title (bold while something in it is unread, a blue dot in the margin) and, for an agent that came from
- * Slack, the connect's mark; under it the last thing said, the agent's state on its picture when it said it. Two lines,
+ * A row: its title (bold while something in it is unread) and, for an agent that came from
+ * Slack, the connect's mark; under it the last thing said; the chat's state on its picture (../ChatMark.tsx). Two lines,
  * always the same height. The time shows while the row is held (or, with a mouse, pointed at). One whose station is
  * offline is greyed and says so.
  */
@@ -121,7 +122,6 @@ function ChatRow({ item }: { item: ChatItem }) {
       onPointerDown={() => { longPressed.current = false; timer.current = setTimeout(() => { longPressed.current = true; setHeld(true); }, 450); }}
       onPointerUp={release} onPointerCancel={release} onPointerLeave={release} onContextMenu={(e) => e.preventDefault()}
       onClick={() => { if (!longPressed.current) app.push(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`); }}>
-      {item.unread && <span className={css.mUnread} aria-label="有未读消息" />}
       <AgentsPicture item={item} />
       <span className={css.mChatText}>
       <span className={css.mChatLine1}>
@@ -141,18 +141,17 @@ function ChatRow({ item }: { item: ChatItem }) {
 }
 
 /**
- * Who is in a chat, as its row's picture: its agent's mark, or two of its agents' overlapping, with its state (the
- * core's) at the corner. A chat with no agent yet shows ember's.
+ * Who is in a chat, as its row's picture: its agent's mark, or two of its agents' overlapping, with the chat's state
+ * at the corner. A chat with no agent yet shows ember's.
  */
 function AgentsPicture({ item }: { item: ChatItem }) {
   const agents = item.agents.slice(0, 2);
-  const state = stateOf(item.state ?? undefined);
   return (
-    <span className={css.mRowPicture} data-count={agents.length || 1} aria-hidden="true">
+    <span className={css.mRowPicture} data-count={agents.length || 1}>
       {agents.length === 0
-        ? <span className={css.mRowAgent}><Mark size={26} /></span>
-        : agents.map((a) => <span key={a.key} className={css.mRowAgent}><MakerIcon maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 18 : 28} /></span>)}
-      {state !== "done" && <Badge state={state} size={10} ring={2} around="var(--m-bg)" style={{ position: "absolute", right: -2, bottom: -2 }} />}
+        ? <span className={css.mRowAgent} aria-hidden="true"><Mark size={26} /></span>
+        : agents.map((a) => <span key={a.key} className={css.mRowAgent} aria-hidden="true"><MakerIcon maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 18 : 28} /></span>)}
+      <ChatMark item={item} />
     </span>
   );
 }
