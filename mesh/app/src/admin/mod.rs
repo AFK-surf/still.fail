@@ -500,6 +500,9 @@ impl AdminApi {
             ("PUT", "/memory/global") => {
                 let input = read_json(body).await?;
                 let path = crate::agent_home::agent_home_paths(&self.config().agent_home).0;
+                if let Some(dir) = path.parent() {
+                    std::fs::create_dir_all(dir)?;
+                }
                 std::fs::write(&path, input.text("text"))?;
                 info!(by = viewer.id(), "global memory edited from the admin page");
                 return ok(json!({ "path": path.to_string_lossy(), "text": input.text("text") }));
