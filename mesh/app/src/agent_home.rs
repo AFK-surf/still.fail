@@ -106,11 +106,6 @@ fn front(text: &str, key: &str) -> Option<String> {
     body[..end].lines().find_map(|line| line.strip_prefix(&format!("{key}:")).map(|v| v.trim().trim_matches('"').to_string()))
 }
 
-/// Whether a skill's name is one a directory can safely have: letters, digits, `-` and `_` (CJK letters too).
-pub fn skill_name_ok(name: &str) -> bool {
-    !name.is_empty() && name.chars().count() <= 64 && !name.starts_with('.') && name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-}
-
 /// The shared skills, by name: the team's and the station's own.
 pub fn list_skills(agent_home: &Path) -> Vec<SkillFile> {
     let (_, dir) = agent_home_paths(agent_home);
@@ -133,28 +128,6 @@ pub fn list_skills(agent_home: &Path) -> Vec<SkillFile> {
         .collect();
     skills.sort_by(|a, b| (a.builtin, !a.project, a.name.clone()).cmp(&(b.builtin, !b.project, b.name.clone())));
     skills
-}
-
-/// Writes a team skill's SKILL.md (a new one, or over what it had); the station's own are not the team's to change.
-pub fn save_skill(agent_home: &Path, name: &str, text: &str) -> Result<SkillFile> {
-    if !skill_name_ok(name) {
-        anyhow::bail!("a skill's name is letters, digits, - and _");
-    }
-    if BUILTIN_SKILLS.iter().any(|(n, _)| *n == name) {
-        anyhow::bail!("{name} is the station's own skill: it is rewritten at every start");
-    }
-    let (_, skills) = agent_home_paths(agent_home);
-    let dir = skills.join(name);
-    std::fs::create_dir_all(&dir)?;
-    std::fs::write(dir.join("SKILL.md"), text)?;
-    list_skills(agent_home).into_iter().find(|s| s.name == name).ok_or_else(|| anyhow::anyhow!("{name} not written"))
-}
-
-/// A new project memory's SKILL.md: its name, when it applies, and where its lessons go.
-pub fn project_skill_text(name: &str, about: &str) -> String {
-    format!(
-        "---\nname: {name}\ndescription: {PROJECT_PREFIX}{about}\n---\n\n# {name}\n\n只跟这个项目有关的长期约定和教训写在这里；跨项目通用的写全局记忆。保持简短，不写凭据和一次性细节。\n"
-    )
 }
 
 #[cfg(test)]
@@ -220,13 +193,15 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path().join("agent");
         write_builtin_skills(&home).unwrap();
-        let made = save_skill(&home, "发版", &project_skill_text("发版", "每周发版和上线检查时使用。")).unwrap();
-        assert!(made.project && !made.builtin);
-        assert_eq!(made.description, "项目记忆：每周发版和上线检查时使用。");
-        save_skill(&home, "pdf", "---\nname: pdf\ndescription: Reading PDFs.\n---\n").unwrap();
-        let names: Vec<(String, bool, bool)> = list_skills(&home).into_iter().map(|s| (s.name, s.project, s.builtin)).collect();
+        let write = |name: &str, text: &str| {
+            std::fs::create_dir_all(home.join("skills").join(name)).unwrap();
+            std::fs::write(home.join("skills").join(name).join("SKILL.md"), text).unwrap();
+        };
+        write("发版", "---\nname: 发版\ndescription: 项目记忆：每周发版时使用。\n---\n\n- 周四发\n");
+        write("pdf", "---\nname: pdf\ndescription: Reading PDFs.\n---\n");
+        let skills = list_skills(&home);
+        let names: Vec<(String, bool, bool)> = skills.iter().map(|s| (s.name.clone(), s.project, s.builtin)).collect();
         assert_eq!(names, [("发版".into(), true, false), ("pdf".into(), false, false), ("ember-jobs".into(), false, true)]);
-        assert!(save_skill(&home, "ember-jobs", "x").is_err(), "the station's own");
-        assert!(save_skill(&home, "../out", "x").is_err());
+        assert_eq!(skills[0].description, "项目记忆：每周发版时使用。");
     }
 }

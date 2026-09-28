@@ -1463,23 +1463,15 @@ async fn the_slack_people_of_the_stations_connects_are_listed_once_each_by_email
 }
 
 #[tokio::test]
-async fn the_agents_memory_is_read_and_edited_on_the_pages_global_and_projects() {
+async fn the_agents_memory_is_shown_on_the_pages_global_and_projects() {
     let r = setup().await;
-    let (status, _) = r.call("PUT", "/memory/global", Some(json!({ "text": "# ember memory\n- 用中文回复\n" }))).await;
-    assert_eq!(status, 200);
-    let (status, made) = r.call("POST", "/memory/skills", Some(json!({ "name": "发版", "about": "每周发版时使用。" }))).await;
-    assert_eq!(status, 200, "{made}");
-    assert_eq!(made["project"], true);
-    let (status, _) = r.call("POST", "/memory/skills", Some(json!({ "name": "发版", "about": "again" }))).await;
-    assert_eq!(status, 409);
-    let (status, _) = r.call("POST", "/memory/skills", Some(json!({ "name": "x" }))).await;
-    assert_eq!(status, 400, "a project memory says when it applies");
-    let text = "---\nname: 发版\ndescription: 项目记忆：每周发版时使用。\n---\n\n- 周四发\n";
-    let (status, saved) = r.call("PUT", "/memory/skills/%E5%8F%91%E7%89%88", Some(json!({ "text": text }))).await;
-    assert_eq!((status, saved["text"].as_str()), (200, Some(text)));
+    let home = r.settings.config().agent_home.clone();
+    std::fs::create_dir_all(home.join("skills").join("发版")).unwrap();
+    std::fs::write(home.join("MEMORY.md"), "# ember memory\n- 用中文回复\n").unwrap();
+    std::fs::write(home.join("skills").join("发版").join("SKILL.md"), "---\nname: 发版\ndescription: 项目记忆：每周发版时使用。\n---\n\n- 周四发\n").unwrap();
     let memory = r.get("/memory").await;
     assert_eq!(memory["global"]["text"], "# ember memory\n- 用中文回复\n");
     assert!(memory["skills"].as_array().unwrap().iter().any(|s| s["name"] == "发版" && s["project"] == true));
-    let (status, _) = r.call("PUT", "/memory/skills/ember-jobs", Some(json!({ "text": "x" }))).await;
-    assert_eq!(status, 400, "the station's own skills are not edited here");
+    let (status, _) = r.call("PUT", "/memory/global", Some(json!({ "text": "x" }))).await;
+    assert_ne!(status, 200, "the pages only read it");
 }
