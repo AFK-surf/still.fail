@@ -527,9 +527,10 @@ impl Stations {
         self.call(station, "POST", &path, vec![("content-type".into(), "application/octet-stream".into())], bytes).await
     }
 
-    /// GET /sessions/:key/files?name=: (content type, bytes).
-    pub async fn file(&self, station: &StationAddr, key: &str, name: &str) -> Result<(String, Vec<u8>)> {
-        let path = format!("/sessions/{}/files?name={}", encode(key), encode(name));
+    /// GET /sessions/:key/files?name=(&thumb=1): (content type, bytes).
+    pub async fn file(&self, station: &StationAddr, key: &str, name: &str, thumb: bool) -> Result<(String, Vec<u8>)> {
+        // A station from before thumbnails answers the image itself.
+        let path = format!("/sessions/{}/files?name={}{}", encode(key), encode(name), if thumb { "&thumb=1" } else { "" });
         let (status, kind, bytes) = self.exchange(station, "GET", &path, Vec::new(), Vec::new(), |reply| reply.header("content-type").unwrap_or("").to_string()).await?;
         if status != 200 {
             return Err(CoreError::new(format!("http_{status}"), "读不到文件").with_status(status));
@@ -1945,7 +1946,7 @@ mod tests {
             assert_eq!(saved["name"], "a b.png");
             assert_eq!(wire.calls.borrow()[0].3, vec![1, 2, 3]);
             wire.answer("GET /admin/api/sessions/k/files?name=x", 404, json!({"error": "没有这个文件"}));
-            let e = stations.file(&remote(), "k", "x").await.unwrap_err();
+            let e = stations.file(&remote(), "k", "x", false).await.unwrap_err();
             assert_eq!((e.message.as_str(), e.status), ("读不到文件", Some(404)));
         });
     }

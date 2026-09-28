@@ -159,8 +159,9 @@ impl AdminApi {
         self.config().data_dir.join("uploads")
     }
 
-    /// A file sent to a session, for previews: only from its upload directory.
-    pub(super) async fn session_file(&self, key: &str, name: &str) -> Result<Response<Body>> {
+    /// A file sent to a session, for previews: only from its upload directory. `thumb`: an image as a chat shows it, its
+    /// thumbnail (the image itself when it has none).
+    pub(super) async fn session_file(&self, key: &str, name: &str, thumb: bool) -> Result<Response<Body>> {
         let row = self.deps.store.get_session(key)?.ok_or_else(|| http_error(404, format!("unknown session {key}")))?;
         let uploads = clean(&Path::new(&row.workspace).join("uploads"));
         let base = name.rsplit(['/', '\\']).next().unwrap_or("");
@@ -168,8 +169,15 @@ impl AdminApi {
         if base.is_empty() || !path.starts_with(&uploads) || path == uploads || !path.is_file() {
             return Err(http_error(404, "没有这个文件"));
         }
+        let small = if thumb {
+            let (image, dir) = (path.clone(), crate::thumbs::dir(&self.config().data_dir));
+            tokio::task::spawn_blocking(move || crate::thumbs::thumbnail(&image, &dir)).await.ok().flatten()
+        } else {
+            None
+        };
+        let (path, kind) = small.unwrap_or_else(|| { let kind = mime(&path); (path, kind) });
         let bytes = tokio::fs::read(&path).await?;
-        Ok(Response::builder().status(200).header("content-type", mime(&path)).header("cache-control", "private, max-age=3600").body(super::full(bytes))?)
+        Ok(Response::builder().status(200).header("content-type", kind).header("cache-control", "private, max-age=3600").body(super::full(bytes))?)
     }
 
     /// Files named in a message: ones waiting in the uploads (they move into the upload directory of the chat's first

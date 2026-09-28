@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, 
 import { useLocation, useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
 import { useHost, type HostComposer } from "./ChatHost.tsx";
-import { FileLink, FilePreview, fileSize, isImage, useFileUrl } from "../FilePreview.tsx";
+import { FileLink, FilePreview, fileSize, isImage, useFileUrl, useNear } from "../FilePreview.tsx";
 import { Activity, useAwayFromBottom, useEmissions, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
 import { placeFiles, Prose } from "../Prose.tsx";
@@ -365,14 +365,15 @@ function OneFile({ here, file }: { here: Here; file: Attachment }) {
 
 /** An image at its own proportions within 240×200 (known before it loads); a tap shows it whole. */
 function StationImage({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
-  const url = useFileUrl(sessionKey, file, true);
+  const at = useRef<HTMLButtonElement>(null);
+  const url = useFileUrl(sessionKey, file, useNear(at, true));
   const [open, setOpen] = useState(false);
   const box = file.width && file.height
     ? (() => { const scale = Math.min(1, 240 / file.width, 200 / file.height); return { width: Math.max(40, file.width * scale), height: Math.max(40, file.height * scale) }; })()
     : { width: 170, height: 120 };
   return (
     <>
-      <button type="button" className={css.mImage} style={box} disabled={!url} onClick={() => setOpen(true)}>{url && <img src={url} alt={file.name} />}</button>
+      <button ref={at} type="button" className={css.mImage} style={box} disabled={!url} onClick={() => setOpen(true)}>{url && <img src={url} alt={file.name} />}</button>
       <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
     </>
   );

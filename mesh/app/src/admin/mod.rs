@@ -591,7 +591,7 @@ impl AdminApi {
                 });
                 return Ok(json_response(202, &json!({ "ok": true })));
             }
-            (Some("sessions"), Some(key), Some("files"), "GET") => return self.session_file(key, asked.param("name").unwrap_or("")).await,
+            (Some("sessions"), Some(key), Some("files"), "GET") => return self.session_file(key, asked.param("name").unwrap_or(""), asked.param("thumb") == Some("1")).await,
             (Some("sessions"), Some(key), Some("settings"), "POST") => {
                 // How the session runs from its next turn on: its profile, model, effort (Hub::configure).
                 let input = read_json(body).await?;
@@ -642,6 +642,7 @@ impl AdminApi {
                         if text.is_empty() && attachments.is_empty() && quotes.is_empty() {
                             return Err(http_error(400, "消息是空的"));
                         }
+                        crate::thumbs::make_later(attachments.iter().map(|a| a.path.clone().into()).collect(), crate::thumbs::dir(&self.config().data_dir));
                         let n = self.deps.hub.say(thread_id, &viewer.id(), &text, attachments, quotes)?;
                         return ok(json!({ "n": n }));
                     }

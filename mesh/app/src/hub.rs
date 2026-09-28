@@ -1058,6 +1058,7 @@ impl Hub {
         let kind = state_arg(args.get("kind"))?;
         let thread = self.target(key, args.get("to"))?;
         let files = if paths.is_empty() { vec![] } else { self.attach(key, &paths)? };
+        crate::thumbs::make_later(files.iter().map(|f| f.path.clone().into()).collect(), crate::thumbs::dir(&self.config().data_dir));
         let here = ThreadRef::new(&thread.thread.channel, &thread.thread.thread_ts);
         let ts = self.chat(&thread.connect)?.post(&here, &text, &files).await?;
         let (n, _) = self.store.insert_message(NewMessage {

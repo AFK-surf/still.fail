@@ -138,11 +138,17 @@ export interface StationCall {
   request<T>(method: string, path: string, body?: unknown): Promise<T>;
   /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
   upload(file: File): Promise<Attachment>;
-  /** A file sent to the session, as a blob for previews. */
-  file(key: string, name: string): Promise<Blob>;
+  /** A file sent to the session, as a blob for previews; `thumb`: an image as a chat shows it (its thumbnail, where the station keeps one). */
+  file(key: string, name: string, thumb?: boolean): Promise<Blob>;
 }
 
 /** The whole file as base64, the protocol's form for bytes. */
+/** Bytes from base64: natively where the browser can (a chat's images are megabytes; decoding them char by char held up frames). */
+function fromBase64(text: string): Uint8Array<ArrayBuffer> {
+  const native = (Uint8Array as unknown as { fromBase64?: (s: string) => Uint8Array<ArrayBuffer> }).fromBase64;
+  return native ? native(text) : Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+}
+
 function toBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -172,9 +178,9 @@ export function useStationCall(station: string): StationCall {
       }
       return saved;
     },
-    file: async (key, name) => {
-      const { type, bytes } = await call("station.file", { station, key, name }) as { type: string; bytes: string };
-      return new Blob([Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0))], { type });
+    file: async (key, name, thumb = false) => {
+      const { type, bytes } = await call("station.file", { station, key, name, ...(thumb ? { thumb } : {}) }) as { type: string; bytes: string };
+      return new Blob([fromBase64(bytes)], { type });
     },
   }), [call, station]);
 }

@@ -3,7 +3,7 @@
 // highlighted, Markdown rendered, CSV as a table, HTML in a sandbox. Anything
 // else says it cannot be shown and offers the download.
 import { Dialog as RDialog } from "radix-ui";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, type Api, type Attachment } from "./api.ts";
 import { Close, Download, Minus, Plus } from "./icons.tsx";
 import { Prose } from "./Prose.tsx";
@@ -76,13 +76,14 @@ const storedName = (a: Attachment) => a.path.split("/").at(-1)!;
 const blobs = new Map<string, Promise<Blob>>();
 const KEEP_BLOBS = 100;
 
-function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment): Promise<Blob> {
-  const id = `${station}/${sessionKey}/${file.path}`;
+function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment, thumb = false): Promise<Blob> {
+  const id = `${station}/${sessionKey}/${file.path}${thumb ? "#thumb" : ""}`;
   let blob = blobs.get(id);
   if (!blob) {
-    // Typed by its name, so the browser plays and shows it whatever the station called it.
+    // Typed by its name, so the browser plays and shows it whatever the station called it (a thumbnail is typed by the
+    // station: it may be a JPEG of a PNG).
     const { type } = kindOf(file.name);
-    blob = api.file(sessionKey, storedName(file)).then((b) => (type !== "application/octet-stream" && b.type !== type ? b.slice(0, b.size, type) : b));
+    blob = api.file(sessionKey, storedName(file), thumb).then((b) => (!thumb && type !== "application/octet-stream" && b.type !== type ? b.slice(0, b.size, type) : b));
     // A failure is not kept: the next look tries again.
     blob.catch(() => blobs.delete(id));
     blobs.set(id, blob);
@@ -94,7 +95,7 @@ function fetchFile(api: Api, station: string, sessionKey: string, file: Attachme
 type Loaded = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; blob: Blob; url: string };
 
 /** A file as a blob and its URL, fetched from the station once and kept while shown. */
-function useFile(sessionKey: string, file: Attachment, enabled: boolean): Loaded {
+function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb = false): Loaded {
   const api = useApi();
   const station = useStation();
   const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
@@ -103,7 +104,7 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean): Loaded
     let u: string | null = null;
     let current = true;
     setLoaded({ state: "loading" });
-    fetchFile(api, station.address, sessionKey, file).then((blob) => {
+    fetchFile(api, station.address, sessionKey, file, thumb).then((blob) => {
       if (!current) return;
       u = URL.createObjectURL(blob);
       setLoaded({ state: "ready", blob, url: u });
@@ -114,14 +115,32 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean): Loaded
       current = false;
       if (u) URL.revokeObjectURL(u);
     };
-  }, [api, station.address, sessionKey, file.path, enabled]);
+  }, [api, station.address, sessionKey, file.path, enabled, thumb]);
   return loaded;
 }
 
-/** A file as a blob URL, fetched from the station once and kept while shown. */
+/** An image as a chat shows it (its thumbnail, where the station keeps one) as a blob URL, fetched once and kept while shown. */
 export function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean): string | null {
-  const loaded = useFile(sessionKey, file, enabled);
+  const loaded = useFile(sessionKey, file, enabled, true);
   return loaded.state === "ready" ? loaded.url : null;
+}
+
+/**
+ * Whether an element has come near the screen (and stays so once it has): a chat's images are fetched only then, not
+ * all as it opens (a chat of screenshots is megabytes, and taking them in held up the page's first frames). Their
+ * boxes are sized beforehand, so nothing moves when they come.
+ */
+export function useNear(ref: RefObject<HTMLElement | null>, watch: boolean): boolean {
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!watch || near || !el) return;
+    // scrollMargin reaches past the chat list's own edges (rootMargin only past the window's).
+    const observer = new IntersectionObserver(([e]) => { if (e?.isIntersecting) setNear(true); }, { rootMargin: "600px 0px", scrollMargin: "600px 0px" } as IntersectionObserverInit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, watch, near]);
+  return near;
 }
 
 // ── the viewer ─────────────────────────────────────────────────────────

@@ -423,8 +423,8 @@ impl Inner {
             Call::StationUpload { station, name, bytes } => {
                 self.stations.upload(&StationAddr::parse(&station)?, &name, bytes).await
             }
-            Call::StationFile { station, key, name } => {
-                let (kind, bytes) = self.stations.file(&StationAddr::parse(&station)?, &key, &name).await?;
+            Call::StationFile { station, key, name, thumb } => {
+                let (kind, bytes) = self.stations.file(&StationAddr::parse(&station)?, &key, &name, thumb).await?;
                 Ok(json!({ "type": kind, "bytes": BASE64.encode(bytes) }))
             }
             Call::StationPreview { station, port, method, path, headers, body } => {
@@ -956,7 +956,7 @@ enum Call {
     ChatOlder { station: String, thread: u64 },
     ChatRead { station: String, thread: u64, seq: u64 },
     StationUpload { station: String, name: String, bytes: Vec<u8> },
-    StationFile { station: String, key: String, name: String },
+    StationFile { station: String, key: String, name: String, thumb: bool },
     StationPreview { station: String, port: u16, method: String, path: String, headers: Vec<(String, String)>, body: Vec<u8> },
     Migrate { accounts: Option<Value>, device: Option<Vec<u8>> },
 }
@@ -1049,6 +1049,9 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         station: String,
         key: String,
         name: String,
+        /// An image as a chat shows it: its thumbnail, where the station keeps one.
+        #[serde(default)]
+        thumb: bool,
     }
     #[derive(Deserialize)]
     struct Preview {
@@ -1119,7 +1122,7 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "station.file" => {
             let p: File = read(params)?;
-            Call::StationFile { station: p.station, key: p.key, name: p.name }
+            Call::StationFile { station: p.station, key: p.key, name: p.name, thumb: p.thumb }
         }
         "station.preview" => {
             let p: Preview = read(params)?;
@@ -1224,7 +1227,11 @@ mod tests {
         );
         assert_eq!(
             parse_call("station.file", json!({"station": "w/s", "key": "k", "name": "a.png"})).unwrap(),
-            Call::StationFile { station: "w/s".into(), key: "k".into(), name: "a.png".into() }
+            Call::StationFile { station: "w/s".into(), key: "k".into(), name: "a.png".into(), thumb: false }
+        );
+        assert_eq!(
+            parse_call("station.file", json!({"station": "w/s", "key": "k", "name": "a.png", "thumb": true})).unwrap(),
+            Call::StationFile { station: "w/s".into(), key: "k".into(), name: "a.png".into(), thumb: true }
         );
         assert_eq!(
             parse_call("chat.send", json!({"station": "w/s", "thread": 7, "text": "hi"})).unwrap(),

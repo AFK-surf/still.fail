@@ -10,7 +10,7 @@ import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
-import { FileLink, FilePreview, fileSize, isImage, useFileUrl } from "./FilePreview.tsx";
+import { FileLink, FilePreview, fileSize, isImage, useFileUrl, useNear } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { track } from "./telemetry.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -467,13 +467,15 @@ function Files({ owner, files }: { owner: (file: Attachment) => string | null; f
 /** Images show themselves at their own proportions; other files are a card. Either opens in a preview. */
 function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
   const image = isImage(file.name);
-  const url = useFileUrl(sessionKey ?? "", file, image && sessionKey !== null);
+  const box = useRef<HTMLButtonElement>(null);
+  const near = useNear(box, image);
+  const url = useFileUrl(sessionKey ?? "", file, image && sessionKey !== null && near);
   const [open, setOpen] = useState(false);
   const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
   if (image) {
     return (
       <>
-        <button type="button" className={css.msgImage} onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`} style={imageBox(file)}>
+        <button ref={box} type="button" className={css.msgImage} onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`} style={imageBox(file)}>
           {url ? <img src={url} alt={file.name} /> : <span className={css.msgImageWait} />}
         </button>
         {preview}

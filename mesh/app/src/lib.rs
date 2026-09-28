@@ -30,4 +30,5 @@ pub mod session;
 pub mod settings;
 pub mod store;
 pub mod telemetry;
+pub mod thumbs;
 pub mod transcript;

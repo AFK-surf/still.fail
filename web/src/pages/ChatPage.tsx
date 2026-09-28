@@ -16,6 +16,7 @@ import { useAction, useApi, useChat, useChats, useHistory, useHost, useLives, us
 import { History } from "../History.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { ChatPanel } from "../Chat.tsx";
+import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
 import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
@@ -149,7 +150,18 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   };
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>读不到这个对话：{chatView.error.message}</p></Empty>;
-    return <Loading label={station.name ? `正在从 ${station.name} 读取对话…` : "正在读取对话…"} />;
+    // Laid out as the chat will be, its composer already in its place: coming from another chat page, the composer
+    // moves there at once rather than going away until the chat is read (it cannot send until then).
+    return (
+      <div className={sessionCss.sessionPage} data-panel={open.length > 0}>
+        <div className={jobsCss.sessionMain}>
+          <section className={sessionCss.chat} aria-label="对话" data-under-composer="">
+            <Loading label={station.name ? `正在从 ${station.name} 读取对话…` : "正在读取对话…"} />
+            <ComposerSlot variant="chat" station={station} draftKey={chatKey} thread={null} sessionKey={null} locked />
+          </section>
+        </div>
+      </div>
+    );
   }
   const chat = chatView.value;
   const panel = open.length > 0;
