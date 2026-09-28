@@ -23,7 +23,7 @@ export const ICON = { size: 16, strokeWidth: 1.7 } as const;
 
 type IconType = ComponentType<{ size?: number; strokeWidth?: number }>;
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "danger-solid";
-const VARIANT: Record<Variant, string> = { primary: controlsCss.btnPrimary, secondary: "", ghost: controlsCss.btnGhost, danger: css.btnDanger, "danger-solid": css.btnDangerSolid };
+const VARIANT: Record<Variant, string> = { primary: controlsCss.btnPrimary, secondary: "", ghost: controlsCss.btnGhost, danger: controlsCss.btnDanger, "danger-solid": controlsCss.btnDangerSolid };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; icon?: IconType; busy?: boolean | undefined }>(
   function Button({ variant = "secondary", icon: Icon, busy, children, className, ...rest }, ref) {

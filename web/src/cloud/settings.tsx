@@ -3,14 +3,14 @@
 // workspace itself (its name, members, stations, connects and the stations'
 // runtime accounts).
 import { Illustration } from "../brand.tsx";
-import { ArrowLeft, Brain, Check, Key, LogOut, Plug, Plus, Server, Settings, Trash, UserPlus, Users } from "../icons.tsx";
+import { ArrowLeft, Brain, Check, Key, LogOut, Plug, Plus, Server, Settings, Sliders, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
-import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
+import { DeviceCard, QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { MemoryView } from "../Memory.tsx";
@@ -49,17 +49,16 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   return (
     <div className={nav.navScroll}>
       <NavLink className={nav.navRow} to={lastChat(entry.id, `/w/${entry.id}`)} end><ArrowLeft {...ICON} />{some ? "返回会话" : "返回"}</NavLink>
-      <div className={nav.navHeading}>账号</div>
-      <NavLink className={nav.navRow} to={`${base}/account`}><Avatar account={entry.account} size={18} /><span className={nav.navText}>{entry.account.email}</span></NavLink>
-      <div className={nav.navHeading}>Workspace · {entry.name}</div>
+      <div className={nav.navHeading}>客户端</div>
+      <NavLink className={nav.navRow} to={`${base}/appearance`}><Sliders {...ICON} />外观</NavLink>
+      <div className={nav.navHeading}>Station</div>
       <NavLink className={nav.navRow} to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
       {some && <NavLink className={nav.navRow} to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>}
       {some && <NavLink className={nav.navRow} to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>}
       {some && <NavLink className={nav.navRow} to={`${base}/memory`}><Brain {...ICON} />记忆</NavLink>}
-      <NavLink className={nav.navRow} to={`${base}/members`}><Users {...ICON} />成员</NavLink>
-      <NavLink className={nav.navRow} to={`${base}/general`}><Settings {...ICON} />通用</NavLink>
-      <div className={nav.navHeading}>离开</div>
-      <NavLink className={nav.navRow} to={`${base}/leave`}><LogOut {...ICON} />退出与删除</NavLink>
+      <div className={nav.navHeading}>Cloud</div>
+      <NavLink className={nav.navRow} to={`${base}/workspace`}><Users {...ICON} /><span className={nav.navText}>Workspace · {entry.name}</span></NavLink>
+      <NavLink className={nav.navRow} to={`${base}/account`}><Avatar account={entry.account} size={18} /><span className={nav.navText}>{entry.account.email}</span></NavLink>
     </div>
   );
 }
@@ -94,9 +93,6 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           <p className={pagesCss.identitySub}><span>{account.email}</span><span>Google 账号</span></p>
         </div>
       </header>
-      <Section title="外观" description="浅色、深色，或跟着系统走。只对这个浏览器生效。">
-        <div className={chatCss.appearanceSetting}><AppearanceSetting /></div>
-      </Section>
       <Section title="登录的地方" description="这个账号在哪些浏览器或设备上登录了 ember。认不出来的可以让它退出。">
         {!devices.value ? devices.error ? <p className={controlsCss.fieldError}>读不到登录记录：{devices.error.message}</p> : <Loading label="正在读取…" fill={false} /> : (
           <ul className={pagesCss.list}>
@@ -131,16 +127,22 @@ function useWorkspace(entry: WorkspaceEntry): { view: WorkspaceView | undefined;
   return { view, manager: view?.role === "owner" || view?.role === "admin" };
 }
 
-export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
+/** The workspace in one page: its name, its members, and leaving or deleting it (at the end, away from the rest). */
+export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
   const account = entry.account;
+  const navigate = useNavigate();
   const toast = useToast();
   const [name, setName] = useState("");
   useEffect(() => { if (view) setName(view.name); }, [view?.name]);
   const rename = useAction(() => cloud.renameWorkspace(account.sub, entry.id, name), () => toast("已改名"));
+  const [leaving, setLeaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const leave = useAction(() => cloud.removeMember(account.sub, entry.id, account.sub), () => { toast("已退出 workspace"); navigate("/"); });
+  const remove = useAction(() => cloud.deleteWorkspace(account.sub, entry.id), () => { toast("已删除 workspace"); navigate("/"); });
   if (!view) return <Loading label="正在读取 workspace…" />;
   return (
-    <Page title="通用" back={`/w/${entry.id}/settings`}>
+    <Page title="Workspace" back={`/w/${entry.id}/settings`}>
       <Section title="名字">
         <div className={pagesCss.card}>
           <Field label="Workspace 名字" htmlFor="ws-rename" hint={manager ? undefined : "只有 owner 和管理员能改名。"}>
@@ -152,59 +154,27 @@ export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
           <p className={`${shellCss.muted} ${controlsCss.cardFoot}`}>你在这里是{ROLE_LABEL[view.role]}，通过 {account.email} 访问。</p>
         </div>
       </Section>
-    </Page>
-  );
-}
-
-/** The last settings page: everything that ends access, away from everyday settings. */
-export function LeaveSettings({ entry }: { entry: WorkspaceEntry }) {
-  const { view } = useWorkspace(entry);
-  const account = entry.account;
-  const navigate = useNavigate();
-  const toast = useToast();
-  const [signingOut, setSigningOut] = useState(false);
-  const [leaving, setLeaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const leave = useAction(() => cloud.removeMember(account.sub, entry.id, account.sub), () => { toast("已退出 workspace"); navigate("/"); });
-  const remove = useAction(() => cloud.deleteWorkspace(account.sub, entry.id), () => { toast("已删除 workspace"); navigate("/"); });
-  if (!view) return <Loading label="正在读取 workspace…" />;
-  return (
-    <Page title="退出与删除" back={`/w/${entry.id}/settings`}>
-      <Section title="账号">
-        <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
-          <div className={pagesCss.cardRowText}><strong>在这个浏览器上退出 {account.email}</strong><span className={shellCss.muted}>它所在的 workspace 会从这里消失；其他已登录的账号不受影响。</span></div>
-          <Button icon={LogOut} onClick={() => setSigningOut(true)}>退出账号</Button>
-        </div>
-      </Section>
-      <Section title={`Workspace · ${view.name}`}>
-        <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
-          <div className={pagesCss.cardRowText}><strong>退出这个 workspace</strong><span className={shellCss.muted}>退出后不能再访问里面的 station，需要重新被邀请。</span></div>
-          <Button onClick={() => setLeaving(true)}>退出</Button>
-        </div>
-        {view.role === "owner" && (
-          <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
-            <div className={pagesCss.cardRowText}><strong>删除 workspace</strong><span className={shellCss.muted}>所有成员失去访问权限，station 断开与 ember cloud 的连接；station 本机的数据不受影响。</span></div>
-            <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>删除</Button>
+      <Members view={view} account={account} manager={manager} />
+      <Section title="退出与删除">
+        {/* One card, as the name's: leaving, and (the owner) deleting, each asked again before it is done. */}
+        <div className={pagesCss.card}>
+          <div className={pagesCss.cardRow}>
+            <div className={pagesCss.cardRowText}><strong>退出这个 workspace</strong><span className={shellCss.muted}>退出后不能再访问里面的 station，需要重新被邀请。</span></div>
+            <Button variant="danger" icon={LogOut} onClick={() => setLeaving(true)}>退出</Button>
           </div>
-        )}
+          {view.role === "owner" && (
+            <div className={pagesCss.cardRow}>
+              <div className={pagesCss.cardRowText}><strong>删除 workspace</strong><span className={shellCss.muted}>所有成员失去访问权限，station 断开与 ember cloud 的连接；station 本机的数据不受影响。</span></div>
+              <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>删除</Button>
+            </div>
+          )}
+        </div>
       </Section>
       <Confirm open={leaving} onClose={() => setLeaving(false)} busy={leave.busy} onConfirm={() => leave.run()}
         title={`退出「${view.name}」？`} action="退出" description="退出后你就不能再访问里面的 station，需要重新被邀请才能回来。" error={leave.error?.message} />
       <Confirm open={deleting} onClose={() => setDeleting(false)} busy={remove.busy} onConfirm={() => remove.run()}
         title={`删除「${view.name}」？`} action="删除 workspace"
         description={`所有成员都会失去访问权限，${view.stations.length} 台 station 会断开和 ember cloud 的连接（station 本机上的数据不受影响）。`} error={remove.error?.message} />
-      <Confirm open={signingOut} onClose={() => setSigningOut(false)} onConfirm={() => void signOut(account.sub).then(() => { toast(`已退出 ${account.email}`); navigate("/"); })}
-        title={`退出 ${account.email}？`} action="退出账号" description="这个浏览器上不再使用这个账号；它所在的 workspace 也会从这里消失。其他已登录的账号不受影响。" />
-    </Page>
-  );
-}
-
-export function MembersSettings({ entry }: { entry: WorkspaceEntry }) {
-  const { view, manager } = useWorkspace(entry);
-  if (!view) return <Loading label="正在读取 workspace…" />;
-  return (
-    <Page title="成员" lead="谁能使用这个 workspace 里的 station。" back={`/w/${entry.id}/settings`}>
-      <Members view={view} account={entry.account} manager={manager} />
     </Page>
   );
 }

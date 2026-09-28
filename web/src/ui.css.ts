@@ -45,13 +45,6 @@ export const sectionHead = style({
 });
 export const sectionSub = style({ margin: "3px 0 0", fontSize: vars.textXs, color: vars.muted, maxWidth: "52em" });
 export const sectionActions = style({ display: "flex", gap: "8px" });
-export const btnDanger = style({ color: vars.red });
-export const btnDangerSolid = style({
-  background: vars.red, borderColor: vars.red, color: "#fff",
-  selectors: {
-    "&:hover:not(:disabled)": { background: `color-mix(in oklch, ${vars.red} 85%, black)` },
-  },
-});
 export const field = style({ display: "grid", gap: "6px" });
 export const fieldTop = style({ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "8px" });
 export const fieldLabel = style({ fontSize: vars.textSm, fontWeight: "500" });

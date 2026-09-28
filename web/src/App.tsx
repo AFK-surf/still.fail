@@ -7,6 +7,7 @@ import { AccountPage, AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
 import { ConnectsPage } from "./pages/Connects.tsx";
 import { DevicePage } from "./pages/Device.tsx";
+import { AppearancePage } from "./pages/Appearance.tsx";
 import { MemoryPage } from "./Memory.tsx";
 import { ArchivePage } from "./pages/Archive.tsx";
 import { ChatPage } from "./pages/ChatPage.tsx";
@@ -63,6 +64,7 @@ export function App() {
             <Route path="/settings" element={<Navigate to="/settings/connects" replace />} />
             <Route path="/settings/connects" element={<ConnectsPage />} />
             <Route path="/settings/device" element={<DevicePage />} />
+            <Route path="/settings/appearance" element={<AppearancePage back="/settings" />} />
             <Route path="/settings/memory" element={<MemoryPage />} />
             <Route path="/settings/accounts" element={<AccountsPage />} />
             <Route path="/settings/accounts/:id" element={<AccountPage />} />

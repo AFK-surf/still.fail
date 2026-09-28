@@ -16,7 +16,8 @@ import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble } from "../Sidebar.tsx";
 import { ArchivePage } from "../pages/Archive.tsx";
-import { AccountSettings, ConnectsSettings, FirstStation, GeneralSettings, LeaveSettings, MembersSettings, MemorySettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
+import { AppearancePage } from "../pages/Appearance.tsx";
+import { AccountSettings, ConnectsSettings, FirstStation, MemorySettings, RuntimeSettings, SettingsNav, StationsSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
@@ -81,14 +82,17 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
           <Routes>
             <Route index element={<WorkspaceHome id={entry.id} stations={found.value && stations} />} />
             <Route path="settings" element={<Navigate to="stations" replace />} />
+            <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
-            <Route path="settings/general" element={<GeneralSettings entry={entry} />} />
-            <Route path="settings/members" element={<MembersSettings entry={entry} />} />
+            <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />
+            {/* Pages the workspace page took in: links to them still land there. */}
+            <Route path="settings/general" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
+            <Route path="settings/members" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
             <Route path="settings/memory" element={<MemorySettings entry={entry} />} />
-            <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
+            <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
             <Route path="archive" element={<ArchivePage scope={entry.id} back={`/w/${entry.id}`} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
@@ -140,9 +144,9 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
         <p className={css.onboardingLead}>agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。</p>
         <FirstStation entry={entry} />
         <p className={`${css.onboardingFoot} ${shellCss.muted}`}>
-          <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/members`}>邀请成员</Link>
+          <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/workspace`}>邀请成员</Link>
           <span aria-hidden="true"> · </span>
-          <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/general`}>workspace 设置</Link>
+          <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/workspace`}>workspace 设置</Link>
         </p>
       </main>
     </div>

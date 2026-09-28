@@ -25,6 +25,14 @@ export const btnPrimary = style({
   },
 });
 export const btnGhost = style({ borderColor: "transparent", background: "transparent" });
+// Here, after btn, as the other variants: in ui.css.ts (which cascades before this file) btn's colour won over them.
+export const btnDanger = style({ color: vars.red });
+export const btnDangerSolid = style({
+  background: vars.red, borderColor: vars.red, color: "#fff",
+  selectors: {
+    "&:hover:not(:disabled)": { background: `color-mix(in oklch, ${vars.red} 85%, black)` },
+  },
+});
 export const textToggle = style({
   display: "inline-flex", alignItems: "center", gap: "2px", border: "0", background: "none", padding: "2px 4px",
   color: vars.muted, fontSize: vars.textXs, cursor: "pointer",

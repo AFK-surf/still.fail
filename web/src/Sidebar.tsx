@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Brain, ChevronRight, Compose, Key, Monitor, Plug, Settings, Unplug } from "./icons.tsx";
+import { Archive, ArrowLeft, Brain, ChevronRight, Compose, Key, Monitor, Plug, Settings, Sliders, Unplug } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
@@ -41,7 +41,9 @@ function SettingsNav() {
   return (
     <div className={nav.navScroll}>
       <NavLink className={nav.navRow} to={link(lastChat("local", "/chats"))}><ArrowLeft {...ICON} />返回会话</NavLink>
-      <div className={nav.navHeading}>设置</div>
+      <div className={nav.navHeading}>客户端</div>
+      <NavLink className={nav.navRow} to={link("/settings/appearance")}><Sliders {...ICON} />外观</NavLink>
+      <div className={nav.navHeading}>Station</div>
       <NavLink className={nav.navRow} to={link("/settings/connects")} aria-current={connectOpen ? "page" : undefined}><Plug {...ICON} />连接</NavLink>
       <NavLink className={nav.navRow} to={link("/settings/accounts")}><Key {...ICON} />Profile</NavLink>
       <NavLink className={nav.navRow} to={link("/settings/memory")}><Brain {...ICON} />记忆</NavLink>
