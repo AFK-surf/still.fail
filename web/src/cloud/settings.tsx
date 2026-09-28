@@ -3,7 +3,7 @@
 // workspace itself (its name, members, stations, connects and the stations'
 // runtime accounts).
 import { Illustration } from "../brand.tsx";
-import { ArrowLeft, Check, Key, LogOut, Plug, Plus, Server, Settings, Trash, UserPlus, Users } from "../icons.tsx";
+import { ArrowLeft, Brain, Check, Key, LogOut, Plug, Plus, Server, Settings, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
@@ -13,6 +13,7 @@ import { stamp } from "../api.ts";
 import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
+import { MemoryEditor } from "../Memory.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
@@ -46,6 +47,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
       <NavLink className="nav-row" to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
       {some && <NavLink className="nav-row" to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>}
       {some && <NavLink className="nav-row" to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>}
+      {some && <NavLink className="nav-row" to={`${base}/memory`}><Brain {...ICON} />记忆</NavLink>}
       <NavLink className="nav-row" to={`${base}/members`}><Users {...ICON} />成员</NavLink>
       <NavLink className="nav-row" to={`${base}/general`}><Settings {...ICON} />通用</NavLink>
       <div className="nav-heading">离开</div>
@@ -198,6 +200,23 @@ export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
       {/* None yet: adding the first, as the workspace's page does. */}
       {stations.length === 0 ? <FirstStation entry={entry} />
         : <Stations view={view} account={entry.account} manager={manager} stations={stations} />}
+    </Page>
+  );
+}
+
+/** Each station's agents' memory: global and projects', where its sessions run. */
+export function MemorySettings({ entry }: { entry: WorkspaceEntry }) {
+  const listed = useStations(entry.id).value;
+  if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
+  const stations = listed ?? [];
+  return (
+    <Page title="记忆" lead="每台 station 上所有会话共用的记忆：全局记忆放跨项目的，项目记忆每个项目一份。记忆在各台 station 上，不互相同步。" back={`/w/${entry.id}/settings`}>
+      {stations.map((s) => (
+        <div key={s.id} className="memory-station">
+          {stations.length > 1 && <h2 className="memory-station-name">{s.name}</h2>}
+          {s.online ? <MemoryEditor station={s.station} /> : <p className="muted">离线，等它上线再看。</p>}
+        </div>
+      ))}
     </Page>
   );
 }
