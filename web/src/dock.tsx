@@ -68,7 +68,9 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   const [dock] = useState<Dock>(() => ({
     place(at, next) {
       // Laid out for another page: where it is now is where it goes from.
-      if (next.variant !== variant.current) seen();
+      // Laid out for another page: where it is now is where it goes from, read once (a page may hand over its place
+      // again before the dock has drawn the change, and by then it has moved there).
+      if (next.variant !== variant.current && next.variant !== seenFor.current) { seen(); seenFor.current = next.variant; }
       clearTimeout(away.current);
       if (slot.current !== at) { slot.current = at; wake.current(); }
       setSpec(next);
@@ -126,6 +128,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   // it is the live box.
   const inner = () => box.current?.querySelector<HTMLElement>(`.${composerCss.composerBox}`) ?? null;
   const was = useRef<{ rect: DOMRect; radius: number } | null>(null);
+  const seenFor = useRef<string | undefined>(undefined);
   const seen = () => {
     const b = inner();
     if (b) was.current = { rect: b.getBoundingClientRect(), radius: parseFloat(getComputedStyle(b).borderTopLeftRadius) };
@@ -143,6 +146,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     const before = variant.current;
     variant.current = spec?.variant;
     const from = was.current;
+    seenFor.current = undefined;
     const b = inner();
     const wrap = b?.parentElement;
     if (!before || !spec || before === spec.variant || !from || !b || !wrap) return;

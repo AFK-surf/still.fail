@@ -818,15 +818,22 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     const frame: Keyframe = { height: `${height}px`, borderRadius: `${Math.min(parseFloat(style.borderTopLeftRadius), height / 2)}px`, cornerShape: style.getPropertyValue("corner-shape") };
     return { frame, height, parts };
   };
+  // Its own moves, so a change of mind stops those and nothing else: the dock moves the same box between pages.
+  const moves = useRef<Animation[]>([]);
+  const wasRoomy = useRef(roomy);
   useLayoutEffect(() => {
     const el = box.current;
     const was = shape.current;
-    if (!el || !was || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    for (const a of el.getAnimations({ subtree: true })) a.cancel();
+    const paged = wasRoomy.current !== roomy;
+    wasRoomy.current = roomy;
+    for (const a of moves.current) a.cancel();
+    moves.current = [];
+    // Laid out for another page (a new chat's roomy box ⇄ a chat's foot), the dock moves it (dock.tsx), not this.
+    if (!el || !was || paged || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const now = shapeOf(el);
     const ease = getComputedStyle(document.documentElement).getPropertyValue("--ease-out").trim() || "ease-out";
     const timing = { duration: 260, easing: ease };
-    el.animate([{ ...was.frame, overflow: "clip" }, { ...now.frame, overflow: "clip" }], timing);
+    moves.current.push(el.animate([{ ...was.frame, overflow: "clip" }, { ...now.frame, overflow: "clip" }], timing));
     // Its foot stays where it is (at a chat's foot it hangs from it), and its parts are laid out in the height it has
     // on the way: from its top in a box, about its middle in a capsule. Each starts where it showed, as the new layout
     // puts it at the height it starts from.
@@ -838,7 +845,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
       if (!from) continue;
       const x = from.x - to.x, y = from.y - to.y + shift;
       if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue;
-      part.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing);
+      moves.current.push(part.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
     }
   }, [multiline]);
   // How it is after each change (read after the one above: mid-way, when it moves), for the next time it changes.
