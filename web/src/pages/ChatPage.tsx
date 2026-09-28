@@ -109,7 +109,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
   // ember's own links (/o/<workspace>/<station>/<session>, as agents post them): one of this chat's agents' web services
-  // opens beside the chat; another session of the workspace opens here, in the page, not through the desktop app.
+  // opens beside the chat; another session of the workspace opens here, in the page, not through the desktop app. In
+  // the desktop app (at app://ember) ember cloud's links are its own too.
   const opens = useRef({ agents, openTab });
   opens.current = { agents, openTab };
   useEffect(() => {
@@ -125,7 +126,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       if (service && opens.current.agents.some((a) => a.session.key === session)) {
         event.preventDefault();
         opens.current.openTab(`service:${service}`);
-      } else if (url.origin === location.origin) {
+      } else if (url.origin === location.origin || url.origin === window.emberDesktop?.cloudOrigin) {
         event.preventDefault();
         navigate(`/w/${item[1]}/s/${item[2]}/chats/${encodeURIComponent(session)}${url.search}`);
       }

@@ -329,6 +329,8 @@ export interface EmberDesktop {
   previewHost(station: string, port: number): Promise<string | null>;
   /** The page is in a workspace, reached as `account`: the app's station joins it when it is in none yet. */
   inWorkspace(account: string, workspace: string): void;
+  /** ember cloud's origin (https://ember.3720.org): its links are the app's own, though the app is at app://ember. */
+  cloudOrigin?: string;
 }
 
 declare global {

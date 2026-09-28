@@ -5,9 +5,10 @@
 // the service to this page, which sends it to the station through the core,
 // like any other call, and hands the answer back. No port on the station is
 // open to anyone. The desktop app needs none of that: the frame is at
-// ember-preview://, which the app serves itself through its core.
+// ember-preview://, which the app serves itself through its core; the bar
+// over it is the same.
 import { ArrowLeft, ArrowRight, External, Refresh, Web } from "./icons.tsx";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { useHref } from "react-router";
 import { useLink } from "./station.tsx";
 import { useCall } from "./core/react.ts";
@@ -53,7 +54,7 @@ interface Bar {
   at: string | null;
   go(path: string): void;
   reload(): void;
-  /** Absent where the frame's history cannot be reached (the desktop app's frame); off at either end of it. */
+  /** Off at either end of the frame's history. */
   back?(): void;
   forward?(): void;
   canBack?: boolean;
@@ -99,48 +100,65 @@ function Restart({ name, restarting, reload }: { name: string; restarting: Resta
   );
 }
 
-function DesktopPreview({ station, port, name, external, restarting }: Shown) {
-  const [host, setHost] = useState<string | null>(null);
-  const [path, setPath] = useState("/");
-  const [n, setN] = useState(0);
+/**
+ * The bar over a frame that keeps the service's history (cloud/src/preview.ts on the web, the desktop app's own in
+ * apps/desktop/src/main.ts): it says where the service is and whether it can go back or on (ember-preview-at), and is
+ * told where to go (ember-preview-nav). `frame` is the frame at `origin`, loaded with `src`.
+ */
+function Framed({ name, external, restarting, origin, src, nonce, frame }:
+  Omit<Shown, "station" | "port"> & { origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null> }) {
+  const [at, setAt] = useState<string | null>(null);
+  const [moves, setMoves] = useState({ back: false, forward: false });
   useEffect(() => {
-    let live = true;
-    void window.emberDesktop!.previewHost(station, port).then((h) => { if (live) setHost(h); });
-    return () => { live = false; };
-  }, [station, port]);
-  const go = (to: string) => {
-    setPath(to);
-    setN((x) => x + 1);
-  };
-  const reloadDesktop = useCallback(() => setN((x) => x + 1), []);
+    if (!origin) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== origin || event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce) return;
+      if (event.data?.type !== "ember-preview-at" || typeof event.data.path !== "string") return;
+      setAt(event.data.path);
+      setMoves({ back: event.data.back === true, forward: event.data.forward === true });
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [origin, nonce, frame]);
+  const nav = useCallback((action: "back" | "forward" | "reload" | "go", path?: string) => {
+    if (origin) frame.current?.contentWindow?.postMessage({ type: "ember-preview-nav", action, path }, origin);
+  }, [origin, frame]);
+  const reload = useCallback(() => nav("reload"), [nav]);
   return (
     <div className="preview">
-      <PreviewBar name={name} at={path} go={go} reload={() => setN((x) => x + 1)} external={external} />
+      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={reload} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} />
       <div className="preview-stage">
-        {host && <iframe key={n} className="preview-frame" title={name} src={`ember-preview://${host}${path}`} />}
-        <Restart name={name} restarting={restarting} reload={reloadDesktop} />
+        {src && <iframe ref={frame} className="preview-frame" title={name} src={src} />}
+        <Restart name={name} restarting={restarting} reload={reload} />
       </div>
     </div>
   );
 }
 
-function WebPreview({ station, port, name, external, restarting }: Shown) {
+function DesktopPreview({ station, port, ...shown }: Shown) {
+  const [nonce] = useState(() => crypto.randomUUID());
+  const [host, setHost] = useState<string | null>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    let live = true;
+    void window.emberDesktop!.previewHost(station, port).then((h) => { if (live) setHost(h); });
+    return () => { live = false; };
+  }, [station, port]);
+  const origin = host && `ember-preview://${host}`;
+  return <Framed {...shown} origin={origin} src={origin && `${origin}/_ember/frame?n=${nonce}&path=%2F`} nonce={nonce} frame={frame} />;
+}
+
+function WebPreview({ station, port, ...shown }: Shown) {
   const call = useCall();
   // One frame for as long as this shows: moving about (back, reload, a path) is the frame's own, told to it.
   const [nonce] = useState(() => crypto.randomUUID());
   const [first] = useState("/");
-  const [at, setAt] = useState<string | null>(null);
-  const [moves, setMoves] = useState({ back: false, forward: false });
   const frame = useRef<HTMLIFrameElement>(null);
+  // The frame's requests of the service, handed here once it is ready: on to the station.
   useEffect(() => {
     const bridges: MessagePort[] = [];
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== ORIGIN || event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce) return;
-      if (event.data?.type === "ember-preview-at" && typeof event.data.path === "string") {
-        setAt(event.data.path);
-        setMoves({ back: event.data.back === true, forward: event.data.forward === true });
-        return;
-      }
       if (event.data?.type !== "ember-preview-ready") return;
       const { port1, port2 } = new MessageChannel();
       bridges.push(port1);
@@ -163,17 +181,7 @@ function WebPreview({ station, port, name, external, restarting }: Shown) {
       for (const bridge of bridges) bridge.close();
     };
   }, [nonce, station, port, call]);
-  const nav = (action: "back" | "forward" | "reload" | "go", path?: string) => frame.current?.contentWindow?.postMessage({ type: "ember-preview-nav", action, path }, ORIGIN);
-  const reloadWeb = useCallback(() => frame.current?.contentWindow?.postMessage({ type: "ember-preview-nav", action: "reload" }, ORIGIN), []);
-  return (
-    <div className="preview">
-      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={() => nav("reload")} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} />
-      <div className="preview-stage">
-        <iframe ref={frame} className="preview-frame" title={name} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} />
-        <Restart name={name} restarting={restarting} reload={reloadWeb} />
-      </div>
-    </div>
-  );
+  return <Framed {...shown} origin={ORIGIN} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} nonce={nonce} frame={frame} />;
 }
 
 /** A web service on a page of its own (its "open on its own"): the whole window with its bar, found by its job. */

@@ -71,6 +71,9 @@ ipcMain.on("core:open", (event, id: unknown) => {
   event.sender.postMessage("core:port", id, [port2]);
 });
 
+// ember cloud's origin, for the page to know its links (web/src/core/client.ts, EmberDesktop.cloudOrigin).
+ipcMain.on("app:cloud-origin", (event) => { event.returnValue = CLOUD_ORIGIN; });
+
 // The app's own way to the core, for what it serves itself (previews): a client of the core as a page is, making calls.
 interface OwnLink { port: MessagePortMain; next: number; waiting: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }> }
 let own: OwnLink | null = null;
@@ -106,9 +109,10 @@ function coreCall(name: string, params: unknown): Promise<unknown> {
   });
 }
 
-// Previews: a page asks for a station's port as a host of ember-preview:// (p<port>-<the station's hash>), puts it in a
-// frame, and every request of that frame comes here and goes to the station through the core (station.preview), over
-// the mesh like any other call. The service's scripts are on an origin of their own, apart from the app's.
+// Previews: a page asks for a station's port as a host of ember-preview:// (p<port>-<the station's hash>), puts that
+// host's /_ember/frame (FRAME below) in a frame, and every other request of the host comes here and goes to the station
+// through the core (station.preview), over the mesh like any other call. The service's scripts are on an origin of
+// their own, apart from the app's.
 const previewStations = new Map<string, string>();
 
 ipcMain.handle("preview:host", (event, station: unknown, port: unknown) => {
@@ -117,6 +121,66 @@ ipcMain.handle("preview:host", (event, station: unknown, port: unknown) => {
   previewStations.set(id, station);
   return `p${port}-${id}`;
 });
+
+// The frame a page puts in its own (ember-preview://<host>/_ember/frame), as the preview host's is on the web
+// (cloud/src/preview.ts): the service in a frame of its own, and a history of its own. The bar's back, forward and go
+// move along it with replace(), so they never step the page it sits in (a frame shares its window's history). Where it
+// is, and whether it can go back or on, is said back to the page as it loads and as a page moves itself.
+const FRAME = `<!doctype html>
+<meta charset="utf-8">
+<title>ember preview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; }
+  iframe { display: block; width: 100%; height: 100%; border: 0; }
+</style>
+<script>
+  const params = new URLSearchParams(location.search);
+  const nonce = params.get("n") || "";
+  const trail = [];
+  let here = -1;
+  let moving = false;
+  let said = "";
+  const inner = document.createElement("iframe");
+  const where = () => {
+    try {
+      // A redirect on its way (see preview below) is no place of its own.
+      if (inner.contentDocument.querySelector("meta[name=ember-redirect]")) return null;
+      const at = inner.contentWindow.location;
+      return at.protocol === "about:" ? null : at.pathname + at.search + at.hash;
+    } catch { return null; }
+  };
+  const report = () => {
+    const path = where();
+    if (path === null) return;
+    if (!moving && trail[here] !== path) {
+      trail.splice(here + 1);
+      trail.push(path);
+      here = trail.length - 1;
+    }
+    const state = path + "|" + here + "|" + trail.length;
+    if (state === said) return;
+    said = state;
+    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1 }, "*");
+  };
+  const replace = (path) => {
+    moving = true;
+    inner.contentWindow.location.replace(path);
+  };
+  window.addEventListener("message", (event) => {
+    if (event.source !== parent || event.data?.type !== "ember-preview-nav") return;
+    const { action, path } = event.data;
+    if (action === "back" && here > 0) replace(trail[--here]);
+    else if (action === "forward" && here < trail.length - 1) replace(trail[++here]);
+    else if (action === "reload") { moving = true; inner.contentWindow.location.reload(); }
+    else if (action === "go" && typeof path === "string" && path.startsWith("/")) inner.contentWindow.location.replace(path);
+  });
+  inner.src = params.get("path") || "/";
+  inner.addEventListener("load", () => { report(); moving = false; });
+  addEventListener("DOMContentLoaded", () => document.body.append(inner));
+  setInterval(report, 500);
+</script>
+<body></body>
+`;
 
 function plain(status: number, text: string): Response {
   return new Response(text, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
@@ -127,6 +191,7 @@ async function preview(request: Request): Promise<Response> {
   const host = /^p(\d{1,5})-([0-9a-f]{12})$/.exec(url.hostname);
   const station = host ? previewStations.get(host[2]!) : undefined;
   if (!host || !station) return plain(404, "预览已经失效：在 ember 里重新打开它。");
+  if (url.pathname === "/_ember/frame") return new Response(FRAME, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
   const body = request.method === "GET" || request.method === "HEAD" ? "" : Buffer.from(await request.arrayBuffer()).toString("base64");
   const headers: [string, string][] = [];
   request.headers.forEach((value, name) => headers.push([name, value]));
@@ -146,7 +211,7 @@ async function preview(request: Request): Promise<Response> {
       const next = new URL(location, `http://localhost:${host[1]}${path}`);
       if (next.hostname !== "localhost" && next.hostname !== "127.0.0.1") return plain(502, `这个网页跳到了别的地址：${location}`);
       path = next.pathname + next.search;
-      if (page) return new Response(`<!doctype html><meta charset="utf-8"><script>location.replace(${JSON.stringify(path)})</script>`, { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (page) return new Response(`<!doctype html><meta charset="utf-8"><meta name="ember-redirect"><script>location.replace(${JSON.stringify(path)})</script>`, { headers: { "content-type": "text/html; charset=utf-8" } });
     }
     if (!answer) return plain(508, "跳转太多次了");
     const empty = request.method === "HEAD" || [101, 204, 205, 304].includes(answer.status);
@@ -199,19 +264,26 @@ function external(url: string): void {
   if (/^https?:\/\//.test(url)) void shell.openExternal(url);
 }
 
-function open(path = "/"): BrowserWindow {
+/**
+ * A window of the app at `path`. The app's own window has no title bar: its buttons sit in the page's top row (44 px,
+ * web/src/app.css), centred on it. A page of the app opened in a new window (a web service's page of its own) has one:
+ * its page has no row for them.
+ */
+function open(path = "/", titled = false): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1280,
+    width: titled ? 1100 : 1280,
     height: 820,
     show: false,
-    // No title bar: the buttons sit in the page's top row (44 px, web/src/app.css), centred on it.
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 15 },
+    ...(titled ? {} : { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 15 } } as const),
     webPreferences: { preload: join(__dirname, "preload.js"), sandbox: true, contextIsolation: true },
   });
   window.once("ready-to-show", () => window.show());
+  // A new window of the app's own pages opens in the app, as another window like this one; anything else is outside.
   window.webContents.setWindowOpenHandler(({ url }) => {
-    external(url);
+    if (url.startsWith(`${APP_ORIGIN}/`)) {
+      const at = new URL(url);
+      open(at.pathname + at.search + at.hash, true);
+    } else external(url);
     return { action: "deny" };
   });
   // Leaving the app (a sign-in going to Google, a link) goes to the system browser instead.
@@ -232,7 +304,7 @@ function open(path = "/"): BrowserWindow {
 function arrived(url: string): void {
   const item = /^ember:\/\/o\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)/.exec(url);
   if (!url.startsWith(AUTH_CALLBACK) && !item) return;
-  // An item's link may name a web service to open with it (?preview=<port>).
+  // An item's link may name a web service to open with it (?service=<job>).
   const path = item ? `/o/${item[1]}/${item[2]}/${item[3]}${new URL(url).search}` : `/auth/callback${new URL(url).search}`;
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   if (!window) {
