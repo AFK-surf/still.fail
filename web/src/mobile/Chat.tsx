@@ -4,7 +4,7 @@
 // Long-press quotes or copies a message; ＋ adds files. The list's behaviour (following its end, older pages, what is
 // read, the unread line, where it was left, messages coming out of an agent's avatar) is the desktop's (../Chat.tsx).
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { useParams } from "react-router";
+import { useLocation, useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
 import { useHost, type HostComposer } from "./ChatHost.tsx";
 import { Activity, fileSize, Lightbox, useAwayFromBottom, useEmissions, useFileUrl, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
@@ -20,6 +20,13 @@ import { Avatar, GroupLabel, InfoList, InfoRow, Mark, ModelMark, NavButton, Peop
 export function ChatScreen() {
   const { chat: key = "" } = useParams();
   const station = useStation();
+  // A service's link (`?service=<job>`, from Slack): the service, full screen, over the chat.
+  const app = useApp();
+  const asked = new URLSearchParams(useLocation().search).get("service");
+  useEffect(() => {
+    if (asked) app.push(`${stationBase(station.address)}/chats/${encodeURIComponent(key)}/services/${encodeURIComponent(asked)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
   const chat = useChat(station.address, { session: key });
   const view = chat.value;
   const lives = useLives(station.address, (view?.agents ?? []).map((a) => a.session.key));
@@ -545,6 +552,11 @@ function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
   app.sheet({ height: 0.72, draggable: true, content: () => <ChatInfo here={here} thread={thread} /> });
 }
 
+/** The chat's agents' web services that are up (or starting again): opened full screen. */
+function services(view: ChatView) {
+  return view.agents.flatMap((a) => a.jobs ?? []).filter((j) => j.port !== undefined && (j.state === "running" || j.state === "exited"));
+}
+
 function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const app = useApp();
   const view = useChat(here.station, { session: here.key }).value ?? here.view;
@@ -561,17 +573,18 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
           <InfoDetail label="创建" value={thread.time?.createdAt?.ago ?? ""} />
           {thread.lastMessage && <InfoDetail label="最近消息" value={thread.lastMessage.time?.createdAt?.ago ?? ""} />}
         </InfoList>
-        <GroupLabel>这台机器上的网页</GroupLabel>
-        <InfoList>
-          <InfoRow onClick={() => ask(app, { title: "预览这台机器上的网页", value: "", placeholder: "端口，例如 3000", action: "打开",
-            hint: "agent 在这台机器上启动的网页服务（开发服务器、报告），在这里打开看。",
-            run: async (port) => {
-              if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535) throw new Error("端口是 1 到 65535 之间的数字");
-              app.push(`${stationBase(here.station)}/chats/${encodeURIComponent(here.key)}/preview/${port}`);
-            } })}>
-            <Web size={16} /><span className="m-grow">预览网页</span><ChevronRight size={14} className="m-subtle" />
-          </InfoRow>
-        </InfoList>
+        {services(view).length > 0 && (
+          <>
+            <GroupLabel>服务</GroupLabel>
+            <InfoList>
+              {services(view).map((j) => (
+                <InfoRow key={j.id} onClick={() => app.push(`${stationBase(here.station)}/chats/${encodeURIComponent(here.key)}/services/${encodeURIComponent(j.id)}`)}>
+                  <Web size={16} /><span className="m-grow">{j.name}</span><ChevronRight size={14} className="m-subtle" />
+                </InfoRow>
+              ))}
+            </InfoList>
+          </>
+        )}
         {view.slackUrl && (
           <>
             <GroupLabel>在 Slack 里</GroupLabel>

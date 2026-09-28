@@ -14,6 +14,7 @@ import { Loading } from "./ui.tsx";
 import { toMadeChat } from "./Chat.tsx";
 import { ComposerDock } from "./dock.tsx";
 import { Mark } from "./brand.tsx";
+import { ServicePage } from "./Preview.tsx";
 
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
 function useDetailOpen(): boolean {
@@ -25,6 +26,9 @@ export function App() {
   useRememberChat("local", (p) => /^\/(new|chats\/.+)$/.test(p));
   const overview = useOverview("local");
   const detail = useDetailOpen();
+  // A web service on a page of its own: the whole window, no sidebar.
+  const service = /^\/services\/([^/]+)$/.exec(useLocation().pathname)?.[1];
+  if (service) return <ServicePage station="local" service={decodeURIComponent(service)} />;
 
   // Once read, the page stays up through a passing error; the core keeps retrying.
   if (!overview.value && overview.error) {

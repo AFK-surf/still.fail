@@ -52,6 +52,8 @@ need to reach (a plain background job is enough).
   127.0.0.1 is enough (for example `python3 -m http.server $PORT`, `npm run dev -- --port $PORT --host 127.0.0.1`).
 - Check it answers before telling anyone: `curl -sf http://127.0.0.1:<port>/` (retry a few seconds while it starts);
   look at `job_log` if it does not.
+- Give it a name people will recognise (`name`): the pages show services by their names, never their ports. When you
+  speak of it, use that name and the link; the port is the station's business, not theirs.
 - Post the returned `link` where people asked, saying what it is (in Slack: `<link|what it is>`). The link opens the
   service beside this session in ember, for the workspace's members only: it is not a public URL; do not hand it out as
   one.

@@ -839,6 +839,20 @@
 .preview-host { font-size: var(--text-sm); color: var(--muted); white-space: nowrap; }
 .preview-address { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
 .preview-page { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--canvas); }
+.preview-missing { align-items: center; justify-content: center; color: var(--muted); }
+.jobs-panel { width: 320px; display: flex; flex-direction: column; gap: 10px; }
+.jobs-panel section { display: flex; flex-direction: column; gap: 2px; }
+.jobs-head { font-size: var(--text-xs); color: var(--muted); padding: 0 6px 2px; }
+.jobs-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px; border: 0; border-radius: calc(8px * var(--corner-scale)); background: none; color: var(--text); font: inherit; text-align: left; corner-shape: var(--corner-shape); }
+.jobs-toggle { cursor: pointer; }
+.jobs-toggle:hover { background: var(--hover); }
+.jobs-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
+.jobs-state { flex: none; font-size: var(--text-xs); color: var(--muted); }
+.jobs-state[data-state="running"] { color: var(--green); }
+.jobs-state[data-state="failed"] { color: var(--red); }
+.jobs-open { flex: none; padding: 2px 10px; }
+.jobs-log { max-height: 240px; overflow: auto; margin: 2px 0 6px; font-size: var(--text-xs); white-space: pre-wrap; }
+.jobs-empty { margin: 0; font-size: var(--text-sm); color: var(--muted); }
 /* A preview's tab stays loaded while another is shown (its page keeps its place). */
 .side-content[data-state="inactive"] { display: none; }
 .preview-path { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--canvas); color: var(--text); font: inherit; font-size: var(--text-sm); }

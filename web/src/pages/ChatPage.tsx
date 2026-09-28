@@ -9,6 +9,7 @@ import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
+import type { Job } from "../core/shapes.ts";
 import { useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
@@ -88,8 +89,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const tabs = chosen ?? (bound ? [bound] : []);
   const [active, setActiveState] = useState<string | null>(kept?.active ?? null);
   // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
-  // A preview's tab (`preview:<port>`) is the chat's own, whatever its agents.
-  const open = agents.length ? tabs.filter((key) => previewPort(key) !== null || agents.some((a) => a.session.key === key)) : tabs;
+  // Its agents' background jobs; a service's tab (`service:<job>`) is the chat's own while one of them has it.
+  const jobs = agents.flatMap((a) => a.jobs ?? []);
+  const open = agents.length ? tabs.filter((key) => (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
   const shown = active && open.includes(active) ? active : open[0] ?? null;
   // Tabs and the one in front change together, and are kept for this chat in one write.
   const commit = (next: string[], front: string | null) => {
@@ -112,13 +114,13 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const toggleHistory = (key: string) => (open.includes(key) && shown === key ? closeTab(key) : openTab(key));
   // An activity row: its agent's history, open at that entry.
   const [focus, setFocus] = useState<{ key: string; entry: number; n: number } | null>(null);
-  // A link that names a web service of the chat's (`?preview=<port>`, a job's link in Slack): its tab, open.
+  // A link that names a web service of the chat's (`?service=<job>`, a service's link in Slack): its tab, open.
   const [search, setSearch] = useSearchParams();
-  const asked = search.get("preview");
+  const asked = search.get("service");
   useEffect(() => {
-    if (!asked || !/^\d{1,5}$/.test(asked)) return;
-    openTab(`preview:${asked}`);
-    setSearch((now) => { now.delete("preview"); return now; }, { replace: true });
+    if (!asked) return;
+    openTab(`service:${asked}`);
+    setSearch((now) => { now.delete("service"); return now; }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
   // ember's own links (/o/<workspace>/<station>/<session>, as agents post them): one of this chat's agents' web services
@@ -134,10 +136,10 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       const item = /^\/o\/([^/]+)\/([^/]+)\/([^/]+)\/?$/.exec(url.pathname);
       if (!item) return;
       const session = decodeURIComponent(item[3]!);
-      const port = url.searchParams.get("preview");
-      if (port && /^\d{1,5}$/.test(port) && opens.current.agents.some((a) => a.session.key === session)) {
+      const service = url.searchParams.get("service");
+      if (service && opens.current.agents.some((a) => a.session.key === session)) {
         event.preventDefault();
-        opens.current.openTab(`preview:${port}`);
+        opens.current.openTab(`service:${service}`);
       } else if (url.origin === location.origin) {
         event.preventDefault();
         navigate(`/w/${item[1]}/s/${item[2]}/chats/${encodeURIComponent(session)}${url.search}`);
@@ -182,7 +184,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           ))}
         </div>
         <div className="page-bar-actions">
-          <OpenPreview onOpen={(port) => openTab(`preview:${port}`)} />
+          <JobsPanel station={station.address} jobs={jobs} onOpen={(job) => openTab(`service:${job}`)} />
           {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
           {slackUrl && (
             <Tip label="在 Slack 中打开">
@@ -201,14 +203,14 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             <div className="side-bar">
               <Tabs.List className="side-tab-list" aria-label="执行历史">
                 {open.map((key) => {
-                  const port = previewPort(key);
-                  if (port !== null) {
+                  const service = jobs.find((j) => j.id === serviceOf(key));
+                  if (service) {
                     return (
                       <span key={key} className="side-tab-wrap">
-                        <Tabs.Trigger className="side-tab" value={key} title={`localhost:${port} 的预览`}>
-                          <span className="side-tab-agent"><Web size={13} strokeWidth={1.75} />localhost:{port}</span>
+                        <Tabs.Trigger className="side-tab" value={key} title={service.name}>
+                          <span className="side-tab-agent"><Web size={13} strokeWidth={1.75} />{service.name}</span>
                         </Tabs.Trigger>
-                        <button type="button" className="side-tab-close" aria-label={`关闭 localhost:${port} 的预览`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                        <button type="button" className="side-tab-close" aria-label={`关闭 ${service.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
                   }
@@ -230,9 +232,17 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               <IconButton label="收起侧栏" icon={PanelClose} onClick={() => saveTabs([])} />
             </div>
             {open.map((key) => {
-              const port = previewPort(key);
+              const service = jobs.find((j) => j.id === serviceOf(key));
               // Kept loaded while another tab shows: switching back does not load it anew.
-              if (port !== null) return <Tabs.Content key={key} className="side-content" value={key} forceMount><StationPreview station={station.address} port={port} /></Tabs.Content>;
+              if (service) {
+                return (
+                  <Tabs.Content key={key} className="side-content" value={key} forceMount>
+                    {service.port !== undefined && (service.state === "running" || service.state === "exited")
+                      ? <StationPreview station={station.address} port={service.port} name={service.name} service={service.id} />
+                      : <Empty><p>「{service.name}」{service.state === "failed" ? "没能启动" : "已经停了"}。</p></Empty>}
+                  </Tabs.Content>
+                );
+              }
               const a = agents.find((x) => x.session.key === key);
               if (!a) return <Tabs.Content key={key} className="side-content" value={key} />;
               return (
@@ -250,34 +260,73 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   );
 }
 
-/** A preview tab's port, from its key (`preview:<port>`); null for an agent's history tab. */
-function previewPort(key: string): number | null {
-  const match = /^preview:(\d{1,5})$/.exec(key);
-  return match ? Number(match[1]) : null;
+/** A web service's tab: its job, from its key (`service:<job>`); null for an agent's history tab. */
+function serviceOf(key: string): string | null {
+  return key.startsWith("service:") ? key.slice("service:".length) : null;
 }
 
-/** Opens a web service on the station's machine (by its localhost port) in the side panel. */
-function OpenPreview({ onOpen }: { onOpen: (port: number) => void }) {
-  const [port, setPort] = useState("");
+/** A job's state, in words. */
+function jobState(job: Job): string {
+  switch (job.state) {
+    case "running": return "运行中";
+    case "exited": return job.port !== undefined ? "正在重启" : job.exitCode === 0 ? "已完成" : `已结束（退出码 ${job.exitCode ?? "?"}）`;
+    case "stopped": return "已停止";
+    default: return "没能启动";
+  }
+}
+
+/** The chat's web services (opened beside it) and background jobs (their last output): from the title bar. */
+function JobsPanel({ station, jobs, onOpen }: { station: string; jobs: Job[]; onOpen: (job: string) => void }) {
+  const call = useStationCall(station);
   const [open, setOpen] = useState(false);
-  const valid = /^\d{1,5}$/.test(port) && Number(port) >= 1 && Number(port) <= 65535;
+  const [shown, setShown] = useState<{ id: string; text: string | null } | null>(null);
+  const services = jobs.filter((j) => j.port !== undefined);
+  const plain = jobs.filter((j) => j.port === undefined);
+  const log = (id: string) => {
+    if (shown?.id === id) return setShown(null);
+    setShown({ id, text: null });
+    void call.request<{ text: string }>("GET", `/jobs/${encodeURIComponent(id)}/log?lines=80`)
+      .then((r) => setShown((now) => (now?.id === id ? { id, text: r.text || "（还没有输出）" } : now)), (e: Error) => setShown((now) => (now?.id === id ? { id, text: `读不到输出：${e.message}` } : now)));
+  };
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Tip label="预览这台机器上的网页">
+    <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (!next) setShown(null); }}>
+      <Tip label="服务和后台任务">
         <Popover.Trigger asChild>
-          <button type="button" className="icon-btn" aria-label="预览这台机器上的网页"><Web {...ICON} /></button>
+          <button type="button" className="icon-btn" aria-label="服务和后台任务" data-count={jobs.length || undefined}><Web {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
-        <Popover.Content className="popover preview-open" align="end" sideOffset={6} collisionPadding={8}>
-          <form onSubmit={(e) => { e.preventDefault(); if (valid) { onOpen(Number(port)); setOpen(false); } }}>
-            <label className="preview-open-label">
-              <span>localhost:</span>
-              <input autoFocus inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value.trim())} placeholder="3000" aria-label="端口" />
-            </label>
-            <button type="submit" className="btn btn-primary" disabled={!valid}>打开</button>
-          </form>
-          <p className="preview-open-note">station 所在机器上跑着的网页服务，在侧栏里打开。</p>
+        <Popover.Content className="popover jobs-panel" align="end" sideOffset={6} collisionPadding={8}>
+          {jobs.length === 0 && <p className="jobs-empty">这个对话里还没有服务或后台任务。agent 起了以后会列在这里。</p>}
+          {services.length > 0 && (
+            <section>
+              <div className="jobs-head">服务</div>
+              {services.map((j) => {
+                const up = j.state === "running" || j.state === "exited";
+                return (
+                  <div key={j.id} className="jobs-row">
+                    <span className="jobs-name">{j.name}</span>
+                    <span className="jobs-state" data-state={j.state}>{jobState(j)}</span>
+                    {up && <button type="button" className="btn btn-secondary jobs-open" onClick={() => { onOpen(j.id); setOpen(false); }}>打开</button>}
+                  </div>
+                );
+              })}
+            </section>
+          )}
+          {plain.length > 0 && (
+            <section>
+              <div className="jobs-head">后台任务</div>
+              {plain.map((j) => (
+                <div key={j.id}>
+                  <button type="button" className="jobs-row jobs-toggle" aria-expanded={shown?.id === j.id} onClick={() => log(j.id)}>
+                    <span className="jobs-name">{j.name}</span>
+                    <span className="jobs-state" data-state={j.state}>{jobState(j)}</span>
+                  </button>
+                  {shown?.id === j.id && <pre className="code jobs-log">{shown.text ?? "正在读取…"}</pre>}
+                </div>
+              ))}
+            </section>
+          )}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

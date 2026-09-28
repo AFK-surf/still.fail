@@ -5,6 +5,7 @@
 // not on the page.
 import { Tooltip } from "radix-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ServicePage } from "../Preview.tsx";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { ToastProvider } from "../toast.tsx";
 import { Button, Select, Splash, useNarrow } from "../ui.tsx";
@@ -82,6 +83,7 @@ function Home() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/o/:ws/:station/:session" element={<OpenItem />} />
+      <Route path="/w/:ws/s/:station/services/:service" element={<CloudServicePage />} />
       <Route path="/w/:ws/*" element={<WorkspaceRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -234,6 +236,12 @@ function Invite() {
       )}
     </div>
   );
+}
+
+/** A web service on a page of its own (opened from its preview): the whole window. */
+function CloudServicePage() {
+  const { ws = "", station = "", service = "" } = useParams();
+  return <ServicePage station={`${ws}/${station}`} service={service} />;
 }
 
 /**

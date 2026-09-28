@@ -34,7 +34,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/leave" element={<WorkspaceScreen />} />
       <Route path="s/:station/chats/:chat" element={<ChatHost stations={stations} />} />
       <Route path="s/:station/chats/:chat/run/:agent" element={<InStation stations={stations}><RunSettingsScreen /></InStation>} />
-      <Route path="s/:station/chats/:chat/preview/:port" element={<InStation stations={stations}><PreviewScreen /></InStation>} />
+      <Route path="s/:station/chats/:chat/services/:service" element={<InStation stations={stations}><PreviewScreen /></InStation>} />
       <Route path="s/:station/overview" element={<InStation stations={stations}><StationScreen /></InStation>} />
       <Route path="s/:station/connects/new" element={<InStation stations={stations}><NewConnectScreen /></InStation>} />
       <Route path="s/:station/connects/:id" element={<InStation stations={stations}><ConnectScreen /></InStation>} />

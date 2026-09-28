@@ -25,16 +25,25 @@ const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCo
 
 interface Asked { id: number; method: string; path: string; headers: [string, string][]; body: Uint8Array | null }
 
-/** A service beside a chat, or on a page of its own (`alone`): the bar has no "open on its own" there. */
-export function StationPreview({ station, port, alone = false }: { station: string; port: number; alone?: boolean }) {
+interface Shown {
+  station: string;
+  /** How the station reaches it; never shown. */
+  port: number;
+  /** What people know it by. */
+  name: string;
+  external?: string | undefined;
+}
+
+/** A web service beside a chat, or on a page of its own (`alone`: no "open on its own" there). */
+export function StationPreview({ station, port, name, service, alone = false }: { station: string; port: number; name: string; service: string; alone?: boolean }) {
   // Its page of its own, at the station's pages' place (a new window or tab: the browser's).
-  const own = useHref(useLink()(`/preview/${port}`));
-  const external = alone ? undefined : own;
-  return window.emberDesktop ? <DesktopPreview station={station} port={port} external={external} /> : <WebPreview station={station} port={port} external={external} />;
+  const own = useHref(useLink()(`/services/${encodeURIComponent(service)}`));
+  const shown: Shown = { station, port, name, external: alone ? undefined : own };
+  return window.emberDesktop ? <DesktopPreview {...shown} /> : <WebPreview {...shown} />;
 }
 
 interface Bar {
-  port: number;
+  name: string;
   /** Where the service is now, as its frame says (null: not known). */
   at: string | null;
   go(path: string): void;
@@ -46,7 +55,7 @@ interface Bar {
 }
 
 /** Back, forward, reload, where it is (typed to go elsewhere), and its page of its own: over the frame. */
-function PreviewBar({ port, at, go, reload, back, forward, external }: Bar) {
+function PreviewBar({ name, at, go, reload, back, forward, external }: Bar) {
   const [typed, setTyped] = useState(at ?? "/");
   const [editing, setEditing] = useState(false);
   // Where it went is what the bar says, unless someone is typing there.
@@ -58,7 +67,7 @@ function PreviewBar({ port, at, go, reload, back, forward, external }: Bar) {
       {forward && <button type="button" className="icon-btn" aria-label="前进" title="前进" onClick={forward}><ArrowRight {...icon} /></button>}
       <button type="button" className="icon-btn" aria-label="刷新" title="刷新" onClick={reload}><Refresh {...icon} /></button>
       <label className="preview-address">
-        <span className="preview-host">localhost:{port}</span>
+        <span className="preview-host">{name}</span>
         <input className="preview-path" value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />
       </label>
       {external && <a className="icon-btn" href={external} target="_blank" rel="noopener" aria-label="在新窗口打开" title="在新窗口打开"><External {...icon} /></a>}
@@ -66,7 +75,7 @@ function PreviewBar({ port, at, go, reload, back, forward, external }: Bar) {
   );
 }
 
-function DesktopPreview({ station, port, external }: { station: string; port: number; external?: string | undefined }) {
+function DesktopPreview({ station, port, name, external }: Shown) {
   const [host, setHost] = useState<string | null>(null);
   const [path, setPath] = useState("/");
   const [n, setN] = useState(0);
@@ -81,13 +90,13 @@ function DesktopPreview({ station, port, external }: { station: string; port: nu
   };
   return (
     <div className="preview">
-      <PreviewBar port={port} at={path} go={go} reload={() => setN((x) => x + 1)} external={external} />
-      {host && <iframe key={n} className="preview-frame" title={`localhost:${port}`} src={`ember-preview://${host}${path}`} />}
+      <PreviewBar name={name} at={path} go={go} reload={() => setN((x) => x + 1)} external={external} />
+      {host && <iframe key={n} className="preview-frame" title={name} src={`ember-preview://${host}${path}`} />}
     </div>
   );
 }
 
-function WebPreview({ station, port, external }: { station: string; port: number; external?: string | undefined }) {
+function WebPreview({ station, port, name, external }: Shown) {
   const call = useCall();
   // One frame for as long as this shows: moving about (back, reload, a path) is the frame's own, told to it.
   const [nonce] = useState(() => crypto.randomUUID());
@@ -127,13 +136,23 @@ function WebPreview({ station, port, external }: { station: string; port: number
   const nav = (action: "back" | "forward" | "reload" | "go", path?: string) => frame.current?.contentWindow?.postMessage({ type: "ember-preview-nav", action, path }, ORIGIN);
   return (
     <div className="preview">
-      <PreviewBar port={port} at={at} go={(path) => nav("go", path)} reload={() => nav("reload")} back={() => nav("back")} forward={() => nav("forward")} external={external} />
-      <iframe ref={frame} className="preview-frame" title={`localhost:${port}`} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} />
+      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={() => nav("reload")} back={() => nav("back")} forward={() => nav("forward")} external={external} />
+      <iframe ref={frame} className="preview-frame" title={name} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} />
     </div>
   );
 }
 
-/** A service on a page of its own: the whole window, with its bar (opened from a preview's "open on its own"). */
-export function PreviewPage({ station, port }: { station: string; port: number }) {
-  return <div className="preview-page"><StationPreview station={station} port={port} alone /></div>;
+/** A web service on a page of its own (its "open on its own"): the whole window with its bar, found by its job. */
+export function ServicePage({ station, service }: { station: string; service: string }) {
+  const call = useCall();
+  const [job, setJob] = useState<{ name: string; port: number | null; state: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    call("station.request", { station, method: "GET", path: `/jobs/${encodeURIComponent(service)}` })
+      .then((j) => { const found = j as { name: string; port: number | null; state: string }; setJob(found); document.title = found.name; }, (e: Error) => setError(e.message));
+  }, [call, station, service]);
+  if (error) return <div className="preview-page preview-missing">找不到这个服务：{error}</div>;
+  if (!job) return <div className="preview-page" />;
+  if (job.port === null || (job.state !== "running" && job.state !== "exited")) return <div className="preview-page preview-missing">「{job.name}」已经停了。</div>;
+  return <div className="preview-page"><StationPreview station={station} port={job.port} name={job.name} service={service} alone /></div>;
 }
