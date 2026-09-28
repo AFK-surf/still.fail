@@ -258,10 +258,9 @@ async fn write_line(send: &mut SendStream, value: &Value) -> Result<()> {
 struct Station {
     data: PathBuf,
     state: Mutex<CloudState>,
-    /// The Node part's admin API, and whether it answers now.
-    socket: PathBuf,
+    /// Where its requests go, and whether that answers now.
+    backend: local::Backend,
     ready: watch::Receiver<bool>,
-    secret: String,
     removed: Mutex<bool>,
     telemetry: Arc<Telemetry>,
 }
@@ -289,14 +288,36 @@ async fn run(options: Run) -> Result<()> {
     let telemetry = Telemetry::new(traces_on(&data));
     let (ready_tx, ready) = watch::channel(false);
     let (stop_tx, stopping) = watch::channel(false);
-    let launch = node::Launch { node: options.node, app: options.app, data: data.clone(), socket: socket.clone(), secret: secret.clone() };
-    let supervised = tokio::spawn(node::supervise(launch, ready_tx, telemetry.clone(), stopping));
+    // The app in this process (ember-app) while it takes over from the Node part: EMBER_STATION_APP=rust.
+    let in_process = std::env::var("EMBER_STATION_APP").as_deref() == Ok("rust");
+    let (backend, supervised, app) = if in_process {
+        let app: Arc<std::sync::OnceLock<Arc<ember_app::server::App>>> = Arc::default();
+        let (cell, data, ui) = (app.clone(), data.clone(), options.app.join("dist").join("admin"));
+        let config = std::env::var_os("EMBER_CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
+        let started = tokio::spawn(async move {
+            match ember_app::server::App::start(ember_app::server::AppOptions { data, config, ui }).await {
+                Ok(app) => {
+                    let _ = cell.set(app);
+                    ready_tx.send_replace(true);
+                }
+                Err(error) => {
+                    tracing::error!(error = %format!("{error:#}"), "the station did not start");
+                    std::process::exit(1);
+                }
+            }
+        });
+        (local::Backend::App(app.clone()), started, Some(app))
+    } else {
+        let launch = node::Launch { node: options.node, app: options.app, data: data.clone(), socket: socket.clone(), secret: secret.clone() };
+        let supervised = tokio::spawn(node::supervise(launch, ready_tx, telemetry.clone(), stopping));
+        (local::Backend::Node { socket, secret }, supervised, None)
+    };
     let listener = local::bind(&data, options.port, options.named).await?;
-    tokio::spawn(local::serve(listener, socket.clone(), ready.clone()));
-    tokio::spawn(mesh(data.clone(), socket, ready, secret, telemetry));
-    // SIGTERM (launchd, the desktop app) or ^C: the Node part ends its runtimes first. So does, with --with-parent, the
-    // parent's end (the desktop app's, killed): orphaned, this would hold the machine's station with no app to stop it.
-    // Run otherwise (launchd, nohup), the parent may well end first.
+    tokio::spawn(local::serve(listener, backend.clone(), ready.clone()));
+    tokio::spawn(mesh(data.clone(), backend, ready, telemetry));
+    // SIGTERM (launchd, the desktop app) or ^C: the runtimes end first. So does, with --with-parent, the parent's end
+    // (the desktop app's, killed): orphaned, this would hold the machine's station with no app to stop it. Run
+    // otherwise (launchd, nohup), the parent may well end first.
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! {
         _ = term.recv() => {}
@@ -305,7 +326,12 @@ async fn run(options: Run) -> Result<()> {
     }
     info!("stopping");
     stop_tx.send_replace(true);
-    let _ = supervised.await;
+    match app.as_ref().and_then(|a| a.get()) {
+        Some(app) => app.shutdown().await,
+        None => {
+            let _ = supervised.await;
+        }
+    }
     Ok(())
 }
 
@@ -352,14 +378,14 @@ fn traces_on(data: &Path) -> bool {
 }
 
 /// The station's way into ember cloud, once it is in a workspace (enrolled: `ember station enroll`).
-async fn mesh(data: PathBuf, socket: PathBuf, ready: watch::Receiver<bool>, secret: String, telemetry: Arc<Telemetry>) {
+async fn mesh(data: PathBuf, backend: local::Backend, ready: watch::Receiver<bool>, telemetry: Arc<Telemetry>) {
     let state = loop {
         match load_state(&data) {
             Ok(state) if load_key(&data).is_ok() => break state,
             _ => tokio::time::sleep(Duration::from_secs(2)).await,
         }
     };
-    if let Err(error) = serve_mesh(data, state, socket, ready, secret, telemetry).await {
+    if let Err(error) = serve_mesh(data, state, backend, ready, telemetry).await {
         warn!(%error, "mesh stopped");
     }
 }
@@ -368,7 +394,7 @@ async fn mesh(data: PathBuf, socket: PathBuf, ready: watch::Receiver<bool>, secr
 /// app's endpoints answer too and a query's answers stop after a few (client/core/src/mesh.rs asks for it).
 const MDNS_SERVICE: &str = "ember";
 
-async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: watch::Receiver<bool>, secret: String, telemetry: Arc<Telemetry>) -> Result<()> {
+async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, ready: watch::Receiver<bool>, telemetry: Arc<Telemetry>) -> Result<()> {
     let key = load_key(&data)?;
     let relay: RelayUrl = state.relay_url.parse().context("relay url")?;
     // ember's relay (iroh's public ones only while it is down: `relay_fallback`); found without ember cloud: on the
@@ -386,7 +412,7 @@ async fn serve_mesh(data: PathBuf, state: CloudState, socket: PathBuf, ready: wa
         .await?;
     info!(station = %endpoint.id(), workspace = %state.workspace_name, "mesh listening");
     let traces = telemetry.enabled();
-    let station = Arc::new(Station { data, state: Mutex::new(state), socket, ready, secret, removed: Mutex::new(false), telemetry: telemetry.clone() });
+    let station = Arc::new(Station { data, state: Mutex::new(state), backend, ready, removed: Mutex::new(false), telemetry: telemetry.clone() });
     // Online at ember cloud only once the relay can reach us: a device that saw "online" and connected before
     // our relay link was up had its first packets dropped and waited out QUIC's retransmits (~3 s).
     if tokio::time::timeout(std::time::Duration::from_secs(15), endpoint.online()).await.is_err() {
@@ -747,12 +773,7 @@ async fn answer(
         }
     }
     outcome.received = body.len();
-    let mut request = hyper::Request::builder()
-        .method(method)
-        .uri(path)
-        .header("host", "ember")
-        .header("x-ember-mesh", &station.secret)
-        .header("x-ember-viewer", B64.encode(serde_json::to_vec(viewer)?));
+    let mut request = hyper::Request::builder().method(method).uri(path).header("host", "ember");
     // The caller's headers go on (a preview's page needs its cookies and what it accepts), but not those of the hop,
     // nor any of ember's own: who is asking is only what this process says.
     for (name, value) in head["headers"].as_object().into_iter().flatten() {
@@ -770,11 +791,15 @@ async fn answer(
     let request = request.body(Full::new(Bytes::from(body)))?;
     let unreachable = |error: String| json!({ "error": format!("station unreachable: {error}") });
     let up = *station.ready.borrow();
-    let response = if !up {
-        Err(anyhow!("not started"))
-    } else {
-        local::request(&station.socket, request).await
+    let seen = ember_app::access::Viewer::Mesh {
+        sub: viewer.sub.clone(),
+        email: viewer.email.clone(),
+        name: viewer.name.clone(),
+        role: viewer.role.clone(),
+        workspace: viewer.workspace.clone(),
+        device: viewer.device.clone(),
     };
+    let response = if !up { Err(anyhow!("not started")) } else { station.backend.call(request, Some(&seen)).await };
     let response = match response {
         Ok(r) => r,
         Err(error) => {
@@ -808,7 +833,7 @@ async fn answer(
     }
     let mut body = response.into_body();
     while let Some(frame) = body.frame().await {
-        if let Ok(chunk) = frame?.into_data() {
+        if let Ok(chunk) = frame.map_err(|e| anyhow!("{e}"))?.into_data() {
             send.write_all(&chunk).await?;
             outcome.sent += chunk.len();
         }

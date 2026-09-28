@@ -87,6 +87,11 @@ impl MachineLogins {
         Arc::new(MachineLogins { env, usage, state: Mutex::new((vec![], 0, false)), changes: watch::channel(0).0 })
     }
 
+    /// The environment the logins are read in (whose HOME holds them).
+    pub fn env(&self) -> Env {
+        self.env.clone()
+    }
+
     pub fn get(self: &Arc<Self>) -> Vec<MachineLogin> {
         let stale = now_ms() - self.state.lock().unwrap().1 > FRESH_MS;
         if stale {

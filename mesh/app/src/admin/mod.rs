@@ -20,7 +20,7 @@ use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Full};
-use hyper::{Request, Response, StatusCode};
+use hyper::{Request, Response};
 use serde_json::{Map, Value, json};
 use tokio::sync::watch;
 use tracing::{error, info, warn};
@@ -69,6 +69,49 @@ pub struct CheckRequest {
     pub home: std::path::PathBuf,
 }
 
+/// What the pages need of Slack beyond a connect's own connection: its app API with the viewer's configuration token,
+/// an install's code exchanged, and tokens checked. The real one is `SlackOnline`; tests give their own.
+#[async_trait::async_trait]
+pub trait SlackService: Send + Sync {
+    fn configured(&self, by: &str) -> bool;
+    async fn export_manifest(&self, by: &str, app_id: &str) -> Result<Value>;
+    /// Whether Slack wants permissions approved again.
+    async fn update_manifest(&self, by: &str, app_id: &str, manifest: &Value) -> Result<bool>;
+    async fn create_app(&self, by: &str, team: &str, manifest: &Value) -> Result<crate::chat::slack_apps::CreatedApp>;
+    async fn set_icon(&self, by: &str, app_id: &str, picture: Vec<u8>, mime: &str) -> Result<()>;
+    /// An install's code, for its bot token and its workspace's name.
+    async fn exchange_install_code(&self, client_id: &str, client_secret: &str, code: &str, redirect_uri: &str) -> Result<(String, Option<String>)>;
+    async fn verify_tokens(&self, app_token: &str, bot_token: &str) -> (Option<crate::chat::slack::SlackIdentity>, Vec<String>);
+}
+
+/// Slack itself: the app API with the configured tokens, and its Web API.
+pub struct SlackOnline(pub SlackApps);
+
+#[async_trait::async_trait]
+impl SlackService for SlackOnline {
+    fn configured(&self, by: &str) -> bool {
+        self.0.configured(by)
+    }
+    async fn export_manifest(&self, by: &str, app_id: &str) -> Result<Value> {
+        self.0.export_manifest(by, app_id).await
+    }
+    async fn update_manifest(&self, by: &str, app_id: &str, manifest: &Value) -> Result<bool> {
+        self.0.update_manifest(by, app_id, manifest).await
+    }
+    async fn create_app(&self, by: &str, team: &str, manifest: &Value) -> Result<crate::chat::slack_apps::CreatedApp> {
+        self.0.create_app(by, team, manifest).await
+    }
+    async fn set_icon(&self, by: &str, app_id: &str, picture: Vec<u8>, mime: &str) -> Result<()> {
+        self.0.set_icon(by, app_id, picture, mime).await
+    }
+    async fn exchange_install_code(&self, client_id: &str, client_secret: &str, code: &str, redirect_uri: &str) -> Result<(String, Option<String>)> {
+        crate::chat::slack_apps::exchange_install_code(client_id, client_secret, code, redirect_uri).await
+    }
+    async fn verify_tokens(&self, app_token: &str, bot_token: &str) -> (Option<crate::chat::slack::SlackIdentity>, Vec<String>) {
+        crate::chat::slack::verify_slack_tokens(app_token, bot_token).await
+    }
+}
+
 pub type CheckFn = Arc<dyn Fn(CheckRequest) -> BoxFuture<'static, ProfileCheck> + Send + Sync>;
 pub type QuotaFn = Arc<dyn Fn(Profile) -> BoxFuture<'static, ProfileQuota> + Send + Sync>;
 pub type ModelsFn = Arc<dyn Fn(Profile) -> BoxFuture<'static, Result<Vec<String>>> + Send + Sync>;
@@ -88,8 +131,9 @@ pub struct AdminDeps {
     pub check_profile: CheckFn,
     /// The models a ChatGPT subscription runs in Codex (its app-server's list); its sign-in check does not say.
     pub codex_models: Option<ModelsFn>,
-    /// Slack's app API; defaults to one using the configuration tokens in the config.
-    pub slack_apps: Option<Arc<SlackApps>>,
+    /// Slack's app API and Web API as the pages need them; defaults to Slack itself with the configuration tokens in
+    /// the config.
+    pub slack_apps: Option<Arc<dyn SlackService>>,
     /// Check every profile shortly after start (the real station; tests leave it off).
     pub check_on_start: bool,
     /// Who this machine's own Claude Code and Codex are signed in as, for the pages to say.
@@ -120,7 +164,7 @@ struct Pending {
 
 pub struct AdminApi {
     deps: AdminDeps,
-    apps: Arc<SlackApps>,
+    apps: Arc<dyn SlackService>,
     checks: Arc<Mutex<HashMap<String, ProfileCheck>>>,
     quotas: Arc<Mutex<HashMap<String, ProfileQuota>>>,
     quota_pending: Mutex<HashSet<String>>,
@@ -245,7 +289,7 @@ impl AdminApi {
     pub fn new(deps: AdminDeps) -> Arc<AdminApi> {
         let apps = deps.slack_apps.clone().unwrap_or_else(|| {
             let (load, save) = (deps.settings.clone(), deps.settings.clone());
-            Arc::new(SlackApps::new(
+            Arc::new(SlackOnline(SlackApps::new(
                 Arc::new(move || load.config().slack_config_tokens.clone()),
                 Arc::new(move |token| {
                     if let Err(e) = save.update(|raw| {
@@ -255,7 +299,7 @@ impl AdminApi {
                         warn!(error = %e, "slack configuration token not saved");
                     }
                 }),
-            ))
+            )))
         });
         let api = Arc::new_cyclic(|me: &Weak<AdminApi>| AdminApi {
             apps,

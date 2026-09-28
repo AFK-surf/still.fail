@@ -23,6 +23,7 @@ pub mod preview;
 pub mod profiles;
 pub mod quota;
 pub mod runtime;
+pub mod server;
 pub mod session;
 pub mod settings;
 pub mod store;

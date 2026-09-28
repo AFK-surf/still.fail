@@ -5,6 +5,7 @@ edition.workspace = true
 description = "ember station: runs the station (its Node part as a child), serves its admin page here, and connects it to ember cloud over iroh"
 
 [dependencies]
+ember-app = { path = "../app" }
 anyhow = "1"
 bytes = "1"
 http-body-util = "0.1"

@@ -158,7 +158,12 @@ impl AdminApi {
             let effort = kept("effort", old_bind.as_ref().and_then(|b| b.effort.clone()));
             let profile = kept("profile", old_bind.as_ref().and_then(|b| b.profile.clone()));
             // A connect's runtime is chosen when it is made: its sessions and their history belong to it.
-            let runtime = old_bind.as_ref().map(|b| b.runtime).or_else(|| runtime_of(bind.and_then(|b| b.get("runtime")))).ok_or_else(|| anyhow!("runtime is required"))?;
+            let given = bind.and_then(|b| b.get("runtime"));
+            let runtime = match (old_bind.as_ref().map(|b| b.runtime), given) {
+                (Some(runtime), _) => runtime,
+                (None, Some(v)) => runtime_of(Some(v)).ok_or_else(|| anyhow!("unknown runtime {}", v.as_str().map(String::from).unwrap_or_else(|| v.to_string())))?,
+                (None, None) => bail!("runtime is required"),
+            };
             // The profile its sessions keep to (None: the pool's pick), one that runs its runtime and model.
             if let Some(profile) = &profile {
                 let p = raw.profiles.as_deref().unwrap_or_default().iter().find(|p| &p.id == profile);
@@ -514,7 +519,7 @@ impl AdminApi {
         let home = config.data_dir.join("homes").join(&id);
         std::fs::create_dir_all(&home)?;
         if runtime == RuntimeKind::Codex {
-            crate::machine_logins::link_codex_auth(&home, &crate::machine_logins::process_env())?;
+            crate::machine_logins::link_codex_auth(&home, &machine.env())?;
         }
         let name = match &login.email {
             Some(email) => format!("{email}（本机）"),

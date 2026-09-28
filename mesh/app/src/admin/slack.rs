@@ -12,7 +12,7 @@ use tracing::{info, warn};
 use super::{AdminApi, Input, http_error};
 use crate::access::Viewer;
 use crate::chat::slack_apps::{
-    SLACK_GROUPS, SlackApiError, SlackAppEdit, apply_settings, app_id_of, exchange_install_code, owner_of_config_token, rotate_config_token, settings_of, slack_app_links,
+    SLACK_GROUPS, SlackApiError, SlackAppEdit, apply_settings, app_id_of, owner_of_config_token, rotate_config_token, settings_of, slack_app_links,
     slack_error, slack_manifest, with_socket_mode,
 };
 use crate::config::{ConfigToken, RawPlace, SlackAppMade, SlackAppOauth};
@@ -299,7 +299,7 @@ impl AdminApi {
         let state = input.text("state");
         let oauth = self.made_app(&state).and_then(|a| a.oauth).filter(|o| !state.is_empty() && o.state == state);
         let Some(oauth) = oauth else { return Err(http_error(400, "这个安装不是这台 station 发起的，或者这个 app 已经连上或移除了")) };
-        let (bot_token, team) = exchange_install_code(&oauth.client_id, &oauth.client_secret, &input.text("code"), &oauth.redirect_uri)
+        let (bot_token, team) = self.apps.exchange_install_code(&oauth.client_id, &oauth.client_secret, &input.text("code"), &oauth.redirect_uri)
             .await
             .map_err(|e| http_error(400, format!("Slack 没能完成安装：{}", slack_error(&e))))?;
         self.deps.settings.update(|raw| {
@@ -328,7 +328,7 @@ impl AdminApi {
             return Err(http_error(400, "app 还没装好：先在 Slack 里安装"));
         }
         let bot_token = installed.and_then(|o| o.bot_token).unwrap_or_else(|| text("botToken"));
-        let (identity, errors) = crate::chat::slack::verify_slack_tokens(&app_token, &bot_token).await;
+        let (identity, errors) = self.apps.verify_tokens(&app_token, &bot_token).await;
         let Some(identity) = identity.filter(|_| errors.is_empty()) else {
             return Err(http_error(400, if errors.is_empty() { "token 不对".to_string() } else { errors.join("；") }));
         };
@@ -425,7 +425,7 @@ impl AdminApi {
         let app_token = pick("appToken", stored.as_ref().map(|s| s.app_token.clone()));
         let installed = input.str("install").and_then(|i| self.made_app(i)).and_then(|a| a.oauth).and_then(|o| o.bot_token);
         let bot_token = installed.unwrap_or_else(|| pick("botToken", stored.as_ref().map(|s| s.bot_token.clone())));
-        let (identity, errors) = crate::chat::slack::verify_slack_tokens(&app_token, &bot_token).await;
+        let (identity, errors) = self.apps.verify_tokens(&app_token, &bot_token).await;
         json!({ "identity": identity, "errors": errors })
     }
 
