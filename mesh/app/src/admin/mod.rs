@@ -312,7 +312,7 @@ impl AdminApi {
     pub async fn handle<B>(&self, req: Request<B>, viewer: Viewer) -> Response<Body>
     where
         B: hyper::body::Body<Data = Bytes> + Send + Unpin + 'static,
-        B::Error: std::fmt::Display,
+        B::Error: std::error::Error + Send + Sync + 'static,
     {
         let started = std::time::Instant::now();
         let (parts, body) = req.into_parts();
@@ -352,7 +352,7 @@ impl AdminApi {
     async fn route<B>(&self, asked: &Asked, body: B, viewer: &Viewer) -> Result<Response<Body>>
     where
         B: hyper::body::Body<Data = Bytes> + Send + Unpin + 'static,
-        B::Error: std::fmt::Display,
+        B::Error: std::error::Error + Send + Sync + 'static,
     {
         let method = asked.method.as_str();
         let path = asked.path.as_str();
@@ -649,7 +649,7 @@ impl AdminApi {
 pub async fn read_json<B>(body: B) -> Result<Input>
 where
     B: hyper::body::Body<Data = Bytes> + Send + Unpin + 'static,
-    B::Error: std::fmt::Display,
+    B::Error: std::error::Error + Send + Sync + 'static,
 {
     let limited = http_body_util::Limited::new(body, 1_000_000);
     let bytes = match limited.collect().await {

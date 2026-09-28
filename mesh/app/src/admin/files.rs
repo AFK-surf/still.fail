@@ -55,7 +55,7 @@ pub fn clean(path: &Path) -> PathBuf {
 fn bytes_of<B>(body: B) -> impl futures_util::Stream<Item = std::io::Result<Bytes>> + Send + 'static
 where
     B: hyper::body::Body<Data = Bytes> + Send + Unpin + 'static,
-    B::Error: std::fmt::Display,
+    B::Error: std::error::Error + Send + Sync + 'static,
 {
     BodyStream::new(body).filter_map(|frame| async move {
         match frame {
@@ -81,7 +81,7 @@ pub async fn sweep_staged(dir: &Path) {
 pub async fn save_upload<B>(body: B, dir: &Path, name: &str) -> Result<Attachment>
 where
     B: hyper::body::Body<Data = Bytes> + Send + Unpin + 'static,
-    B::Error: std::fmt::Display,
+    B::Error: std::error::Error + Send + Sync + 'static,
 {
     let base = name.replace('\\', "/");
     let base = base.rsplit('/').next().unwrap_or("");
@@ -141,7 +141,7 @@ pub fn quotes_of(input: Option<&Value>) -> Vec<Quote> {
 pub async fn preview<B>(asked: &Asked, body: B, port: u16, target: &str) -> Result<Response<Body>>
 where
     B: hyper::body::Body<Data = Bytes> + Send + Unpin + 'static,
-    B::Error: std::fmt::Display,
+    B::Error: std::error::Error + Send + Sync + 'static,
 {
     let request = reqwest::Body::wrap_stream(bytes_of(body));
     let answer = crate::preview::proxy_preview(&asked.method, &asked.headers, request, port, &format!("{target}{}", asked.search)).await;
