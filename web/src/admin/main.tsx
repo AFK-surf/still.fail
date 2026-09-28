@@ -15,7 +15,8 @@ import { Callback, SignInPage } from "../cloud/gate.tsx";
 import { ToastProvider } from "../toast.tsx";
 import { Button, Loading } from "../ui.tsx";
 import { Console, useAdminAccount } from "./console.tsx";
-import "../legacy.css";
+import "../theme.css";
+import "../app.css";
 
 function AdminApp() {
   return (

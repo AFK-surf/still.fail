@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { signIn } from "../cloud/accounts.ts";
 import { Illustration } from "./parts.tsx";
-import "./legacy.css";
+import "./mobile.css";
 
 export function MobileSignIn() {
   const [busy, setBusy] = useState(false);

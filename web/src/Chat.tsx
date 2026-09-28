@@ -13,7 +13,6 @@ import { Prose } from "./Prose.tsx";
 import { FilePreview, fileSize, isImage, useFileUrl } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { track } from "./telemetry.ts";
-import * as nav from "./Sidebar.css.ts";
 
 /** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
 interface AgentHere { key: string; who: string; runtime: RuntimeKind; maker: Maker | undefined; session: Session; status: Status; live: Live | undefined; since: number | undefined }
@@ -980,7 +979,7 @@ function flashRange(range: Range): void {
 /** Opens the chat `step` rows above (-1) or below (1) the open one in the sidebar; false when there is none. */
 function goToNeighbour(step: -1 | 1): boolean {
   // The list in view: the other one (全部 or 我参与的) sits beside it out of view, and a row of it is not a neighbour.
-  const rows = [...document.querySelectorAll<HTMLAnchorElement>(`.${nav.sidebar} .${nav.navScroll}:not([inert]) a.${nav.navSession}`)];
+  const rows = [...document.querySelectorAll<HTMLAnchorElement>(".sidebar .nav-scroll:not([inert]) a.nav-session")];
   const at = rows.findIndex((row) => row.getAttribute("aria-current") === "page");
   const next = at < 0 ? null : rows[at + step];
   if (!next) return false;

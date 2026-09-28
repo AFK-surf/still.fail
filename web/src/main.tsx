@@ -6,7 +6,8 @@ import { BrowserRouter } from "react-router";
 import "@fontsource-variable/inter";
 import { App } from "./App.tsx";
 import { PageViews, startTelemetry } from "./telemetry.ts";
-import "./legacy.css";
+import "./theme.css";
+import "./app.css";
 
 applyAppearance();
 startScrollbars();

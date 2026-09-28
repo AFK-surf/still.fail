@@ -151,7 +151,7 @@ function Viewer({ onClose, sessionKey, file }: { onClose(): void; sessionKey: st
     const { url, blob } = loaded;
     switch (kind) {
       case "image": body = <ImageViewer url={url} file={file} setControls={setControls} />; break;
-      case "video": body = <VideoPlayer url={url} />; break;
+      case "video": body = <video className="fp-video" src={url} controls autoPlay playsInline />; break;
       case "audio": body = <div className="fp-audio"><span className="fp-audio-name">{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
@@ -174,16 +174,6 @@ function Viewer({ onClose, sessionKey, file }: { onClose(): void; sessionKey: st
       </header>
       <div className="fp-body">{body}</div>
     </RDialog.Content>
-  );
-}
-
-/** A video as large as the window takes it, at its own proportions (known once its first frame's size is). */
-function VideoPlayer({ url }: { url: string }) {
-  const [ratio, setRatio] = useState<number | null>(null);
-  return (
-    <video className="fp-video" src={url} controls autoPlay playsInline
-      onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth && v.videoHeight) setRatio(v.videoWidth / v.videoHeight); }}
-      style={ratio ? { aspectRatio: String(ratio), width: `min(100% - var(--fp-gap) * 2, (100dvh - var(--fp-head) - var(--fp-gap) * 2) * ${ratio})` } : { visibility: "hidden" }} />
   );
 }
 

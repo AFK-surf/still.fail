@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { stationApi, useStations, useStationCall, type ArchivedChat as ChatRow, type StationView } from "../api.ts";
 import { useToast } from "../toast.tsx";
 import { About, Button, Confirm, MobileBack } from "../ui.tsx";
-import * as nav from "../Sidebar.css.ts";
 
 export function ArchivePage({ scope, back }: { scope: string; back: string }) {
   const stations = useStations(scope);
@@ -65,7 +64,7 @@ function ArchivedOn({ view, named }: { view: StationView; named: boolean }) {
   const sorted = [...(rows ?? [])].sort((a, b) => (b.archived?.at ?? 0) - (a.archived?.at ?? 0));
   return (
     <section className="archive-station" aria-label={view.name}>
-      {named && <div className={nav.navHeading}>{view.name}</div>}
+      {named && <div className="nav-heading">{view.name}</div>}
       {error && <p className="field-error">{error}</p>}
       {!rows && !error && <p className="muted">正在读取…</p>}
       {rows && sorted.length === 0 && <p className="muted">没有归档的对话。</p>}
