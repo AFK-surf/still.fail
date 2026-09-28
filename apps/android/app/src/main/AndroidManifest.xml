@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- mDNS: stations on the LAN are found without ember cloud (MainActivity's multicast lock). -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- The app installs its own newer builds (Updates.kt). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="ember"
@@ -37,6 +39,8 @@
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPrefix="/o/" />
             </intent-filter>
         </activity>
+        <!-- What the installer says of an update (Updates.kt). -->
+        <receiver android:name=".InstallResult" android:exported="false" />
     </application>
 
     <queries>

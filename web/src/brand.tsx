@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDark } from "./theme.ts";
+import type { AppUpdate } from "./core/client.ts";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
 // picked by the OS theme like the rest of the app; the illustrations switch themselves.
@@ -34,6 +35,7 @@ export function SidebarBrand() {
       {!window.emberDesktop && <Themed name="wordmark" width={81} height={22} alt="ember" className="brand-wordmark" />}
       {!window.emberDesktop && <span className="brand-phone"><Lockup /></span>}
       <SidebarBuddy />
+      <UpdateButton />
     </>
   );
 }
@@ -75,6 +77,32 @@ function SidebarBuddy() {
   return createPortal(
     <button type="button" className="sidebar-buddy" data-pose={pose} onClick={toggle} aria-label={closed ? "展开侧边栏" : "收起侧边栏"} title={closed ? "展开侧边栏" : "收起侧边栏"}>
       <Themed name={`buddy/${pose}`} width={28} height={28} />
+    </button>,
+    document.body,
+  );
+}
+
+/**
+ * The desktop app has a newer build: 更新 beside the buddy, wherever it stands. Clicked, the build is downloaded (the
+ * button says how far) and the app restarts as it.
+ */
+function UpdateButton() {
+  const updates = window.emberDesktop?.appUpdate;
+  const [state, setState] = useState<AppUpdate | null>(null);
+  useEffect(() => {
+    if (!updates) return;
+    let live = true;
+    void updates.state().then((s) => { if (live) setState(s); });
+    const stop = updates.watch(setState);
+    return () => { live = false; stop(); };
+  }, [updates]);
+  if (!updates || !state) return null;
+  const label = state.phase === "downloading" ? `下载中 ${state.percent}%` : state.phase === "installing" ? "正在重启…" : state.phase === "failed" ? "更新失败，重试" : "更新";
+  const busy = state.phase === "downloading" || state.phase === "installing";
+  const title = state.phase === "failed" ? state.message : `更新到 ${state.version}：下载后 ember 会重启`;
+  return createPortal(
+    <button type="button" className="sidebar-update" disabled={busy} aria-busy={busy} onClick={() => updates.start()} title={title}>
+      {label}
     </button>,
     document.body,
   );

@@ -3,7 +3,7 @@
 // and ADMIN_ORIGIN's hosts; the web apps are static Workers of their own on those hosts' Custom Domains (routes take
 // precedence over them), and the relay is a Worker of its own (relay-worker.ts), so deploying this one drops no relay
 // connection and serves no page.
-import { installScript, RELEASE_FILE } from "./install.ts";
+import { installScript, releaseType } from "./install.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
 import type { Env } from "./env";
@@ -40,14 +40,15 @@ async function handle(request: Request, env: Env): Promise<Response> {
   if (path === "/healthz" && request.method === "GET") {
     return Response.json({ service: "ember-cloud", google_login: authConfigured(env) });
   }
-  // Installing a station: the installer, and the releases it gets.
+  // Installing a station: the installer, and the releases it gets; the apps' builds, for their updaters.
   if (url.origin === env.PUBLIC_ORIGIN && request.method === "GET") {
     if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
     const release = /^\/releases\/(.+)$/.exec(path)?.[1];
-    if (release && RELEASE_FILE.test(release)) {
+    const type = release ? releaseType(release) : null;
+    if (release && type) {
       const object = await env.RELEASES?.get(release);
       if (!object) return reply({ error: "release_not_found" }, 404);
-      return new Response(object.body, { headers: { "content-type": "application/gzip", "content-length": String(object.size), "cache-control": "no-store" } });
+      return new Response(object.body, { headers: { "content-type": type, "content-length": String(object.size), "cache-control": "no-store" } });
     }
   }
   const onConsole = url.origin === env.ADMIN_ORIGIN;

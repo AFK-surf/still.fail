@@ -20,6 +20,7 @@ import dev.ember.android.ui.IconIn
 import dev.ember.android.ui.Icons
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -29,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.ember.android.BuildConfig
 import dev.ember.android.LocalApp
 import dev.ember.android.data.Account
 import dev.ember.android.data.AccountWorkspaces
@@ -109,6 +111,17 @@ fun MeScreen(current: WorkspaceEntry) {
             }
             ListRow(onClick = { scope.launch { signIn(app, context) } }) {
                 Text("＋ 登录另一个 Google 账号", fontSize = 15.sp, color = C.accent)
+            }
+        }
+        // This build, and a newer one when ember cloud has it: tapped, it is downloaded and installed.
+        SectionHeader("版本", start = 24.dp)
+        val updates = app.updates
+        val newer = updates.available
+        LaunchedEffect(Unit) { app.checkUpdates() }
+        ListCard {
+            ListRow(onClick = if (newer == null || updates.progress != null) null else ({ scope.launch { updates.install()?.let { app.toast = it } } })) {
+                Text("ember ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                Text(updates.progress ?: newer?.let { "更新到 ${it.versionName}" } ?: "已是最新", fontSize = 15.sp, color = if (newer != null && updates.progress == null) C.accent else C.muted)
             }
         }
         Spacer(Modifier.height(30.dp))

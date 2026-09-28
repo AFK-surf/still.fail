@@ -331,7 +331,21 @@ export interface EmberDesktop {
   inWorkspace(account: string, workspace: string): void;
   /** ember cloud's origin (https://ember.3720.org): its links are the app's own, though the app is at app://ember. */
   cloudOrigin?: string;
+  /** A newer build of the app (apps/desktop/src/main.ts, keepUpdated); an app from before updates has none. */
+  appUpdate?: {
+    state(): Promise<AppUpdate | null>;
+    /** Each change of it; the returned function stops listening. */
+    watch(listener: (state: AppUpdate | null) => void): () => void;
+    /** Downloads it; once it is, the app restarts as the new one. */
+    start(): void;
+  };
 }
+
+export type AppUpdate =
+  | { phase: "available"; version: string }
+  | { phase: "downloading"; version: string; percent: number }
+  | { phase: "installing"; version: string }
+  | { phase: "failed"; version: string; message: string };
 
 declare global {
   interface Window {

@@ -5,6 +5,7 @@
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through ember://auth/callback.
 import { app, BrowserWindow, ipcMain, MessageChannelMain, net, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
+import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, writeFileSync } from "node:fs";
@@ -259,6 +260,63 @@ function machineName(): string {
   }
 }
 
+// Keeping the app current: ember cloud has the latest build (scripts/release.sh desktop puts it in /releases/desktop/),
+// looked for at start and every few hours. A newer one is said to the pages, which show 更新 beside the buddy
+// (web/src/brand.tsx); clicked, it is downloaded, and once it is the app quits (the station stopped first) and opens
+// as the new one.
+const UPDATE_EVERY = 4 * 60 * 60 * 1000;
+
+/** What the pages are told of an update (web/src/core/client.ts, AppUpdate). */
+type UpdateState =
+  | { phase: "available"; version: string }
+  | { phase: "downloading"; version: string; percent: number }
+  | { phase: "installing"; version: string }
+  | { phase: "failed"; version: string; message: string };
+let update: UpdateState | null = null;
+
+function sayUpdate(next: UpdateState | null): void {
+  update = next;
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send("update:state", next);
+  }
+}
+
+ipcMain.handle("update:state", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? update : null);
+
+ipcMain.on("update:start", (event) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || !update || update.phase === "downloading" || update.phase === "installing") return;
+  sayUpdate({ phase: "downloading", version: update.version, percent: 0 });
+  autoUpdater.downloadUpdate().catch(() => {});
+});
+
+function keepUpdated(): void {
+  if (!app.isPackaged) return;
+  autoUpdater.setFeedURL({ provider: "generic", url: `${CLOUD_ORIGIN}/releases/desktop` });
+  autoUpdater.logger = null;
+  autoUpdater.autoDownload = false;
+  autoUpdater.on("update-available", ({ version }) => {
+    if (update?.version !== version) sayUpdate({ phase: "available", version });
+  });
+  autoUpdater.on("download-progress", ({ percent }) => {
+    if (update?.phase === "downloading") sayUpdate({ ...update, percent: Math.floor(percent) });
+  });
+  autoUpdater.on("update-downloaded", ({ version }) => {
+    sayUpdate({ phase: "installing", version });
+    void stopStation().then(() => autoUpdater.quitAndInstall(true, true));
+  });
+  autoUpdater.on("error", (error) => {
+    console.warn("updating the app failed", error.message);
+    // Only a download the person asked for is said to have failed; a check that failed is tried again later.
+    if (update?.phase === "downloading") sayUpdate({ phase: "failed", version: update.version, message: error.message });
+  });
+  const check = () => {
+    if (update?.phase === "downloading" || update?.phase === "installing") return;
+    void autoUpdater.checkForUpdates().catch((error: Error) => console.warn("looking for an update failed", error.message));
+  };
+  check();
+  setInterval(check, UPDATE_EVERY);
+}
+
 /** Pages outside the app open in the system browser, as a new tab would. */
 function external(url: string): void {
   if (/^https?:\/\//.test(url)) void shell.openExternal(url);
@@ -317,6 +375,15 @@ function arrived(url: string): void {
   window.focus();
 }
 
+let stationStopped = false;
+
+/** Stops the station (and its runtimes) before the app quits: after it, quitting goes ahead without waiting again. */
+async function stopStation(): Promise<void> {
+  if (stationStopped) return;
+  await station.stop().catch(() => {});
+  stationStopped = true;
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -338,16 +405,13 @@ if (!app.requestSingleInstanceLock()) {
     protocol.handle("ember-preview", preview);
     open();
     station.start();
+    keepUpdated();
   });
   // The station stops with the app, its runtimes first; the app quits once it has.
-  let stopped = false;
   app.on("before-quit", (event) => {
-    if (stopped) return;
+    if (stationStopped) return;
     event.preventDefault();
-    void station.stop().finally(() => {
-      stopped = true;
-      app.quit();
-    });
+    void stopStation().then(() => app.quit());
   });
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) open();

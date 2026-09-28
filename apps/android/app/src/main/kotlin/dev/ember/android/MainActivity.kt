@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         multicast?.acquire()
+        app?.let { lifecycleScope.launch { it.checkUpdates() } }
     }
 
     override fun onStop() {
@@ -48,8 +49,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             val core = EmberCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN)
-            app = AppState(core, getSharedPreferences("ember", Context.MODE_PRIVATE), BuildConfig.CLOUD_ORIGIN)
+            app = AppState(core, getSharedPreferences("ember", Context.MODE_PRIVATE), BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN))
             handle(intent)
+            app?.checkUpdates()
         }
         setContent {
             val current = app

@@ -94,6 +94,7 @@ import dev.ember.android.ui.SectionHeader
 import dev.ember.android.ui.Seg
 import dev.ember.android.ui.SlackMark
 import dev.ember.android.ui.avatarColor
+import kotlinx.coroutines.launch
 import dev.ember.android.ui.initial
 
 @Composable
@@ -128,6 +129,18 @@ fun HomeScreen(current: WorkspaceEntry) {
                 Text(current.workspace.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = "有邀请" })
                 IconIn(Icons.ChevronDown, 16.dp, C.muted)
+            }
+            // A newer build of the app: tapped, it is downloaded and handed to the installer (Updates.kt).
+            val updates = app.updates
+            if (updates.available != null) {
+                // Quiet like the bar's other buttons: the icon with a dot; while it downloads, how far it is instead.
+                val progress = updates.progress
+                if (progress != null) {
+                    Text(progress.substringAfter(' ', "…"), fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.semantics { contentDescription = progress })
+                } else Box(Modifier.semantics { contentDescription = "更新到 ${updates.available?.versionName}" }) {
+                    NavButton(Icons.Download, { app.scope.launch { updates.install()?.let { app.toast = it } } }, 20.dp)
+                    Box(Modifier.align(Alignment.TopEnd).offset((-3).dp, 3.dp).size(13.dp).clip(CircleShape).background(C.bg).padding(2.dp).clip(CircleShape).background(C.accent))
+                }
             }
             // A station not working marks it: grey offline, orange coming back, red failing (the core's `trouble`); its page says which.
             Box {

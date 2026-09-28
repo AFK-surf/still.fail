@@ -7,6 +7,9 @@
 # build/app, then electron-builder puts them together.
 # CARGO_TARGET_DIR is honoured. SKIP_WEB=1 takes dist/cloud-web and dist/admin as they are. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops at build/: no packing, no
 # signing, for Electron's own app to run as it is (dev.sh).
+# Packed, the app is also zipped with latest-mac.yml beside it in out/: what scripts/release.sh desktop publishes
+# for the apps' updater (main.ts, keepUpdated). Its version is 0.1.<the commits in the history>, each release's
+# higher than the one before it.
 set -eu
 # A non-login shell (ssh studio …) has none of these on its PATH.
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$HOME/.local/node-v24.15.0-darwin-arm64/bin:$PATH"
@@ -30,5 +33,6 @@ cd "$here"
 [ -d node_modules/electron/dist ] || node node_modules/electron/install.js
 pnpm exec esbuild src/main.ts src/core.ts src/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=build/app --log-level=warning
 [ -z "${DEV:-}" ] || { echo "$here/build"; exit 0; }
-pnpm exec electron-builder --mac --arm64 --publish never
+version="0.1.$(git -C "$root" rev-list --count HEAD)"
+pnpm exec electron-builder --mac --arm64 --publish never -c.extraMetadata.version="$version"
 ls -d "$here/out/mac-arm64/ember.app"
