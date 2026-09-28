@@ -2783,13 +2783,21 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
    shows through, blurred. The list's foot leaves the composer's height free, so its last message still ends above it. */
 .chat[data-under-composer] > .composer-slot { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; }
 .chat[data-under-composer] .chat-list { padding-bottom: calc(24px + var(--composer-height)); }
-.chat[data-under-composer] .chat-to-bottom { bottom: calc(12px + var(--composer-height)); }
+.chat[data-under-composer] .chat-to-bottom {
+  bottom: calc(12px + var(--composer-height)); border: 0.5px solid var(--line);
+  background: color-mix(in oklch, var(--canvas) 72%, transparent); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  box-shadow: 0 6px 16px rgb(0 0 0 / .14), 0 2px 5px rgb(0 0 0 / .1);
+}
 .chat[data-under-composer] > .offline-notice { margin-bottom: calc(8px + var(--composer-height)); }
 .composer-dock[data-variant="chat"] .composer-wrap { pointer-events: none; }
 .composer-dock[data-variant="chat"] .composer-wrap > * { pointer-events: auto; }
-.composer-dock[data-variant="chat"] .composer-box {
+/* As the phone's capsule (mobile.css .m-floating): frosted, raised, a hairline round it; its send a dark disc. */
+.composer-dock[data-variant="chat"] .composer-box, .composer-dock[data-variant="chat"] .composer-box:focus-within {
+  border: 0.5px solid var(--line);
   background: color-mix(in oklch, var(--canvas) 72%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
-  box-shadow: 0 6px 16px rgb(0 0 0 / .08), 0 2px 5px rgb(0 0 0 / .06);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  box-shadow: 0 6px 16px rgb(0 0 0 / .14), 0 2px 5px rgb(0 0 0 / .1);
 }
+.composer-dock[data-variant="chat"] .send-btn:not(:disabled) { background: var(--text); color: var(--canvas); }
+.composer-dock[data-variant="chat"] .send-btn:disabled { background: var(--line); color: var(--canvas); }
 .composer-dock[data-variant="chat"] .composer-box[data-dragging] { background: color-mix(in oklch, var(--field-focus) 8%, color-mix(in oklch, var(--canvas) 72%, transparent)); }
