@@ -1084,9 +1084,9 @@ a.h-place:hover, button.h-place:hover { background: var(--hover); text-decoratio
 /* ── chat, after Zork ───────────────────────────────────────────────── */
 /* The page itself never scrolls or bounces; only the panes inside do. */
 html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
-.chat-list { gap: 14px; }
+.chat-list { gap: 28px; }
 /* Holds the space of whatever left the bottom (see scroll.ts); the negative margin takes back its gap. */
-.chat-floor { flex: none; margin-top: -14px; padding: 0; }
+.chat-floor { flex: none; margin-top: -28px; padding: 0; }
 .chat-older { display: flex; justify-content: center; padding: 4px 0 8px; color: var(--muted); }
 /* A message on its way says so only if it takes a moment. */
 .msg-sending { animation: msg-sending-show 0s 0.8s both; }
@@ -1105,7 +1105,7 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .msg-avatar .avatar { border-radius: 50% !important; }
 .msg-avatar-agent { background: var(--neutral-bg); }
 .msg-head { display: flex; align-items: baseline; gap: 8px; min-height: 24px; align-items: center; }
-.msg-head .msg-name { font-weight: 500; font-size: var(--text-sm); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-head .msg-name { font-weight: 650; font-size: var(--text-body); color: var(--text); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-time { font-size: 10px; color: var(--muted); }
 .msg-plain { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-sm); line-height: 1.55; }
 .msg-quotes { display: grid; gap: 8px; margin-bottom: 4px; }
