@@ -88,6 +88,8 @@ struct FakeSession {
     events: Events,
     prompts: Mutex<Vec<String>>,
     steers: Mutex<Vec<String>>,
+    /// Times the running turn's tool calls were moved to the background.
+    backgrounds: AtomicUsize,
     aborts: AtomicUsize,
     disposed: AtomicBool,
     busy: AtomicBool,
@@ -141,6 +143,9 @@ impl AgentSession for FakeSession {
         self.steers.lock().unwrap().push(text.into());
         true
     }
+    async fn background_tools(&self) {
+        self.backgrounds.fetch_add(1, Ordering::SeqCst);
+    }
     async fn abort(&self) {
         self.aborts.fetch_add(1, Ordering::SeqCst);
     }
@@ -190,6 +195,7 @@ impl AgentDriver for FakeDriver {
             events,
             prompts: Mutex::default(),
             steers: Mutex::default(),
+            backgrounds: AtomicUsize::new(0),
             aborts: AtomicUsize::new(0),
             disposed: AtomicBool::new(false),
             busy: AtomicBool::new(false),
@@ -398,6 +404,23 @@ async fn a_message_during_a_running_turn_is_steered_into_it() {
     settle().await;
     assert_eq!(r.claude.last().prompts().len(), 1);
     assert!(r.claude.last().steers()[0].contains("also check tests"));
+}
+
+#[tokio::test]
+async fn a_message_during_a_running_turn_moves_what_it_waits_on_to_the_background_unless_its_profile_says_not() {
+    let r = setup();
+    let first = message();
+    r.accept(&first).await;
+    settle().await;
+    r.accept(&reply(&first, "9999.1", "also check tests")).await;
+    settle().await;
+    let session = r.claude.last();
+    assert_eq!(session.backgrounds.load(Ordering::SeqCst), 1);
+    r.edit(|c| c.profiles.iter_mut().for_each(|p| p.background_on_message = false));
+    r.accept(&reply(&first, "9999.2", "and lint")).await;
+    settle().await;
+    assert_eq!(session.steers().len(), 2);
+    assert_eq!(session.backgrounds.load(Ordering::SeqCst), 1, "off: the message waits for what the turn waits on");
 }
 
 #[tokio::test]

@@ -10,7 +10,7 @@ import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard, ProfileCard } from "../ProfileCard.tsx";
-import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time, Tip } from "../ui.tsx";
+import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, SwitchRow, Time, Tip } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as baseCss from "../styles/base.css.ts";
 import * as css from "./Accounts.css.ts";
@@ -243,6 +243,17 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
       <QuotaSection profile={profile} />
 
       <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => void save.run({ models })} />
+
+      {/* A station older than the setting says nothing of it. */}
+      {profile.runtimes.includes("claude") && profile.backgroundOnMessage !== undefined && (
+        <Section title="运行">
+          <SwitchRow title="新消息到来时，把正在执行的命令转到后台" checked={profile.backgroundOnMessage} disabled={save.busy}
+            description={profile.backgroundOnMessage
+              ? "Claude Code 正在等命令或 subagent 时，新消息会让它们转到后台继续跑（像按 Ctrl+B），agent 马上读到消息，跑完再回来处理结果。"
+              : "新消息要等正在执行的命令或 subagent 结束后才会读到。"}
+            onChange={(on) => saveThen({ backgroundOnMessage: on }, () => toast(on ? "已打开" : "已关闭"))} />
+        </Section>
+      )}
 
       <Section title="使用它的连接">
         {users.length === 0 ? <p className={shellCss.muted}>还没有连接使用这个 Profile。</p> : (

@@ -192,6 +192,9 @@ pub struct RawProfile {
     /// Uses this machine's own login of its runtime (a subscription profile of one runtime).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub machine: Option<bool>,
+    /// Absent: on (Profile::background_on_message).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_on_message: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -288,6 +291,9 @@ pub struct Profile {
     pub models: Vec<String>,
     /// Uses this machine's own login of its runtime: not edited or signed in here; removing it stops using that login.
     pub machine: bool,
+    /// A message that reaches a running Claude Code turn first moves the commands and subagents it waits on to the
+    /// background (Ctrl+B), so it is read now rather than when they end.
+    pub background_on_message: bool,
 }
 
 impl Profile {
@@ -480,6 +486,7 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
             model: p.model.clone().filter(|m| !m.is_empty()),
             models,
             machine: p.machine == Some(true),
+            background_on_message: p.background_on_message != Some(false),
         });
     }
     unique("profile", profiles.iter().map(|p| p.id.as_str()))?;

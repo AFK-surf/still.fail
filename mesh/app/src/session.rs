@@ -54,6 +54,9 @@ pub trait SessionDeps: Send + Sync {
     fn repos_dir(&self) -> PathBuf;
     fn memory_path(&self) -> PathBuf;
     fn max_nudges(&self) -> u32;
+    /// Whether a message to the session's running turn first moves what it waits on to the background (its profile's
+    /// setting).
+    fn background_on_message(&self, key: &str) -> bool;
     /// Where the runtime's live steps go, for whoever watches the session.
     fn live(&self) -> Option<Arc<LiveHub>>;
     /// The runtime process has gone idle (see the hub's eviction deadlines).
@@ -309,6 +312,10 @@ impl SessionActor {
         }
         let text = self.format(&deps, &pending).await?;
         if let Some(agent) = self.agent().filter(|a| a.busy()) {
+            // So it is read now, not when a long command ends; what it waited on goes on.
+            if deps.background_on_message(&self.key) {
+                agent.background_tools().await;
+            }
             if agent.steer(&text).await {
                 self.work_for(&deps, &pending);
                 self.delivered(&store, &pending)?;

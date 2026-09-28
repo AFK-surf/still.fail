@@ -166,6 +166,9 @@ pub trait AgentSession: Send + Sync {
     async fn prompt(&self, text: &str) -> Result<()>;
     /// Adds input to the running turn. False when nothing is running or the turn cannot take it.
     async fn steer(&self, text: &str) -> bool;
+    /// Moves the tool calls the running turn waits on (commands, subagents) to the background, where they go on and
+    /// report when they end: the turn goes on at once. Nothing for a runtime that cannot.
+    async fn background_tools(&self) {}
     /// Interrupts the running turn; its end still arrives as TurnEnded.
     async fn abort(&self);
     /// Releases the session; ends the runtime process when it is not shared.

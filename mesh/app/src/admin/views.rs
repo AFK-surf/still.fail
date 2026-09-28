@@ -147,6 +147,7 @@ impl AdminApi {
                     "usedBy": config.connects.iter().filter(|c| p.runtimes.contains(&c.bind.runtime) && serves(p, c.bind.model.as_deref())).map(|c| c.id.clone()).collect::<Vec<_>>(),
                     "loginCommand": crate::profiles::login_command(p.runtime, &p.home.to_string_lossy()),
                     "machine": p.machine,
+                    "backgroundOnMessage": p.background_on_message,
                     "check": checks.get(&p.id),
                     "login": self.deps.logins.get(&p.id),
                     "quota": quotas.get(&p.id),

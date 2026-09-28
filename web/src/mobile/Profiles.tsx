@@ -20,6 +20,7 @@ import * as listsCss from "./styles/lists.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as historyCss from "./styles/history.css.ts";
 import * as css from "./Profiles.css.ts";
+import * as connectsCss from "./Connects.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 
@@ -79,6 +80,21 @@ function ProfilePage({ p }: { p: Profile }) {
         {p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         <Quota p={p} />
         <Models p={p} onSave={(models) => void save({ models }, "已保存")} />
+        {/* A station older than the setting says nothing of it. */}
+        {p.runtimes.includes("claude") && p.backgroundOnMessage !== undefined && (
+          <>
+            <SectionHeader title="运行" start={24} />
+            <ListCard>
+              <ListRow onClick={() => void save({ backgroundOnMessage: !p.backgroundOnMessage }, p.backgroundOnMessage ? "已关闭" : "已打开")}>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                  <span className={listsCss.mRowTitle}>新消息到来时，把正在执行的命令转到后台</span>
+                  <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.backgroundOnMessage ? "命令和 subagent 转到后台继续跑，agent 马上读到消息。" : "新消息要等正在执行的命令或 subagent 结束后才会读到。"}</span>
+                </span>
+                <span className={connectsCss.mSwitch} data-on={p.backgroundOnMessage || undefined} />
+              </ListRow>
+            </ListCard>
+          </>
+        )}
         <SectionHeader title="使用它的连接" start={24} />
         <ListCard>
           {users.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>还没有连接使用这个 Profile。</span></ListRow>}

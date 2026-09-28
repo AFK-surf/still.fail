@@ -1447,6 +1447,15 @@ async fn a_profile_on_the_machines_own_login_made_from_a_login_kept_in_a_file_it
     assert!(profile(&s).machine);
     let body = s.get("/overview").await;
     assert_eq!(body["profiles"].as_array().unwrap().iter().find(|p| p["id"] == "machine-claude").unwrap()["machine"], true);
+    // And how it runs: on by default, turned off and on here; other edits keep it.
+    assert!(profile(&s).background_on_message);
+    assert_eq!(s.call("PUT", "/profiles/machine-claude", Some(json!({ "backgroundOnMessage": false }))).await.0, 200);
+    assert!(!profile(&s).background_on_message);
+    assert_eq!(s.call("PUT", "/profiles/machine-claude", Some(json!({ "models": ["claude-y"] }))).await.0, 200);
+    let body = s.get("/overview").await;
+    assert_eq!(body["profiles"].as_array().unwrap().iter().find(|p| p["id"] == "machine-claude").unwrap()["backgroundOnMessage"], false);
+    assert_eq!(s.call("PUT", "/profiles/machine-claude", Some(json!({ "backgroundOnMessage": true }))).await.0, 200);
+    assert!(profile(&s).background_on_message);
     assert_eq!(s.call("POST", "/profiles/machine-claude/login", None).await.0, 400);
     // Stopped: the profile goes; it can be made again from the machine's login.
     assert_eq!(s.call("DELETE", "/profiles/machine-claude", None).await.0, 200);

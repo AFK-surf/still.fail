@@ -55,6 +55,8 @@ export interface ProfileInput {
   /** Replaces the enabled models. */
   models?: string[];
   env?: Record<string, string | null>;
+  /** Claude Code: a message to a running turn moves what it waits on to the background first. */
+  backgroundOnMessage?: boolean;
 }
 
 /** The groups of scopes and events a Slack app made here asks for (mesh/app/src/chat/slack_apps.rs). */

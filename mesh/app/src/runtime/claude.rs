@@ -6,6 +6,9 @@
 //! - 401/403 is retried silently for minutes, visible only as system/api_retry frames, so the first one fails the turn;
 //! - input written while a turn is finishing may start a turn of its own (a system/init with no prompt of ours);
 //! - interrupt is a control_request; the turn still ends with a result frame.
+//! - background_tasks (a control_request) moves the Bash commands and subagents a turn waits on to the background: each
+//!   call returns at once and the turn goes on; a task_notification tells when one ends. Input written after it is
+//!   read in the turn then, not when they end.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
@@ -283,6 +286,18 @@ impl AgentSession for ClaudeSession {
         }
         self.proc.write(&user_message(text)).await;
         true
+    }
+
+    async fn background_tools(&self) {
+        {
+            let t = self.turn.lock().unwrap();
+            if t.closed || !t.busy {
+                return;
+            }
+        }
+        // Ctrl+B: every foreground Bash command and subagent. A CLI without it answers an error, and the message waits
+        // as before.
+        self.proc.write(&json!({ "type": "control_request", "request_id": format!("background-{}", uuid()), "request": { "subtype": "background_tasks" } }).to_string()).await;
     }
 
     async fn abort(&self) {

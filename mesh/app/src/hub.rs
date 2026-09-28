@@ -1312,6 +1312,10 @@ impl SessionDeps for Hub {
     fn max_nudges(&self) -> u32 {
         self.config().max_nudges
     }
+    fn background_on_message(&self, key: &str) -> bool {
+        let Ok(Some(row)) = self.store.get_session(key) else { return true };
+        self.config().profiles.iter().find(|p| p.id == row.profile).is_none_or(|p| p.background_on_message)
+    }
     fn live(&self) -> Option<Arc<LiveHub>> {
         Some(self.live.clone())
     }

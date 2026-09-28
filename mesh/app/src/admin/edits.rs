@@ -38,6 +38,7 @@ pub fn bare_profile(id: &str, runtime: RuntimeKind, kind: AccessKind, key: &str,
         model: None,
         models: vec![],
         machine: false,
+        background_on_message: true,
     }
 }
 
@@ -226,8 +227,9 @@ impl AdminApi {
         self.save(viewer, &format!("profile {id}"), |raw| {
             let existing = raw.profiles.as_deref().unwrap_or_default().iter().find(|p| p.id == id).cloned();
             let machine = existing.as_ref().and_then(|p| p.machine).unwrap_or(false);
-            // One on the machine's login is the machine's: only which of its models are used is chosen here.
-            let get = |key: &str| if machine && key != "model" && key != "models" { None } else { given.get(key) };
+            // One on the machine's login is the machine's: only which of its models are used, and how it runs, are chosen
+            // here.
+            let get = |key: &str| if machine && !["model", "models", "backgroundOnMessage"].contains(&key) { None } else { given.get(key) };
             // env: a string sets the value; null removes the key; an omitted key keeps it (so masked secrets survive
             // edits).
             let mut env = existing.as_ref().and_then(|p| p.env.clone()).unwrap_or_default();
@@ -282,6 +284,12 @@ impl AdminApi {
                 model,
                 models,
                 machine: machine.then_some(true),
+                // Only the default's opposite is written.
+                background_on_message: match get("backgroundOnMessage") {
+                    Some(Value::Bool(on)) => Some(*on),
+                    _ => existing.as_ref().and_then(|p| p.background_on_message),
+                }
+                .filter(|on| !on),
             };
             if let Some(old) = &existing {
                 let kind_of = |p: &RawProfile| p.access.as_ref().map(|a| a.kind).unwrap_or(AccessKind::Env);
@@ -414,6 +422,7 @@ impl AdminApi {
                 model: None,
                 models: None,
                 machine: None,
+                background_on_message: None,
             });
             Ok(())
         });
@@ -490,6 +499,7 @@ impl AdminApi {
                 model: None,
                 models: None,
                 machine: None,
+                background_on_message: None,
             });
             Ok(())
         })?;
@@ -537,6 +547,7 @@ impl AdminApi {
                 model: None,
                 models: None,
                 machine: Some(true),
+                background_on_message: None,
             });
             Ok(())
         })?;

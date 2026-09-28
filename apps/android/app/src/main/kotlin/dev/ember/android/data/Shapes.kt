@@ -349,6 +349,9 @@ data class Profile (
 	val loginCommand: String,
 	/// On the machine's own login of its runtime: not edited (but for its models) or signed in here; removing it stops using that login.
 	val machine: Boolean? = null,
+	/// Whether a message to a running Claude Code turn moves what it waits on to the background first; None from a
+	/// station older than the setting.
+	val backgroundOnMessage: Boolean? = null,
 	val check: ProfileCheck? = null,
 	val login: LoginJob? = null,
 	val quota: Quota? = null,

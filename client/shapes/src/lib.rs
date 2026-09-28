@@ -596,6 +596,9 @@ pub struct Profile {
     /// On the machine's own login of its runtime: not edited (but for its models) or signed in here; removing it stops using that login.
     #[serde(default)]
     pub machine: bool,
+    /// Whether a message to a running Claude Code turn moves what it waits on to the background first; None from a
+    /// station older than the setting.
+    pub background_on_message: Option<bool>,
     pub check: Option<ProfileCheck>,
     pub login: Option<LoginJob>,
     pub quota: Option<Quota>,
