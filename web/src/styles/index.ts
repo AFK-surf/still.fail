@@ -37,6 +37,7 @@ import "../ModelTriple.css.ts";
 import "../Preview.css.ts";
 import "../Jobs.css.ts";
 import "../Prose.css.ts";
+import "../ToolStep.css.ts";
 import "../scrollbars.css.ts";
 import "../FilePreview.css.ts";
 import "../dock.css.ts";

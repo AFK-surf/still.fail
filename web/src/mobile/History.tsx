@@ -15,6 +15,8 @@ import { SheetGrab, useApp, type MobileApp } from "./app.tsx";
 import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, ProviderMark, QuotaRing, QuotaRings, Ring, Seg, SlackMark, Spinner, stateOf, type Icon } from "./parts.tsx";
 import * as partsCss from "./styles/parts.css.ts";
 import * as css from "./History.css.ts";
+import { ToolCall, ToolResult } from "../ToolStep.tsx";
+import * as toolCss from "../ToolStep.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as historyCss from "./styles/history.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -248,8 +250,10 @@ function Group({ g }: { g: HistoryGroup }) {
 function StepRow({ step }: { step: HistoryStep }) {
   return (
     <Folding name={step.said ?? step.name} hint={step.said === undefined ? step.hint : null} meta={step.meta} failed={step.failed}>
-      <Code text={step.call} />
-      {step.result !== undefined && <Code text={step.result} failed={step.failed} />}
+      <div className={toolCss.body}>
+        <div className={toolCss.section}><ToolCall name={step.name} call={step.call} said={step.said !== undefined} /></div>
+        {step.result !== undefined && <ToolResult name={step.name} call={step.call} result={step.result} failed={step.failed} />}
+      </div>
     </Folding>
   );
 }
@@ -267,10 +271,6 @@ function Folding({ name, hint, meta, failed, children }: { name: string; hint: s
       {open && children}
     </div>
   );
-}
-
-function Code({ text, failed = false }: { text: string; failed?: boolean }) {
-  return <pre className={css.mHCode} data-failed={failed || undefined}>{text.slice(0, 4000).split("\n").slice(0, 40).join("\n")}</pre>;
 }
 
 /** The turn's state with the model (the core's words), with a running clock. */

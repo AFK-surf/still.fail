@@ -113,14 +113,6 @@ export const hStepBody = style({
 export const hThinking = style({
   padding: "2px 0 6px 6px", fontSize: vars.textXs, color: vars.muted, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });
-export const code = style({
-  margin: "4px 0 6px", padding: "10px 12px", borderRadius: `calc(12px * ${vars.cornerScale})`, background: vars.paper,
-  font: `12px/1.55 ${vars.fontMono}`, whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: "360px",
-  overflow: "auto", cornerShape: vars.cornerShape,
-  selectors: {
-    "&[data-failed=\"true\"]": { background: vars.redBg },
-  },
-});
 export const historyDetails = style({ borderBottom: `1px solid ${vars.line}`, background: vars.list });
 export const flip = style({
   selectors: {

@@ -50,10 +50,14 @@ function textOf(node: ReactNode): string {
 }
 
 function CodeBlock({ children }: { children?: ReactNode }) {
-  const [copied, setCopied] = useState(false);
   const code = isValidElement<{ className?: string; children?: ReactNode }>(children) ? children : null;
   const language = /language-([\w+#-]+)/.exec(code?.props.className ?? "")?.[1];
-  const text = textOf(code?.props.children ?? children).replace(/\n$/, "");
+  return <Code text={textOf(code?.props.children ?? children).replace(/\n$/, "")} language={language} />;
+}
+
+/** A block of code as markdown shows one: highlighted when its language is known (a name or a file extension Shiki knows), with a copy button. */
+export function Code({ text, language }: { text: string; language?: string | undefined }) {
+  const [copied, setCopied] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
   useEffect(() => {
     if (!language) return;

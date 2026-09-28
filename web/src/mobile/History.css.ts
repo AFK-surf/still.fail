@@ -88,14 +88,6 @@ export const mHFoldMeta = style({
     [`${mHFoldHead}[data-failed] &`]: { color: "var(--m-red)" },
   },
 });
-export const mHCode = style({
-  margin: "0", overflowX: "auto", padding: "8px 10px", borderRadius: "10px", background: "var(--m-surface2)",
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "12px", lineHeight: "18px",
-  color: "var(--m-ink)", whiteSpace: "pre",
-  selectors: {
-    "&[data-failed]": { background: "color-mix(in srgb, var(--m-red) 8%, transparent)" },
-  },
-});
 export const mHPhase = style({ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "13px" });
 export const mHDetails = style({
   position: "absolute", inset: "0", overflowY: "auto", overscrollBehavior: "contain", padding: "0 18px 30px",

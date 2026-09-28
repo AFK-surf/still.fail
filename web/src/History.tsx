@@ -10,6 +10,8 @@ import { ICON, Pill, SlackLogo } from "./ui.tsx";
 import { useLink } from "./station.tsx";
 import { Link } from "react-router";
 import { Prose } from "./Prose.tsx";
+import { ToolCall, ToolResult } from "./ToolStep.tsx";
+import * as toolCss from "./ToolStep.css.ts";
 import { useStickToBottom } from "./scroll.ts";
 import { useOlderOnScroll } from "./Chat.tsx";
 import { Mark } from "./brand.tsx";
@@ -199,8 +201,10 @@ function Group({ group }: { group: HistoryGroup }) {
                   : <><span className={css.hStepName}>{step.name}</span><span className={css.hStepHint}>{step.hint}</span></>}
                 <span className={css.hStepMeta}>{step.meta}</span>
               </summary>
-              <pre className={css.code}>{step.call}</pre>
-              {step.result !== undefined && <pre className={css.code} data-failed={step.failed}>{step.result}</pre>}
+              <div className={toolCss.body}>
+                <div className={toolCss.section}><ToolCall name={step.name} call={step.call} said={step.said !== undefined} /></div>
+                {step.result !== undefined && <ToolResult name={step.name} call={step.call} result={step.result} failed={step.failed} />}
+              </div>
             </details>
           ))}
         </div>

@@ -46,10 +46,56 @@ fn verb_unit(kind: &str) -> (&'static str, &'static str) {
 }
 
 fn args(text: &str) -> Option<serde_json::Map<String, Value>> {
-    match serde_json::from_str(text) {
-        Ok(Value::Object(map)) => Some(map),
+    let parsed = serde_json::from_str(text).ok().or_else(|| {
+        // A long call is kept to its first characters, then `… (n more characters)`: read what is there.
+        let (head, tail) = text.rsplit_once("\n… (")?;
+        tail.ends_with(" more characters)").then(|| serde_json::from_str(&close(head)).ok()).flatten()
+    });
+    match parsed {
+        Some(Value::Object(map)) => Some(map),
         _ => None,
     }
+}
+
+/// JSON cut short, closed where it stops: the string it was in ends with an ellipsis, and what was open is closed.
+fn close(json: &str) -> String {
+    let (mut open, mut quoted, mut escaped) = (Vec::new(), false, false);
+    for c in json.chars() {
+        if escaped {
+            escaped = false;
+        } else if quoted {
+            match c {
+                '\\' => escaped = true,
+                '"' => quoted = false,
+                _ => {}
+            }
+        } else {
+            match c {
+                '"' => quoted = true,
+                '{' => open.push('}'),
+                '[' => open.push(']'),
+                '}' | ']' => {
+                    open.pop();
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut out = json.to_string();
+    if quoted {
+        if escaped {
+            out.pop();
+        }
+        out.push_str("…\"");
+    }
+    let mut out = out.trim_end().to_string();
+    if out.ends_with(':') {
+        out.push_str("null");
+    } else if out.ends_with(',') {
+        out.pop();
+    }
+    out.extend(open.iter().rev());
+    out
 }
 
 fn line(text: &str, max: usize) -> String {
@@ -437,6 +483,14 @@ fn group(timeline: &[Value], steps: &[Step], members: &[usize], thinking: &[usiz
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_a_call_cut_short() {
+        let cut = "{\n  \"file_path\": \"/a/b.ts\",\n  \"content\": \"line one\\nline t\n… (1200 more characters)";
+        assert_eq!(hint(cut), "/a/b.ts");
+        assert_eq!(args(cut).unwrap()["content"], "line one\nline t…");
+        assert_eq!(args("{\"a\": [1, 2,\n… (9 more characters)").unwrap()["a"], json!([1, 2]));
+    }
 
     fn cx<'a>(threads: &'a [Value], members: &'a [Value], slack: &'a [String]) -> Context<'a> {
         let workspaces = Box::leak(Box::new(std::collections::HashMap::from([(
