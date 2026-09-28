@@ -35,6 +35,7 @@ use crate::kept::Kept;
 use crate::mesh::{CredentialSource, Mesh};
 use crate::protocol::{ClientId, ClientMessage, CoreMessage, RequestId, Topic};
 use crate::station::{self, MeshSource, StationAddr, StationCredentials, Stations, TopicSink};
+use crate::status::{Place, Status};
 use crate::store::{Source, Store};
 use crate::sync::Sync;
 use crate::trace::{self, Kind, Span, Tracer};
@@ -89,6 +90,8 @@ struct Inner {
     live: RefCell<HashMap<Topic, u64>>,
     /// Per account, its ember cloud events socket while an account topic is live.
     sockets: RefCell<HashMap<String, Socket>>,
+    /// What is waited on, for the `status` topic.
+    status: Rc<Status>,
 }
 
 struct Socket {
@@ -119,7 +122,8 @@ impl Core {
     pub async fn traced(host: Rc<dyn Host>, sample: f64) -> Core {
         let tracer = Tracer::new(host.clone(), sample);
         let accounts = Accounts::load(host.clone()).await;
-        let cloud = Cloud::new(host.clone(), accounts.clone(), tracer.clone());
+        let status = Status::new(host.clone());
+        let cloud = Cloud::new(host.clone(), accounts.clone(), tracer.clone(), status.clone());
         // What was last known is there before any UI asks.
         let data = Data::new(host.clone());
         data.load().await;
@@ -140,11 +144,20 @@ impl Core {
                 })
             });
             let center = Rc::new(Center { store: store.clone(), data: data.clone() });
-            let wire = station::wire(host.clone(), mesh_source(me.clone()), credentials(me.clone()));
+            let wire = station::wire(host.clone(), mesh_source(me.clone()), credentials(me.clone()), status.clone());
+            status.on_change({
+                let store = Rc::downgrade(&store);
+                Rc::new(move || {
+                    if let Some(store) = store.upgrade() {
+                        store.invalidate(&Topic::Status);
+                    }
+                })
+            });
+            status.set_names(name_of(me.clone()));
             let kept = Kept::new(host.clone());
-            let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone());
+            let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone(), status.clone());
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), status: status.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
             let sync = Sync::new(store.clone(), host.clone());
             Inner {
                 sync,
@@ -169,6 +182,7 @@ impl Core {
                 me_fetches: RefCell::default(),
                 live: RefCell::default(),
                 sockets: RefCell::default(),
+                status: status.clone(),
             }
         });
         // Whom each account reaches, as the data center has it from the last run: views put together before the
@@ -243,6 +257,7 @@ struct Router {
     core: Weak<Inner>,
     stations: Rc<Stations>,
     views: Rc<Views>,
+    status: Rc<Status>,
     tracer: Rc<Tracer>,
     /// Views opening: each is a trace (`chat.open`, …) until its first value goes out.
     opening: RefCell<HashMap<Topic, Span>>,
@@ -255,6 +270,11 @@ fn station_id(address: &str) -> &str {
 
 impl Source for Router {
     fn start(&self, topic: &Topic) {
+        // Always kept (status.rs): only computed while shown.
+        if *topic == Topic::Status {
+            self.status.changed();
+            return;
+        }
         if topic.is_view() {
             let (name, station) = match topic {
                 Topic::Chat { station, .. } => ("chat.open", Some(station)),
@@ -278,6 +298,9 @@ impl Source for Router {
     }
 
     fn stop(&self, topic: &Topic) {
+        if *topic == Topic::Status {
+            return;
+        }
         if topic.is_view() {
             // Given up before it had a value: recorded as cancelled.
             let opening = self.opening.borrow_mut().remove(topic);
@@ -292,6 +315,9 @@ impl Source for Router {
     }
 
     fn compute(&self, topic: &Topic) -> Option<Result<Value>> {
+        if *topic == Topic::Status {
+            return Some(Ok(self.status.value()));
+        }
         let Some(context) = self.opening.borrow().get(topic).map(Span::context) else { return self.views.compute(topic) };
         // Still opening: what it starts now (a chat's agents) is part of it too.
         let value = self.tracer.enter(Some(context), || self.views.compute(topic));
@@ -305,6 +331,17 @@ impl Source for Router {
         }
         value
     }
+}
+
+/// A station's name by its address, as its workspace was last read (for what the status says).
+fn name_of(core: Weak<Inner>) -> crate::status::NameOf {
+    Rc::new(move |address: &str| {
+        let core = core.upgrade()?;
+        let (workspace, id) = address.split_once('/')?;
+        let workspace = core.store.get(&Topic::Workspace { workspace: workspace.to_string() })?;
+        let station = workspace.get("stations")?.as_array()?.iter().find(|s| s.get("id").and_then(Value::as_str) == Some(id))?.clone();
+        station.get("name")?.as_str().map(str::to_string)
+    })
 }
 
 /// Who a workspace's views take as "me": the account that reaches it, as far as `/v1/me` has told.
@@ -887,6 +924,7 @@ impl Inner {
             let keep = wanted.contains(sub);
             if !keep {
                 socket.task.abort();
+                self.status.socket_up(sub);
             }
             keep
         });
@@ -952,10 +990,16 @@ async fn follow_socket(core: Weak<Inner>, sub: String) {
     let mut wait = SOCKET_RETRY_MS;
     loop {
         let Some(this) = core.upgrade() else { return };
-        match this.open_socket(&sub).await {
+        let waiting = this.status.begin(Place::Cloud, "连接", true);
+        let opened = this.open_socket(&sub).await;
+        drop(waiting);
+        // Why it is down, if it is: said until it is open again (status.rs).
+        let down: String;
+        match opened {
             Ok(mut frames) => {
                 let opened = this.host.now_ms();
                 this.socket_state(&sub, SocketState::Open);
+                this.status.socket_up(&sub);
                 // Nothing is replayed: what changed while it was closed is read now.
                 this.refresh_all().await;
                 drop(this);
@@ -968,12 +1012,15 @@ async fn follow_socket(core: Weak<Inner>, sub: String) {
                     wait = SOCKET_RETRY_MS;
                 }
                 this.socket_state(&sub, SocketState::Retrying);
+                down = "连接断开了".into();
             }
             Err(error) if error.code == "signed_out" => {
                 this.sockets.borrow_mut().remove(&sub);
+                this.status.socket_up(&sub);
                 return;
             }
-            Err(_) => {
+            Err(error) => {
+                down = error.message;
                 // Its first try failed: the topics are read anyway, so they show what can be shown.
                 if this.socket_state(&sub, SocketState::Retrying) == Some(SocketState::Connecting) {
                     this.refresh_all().await;
@@ -981,6 +1028,7 @@ async fn follow_socket(core: Weak<Inner>, sub: String) {
             }
         }
         let Some(this) = core.upgrade() else { return };
+        this.status.socket_down(&sub, &down, this.host.now_ms() + wait as f64);
         let sleep = this.host.sleep(wait);
         drop(this);
         sleep.await;

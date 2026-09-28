@@ -7,7 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { Attachment, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, ChatThread } from "./core/shapes.ts";
+import type { Attachment, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 
 export type { TopicState };
@@ -90,6 +90,12 @@ export function stamp(of: object, field: string): Stamp | undefined {
 export function useChats(scope: string, mine: boolean): TopicState<ChatsView> {
   return useTopic<ChatsView>({ topic: "chats", scope, mine });
 }
+
+/** What the core is waiting on, when it is worth saying: something slow, a connection down (`state` absent: nothing). */
+export function useStatus(): StatusView | undefined {
+  return useTopic<StatusView>(STATUS).value;
+}
+const STATUS = { topic: "status" } as const;
 
 export function useStations(scope: string): TopicState<StationView[]> {
   return useTopic<StationView[]>({ topic: "stations", scope });

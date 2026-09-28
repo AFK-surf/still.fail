@@ -38,6 +38,7 @@ use crate::host::{Host, HttpRequest};
 use crate::kept::{Kept, Log};
 use crate::mesh::{CredentialSource, Mesh, RequestHead};
 use crate::protocol::Topic;
+use crate::status::{Place, Status, Waiting, station_what};
 use crate::store::{Source, Store};
 use crate::trace::{Kind, Span, SpanContext, Tracer, route};
 
@@ -181,11 +182,12 @@ pub type StationCredentials = Rc<dyn Fn(&str) -> CredentialSource>;
 pub struct MeshWire {
     mesh: MeshSource,
     credentials: StationCredentials,
+    status: Rc<Status>,
 }
 
 impl MeshWire {
-    pub fn new(mesh: MeshSource, credentials: StationCredentials) -> Rc<MeshWire> {
-        Rc::new(MeshWire { mesh, credentials })
+    pub fn new(mesh: MeshSource, credentials: StationCredentials, status: Rc<Status>) -> Rc<MeshWire> {
+        Rc::new(MeshWire { mesh, credentials, status })
     }
 }
 
@@ -196,14 +198,25 @@ impl StationWire for MeshWire {
         };
         let mesh = (self.mesh)();
         let credentials = (self.credentials)(&workspace);
+        let (status, address) = (self.status.clone(), Place::Station(format!("{workspace}/{station}")));
         async move {
-            let mesh = mesh.await?;
-            let link = mesh.link(&station, credentials.clone()).await?;
+            // Bringing up the endpoint (the relay) and opening the link are waits of their own: a request slow for
+            // them says so (status.rs).
+            let mesh = {
+                let _waiting = status.begin(Place::Relay, "连接", true);
+                mesh.await?
+            };
+            let link = {
+                let _waiting = status.begin(address.clone(), "连接", true);
+                mesh.link(&station, credentials.clone()).await?
+            };
             // A read whose link went before it was answered (the station restarting, a network change) is asked once more,
             // on the link opened in its place; anything that changes something is not sent twice.
             let (link, reply) = match link.request(head.clone(), body.clone()).await {
                 Err(error) if error.code == "mesh" && head.method == "GET" => {
+                    let _waiting = status.begin(address, "连接", true);
                     let link = mesh.link(&station, credentials).await?;
+                    drop(_waiting);
                     let reply = link.request(head, body).await?;
                     (link, reply)
                 }
@@ -239,8 +252,8 @@ impl StationWire for RoutedWire {
 }
 
 /// The real wire: HTTP for `local`, mesh links for the rest.
-pub fn wire(host: Rc<dyn Host>, mesh: MeshSource, credentials: StationCredentials) -> Rc<dyn StationWire> {
-    RoutedWire::new(HttpWire::new(host), MeshWire::new(mesh, credentials))
+pub fn wire(host: Rc<dyn Host>, mesh: MeshSource, credentials: StationCredentials, status: Rc<Status>) -> Rc<dyn StationWire> {
+    RoutedWire::new(HttpWire::new(host), MeshWire::new(mesh, credentials, status))
 }
 
 // ── where topic values go ───────────────────────────────────────────────────
@@ -485,6 +498,8 @@ pub struct Stations {
     wire: Rc<dyn StationWire>,
     tracer: Rc<Tracer>,
     kept: Rc<Kept>,
+    /// What is waited on, for the `status` topic.
+    status: Rc<Status>,
     me: Weak<Stations>,
     stations: RefCell<HashMap<String, StationState>>,
 }
@@ -507,8 +522,8 @@ fn answered(span: &mut Span, reply: &WireReply) {
 }
 
 impl Stations {
-    pub fn new(host: Rc<dyn Host>, sink: Rc<dyn TopicSink>, wire: Rc<dyn StationWire>, tracer: Rc<Tracer>, kept: Rc<Kept>) -> Rc<Stations> {
-        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, me: me.clone(), stations: RefCell::default() })
+    pub fn new(host: Rc<dyn Host>, sink: Rc<dyn TopicSink>, wire: Rc<dyn StationWire>, tracer: Rc<Tracer>, kept: Rc<Kept>, status: Rc<Status>) -> Rc<Stations> {
+        Rc::new_cyclic(|me| Stations { host, sink, wire, tracer, kept, status, me: me.clone(), stations: RefCell::default() })
     }
 
     /// One JSON call to the admin API (path without the `/admin/api` prefix); a write answers once the live topics
@@ -540,7 +555,7 @@ impl Stations {
     pub async fn file(&self, station: &StationAddr, key: &str, name: &str, thumb: bool) -> Result<(String, Vec<u8>)> {
         // A station from before thumbnails answers the image itself.
         let path = format!("/sessions/{}/files?name={}{}", encode(key), encode(name), if thumb { "&thumb=1" } else { "" });
-        let (status, kind, bytes) = self.exchange(station, "GET", &path, Vec::new(), Vec::new(), |reply| reply.header("content-type").unwrap_or("").to_string()).await?;
+        let (status, kind, bytes) = self.exchange(station, "GET", &path, Vec::new(), Vec::new(), false, |reply| reply.header("content-type").unwrap_or("").to_string()).await?;
         if status != 200 {
             return Err(CoreError::new(format!("http_{status}"), "读不到文件").with_status(status));
         }
@@ -551,12 +566,13 @@ impl Stations {
     /// of that service shown here. Answers its status, headers and body whatever the status.
     pub async fn preview(&self, station: &StationAddr, port: u16, method: &str, path: &str, headers: Vec<(String, String)>, body: Vec<u8>) -> Result<(u16, Vec<(String, String)>, Vec<u8>)> {
         let path = format!("/preview/{port}{}", if path.starts_with('/') { path.to_string() } else { format!("/{path}") });
-        self.exchange(station, method, &path, headers, body, |reply| reply.headers.clone()).await
+        self.exchange(station, method, &path, headers, body, false, |reply| reply.headers.clone()).await
     }
 
     /// Starts a request: its span (under the current trace, or a trace of its own), whose `traceparent` the
-    /// request carries, and the reply's head.
-    fn send(&self, station: &StationAddr, method: &str, path: &str, mut headers: Vec<(String, String)>, body: Vec<u8>) -> (Span, LocalBoxFuture<'static, Result<WireReply>>) {
+    /// request carries, what it is waited on as (none for one in the background, `quiet`), and the reply's head.
+    fn send(&self, station: &StationAddr, method: &str, path: &str, mut headers: Vec<(String, String)>, body: Vec<u8>, quiet: bool) -> (Span, Option<Waiting>, LocalBoxFuture<'static, Result<WireReply>>) {
+        let waiting = (!quiet).then(|| self.status.begin(Place::Station(station.to_string()), station_what(method, path), false));
         let path = format!("/admin/api{path}");
         let mut span = self.tracer.span(format!("{method} {}", route(&path)), Kind::Client);
         span.set("http.request.method", method.to_string());
@@ -572,17 +588,32 @@ impl Stations {
         let head = RequestHead { method: method.to_string(), path, headers };
         // Under the request's span: opening the link it needs (a credential, a connection) shows as part of it.
         let reply = self.tracer.instrument(Some(span.context()), self.wire.request(station, head, body));
-        (span, reply)
+        (span, waiting, reply)
+    }
+
+    /// A reply's whole body, its bytes counted as they come (status.rs).
+    async fn read_body(&self, reply: WireReply, waiting: Option<&Waiting>) -> Result<Vec<u8>> {
+        let mut body = reply.body;
+        let mut out = Vec::new();
+        while let Some(chunk) = body.next().await {
+            let chunk = chunk?;
+            match waiting {
+                Some(waiting) => waiting.received(chunk.len()),
+                None => self.status.received(None, chunk.len()),
+            }
+            out.extend(chunk);
+        }
+        Ok(out)
     }
 
     /// One whole request: its status, what `head` takes from the reply's head, and the body.
-    async fn exchange<T>(&self, station: &StationAddr, method: &str, path: &str, headers: Vec<(String, String)>, body: Vec<u8>, head: impl FnOnce(&WireReply) -> T) -> Result<(u16, T, Vec<u8>)> {
-        let (mut span, reply) = self.send(station, method, path, headers, body);
+    async fn exchange<T>(&self, station: &StationAddr, method: &str, path: &str, headers: Vec<(String, String)>, body: Vec<u8>, quiet: bool, head: impl FnOnce(&WireReply) -> T) -> Result<(u16, T, Vec<u8>)> {
+        let (mut span, waiting, reply) = self.send(station, method, path, headers, body, quiet);
         let result = async {
             let reply = reply.await?;
             answered(&mut span, &reply);
             let (status, taken) = (reply.status, head(&reply));
-            let bytes = reply.bytes().await?;
+            let bytes = self.read_body(reply, waiting.as_ref()).await?;
             span.set("http.response.body.size", bytes.len());
             Ok((status, taken, bytes))
         }
@@ -595,7 +626,12 @@ impl Stations {
     }
 
     async fn call(&self, station: &StationAddr, method: &str, path: &str, headers: Vec<(String, String)>, body: Vec<u8>) -> Result<Value> {
-        let (status, (), bytes) = self.exchange(station, method, path, headers, body, |_| ()).await?;
+        self.call_as(station, method, path, headers, body, false).await
+    }
+
+    /// A call, in the background (`quiet`): nobody waits on it, so it is not said to be waited on.
+    async fn call_as(&self, station: &StationAddr, method: &str, path: &str, headers: Vec<(String, String)>, body: Vec<u8>, quiet: bool) -> Result<Value> {
+        let (status, (), bytes) = self.exchange(station, method, path, headers, body, quiet, |_| ()).await?;
         // Like the web's `response.json().catch(() => ({}))`.
         let data: Value = serde_json::from_slice(&bytes).unwrap_or_else(|_| json!({}));
         if !(200..300).contains(&status) {
@@ -606,7 +642,7 @@ impl Stations {
 
     /// Opens an event stream; a non-2xx answer is an error. Its span ends when the stream is open.
     async fn open_stream(&self, station: &StationAddr, path: &str) -> Result<LocalBoxStream<'static, Result<Vec<u8>>>> {
-        let (mut span, reply) = self.send(station, "GET", path, vec![("accept".into(), EVENT_STREAM.into())], Vec::new());
+        let (mut span, waiting, reply) = self.send(station, "GET", path, vec![("accept".into(), EVENT_STREAM.into())], Vec::new(), false);
         span.set("ember.stream", true);
         let reply = match reply.await {
             Ok(reply) => reply,
@@ -615,6 +651,8 @@ impl Stations {
                 return Err(error);
             }
         };
+        // Open: what comes on it is no longer waited on, only counted.
+        drop(waiting);
         answered(&mut span, &reply);
         span.end();
         if !(200..300).contains(&reply.status) {
@@ -623,7 +661,13 @@ impl Stations {
             let data: Value = serde_json::from_slice(&bytes).unwrap_or_else(|_| json!({}));
             return Err(http_error(status, &data));
         }
-        Ok(idle_guarded(self.host.clone(), reply.body))
+        let status = Rc::downgrade(&self.status);
+        let body = reply.body.inspect(move |chunk| {
+            if let (Ok(chunk), Some(status)) = (chunk, status.upgrade()) {
+                status.received(None, chunk.len());
+            }
+        });
+        Ok(idle_guarded(self.host.clone(), body.boxed_local()))
     }
 
     /// Brings the topics a successful write changed up to date before the write answers, so a page that moves on
@@ -821,7 +865,7 @@ impl Stations {
             return;
         }
         // The summaries a chat opens with (as the station lists its threads).
-        let threads = self.call(&addr, "GET", "/threads", Vec::new(), Vec::new()).await.ok();
+        let threads = self.call_as(&addr, "GET", "/threads", Vec::new(), Vec::new(), true).await.ok();
         for (_, id, title) in chats {
             if self.addr(station).is_none() {
                 return;
@@ -836,7 +880,7 @@ impl Stations {
                 Some(last) => format!("/threads/{id}/entries?after={last}"),
                 None => format!("/threads/{id}/entries?limit={PAGE}"),
             };
-            let Ok(answer) = self.call(&addr, "GET", &path, Vec::new(), Vec::new()).await else { continue };
+            let Ok(answer) = self.call_as(&addr, "GET", &path, Vec::new(), Vec::new(), true).await else { continue };
             let summary = threads.as_ref().and_then(|t| t.as_array()?.iter().find(|t| t.get("id").and_then(Value::as_u64) == Some(id)).cloned());
             let entries = answer.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
             if let Some(first) = entries.first().and_then(n_of) {
@@ -1876,7 +1920,7 @@ mod tests {
         let host = FakeHost::new();
         let sink = Rc::new(FakeSink::default());
         let wire = FakeWire::new();
-        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()));
+        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Status::new(host.clone()));
         (host, sink, wire, stations)
     }
 
@@ -2260,7 +2304,7 @@ mod tests {
     fn reopened(host: &Rc<FakeHost>) -> (Rc<FakeSink>, Rc<FakeWire>, Rc<Stations>) {
         let sink = Rc::new(FakeSink::default());
         let wire = FakeWire::new();
-        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()));
+        let stations = Stations::new(host.clone(), sink.clone(), wire.clone(), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Status::new(host.clone()));
         (sink, wire, stations)
     }
 
@@ -2679,7 +2723,7 @@ mod tests {
         run(async {
             let (host, sink) = (FakeHost::new(), Rc::new(FakeSink::default()));
             let (local, far) = (FakeWire::new(), FakeWire::new());
-            let stations = Stations::new(host.clone(), sink, RoutedWire::new(local.clone(), far.clone()), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()));
+            let stations = Stations::new(host.clone(), sink, RoutedWire::new(local.clone(), far.clone()), Tracer::new(host.clone(), 1.0), Kept::new(host.clone()), Status::new(host.clone()));
             stations.request(&StationAddr::Local, "GET", "/overview", None).await.unwrap();
             stations.request(&remote(), "GET", "/host", None).await.unwrap();
             assert_eq!(local.paths(), vec!["GET /admin/api/overview"]);

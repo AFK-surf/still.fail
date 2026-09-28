@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use crate::accounts::{Accounts, encode_component};
 use crate::error::{CoreError, Result};
 use crate::host::{Host, HttpRequest};
+use crate::status::{Place, Status, cloud_what};
 use crate::trace::{Kind, Tracer, route};
 
 /// A member's credential for this device (POST /v1/workspaces/:ws/credential {device}): every station of the
@@ -26,11 +27,12 @@ pub struct Cloud {
     host: Rc<dyn Host>,
     accounts: Rc<Accounts>,
     tracer: Rc<Tracer>,
+    status: Rc<Status>,
 }
 
 impl Cloud {
-    pub fn new(host: Rc<dyn Host>, accounts: Rc<Accounts>, tracer: Rc<Tracer>) -> Rc<Cloud> {
-        Rc::new(Cloud { host, accounts, tracer })
+    pub fn new(host: Rc<dyn Host>, accounts: Rc<Accounts>, tracer: Rc<Tracer>, status: Rc<Status>) -> Rc<Cloud> {
+        Rc::new(Cloud { host, accounts, tracer, status })
     }
 
     /// One call as `sub`: adds the token (refreshing it), parses JSON, maps errors to CoreError with the cloud's code.
@@ -53,7 +55,12 @@ impl Cloud {
             headers,
             body: body.map(|b| serde_json::to_vec(&b).unwrap()),
         };
+        let waiting = self.status.begin(Place::Cloud, cloud_what(method, path), false);
         let response = self.host.fetch(request).await;
+        if let Ok(response) = &response {
+            waiting.received(response.body.len());
+        }
+        drop(waiting);
         if let Some(mut span) = span {
             match &response {
                 Ok(response) => {
@@ -150,7 +157,7 @@ mod tests {
             access_expires: far,
         };
         host.store(STORAGE_KEY, serde_json::to_vec(&[account]).unwrap());
-        Cloud::new(host.clone(), Accounts::load(host.clone()).await, Tracer::new(host.clone(), 1.0))
+        Cloud::new(host.clone(), Accounts::load(host.clone()).await, Tracer::new(host.clone(), 1.0), Status::new(host.clone()))
     }
 
     fn header(request: &HttpRequest, name: &str) -> Option<String> {

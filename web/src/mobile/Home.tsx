@@ -2,7 +2,7 @@
 // and grouped by day. A fixed head (you → settings · workspace · stations) and one bottom toolbar (全部 / 我参与的 · new
 // chat). Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
 import { useRef, useState } from "react";
-import { useChats, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
+import { useChats, useStations, useStatus, type ChatItem, type ChatsView, type StatusView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
 import { ChevronDown, Edit, Server, Unplug } from "../icons.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
@@ -65,15 +65,21 @@ export function Home() {
   );
 }
 
+/** "Reading", and what the core has been waiting on for a while if anything (the core's `status`). */
+function reading(status: StatusView | undefined): string {
+  return status?.text ? `正在读取会话… ${status.text}` : "正在读取会话…";
+}
+
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days. */
 function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine: boolean }) {
   const view = chats.value;
+  const status = useStatus();
   return (
     <div className={css.mHomePane}>
-      {!view ? <Note text={chats.error?.message ?? "正在读取会话…"} error={!!chats.error} /> : (
+      {!view ? <Note text={chats.error?.message ?? reading(status)} error={!!chats.error} /> : (
         <>
           {/* A station's link coming back is said on its rows; only with no rows to show does the list say it. */}
-          {view.days.length === 0 && (view.loading || view.stations.some((s) => s.state === "connecting")) && <Note text="正在读取会话…" />}
+          {view.days.length === 0 && (view.loading || view.stations.some((s) => s.state === "connecting")) && <Note text={reading(status)} />}
           {view.days.length === 0 && !view.loading && view.stations.filter((s) => s.state === "error").map((s) => <Note key={`e/${s.station}`} text={`连不上「${s.name}」，正在重试…`} error />)}
           {view.days.length === 0 && !view.loading && !view.stations.some((s) => s.state === "error" || s.state === "connecting") && <Empty view={view} onlyMine={onlyMine} />}
           {view.days.map((day) => (

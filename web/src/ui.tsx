@@ -430,11 +430,11 @@ export function SlackLogo({ size = 16 }: { size?: number; strokeWidth?: number }
  * Waiting on something, said in words. Appears after a short delay, so fast
  * answers do not flash it; `fill` centres it in the page.
  */
-export function Loading({ label = "正在加载…", fill = true }: { label?: string; fill?: boolean }) {
+export function Loading({ label = "正在加载…", fill = true, detail }: { label?: string; fill?: boolean; detail?: ReactNode }) {
   return (
     <div className={fill ? `${css.loading} ${css.loadingFill}` : css.loading} role="status" aria-live="polite">
       <span className={waitingCss.spinner} aria-hidden="true" />
-      <span>{label}</span>
+      <span>{label}{detail}</span>
     </div>
   );
 }

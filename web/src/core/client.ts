@@ -30,7 +30,9 @@ export type Topic =
   | { topic: "chat"; station: string; thread: number }
   | { topic: "chat"; station: string; session: string }
   // An agent's execution history, read for people.
-  | { topic: "history"; station: string; key: string };
+  | { topic: "history"; station: string; key: string }
+  // What the core is waiting on, when it is worth saying (a core from before it answers an error: nothing to say).
+  | { topic: "status" };
 
 export interface ErrorBody {
   code: string;

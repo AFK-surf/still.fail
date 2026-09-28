@@ -1,0 +1,34 @@
+import { useStatus, type StatusView } from "./api.ts";
+import { StatusDot, Tip } from "./ui.tsx";
+import * as nav from "./Sidebar.css.ts";
+import * as waitingCss from "./styles/waiting.css.ts";
+
+/** What the core is waiting on (see StationTrouble). */
+export function Waiting({ status }: { status: StatusView }) {
+  const items = (
+    <span className={nav.waitingItems}>
+      {status.items.map((item, i) => (
+        <span key={i} className={nav.waitingItem} data-state={item.state}>
+          <span>{item.text}</span>
+          <span className={nav.waitingDetail}>{item.detail}</span>
+        </span>
+      ))}
+    </span>
+  );
+  return (
+    <Tip label={items} side="top">
+      <div className={`${nav.navRow} ${nav.stationTrouble}`} data-state={status.state} role="status" tabIndex={0}>
+        <span className={nav.stationTroubleMark}>
+          {status.state === "trouble" ? <StatusDot state="offline" /> : <span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" />}
+        </span>
+        <span className={nav.stationTroubleText}>{status.text}</span>
+      </div>
+    </Tip>
+  );
+}
+
+/** Under a page's "loading…": what the core has been waiting on for a while, if anything (the core's `status`). */
+export function StatusLine() {
+  const text = useStatus()?.text;
+  return text ? <span className={nav.statusLine}>{text}</span> : null;
+}

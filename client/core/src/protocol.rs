@@ -68,6 +68,8 @@ pub enum Topic {
     Chat { station: String, #[serde(default)] thread: Option<u64>, #[serde(default)] session: Option<String> },
     /// An agent's execution history, as people read it (history.rs): its transcript in items, what streams now.
     History { station: String, key: String },
+    /// What the core is waiting on, when it is worth saying (status.rs): something slow, a connection down.
+    Status,
 }
 
 impl Topic {
@@ -76,7 +78,7 @@ impl Topic {
         match self {
             Topic::Link { station } | Topic::Overview { station } | Topic::Sessions { station } | Topic::Host { station } | Topic::Threads { station } | Topic::ChatRows { station } => Some(station),
             Topic::Session { station, .. } | Topic::Live { station, .. } | Topic::Thread { station, .. } | Topic::SlackApp { station, .. } => Some(station),
-            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } => None,
+            Topic::Accounts | Topic::Workspaces | Topic::Workspace { .. } | Topic::LoginSessions { .. } | Topic::Admin { .. } | Topic::Status => None,
             Topic::Chats { .. } | Topic::Stations { .. } | Topic::Connects { .. } | Topic::Chat { .. } | Topic::History { .. } => None,
         }
     }

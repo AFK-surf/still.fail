@@ -1021,6 +1021,28 @@ pub struct StationTrouble {
     pub state: String,
 }
 
+/// What the core is waiting on (the `status` topic), when it is worth saying: `state` slow (something has taken a
+/// while) | trouble (a connection down), absent while all goes as it should; `text` says it in one line.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusView {
+    pub state: Option<String>,
+    pub text: Option<String>,
+    pub items: Vec<StatusItem>,
+}
+
+/// One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusItem {
+    pub state: String,
+    pub text: String,
+    pub detail: String,
+}
+
 /// An agent of a sidebar row, with what its mark shows.
 #[typeshare]
 #[skip_serializing_none]

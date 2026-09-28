@@ -21,6 +21,7 @@ import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
 import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
+import { StatusLine } from "../Status.tsx";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
 import * as sidebarCss from "../styles/sidebar.css.ts";
@@ -210,7 +211,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       <div className={sessionCss.sessionPage} data-panel={open.length > 0}>
         <div className={jobsCss.sessionMain}>
           <section className={sessionCss.chat} aria-label="对话" data-under-composer="">
-            <Loading label={station.name ? `正在从 ${station.name} 读取对话…` : "正在读取对话…"} />
+            <Loading label={station.name ? `正在从 ${station.name} 读取对话…` : "正在读取对话…"} detail={<StatusLine />} />
             <ComposerSlot variant="chat" station={station} draftKey={chatKey} thread={null} sessionKey={null} locked />
           </section>
         </div>

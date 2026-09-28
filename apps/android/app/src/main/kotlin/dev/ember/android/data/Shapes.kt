@@ -1185,3 +1185,20 @@ data class StationView (
 	val time: Map<String, Stamp>? = null
 )
 
+/// One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble.
+@Serializable
+data class StatusItem (
+	val state: String,
+	val text: String,
+	val detail: String
+)
+
+/// What the core is waiting on (the `status` topic), when it is worth saying: `state` slow (something has taken a
+/// while) | trouble (a connection down), absent while all goes as it should; `text` says it in one line.
+@Serializable
+data class StatusView (
+	val state: String? = null,
+	val text: String? = null,
+	val items: List<StatusItem>
+)
+

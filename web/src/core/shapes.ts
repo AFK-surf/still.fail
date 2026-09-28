@@ -1097,3 +1097,20 @@ export interface StationView {
 	time?: Record<string, Stamp>;
 }
 
+/** One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble. */
+export interface StatusItem {
+	state: string;
+	text: string;
+	detail: string;
+}
+
+/**
+ * What the core is waiting on (the `status` topic), when it is worth saying: `state` slow (something has taken a
+ * while) | trouble (a connection down), absent while all goes as it should; `text` says it in one line.
+ */
+export interface StatusView {
+	state?: string;
+	text?: string;
+	items: StatusItem[];
+}
+

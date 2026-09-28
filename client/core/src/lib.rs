@@ -19,6 +19,7 @@ pub mod mesh;
 pub mod present;
 pub mod protocol;
 pub mod station;
+pub mod status;
 pub mod store;
 pub mod sync;
 #[cfg(any(test, feature = "testing"))]

@@ -172,3 +172,11 @@ export const stationTrouble = style({
 export const stationTroubleMark = style({ width: 16, flex: "none", display: "grid", placeItems: "center" });
 export const stationTroubleText = style({ flex: 1, ...ellipsis });
 export const stationTroubleGo = style({ flex: "none", color: vars.muted });
+/** What is waited on: quieter than a station down, it is only slow; the row is no link. */
+globalStyle(`${stationTrouble}[data-state="slow"]`, { color: vars.muted, cursor: "default" });
+globalStyle(`${stationTrouble}[role="status"]:hover`, { background: "transparent" });
+export const waitingItems = style({ display: "grid", gap: 6, maxWidth: 320 });
+export const waitingItem = style({ display: "grid", gap: 1 });
+export const waitingDetail = style({ opacity: 0.7 });
+/** Under a page's "loading…": quiet. */
+export const statusLine = style({ display: "block", marginTop: 4, fontSize: 12, color: vars.muted });

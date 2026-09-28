@@ -3,7 +3,8 @@ import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { stationApi, useChats, useStationCall, type ChatItem } from "./api.ts";
+import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
+import { Waiting } from "./Status.tsx";
 import { useToast } from "./toast.tsx";
 import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, StatusDot, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
@@ -32,12 +33,19 @@ export function Sidebar() {
         <>
           <ChatList scope="local" newChat="/new" stationsPage="/settings" archive="/archive" />
           <div className={nav.navFoot}>
+            <LocalWaiting />
             <NavLink className={nav.navRow} to="/settings"><Settings {...ICON} />设置</NavLink>
           </div>
         </>
       )}
     </nav>
   );
+}
+
+/** On a station's own page: only what the core waits on (its one station's state is the page's). */
+function LocalWaiting() {
+  const status = useStatus();
+  return status?.state ? <Waiting status={status} /> : null;
 }
 
 function SettingsNav() {
@@ -98,13 +106,15 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
 }
 
 /**
- * The workspace's stations not working as they should (the core's `trouble`): a row at the top of the sidebar's foot,
- * over the account — which, or how many, and the worst state's dot (a spinner while one reconnects). It leads to the
- * stations. Nothing while all work.
+ * The one place that says what is wrong or slow, at the top of the sidebar's foot: the workspace's stations not working
+ * as they should (the core's `trouble`: which, or how many, and the worst state's dot, a spinner while one reconnects;
+ * it leads to the stations); else what the core has been waiting on for a while, or ember cloud not reached (the
+ * core's `status`: what, how long, how fast; each thing on hover). Nothing while all goes as it should.
  */
 export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const trouble = useChats(scope, false).value?.trouble;
-  if (!trouble) return null;
+  const status = useStatus();
+  if (!trouble) return status?.state ? <Waiting status={status} /> : null;
   return (
     <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble.state}>
       <span className={nav.stationTroubleMark}>

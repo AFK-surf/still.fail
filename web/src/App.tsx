@@ -14,6 +14,7 @@ import { ChatPage } from "./pages/ChatPage.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
 import { Loading } from "./ui.tsx";
+import { StatusLine } from "./Status.tsx";
 import { toMadeChat } from "./Chat.tsx";
 import { ComposerDock } from "./dock.tsx";
 import { Mark } from "./brand.tsx";
@@ -49,7 +50,7 @@ export function App() {
       </div>
     );
   }
-  if (!overview.value) return <div className={shellCss.gate}><Loading label="正在连接 ember…" /></div>;
+  if (!overview.value) return <div className={shellCss.gate}><Loading label="正在连接 ember…" detail={<StatusLine />} /></div>;
 
   return (
     <ToastProvider>

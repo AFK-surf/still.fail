@@ -9,6 +9,7 @@ import { ServicePage } from "../Preview.tsx";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { ToastProvider } from "../toast.tsx";
 import { Button, Select, Splash, useNarrow } from "../ui.tsx";
+import { StatusLine } from "../Status.tsx";
 import { signIn, useAccounts } from "./accounts.ts";
 import { Callback, SignInPage } from "./gate.tsx";
 import { WorkspaceShell } from "./workspace.tsx";
@@ -162,7 +163,7 @@ function Landing() {
       </div>
     );
   }
-  return <Splash label={failed ? `没能读取你的 workspace：${failed.message}` : "正在读取你的 workspace…"} now={Boolean(failed)} />;
+  return <Splash label={failed ? `没能读取你的 workspace：${failed.message}` : "正在读取你的 workspace…"} now={Boolean(failed)}>{!failed && <StatusLine />}</Splash>;
 }
 
 /** Asks for the invite code a new workspace needs; what the last try said stands under it. */
@@ -187,7 +188,7 @@ function WorkspaceRoute() {
   const { ws = "" } = useParams();
   const narrow = useNarrow();
   const workspaces = useWorkspaces().value;
-  if (!workspaces) return <Splash label="正在打开 workspace…" />;
+  if (!workspaces) return <Splash label="正在打开 workspace…"><StatusLine /></Splash>;
   const owner = workspaces.find((a) => a.workspaces.some((w) => w.id === ws));
   const found = owner?.workspaces.find((w) => w.id === ws);
   if (!owner || !found) return <div className={shellCss.gate}><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className={`${controlsCss.btn} btn-secondary`} href="/">回到 ember</a></div>;
