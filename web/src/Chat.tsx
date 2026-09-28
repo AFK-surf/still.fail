@@ -3,12 +3,12 @@
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, type Activity as ActivityView, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
-import { ComposerSlot } from "./dock.tsx";
+import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { Prose } from "./Prose.tsx";
 import { FilePreview, fileSize, isImage, useFileUrl } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
@@ -36,6 +36,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
 }) {
   const station = useStation();
   const list = useRef<HTMLDivElement>(null);
+  const composerHeight = useComposerHeight();
   const floor = useRef<HTMLDivElement>(null);
   const sending = useChatSend();
   const { thread, outbox, messages } = chat;
@@ -89,7 +90,8 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   };
 
   return (
-    <section className="chat" aria-label="对话">
+    // The list runs on under the composer, frosted over it (app.css): its foot leaves the composer's height free.
+    <section className="chat" aria-label="对话" data-under-composer="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
       <div className="chat-pane">
       {away && (
         <button type="button" className="chat-to-bottom" aria-label="跳到最新"

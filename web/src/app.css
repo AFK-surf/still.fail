@@ -2363,7 +2363,9 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 /* The chat pages' one composer (dock.tsx) sits over its place on the page, laid out for a new chat or a chat. */
 .composer-slot { flex: none; }
 .new-chat-inner > .composer-slot { justify-self: stretch; }
-.composer-dock { position: absolute; z-index: 3; view-transition-name: composer; }
+.composer-dock { position: absolute; z-index: 3; }
+/* Named only while a page changes (transitionTo): named, it would be a backdrop root and its glass would blur nothing. */
+:root[data-transitioning] .composer-dock { view-transition-name: composer; }
 .composer-dock .composer, .composer-dock .composer-wrap { border-top: 0; }
 .composer-dock[data-variant="new"] .composer-wrap { padding: 0; text-align: left; }
 .composer-dock[data-variant="new"] .composer-box { min-height: 96px; }
@@ -2776,3 +2778,18 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .archive-title { font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-meta { font-size: var(--text-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-actions { display: flex; gap: 4px; flex: none; }
+
+/* A chat's list runs on under its composer, which floats over it frosted, as the phone's does: what scrolls under it
+   shows through, blurred. The list's foot leaves the composer's height free, so its last message still ends above it. */
+.chat[data-under-composer] > .composer-slot { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; }
+.chat[data-under-composer] .chat-list { padding-bottom: calc(24px + var(--composer-height)); }
+.chat[data-under-composer] .chat-to-bottom { bottom: calc(12px + var(--composer-height)); }
+.chat[data-under-composer] > .offline-notice { margin-bottom: calc(8px + var(--composer-height)); }
+.composer-dock[data-variant="chat"] .composer-wrap { pointer-events: none; }
+.composer-dock[data-variant="chat"] .composer-wrap > * { pointer-events: auto; }
+.composer-dock[data-variant="chat"] .composer-box {
+  background: color-mix(in oklch, var(--canvas) 72%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: 0 6px 16px rgb(0 0 0 / .08), 0 2px 5px rgb(0 0 0 / .06);
+}
+.composer-dock[data-variant="chat"] .composer-box[data-dragging] { background: color-mix(in oklch, var(--field-focus) 8%, color-mix(in oklch, var(--canvas) 72%, transparent)); }

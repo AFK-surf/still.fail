@@ -116,6 +116,11 @@ export function ComposerSlot(spec: ComposerSpec) {
   return <div ref={ref} className="composer-slot" data-variant={spec.variant} style={{ height: dock?.height || undefined }} />;
 }
 
+/** The composer's height: what a page running under it leaves free at its foot. */
+export function useComposerHeight(): number {
+  return useContext(DockContext)?.height ?? 0;
+}
+
 /** The next page's draft goes on from what is typed now. */
 export function useCarryDraft(): (key: string) => void {
   const dock = useContext(DockContext);

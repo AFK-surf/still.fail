@@ -573,10 +573,12 @@ export function Time({ stamp, className, fixed = false }: { stamp: Stamp | undef
 export function transitionTo(go: () => void, ready?: () => boolean, still = false): Promise<void> {
   if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { go(); return Promise.resolve(); }
   if (still) document.documentElement.dataset.still = "";
+  // What is named for it only while it runs (app.css): a named element blurs nothing behind it (the composer's glass).
+  document.documentElement.dataset.transitioning = "";
   const transition = document.startViewTransition(async () => {
     flushSync(go);
     const until = performance.now() + 800;
     while (ready && !ready() && performance.now() < until) await new Promise((r) => setTimeout(r, 16));
   });
-  return transition.finished.catch(() => {}).finally(() => { if (still) delete document.documentElement.dataset.still; });
+  return transition.finished.catch(() => {}).finally(() => { delete document.documentElement.dataset.transitioning; if (still) delete document.documentElement.dataset.still; });
 }
