@@ -15,6 +15,7 @@
 //! answered by a JSON head line `{"status","headers"}` and the response body.
 //! A request's `traceparent` header is passed on to the admin API (see telemetry.rs).
 
+mod errors;
 mod local;
 mod node;
 mod telemetry;
@@ -288,14 +289,25 @@ async fn run(options: Run) -> Result<()> {
     let telemetry = Telemetry::new(traces_on(&data));
     let (ready_tx, ready) = watch::channel(false);
     let (stop_tx, stopping) = watch::channel(false);
-    // The app in this process (ember-app) while it takes over from the Node part: EMBER_STATION_APP=rust.
-    let in_process = std::env::var("EMBER_STATION_APP").as_deref() == Ok("rust");
+    // The app in this process (ember-app) while it takes over from the Node part: EMBER_STATION_APP=rust, or a file
+    // named `rust` in the data directory (it survives `ember update`, which writes the service anew; removed to go back).
+    let in_process = std::env::var("EMBER_STATION_APP").as_deref() == Ok("rust") || data.join("rust").exists();
     // Held for as long as this runs: a dropped sender reads as "not answering" to whoever waits on `ready`.
     let ready_tx = Arc::new(ready_tx);
     let (backend, supervised, app) = if in_process {
         let app: Arc<std::sync::OnceLock<Arc<ember_app::server::App>>> = Arc::default();
         let (cell, data, ui, ready_tx) = (app.clone(), data.clone(), options.app.join("dist").join("admin"), ready_tx.clone());
         let config = std::env::var_os("EMBER_CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
+        // Its errors to ember's error tracking, while the config says so.
+        let (config_path, state_data) = (config.clone(), data.clone());
+        let _ = errors::REPORTS.set(ember_app::telemetry::ErrorReports::new(ember_app::telemetry::ErrorReportsOptions {
+            key: ember_app::telemetry::built_key(&ui),
+            enabled: Arc::new(move || {
+                std::fs::read(&config_path).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).is_some_and(|c| c["telemetry"]["errors"] == true)
+            }),
+            station: Arc::new(move || load_state(&state_data).ok().map(|s| s.station)),
+            home: None,
+        }));
         let started = tokio::spawn(async move {
             match ember_app::server::App::start(ember_app::server::AppOptions { data, config, ui }).await {
                 Ok(app) => {
@@ -332,6 +344,9 @@ async fn run(options: Run) -> Result<()> {
         Some(app) => {
             ready_tx.send_replace(false);
             app.shutdown().await;
+            if let Some(reports) = errors::REPORTS.get() {
+                reports.shutdown().await;
+            }
         }
         None => {
             let _ = supervised.await;
@@ -857,7 +872,12 @@ async fn main() -> Result<()> {
     // The DHT and mDNS say a lot that is not the station's trouble: a network where the DHT cannot be reached (its
     // bootstrap fails every second there) still finds stations through the relay and the LAN.
     let filter = "info,iroh=warn,swarm_discovery=warn,n0_mainline=off,iroh_mainline_address_lookup=error";
-    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| filter.into())).init();
+    {
+        use tracing_subscriber::layer::SubscriberExt;
+        use tracing_subscriber::util::SubscriberInitExt;
+        let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| filter.into());
+        tracing_subscriber::registry().with(tracing_subscriber::fmt::layer()).with(filter).with(errors::ErrorLayer).init();
+    }
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut take = |flag: &str| -> Option<String> {
         let i = args.iter().position(|a| a == flag)?;
