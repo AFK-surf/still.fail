@@ -1177,7 +1177,9 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 /* Someone's message has its avatar in a column of its own, held in view while the message scrolls past: however long
    a reply, whose it is shows at the top of the pane. An agent at work shows the same avatar, where its message lands. */
 .msg-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; align-items: start; }
-.msg-row > .msg-avatar { position: sticky; top: 12px; }
+/* Sticky offsets count from inside the list's padding: these put the avatar 8px under the pane's top. */
+.msg-row > .msg-avatar { position: sticky; top: -16px; }
+@media (max-width: 700px) { .msg-row > .msg-avatar { top: -8px; } }
 .msg-row > .msg-avatar, .chat-list .activity-avatar .msg-avatar { width: 28px; height: 28px; }
 .msg-row > .msg-avatar-agent img, .chat-list .activity-avatar .msg-avatar-agent img { width: 16px; height: 16px; }
 .msg-row .msg-head { min-height: 28px; }
