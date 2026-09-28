@@ -663,15 +663,17 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   useLayoutEffect(() => {
     if (window.matchMedia("(pointer: fine)").matches) input.current?.focus();
   }, [thread]);
-  // Grow with the text up to the frame's limit; the frame is never resized by hand. Its width changing re-wraps the
-  // text (or the placeholder), so it is measured again then; below the limit it never scrolls.
+  // Grow with the text up to three lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
+  // the text (or the placeholder), so it is measured again then; below the limit it never scrolls.
   useEffect(() => {
     const el = input.current;
     if (!el) return;
     const fit = () => {
+      const style = getComputedStyle(el);
+      const limit = 3 * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
       el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-      el.style.overflowY = el.scrollHeight > 160 ? "auto" : "hidden";
+      el.style.height = `${Math.min(el.scrollHeight, limit)}px`;
+      el.style.overflowY = el.scrollHeight > limit + 1 ? "auto" : "hidden";
     };
     fit();
     let width = el.clientWidth;
