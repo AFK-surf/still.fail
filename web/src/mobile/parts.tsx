@@ -6,6 +6,10 @@ import type { Badge as BadgeKind, Maker, Person, Quota, RuntimeKind } from "../a
 import { Check, ChevronLeft, type IconProps } from "../icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
 import { SlackLogo } from "../ui.tsx";
+import * as css from "./parts.css.ts";
+import * as partsCss from "./styles/parts.css.ts";
+import * as barsCss from "./styles/bars.css.ts";
+import * as listsCss from "./styles/lists.css.ts";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -20,7 +24,7 @@ const MONO = new Set(["anthropic", "openai", "kimi", "xai"]);
 /** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's. */
 export function MakerIcon({ maker, runtime, size }: { maker?: Maker | undefined; runtime?: RuntimeKind | string | undefined; size: number }) {
   const id = maker && MAKERS.has(maker.id) ? maker.id : runtime === "codex" ? "openai" : "anthropic";
-  return <img className="m-maker" src={`${BASE}models/${id}.svg`} alt={maker?.name ?? ""} width={size} height={size} data-mono={MONO.has(id) || undefined} />;
+  return <img className={css.mMaker} src={`${BASE}models/${id}.svg`} alt={maker?.name ?? ""} width={size} height={size} data-mono={MONO.has(id) || undefined} />;
 }
 
 /** An agent's state as its mark shows it; done shows none. */
@@ -37,7 +41,7 @@ export function Badge({ state, size, ring, around, style }: { state: AgentState;
   const inner = r - ring;
   const w = Math.min(2.5, inner);
   return (
-    <svg className="m-badge" width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={style} aria-hidden="true">
+    <svg className={css.mBadge} width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={style} aria-hidden="true">
       <circle cx={r} cy={r} r={r} fill={around} />
       {state === "block" && <circle cx={r} cy={r} r={inner} fill="var(--m-accent)" />}
       {state === "failed" && <circle cx={r} cy={r} r={inner} fill="var(--m-red)" />}
@@ -51,8 +55,8 @@ export function ModelMark({ maker, runtime, size = 36, state, around = "var(--m-
   const xs = size < 30;
   const badge = xs ? 11 : 15;
   return (
-    <span className="m-model-mark" style={{ width: size, height: size }}>
-      <span className="m-model-tile" style={{ borderRadius: xs ? 6 : 11 }}>
+    <span className={css.mModelMark} style={{ width: size, height: size }}>
+      <span className={css.mModelTile} style={{ borderRadius: xs ? 6 : 11 }}>
         <MakerIcon maker={maker} runtime={runtime} size={Math.round(size * (xs ? 0.6 : 0.56))} />
       </span>
       {state && state !== "done" && <Badge state={state} size={badge} ring={xs ? 1.5 : 2} around={around} style={{ position: "absolute", right: -3, bottom: -3 }} />}
@@ -84,7 +88,7 @@ export function initial(name: string): string {
 export function Avatar({ id, name, size, picture }: { id: string; name: string; size: number; picture?: string | undefined }) {
   const [failed, setFailed] = useState(false);
   return (
-    <span className="m-avatar" style={{ width: size, height: size, background: avatarColor(id), fontSize: size * 0.5 }}>
+    <span className={css.mAvatar} style={{ width: size, height: size, background: avatarColor(id), fontSize: size * 0.5 }}>
       {picture && !failed
         ? <img src={picture} alt={name} referrerPolicy="no-referrer" onError={() => setFailed(true)} />
         : initial(name)}
@@ -95,9 +99,9 @@ export function Avatar({ id, name, size, picture }: { id: string; name: string; 
 /** People overlapping a little, each ringed in the page's colour. */
 export function PeopleStack({ people, size = 18, ring = "var(--m-bg)" }: { people: Person[]; size?: number; ring?: string }) {
   return (
-    <span className="m-people">
+    <span className={css.mPeople}>
       {people.map((p, i) => (
-        <span key={p.id} className="m-people-one" style={{ width: size + 3, height: size + 3, marginLeft: i ? -5 : 0, zIndex: people.length - i, background: ring }}>
+        <span key={p.id} className={css.mPeopleOne} style={{ width: size + 3, height: size + 3, marginLeft: i ? -5 : 0, zIndex: people.length - i, background: ring }}>
           <Avatar id={p.id} name={p.shown.display} size={size} picture={p.shown.picture} />
         </span>
       ))}
@@ -128,15 +132,15 @@ export function Ring({ percent, label, level, size = 46 }: { percent: number; la
   const r = size / 2 - w / 2 - 1;
   const p = Math.max(0, Math.min(100, percent));
   return (
-    <span className="m-ring">
-      <span className="m-ring-disc" style={{ width: size, height: size }}>
+    <span className={css.mRing}>
+      <span className={css.mRingDisc} style={{ width: size, height: size }}>
         <svg width={size} height={size} aria-hidden="true">
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--m-line)" strokeWidth={w} />
           {p > 0 && <path d={arc(size / 2, r, 0, (360 * p) / 100)} fill="none" stroke={levelColor(level)} strokeWidth={w} strokeLinecap="round" />}
         </svg>
         <b style={{ fontSize: size < 44 ? 12 : 13 }}>{percent}</b>
       </span>
-      <span className="m-ring-label">{label}</span>
+      <span className={css.mRingLabel}>{label}</span>
     </span>
   );
 }
@@ -150,7 +154,7 @@ export function QuotaRing({ left, level, size = 20 }: { left: number; level: str
   const r = size / 2 - w / 2 - 0.5;
   const used = 100 - left;
   return (
-    <span className="m-quota-ring" style={{ width: size, height: size }}>
+    <span className={css.mQuotaRing} style={{ width: size, height: size }}>
       <svg width={size} height={size} aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--m-line)" strokeWidth={w} />
         {left > 0 && <path d={arc(size / 2, r, used * 3.6, (360 * left) / 100)} fill="none" stroke={levelColor(level)} strokeWidth={w} strokeLinecap="round" />}
@@ -165,9 +169,9 @@ export function QuotaRings({ quota }: { quota?: Quota | undefined }) {
   const windows = quota?.state === "ok" ? quota.windows : [];
   if (!windows.length) return null;
   return (
-    <span className="m-quota-rings">
+    <span className={css.mQuotaRings}>
       {windows.map((w) => (
-        <span key={w.mark} className="m-quota-window"><QuotaRing left={w.left} level={w.level} /><i>{w.mark}</i></span>
+        <span key={w.mark} className={partsCss.mQuotaWindow}><QuotaRing left={w.left} level={w.level} /><i>{w.mark}</i></span>
       ))}
     </span>
   );
@@ -198,19 +202,19 @@ export function Seg({ options, selected, onSelect, height = 30, fill = false, ra
   const row = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ x: number; w: number; moved: boolean } | null>(null);
   useLayoutEffect(() => {
-    const el = row.current?.querySelectorAll<HTMLElement>(".m-seg-option")[selected];
+    const el = row.current?.querySelectorAll<HTMLElement>(`.${css.mSegOption}`)[selected];
     if (!el) return;
     // The first placement jumps; a change of choice slides.
     setThumb((t) => ({ x: el.offsetLeft, w: el.offsetWidth, moved: t !== null }));
   }, [selected, options.length]);
   return (
-    <div className={`m-seg${className ? ` ${className}` : ""}`} data-track={track || undefined} data-fill={fill || undefined}
+    <div className={`${css.mSeg}${className ? ` ${className}` : ""}`} data-track={track || undefined} data-fill={fill || undefined}
       style={{ height, borderRadius: radius, padding: inset }}>
-      <div className="m-seg-row" ref={row}>
-        {thumb && <span className="m-seg-thumb" data-moved={thumb.moved || undefined}
+      <div className={css.mSegRow} ref={row}>
+        {thumb && <span className={css.mSegThumb} data-moved={thumb.moved || undefined}
           style={{ transform: `translateX(${thumb.x}px)`, width: thumb.w, borderRadius: Math.max(0, radius - inset) }} />}
         {options.map((label, i) => (
-          <button key={label} type="button" className="m-seg-option" data-on={i === selected || undefined} onClick={() => onSelect(i)}>{label}</button>
+          <button key={label} type="button" className={css.mSegOption} data-on={i === selected || undefined} onClick={() => onSelect(i)}>{label}</button>
         ))}
       </div>
     </div>
@@ -218,63 +222,63 @@ export function Seg({ options, selected, onSelect, height = 30, fill = false, ra
 }
 
 export function Spinner({ size, color }: { size: number; color?: string }) {
-  return <span className="m-spinner" style={{ width: size, height: size, ...(color ? { borderTopColor: color, borderRightColor: color } : {}) }} aria-hidden="true" />;
+  return <span className={css.mSpinner} style={{ width: size, height: size, ...(color ? { borderTopColor: color, borderRightColor: color } : {}) }} aria-hidden="true" />;
 }
 
 // ── navigation ─────────────────────────────────────────────────────────
 
 /** Back, in the accent colour, with where it goes back to. */
 export function NavBack({ label, onClick }: { label: string; onClick: () => void }) {
-  return <button type="button" className="m-nav-back" onClick={onClick}><ChevronLeft size={22} />{label}</button>;
+  return <button type="button" className={css.mNavBack} onClick={onClick}><ChevronLeft size={22} />{label}</button>;
 }
 
 /** A bar's button: the icon alone, no disc behind it (a bar's buttons are quiet). */
 export function NavButton({ icon: I, onClick, iconSize = 18, label }: { icon: Icon; onClick: () => void; iconSize?: number; label: string }) {
-  return <button type="button" className="m-nav-button" onClick={onClick} aria-label={label}><I size={iconSize} /></button>;
+  return <button type="button" className={barsCss.mNavButton} onClick={onClick} aria-label={label}><I size={iconSize} /></button>;
 }
 
 /** A page's compact bar: back, a centred title, and one action. No line under it: the page's paper runs on. */
 export function NavBar({ back, onBack, title, sub, trailing }: { back: string; onBack: () => void; title: string; sub?: ReactNode; trailing?: ReactNode }) {
   return (
-    <header className="m-navbar">
-      <span className="m-navbar-back"><NavBack label={back} onClick={onBack} /></span>
-      <span className="m-navbar-title"><b>{title}</b>{sub !== undefined && <span className="m-navbar-sub">{sub}</span>}</span>
-      {trailing !== undefined && <span className="m-navbar-trailing">{trailing}</span>}
+    <header className={css.mNavbar}>
+      <span className={css.mNavbarBack}><NavBack label={back} onClick={onBack} /></span>
+      <span className={css.mNavbarTitle}><b>{title}</b>{sub !== undefined && <span className={css.mNavbarSub}>{sub}</span>}</span>
+      {trailing !== undefined && <span className={css.mNavbarTrailing}>{trailing}</span>}
     </header>
   );
 }
 
 /** Back to the chats, at the top of a large-title page. */
 export function TopBack({ label, onBack }: { label: string; onBack: () => void }) {
-  return <div className="m-top-back"><NavBack label={label} onClick={onBack} /></div>;
+  return <div className={css.mTopBack}><NavBack label={label} onClick={onBack} /></div>;
 }
 
 /** A page's large title (stations, settings): a small line over a big word. */
 export function LargeTitle({ small, big }: { small: string; big: string }) {
-  return <div className="m-large-title"><span>{small}</span><h1>{big}</h1></div>;
+  return <div className={css.mLargeTitle}><span>{small}</span><h1>{big}</h1></div>;
 }
 
 // ── lists and cards ────────────────────────────────────────────────────
 
 export function SectionHeader({ title, trailing, start = 20 }: { title: string; trailing?: string | undefined; start?: number }) {
-  return <div className="m-section" style={{ paddingLeft: start }}><b>{title}</b>{trailing !== undefined && <span>{trailing}</span>}</div>;
+  return <div className={css.mSection} style={{ paddingLeft: start }}><b>{title}</b>{trailing !== undefined && <span>{trailing}</span>}</div>;
 }
 
 export function Card({ onClick, children }: { onClick?: () => void; children: ReactNode }) {
   return onClick
-    ? <button type="button" className="m-card" onClick={onClick}>{children}</button>
-    : <div className="m-card">{children}</div>;
+    ? <button type="button" className={listsCss.mCard} onClick={onClick}>{children}</button>
+    : <div className={listsCss.mCard}>{children}</div>;
 }
 
 /** Rows on one rounded card; the card groups them, no lines between. */
 export function ListCard({ children }: { children: ReactNode }) {
-  return <div className="m-list-card">{children}</div>;
+  return <div className={css.mListCard}>{children}</div>;
 }
 
 export function ListRow({ onClick, children }: { onClick?: (() => void) | undefined; children: ReactNode }) {
   return onClick
-    ? <button type="button" className="m-list-row" onClick={onClick}>{children}</button>
-    : <div className="m-list-row">{children}</div>;
+    ? <button type="button" className={css.mListRow} onClick={onClick}>{children}</button>
+    : <div className={css.mListRow}>{children}</div>;
 }
 
 /** A row of a picking sheet: what, a line under it, and a check on the chosen one. */
@@ -282,36 +286,36 @@ export function PickRow({ label, sub, checked = false, enabled = true, accent = 
   label: string; sub?: string | undefined; checked?: boolean; enabled?: boolean; accent?: boolean; leading?: ReactNode; onClick: () => void;
 }) {
   return (
-    <button type="button" className="m-pick-row" disabled={!enabled} data-accent={accent || undefined} onClick={onClick}>
+    <button type="button" className={css.mPickRow} disabled={!enabled} data-accent={accent || undefined} onClick={onClick}>
       {leading}
-      <span className="m-pick-text"><span>{label}</span>{sub !== undefined && <small>{sub}</small>}</span>
-      {checked && <Check size={14} className="m-accent" />}
+      <span className={css.mPickText}><span>{label}</span>{sub !== undefined && <small>{sub}</small>}</span>
+      {checked && <Check size={14} className={partsCss.mAccent} />}
     </button>
   );
 }
 
 export function GroupLabel({ children }: { children: ReactNode }) {
-  return <div className="m-group-label">{children}</div>;
+  return <div className={listsCss.mGroupLabel}>{children}</div>;
 }
 
 export function InfoList({ children }: { children: ReactNode }) {
-  return <div className="m-info-list">{children}</div>;
+  return <div className={css.mInfoList}>{children}</div>;
 }
 
 export function InfoRow({ onClick, children }: { onClick?: () => void; children: ReactNode }) {
   return onClick
-    ? <button type="button" className="m-info-row" onClick={onClick}>{children}</button>
-    : <div className="m-info-row">{children}</div>;
+    ? <button type="button" className={listsCss.mInfoRow} onClick={onClick}>{children}</button>
+    : <div className={listsCss.mInfoRow}>{children}</div>;
 }
 
 /** A line to type in, on a soft frame. */
 export function Field({ value, onChange, placeholder, mono = false }: { value: string; onChange: (v: string) => void; placeholder: string; mono?: boolean }) {
-  return <input className="m-field" data-mono={mono || undefined} value={value} placeholder={placeholder} maxLength={mono ? 32 : 80} onChange={(e) => onChange(e.target.value)} spellCheck={false} />;
+  return <input className={listsCss.mField} data-mono={mono || undefined} value={value} placeholder={placeholder} maxLength={mono ? 32 : 80} onChange={(e) => onChange(e.target.value)} spellCheck={false} />;
 }
 
 export function Button({ label, primary, busy = false, enabled = true, onClick }: { label: string; primary: boolean; busy?: boolean; enabled?: boolean; onClick: () => void }) {
   return (
-    <button type="button" className="m-button" data-primary={primary || undefined} disabled={!enabled || busy} onClick={onClick}>
+    <button type="button" className={css.mButton} data-primary={primary || undefined} disabled={!enabled || busy} onClick={onClick}>
       {busy && <Spinner size={14} />}{label}
     </button>
   );
@@ -319,7 +323,7 @@ export function Button({ label, primary, busy = false, enabled = true, onClick }
 
 /** Something is on its way: said in words, centred on the page. */
 export function Loading({ text }: { text: string }) {
-  return <div className="m-loading">{text}</div>;
+  return <div className={css.mLoading}>{text}</div>;
 }
 
 export function Mark({ size = 14 }: { size?: number }) {
@@ -333,5 +337,5 @@ export function SlackMark({ size = 13 }: { size?: number }) {
 /** A scene beside text that says the same (Android's illustrations, as the web has them). */
 export function Illustration({ name, width }: { name: "new-chat" | "station-offline" | "sign-in"; width: number }) {
   // Decoded as the app starts (../brand.tsx), drawn in its first frame.
-  return <img className="m-illus" src={illustrationUrl(name)} alt="" width={width} decoding="sync" />;
+  return <img className={partsCss.mIllus} src={illustrationUrl(name)} alt="" width={width} decoding="sync" />;
 }

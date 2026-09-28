@@ -1,0 +1,216 @@
+import { globalStyle, style } from "@vanilla-extract/css";
+import { spinKeyframes } from "../styles/keyframes.css.ts";
+import { m } from "./styles/root.css.ts";
+import { mForm } from "./styles/sheets.css.ts";
+import { mMessages } from "./styles/chat.css.ts";
+import { mRunLabel } from "./styles/history.css.ts";
+import { mReaderBar, mSheetHead } from "./app.css.ts";
+import { mAgentHead, mAttach, mChatBar, mChatBarTitle, mDraftQuoteSource, mFileText, mInfoAgent, mJobHead, mQuoteSource, mUnreadLine } from "./Chat.css.ts";
+import { mSteps } from "./styles/settings.css.ts";
+import { mHomeBar, mHomeWorkspace } from "./Home.css.ts";
+
+export const mMaker = style({
+  display: "block", flex: "none",
+  selectors: {
+    [`:root[data-theme="dark"] ${m} &[data-mono]`]: { filter: "invert(1)" },
+  },
+  "@media": {
+    "(prefers-color-scheme: dark)": {
+      selectors: {
+        [`:root:not([data-theme="light"]) ${m} &[data-mono]`]: { filter: "invert(1)" },
+      },
+    },
+  },
+});
+export const mModelMark = style({ position: "relative", display: "inline-block", flex: "none" });
+export const mModelTile = style({
+  display: "grid", placeItems: "center", width: "100%", height: "100%", boxSizing: "border-box",
+  background: "var(--m-surface)", border: "1px solid var(--m-line)",
+});
+export const mBadge = style({ display: "block" });
+export const mAvatar = style({
+  display: "inline-grid", placeItems: "center", flex: "none", borderRadius: "50%", overflow: "hidden", color: "#fff",
+  fontWeight: "600", lineHeight: "1",
+});
+export const mPeople = style({ display: "inline-flex", alignItems: "center", flex: "none" });
+export const mPeopleOne = style({
+  position: "relative", display: "inline-grid", placeItems: "center", borderRadius: "50%",
+});
+export const mRing = style({
+  display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "4px", flex: "none",
+});
+export const mRingDisc = style({ position: "relative", display: "grid", placeItems: "center" });
+export const mRingLabel = style({ fontSize: "12px", color: "var(--m-muted)" });
+export const mQuotaRing = style({ position: "relative", display: "inline-grid", placeItems: "center", flex: "none" });
+export const mQuotaRings = style({ display: "inline-flex", alignItems: "center", gap: "6px", flex: "none" });
+export const mSpinner = style({
+  display: "inline-block", flex: "none", boxSizing: "border-box", borderRadius: "50%",
+  border: "1.5px solid transparent", borderTopColor: "var(--m-subtle)", borderRightColor: "var(--m-subtle)",
+  animation: `${spinKeyframes} .8s linear infinite`,
+});
+/** A segmented choice: a track that tints what it sits on, and a thumb that slides to the chosen option. */
+export const mSeg = style({
+  position: "relative", boxSizing: "border-box", overflow: "hidden",
+  selectors: {
+    "&[data-track]": { background: "color-mix(in srgb, var(--m-ink) 6%, transparent)" },
+  },
+});
+export const mSegRow = style({ position: "relative", display: "flex", height: "100%" });
+export const mSegOption = style({
+  border: "0", background: "none", padding: "0 10px", fontSize: "13px !important", color: "var(--m-muted) !important",
+  whiteSpace: "nowrap", cursor: "pointer", position: "relative",
+  selectors: {
+    [`${mSeg}[data-fill] &`]: { flex: "1", padding: "0 12px", fontSize: "14px !important" },
+    "&[data-on]": { color: "var(--m-ink) !important" },
+    [`${mSeg}:not([data-track]) &[data-on]`]: { fontWeight: "600" },
+  },
+});
+export const mSegThumb = style({
+  position: "absolute", top: "0", bottom: "0", left: "0",
+  background: "color-mix(in srgb, var(--m-ink) 8%, transparent)",
+  selectors: {
+    [`${mSeg}[data-track] &`]: { background: "var(--m-thumb)", boxShadow: "inset 0 0 0 0.5px var(--m-line)" },
+    [`:root[data-theme="dark"] ${m} ${mSeg}:not([data-track]) &`]: { background: "color-mix(in srgb, var(--m-ink) 13%, transparent)" },
+    "&[data-moved]": {
+      transition: "transform 240ms cubic-bezier(0, 0, .2, 1), width 240ms cubic-bezier(0, 0, .2, 1)",
+    },
+  },
+  "@media": {
+    "(prefers-color-scheme: dark)": {
+      selectors: {
+        [`:root:not([data-theme="light"]) ${m} ${mSeg}:not([data-track]) &`]: { background: "color-mix(in srgb, var(--m-ink) 13%, transparent)" },
+      },
+    },
+    "(prefers-reduced-motion: reduce)": {
+      animation: "none !important", transition: "none !important",
+    },
+  },
+});
+export const mNavBack = style({
+  display: "inline-flex", alignItems: "center", gap: "0", padding: "4px 6px 4px 0", border: "0", background: "none",
+  borderRadius: "8px", color: "var(--m-accent) !important", fontSize: "17px !important", cursor: "pointer",
+});
+export const mNavbar = style({
+  display: "grid", gridTemplateColumns: "84px minmax(0, 1fr) 84px", alignItems: "center", flex: "none",
+  padding: "calc(var(--m-top) + 6px) 16px 10px 10px", background: "var(--m-bg)",
+});
+export const mNavbarBack = style({ gridColumn: "1", justifySelf: "start", whiteSpace: "nowrap" });
+export const mNavbarTitle = style({
+  gridColumn: "2", display: "flex", flexDirection: "column", alignItems: "center", minWidth: "0", textAlign: "center",
+});
+export const mNavbarSub = style({ display: "flex", alignItems: "center", gap: "5px", maxWidth: "100%" });
+export const mNavbarTrailing = style({ gridColumn: "3", justifySelf: "end" });
+export const mTopBack = style({ padding: "calc(var(--m-top) + 6px) 0 4px 10px" });
+export const mLargeTitle = style({ padding: "0 16px 6px" });
+export const mSection = style({ display: "flex", alignItems: "flex-end", padding: "14px 20px 6px" });
+export const mListCard = style({
+  margin: "0 12px 10px", borderRadius: "16px", background: "var(--m-surface)", overflow: "hidden",
+  selectors: {
+    [`${mSteps} &`]: { margin: "0" },
+  },
+});
+export const mListRow = style({
+  display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", padding: "12px 16px",
+  border: "0", background: "none", color: "var(--m-ink)", textAlign: "left",
+  selectors: {
+    "button&": { cursor: "pointer" },
+  },
+});
+export const mPickRow = style({
+  display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "calc(100% - 24px)",
+  margin: "0 12px", padding: "12px 8px", border: "0", background: "none", color: "var(--m-ink)", textAlign: "left",
+  cursor: "pointer",
+  selectors: {
+    "&:disabled": { color: "var(--m-subtle)" },
+    "&[data-accent]": { color: "var(--m-accent) !important" },
+    [`${mForm} &`]: { width: "100%", margin: "0" },
+  },
+});
+export const mPickText = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column" });
+export const mInfoList = style({
+  borderRadius: "14px", background: "color-mix(in srgb, var(--m-ink) 5%, transparent)", overflow: "hidden",
+});
+export const mButton = style({
+  display: "inline-flex", alignItems: "center", gap: "8px", flex: "none", height: "38px", padding: "0 16px",
+  border: "0", borderRadius: "19px", background: "var(--m-chip)", color: "var(--m-ink) !important",
+  fontSize: "14px !important", fontWeight: "600", whiteSpace: "nowrap", cursor: "pointer",
+  selectors: {
+    "&[data-primary]": { background: "var(--m-ink)", color: "var(--m-bg) !important" },
+    [`&[data-primary]:disabled:not(:has(${mSpinner}))`]: { background: "var(--m-line)" },
+    [`${mSteps} > &`]: { alignSelf: "flex-end" },
+  },
+});
+export const mLoading = style({
+  flex: "1", display: "grid", placeItems: "center", padding: "32px", fontSize: "14px", color: "var(--m-muted)",
+  textAlign: "center",
+});
+globalStyle(`${mAvatar} img`, { width: "100%", height: "100%", objectFit: "cover" });
+globalStyle(`${mRingDisc} svg`, { position: "absolute", inset: "0" });
+globalStyle(`${mRingDisc} b`, { position: "relative", fontWeight: "600", color: "var(--m-ink)" });
+globalStyle(`${mQuotaRing} svg`, { position: "absolute", inset: "0" });
+globalStyle(`${mQuotaRing} b`, { position: "relative", fontWeight: "600", lineHeight: "1", color: "var(--m-ink)" });
+globalStyle(`${mNavbarTitle} b`, {
+  maxWidth: "100%", fontSize: "16px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+});
+globalStyle(`${mLargeTitle} span`, { fontSize: "13px", color: "var(--m-muted)" });
+globalStyle(`${mLargeTitle} h1`, {
+  margin: "0", fontSize: "32px", fontWeight: "700", letterSpacing: "-0.6px", lineHeight: "1.25",
+});
+globalStyle(`${mSection} b`, { fontSize: "15px", fontWeight: "600" });
+globalStyle(`${mSection} span`, { marginLeft: "auto", fontSize: "13px", color: "var(--m-muted)" });
+globalStyle(`${mPickText} > span`, { fontSize: "15px" });
+globalStyle(`${mPickText} small`, { fontSize: "12px", color: "var(--m-muted)" });
+/** Here rather than with its class: it comes after .m-navbar-title b, and wins over it. */
+globalStyle(`${mInfoAgent} b`, {
+  fontSize: "15px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+/** Here rather than with its class: it comes after .m-large-title span, and wins over it. */
+globalStyle(`${mInfoAgent} span`, {
+  display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: "var(--m-muted)", overflow: "hidden",
+  textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+/** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
+globalStyle(`${mHomeWorkspace} b`, {
+  minWidth: "0", fontSize: "24px", fontWeight: "700", letterSpacing: "-0.4px", overflow: "hidden",
+  textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+/** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
+globalStyle(`${mSheetHead} b`, { flex: "1", fontSize: "17px", fontWeight: "700" });
+/** Here rather than with its class: it comes after .m-section b, and wins over it. */
+globalStyle(`${mChatBarTitle} b`, {
+  flex: "0 1 auto", minWidth: "0", fontSize: "16px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+});
+/** Here rather than with its class: it comes after .m-loading, and wins over it. */
+globalStyle(`${mMessages} > *`, { flex: "none" });
+/** Here rather than with its class: it comes after .m-large-title span, and wins over it. */
+globalStyle(`${mUnreadLine} span`, { fontSize: "12px", color: "var(--m-blue)" });
+/** Here rather than with its class: it comes after .m-navbar-title b, and wins over it. */
+globalStyle(`${mAgentHead} b`, {
+  fontSize: "13px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+/** Here rather than with its class: it comes after .m-info-agent span, and wins over it. */
+globalStyle(`${mQuoteSource} > span`, {
+  display: "-webkit-box", WebkitLineClamp: "3", WebkitBoxOrient: "vertical", overflow: "hidden",
+});
+/** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
+globalStyle(`${mQuoteSource} b`, { color: "var(--m-ink)", fontWeight: "500" });
+/** Here rather than with its class: it comes after .m-pick-text > span, and wins over it. */
+globalStyle(`${mFileText} > span`, {
+  fontSize: "13px", color: "var(--m-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+/** Here rather than with its class: it comes after .m-info-agent span, and wins over it. */
+globalStyle(`${mDraftQuoteSource} > span`, {
+  flex: "1", minWidth: "0", display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+});
+/** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
+globalStyle(`${mDraftQuoteSource} b`, { color: "var(--m-ink)", fontWeight: "500" });
+/** Here rather than with its class: it comes after .m-pick-text > span, and wins over it. */
+globalStyle(`${mAttach} span`, { fontSize: "13px" });
+globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar})`, { WebkitAppRegion: "drag" });
+globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar}) :is(button, a)`, { WebkitAppRegion: "no-drag" });
+globalStyle(`${mListRow} ${mRunLabel}`, { width: "32px", flex: "none", fontSize: "13px", color: "var(--m-muted)" });
+/** Here rather than with its class: it comes after .m-quote-source > span, and wins over it. */
+globalStyle(`${mJobHead} span`, { display: "flex", flexDirection: "column", minWidth: "0" });

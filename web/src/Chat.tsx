@@ -14,6 +14,15 @@ import { FileLink, FilePreview, fileSize, isImage, useFileUrl } from "./FilePrev
 import { useStickToBottom } from "./scroll.ts";
 import { track } from "./telemetry.ts";
 import * as nav from "./Sidebar.css.ts";
+import * as sessionCss from "./styles/session.css.ts";
+import * as chatCss from "./mobile/styles/chat.css.ts";
+import * as chatCss2 from "./styles/chat.css.ts";
+import * as conversationCss from "./styles/conversation.css.ts";
+import * as css from "./Chat.css.ts";
+import * as waitingCss from "./styles/waiting.css.ts";
+import * as cloudCss from "./styles/cloud.css.ts";
+import * as composerCss from "./styles/composer.css.ts";
+import * as controlsCss from "./styles/controls.css.ts";
 
 /** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
 interface AgentHere { key: string; who: string; runtime: RuntimeKind; maker: Maker | undefined; session: Session; status: Status; live: Live | undefined; since: number | undefined }
@@ -27,7 +36,7 @@ interface AgentHere { key: string; who: string; runtime: RuntimeKind; maker: Mak
  * page is kept until the chat shows them, then gives way at once.
  */
 export function toMadeChat(go: () => void): void {
-  void transitionTo(go, () => document.querySelector(":is(.chat-list, .m-messages) :is(.msg-mine, .m-mine)") !== null, true);
+  void transitionTo(go, () => document.querySelector(`:is(.${sessionCss.chatList}, .${chatCss.mMessages}) :is(.${chatCss2.msgMine}, .${chatCss.mMine})`) !== null, true);
 }
 
 export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent }: {
@@ -47,7 +56,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
   // Whose a message is, the core says.
   const mineOf = (m: ChatMessage) => m.mine;
-  useStickToBottom(list, ".msg", floor);
+  useStickToBottom(list, `.${conversationCss.msg}`, floor);
   // Without a chat there is nothing older to load and nothing to read.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   useOlderOnScroll(list, chat, older);
@@ -91,20 +100,20 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   };
 
   return (
-    // The list runs on under the composer, frosted over it (app.css): its foot leaves the composer's height free.
-    <section className="chat" aria-label="对话" data-under-composer="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
-      <div className="chat-pane">
+    // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
+    <section className={sessionCss.chat} aria-label="对话" data-under-composer="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
+      <div className={sessionCss.chatPane}>
       {away && (
-        <button type="button" className="chat-to-bottom" aria-label="跳到最新"
+        <button type="button" className={css.chatToBottom} aria-label="跳到最新"
           // Glides down, and follows new messages again (scroll.ts).
           onClick={() => list.current?.dispatchEvent(new Event("to-bottom"))}>
           <ArrowDown size={16} strokeWidth={2} />
         </button>
       )}
-      <div className="chat-list" ref={list} onMouseUp={() => setTimeout(onSelect, 0)} onScroll={() => setPicked(null)}>
-        {chat.more && <div className="chat-older" aria-hidden="true"><span className="spinner" /></div>}
+      <div className={sessionCss.chatList} ref={list} onMouseUp={() => setTimeout(onSelect, 0)} onScroll={() => setPicked(null)}>
+        {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
         {messages.length === 0 && (
-          <div className="chat-empty">
+          <div className={css.chatEmpty}>
             <p>在这里发消息，这个对话里的 agent 会在这里回复。</p>
           </div>
         )}
@@ -112,28 +121,28 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           const fresh = m.seq > firstSeq.current!;
           const mine = mineOf(m);
           const enter = fresh && !(mine && sentHere.current.has(m.text)) ? true : undefined;
-          const line = m.seq === divider ? <div key={`new-${m.seq}`} className="chat-unread-line" data-unread-line role="separator"><span>以下是新消息</span></div> : null;
+          const line = m.seq === divider ? <div key={`new-${m.seq}`} className={css.chatUnreadLine} data-unread-line role="separator"><span>以下是新消息</span></div> : null;
           if (mine) {
             return [line, (
-              <div key={m.seq} className="msg msg-mine" data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
+              <div key={m.seq} className={`${conversationCss.msg} ${chatCss2.msgMine}`} data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
                 <Quotes quotes={m.quotes} />
-                {m.text && <div className="msg-bubble"><div className="msg-plain">{m.text}</div></div>}
+                {m.text && <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{m.text}</div></div>}
                 <Files owner={ownerOf} files={m.attachments} />
                 {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
                 {m.waiting
-                  ? <span className="msg-time msg-waiting msg-waiting-late"><span className="spinner" aria-hidden="true" />等待 agent 接收</span>
-                  : <Time className="msg-time" stamp={m.time?.createdAt} />}
+                  ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
+                  : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}
               </div>
             )];
           }
           // What ember itself says (a limit hit, a failure): a notice across the chat, not someone's message.
           if (m.system) {
             return [line, (
-              <div key={m.seq} className="msg msg-system" data-ts={m.ts} data-role="system" data-enter={enter} role="note">
-                <div className="msg-system-box">
+              <div key={m.seq} className={`${conversationCss.msg} ${css.msgSystem}`} data-ts={m.ts} data-role="system" data-enter={enter} role="note">
+                <div className={css.msgSystemBox}>
                   <Mark size={14} />
-                  <div className="markdown"><Prose>{m.text}</Prose></div>
-                  <Time className="msg-time" stamp={m.time?.createdAt} />
+                  <div className={conversationCss.markdown}><Prose>{m.text}</Prose></div>
+                  <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />
                 </div>
               </div>
             )];
@@ -142,56 +151,56 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           const who = m.by.name;
           const emitted = emissions.stateOf(m.seq);
           return [line, (
-            <div key={m.seq} className="msg msg-row" data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
+            <div key={m.seq} className={`${conversationCss.msg} ${css.msgRow}`} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
               data-enter={emissions.emits(m.seq) ? undefined : enter} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}>
               <MessageAvatar message={m} name={who} />
-              <div className="msg-main">
-                <div className="msg-head">
+              <div className={css.msgMain}>
+                <div className={conversationCss.msgHead}>
                   {agent
-                    ? <button type="button" className="msg-name msg-agent" onClick={() => onOpenHistory(agent.key)} title="打开或关闭执行历史">{who}</button>
-                    : <span className="msg-name">{who}</span>}
-                  <Time className="msg-time" stamp={m.time?.createdAt} />
+                    ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent.key)} title="打开或关闭执行历史">{who}</button>
+                    : <span className={css.msgName}>{who}</span>}
+                  <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />
                 </div>
                 <Quotes quotes={m.quotes} />
                 {m.authorKind === "person"
-                  ? <>{m.text && <div className="msg-plain">{m.text}</div>}<Files owner={ownerOf} files={m.attachments} /></>
+                  ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={ownerOf} files={m.attachments} /></>
                   : <ProseWithFiles owner={ownerOf} text={m.text} files={m.attachments} />}
               </div>
             </div>
           )];
         })}
         {outbox.map((o) => (
-          <div key={o.id} className="msg msg-mine" data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
+          <div key={o.id} className={`${conversationCss.msg} ${chatCss2.msgMine}`} data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
             <Quotes quotes={o.quotes} />
-            {o.text && <div className="msg-bubble"><div className="msg-plain">{o.text}</div></div>}
+            {o.text && <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{o.text}</div></div>}
             <Files owner={ownerOf} files={o.attachments} />
             {o.state === "failed"
               // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
-              ? <div className="msg-unsent">
+              ? <div className={css.msgUnsent}>
                   <Tip label={o.error ? `没发出去：${o.error}` : "没发出去"}>
-                    <span className="msg-unsent-note"><Info size={12} strokeWidth={2} />未发送</span>
+                    <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />未发送</span>
                   </Tip>
-                  <button type="button" className="msg-unsent-btn" onClick={() => void (id !== null && sending.retry(id, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
-                  <button type="button" className="msg-unsent-btn" onClick={() => void (id !== null && sending.discard(id, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
+                  <button type="button" className={css.msgUnsentBtn} onClick={() => void (id !== null && sending.retry(id, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
+                  <button type="button" className={css.msgUnsentBtn} onClick={() => void (id !== null && sending.discard(id, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
                 </div>
-              : <span className="msg-time msg-waiting msg-sending"><span className="spinner" aria-hidden="true" />正在发送</span>}
+              : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
           </div>
         ))}
         {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
         {shown.map(({ agent, leaving }) => (
           <Activity key={agent.key} agent={agent} leaving={leaving} pose={emissions.poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
         ))}
-        <div ref={floor} className="chat-floor" aria-hidden="true" />
+        <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
       </div>
       {picked && (
-        <button type="button" className="quote-pop" style={{ left: picked.at.x, top: picked.at.y }}
+        <button type="button" className={css.quotePop} style={{ left: picked.at.x, top: picked.at.y }}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => { setQuotes((all) => [...all, picked.quote]); setFocusQuote(picked.quote.id); setPicked(null); window.getSelection()?.removeAllRanges(); }}>
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
-      {chat.offline && <p className="offline-notice" role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
+      {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)}
         locked={chat.offline} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
@@ -277,7 +286,7 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     if (!pane) return;
     const record = () => {
       const top = pane.getBoundingClientRect().top;
-      const first = [...pane.querySelectorAll<HTMLElement>(".msg[data-ts]")].find((m) => m.getBoundingClientRect().bottom > top);
+      const first = [...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)].find((m) => m.getBoundingClientRect().bottom > top);
       if (first) leftAt.set(key, { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top });
     };
     pane.addEventListener("scroll", record, { passive: true });
@@ -290,7 +299,7 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     if (!saved || !ready || restored.current) return;
     restored.current = true;
     const pane = ref.current;
-    const at = pane?.querySelector<HTMLElement>(`.msg[data-ts="${saved.ts}"]`);
+    const at = pane?.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${saved.ts}"]`);
     if (!pane || !at) return;
     // A reader's move: the pane keeps it rather than holding its bottom.
     pane.dispatchEvent(new WheelEvent("wheel"));
@@ -359,12 +368,12 @@ export function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView
 }
 
 function MessageAvatar({ message, name }: { message: ChatMessage; name: string }) {
-  if (message.authorKind === "agent") return <span className="msg-avatar msg-avatar-agent">{message.by.runtime ? <ModelLogo maker={message.by.maker} runtime={message.by.runtime} size={12} /> : <Mark size={12} />}</span>;
-  if (message.authorKind === "ember") return <span className="msg-avatar msg-avatar-agent"><Mark size={12} /></span>;
+  if (message.authorKind === "agent") return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}>{message.by.runtime ? <ModelLogo maker={message.by.maker} runtime={message.by.runtime} size={12} /> : <Mark size={12} />}</span>;
+  if (message.authorKind === "ember") return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><Mark size={12} /></span>;
   const picture = message.by.picture;
   return picture
-    ? <img className="msg-avatar" src={picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />
-    : <span className="msg-avatar"><Avatar id={message.author} name={name} size={18} /></span>;
+    ? <img className={chatCss2.msgAvatar} src={picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />
+    : <span className={chatCss2.msgAvatar}><Avatar id={message.author} name={name} size={18} /></span>;
 }
 
 /**
@@ -375,25 +384,25 @@ function MessageAvatar({ message, name }: { message: ChatMessage; name: string }
 function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
   if (!quotes?.length) return null;
   const jump = (ts: string | undefined, text: string) => {
-    const target = ts ? document.querySelector<HTMLElement>(`.chat-list [data-ts="${ts}"]`) : null;
+    const target = ts ? document.querySelector<HTMLElement>(`.${sessionCss.chatList} [data-ts="${ts}"]`) : null;
     if (!target) return;
     // A reader's move: the pane lets it take the position.
-    target.closest(".chat-list")?.dispatchEvent(new WheelEvent("wheel"));
+    target.closest(`.${sessionCss.chatList}`)?.dispatchEvent(new WheelEvent("wheel"));
     const range = findText(target, text);
     if (range && "highlights" in CSS) {
       const rect = range.getBoundingClientRect();
-      const pane = target.closest<HTMLElement>(".chat-list");
+      const pane = target.closest<HTMLElement>(`.${sessionCss.chatList}`);
       if (pane) pane.scrollTop += rect.top + rect.height / 2 - (pane.getBoundingClientRect().top + pane.clientHeight / 2);
       flashRange(range);
       return;
     }
     target.scrollIntoView({ block: "center" });
-    target.classList.remove("msg-flash");
+    target.classList.remove(css.msgFlash);
     void target.offsetWidth;
-    target.classList.add("msg-flash");
+    target.classList.add(css.msgFlash);
   };
   return (
-    <div className="quote-cards">
+    <div className={css.quoteCards}>
       {quotes.map((q, i) => <QuoteCard key={i} quote={q} onJump={q.ts ? () => jump(q.ts, q.text) : undefined} />)}
     </div>
   );
@@ -402,12 +411,12 @@ function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
 /** One quote: the passage with whose it is, and the comment. Also the composer's pending quote, with an editable comment. */
 function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?: (() => void) | undefined; comment?: ReactNode; onRemove?: () => void }) {
   return (
-    <div className="quote-card">
-      <button type="button" className="quote-card-source" onClick={onJump} disabled={!onJump} title={onJump ? "跳到原消息" : undefined}>
-        <span className="quote-card-text"><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className="quote-card-who">{quote.author}：</span>{quote.text}</span>
+    <div className={css.quoteCard}>
+      <button type="button" className={css.quoteCardSource} onClick={onJump} disabled={!onJump} title={onJump ? "跳到原消息" : undefined}>
+        <span className={css.quoteCardText}><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className={css.quoteCardWho}>{quote.author}：</span>{quote.text}</span>
       </button>
-      {comment ?? (quote.comment ? <div className="quote-card-comment">{quote.comment}</div> : null)}
-      {onRemove && <button type="button" className="quote-card-remove" aria-label="移除引用" onClick={onRemove}><Close size={12} /></button>}
+      {comment ?? (quote.comment ? <div className={css.quoteCardComment}>{quote.comment}</div> : null)}
+      {onRemove && <button type="button" className={css.quoteCardRemove} aria-label="移除引用" onClick={onRemove}><Close size={12} /></button>}
     </div>
   );
 }
@@ -419,7 +428,7 @@ function ProseWithFiles({ owner, text, files }: { owner: (file: Attachment) => s
   const { placed, rest } = useMemo(() => placeFiles(text, files), [text, files]);
   return (
     <>
-      <div className="markdown"><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <FileItem sessionKey={owner(f)} file={f} />}>{text}</Prose></div>
+      <div className={conversationCss.markdown}><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <FileItem sessionKey={owner(f)} file={f} />}>{text}</Prose></div>
       <Files owner={owner} files={rest} />
     </>
   );
@@ -428,7 +437,7 @@ function ProseWithFiles({ owner, text, files }: { owner: (file: Attachment) => s
 /** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */
 function Files({ owner, files }: { owner: (file: Attachment) => string | null; files: Attachment[] | undefined }) {
   if (!files?.length) return null;
-  return <div className="msg-files">{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} />)}</div>;
+  return <div className={css.msgFiles}>{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} />)}</div>;
 }
 
 /** Images show themselves at their own proportions; other files are a card. Either opens in a preview. */
@@ -440,8 +449,8 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button type="button" className="msg-image" onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`} style={imageBox(file)}>
-          {url ? <img src={url} alt={file.name} /> : <span className="msg-image-wait" />}
+        <button type="button" className={css.msgImage} onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`} style={imageBox(file)}>
+          {url ? <img src={url} alt={file.name} /> : <span className={css.msgImageWait} />}
         </button>
         {preview}
       </>
@@ -450,7 +459,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (sessionKey === null) return <FileCard file={file} />;
   return (
     <>
-      <button type="button" className="file-card-open" onClick={() => setOpen(true)} aria-label={`查看 ${file.name}`}><FileCard file={file} /></button>
+      <button type="button" className={css.fileCardOpen} onClick={() => setOpen(true)} aria-label={`查看 ${file.name}`}><FileCard file={file} /></button>
       {preview}
     </>
   );
@@ -471,13 +480,13 @@ export function imageBox(file: Attachment): { width: number; aspectRatio: string
 
 function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; error?: string | null }) {
   return (
-    <span className="file-card" title={file.path ?? file.name} data-error={error ? true : undefined}>
-      {pending ? <span className="spinner" aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
-      <span className="file-card-text">
-        <span className="file-card-name">{file.name}</span>
-        <span className="file-card-meta">{error ?? (pending ? "正在上传…" : fileSize(file.size))}</span>
+    <span className={css.fileCard} title={file.path ?? file.name} data-error={error ? true : undefined}>
+      {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
+      <span className={css.fileCardText}>
+        <span className={css.fileCardName}>{file.name}</span>
+        <span className={css.fileCardMeta}>{error ?? (pending ? "正在上传…" : fileSize(file.size))}</span>
       </span>
-      {onRemove && <button type="button" className="file-card-remove" aria-label={`移除 ${file.name}`} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+      {onRemove && <button type="button" className={css.fileCardRemove} aria-label={`移除 ${file.name}`} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span>
   );
 }
@@ -627,7 +636,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
       el.style.overflowY = el.scrollHeight > limit + 1 ? "auto" : "hidden";
       edges();
     };
-    // Scrolling, the lines it cuts fade out at its edges (app.css) rather than stop at a hard line.
+    // Scrolling, the lines it cuts fade out at its edges (its styles) rather than stop at a hard line.
     const edges = () => {
       const over = el.scrollHeight > el.clientHeight + 1;
       el.toggleAttribute("data-more-above", over && el.scrollTop > 1);
@@ -646,20 +655,20 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     if (ready) void send(text.trim());
   };
   return (
-    <div className="composer-wrap">
-      <form className="composer-box" data-multiline={roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0 || undefined} data-dragging={dragging || undefined}
+    <div className={cloudCss.composerWrap}>
+      <form className={composerCss.composerBox} data-multiline={roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0 || undefined} data-dragging={dragging || undefined}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
         // Locked (its station offline), no file is taken in.
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); if (!locked) add(e.dataTransfer.files); } }}>
         {quotes.length > 0 && (
-          <div className="composer-quotes">
+          <div className={css.composerQuotes}>
             {quotes.map((q) => (
-              <div key={q.id} className="composer-quote" onClick={(e) => e.stopPropagation()}>
+              <div key={q.id} className={css.composerQuote} onClick={(e) => e.stopPropagation()}>
                 <QuoteCard quote={q} onRemove={() => setQuotes((all) => all.filter((x) => x.id !== q.id))} comment={
                   <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
-                    className="quote-card-comment quote-card-input" value={q.comment} placeholder="对这段说点什么（可以不写）" aria-label={`对 ${q.author} 这段的批注`}
+                    className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder="对这段说点什么（可以不写）" aria-label={`对 ${q.author} 这段的批注`}
                     onChange={(e) => { const v = e.target.value; setQuotes((all) => all.map((x) => (x.id === q.id ? { ...x, comment: v } : x))); }}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); input.current?.focus(); } }} />
                 } />
@@ -668,20 +677,20 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
           </div>
         )}
         {files.length > 0 && (
-          <div className="composer-files">
+          <div className={css.composerFiles}>
             {files.map((f) => {
               const remove = () => { if (f.preview) URL.revokeObjectURL(f.preview); setFiles((all) => all.filter((x) => x.id !== f.id)); };
               return f.preview ? (
-                <span key={f.id} className="composer-thumb" title={f.error ?? f.name} data-error={f.error ? true : undefined}>
+                <span key={f.id} className={css.composerThumb} title={f.error ?? f.name} data-error={f.error ? true : undefined}>
                   <img src={f.preview} alt={f.name} />
-                  {!f.done && !f.error && <span className="composer-thumb-busy"><span className="spinner" aria-hidden="true" /></span>}
-                  <button type="button" className="composer-thumb-remove" aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><Close size={11} /></button>
+                  {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
+                  <button type="button" className={css.composerThumbRemove} aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><Close size={11} /></button>
                 </span>
               ) : <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={remove} />;
             })}
           </div>
         )}
-        <textarea ref={input} className="composer-text" rows={1} value={text} placeholder={placeholder} aria-label="消息"
+        <textarea ref={input} className={css.composerText} rows={1} value={text} placeholder={placeholder} aria-label="消息"
           onChange={(e) => { setText(e.target.value); warm(); }}
           onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); } }}
           onKeyDown={(e) => {
@@ -691,22 +700,22 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
               if (goToNeighbour(e.key === "ArrowUp" ? -1 : 1)) e.preventDefault();
             }
           }} />
-        <div className="composer-toolbar">
+        <div className={css.composerToolbar}>
           <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
           <Tip label="发送文件">
-            <button type="button" className="attach-btn" aria-label="发送文件" disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
+            <button type="button" className={css.attachBtn} aria-label="发送文件" disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
               <Plus size={18} />
             </button>
           </Tip>
-          {toolbar && <div className="composer-choices" onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
+          {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
           <Tip label={uploading ? "文件还在上传" : "发送"}>
-            <button type="submit" className="send-btn" disabled={!ready} aria-label="发送" aria-busy={starting || undefined}>
-              {starting ? <span className="spinner" aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
+            <button type="submit" className={css.sendBtn} disabled={!ready} aria-label="发送" aria-busy={starting || undefined}>
+              {starting ? <span className={waitingCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
             </button>
           </Tip>
         </div>
       </form>
-      {sendError && <p className="field-error chat-error" role="alert">{sendError.message}</p>}
+      {sendError && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{sendError.message}</p>}
     </div>
   );
 }
@@ -800,9 +809,9 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     if (!current) return;
     const { seq, agent, pose } = current;
     const pane = list.current;
-    const avatar = pane?.querySelector(`.agent-activity[data-agent="${CSS.escape(agent)}"] .activity-avatar`);
-    const message = pane?.querySelector(`.msg[data-seq="${seq}"]`);
-    const landing = message?.querySelector(":scope > .msg-avatar");
+    const avatar = pane?.querySelector(`.${css.agentActivity}[data-agent="${CSS.escape(agent)}"] .${css.activityAvatar}`);
+    const message = pane?.querySelector(`.${conversationCss.msg}[data-seq="${seq}"]`);
+    const landing = message?.querySelector(`:scope > .${chatCss2.msgAvatar}`);
     if (!pane || !avatar || !message || !landing) { finish(seq, agent); return; }
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame = 0;
@@ -827,7 +836,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     if (pose === "fold") go("float", FOLD_MS);
     if (pose === "float") {
       const el = avatar.cloneNode(true) as HTMLElement;
-      el.classList.add("avatar-flying");
+      el.classList.add(css.avatarFlying);
       Object.assign(el.style, { left: "0", top: "0", width: `${(avatar as HTMLElement).offsetWidth}px`, height: `${(avatar as HTMLElement).offsetHeight}px` });
       pane.append(el);
       flying.current = el;
@@ -889,15 +898,15 @@ export function Activity({ agent, leaving, pose, onOpen, mark, className }: {
 }) {
   const now = useSteady(agent.activity?.now ?? { key: "busy", text: "处理中" });
   return (
-    <div className={`msg agent-activity${className ? ` ${className}` : ""}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined}>
-      <button type="button" className="activity-line" onClick={onOpen} title="打开执行历史" aria-label={`${agent.who}：${now.current.text}`}>
-        <span className="activity-avatar" aria-hidden="true">{mark ?? <span className="msg-avatar msg-avatar-agent"><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span>}</span>
-        <span className="activity-tail">
-          <span className="activity-now">
-            {now.previous && <span key={`was-${now.n - 1}`} className="activity-now-text" data-out="">{now.previous.text}</span>}
-            <span key={now.n} className="activity-now-text" data-in={now.switched || undefined}>{now.current.text}</span>
+    <div className={`${conversationCss.msg} ${css.agentActivity}${className ? ` ${className}` : ""}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined}>
+      <button type="button" className={css.activityLine} onClick={onOpen} title="打开执行历史" aria-label={`${agent.who}：${now.current.text}`}>
+        <span className={css.activityAvatar} aria-hidden="true">{mark ?? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span>}</span>
+        <span className={css.activityTail}>
+          <span className={css.activityNow}>
+            {now.previous && <span key={`was-${now.n - 1}`} className={css.activityNowText} data-out="">{now.previous.text}</span>}
+            <span key={now.n} className={css.activityNowText} data-in={now.switched || undefined}>{now.current.text}</span>
           </span>
-          {agent.since ? <span className="activity-elapsed"><Elapsed since={agent.since} /></span> : null}
+          {agent.since ? <span className={css.activityElapsed}><Elapsed since={agent.since} /></span> : null}
         </span>
       </button>
     </div>

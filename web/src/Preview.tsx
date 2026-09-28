@@ -12,6 +12,8 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { useHref } from "react-router";
 import { useLink } from "./station.tsx";
 import { useCall } from "./core/react.ts";
+import * as css from "./Preview.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
 
 declare const __PREVIEW_ORIGIN__: string;
 const ORIGIN = __PREVIEW_ORIGIN__;
@@ -70,16 +72,16 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
   useEffect(() => { if (at !== null && !editing) setTyped(at); }, [at, editing]);
   const icon = { size: 14, strokeWidth: 1.75 };
   return (
-    <form className="preview-bar" onSubmit={(e) => { e.preventDefault(); go(typed.startsWith("/") ? typed : `/${typed}`); (document.activeElement as HTMLElement | null)?.blur(); }}>
-      {back && <button type="button" className="icon-btn" aria-label="后退" title="后退" disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button>}
-      {forward && <button type="button" className="icon-btn" aria-label="前进" title="前进" disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button>}
-      <button type="button" className="icon-btn" aria-label="刷新" title="刷新" onClick={reload}><Refresh {...icon} /></button>
-      <label className="preview-address">
+    <form className={css.previewBar} onSubmit={(e) => { e.preventDefault(); go(typed.startsWith("/") ? typed : `/${typed}`); (document.activeElement as HTMLElement | null)?.blur(); }}>
+      {back && <button type="button" className={pagesCss.iconBtn} aria-label="后退" title="后退" disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button>}
+      {forward && <button type="button" className={pagesCss.iconBtn} aria-label="前进" title="前进" disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button>}
+      <button type="button" className={pagesCss.iconBtn} aria-label="刷新" title="刷新" onClick={reload}><Refresh {...icon} /></button>
+      <label className={css.previewAddress}>
         <Web size={14} strokeWidth={1.75} />
-        <span className="preview-host">{name}</span>
-        <input className="preview-path" value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />
+        <span className={css.previewHost}>{name}</span>
+        <input className={css.previewPath} value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />
       </label>
-      {external && <a className="icon-btn" href={external} target="_blank" rel="noopener" aria-label="在新窗口打开" title="在新窗口打开"><External {...icon} /></a>}
+      {external && <a className={pagesCss.iconBtn} href={external} target="_blank" rel="noopener" aria-label="在新窗口打开" title="在新窗口打开"><External {...icon} /></a>}
     </form>
   );
 }
@@ -93,8 +95,8 @@ function Restart({ name, restarting, reload }: { name: string; restarting: Resta
   }, [restarting, reload]);
   if (!restarting) return null;
   return (
-    <div className="preview-restart" role="status">
-      <span className="preview-restart-dot" aria-hidden="true" />
+    <div className={css.previewRestart} role="status">
+      <span className={css.previewRestartDot} aria-hidden="true" />
       <span><b>{name}正在重启</b><span>{restarting.restarts ? `第 ${restarting.restarts} 次 · ` : ""}起来后自动刷新</span></span>
     </div>
   );
@@ -125,10 +127,10 @@ function Framed({ name, external, restarting, origin, src, nonce, frame }:
   }, [origin, frame]);
   const reload = useCallback(() => nav("reload"), [nav]);
   return (
-    <div className="preview">
+    <div className={css.preview}>
       <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={reload} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} />
-      <div className="preview-stage">
-        {src && <iframe ref={frame} className="preview-frame" title={name} src={src} />}
+      <div className={css.previewStage}>
+        {src && <iframe ref={frame} className={css.previewFrame} title={name} src={src} />}
         <Restart name={name} restarting={restarting} reload={reload} />
       </div>
     </div>
@@ -193,8 +195,8 @@ export function ServicePage({ station, service }: { station: string; service: st
     call("station.request", { station, method: "GET", path: `/jobs/${encodeURIComponent(service)}` })
       .then((j) => { const found = j as { name: string; port: number | null; state: string }; setJob(found); document.title = found.name; }, (e: Error) => setError(e.message));
   }, [call, station, service]);
-  if (error) return <div className="preview-page preview-missing">找不到这个服务：{error}</div>;
-  if (!job) return <div className="preview-page" />;
-  if (job.port === null || (job.state !== "running" && job.state !== "exited")) return <div className="preview-page preview-missing">「{job.name}」已经停了。</div>;
-  return <div className="preview-page"><StationPreview station={station} port={job.port} name={job.name} service={service} alone /></div>;
+  if (error) return <div className={`${css.previewPage} ${css.previewMissing}`}>找不到这个服务：{error}</div>;
+  if (!job) return <div className={css.previewPage} />;
+  if (job.port === null || (job.state !== "running" && job.state !== "exited")) return <div className={`${css.previewPage} ${css.previewMissing}`}>「{job.name}」已经停了。</div>;
+  return <div className={css.previewPage}><StationPreview station={station} port={job.port} name={job.name} service={service} alone /></div>;
 }

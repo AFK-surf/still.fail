@@ -1,3 +1,4 @@
+import "./styles/index.ts";
 import { applyAppearance } from "./theme.ts";
 import { startScrollbars } from "./scrollbars.ts";
 import { StrictMode } from "react";
@@ -6,7 +7,6 @@ import { BrowserRouter } from "react-router";
 import "@fontsource-variable/inter";
 import { App } from "./App.tsx";
 import { PageViews, startTelemetry } from "./telemetry.ts";
-import "./legacy.css";
 
 applyAppearance();
 startScrollbars();

@@ -1,9 +1,10 @@
-// Styles are written in TypeScript beside what they style (Sidebar.css.ts for Sidebar.tsx, vanilla-extract): each class
-// is scoped to its file, so no two can collide, and a rule for an element's state sits with the element's other rules.
-// theme.css, app.css and mobile.css are the styles from before, in a layer (`legacy`) under these, being moved over.
+// Styles are written in TypeScript beside what they style (Chat.css.ts for Chat.tsx, vanilla-extract): each class is
+// scoped to its file, so no two can collide, and a rule for an element's state sits with the element's other rules.
+// What several components share is in styles/ (the phone's in mobile/styles/); styles/index.ts loads them all, in
+// the order they cascade.
 //
-// The palette, type sizes, radii and motion of theme.css, for those styles: `vars.muted` is `var(--muted)`. The values
-// stay in theme.css, which switches them with the theme; this only names them.
+// The palette, type sizes, radii and motion (styles/global.css.ts gives them their values, per theme), for those
+// styles: `vars.muted` is `var(--muted)`.
 import { createGlobalThemeContract } from "@vanilla-extract/css";
 
 const names = [

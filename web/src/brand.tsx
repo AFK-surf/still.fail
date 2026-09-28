@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDark } from "./theme.ts";
 import type { AppUpdate } from "./core/client.ts";
+import * as css from "./brand.css.ts";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
 // picked by the OS theme like the rest of the app; the illustrations switch themselves.
@@ -21,7 +22,7 @@ export function Mark({ size, className }: { size: number; className?: string }) 
 
 /** Buddy and name; 132 × 30 at the smallest. */
 export function Lockup({ height = 30, alt = "ember" }: { height?: number; alt?: string }) {
-  return <Themed name="lockup" width={Math.round((height * 264) / 60)} height={height} alt={alt} className="brand-lockup" />;
+  return <Themed name="lockup" width={Math.round((height * 264) / 60)} height={height} alt={alt} className={css.brandLockup} />;
 }
 
 /**
@@ -32,8 +33,8 @@ export function Lockup({ height = 30, alt = "ember" }: { height?: number; alt?: 
 export function SidebarBrand() {
   return (
     <>
-      {!window.emberDesktop && <Themed name="wordmark" width={81} height={22} alt="ember" className="brand-wordmark" />}
-      {!window.emberDesktop && <span className="brand-phone"><Lockup /></span>}
+      {!window.emberDesktop && <Themed name="wordmark" width={81} height={22} alt="ember" className={css.brandWordmark} />}
+      {!window.emberDesktop && <span className={css.brandPhone}><Lockup /></span>}
       <SidebarBuddy />
       <UpdateButton />
     </>
@@ -42,7 +43,7 @@ export function SidebarBrand() {
 
 /** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app, whose window has its title bar there. */
 export function PageBrand() {
-  return window.emberDesktop ? null : <Themed name="wordmark" width={81} height={22} alt="ember" className="brand-wordmark" />;
+  return window.emberDesktop ? null : <Themed name="wordmark" width={81} height={22} alt="ember" className={css.brandWordmark} />;
 }
 
 type Pose = "push" | "hop" | "rest";
@@ -75,7 +76,7 @@ function SidebarBuddy() {
   // On the page itself, not in the sidebar: a closed sidebar clips what is in it, and the desktop app's window would
   // then take a click on the buddy for a drag of the window.
   return createPortal(
-    <button type="button" className="sidebar-buddy" data-pose={pose} onClick={toggle} aria-label={closed ? "展开侧边栏" : "收起侧边栏"} title={closed ? "展开侧边栏" : "收起侧边栏"}>
+    <button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? "展开侧边栏" : "收起侧边栏"} title={closed ? "展开侧边栏" : "收起侧边栏"}>
       <Themed name={`buddy/${pose}`} width={28} height={28} />
     </button>,
     document.body,
@@ -101,7 +102,7 @@ function UpdateButton() {
   const busy = state.phase === "downloading" || state.phase === "installing";
   const title = state.phase === "failed" ? state.message : `更新到 ${state.version}：下载后 ember 会重启`;
   return createPortal(
-    <button type="button" className="sidebar-update" disabled={busy} aria-busy={busy} onClick={() => updates.start()} title={title}>
+    <button type="button" className={css.sidebarUpdate} disabled={busy} aria-busy={busy} onClick={() => updates.start()} title={title}>
       {label}
     </button>,
     document.body,
@@ -130,5 +131,5 @@ void decoded;
 /** A scene beside text that says the same, hence no alt. */
 export function Illustration({ name }: { name: Illus }) {
   const [width, height] = ILLUS_SIZE[name];
-  return <img className="illus" src={illustrationUrl(name)} alt="" width={width} height={height} decoding="sync" />;
+  return <img className={css.illus} src={illustrationUrl(name)} alt="" width={width} height={height} decoding="sync" />;
 }

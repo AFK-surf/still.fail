@@ -1,2 +1,0 @@
-/* The phone's styles from before the *.css.ts ones, in the same layer as theme.css and app.css (../legacy.css). */
-@import "./mobile.css" layer(legacy);

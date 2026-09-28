@@ -28,6 +28,11 @@ import { Avatar } from "./gate.tsx";
 import { Illustration, PageBrand, SidebarBrand } from "../brand.tsx";
 import { identify, track } from "../telemetry.ts";
 import * as nav from "../Sidebar.css.ts";
+import * as shellCss from "../styles/shell.css.ts";
+import * as css from "./workspace.css.ts";
+import * as chatCss from "../styles/chat.css.ts";
+import * as pagesCss from "../styles/pages.css.ts";
+import * as controlsCss from "../styles/controls.css.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
@@ -67,11 +72,11 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
 
   return (
     <PeopleContext.Provider value={people}>
-      <div className="shell" data-detail={detail}>
+      <div className={shellCss.shell} data-detail={detail}>
         {settings
           ? <nav className={nav.sidebar} aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WorkspaceSwitcher current={entry} /></div></nav>
           : <WorkspaceSidebar entry={entry} />}
-        <main className="main">
+        <main className={shellCss.main}>
           <ComposerDock>
           <Routes>
             <Route index element={<WorkspaceHome id={entry.id} stations={found.value && stations} />} />
@@ -124,20 +129,20 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
  */
 function Onboarding({ entry }: { entry: WorkspaceEntry }) {
   return (
-    <div className="onboarding">
-      <header className="onboarding-bar">
+    <div className={css.onboarding}>
+      <header className={css.onboardingBar}>
         <div className={`${nav.brand} ${nav.brandCompact}`}><PageBrand /></div>
-        <div className="onboarding-account"><WorkspaceSwitcher current={entry} /></div>
+        <div className={css.onboardingAccount}><WorkspaceSwitcher current={entry} /></div>
       </header>
-      <main className="onboarding-main">
+      <main className={css.onboardingMain}>
         <Illustration name="no-station" />
-        <h1 className="onboarding-title">添加第一台 station</h1>
-        <p className="onboarding-lead">agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。</p>
+        <h1 className={css.onboardingTitle}>添加第一台 station</h1>
+        <p className={css.onboardingLead}>agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。</p>
         <FirstStation entry={entry} />
-        <p className="onboarding-foot muted">
-          <Link className="inline-link" to={`/w/${entry.id}/settings/members`}>邀请成员</Link>
+        <p className={`${css.onboardingFoot} ${shellCss.muted}`}>
+          <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/members`}>邀请成员</Link>
           <span aria-hidden="true"> · </span>
-          <Link className="inline-link" to={`/w/${entry.id}/settings/general`}>workspace 设置</Link>
+          <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/general`}>workspace 设置</Link>
         </p>
       </main>
     </div>
@@ -153,7 +158,7 @@ function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | und
     <Empty>
       <Illustration name="no-station" />
       <h2>这个 workspace 还没有 station</h2>
-      <p>到 <Link className="inline-link" to={`/w/${id}/settings/stations`}>设置 → Station</Link> 里添加一台 station：在要运行 ember 的机器上执行一条命令即可。</p>
+      <p>到 <Link className={chatCss.inlineLink} to={`/w/${id}/settings/stations`}>设置 → Station</Link> 里添加一台 station：在要运行 ember 的机器上执行一条命令即可。</p>
     </Empty>
   );
 }
@@ -170,7 +175,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
         <div className={nav.navFootRow}>
           <WorkspaceSwitcher current={entry} />
-          <Tip label="设置" side="top"><NavLink className="icon-btn" to={`/w/${entry.id}/settings`} aria-label="设置"><Settings {...ICON} /></NavLink></Tip>
+          <Tip label="设置" side="top"><NavLink className={pagesCss.iconBtn} to={`/w/${entry.id}/settings`} aria-label="设置"><Settings {...ICON} /></NavLink></Tip>
         </div>
       </div>
     </nav>
@@ -196,50 +201,50 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
     <>
       <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger asChild>
-          <button type="button" className="account-trigger">
-            <span className="account-text">
-              <span className="account-name">{current.name}</span>
+          <button type="button" className={css.accountTrigger}>
+            <span className={css.accountText}>
+              <span className={css.accountName}>{current.name}</span>
             </span>
-            {pending.length > 0 && <span className="invite-dot" role="img" aria-label={`${pending.length} 个邀请`} />}
+            {pending.length > 0 && <span className={css.inviteDot} role="img" aria-label={`${pending.length} 个邀请`} />}
             <ChevronsUpDown {...ICON} size={14} />
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content className="popover menu-list account-menu" side="top" align="start" sideOffset={6}>
+          <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.accountMenu}`} side="top" align="start" sideOffset={6}>
             {pending.length > 0 && (
               <>
-                <DropdownMenu.Label className="menu-label">邀请</DropdownMenu.Label>
+                <DropdownMenu.Label className={controlsCss.menuLabel}>邀请</DropdownMenu.Label>
                 {pending.map((invite) => (
-                  <div key={invite.id} className="menu-invite">
-                    <span className="thread-item">
+                  <div key={invite.id} className={css.menuInvite}>
+                    <span className={css.threadItem}>
                       <span>{invite.inviter || "有人"}邀请你加入「{invite.name}」</span>
-                      <span className="muted">{invite.account.email}{list.length > 1 ? "" : ""}</span>
+                      <span className={shellCss.muted}>{invite.account.email}{list.length > 1 ? "" : ""}</span>
                     </span>
-                    <span className="menu-invite-actions">
-                      <DropdownMenu.Item className="btn btn-primary menu-invite-btn" onSelect={() => respond.run({ invite, accept: true })}>加入</DropdownMenu.Item>
-                      <DropdownMenu.Item className="btn btn-ghost menu-invite-btn" onSelect={() => respond.run({ invite, accept: false })}>忽略</DropdownMenu.Item>
+                    <span className={css.menuInviteActions}>
+                      <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css.menuInviteBtn}`} onSelect={() => respond.run({ invite, accept: true })}>加入</DropdownMenu.Item>
+                      <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css.menuInviteBtn}`} onSelect={() => respond.run({ invite, accept: false })}>忽略</DropdownMenu.Item>
                     </span>
                   </div>
                 ))}
-                <DropdownMenu.Separator className="menu-sep" />
+                <DropdownMenu.Separator className={controlsCss.menuSep} />
               </>
             )}
             {byAccount.map(({ account, workspaces: items }, i) => (
               <div key={account.sub}>
-                {i > 0 && <DropdownMenu.Separator className="menu-sep" />}
-                <DropdownMenu.Label className="menu-label menu-account"><Avatar account={account} size={16} />{account.email}</DropdownMenu.Label>
-                {items.length === 0 && <div className="menu-empty">没有 workspace</div>}
+                {i > 0 && <DropdownMenu.Separator className={controlsCss.menuSep} />}
+                <DropdownMenu.Label className={`${controlsCss.menuLabel} ${css.menuAccount}`}><Avatar account={account} size={16} />{account.email}</DropdownMenu.Label>
+                {items.length === 0 && <div className={css.menuEmpty}>没有 workspace</div>}
                 {items.map((w) => (
-                  <DropdownMenu.Item key={w.id} className="menu-item" onSelect={() => navigate(`/w/${w.id}`)}>
-                    <span className="thread-item"><span>{w.name}</span><span className="muted">{w.stations} 台 station · {w.members} 人</span></span>
-                    {w.id === current.id && account.sub === current.account.sub && <Check {...ICON} size={14} className="menu-check" />}
+                  <DropdownMenu.Item key={w.id} className={controlsCss.menuItem} onSelect={() => navigate(`/w/${w.id}`)}>
+                    <span className={css.threadItem}><span>{w.name}</span><span className={shellCss.muted}>{w.stations} 台 station · {w.members} 人</span></span>
+                    {w.id === current.id && account.sub === current.account.sub && <Check {...ICON} size={14} className={css.menuCheck} />}
                   </DropdownMenu.Item>
                 ))}
               </div>
             ))}
-            <DropdownMenu.Separator className="menu-sep" />
-            <DropdownMenu.Item className="menu-item" onSelect={() => setCreating(true)}><Plus {...ICON} />新建 workspace</DropdownMenu.Item>
-            <DropdownMenu.Item className="menu-item" onSelect={() => void signIn()}><UserPlus {...ICON} />添加另一个账号</DropdownMenu.Item>
+            <DropdownMenu.Separator className={controlsCss.menuSep} />
+            <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setCreating(true)}><Plus {...ICON} />新建 workspace</DropdownMenu.Item>
+            <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => void signIn()}><UserPlus {...ICON} />添加另一个账号</DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -263,7 +268,7 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
     <Dialog open={open} onClose={onClose} title="新建 workspace" description="workspace 是一组人和他们共用的 station。你会成为它的 owner。"
       footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button variant="primary" disabled={!name.trim()} busy={create.busy} onClick={() => create.run()}>新建</Button></>}>
       <Field label="名字" htmlFor="ws-name">
-        <input id="ws-name" className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="例如：产品团队" maxLength={80}
+        <input id="ws-name" className={controlsCss.input} value={name} autoFocus onChange={(e) => setName(e.target.value)} placeholder="例如：产品团队" maxLength={80}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) create.run(); }} />
       </Field>
       {list.length > 1 && (
@@ -274,11 +279,11 @@ function NewWorkspaceDialog({ open, onClose }: { open: boolean; onClose(): void 
       {asking && (
         <Field label="邀请码" htmlFor="ws-code" error={create.error && needsInviteCode(create.error) && code.trim() ? errorText(create.error) : undefined}
           hint="ember 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。">
-          <input id="ws-code" className="input mono" value={code} autoFocus onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
+          <input id="ws-code" className={`${controlsCss.input} ${shellCss.mono}`} value={code} autoFocus onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
             onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim() && code.trim()) create.run(); }} />
         </Field>
       )}
-      {create.error && !needsInviteCode(create.error) && <p className="field-error" role="alert">{create.error.message}</p>}
+      {create.error && !needsInviteCode(create.error) && <p className={controlsCss.fieldError} role="alert">{create.error.message}</p>}
     </Dialog>
   );
 }

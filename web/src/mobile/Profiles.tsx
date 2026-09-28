@@ -13,6 +13,15 @@ import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
 import { Button, Field, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRing, QuotaRings, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as barsCss from "./styles/bars.css.ts";
+import * as settingsCss from "./styles/settings.css.ts";
+import * as listsCss from "./styles/lists.css.ts";
+import * as partsCss from "./styles/parts.css.ts";
+import * as historyCss from "./styles/history.css.ts";
+import * as css from "./Profiles.css.ts";
+import * as sheetsCss from "./styles/sheets.css.ts";
+import * as chatCss from "./styles/chat.css.ts";
 
 function useApi() {
   const station = useStation();
@@ -42,7 +51,7 @@ export function ProfileScreen() {
   const { id = "" } = useParams();
   const overview = useOverview(station.address);
   const p = overview.value?.profiles.find((x) => x.id === id);
-  if (!p) return <div className="m-screen"><NavBar back={station.name || "Station"} onBack={app.pop} title="Profile" /><Loading text={overview.error?.message ?? (overview.value ? "没有这个 Profile。" : "正在读取…")} /></div>;
+  if (!p) return <div className={pagesCss.mScreen}><NavBar back={station.name || "Station"} onBack={app.pop} title="Profile" /><Loading text={overview.error?.message ?? (overview.value ? "没有这个 Profile。" : "正在读取…")} /></div>;
   return <ProfilePage p={p} />;
 }
 
@@ -56,15 +65,15 @@ function ProfilePage({ p }: { p: Profile }) {
   const signingIn = !!p.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(p.login.state);
   const keyed = KEYED.has(p.access.kind);
   return (
-    <div className="m-screen">
-      <NavBar back={station.name || "Station"} onBack={app.pop} title={p.name} sub={<span className="m-navbar-note">{accessLabel(p)}</span>}
+    <div className={pagesCss.mScreen}>
+      <NavBar back={station.name || "Station"} onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{accessLabel(p)}</span>}
         trailing={<NavButton icon={More} label="更多" onClick={() => app.sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
-      <div className="m-scroll m-station-page">
-        <div className="m-card m-profile-head">
+      <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
+        <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
           <ProviderMark runtime={p.runtime} kind={p.access.kind} size={26} />
-          <span className="m-grow">
-            <span className="m-pill m-check-pill" data-tone={p.checkTone}>{p.checkText}</span>
-            <span className="m-row-note m-wrap">{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}{p.check?.time?.checkedAt ? ` · ${p.check.time.checkedAt.ago}检查` : ""}</span>
+          <span className={partsCss.mGrow}>
+            <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
+            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : "还没检查过"}{p.check?.time?.checkedAt ? ` · ${p.check.time.checkedAt.ago}检查` : ""}</span>
           </span>
         </div>
         {p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
@@ -72,10 +81,10 @@ function ProfilePage({ p }: { p: Profile }) {
         <Models p={p} onSave={(models) => void save({ models }, "已保存")} />
         <SectionHeader title="使用它的连接" start={24} />
         <ListCard>
-          {users.length === 0 && <ListRow><span className="m-muted m-row-title">还没有连接使用这个 Profile。</span></ListRow>}
+          {users.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>还没有连接使用这个 Profile。</span></ListRow>}
           {users.map((c) => (
             <ListRow key={c.id} onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(c.id)}`)}>
-              <SlackMark size={15} /><span className="m-grow m-row-title">{c.name}</span><span className="m-row-note">{c.modelName ?? (p.model ? p.names[p.model] ?? p.model : "默认模型")}</span>
+              <SlackMark size={15} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{c.name}</span><span className={listsCss.mRowNote}>{c.modelName ?? (p.model ? p.names[p.model] ?? p.model : "默认模型")}</span>
             </ListRow>
           ))}
         </ListCard>
@@ -85,8 +94,8 @@ function ProfilePage({ p }: { p: Profile }) {
             <ListCard>
               <ListRow onClick={() => ask(app, { title: p.access.kind === "opencode-go" ? "新的 OpenCode Go key" : "新的 API key", value: "", placeholder: "粘贴 key", action: "保存", secret: true,
                 hint: "保存后会重新检查。", run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }).then(() => app.toast("已保存，正在检查")) })}>
-                <span className="m-grow m-row-text"><span className="m-row-title">{p.access.kind === "opencode-go" ? "OpenCode Go key" : "API key"}</span><span className="m-row-note m-mono">{p.access.key || "没有保存"}</span></span>
-                <span className="m-link">更换</span>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.access.kind === "opencode-go" ? "OpenCode Go key" : "API key"}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.key || "没有保存"}</span></span>
+                <span className={partsCss.mLink}>更换</span>
               </ListRow>
             </ListCard>
           </>
@@ -95,8 +104,8 @@ function ProfilePage({ p }: { p: Profile }) {
           <>
             <SectionHeader title="环境变量" start={24} />
             <ListCard>
-              {p.env.map((e) => <ListRow key={e.key}><span className="m-grow m-row-text"><span className="m-row-title m-mono">{e.key}</span><span className="m-row-note m-mono">{e.value}</span></span></ListRow>)}
-              <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className="m-accent m-row-title">编辑变量</span></ListRow>
+              {p.env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${css.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{e.value}</span></span></ListRow>)}
+              <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>编辑变量</span></ListRow>
             </ListCard>
           </>
         )}
@@ -115,7 +124,7 @@ function ProfileMenu({ p }: { p: Profile }) {
     <>
       <SheetGrab />
       <SheetHead title={p.name} />
-      <div className="m-sheet-scroll">
+      <div className={sheetsCss.mSheetScroll}>
         {!p.machine && <PickRow label="改名" onClick={() => ask(app, { title: "Profile 的名字", value: p.name, placeholder: "名字", action: "保存", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast("已改名")) })} />}
         <PickRow label="重新检查" onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast("已检查"), failed); }} />
         <PickRow label="刷新额度" onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast("已刷新额度"), failed); }} />
@@ -141,9 +150,9 @@ function Quota({ p }: { p: Profile }) {
         <SectionHeader title="额度" trailing={p.quota?.time?.checkedAt ? `${p.quota.time.checkedAt.ago}查询` : undefined} start={24} />
         <ListCard>
           <ListRow>
-            <span className="m-grow m-row-text">
-              <span className="m-row-title"><Presence state={p.quota?.state === "blocked" ? "error" : "offline"} /> {p.quota?.state === "blocked" ? "被停用" : "查不到额度"}</span>
-              <span className="m-row-note m-wrap">{trouble}</span>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+              <span className={listsCss.mRowTitle}><Presence state={p.quota?.state === "blocked" ? "error" : "offline"} /> {p.quota?.state === "blocked" ? "被停用" : "查不到额度"}</span>
+              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>
             </span>
           </ListRow>
         </ListCard>
@@ -158,8 +167,8 @@ function Quota({ p }: { p: Profile }) {
         {windows.map((w) => (
           <ListRow key={w.mark}>
             <QuotaRing left={w.left} level={w.level} size={26} />
-            <span className="m-grow m-row-text"><span className="m-row-title">{w.label}</span>{w.refills && <span className="m-row-note">{w.refills}</span>}</span>
-            <span className="m-row-note">剩 {w.left}%</span>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{w.label}</span>{w.refills && <span className={listsCss.mRowNote}>{w.refills}</span>}</span>
+            <span className={listsCss.mRowNote}>剩 {w.left}%</span>
           </ListRow>
         ))}
       </ListCard>
@@ -178,12 +187,12 @@ function Models({ p, onSave }: { p: Profile; onSave: (models: string[]) => void 
   return (
     <>
       <SectionHeader title={`模型 · 启用 ${p.models.length} / ${all.length}`} start={24} />
-      <p className="m-profile-note">{all.length === 0 ? "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" : "只有勾选的模型能在新对话和连接里选。"}</p>
+      <p className={css.mProfileNote}>{all.length === 0 ? "检查过 Profile 后，这里会列出它能用的模型，勾选后才能使用。" : "只有勾选的模型能在新对话和连接里选。"}</p>
       {all.length > 0 && (
-        <div className="m-profile-tools">
-          {all.length > 10 ? <span className="m-grow"><Field value={filter} onChange={setFilter} placeholder="筛选模型" /></span> : <span className="m-grow" />}
-          <button type="button" className="m-link" onClick={() => save([...p.models, ...shown])}>全选{suffix}</button>
-          <button type="button" className="m-link" onClick={() => save(p.models.filter((m) => !shown.includes(m)))}>全不选{suffix}</button>
+        <div className={settingsCss.mProfileTools}>
+          {all.length > 10 ? <span className={partsCss.mGrow}><Field value={filter} onChange={setFilter} placeholder="筛选模型" /></span> : <span className={partsCss.mGrow} />}
+          <button type="button" className={partsCss.mLink} onClick={() => save([...p.models, ...shown])}>全选{suffix}</button>
+          <button type="button" className={partsCss.mLink} onClick={() => save(p.models.filter((m) => !shown.includes(m)))}>全不选{suffix}</button>
         </div>
       )}
       {/* By series, newest first (the core's). */}
@@ -192,13 +201,13 @@ function Models({ p, onSave }: { p: Profile; onSave: (models: string[]) => void 
         if (list.length === 0) return null;
         return (
           <div key={s.name}>
-            <div className="m-group-label" style={{ paddingLeft: 24, paddingRight: 24 }}>{s.name}</div>
+            <div className={listsCss.mGroupLabel} style={{ paddingLeft: 24, paddingRight: 24 }}>{s.name}</div>
             {list.map((m) => {
               const on = p.models.includes(m);
               return (
-                <button key={m} type="button" className="m-model-row" onClick={() => save(on ? p.models.filter((x) => x !== m) : [...p.models, m])}>
-                  <span className="m-check" data-on={on || undefined}>{on && <Check size={13} />}</span>
-                  <span className="m-grow">{p.names[m] ?? m}</span>
+                <button key={m} type="button" className={settingsCss.mModelRow} onClick={() => save(on ? p.models.filter((x) => x !== m) : [...p.models, m])}>
+                  <span className={settingsCss.mCheck} data-on={on || undefined}>{on && <Check size={13} />}</span>
+                  <span className={partsCss.mGrow}>{p.names[m] ?? m}</span>
                 </button>
               );
             })}
@@ -225,7 +234,7 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
   return (
     <>
       <SectionHeader title={active ? `正在登录 ${provider}` : needed ? `还没登录 ${provider} 账号` : `${provider} 订阅`} start={24} />
-      <div className="m-card m-form-group">
+      <div className={`${listsCss.mCard} ${settingsCss.mFormGroup}`}>
         {active ? (
           <>
             <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} />
@@ -233,10 +242,10 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
           </>
         ) : (
           <>
-            <p className="m-muted m-small">{job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : "登录在运行 ember 的机器上完成，你只需要在浏览器里授权。"}</p>
+            <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? `上次登录没成功：${job.error}` : job?.state === "done" ? "已登录。换账号的话重新登录一次。" : "登录在运行 ember 的机器上完成，你只需要在浏览器里授权。"}</p>
             <Button label={job?.state === "done" || !needed ? "重新登录" : "登录"} primary={needed} busy={busy}
               onClick={() => { setBusy(true); api.startLogin(p.id).catch((e: Error) => app.toast(e.message)).finally(() => setBusy(false)); }} />
-            <details className="m-details"><summary>也可以在那台机器上手动登录</summary><CommandBox text={p.loginCommand} /></details>
+            <details className={css.mDetails}><summary>也可以在那台机器上手动登录</summary><CommandBox text={p.loginCommand} /></details>
           </>
         )}
       </div>
@@ -250,26 +259,26 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  if (!job || job.state === "starting") return <p className="m-muted m-waiting"><Spinner size={12} />正在生成 {provider} 的登录链接…</p>;
-  if (job.state === "verifying") return <p className="m-muted m-waiting"><Spinner size={12} />正在完成登录…</p>;
-  if (job.state === "done") return <p className="m-muted m-waiting"><Spinner size={12} />已登录，正在添加…</p>;
+  if (!job || job.state === "starting") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={12} />正在生成 {provider} 的登录链接…</p>;
+  if (job.state === "verifying") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={12} />正在完成登录…</p>;
+  if (job.state === "done") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={12} />已登录，正在添加…</p>;
   if (job.state === "needs_approval" && job.url && job.userCode) {
     return (
       <>
-        <span className="m-device-code">{job.userCode}</span>
+        <span className={css.mDeviceCode}>{job.userCode}</span>
         <Button label={copied ? "已复制，重新打开登录页" : "复制代码并打开登录页"} primary
           onClick={() => { void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => {}).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
-        <p className="m-muted m-small">在打开的 OpenAI 页面用要给 ember 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>在打开的 OpenAI 页面用要给 ember 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。</p>
       </>
     );
   }
   if (job.state === "needs_code" && job.url) {
     return (
       <>
-        <p className="m-small">1. <a href={job.url} target="_blank" rel="noopener">打开授权页面</a>，用要给 ember 使用的 Claude 账号登录并同意。</p>
-        <p className="m-small">2. 同意后页面上会显示一段授权码，复制过来：</p>
-        <input className="m-field" data-mono autoComplete="off" spellCheck={false} value={code} placeholder="粘贴授权码" onChange={(e) => setCode(e.target.value)} />
-        {error && <p className="m-error">{error}</p>}
+        <p className={partsCss.mSmall}>1. <a href={job.url} target="_blank" rel="noopener">打开授权页面</a>，用要给 ember 使用的 Claude 账号登录并同意。</p>
+        <p className={partsCss.mSmall}>2. 同意后页面上会显示一段授权码，复制过来：</p>
+        <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder="粘贴授权码" onChange={(e) => setCode(e.target.value)} />
+        {error && <p className={partsCss.mError}>{error}</p>}
         <Button label="完成登录" primary busy={busy} enabled={!!code.trim()}
           onClick={() => { setBusy(true); setError(null); send(code.trim()).then(() => setCode(""), (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} />
       </>
@@ -305,18 +314,18 @@ function EnvSheet({ p }: { p: Profile }) {
     <>
       <SheetGrab />
       <SheetHead title="环境变量" />
-      <div className="m-sheet-scroll m-form">
-        <p className="m-muted m-small">运行时启动时带上这些变量，用来接到你的模型服务。值里的 {"{route}"} 会换成会话的路由 ID。</p>
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>运行时启动时带上这些变量，用来接到你的模型服务。值里的 {"{route}"} 会换成会话的路由 ID。</p>
         {rows.map((r) => (
-          <div key={r.row} className="m-env-row">
-            <input className="m-field" data-mono spellCheck={false} value={r.key} placeholder="NAME" onChange={(e) => update(r.row, { key: e.target.value })} />
-            <input className="m-field" data-mono spellCheck={false} autoComplete="off" type={r.masked !== null || /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(r.key) ? "password" : "text"}
+          <div key={r.row} className={css.mEnvRow}>
+            <input className={listsCss.mField} data-mono spellCheck={false} value={r.key} placeholder="NAME" onChange={(e) => update(r.row, { key: e.target.value })} />
+            <input className={listsCss.mField} data-mono spellCheck={false} autoComplete="off" type={r.masked !== null || /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(r.key) ? "password" : "text"}
               value={r.value} placeholder={r.masked !== null ? `已保存 ${r.masked}，留空不变` : "值"} onChange={(e) => update(r.row, { value: e.target.value })} />
-            <button type="button" className="m-link" onClick={() => setRows(rows.filter((x) => x.row !== r.row))}>删除</button>
+            <button type="button" className={partsCss.mLink} onClick={() => setRows(rows.filter((x) => x.row !== r.row))}>删除</button>
           </div>
         ))}
-        <button type="button" className="m-link m-step-alt" onClick={() => setRows([...rows, { row: next.current++, key: "", value: "", masked: null, original: null }])}>＋ 添加变量</button>
-        <div className="m-form-actions">
+        <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setRows([...rows, { row: next.current++, key: "", value: "", masked: null, original: null }])}>＋ 添加变量</button>
+        <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <Button label="保存" primary busy={busy} onClick={() => { setBusy(true); api.putProfile(p.id, { env: patch() }).then(() => { app.toast("已保存"); app.sheet(null); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false)); }} />
         </div>
@@ -353,13 +362,13 @@ export function NewProfileScreen() {
   const provider = runtime === "claude" ? "Claude" : "ChatGPT";
   const job = pending?.job ?? null;
   return (
-    <div className="m-screen">
-      <NavBar back="取消" onBack={leave} title="添加 Profile" sub={<span className="m-navbar-note">{station.name}</span>} />
-      <div className="m-scroll m-pad-x-18 m-steps">
+    <div className={pagesCss.mScreen}>
+      <NavBar back="取消" onBack={leave} title="添加 Profile" sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+      <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
         {login ? (
           job?.state === "failed" || job?.state === "cancelled" ? (
             <>
-              <p className="m-error">{job.error ?? "登录没有完成。"}</p>
+              <p className={partsCss.mError}>{job.error ?? "登录没有完成。"}</p>
               <Button label="重新开始" primary={false} onClick={() => { void api.dropLogin(login).catch(() => {}); setLogin(null); }} />
             </>
           ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login, code)} />
@@ -369,7 +378,7 @@ export function NewProfileScreen() {
               <MachineLoginOffers inForm logins={overview.machineLogins} profiles={overview.profiles}
                 onSignIn={(c) => { setChoice(c); setBusy(true); setError(null); api.newLogin(CHOICES[c].runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} />
             )}
-            {overview && machineOffers(overview.machineLogins, overview.profiles).length > 0 && <b className="m-form-label">或者添加一个新的</b>}
+            {overview && machineOffers(overview.machineLogins, overview.profiles).length > 0 && <b className={sheetsCss.mFormLabel}>或者添加一个新的</b>}
             <ListCard>
               {(Object.keys(CHOICES) as Choice[]).map((c) => (
                 <PickRow key={c} label={CHOICES[c].title} sub={CHOICES[c].description} checked={choice === c} onClick={() => setChoice(c)}
@@ -378,12 +387,12 @@ export function NewProfileScreen() {
             </ListCard>
             {KEYED.has(kind) && (
               <>
-                <b className="m-form-label">{kind === "opencode-go" ? "OpenCode Go key" : "API key"}</b>
-                <input className="m-field" data-mono type="password" autoComplete="off" spellCheck={false} value={key} placeholder="先验证能用，再添加" onChange={(e) => setKey(e.target.value.trim())} />
+                <b className={sheetsCss.mFormLabel}>{kind === "opencode-go" ? "OpenCode Go key" : "API key"}</b>
+                <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={key} placeholder="先验证能用，再添加" onChange={(e) => setKey(e.target.value.trim())} />
               </>
             )}
-            {kind === "subscription" && <p className="m-muted m-small">登录在运行 ember 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。</p>}
-            {error && <p className="m-error">{error}</p>}
+            {kind === "subscription" && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>登录在运行 ember 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。</p>}
+            {error && <p className={partsCss.mError}>{error}</p>}
             {kind === "subscription"
               ? <Button label={`登录 ${provider}`} primary busy={busy} onClick={() => { setBusy(true); setError(null); api.newLogin(runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} />
               : <Button label={KEYED.has(kind) ? "验证并添加" : "添加"} primary busy={busy} enabled={!KEYED.has(kind) || !!key}
@@ -426,7 +435,7 @@ export function MachineLoginOffers({ logins, profiles, onSignIn, inForm = false 
   };
   return (
     <>
-      {inForm ? <b className="m-form-label">这台机器上已经登录了</b> : <SectionHeader title="这台机器上已经登录了" start={24} />}
+      {inForm ? <b className={sheetsCss.mFormLabel}>这台机器上已经登录了</b> : <SectionHeader title="这台机器上已经登录了" start={24} />}
       <ListCard>
         {offers.map((l) => {
           const blocked = l.quota?.state === "blocked";
@@ -435,20 +444,20 @@ export function MachineLoginOffers({ logins, profiles, onSignIn, inForm = false 
           return (
             <ListRow key={l.runtime}>
               <ProviderMark runtime={l.runtime} kind="subscription" size={18} />
-              <span className="m-grow m-row-text">
-                <span className="m-row-title"><Presence state={blocked ? "error" : "online"} /> {MACHINE_RUNTIME[l.runtime]}{plan && <span className="m-row-aside"> · {plan}</span>}</span>
-                <span className="m-row-note">{blocked ? "被停用" : "本机已登录"}{l.email ? ` · ${l.email}` : ""}</span>
-                {trouble && <span className="m-row-note m-wrap">{trouble}</span>}
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                <span className={listsCss.mRowTitle}><Presence state={blocked ? "error" : "online"} /> {MACHINE_RUNTIME[l.runtime]}{plan && <span className={settingsCss.mRowAside}> · {plan}</span>}</span>
+                <span className={listsCss.mRowNote}>{blocked ? "被停用" : "本机已登录"}{l.email ? ` · ${l.email}` : ""}</span>
+                {trouble && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>}
               </span>
               <QuotaRings quota={l.quota} />
               {blocked ? null : l.usable
-                ? <button type="button" className="m-link" disabled={busy} onClick={() => use(l)}>用这个账号</button>
-                : <button type="button" className="m-link" onClick={() => onSignIn(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</button>}
+                ? <button type="button" className={partsCss.mLink} disabled={busy} onClick={() => use(l)}>用这个账号</button>
+                : <button type="button" className={partsCss.mLink} onClick={() => onSignIn(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</button>}
             </ListRow>
           );
         })}
       </ListCard>
-      <p className={inForm ? "m-small m-muted" : "m-page-note"}>「用这个账号」直接用这台机器的登录，在这台机器上换号或登出，它也跟着变；存在钥匙串里的登录不能直接用，要为 ember 单独登录一次，原来的登录不受影响。</p>
+      <p className={inForm ? `${partsCss.mSmall} ${partsCss.mMuted}` : settingsCss.mPageNote}>「用这个账号」直接用这台机器的登录，在这台机器上换号或登出，它也跟着变；存在钥匙串里的登录不能直接用，要为 ember 单独登录一次，原来的登录不受影响。</p>
     </>
   );
 }

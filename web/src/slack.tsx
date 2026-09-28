@@ -4,12 +4,15 @@ import { CheckCircle, External } from "./icons.tsx";
 import { useState } from "react";
 import { useAction, useApi, type SlackIdentity } from "./api.ts";
 import { Button, Field, ICON } from "./ui.tsx";
+import * as controlsCss from "./styles/controls.css.ts";
+import * as css from "./slack.css.ts";
+import * as shellCss from "./styles/shell.css.ts";
 
 export function CreateAppSteps({ name }: { name: string }) {
   const api = useApi();
   const open = useAction(() => api.createAppUrl(name.trim() || "ember"), ({ url }) => window.open(url, "_blank", "noopener"));
   return (
-    <ol className="steps">
+    <ol className={controlsCss.steps}>
       <li>
         <span>用 ember 的配置在 Slack 新建一个 app，名字是「{name.trim() || "ember"}」。</span>
         <Button icon={External} onClick={() => void open.run()} busy={open.busy}>在 Slack 创建 app</Button>
@@ -73,22 +76,22 @@ export function TokenFields({ value, onChange, masked, install, check }: {
 }) {
   const edit = (patch: Partial<TokenState>) => onChange({ ...value, ...patch, verified: null });
   return (
-    <div className="token-fields">
+    <div className={css.tokenFields}>
       <Field label="App-Level Token" htmlFor="app-token">
-        <input id="app-token" className="input mono" spellCheck={false} type="password" autoComplete="off" value={value.appToken}
+        <input id="app-token" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" value={value.appToken}
           onChange={(e) => edit({ appToken: e.target.value.trim() })}
           placeholder={masked?.appToken ? `已保存 ${masked.appToken}，留空保持不变` : "xapp-…"} />
       </Field>
       {!install && (
         <Field label="Bot Token" htmlFor="bot-token">
-          <input id="bot-token" className="input mono" spellCheck={false} type="password" autoComplete="off" value={value.botToken}
+          <input id="bot-token" className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} type="password" autoComplete="off" value={value.botToken}
             onChange={(e) => edit({ botToken: e.target.value.trim() })}
             placeholder={masked?.botToken ? `已保存 ${masked.botToken}，留空保持不变` : "xoxb-…"} />
         </Field>
       )}
-      {value.verified && <span className="verify-ok"><CheckCircle {...ICON} />连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>}
-      {check.errors.length > 0 && <ul className="field-error-list" role="alert">{check.errors.map((e) => <li key={e}>{e}</li>)}</ul>}
-      {check.error && <p className="field-error" role="alert">{check.error}</p>}
+      {value.verified && <span className={controlsCss.verifyOk}><CheckCircle {...ICON} />连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>}
+      {check.errors.length > 0 && <ul className={css.fieldErrorList} role="alert">{check.errors.map((e) => <li key={e}>{e}</li>)}</ul>}
+      {check.error && <p className={controlsCss.fieldError} role="alert">{check.error}</p>}
     </div>
   );
 }

@@ -16,6 +16,10 @@ import { admin, useAction, type Admission, type AdminUser, type AdminWorkspace, 
 import { Avatar } from "../cloud/gate.tsx";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
 import * as nav from "../Sidebar.css.ts";
+import * as shellCss from "../styles/shell.css.ts";
+import * as css from "./console.css.ts";
+import * as pagesCss from "../styles/pages.css.ts";
+import * as controlsCss from "../styles/controls.css.ts";
 
 // Each account is asked once per page load whether it is the admin.
 const probes = new Map<string, Promise<boolean>>();
@@ -42,7 +46,7 @@ const narrow = () => matchMedia("(max-width: 700px)").matches;
 export function Console({ account }: { account: Account }) {
   const atIndex = useLocation().pathname === "/";
   return (
-    <div className="shell" data-detail={!atIndex}>
+    <div className={shellCss.shell} data-detail={!atIndex}>
       <nav className={nav.sidebar} aria-label="管理后台">
         <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
         <div className={`${nav.brand} ${nav.brandCompact}`}><Lockup /></div>
@@ -52,12 +56,12 @@ export function Console({ account }: { account: Account }) {
           <NavLink className={nav.navRow} to="/workspaces"><Boxes {...ICON} />Workspace</NavLink>
           <NavLink className={nav.navRow} to="/codes"><Ticket {...ICON} />邀请码</NavLink>
         </div>
-        <div className={`${nav.navFootRow} admin-foot`}>
-          <span className="admin-account"><Avatar account={account} size={20} /><span className="account-email">{account.email}</span></span>
+        <div className={`${nav.navFootRow} ${css.adminFoot}`}>
+          <span className={css.adminAccount}><Avatar account={account} size={20} /><span className={css.accountEmail}>{account.email}</span></span>
           <Tip label="退出登录" side="top"><IconButton label="退出登录" icon={LogOut} onClick={() => void signOut(account.sub)} /></Tip>
         </div>
       </nav>
-      <main className="main">
+      <main className={shellCss.main}>
         <Routes>
           <Route index element={narrow() ? null : <Navigate to="/users" replace />} />
           <Route path="users" element={<UsersPage account={account} />} />
@@ -79,16 +83,16 @@ function useList<T>(account: string, list: "users" | "workspaces" | "invite-code
 
 function Page({ title, lead, children }: { title: string; lead?: string | undefined; children: React.ReactNode }) {
   return (
-    <div className="page page-narrow">
+    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to="/" label="管理后台" />
-      <header className="page-head"><div><h1>{title}{lead && <About>{lead}</About>}</h1></div></header>
+      <header className={pagesCss.pageHead}><div><h1>{title}{lead && <About>{lead}</About>}</h1></div></header>
       {children}
     </div>
   );
 }
 
 function Failed({ error }: { error: Error | null }) {
-  return error ? <p className="field-error" role="alert">读取失败：{error.message}</p> : null;
+  return error ? <p className={controlsCss.fieldError} role="alert">读取失败：{error.message}</p> : null;
 }
 
 // ── users ───────────────────────────────────────────────────────────────
@@ -108,7 +112,7 @@ function UsersPage({ account }: { account: Account }) {
     <Page title="用户" lead={list && `${list.length} 人登录过 ember。「还没进来」的人登录了，但没有 workspace，也没有用过邀请码或接受过邀请。`}>
       <Failed error={users.error} />
       {!list ? !users.error && <Loading label="正在读取…" fill={false} /> : (
-        <ul className="admin-list">{list.map((u) => <UserItem key={u.sub} user={u} />)}</ul>
+        <ul className={css.adminList}>{list.map((u) => <UserItem key={u.sub} user={u} />)}</ul>
       )}
     </Page>
   );
@@ -117,20 +121,20 @@ function UsersPage({ account }: { account: Account }) {
 function UserItem({ user }: { user: AdminUser }) {
   const admission = ADMISSION[user.admission ?? "none"];
   return (
-    <li className="admin-item">
-      <div className="admin-head">
+    <li className={css.adminItem}>
+      <div className={css.adminHead}>
         <Avatar account={user} size={32} />
-        <span className="list-row-text">
-          <span className="list-row-title">{user.name || user.email}</span>
-          <span className="muted">{user.email}</span>
+        <span className={pagesCss.listRowText}>
+          <span className={pagesCss.listRowTitle}>{user.name || user.email}</span>
+          <span className={shellCss.muted}>{user.email}</span>
         </span>
         <Pill tone={admission.tone}>{admission.label}</Pill>
       </div>
-      <p className="admin-meta muted">
+      <p className={`${css.adminMeta} ${shellCss.muted}`}>
         <Time stamp={stamp(user, "created_at")} />首次登录 · {user.last_seen ? <><Time stamp={stamp(user, "last_seen")} />来过</> : "还没有来访记录"}
       </p>
       {user.workspaces.length > 0 && (
-        <div className="chips">{user.workspaces.map((w) => <span key={w.id} className="chip">{w.name} · {ROLE_LABEL[w.role]}</span>)}</div>
+        <div className={css.chips}>{user.workspaces.map((w) => <span key={w.id} className={css.chip}>{w.name} · {ROLE_LABEL[w.role]}</span>)}</div>
       )}
     </li>
   );
@@ -146,7 +150,7 @@ function WorkspacesPage({ account }: { account: Account }) {
     <Page title="Workspace" lead={list && `${list.length} 个 workspace，${stations} 台 station。`}>
       <Failed error={workspaces.error} />
       {!list ? !workspaces.error && <Loading label="正在读取…" fill={false} /> : (
-        <ul className="admin-list">{list.map((w) => <WorkspaceItem key={w.id} workspace={w} />)}</ul>
+        <ul className={css.adminList}>{list.map((w) => <WorkspaceItem key={w.id} workspace={w} />)}</ul>
       )}
     </Page>
   );
@@ -154,42 +158,42 @@ function WorkspacesPage({ account }: { account: Account }) {
 
 function WorkspaceItem({ workspace: w }: { workspace: AdminWorkspace }) {
   return (
-    <li className="admin-item">
-      <div className="admin-head">
-        <span className="list-row-text">
-          <span className="list-row-title">{w.name}</span>
-          <span className="muted">{w.created_by ? w.created_by.name || w.created_by.email : "已不在的人"} 创建于 <Time stamp={stamp(w, "created_at")} /> · <span className="mono">{w.id}</span></span>
+    <li className={css.adminItem}>
+      <div className={css.adminHead}>
+        <span className={pagesCss.listRowText}>
+          <span className={pagesCss.listRowTitle}>{w.name}</span>
+          <span className={shellCss.muted}>{w.created_by ? w.created_by.name || w.created_by.email : "已不在的人"} 创建于 <Time stamp={stamp(w, "created_at")} /> · <span className={shellCss.mono}>{w.id}</span></span>
         </span>
       </div>
-      <div className="admin-group">
-        <div className="admin-group-label">成员 {w.members.length}</div>
+      <div className={css.adminGroup}>
+        <div className={css.adminGroupLabel}>成员 {w.members.length}</div>
         {w.members.map((m) => (
-          <div key={m.sub} className="admin-line">
+          <div key={m.sub} className={css.adminLine}>
             <Avatar account={m} size={20} />
-            <span className="admin-line-text">{m.name || m.email}<span className="muted">{m.name ? m.email : ""}</span></span>
-            <span className="muted">{ROLE_LABEL[m.role]}</span>
+            <span className={css.adminLineText}>{m.name || m.email}<span className={shellCss.muted}>{m.name ? m.email : ""}</span></span>
+            <span className={shellCss.muted}>{ROLE_LABEL[m.role]}</span>
           </div>
         ))}
       </div>
-      <div className="admin-group">
-        <div className="admin-group-label">Station {w.stations.length}</div>
-        {w.stations.length === 0 && <div className="admin-line muted">还没有 station</div>}
+      <div className={css.adminGroup}>
+        <div className={css.adminGroupLabel}>Station {w.stations.length}</div>
+        {w.stations.length === 0 && <div className={`${css.adminLine} ${shellCss.muted}`}>还没有 station</div>}
         {w.stations.map((s) => (
           // Whether a station is up is for the devices to find out over the mesh; ember cloud only knows when it last
           // came to it (or left).
-          <div key={s.id} className="admin-line">
-            <span className="admin-line-text">{s.name}<span className="muted">{s.version ? `ember-mesh ${s.version}` : ""}</span></span>
-            <span className="muted">{s.last_seen ? <>上次连 ember cloud：<Time stamp={stamp(s, "last_seen")} /></> : "还没连过 ember cloud"}</span>
+          <div key={s.id} className={css.adminLine}>
+            <span className={css.adminLineText}>{s.name}<span className={shellCss.muted}>{s.version ? `ember-mesh ${s.version}` : ""}</span></span>
+            <span className={shellCss.muted}>{s.last_seen ? <>上次连 ember cloud：<Time stamp={stamp(s, "last_seen")} /></> : "还没连过 ember cloud"}</span>
           </div>
         ))}
       </div>
       {w.invitations.length > 0 && (
-        <div className="admin-group">
-          <div className="admin-group-label">未接受的邀请 {w.invitations.length}</div>
+        <div className={css.adminGroup}>
+          <div className={css.adminGroupLabel}>未接受的邀请 {w.invitations.length}</div>
           {w.invitations.map((i) => (
-            <div key={i.id} className="admin-line">
-              <span className="admin-line-text">{i.email ?? "任何拿到链接的人"}<span className="muted">{i.inviter ? `${i.inviter} 邀请` : ""}</span></span>
-              <span className="muted">{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span>
+            <div key={i.id} className={css.adminLine}>
+              <span className={css.adminLineText}>{i.email ?? "任何拿到链接的人"}<span className={shellCss.muted}>{i.inviter ? `${i.inviter} 邀请` : ""}</span></span>
+              <span className={shellCss.muted}>{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span>
             </div>
           ))}
         </div>
@@ -221,17 +225,17 @@ function CodesPage({ account }: { account: Account }) {
       <Section title={list ? `${list.length} 个，${usable} 个可用` : "邀请码"} actions={<Button icon={Plus} variant="primary" onClick={() => setMaking(true)}>生成邀请码</Button>}>
         <Failed error={codes.error} />
         {!list ? !codes.error && <Loading label="正在读取…" fill={false} /> : list.length === 0 ? (
-          <div className="admin-item"><p className="muted admin-meta">还没有邀请码。</p></div>
+          <div className={css.adminItem}><p className={`${shellCss.muted} ${css.adminMeta}`}>还没有邀请码。</p></div>
         ) : (
-          <ul className="admin-list">
+          <ul className={css.adminList}>
             {list.map((c) => {
               const state = codeState(c);
               return (
-                <li key={c.code} className="admin-item">
-                  <div className="admin-head">
-                    <span className="list-row-text">
-                      <span className="list-row-title"><span className="mono admin-code">{c.code}</span>{c.note && <span className="admin-note">{c.note}</span>}</span>
-                      <span className="muted">
+                <li key={c.code} className={css.adminItem}>
+                  <div className={css.adminHead}>
+                    <span className={pagesCss.listRowText}>
+                      <span className={pagesCss.listRowTitle}><span className={`${shellCss.mono} ${css.adminCode}`}>{c.code}</span>{c.note && <span className={css.adminNote}>{c.note}</span>}</span>
+                      <span className={shellCss.muted}>
                         <Time stamp={stamp(c, "created_at")} />生成 · {c.used_at ? <>
                           {c.used_by ? c.used_by.name || c.used_by.email : "已不在的人"} <Time stamp={stamp(c, "used_at")} />用它建了{c.workspace ? `「${c.workspace.name}」` : " workspace（已删除）"}
                         </> : c.revoked_at ? <><Time stamp={stamp(c, "revoked_at")} />撤回</> : state.label === "已过期" ? <><Time stamp={stamp(c, "expires_at")} />过期</> : `${stamp(c, "expires_at")?.until}过期`}
@@ -279,7 +283,7 @@ function NewCodeDialog({ account, onMade, onClose }: { account: Account; onMade(
       ) : (
         <>
           <Field label="备注" htmlFor="code-note" hint="可选：给谁的，方便之后认出来。">
-            <input id="code-note" className="input" value={note} autoFocus maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="例如：给产品团队的小王"
+            <input id="code-note" className={controlsCss.input} value={note} autoFocus maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="例如：给产品团队的小王"
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) make.run(); }} />
           </Field>
           <Field label="有效期">
@@ -287,7 +291,7 @@ function NewCodeDialog({ account, onMade, onClose }: { account: Account; onMade(
           </Field>
         </>
       )}
-      {make.error && <p className="field-error" role="alert">{make.error.message}</p>}
+      {make.error && <p className={controlsCss.fieldError} role="alert">{make.error.message}</p>}
     </Dialog>
   );
 }

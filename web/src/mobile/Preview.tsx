@@ -11,6 +11,10 @@ import { StationPreview } from "../Preview.tsx";
 import { useStation } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { NavBar } from "./parts.tsx";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as css from "./Preview.css.ts";
+import * as barsCss from "./styles/bars.css.ts";
+import * as homeCss from "./styles/home.css.ts";
 
 export function PreviewScreen() {
   const app = useApp();
@@ -28,10 +32,10 @@ export function PreviewScreen() {
   const job = live ?? read;
   const up = job && job.port != null && (job.state === "running" || job.state === "exited");
   return (
-    <div className="m-screen m-preview">
-      <NavBar back="对话" onBack={app.pop} title={job?.name ?? "服务"} sub={<span className="m-navbar-note">{station.name}</span>} />
-      {error && !job && <p className="m-note">找不到这个服务：{error}</p>}
-      {job && !up && <p className="m-note">「{job.name}」已经停了。</p>}
+    <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
+      <NavBar back="对话" onBack={app.pop} title={job?.name ?? "服务"} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+      {error && !job && <p className={homeCss.mNote}>找不到这个服务：{error}</p>}
+      {job && !up && <p className={homeCss.mNote}>「{job.name}」已经停了。</p>}
       {job && up && (
         <StationPreview station={station.address} port={job.port!} name={job.name} service={service} alone
           restarting={job.state === "exited" ? { restarts: job.restarts ?? 0 } : null} />

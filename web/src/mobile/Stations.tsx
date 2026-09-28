@@ -14,6 +14,15 @@ import { ConnectRow, Presence, WaitingAppRow } from "./Connects.tsx";
 import { accessLabel, MachineLoginOffers, quotaTrouble, toneDot } from "./Profiles.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Button, Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, NavButton, PickRow, QuotaRings, Ring, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
+import * as css from "./Stations.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as partsCss from "./styles/parts.css.ts";
+import * as listsCss from "./styles/lists.css.ts";
+import * as sheetsCss from "./styles/sheets.css.ts";
+import * as barsCss from "./styles/bars.css.ts";
+import * as settingsCss from "./styles/settings.css.ts";
+import * as chatCss from "./styles/chat.css.ts";
+import * as newChatCss from "./styles/new-chat.css.ts";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -21,7 +30,7 @@ const BASE = import.meta.env.BASE_URL;
 export function Buddy({ s, size = 40 }: { s: StationView; size?: number }) {
   const dark = useDark();
   const face = !s.online ? "offline" : (s.overview?.counts.running ?? 0) > 0 ? "working" : "idle";
-  return <img className="m-buddy" src={`${BASE}${face}${dark ? "-dark" : ""}.svg`} alt="" width={size} height={size} />;
+  return <img className={css.mBuddy} src={`${BASE}${face}${dark ? "-dark" : ""}.svg`} alt="" width={size} height={size} />;
 }
 
 export function StationsScreen() {
@@ -32,34 +41,34 @@ export function StationsScreen() {
   // No station yet: adding the first one is the page.
   if (list && list.length === 0) {
     return (
-      <div className="m-screen m-scroll">
+      <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
         <TopBack label="会话" onBack={app.pop} />
         <FirstStation />
       </div>
     );
   }
   return (
-    <div className="m-screen m-scroll">
+    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label="会话" onBack={app.pop} />
       <LargeTitle small={list ? `${app.entry.name} · ${list.filter((s) => s.online).length}/${list.length} 在线` : app.entry.name} big="Station" />
-      {!list ? <p className="m-muted m-pad-20">{stations.error?.message ?? "正在读取 station…"}</p> : list.map((s) => (
+      {!list ? <p className={`${partsCss.mMuted} ${css.mPad20}`}>{stations.error?.message ?? "正在读取 station…"}</p> : list.map((s) => (
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
-          <span className="m-station-head">
+          <span className={css.mStationHead}>
             <Buddy s={s} />
-            <span className="m-grow"><b className="m-station-name">{s.name}</b><span className="m-station-summary">{s.summary}</span></span>
-            <ChevronRight size={14} className="m-subtle" />
+            <span className={partsCss.mGrow}><b className={css.mStationName}>{s.name}</b><span className={css.mStationSummary}>{s.summary}</span></span>
+            <ChevronRight size={14} className={partsCss.mSubtle} />
           </span>
           {s.online && s.host ? (
-            <span className="m-station-rings">{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} size={40} />)}</span>
+            <span className={css.mStationRings}>{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} size={40} />)}</span>
           ) : !s.online ? (
-            <span className="m-station-offline"><Illustration name="station-offline" width={220} /><span>这台机器很久没联系 ember 了</span></span>
+            <span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>这台机器很久没联系 ember 了</span></span>
           ) : null}
         </Card>
       ))}
       <ListCard>
         {manager && list && (
           <ListRow onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={list.map((s) => s.id)} /> })}>
-            <span className="m-accent m-row-title">＋ 添加 station</span>
+            <span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>＋ 添加 station</span>
           </ListRow>
         )}
       </ListCard>
@@ -85,14 +94,14 @@ function AddStationSheet({ known }: { known: string[] }) {
     <>
       <SheetGrab />
       <SheetHead title="添加 station" />
-      <div className="m-sheet-scroll m-form">
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
         {!made ? (
           <>
-            <p className="m-muted">station 是一台运行 ember 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 ember 并加入。</p>
-            <b className="m-form-label">名字</b>
+            <p className={partsCss.mMuted}>station 是一台运行 ember 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 ember 并加入。</p>
+            <b className={sheetsCss.mFormLabel}>名字</b>
             <Field value={name} onChange={setName} placeholder="比如机器名：studio、mac-mini" />
-            {error && <p className="m-error">{error}</p>}
-            <div className="m-form-actions">
+            {error && <p className={partsCss.mError}>{error}</p>}
+            <div className={sheetsCss.mFormActions}>
               <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
               <Button label="生成命令" primary busy={busy} enabled={!!name.trim()} onClick={() => {
                 setBusy(true); setError(null);
@@ -103,7 +112,7 @@ function AddStationSheet({ known }: { known: string[] }) {
         ) : joined ? (
           <>
             <p>「{joined.name}」已加入，现在可以打开它了。</p>
-            <div className="m-form-actions"><Button label="完成" primary onClick={() => app.sheet(null)} /></div>
+            <div className={sheetsCss.mFormActions}><Button label="完成" primary onClick={() => app.sheet(null)} /></div>
           </>
         ) : <EnrollSteps install={made.install} />}
       </div>
@@ -118,27 +127,27 @@ export function StationScreen() {
   const s = stations.value?.find((x) => x.id === id);
   const manager = useManager();
   return (
-    <div className="m-screen">
-      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s ? <span className="m-navbar-note">{s.host?.cpuModel || (s.online ? "在线" : "离线")}</span> : undefined}
+    <div className={pagesCss.mScreen}>
+      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s ? <span className={barsCss.mNavbarNote}>{s.host?.cpuModel || (s.online ? "在线" : "离线")}</span> : undefined}
         trailing={s && manager ? <NavButton icon={More} label="更多" onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
       {!s ? <Loading text={stations.error?.message ?? "正在读取…"} /> : (
-        <div className="m-scroll m-station-page">
+        <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
           {s.online && s.host ? (
             <Card>
-              <span className="m-station-rings m-rings-18">{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} />)}</span>
-              <span className="m-station-line">{s.host.line}</span>
-              {s.overview?.processesText && <span className="m-station-line">{s.overview.processesText}</span>}
+              <span className={`${css.mStationRings} ${css.mRings18}`}>{s.host.meters.map((m) => <Ring key={m.label} percent={m.percent} label={m.short} level={m.level} />)}</span>
+              <span className={css.mStationLine}>{s.host.line}</span>
+              {s.overview?.processesText && <span className={css.mStationLine}>{s.overview.processesText}</span>}
             </Card>
           ) : !s.online ? (
-            <Card><span className="m-station-offline"><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 ember 就会重新连上</span></span></Card>
+            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>离线：在这台机器上打开 ember 就会重新连上</span></span></Card>
           ) : null}
           {s.overview && (
             <>
               <SectionHeader title="Profile" start={24} />
               <ListCard>
-                {s.overview.profiles.length === 0 && <ListRow><span className="m-muted m-row-title">这台机器还没有 Profile。</span></ListRow>}
+                {s.overview.profiles.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>这台机器还没有 Profile。</span></ListRow>}
                 {s.overview.profiles.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}
-                {s.online && <ListRow onClick={() => app.push(app.at(`/s/${s.id}/profiles/new`))}><span className="m-accent m-row-title">＋ 添加 Profile</span></ListRow>}
+                {s.online && <ListRow onClick={() => app.push(app.at(`/s/${s.id}/profiles/new`))}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>＋ 添加 Profile</span></ListRow>}
               </ListCard>
               {/* The machine's own logins not used yet, each offered as a profile. */}
               {s.online && <MachineLoginOffers logins={s.overview.machineLogins} profiles={s.overview.profiles}
@@ -146,12 +155,12 @@ export function StationScreen() {
               <SectionHeader title="连接" start={24} />
               <ListCard>
                 {s.overview.connects.map((c) => <ConnectRow key={c.id} connect={c} onClick={() => app.push(app.at(`/s/${s.id}/connects/${encodeURIComponent(c.id)}`))} />)}
-                <ListRow><Mark size={14} /><span className="m-grow m-row-title">ember 对话</span><span className="m-row-note">内置</span></ListRow>
+                <ListRow><Mark size={14} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>ember 对话</span><span className={listsCss.mRowNote}>内置</span></ListRow>
                 {s.online && (
                   <ListRow onClick={() => app.push(app.at(`/s/${s.id}/connects/new`))}>
-                    <span className="m-grow m-row-text">
-                      <span className="m-accent m-row-title">＋ 添加连接</span>
-                      {s.overview.profiles.length === 0 && <span className="m-row-note">连接要用 Profile 来跑模型，先添加一个 Profile</span>}
+                    <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                      <span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>＋ 添加连接</span>
+                      {s.overview.profiles.length === 0 && <span className={listsCss.mRowNote}>连接要用 Profile 来跑模型，先添加一个 Profile</span>}
                     </span>
                   </ListRow>
                 )}
@@ -178,8 +187,8 @@ function EnrollSteps({ install }: { install: string }) {
     <>
       <p>在那台机器的终端里执行：</p>
       <CommandBox text={install} />
-      <p className="m-muted m-small">macOS（Apple 芯片）和 Linux 都行；装过 ember 的机器也用这条命令。它会装好 ember、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。</p>
-      <p className="m-muted m-small m-waiting"><Spinner size={10} />等待这台机器加入… 执行命令后会自动继续 · 命令 1 小时内有效</p>
+      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>macOS（Apple 芯片）和 Linux 都行；装过 ember 的机器也用这条命令。它会装好 ember、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。</p>
+      <p className={`${partsCss.mMuted} ${partsCss.mSmall} ${chatCss.mWaiting}`}><Spinner size={10} />等待这台机器加入… 执行命令后会自动继续 · 命令 1 小时内有效</p>
     </>
   );
 }
@@ -202,19 +211,19 @@ export function FirstStation() {
   // Joined: the page is gone (the workspace has a station), so this is said as it goes.
   useEffect(() => () => { if (shown.current) track("station_added", { ms: Math.round(performance.now() - shown.current), first: true }); }, []);
   return (
-    <div className="m-new-none">
-      <img className="m-illus" src={illustrationUrl("no-station")} alt="" width={240} />
+    <div className={newChatCss.mNewNone}>
+      <img className={partsCss.mIllus} src={illustrationUrl("no-station")} alt="" width={240} />
       <b>添加第一台 station</b>
       <p>agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。</p>
-      <div className="m-form m-steps" style={{ alignSelf: "stretch", padding: 0, textAlign: "left" }}>
-        {!view ? <p className="m-muted m-waiting"><Spinner size={12} />正在读取 workspace…</p>
-          : !manager ? <p className="m-callout">这个 workspace 还没有 station，等管理员添加。</p>
+      <div className={`${sheetsCss.mForm} ${settingsCss.mSteps}`} style={{ alignSelf: "stretch", padding: 0, textAlign: "left" }}>
+        {!view ? <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={12} />正在读取 workspace…</p>
+          : !manager ? <p className={settingsCss.mCallout}>这个 workspace 还没有 station，等管理员添加。</p>
           : made ? <EnrollSteps install={made.install} />
           : (
             <>
-              <b className="m-form-label">给这台机器起个名字</b>
+              <b className={sheetsCss.mFormLabel}>给这台机器起个名字</b>
               <Field value={name} onChange={setName} placeholder="比如 studio、mac-mini" />
-              {error && <p className="m-error">{error}</p>}
+              {error && <p className={partsCss.mError}>{error}</p>}
               <Button label="生成命令" primary busy={busy} enabled={!!name.trim()} onClick={() => {
                 setBusy(true); setError(null);
                 cloud.enroll(app.entry.account.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message)).finally(() => setBusy(false));
@@ -240,7 +249,7 @@ function StationMenu({ s }: { s: StationView }) {
     <>
       <SheetGrab />
       <SheetHead title={s.name} />
-      <div className="m-sheet-scroll">
+      <div className={sheetsCss.mSheetScroll}>
         <PickRow label="改名" onClick={() => ask(app, { title: "station 的名字", value: s.name, placeholder: "比如机器名：studio", action: "保存",
           run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast("已改名")) })} />
         <PickRow label="从 workspace 移除" accent onClick={() => confirm(app, {
@@ -262,13 +271,13 @@ function ProfileRow({ station, p }: { station: StationView; p: Profile }) {
   const trouble = quotaTrouble(p.quota);
   return (
     <ListRow onClick={() => app.push(app.at(`/s/${station.id}/settings/accounts/${encodeURIComponent(p.id)}`))}>
-      <span className="m-grow m-row-text">
-        <span className="m-row-title"><Presence state={toneDot(p.checkTone)} /> {p.name}</span>
-        <span className="m-row-note">{p.checkText} · {accessLabel(p)} · {p.modelsText}</span>
-        {trouble && <span className="m-row-note m-wrap">{trouble}</span>}
+      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+        <span className={listsCss.mRowTitle}><Presence state={toneDot(p.checkTone)} /> {p.name}</span>
+        <span className={listsCss.mRowNote}>{p.checkText} · {accessLabel(p)} · {p.modelsText}</span>
+        {trouble && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>}
       </span>
       <QuotaRings quota={p.quota} />
-      <ChevronRight size={14} className="m-subtle" />
+      <ChevronRight size={14} className={partsCss.mSubtle} />
     </ListRow>
   );
 }

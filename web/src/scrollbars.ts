@@ -1,5 +1,6 @@
+import * as css from "./scrollbars.css.ts";
 // Scrollbars that float over what scrolls and take no room from it. With a mouse the system's bars are hidden
-// (app.css) and one thin thumb per axis, drawn here, shows on the pane under the pointer and on any pane while it
+// (styles/global.css.ts) and one thin thumb per axis, drawn here, shows on the pane under the pointer and on any pane while it
 // scrolls, and can be dragged. Touch screens keep the system's own, which already float.
 // A thumb is put beside the pane it is for (in the pane's parent), so it is layered as the pane is: a menu, a popover
 // or a dialog over the pane is over its bar too.
@@ -40,7 +41,7 @@ export function startScrollbars(): void {
 
   function make(axis: Axis): HTMLDivElement {
     const el = document.createElement("div");
-    el.className = "floating-thumb";
+    el.className = css.floatingThumb;
     el.dataset.axis = axis;
     el.addEventListener("pointerdown", (e) => drag(axis, e));
     return el;
@@ -139,7 +140,7 @@ export function startScrollbars(): void {
   // Only when the pointer comes onto another element, never on every move.
   document.addEventListener("pointerover", (e) => {
     if (dragging || e.pointerType !== "mouse") return;
-    if (e.target instanceof HTMLElement && e.target.classList.contains("floating-thumb")) return;
+    if (e.target instanceof HTMLElement && e.target.classList.contains(css.floatingThumb)) return;
     hover = scrollerOf(e.target);
     if (hover) { clearTimeout(hideTimer); show(hover); } else linger();
   }, { passive: true });

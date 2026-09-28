@@ -9,6 +9,12 @@ import { useTopic } from "../core/react.ts";
 import { useAction, useApi, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Field, ICON, Section, SwitchRow } from "../ui.tsx";
+import * as css from "./SlackApp.css.ts";
+import * as shellCss from "../styles/shell.css.ts";
+import * as controlsCss from "../styles/controls.css.ts";
+import * as pagesCss from "../styles/pages.css.ts";
+import * as chatCss from "../styles/chat.css.ts";
+import * as additionsCss from "../styles/additions.css.ts";
 
 /** Permission groups in plain words; mirrors SLACK_GROUPS on the server. */
 const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
@@ -35,29 +41,29 @@ export function SlackAppSection({ connect }: { connect: Connect }) {
   const saved = () => {};
   const links = app.value?.links;
   return (
-    <details className="app-fold">
+    <details className={css.appFold}>
       <summary>
-        <span className="app-fold-title">Slack app</span>
-        <span className="muted">名字、头像和权限</span>
+        <span className={css.appFoldTitle}>Slack app</span>
+        <span className={shellCss.muted}>名字、头像和权限</span>
       </summary>
-      <div className="app-fold-body">
-        {app.error ? <p className="field-error">{app.error.message}</p>
-          : !app.value ? <p className="muted">正在读取 Slack 上的配置…</p>
-          : app.value.state === "no_app" ? <p className="muted">{app.value.error ? `找不到这个连接的 Slack app（${app.value.error}）。换上有效的 token 后再来。` : "连上 Slack 之后，就可以在这里修改它的 app。"}</p>
+      <div className={css.appFoldBody}>
+        {app.error ? <p className={controlsCss.fieldError}>{app.error.message}</p>
+          : !app.value ? <p className={shellCss.muted}>正在读取 Slack 上的配置…</p>
+          : app.value.state === "no_app" ? <p className={shellCss.muted}>{app.value.error ? `找不到这个连接的 Slack app（${app.value.error}）。换上有效的 token 后再来。` : "连上 Slack 之后，就可以在这里修改它的 app。"}</p>
           : app.value.state === "no_config_token" ? (
-            <div className="card card-row">
-              <span className="card-row-text"><span>要在这里改 app，需要你在这个 Slack 工作区的 App 配置 token。</span><span className="muted">它只归你用，这台 station 上的其他人看不到。</span></span>
+            <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
+              <span className={pagesCss.cardRowText}><span>要在这里改 app，需要你在这个 Slack 工作区的 App 配置 token。</span><span className={shellCss.muted}>它只归你用，这台 station 上的其他人看不到。</span></span>
               <Button onClick={() => setAdding(true)}>添加配置 token</Button>
             </div>
           )
           : app.value.state === "error" ? (
-            <div className="card card-row">
-              <span className="card-row-text field-error">读不到 app 配置：{app.value.error}</span>
+            <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
+              <span className={`${pagesCss.cardRowText} ${controlsCss.fieldError}`}>读不到 app 配置：{app.value.error}</span>
               <Button onClick={() => setAdding(true)}>换一个配置 token</Button>
             </div>
           )
           : <AppForm key={JSON.stringify(app.value.settings)} connect={connect} settings={app.value.settings} links={app.value.links} onSaved={saved} />}
-        {links && <a className="text-button app-fold-link" href={links.settings} target="_blank" rel="noopener">在 Slack 打开这个 app</a>}
+        {links && <a className={`${chatCss.textButton} ${css.appFoldLink}`} href={links.settings} target="_blank" rel="noopener">在 Slack 打开这个 app</a>}
       </div>
       <Dialog open={adding} onClose={() => setAdding(false)} wide title="添加 Slack 配置 token">
         <ConfigTokenForm onSaved={() => setAdding(false)} />
@@ -79,21 +85,21 @@ export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; o
     : token && !token.startsWith("xoxe-") ? "Refresh Token 以 xoxe-1- 开头。" : null;
   const ready = token.startsWith("xoxe-1-") && token.length > 20;
   return (
-    <ol className="token-guide">
+    <ol className={css.tokenGuide}>
       <li>
         <strong>打开 Slack 的 app 列表</strong>
-        <span className="muted">用要放 bot 的那个 Slack 工作区的账号登录。</span>
-        <a className="btn btn-primary" href="https://api.slack.com/apps" target="_blank" rel="noopener"><External {...ICON} />打开 api.slack.com/apps</a>
+        <span className={shellCss.muted}>用要放 bot 的那个 Slack 工作区的账号登录。</span>
+        <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href="https://api.slack.com/apps" target="_blank" rel="noopener"><External {...ICON} />打开 api.slack.com/apps</a>
       </li>
       <li>
         <strong>生成配置 token</strong>
-        <span className="muted">拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。</span>
+        <span className={shellCss.muted}>拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。</span>
       </li>
       <li>
         <strong>把 Refresh Token 粘贴到这里</strong>
-        <span className="muted">Slack 会给两个 token，要下面那个以 xoxe-1- 开头的。ember 会自己续期，以后不用再管。</span>
-        <div className="input-row">
-          <input className="input mono" type="password" autoComplete="off" spellCheck={false} value={token} aria-label="Refresh Token"
+        <span className={shellCss.muted}>Slack 会给两个 token，要下面那个以 xoxe-1- 开头的。ember 会自己续期，以后不用再管。</span>
+        <div className={additionsCss.inputRow}>
+          <input className={`${controlsCss.input} ${shellCss.mono}`} type="password" autoComplete="off" spellCheck={false} value={token} aria-label="Refresh Token"
             onChange={(e) => setToken(e.target.value.trim())}
             onPaste={(e) => {
               const pasted = e.clipboardData.getData("text").trim();
@@ -102,7 +108,7 @@ export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; o
             placeholder="xoxe-1-…" />
           <Button variant="primary" disabled={!ready} busy={save.busy} onClick={() => void save.run(token)}>{replacing ? "换成这个" : "加上"}</Button>
         </div>
-        {(wrong || save.error) && <p className="field-error" role="alert">{wrong ?? save.error?.message}</p>}
+        {(wrong || save.error) && <p className={controlsCss.fieldError} role="alert">{wrong ?? save.error?.message}</p>}
       </li>
     </ol>
   );
@@ -293,16 +299,16 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
   const on = (Object.keys(GROUPS) as SlackGroup[]).filter((g) => settings.groups[g]).length;
   const isPicked = (a: Avatar) => picked !== null && !("upload" in picked) && picked.avatar.id === a.id;
   const tile = (a: Avatar, maker: boolean) => (
-    <button key={a.id} type="button" className="avatar-tile" data-picked={isPicked(a) || undefined} title={a.label} aria-label={a.label}
+    <button key={a.id} type="button" className={css.avatarTile} data-picked={isPicked(a) || undefined} title={a.label} aria-label={a.label}
       style={{ background: a.bg }} onClick={() => pick(a, maker)}>
       <img src={a.thumb ?? a.src} alt="" loading="lazy" data-mono={a.mono || undefined} data-maker={maker || undefined} />
     </button>
   );
   return (
     <>
-      <div className="app-look">
-        <button type="button" className="app-avatar" onClick={() => file.current?.click()} title="上传图片" style={{ background: settings.backgroundColor || undefined }}>
-          {icon ? <img src={icon} alt="头像" /> : <span className="app-avatar-empty"><ImageUpload {...ICON} size={20} />{fresh ? "上传" : "保持现在的"}</span>}
+      <div className={css.appLook}>
+        <button type="button" className={css.appAvatar} onClick={() => file.current?.click()} title="上传图片" style={{ background: settings.backgroundColor || undefined }}>
+          {icon ? <img src={icon} alt="头像" /> : <span className={css.appAvatarEmpty}><ImageUpload {...ICON} size={20} />{fresh ? "上传" : "保持现在的"}</span>}
         </button>
         <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
           const f = e.target.files?.[0];
@@ -314,26 +320,26 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
             if (!colourSet) set("backgroundColor", bg);
           }, () => onIcon(null, "读不了这张图片"));
         }} />
-        <div className="app-look-main">
-          <input id="app-name" className="input app-name-input" aria-label="名字" placeholder="名字" value={settings.name} onChange={(e) => setName(e.target.value)} />
-          <input id="app-desc" className="input app-desc" aria-label="简介" maxLength={140} placeholder="简介，显示在 app 资料卡上" value={settings.description} onChange={(e) => set("description", e.target.value)} />
-          <div className="app-colour">
-            <input type="color" className="color-swatch" aria-label="底色" value={/^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor) ? settings.backgroundColor : "#7a2e0e"}
+        <div className={css.appLookMain}>
+          <input id="app-name" className={`${controlsCss.input} ${css.appNameInput}`} aria-label="名字" placeholder="名字" value={settings.name} onChange={(e) => setName(e.target.value)} />
+          <input id="app-desc" className={`${controlsCss.input} ${css.appDesc}`} aria-label="简介" maxLength={140} placeholder="简介，显示在 app 资料卡上" value={settings.description} onChange={(e) => set("description", e.target.value)} />
+          <div className={css.appColour}>
+            <input type="color" className={css.colorSwatch} aria-label="底色" value={/^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor) ? settings.backgroundColor : "#7a2e0e"}
               onChange={(e) => colour(e.target.value.toUpperCase(), true)} />
-            <input className="input mono app-colour-hex" aria-label="底色色值" spellCheck={false} value={settings.backgroundColor} onChange={(e) => colour(e.target.value, true)} />
+            <input className={`${controlsCss.input} ${shellCss.mono} ${css.appColourHex}`} aria-label="底色色值" spellCheck={false} value={settings.backgroundColor} onChange={(e) => colour(e.target.value, true)} />
             {recommended && colourSet && recommended.toLowerCase() !== settings.backgroundColor.toLowerCase() && (
-              <button type="button" className="text-button" onClick={() => colour(recommended, false)}>用推荐色</button>
+              <button type="button" className={chatCss.textButton} onClick={() => colour(recommended, false)}>用推荐色</button>
             )}
           </div>
         </div>
       </div>
-      <div className="avatar-picker" aria-label="头像">
+      <div className={css.avatarPicker} aria-label="头像">
         {(buddyList ?? []).map((a) => tile(a, false))}
         {MAKERS.map((a) => tile(a, true))}
       </div>
-      <details className="app-perms">
+      <details className={css.appPerms}>
         <summary>权限 · 开了 {on} / {Object.keys(GROUPS).length} 项</summary>
-        <div className="switch-list">
+        <div className={css.switchList}>
           {(Object.keys(GROUPS) as SlackGroup[]).map((g) => (
             <SwitchRow key={g} title={GROUPS[g].label} description={GROUPS[g].description} disabled={g === "base"}
               checked={settings.groups[g] ?? false} onChange={(v) => set("groups", { ...settings.groups, [g]: v })} />
@@ -367,18 +373,18 @@ function AppForm({ connect, settings, links, onSaved }: { connect: Connect; sett
   });
 
   return (
-    <div className="card slack-app">
+    <div className={`${pagesCss.card} slack-app`}>
       {approve && (
-        <div className="callout" data-tone="blue" role="status">
+        <div className={additionsCss.callout} data-tone="blue" role="status">
           <ShieldCheck {...ICON} />
           <span>权限变了，Slack 需要你同意一次才会生效。</span>
-          <a className="btn btn-primary" href={links.install} target="_blank" rel="noopener" onClick={() => setApprove(false)}>去 Slack 同意</a>
+          <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={links.install} target="_blank" rel="noopener" onClick={() => setApprove(false)}>去 Slack 同意</a>
         </div>
       )}
       <AppFields settings={draft} onChange={setDraft} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
-      {iconError && <p className="field-error" role="alert">{iconError}</p>}
-      {apply.error && <p className="field-error" role="alert">{apply.error.message}</p>}
-      <div className="card-actions">
+      {iconError && <p className={controlsCss.fieldError} role="alert">{iconError}</p>}
+      {apply.error && <p className={controlsCss.fieldError} role="alert">{apply.error.message}</p>}
+      <div className={pagesCss.cardActions}>
         {dirty && <Button variant="ghost" onClick={() => { setDraft(settings); setIcon(null); }}>还原</Button>}
         <Button variant="primary" disabled={!dirty} busy={apply.busy} onClick={() => void apply.run()}>应用到 Slack</Button>
       </div>

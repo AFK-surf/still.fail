@@ -9,6 +9,10 @@ import { QuotaBars } from "./components.tsx";
 import { RUNTIME_LABEL } from "./format.ts";
 import { ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
 import * as css from "./ModelTriple.css.ts";
+import * as css2 from "./ModelTriple.css.ts";
+import * as chatCss from "./styles/chat.css.ts";
+import * as controlsCss from "./styles/controls.css.ts";
+import * as shellCss from "./styles/shell.css.ts";
 
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
 const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
@@ -87,81 +91,81 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
 
   return (
     <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) { setDraft(value); setFilter(""); } }}>
-      <span className="model-triple-fit" ref={fit}>
-        <Popover.Trigger className="model-triple" title={title} disabled={options.length === 0} data-drop={DROPS[drop]}>
-          {options.length === 0 ? <span className="triple-model">没有可用模型</span> : (
+      <span className={css2.modelTripleFit} ref={fit}>
+        <Popover.Trigger className={css2.modelTriple} title={title} disabled={options.length === 0} data-drop={DROPS[drop]}>
+          {options.length === 0 ? <span className={css2.tripleModel}>没有可用模型</span> : (
             <>
-              <span className="triple-model"><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={13} /><span className="triple-model-name" title={value.model || undefined}>{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span>
-              {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className="triple-part triple-runtime"><RuntimeLogo runtime={value.runtime} size={13} />{RUNTIME_LABEL[value.runtime]}</span>}
-              <span className="triple-part triple-effort" data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
-              <span className="triple-part triple-account">
+              <span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={13} /><span className="triple-model-name" title={value.model || undefined}>{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span>
+              {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={13} />{RUNTIME_LABEL[value.runtime]}</span>}
+              <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
+              <span className={`${css2.triplePart} ${css2.tripleAccount}`}>
                 {shown && <ProviderLogo runtime={value.runtime} kind={shown.kind ?? "env"} size={13} />}
-                <span className="triple-account-name">{value.profile ? shown?.name ?? value.profile : shown ? `自动 · ${shown.name}` : "自动分配"}</span>
-                {!value.profile && <span className="triple-account-short">自动</span>}
-                {shown && <span className="triple-rings"><QuotaBars quota={shown.quota} compact small /></span>}
+                <span className={css2.tripleAccountName}>{value.profile ? shown?.name ?? value.profile : shown ? `自动 · ${shown.name}` : "自动分配"}</span>
+                {!value.profile && <span className={css2.tripleAccountShort}>自动</span>}
+                {shown && <span className={css2.tripleRings}><QuotaBars quota={shown.quota} compact small /></span>}
               </span>
             </>
           )}
-          <ChevronDown size={12} className="chooser-chevron" />
+          <ChevronDown size={12} className={chatCss.chooserChevron} />
         </Popover.Trigger>
       </span>
       <Popover.Portal>
-        <Popover.Content className="popover run-picker-panel" side={side} align="start" sideOffset={6} collisionPadding={8}>
-          <div className="run-picker">
-            <div className="run-picker-column run-picker-models">
+        <Popover.Content className={`${controlsCss.popover} ${css2.runPickerPanel}`} side={side} align="start" sideOffset={6} collisionPadding={8}>
+          <div className={css2.runPicker}>
+            <div className={`${css2.runPickerColumn} ${css2.runPickerModels}`}>
               <h4>模型</h4>
               {/* Many models: a filter; the models by series. */}
               {options.length > 8 && (
-                <input className="input run-picker-filter" placeholder="搜索模型" value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
+                <input className={`${controlsCss.input} ${css2.runPickerFilter}`} placeholder="搜索模型" value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
               )}
               {groups.map(([who, list]) => (
-                <div key={who} className={`run-picker-group ${css.series}`}>
+                <div key={who} className={`${css2.runPickerGroup} ${css.series}`}>
                   {groups.length > 1 && <h5>{who}</h5>}
                   {list.map((o) => (
-                    <button key={o.model} type="button" className="run-picker-option" title={o.ids.join("\n")} aria-pressed={option === o} onClick={() => set({ model: o.model })}>
+                    <button key={o.model} type="button" className={css2.runPickerOption} title={o.ids.join("\n")} aria-pressed={option === o} onClick={() => set({ model: o.model })}>
                       <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={13} />
-                      <span className="run-option-text"><span>{o.name}</span>{o.spent && <span className="run-picker-spent">{o.spent.text}</span>}</span>
+                      <span className={css2.runOptionText}><span>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}</span>
                     </button>
                   ))}
                 </div>
               ))}
-              {listed.length === 0 && <p className="muted run-picker-empty">没有叫这个的模型</p>}
+              {listed.length === 0 && <p className={`${shellCss.muted} ${css2.runPickerEmpty}`}>没有叫这个的模型</p>}
             </div>
             {askRuntime && (
-              <div className="run-picker-column">
+              <div className={css2.runPickerColumn}>
                 <h4>运行时</h4>
                 {option!.runtimes.map((r) => (
-                  <button key={r} type="button" className="run-picker-option" aria-pressed={on === r} onClick={() => set({ runtime: r })}>
+                  <button key={r} type="button" className={css2.runPickerOption} aria-pressed={on === r} onClick={() => set({ runtime: r })}>
                     <RuntimeLogo runtime={r} size={13} />{RUNTIME_LABEL[r]}
                   </button>
                 ))}
               </div>
             )}
-            <div className="run-picker-column">
+            <div className={css2.runPickerColumn}>
               <h4>思考深度</h4>
               {[null, ...efforts].map((e) => (
-                <button key={e ?? ""} type="button" className="run-picker-option" aria-pressed={effort === e} onClick={() => set({ effort: e })}>{e ?? "默认"}</button>
+                <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={effort === e} onClick={() => set({ effort: e })}>{e ?? "默认"}</button>
               ))}
             </div>
-            <div className="run-picker-column run-picker-accounts">
+            <div className={`${css2.runPickerColumn} ${css2.runPickerAccounts}`}>
               <h4>账号</h4>
-              {dropped && <p className="run-picker-note">指定的账号没有启用 {option?.name ?? next.model}，改成了自动分配</p>}
-              <button type="button" className="run-picker-option" aria-pressed={profile === null} onClick={() => set({ profile: null })}>
-                <span className="run-option-text"><strong>自动分配</strong><span className="muted">额度用完或登录失效时换一个</span>{current && !value.profile && <span className="muted">现在：{current.name}</span>}</span>
+              {dropped && <p className={css2.runPickerNote}>指定的账号没有启用 {option?.name ?? next.model}，改成了自动分配</p>}
+              <button type="button" className={css2.runPickerOption} aria-pressed={profile === null} onClick={() => set({ profile: null })}>
+                <span className={css2.runOptionText}><strong>自动分配</strong><span className={shellCss.muted}>额度用完或登录失效时换一个</span>{current && !value.profile && <span className={shellCss.muted}>现在：{current.name}</span>}</span>
               </button>
               {accounts.map((a) => (
-                <button key={a.id} type="button" className="run-picker-option" aria-pressed={profile === a.id} onClick={() => set({ profile: a.id })}>
+                <button key={a.id} type="button" className={css2.runPickerOption} aria-pressed={profile === a.id} onClick={() => set({ profile: a.id })}>
                   <ProviderLogo runtime={on} kind={a.kind ?? "env"} size={15} />
-                  <span className="run-option-text"><span>{a.name}</span></span>
+                  <span className={css2.runOptionText}><span>{a.name}</span></span>
                   <QuotaBars quota={a.quota} compact />
                 </button>
               ))}
             </div>
           </div>
-          <div className="run-picker-foot">
-            <Popover.Close className="btn btn-ghost btn-sm">取消</Popover.Close>
+          <div className={css2.runPickerFoot}>
+            <Popover.Close className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css2.btnSm}`}>取消</Popover.Close>
             {/* Nothing changed: it says so, and only closes. */}
-            <button type="button" className={changed ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"} disabled={!option}
+            <button type="button" className={changed ? `${controlsCss.btn} ${controlsCss.btnPrimary} ${css2.btnSm}` : `${controlsCss.btn} btn-secondary ${css2.btnSm}`} disabled={!option}
               onClick={() => { setOpen(false); if (changed) onPick(next); }}>{changed ? "确定" : "不变"}</button>
           </div>
         </Popover.Content>

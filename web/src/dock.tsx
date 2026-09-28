@@ -6,6 +6,8 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Composer, type ComposerProps } from "./Chat.tsx";
 import { StationContext, type Station } from "./station.tsx";
+import * as composerCss from "./styles/composer.css.ts";
+import * as css from "./dock.css.ts";
 
 export interface ComposerSpec extends ComposerProps {
   /** The station it sends to (uploads, warming, sending are its). */
@@ -69,8 +71,8 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   // Laid out for another page (a new chat becoming its chat, a chat left for a new one), the box goes from where and how
   // big it was to where and how big it is now: one composer changing, not one fading out as another fades in. Its place
   // is read each frame (the last one before the change is where it goes from); a page change's picture leaves it out
-  // (app.css), so what shows of it is the live box.
-  const inner = () => box.current?.querySelector<HTMLElement>(".composer-box") ?? null;
+  // (its styles), so what shows of it is the live box.
+  const inner = () => box.current?.querySelector<HTMLElement>(`.${composerCss.composerBox}`) ?? null;
   const was = useRef<{ rect: DOMRect; radius: number } | null>(null);
   const seen = () => {
     const b = inner();
@@ -115,7 +117,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     if (box.current) setHeight(box.current.offsetHeight);
   }, [spec?.variant]);
   // The frame its layout changes with the page (a chat's foot, a new chat's roomy box) it changes at once: eased, its
-  // corners showed as a jump (app.css eases them as it grows while typed in).
+  // corners showed as a jump (its styles ease them as it grows while typed in).
   const [settled, setSettled] = useState(spec?.variant);
   const switching = spec !== null && spec.variant !== settled;
   useEffect(() => {
@@ -129,7 +131,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     <DockContext.Provider value={value}>
       {children}
       {spec && (
-        <div ref={box} className="composer-dock" data-variant={spec.variant} data-switching={switching || undefined} hidden={!shown}>
+        <div ref={box} className={css.composerDock} data-variant={spec.variant} data-switching={switching || undefined} hidden={!shown}>
           <StationContext.Provider value={spec.station}>
             <Composer {...spec} carry={carry} />
           </StationContext.Provider>
@@ -145,7 +147,7 @@ export function ComposerSlot(spec: ComposerSpec) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => { if (ref.current) dock?.place(ref.current, spec); });
   useLayoutEffect(() => { const at = ref.current; return () => { if (at) dock?.leave(at); }; }, [dock]);
-  return <div ref={ref} className="composer-slot" data-variant={spec.variant} style={{ height: dock?.height || undefined }} />;
+  return <div ref={ref} className={css.composerSlot} data-variant={spec.variant} style={{ height: dock?.height || undefined }} />;
 }
 
 /** The composer's height: what a page running under it leaves free at its foot. */

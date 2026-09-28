@@ -2,16 +2,17 @@
 import { useState } from "react";
 import { signIn } from "../cloud/accounts.ts";
 import { Illustration } from "./parts.tsx";
-import "./legacy.css";
+import * as rootCss from "./styles/root.css.ts";
+import * as css from "./SignIn.css.ts";
 
 export function MobileSignIn() {
   const [busy, setBusy] = useState(false);
   return (
-    <div className="m m-sign-in">
+    <div className={`${rootCss.m} ${css.mSignIn}`}>
       <Illustration name="sign-in" width={300} />
       <h1>让 agent 一直在干活</h1>
       <p>登录后，你所在 workspace 的所有 station 和会话都会出现在这里。</p>
-      <button type="button" className="m-google" disabled={busy} onClick={() => { setBusy(true); void signIn().finally(() => setBusy(false)); }}>
+      <button type="button" className={css.mGoogle} disabled={busy} onClick={() => { setBusy(true); void signIn().finally(() => setBusy(false)); }}>
         <GoogleDot />{busy ? "正在打开…" : "用 Google 登录"}
       </button>
       <small>多个账号可以都登录，随时切换 workspace。</small>
@@ -22,7 +23,7 @@ export function MobileSignIn() {
 /** Google's "G", on white as Google asks for it on a dark button. */
 function GoogleDot() {
   return (
-    <span className="m-google-mark" aria-hidden="true">
+    <span className={css.mGoogleMark} aria-hidden="true">
       <svg width="16" height="16" viewBox="0 0 48 48">
         <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
         <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />

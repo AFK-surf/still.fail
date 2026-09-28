@@ -1,0 +1,47 @@
+import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
+import { muted } from "../styles/shell.css.ts";
+import { list } from "../styles/pages.css.ts";
+import { command, runtimeLogo } from "../ui.css.ts";
+import { machineLogins } from "../pages/Accounts.css.ts";
+import { btn } from "../styles/controls.css.ts";
+
+export const groupHead = style({});
+export const stationRow = style({});
+export const roleSelect = style({ width: "120px", flex: "none" });
+export const stationHeading = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
+export const stationItem = style({
+  selectors: {
+    "& + &": { borderTop: `1px solid ${vars.line}` },
+    [`${list} &`]: { display: "block" },
+  },
+});
+export const stationDevice = style({ padding: "4px 16px 16px 36px" });
+/** Concentric with what is inside: its fields' and commands' corner (--r-field) plus its padding. */
+export const onboardingCard = style({
+  width: "100%", textAlign: "left", padding: "20px", border: `1px solid ${vars.line}`,
+  borderRadius: `calc(${vars.rField} + 20px)`, cornerShape: vars.cornerShape, background: vars.canvas,
+});
+export const onboardingRow = style({ display: "flex", alignItems: "stretch", gap: "8px" });
+export const enrollWait = style({
+  display: "flex", alignItems: "center", gap: "12px", marginTop: "16px", padding: "12px 14px",
+  borderRadius: vars.rField, cornerShape: vars.cornerShape,
+  background: `color-mix(in oklch, ${vars.accent} 9%, transparent)`,
+});
+/** A first profile to add, station by station (cloud/settings.tsx): where it goes is part of adding it. */
+export const firstStations = style({ width: "100%", display: "grid", gap: "28px", textAlign: "left" });
+export const firstStationRow = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textSm });
+export const firstStationName = style({
+  flex: "1", minWidth: "0", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+export const firstStation = style({});
+export const memoryStation = style({});
+export const memoryStationName = style({ margin: "0 0 8px", fontSize: vars.textMd, fontWeight: "600" });
+globalStyle(`${stationRow} ${btn}`, { flex: "none" });
+globalStyle(`${groupHead} ${runtimeLogo}`, { alignSelf: "center" });
+/** As tall as the field beside it. */
+globalStyle(`${onboardingRow} ${btn}`, { height: "auto" });
+globalStyle(`${onboardingCard} ${command}`, { marginTop: "8px" });
+globalStyle(`${enrollWait} strong`, { fontWeight: "600" });
+globalStyle(`${enrollWait} ${muted}`, { fontSize: vars.textXs });
+globalStyle(`${firstStation} ${machineLogins}`, { marginTop: "14px" });

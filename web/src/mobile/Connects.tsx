@@ -17,15 +17,25 @@ import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { AccountList, ModelList, SettingRow } from "./History.tsx";
 import { Button, Field, GroupLabel, LargeTitle, ListCard, ListRow, Loading, MakerIcon, NavBar, NavButton, PickRow, SectionHeader, Seg, SlackMark, Spinner, TopBack } from "./parts.tsx";
 import { ask, confirm } from "./sheets.tsx";
+import * as settingsCss from "./styles/settings.css.ts";
+import * as chatCss from "../styles/chat.css.ts";
+import * as partsCss from "./styles/parts.css.ts";
+import * as listsCss from "./styles/lists.css.ts";
+import * as sheetsCss from "./styles/sheets.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as barsCss from "./styles/bars.css.ts";
+import * as historyCss from "./styles/history.css.ts";
+import * as css from "./Connects.css.ts";
+import * as newChatCss from "./styles/new-chat.css.ts";
 
 /** A connect's presence as a dot: online green, at work orange, failing red, offline hollow. */
 export function Presence({ state }: { state: string }) {
-  return <span className="m-presence" data-state={state} />;
+  return <span className={settingsCss.mPresence} data-state={state} />;
 }
 
 /** A connect as its people see it in Slack: its bot's picture; Slack's mark until Slack has said what that is. */
 function ConnectAvatar({ connect, size }: { connect: Connect; size: number }) {
-  return connect.botImage ? <img className="bot-avatar" src={connect.botImage} width={size} height={size} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <SlackMark size={Math.round(size * 0.55)} />;
+  return connect.botImage ? <img className={chatCss.botAvatar} src={connect.botImage} width={size} height={size} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <SlackMark size={Math.round(size * 0.55)} />;
 }
 
 /** A connect in its station's list: its mark and name, how it runs, and its presence. */
@@ -33,11 +43,11 @@ export function ConnectRow({ connect: c, onClick }: { connect: Connect; onClick:
   return (
     <ListRow onClick={onClick}>
       <ConnectAvatar connect={c} size={30} />
-      <span className="m-grow m-row-text">
-        <span className="m-row-title">{c.name}{c.team && <span className="m-row-aside"> · {c.team}</span>}</span>
-        <span className="m-row-note">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span>
+      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+        <span className={listsCss.mRowTitle}>{c.name}{c.team && <span className={settingsCss.mRowAside}> · {c.team}</span>}</span>
+        <span className={listsCss.mRowNote}>{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span>
       </span>
-      <span className="m-row-status"><Presence state={c.presence} />{c.statusText}</span>
+      <span className={settingsCss.mRowStatus}><Presence state={c.presence} />{c.statusText}</span>
     </ListRow>
   );
 }
@@ -56,11 +66,11 @@ export function WaitingAppRow({ made, online }: { made: MadeSlackApp; online: bo
   return (
     <ListRow onClick={() => app.sheet({ height: 0.4, content: () => <WaitingAppSheet made={made} online={online} /> })}>
       <SlackMark size={16} />
-      <span className="m-grow m-row-text">
-        <span className="m-row-title">{made.name}{made.team && <span className="m-row-aside"> · {made.team}</span>}</span>
-        <span className="m-row-note">{waitingText(made)}</span>
+      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+        <span className={listsCss.mRowTitle}>{made.name}{made.team && <span className={settingsCss.mRowAside}> · {made.team}</span>}</span>
+        <span className={listsCss.mRowNote}>{waitingText(made)}</span>
       </span>
-      {online ? <span className="m-link">继续</span> : <span className="m-row-note">station 离线</span>}
+      {online ? <span className={partsCss.mLink}>继续</span> : <span className={listsCss.mRowNote}>station 离线</span>}
     </ListRow>
   );
 }
@@ -73,8 +83,8 @@ function WaitingAppSheet({ made, online }: { made: MadeSlackApp; online: boolean
     <>
       <SheetGrab />
       <SheetHead title={made.name} />
-      <div className="m-sheet-scroll">
-        <p className="m-muted m-pad m-small">{waitingText(made)}。</p>
+      <div className={sheetsCss.mSheetScroll}>
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{waitingText(made)}。</p>
         <PickRow label={made.installed ? "填 App-Level Token" : made.install ? "继续安装" : "填 token"} enabled={online} sub={online ? undefined : "station 离线，等它上线再继续"}
           onClick={() => { app.sheet(null); app.push(`${stationBase(station.address)}/connects/new?resume=${encodeURIComponent(made.appId)}`); }} />
         <PickRow label="从这里移除" accent onClick={() => confirm(app, {
@@ -106,7 +116,7 @@ export function ConnectScreen() {
   const app = useApp();
   const { item, loading, error } = useItem();
   if (!item) {
-    return <div className="m-screen"><NavBar back="连接" onBack={app.pop} title="连接" /><Loading text={error?.message ?? (loading ? "正在读取连接…" : "没有这个连接。")} /></div>;
+    return <div className={pagesCss.mScreen}><NavBar back="连接" onBack={app.pop} title="连接" /><Loading text={error?.message ?? (loading ? "正在读取连接…" : "没有这个连接。")} /></div>;
   }
   return <ConnectPage item={item} />;
 }
@@ -117,55 +127,55 @@ function ConnectPage({ item }: { item: ConnectItem }) {
   const { connect, bound, sessions } = item;
   const c = connect.connection;
   return (
-    <div className="m-screen">
-      <NavBar back="连接" onBack={app.pop} title={connect.name} sub={<span className="m-navbar-note"><Presence state={connect.presence} /> {connect.statusText}</span>}
+    <div className={pagesCss.mScreen}>
+      <NavBar back="连接" onBack={app.pop} title={connect.name} sub={<span className={barsCss.mNavbarNote}><Presence state={connect.presence} /> {connect.statusText}</span>}
         trailing={<NavButton icon={More} label="更多" onClick={() => app.sheet({ height: 0.6, content: () => <ConnectMenu connect={connect} /> })} />} />
-      <div className="m-scroll m-station-page">
+      <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
         {/* Who it is in Slack: its bot's picture, its Slack workspace, whose it is. */}
-        <div className="m-card m-profile-head">
+        <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
           <ConnectAvatar connect={connect} size={44} />
-          <span className="m-grow">
-            <span className="m-row-title">{connect.team ?? "Slack"}</span>
-            <span className="m-row-note">{station.name}{connect.createdBy ? ` · 所属 ${connect.createdBy.shown?.display ?? connect.createdBy.name}` : ""}</span>
+          <span className={partsCss.mGrow}>
+            <span className={listsCss.mRowTitle}>{connect.team ?? "Slack"}</span>
+            <span className={listsCss.mRowNote}>{station.name}{connect.createdBy ? ` · 所属 ${connect.createdBy.shown?.display ?? connect.createdBy.name}` : ""}</span>
           </span>
         </div>
         {(c.state === "no_tokens" || c.state === "error" || (c.state === "reconnecting" && c.lastError)) && (
-          <div className="m-callout">
-            {c.state === "no_tokens" ? <>这个连接还没接上 Slack。<button type="button" className="m-link" onClick={() => openTokens(app, connect)}>填 token</button></>
+          <div className={settingsCss.mCallout}>
+            {c.state === "no_tokens" ? <>这个连接还没接上 Slack。<button type="button" className={partsCss.mLink} onClick={() => openTokens(app, connect)}>填 token</button></>
               : c.state === "error" ? c.error : `正在重连：${c.lastError}`}
           </div>
         )}
         <SectionHeader title="怎么跑" start={24} />
         <ListCard>
           <ListRow onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(connect.id)}/run`)}>
-            <span className="m-run-label">模型</span>
-            <span className="m-grow m-row-title">{connect.bind.model ? connect.modelName ?? connect.bind.model : "选模型"}<span className="m-muted"> · {connect.bind.effort || "默认深度"} · {connect.bind.profile ? "固定账号" : "自动分配"}</span></span>
-            <ChevronRight size={14} className="m-subtle" />
+            <span className={historyCss.mRunLabel}>模型</span>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{connect.bind.model ? connect.modelName ?? connect.bind.model : "选模型"}<span className={partsCss.mMuted}> · {connect.bind.effort || "默认深度"} · {connect.bind.profile ? "固定账号" : "自动分配"}</span></span>
+            <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
           <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <ModeSheet item={item} /> })}>
-            <span className="m-run-label">会话</span>
-            <span className="m-grow m-row-text">
-              <span className="m-row-title">{MODE[connect.mode].label}</span>
-              <span className="m-row-note m-wrap">{MODE[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? "只在被 @ 时唤醒。" : "它能看到的每条消息都会送进会话。")}</span>
+            <span className={historyCss.mRunLabel}>会话</span>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+              <span className={listsCss.mRowTitle}>{MODE[connect.mode].label}</span>
+              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{MODE[connect.mode].description}{connect.mode === "single-session" && (connect.requireMention ? "只在被 @ 时唤醒。" : "它能看到的每条消息都会送进会话。")}</span>
             </span>
-            <ChevronRight size={14} className="m-subtle" />
+            <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
           {connect.mode === "single-session" && (
             <ListRow onClick={() => app.sheet({ height: 0.7, draggable: true, content: () => <SessionSheet item={item} /> })}>
-              <span className="m-run-label">当前</span>
-              <span className="m-grow m-row-title">{bound ? bound.titleText : <span className="m-muted">还没有会话；下一条消息会开始一个新的。</span>}</span>
-              <ChevronRight size={14} className="m-subtle" />
+              <span className={historyCss.mRunLabel}>当前</span>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{bound ? bound.titleText : <span className={partsCss.mMuted}>还没有会话；下一条消息会开始一个新的。</span>}</span>
+              <ChevronRight size={14} className={partsCss.mSubtle} />
             </ListRow>
           )}
         </ListCard>
-        <p className="m-page-note">跑在 {connect.runtimeText} 上，创建后不能换；要用另一种运行时，新建一个连接。进行中的会话继续用开始时的设置。</p>
+        <p className={settingsCss.mPageNote}>跑在 {connect.runtimeText} 上，创建后不能换；要用另一种运行时，新建一个连接。进行中的会话继续用开始时的设置。</p>
         <SectionHeader title="最近的会话" start={24} />
         <ListCard>
-          {sessions.length === 0 && <ListRow><span className="m-muted m-row-title">还没有会话。在 Slack 里 @{connect.name} 就会开始。</span></ListRow>}
+          {sessions.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>还没有会话。在 Slack 里 @{connect.name} 就会开始。</span></ListRow>}
           {sessions.map((s) => (
             <ListRow key={s.key} onClick={() => app.push(`${stationBase(station.address)}/chats/${encodeURIComponent(s.key)}`)}>
-              <span className="m-grow m-row-title">{s.titleText}</span>
-              <span className="m-row-note">{s.statusText}</span>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{s.titleText}</span>
+              <span className={listsCss.mRowNote}>{s.statusText}</span>
             </ListRow>
           ))}
         </ListCard>
@@ -186,7 +196,7 @@ function ConnectMenu({ connect }: { connect: Connect }) {
     <>
       <SheetGrab />
       <SheetHead title={connect.name} />
-      <div className="m-sheet-scroll">
+      <div className={sheetsCss.mSheetScroll}>
         <PickRow label="重新连接" onClick={() => void api.reconnect(connect.id).then(done("已重新连接"), failed)} />
         <PickRow label="更换 token" onClick={() => openTokens(app, connect)} />
         {workspace?.url && <PickRow label="打开 Slack" onClick={() => window.open(workspace.url, "_blank", "noopener")} />}
@@ -213,8 +223,8 @@ function OwnerSheet({ connect }: { connect: Connect }) {
     <>
       <SheetGrab />
       <SheetHead title="更改所属用户" />
-      <div className="m-sheet-scroll">
-        <p className="m-muted m-pad m-small">连接属于谁，决定它出现在谁的「我添加的」里。</p>
+      <div className={sheetsCss.mSheetScroll}>
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>连接属于谁，决定它出现在谁的「我添加的」里。</p>
         {members.map((m) => (
           <PickRow key={m.sub} label={m.name || m.email} sub={m.email} checked={m.email.toLowerCase() === connect.createdBy?.id.toLowerCase()}
             onClick={() => void api.putConnect(connect.id, { owner: { id: m.email, name: m.name || m.email } }).then(() => { app.toast("已更改所属用户"); app.sheet(null); }, (e: Error) => app.toast(e.message))} />
@@ -237,10 +247,10 @@ function ModeSheet({ item }: { item: ConnectItem }) {
     <>
       <SheetGrab />
       <SheetHead title="会话方式" />
-      <div className="m-sheet-scroll m-form">
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
         <ModeChoices value={next} onChange={setNext} />
-        {effects.length > 0 && <div className="m-callout"><b>更改之后</b><ul>{effects.map((e) => <li key={e}>{e}</li>)}</ul></div>}
-        <div className="m-form-actions">
+        {effects.length > 0 && <div className={settingsCss.mCallout}><b>更改之后</b><ul>{effects.map((e) => <li key={e}>{e}</li>)}</ul></div>}
+        <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <Button label={next.mode === connect.mode ? "确认更改" : `改为${next.mode === "single-session" ? "单会话" : "多会话"}`} primary busy={busy} enabled={changed}
             onClick={() => { setBusy(true); api.putConnect(connect.id, next).then(() => { app.toast("已更改会话方式"); app.sheet(null); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false)); }} />
@@ -252,17 +262,17 @@ function ModeSheet({ item }: { item: ConnectItem }) {
 
 function ModeChoices({ value, onChange }: { value: { mode: ConnectMode; requireMention: boolean }; onChange: (v: { mode: ConnectMode; requireMention: boolean }) => void }) {
   return (
-    <div className="m-choices">
+    <div className={css.mChoices}>
       {(["multi-session", "single-session"] as const).map((m) => (
-        <button key={m} type="button" className="m-choice" data-on={value.mode === m || undefined}
+        <button key={m} type="button" className={css.mChoice} data-on={value.mode === m || undefined}
           onClick={() => onChange({ mode: m, requireMention: m === "multi-session" ? true : value.requireMention })}>
           <b>{MODE[m].label}</b><span>{MODE[m].description}</span>
         </button>
       ))}
       {value.mode === "single-session" && (
-        <button type="button" className="m-switch-row" onClick={() => onChange({ ...value, requireMention: !value.requireMention })}>
-          <span className="m-grow"><b>只在被 @ 时唤醒</b><span>{value.requireMention ? "被 @ 的 thread 之后的回复不用再 @。" : "频道里它能看到的每条消息都会送进会话。"}</span></span>
-          <span className="m-switch" data-on={value.requireMention || undefined} />
+        <button type="button" className={css.mSwitchRow} onClick={() => onChange({ ...value, requireMention: !value.requireMention })}>
+          <span className={partsCss.mGrow}><b>只在被 @ 时唤醒</b><span>{value.requireMention ? "被 @ 的 thread 之后的回复不用再 @。" : "频道里它能看到的每条消息都会送进会话。"}</span></span>
+          <span className={css.mSwitch} data-on={value.requireMention || undefined} />
         </button>
       )}
     </div>
@@ -281,12 +291,12 @@ function SessionSheet({ item }: { item: ConnectItem }) {
     <>
       <SheetGrab />
       <SheetHead title="选择会话" />
-      <div className="m-sheet-scroll m-form">
-        <p className="m-muted m-small">之后「{connect.name}」收到的消息都进选中的会话。原来的会话保留，但不再收到这个连接的新消息。</p>
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>之后「{connect.name}」收到的消息都进选中的会话。原来的会话保留，但不再收到这个连接的新消息。</p>
         <PickRow label="新建会话" sub="从空白上下文开始" checked={choice === "new"} onClick={() => setChoice("new")} />
         {choice === "new" && <Field value={title} onChange={setTitle} placeholder="给它起个名字（可选），例如：值班" />}
         {candidates.map((s) => <PickRow key={s.key} label={s.titleText} sub={s.description} checked={choice === s.key} onClick={() => setChoice(s.key)} />)}
-        <div className="m-form-actions">
+        <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <Button label={choice === "new" ? "新建并使用" : "使用这个会话"} primary busy={busy} enabled={choice !== connect.session}
             onClick={() => { setBusy(true); api.bindSession(connect.id, choice === "new" ? null : choice, title).then(() => { app.toast(choice === "new" ? "已新建会话" : "已换成这个会话"); app.sheet(null); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false)); }} />
@@ -316,10 +326,10 @@ function TokensSheet({ connect }: { connect: Connect }) {
     <>
       <SheetGrab />
       <SheetHead title="Slack token" />
-      <div className="m-sheet-scroll m-form">
-        <p className="m-muted m-small">只换其中一个也可以，另一个留空会沿用已保存的。</p>
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>只换其中一个也可以，另一个留空会沿用已保存的。</p>
         <TokenFields value={tokens} onChange={setTokens} masked={connect.slack} check={check} />
-        <div className="m-form-actions">
+        <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <Button label="保存并连接" primary busy={busy || check.busy} enabled={check.ready}
             onClick={() => check.then(() => { setBusy(true); api.putConnect(connect.id, { slack: { appToken: tokens.appToken, botToken: tokens.botToken } }).then(() => { app.toast("已保存 token，正在连接"); app.sheet(null); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false)); })} />
@@ -336,19 +346,19 @@ function TokensSheet({ connect }: { connect: Connect }) {
 function TokenFields({ value, onChange, masked, install, check }: { value: Tokens; onChange: (t: Tokens) => void; masked?: { appToken: string; botToken: string }; install?: string | undefined; check: TokenCheck }) {
   const edit = (patch: Partial<Tokens>) => onChange({ ...value, ...patch, verified: null });
   return (
-    <div className="m-form-group">
-      <b className="m-form-label">App-Level Token</b>
-      <input className="m-field" data-mono type="password" autoComplete="off" spellCheck={false} value={value.appToken} onChange={(e) => edit({ appToken: e.target.value.trim() })}
+    <div className={settingsCss.mFormGroup}>
+      <b className={sheetsCss.mFormLabel}>App-Level Token</b>
+      <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={value.appToken} onChange={(e) => edit({ appToken: e.target.value.trim() })}
         placeholder={masked?.appToken ? `已保存 ${masked.appToken}，留空不变` : "xapp-…"} />
       {!install && (
         <>
-          <b className="m-form-label">Bot Token</b>
-          <input className="m-field" data-mono type="password" autoComplete="off" spellCheck={false} value={value.botToken} onChange={(e) => edit({ botToken: e.target.value.trim() })}
+          <b className={sheetsCss.mFormLabel}>Bot Token</b>
+          <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={value.botToken} onChange={(e) => edit({ botToken: e.target.value.trim() })}
             placeholder={masked?.botToken ? `已保存 ${masked.botToken}，留空不变` : "xoxb-…"} />
         </>
       )}
-      {value.verified && <span className="m-green m-small">连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>}
-      {[...check.errors, ...(check.error ? [check.error] : [])].map((e) => <p key={e} className="m-error">{e}</p>)}
+      {value.verified && <span className={`${css.mGreen} ${partsCss.mSmall}`}>连接到「{value.verified.team}」，bot 是 @{value.verified.botName}</span>}
+      {[...check.errors, ...(check.error ? [check.error] : [])].map((e) => <p key={e} className={partsCss.mError}>{e}</p>)}
     </div>
   );
 }
@@ -367,7 +377,7 @@ export function ConnectRunScreen() {
   const [busy, setBusy] = useState(false);
   const title = list === "model" ? "选模型" : list === "account" ? "选账号" : "换模型";
   const bar = <NavBar back={list ? "换模型" : "返回"} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
-  if (!item) return <div className="m-screen">{bar}<Loading text="正在读取连接…" /></div>;
+  if (!item) return <div className={pagesCss.mScreen}>{bar}<Loading text="正在读取连接…" /></div>;
   const { connect } = item;
   const runtime = connect.bind.runtime;
   const models = (view?.models ?? []).filter((m) => m.runtimes.includes(runtime));
@@ -380,27 +390,27 @@ export function ConnectRunScreen() {
   const accounts: RunnableProfile[] = choice?.accounts[runtime] ?? [];
   const efforts = choice?.efforts[runtime] ?? [];
   const changed = (model !== (connect.bind.model ?? null) && (!choice || choice !== optionOf(models, connect.bind.model))) || effort !== (connect.bind.effort ?? "") || profile !== (connect.bind.profile ?? null);
-  if (list === "model") return <div className="m-screen">{bar}<ModelList models={models} runtime={runtime} picked={model} onPick={(m) => { set({ model: m, profile: null }); setList(null); }} /></div>;
-  if (list === "account") return <div className="m-screen">{bar}<AccountList accounts={accounts} runtime={runtime} picked={profile} onPick={(p) => { set({ profile: p }); setList(null); }} /></div>;
+  if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={models} runtime={runtime} picked={model} onPick={(m) => { set({ model: m, profile: null }); setList(null); }} /></div>;
+  if (list === "account") return <div className={pagesCss.mScreen}>{bar}<AccountList accounts={accounts} runtime={runtime} picked={profile} onPick={(p) => { set({ profile: p }); setList(null); }} /></div>;
   return (
-    <div className="m-screen">
+    <div className={pagesCss.mScreen}>
       {bar}
-      <div className="m-scroll m-pad-x-18">
-        {models.length === 0 && <p className="m-callout">{connect.runtimeText} 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。</p>}
+      <div className={`${pagesCss.mScroll} ${partsCss.mPadX18}`}>
+        {models.length === 0 && <p className={settingsCss.mCallout}>{connect.runtimeText} 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。</p>}
         <GroupLabel>模型</GroupLabel>
-        <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={choice?.maker} runtime={runtime} size={18} />}><span className="m-setting-main">{named(model) ?? "选一个模型"}</span></SettingRow>
+        <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={choice?.maker} runtime={runtime} size={18} />}><span className={historyCss.mSettingMain}>{named(model) ?? "选一个模型"}</span></SettingRow>
         <GroupLabel>思考深度</GroupLabel>
-        <div className="m-chips">
-          {["", ...efforts].map((e) => <button key={e || "-"} type="button" className="m-chip" data-on={e === effort || undefined} onClick={() => set({ effort: e })}>{e || "默认"}</button>)}
+        <div className={historyCss.mChips}>
+          {["", ...efforts].map((e) => <button key={e || "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => set({ effort: e })}>{e || "默认"}</button>)}
         </div>
         <GroupLabel>账号</GroupLabel>
         <SettingRow onClick={() => setList("account")}>
-          <span className="m-setting-main">{profile ? accounts.find((a) => a.id === profile)?.name ?? profile : "自动分配"}</span>
-          <small className="m-muted">{profile ? "固定用它" : "额度用完或登录失效时换一个"}</small>
+          <span className={historyCss.mSettingMain}>{profile ? accounts.find((a) => a.id === profile)?.name ?? profile : "自动分配"}</span>
+          <small className={partsCss.mMuted}>{profile ? "固定用它" : "额度用完或登录失效时换一个"}</small>
         </SettingRow>
-        <p className="m-small m-subtle m-effort-note">新开的会话会用新的设置；进行中的会话继续用开始时的。</p>
+        <p className={`${partsCss.mSmall} ${partsCss.mSubtle} ${historyCss.mEffortNote}`}>新开的会话会用新的设置；进行中的会话继续用开始时的。</p>
       </div>
-      <button type="button" className="m-run-go" data-changed={changed || undefined} disabled={busy || (changed && !model)}
+      <button type="button" className={historyCss.mRunGo} data-changed={changed || undefined} disabled={busy || (changed && !model)}
         onClick={() => {
           if (!changed) return app.pop();
           setBusy(true);
@@ -459,62 +469,62 @@ export function NewConnectScreen() {
   // A connect runs a profile's model: with none on the station, the first step is a profile.
   const noProfile = !resume && overview !== undefined && overview.profiles.length === 0;
   return (
-    <div className="m-screen">
-      <NavBar back={step === "team" || (resume && step === "install") ? "取消" : "上一步"} onBack={back} title="添加连接" sub={<span className="m-navbar-note">{titles[step]} · {Math.max(1, order.indexOf(step) + 1)} / {order.length}</span>} />
-      <div className="m-scroll m-pad-x-18 m-steps">
+    <div className={pagesCss.mScreen}>
+      <NavBar back={step === "team" || (resume && step === "install") ? "取消" : "上一步"} onBack={back} title="添加连接" sub={<span className={barsCss.mNavbarNote}>{titles[step]} · {Math.max(1, order.indexOf(step) + 1)} / {order.length}</span>} />
+      <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
         {step === "team" && noProfile ? (
-          <div className="m-new-none">
-            <img className="m-illus" src={illustrationUrl("no-profile")} alt="" width={240} />
+          <div className={newChatCss.mNewNone}>
+            <img className={partsCss.mIllus} src={illustrationUrl("no-profile")} alt="" width={240} />
             <b>先添加一个 Profile</b>
             <p>连接要用 Profile 来跑模型。先添加一个，再来加连接。</p>
             <Button label="去添加 Profile" primary onClick={() => app.replace(`${stationBase(station.address)}/profiles/new`)} />
           </div>
         ) : step === "team" && (teams.length === 0 ? (
           <>
-            <p className="m-muted">有了 Slack 的配置 token，ember 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。</p>
+            <p className={partsCss.mMuted}>有了 Slack 的配置 token，ember 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。</p>
             <Button label="添加配置 token" primary onClick={() => setStep("token")} />
-            <button type="button" className="m-link m-step-alt" onClick={() => setStep("manual")}>不用配置 token，自己在 Slack 建 app</button>
+            <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("manual")}>不用配置 token，自己在 Slack 建 app</button>
           </>
         ) : (
           <>
-            <p className="m-muted">用哪个 Slack 工作区的配置 token 建 app。</p>
+            <p className={partsCss.mMuted}>用哪个 Slack 工作区的配置 token 建 app。</p>
             <ListCard>{teams.map((t) => <PickRow key={t.teamId} label={t.name} sub={t.owner ? `${t.owner.user}${t.owner.teamDomain ? ` · ${t.owner.teamDomain}.slack.com` : ""}` : undefined} checked={chosen?.teamId === t.teamId} onClick={() => setTeam(t.teamId)} />)}</ListCard>
-            <button type="button" className="m-link m-step-alt" onClick={() => setStep("token")}>＋ 添加工作区的配置 token</button>
-            <button type="button" className="m-link m-step-alt" onClick={() => setStep("manual")}>不用配置 token，自己建 app</button>
+            <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("token")}>＋ 添加工作区的配置 token</button>
+            <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setStep("manual")}>不用配置 token，自己建 app</button>
             <Button label="下一步" primary enabled={!!chosen} onClick={() => setStep("app")} />
           </>
         ))}
         {step === "token" && (
           <>
-            <ol className="m-steps-list">
+            <ol className={css.mStepsList}>
               <li>打开 <a href="https://api.slack.com/apps" target="_blank" rel="noopener">api.slack.com/apps</a>，用要放 bot 的那个 Slack 工作区的账号登录。</li>
               <li>拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。</li>
               <li>把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。ember 会自己续期，以后不用再管。</li>
             </ol>
-            <input className="m-field" data-mono type="password" autoComplete="off" spellCheck={false} value={config} placeholder="xoxe-1-…" onChange={(e) => setConfig(e.target.value.trim())} />
-            {config.startsWith("xoxe.xoxp-") && <p className="m-error">这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。</p>}
+            <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={config} placeholder="xoxe-1-…" onChange={(e) => setConfig(e.target.value.trim())} />
+            {config.startsWith("xoxe.xoxp-") && <p className={partsCss.mError}>这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。</p>}
             <Button label="加上" primary busy={busy} enabled={config.startsWith("xoxe-1-") && config.length > 20}
               onClick={() => run(() => api.addConfigToken(config).then(({ teamId }) => { setConfig(""); setTeam(teamId); setStep("app"); }))} />
           </>
         )}
         {step === "app" && (
           <>
-            <b className="m-form-label">名字</b>
+            <b className={sheetsCss.mFormLabel}>名字</b>
             <Field value={appSettings.name} onChange={(v) => setAppSettings({ ...appSettings, name: v, displayName: v })} placeholder="ember" />
-            <b className="m-form-label">描述</b>
+            <b className={sheetsCss.mFormLabel}>描述</b>
             <Field value={appSettings.description} onChange={(v) => setAppSettings({ ...appSettings, description: v })} placeholder="Coding agent in your threads" />
             <AppLook settings={appSettings} onChange={setAppSettings} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
-            {iconError && <p className="m-error">{iconError}</p>}
-            <p className="m-small m-muted">权限用默认的（全部打开）；建好以后可以在电脑上改。</p>
+            {iconError && <p className={partsCss.mError}>{iconError}</p>}
+            <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>权限用默认的（全部打开）；建好以后可以在电脑上改。</p>
             <Button label="创建 app" primary busy={busy} enabled={!!appSettings.name.trim() && !!chosen}
               onClick={() => run(() => api.makeSlackApp({ team: chosen!.teamId, settings: appSettings, ...(icon ? { icon } : {}) }).then((r) => { setMadeId(r.appId); setIconError(r.iconError); setStep("install"); }))} />
           </>
         )}
-        {step === "install" && !made && <p className="m-muted">{overview ? "这个 app 已经不在这台 station 上了：可能已经连上，或者被移除了。" : "正在读取…"}</p>}
+        {step === "install" && !made && <p className={partsCss.mMuted}>{overview ? "这个 app 已经不在这台 station 上了：可能已经连上，或者被移除了。" : "正在读取…"}</p>}
         {step === "install" && made && (
           <>
-            {iconError && <p className="m-error">图标没传上：{iconError}</p>}
-            <ol className="m-steps-list">
+            {iconError && <p className={partsCss.mError}>图标没传上：{iconError}</p>}
+            <ol className={css.mStepsList}>
               {made.install ? (
                 <li>{made.installed ? `已装进「${made.installedTeam ?? made.team ?? "工作区"}」。` : <>app 已经建好。<a href={made.install} target="_blank" rel="noopener">安装到工作区</a>：在 Slack 里点「允许」，bot token 会自动交给 station。</>}</li>
               ) : (
@@ -529,8 +539,8 @@ export function NewConnectScreen() {
         )}
         {step === "manual" && (
           <>
-            <ol className="m-steps-list">
-              <li><button type="button" className="m-link" onClick={() => void api.createAppUrl("ember").then(({ url }) => window.open(url, "_blank", "noopener"))}>用 ember 的配置在 Slack 新建一个 app</button>。</li>
+            <ol className={css.mStepsList}>
+              <li><button type="button" className={partsCss.mLink} onClick={() => void api.createAppUrl("ember").then(({ url }) => window.open(url, "_blank", "noopener"))}>用 ember 的配置在 Slack 新建一个 app</button>。</li>
               <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>
               <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
               <li>把两个 token 填在下面。</li>
@@ -542,7 +552,7 @@ export function NewConnectScreen() {
         {step === "bind" && (
           <>
             <GroupLabel>模型</GroupLabel>
-            {models.length === 0 ? <p className="m-callout">这台 station 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。</p> : (
+            {models.length === 0 ? <p className={settingsCss.mCallout}>这台 station 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。</p> : (
               <ListCard>{models.map((m) => <PickRow key={m.model} label={m.name} sub={m.runtimes.map((r) => RUNTIME_LABEL[r] ?? r).join(" · ")} checked={entry?.model === m.model}
                 leading={<MakerIcon maker={m.maker} runtime={m.runtimes[0]} size={18} />} onClick={() => setModel(m)} />)}</ListCard>
             )}
@@ -561,7 +571,7 @@ export function NewConnectScreen() {
               }).then(({ id }) => { app.toast("已添加连接，正在连接 Slack"); app.replace(`${stationBase(station.address)}/connects/${encodeURIComponent(id)}`); }))} />
           </>
         )}
-        {error && <p className="m-error">{error}</p>}
+        {error && <p className={partsCss.mError}>{error}</p>}
         <div style={{ height: 30 }} />
       </div>
     </div>
@@ -614,15 +624,15 @@ function AppLook({ settings, onChange, icon, onIcon }: {
   const hex = /^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor) ? settings.backgroundColor : "#7a2e0e";
   return (
     <>
-      <b className="m-form-label">头像</b>
+      <b className={sheetsCss.mFormLabel}>头像</b>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <button type="button" aria-label="上传图片" onClick={() => file.current?.click()}
           style={{ flex: "none", width: 72, height: 72, padding: 0, border: 0, borderRadius: 18, overflow: "hidden", background: settings.backgroundColor || undefined, cursor: "pointer" }}>
-          {icon ? <img src={icon} alt="头像" width={72} height={72} style={{ display: "block" }} /> : <span className="m-small m-muted">上传</span>}
+          {icon ? <img src={icon} alt="头像" width={72} height={72} style={{ display: "block" }} /> : <span className={`${partsCss.mSmall} ${partsCss.mMuted}`}>上传</span>}
         </button>
-        <span className="m-grow m-row-text">
-          <span className="m-row-note m-wrap">在下面挑一个，或者上传一张图片。</span>
-          <button type="button" className="m-link m-step-alt" onClick={() => file.current?.click()}>上传图片</button>
+        <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+          <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>在下面挑一个，或者上传一张图片。</span>
+          <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => file.current?.click()}>上传图片</button>
         </span>
         <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
           const f = e.target.files?.[0];
@@ -639,13 +649,13 @@ function AppLook({ settings, onChange, icon, onIcon }: {
         {(buddies ?? []).map((a) => tile(a, false))}
         {MAKERS.map((a) => tile(a, true))}
       </div>
-      <b className="m-form-label">底色</b>
+      <b className={sheetsCss.mFormLabel}>底色</b>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <input type="color" aria-label="底色" value={hex} onChange={(e) => colour(e.target.value.toUpperCase(), true)}
           style={{ flex: "none", width: 44, height: 44, padding: 0, border: 0, borderRadius: 12, background: "none", cursor: "pointer" }} />
-        <input className="m-field" data-mono aria-label="底色色值" spellCheck={false} value={settings.backgroundColor} onChange={(e) => colour(e.target.value, true)} />
+        <input className={listsCss.mField} data-mono aria-label="底色色值" spellCheck={false} value={settings.backgroundColor} onChange={(e) => colour(e.target.value, true)} />
         {recommended && colourSet && recommended.toLowerCase() !== settings.backgroundColor.toLowerCase() && (
-          <button type="button" className="m-link" style={{ flex: "none" }} onClick={() => colour(recommended, false)}>用推荐色</button>
+          <button type="button" className={partsCss.mLink} style={{ flex: "none" }} onClick={() => colour(recommended, false)}>用推荐色</button>
         )}
       </div>
     </>

@@ -10,6 +10,9 @@ import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useCallback } from "react";
 import * as nav from "./Sidebar.css.ts";
+import * as waitingCss from "./styles/waiting.css.ts";
+import * as chatCss from "./styles/chat.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
 
 export function Sidebar() {
   const path = useLocation().pathname;
@@ -86,7 +89,7 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   return (
     <NavLink className={`${nav.navRow} ${nav.stationTrouble}`} to={to} data-state={trouble.state}>
       <span className={nav.stationTroubleMark}>
-        {trouble.state === "reconnecting" ? <span className={`spinner ${nav.rowSpinner}`} aria-hidden="true" /> : <StatusDot state={trouble.state === "error" ? "error" : "offline"} />}
+        {trouble.state === "reconnecting" ? <span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" /> : <StatusDot state={trouble.state === "error" ? "error" : "offline"} />}
       </span>
       <span className={nav.stationTroubleText}>{trouble.text}</span>
       <ChevronRight size={14} className={nav.stationTroubleGo} aria-hidden="true" />
@@ -115,7 +118,7 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, archive, hidden }: { c
       {days.length === 0 && view && !loading && !failed.length && !connecting.length && (
         <p className={nav.navEmpty}>{onlyMine ? "没有你参与的会话。"
           : stations.length ? "还没有会话。"
-          : <>还没有 station，到 <NavLink className="inline-link" to={stationsPage}>设置 → Station</NavLink> 添加。</>}</p>
+          : <>还没有 station，到 <NavLink className={chatCss.inlineLink} to={stationsPage}>设置 → Station</NavLink> 添加。</>}</p>
       )}
       {days.map((day) => (
         <section key={day.daysAgo} aria-label={day.label}>
@@ -169,7 +172,7 @@ function ChatRow({ item }: { item: ChatItem }) {
           {item.offline
             ? <Tip label={item.offline} side="right"><span className={nav.sessionKind} aria-label={item.offline}><Unplug size={12} /></span></Tip>
             : item.reconnecting
-            ? <Tip label={item.reconnecting} side="right"><span className={nav.sessionKind} aria-label={item.reconnecting}><span className={`spinner ${nav.rowSpinner}`} aria-hidden="true" /></span></Tip>
+            ? <Tip label={item.reconnecting} side="right"><span className={nav.sessionKind} aria-label={item.reconnecting}><span className={`${waitingCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" /></span></Tip>
             : connect && <Tip label={item.originText ?? "Slack"} side="right"><span className={nav.sessionKind}><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
         </span>
         {/* People are in the chat itself; here only the last thing said and when. */}
@@ -202,7 +205,7 @@ function ArchiveButton({ item, to }: { item: ChatItem; to: string }) {
   };
   return (
     <Tip label="归档" side="right">
-      <button type="button" className={`icon-btn ${nav.rowArchive}`} aria-label={`归档「${item.title}」`} onMouseDown={(e) => e.preventDefault()} onClick={() => void archive()}>
+      <button type="button" className={`${pagesCss.iconBtn} ${nav.rowArchive}`} aria-label={`归档「${item.title}」`} onMouseDown={(e) => e.preventDefault()} onClick={() => void archive()}>
         <Archive size={15} />
       </button>
     </Tip>

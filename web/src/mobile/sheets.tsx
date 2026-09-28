@@ -4,6 +4,10 @@ import { useState, type ReactNode } from "react";
 import { Check, Copy } from "../icons.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { Button, Field } from "./parts.tsx";
+import * as sheetsCss from "./styles/sheets.css.ts";
+import * as partsCss from "./styles/parts.css.ts";
+import * as css from "./sheets.css.ts";
+import * as listsCss from "./styles/lists.css.ts";
 
 /** Asks before something that cannot be undone; the sheet stays, with what went wrong, until it is done. */
 export function confirm(app: MobileApp, spec: { title: string; text: ReactNode; action: string; danger?: boolean; run: () => Promise<unknown> }) {
@@ -18,12 +22,12 @@ function Confirm({ title, text, action, danger = false, run }: { title: string; 
     <>
       <SheetGrab />
       <SheetHead title={title} />
-      <div className="m-sheet-scroll m-form">
-        <p className="m-muted">{text}</p>
-        {error && <p className="m-error">{error}</p>}
-        <div className="m-form-actions">
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
+        <p className={partsCss.mMuted}>{text}</p>
+        {error && <p className={partsCss.mError}>{error}</p>}
+        <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-          <span data-danger={danger || undefined} className="m-danger-button">
+          <span data-danger={danger || undefined} className={css.mDangerButton}>
             <Button label={action} primary busy={busy} onClick={() => {
               setBusy(true); setError(null);
               run().then(() => app.sheet(null), (e: unknown) => setError(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false));
@@ -53,13 +57,13 @@ function Ask({ title, value: first, placeholder, action, hint, secret = false, r
     <>
       <SheetGrab />
       <SheetHead title={title} />
-      <div className="m-sheet-scroll m-form">
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
         {secret
-          ? <input className="m-field" data-mono type="password" autoComplete="off" spellCheck={false} value={value} placeholder={placeholder} onChange={(e) => setValue(e.target.value.trim())} />
+          ? <input className={listsCss.mField} data-mono type="password" autoComplete="off" spellCheck={false} value={value} placeholder={placeholder} onChange={(e) => setValue(e.target.value.trim())} />
           : <Field value={value} onChange={setValue} placeholder={placeholder} />}
-        {hint && <p className="m-small m-muted">{hint}</p>}
-        {error && <p className="m-error">{error}</p>}
-        <div className="m-form-actions">
+        {hint && <p className={`${partsCss.mSmall} ${partsCss.mMuted}`}>{hint}</p>}
+        {error && <p className={partsCss.mError}>{error}</p>}
+        <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
           <Button label={action} primary busy={busy} enabled={!!value.trim() && value.trim() !== first} onClick={go} />
         </div>
@@ -72,7 +76,7 @@ function Ask({ title, value: first, placeholder, action, hint, secret = false, r
 export function CommandBox({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="m-command">
+    <div className={css.mCommand}>
       <code>{text}</code>
       <button type="button" aria-label={copied ? "已复制" : "复制"} onClick={() => void navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); })}>
         {copied ? <Check size={16} /> : <Copy size={16} />}

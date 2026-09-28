@@ -8,6 +8,8 @@ import { useStationCall } from "./api.ts";
 import { ArrowRight, ChevronDown, ChevronRight, PanelOpen, Stop } from "./icons.tsx";
 import { Empty, Segmented } from "./ui.tsx";
 import { useToast } from "./toast.tsx";
+import * as css from "./Jobs.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
 
 /** What a job's dot says: a service up, a job alive, a service restarting, one that died, one that is over. */
 export type Tone = "up" | "live" | "restart" | "fail" | "off";
@@ -97,7 +99,7 @@ function word(job: Job): { text: string; tone: Tone } {
 /** The line under a job's name: what it is up to, in a few words. */
 export function metaOf(job: Job, now: number): ReactNode {
   const w = word(job);
-  const said = <em className="job-word" data-tone={w.tone}>{w.text}</em>;
+  const said = <em className={css.jobWord} data-tone={w.tone}>{w.text}</em>;
   const ended = job.endedAt ? ago(job.endedAt, now) : null;
   if (isService(job)) {
     if (w.tone === "up") return <>{said} · {span(now - job.startedAt)}</>;
@@ -106,7 +108,7 @@ export function metaOf(job: Job, now: number): ReactNode {
   }
   if (w.tone === "live") {
     const last = job.notices?.[0];
-    if (last) return <><span className="job-said">{last.text}</span> · {ago(last.at, now)}</>;
+    if (last) return <><span className={css.jobSaid}>{last.text}</span> · {ago(last.at, now)}</>;
     if (job.outputAt) return <>还没通知过 · 最后输出 {ago(job.outputAt, now)}</>;
     return <>{said} · {span(now - job.startedAt)}</>;
   }
@@ -118,7 +120,7 @@ export function metaOf(job: Job, now: number): ReactNode {
 
 /** A job's status: a small dot, on its name's line. */
 export function JobDot({ tone }: { tone: Tone }) {
-  return <span className="job-dot" data-tone={tone} aria-hidden="true" />;
+  return <span className={css.jobDot} data-tone={tone} aria-hidden="true" />;
 }
 
 /** A job's row: its dot, its name, what it is up to; what is at its end (a service's arrow, a job's chevron). */
@@ -126,14 +128,14 @@ export function JobRow({ job, now, onClick, end, selected, expanded }:
   { job: Job; now: number; onClick?: (() => void) | undefined; end?: ReactNode; selected?: boolean; expanded?: boolean }) {
   const tone = toneOf(job);
   return (
-    <button type="button" className="job-row" onClick={onClick} data-static={!onClick || undefined} data-off={tone === "off" || undefined} data-selected={selected || undefined}
+    <button type="button" className={css.jobRow} onClick={onClick} data-static={!onClick || undefined} data-off={tone === "off" || undefined} data-selected={selected || undefined}
       aria-expanded={expanded} aria-current={selected || undefined}>
       <JobDot tone={tone} />
-      <span className="job-text">
-        <span className="job-name">{job.name}</span>
-        <span className="job-meta">{metaOf(job, now)}</span>
+      <span className={css.jobText}>
+        <span className={css.jobName}>{job.name}</span>
+        <span className={css.jobMeta}>{metaOf(job, now)}</span>
       </span>
-      {end && <span className="job-end">{end}</span>}
+      {end && <span className={css.jobEnd}>{end}</span>}
     </button>
   );
 }
@@ -169,7 +171,7 @@ function LastOutput({ station, job, now }: { station: string; job: Job; now: num
   const line = log?.text.trim();
   if (!at && !line) return null;
   return (
-    <div className="job-last">
+    <div className={css.jobLast}>
       <span>最后输出{at ? ` · ${ago(at, now)}` : ""}</span>
       {line && <code>{line}</code>}
     </div>
@@ -179,9 +181,9 @@ function LastOutput({ station, job, now }: { station: string; job: Job; now: num
 /** What a job said, newest first, each with when. */
 function Notices({ job, now, limit, clockTimes = false }: { job: Job; now: number; limit?: number; clockTimes?: boolean }) {
   const notices = (job.notices ?? []).slice(0, limit);
-  if (notices.length === 0) return <p className="job-notices-none">还没有通知。它用 <code>ember-job notify</code> 说的话会列在这里。</p>;
+  if (notices.length === 0) return <p className={css.jobNoticesNone}>还没有通知。它用 <code>ember-job notify</code> 说的话会列在这里。</p>;
   return (
-    <ol className="job-notices" data-clock={clockTimes || undefined}>
+    <ol className={css.jobNotices} data-clock={clockTimes || undefined}>
       {notices.map((n, i) => <li key={`${n.at}-${i}`}><time dateTime={new Date(n.at).toISOString()}>{clockTimes ? clock(n.at, now) : ago(n.at, now)}</time><span>{n.text}</span></li>)}
     </ol>
   );
@@ -197,7 +199,7 @@ export function JobsPopover({ station, jobs, onService, onTab }:
   const stop = useStopJob(station);
   const [open, setOpen] = useState<string | null>(null);
   if (jobs.length === 0) {
-    return <div className="jobs-empty"><b>还没有服务或后台任务</b><span>agent 开网页、或挂上长期盯着的任务时，会列在这里。</span></div>;
+    return <div className={css.jobsEmpty}><b>还没有服务或后台任务</b><span>agent 开网页、或挂上长期盯着的任务时，会列在这里。</span></div>;
   }
   const shown = sorted(jobs.filter((j) => isCurrent(j, now)));
   const services = shown.filter(isService);
@@ -210,7 +212,7 @@ export function JobsPopover({ station, jobs, onService, onTab }:
     <>
       {services.length > 0 && (
         <section>
-          <div className="jobs-head">服务{serviceNote && <span>{serviceNote}</span>}</div>
+          <div className={css.jobsHead}>服务{serviceNote && <span>{serviceNote}</span>}</div>
           {services.map((j) => (
             <JobRow key={j.id} job={j} now={now} onClick={toneOf(j) === "fail" ? () => onTab(j.id) : () => onService(j.id)}
               end={toneOf(j) === "fail" ? <ChevronRight size={16} /> : <ArrowRight size={16} />} />
@@ -219,18 +221,18 @@ export function JobsPopover({ station, jobs, onService, onTab }:
       )}
       {plain.length > 0 && (
         <section>
-          <div className="jobs-head">后台任务{plainNote && <span>{plainNote}</span>}</div>
+          <div className={css.jobsHead}>后台任务{plainNote && <span>{plainNote}</span>}</div>
           {plain.map((j) => (
-            <div key={j.id} className="job-fold" data-open={open === j.id || undefined}>
+            <div key={j.id} className={css.jobFold} data-open={open === j.id || undefined}>
               <JobRow job={j} now={now} expanded={open === j.id} onClick={() => setOpen(open === j.id ? null : j.id)}
                 end={open === j.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />} />
               {open === j.id && (
-                <div className="job-fold-body">
+                <div className={css.jobFoldBody}>
                   <Notices job={j} now={now} limit={3} />
                   <LastOutput station={station} job={j} now={now} />
-                  <div className="job-actions">
-                    {j.state === "running" && <button type="button" className="job-action" onClick={() => stop(j)}><Stop size={14} />停止</button>}
-                    <button type="button" className="job-action" onClick={() => onTab(j.id)}><PanelOpen size={14} />在侧栏看</button>
+                  <div className={css.jobActions}>
+                    {j.state === "running" && <button type="button" className={css.jobAction} onClick={() => stop(j)}><Stop size={14} />停止</button>}
+                    <button type="button" className={css.jobAction} onClick={() => onTab(j.id)}><PanelOpen size={14} />在侧栏看</button>
                   </div>
                 </div>
               )}
@@ -238,8 +240,8 @@ export function JobsPopover({ station, jobs, onService, onTab }:
           ))}
         </section>
       )}
-      {shown.length === 0 && <p className="jobs-quiet">眼下没有在跑的服务或任务。</p>}
-      <button type="button" className="jobs-all" onClick={() => onTab()}>
+      {shown.length === 0 && <p className={css.jobsQuiet}>眼下没有在跑的服务或任务。</p>}
+      <button type="button" className={css.jobsAll} onClick={() => onTab()}>
         全部 {jobs.length} 个 · 在侧栏看{hidden > 0 && <span>另有 {hidden} 个已停止或结束</span>}
       </button>
     </>
@@ -261,11 +263,11 @@ export function JobsTab({ station, jobs, picked, onPick, onService }:
   const job = plain.find((j) => j.id === picked) ?? plain[0] ?? null;
   if (jobs.length === 0) return <Empty><p>这个对话里还没有服务或后台任务。</p></Empty>;
   return (
-    <div className="jobs-tab">
-      <div className="jobs-tab-list">
+    <div className={css.jobsTab}>
+      <div className={css.jobsTabList}>
         {services.length > 0 && (
           <section>
-            <div className="jobs-head">服务</div>
+            <div className={css.jobsHead}>服务</div>
             {services.map((j) => (
               <JobRow key={j.id} job={j} now={now} onClick={toneOf(j) === "up" || toneOf(j) === "restart" ? () => onService(j.id) : undefined}
                 end={toneOf(j) === "up" || toneOf(j) === "restart" ? <ArrowRight size={16} /> : undefined} />
@@ -274,24 +276,24 @@ export function JobsTab({ station, jobs, picked, onPick, onService }:
         )}
         {plain.length > 0 && (
           <section>
-            <div className="jobs-head">后台任务</div>
+            <div className={css.jobsHead}>后台任务</div>
             {plain.map((j) => <JobRow key={j.id} job={j} now={now} selected={j.id === job?.id} onClick={() => onPick(j.id)} />)}
           </section>
         )}
       </div>
       {job && (
-        <div className="job-detail">
-          <div className="job-detail-head">
+        <div className={css.jobDetail}>
+          <div className={css.jobDetailHead}>
             <JobDot tone={toneOf(job)} />
             <b>{job.name}</b>
-            <span className="job-detail-state">{word(job).text} · {job.state === "running" ? span(now - job.startedAt) : job.endedAt ? ago(job.endedAt, now) : ""}{job.notices?.length ? ` · ${job.notices.length} 条通知` : ""}</span>
-            <span className="job-detail-grow" />
+            <span className={css.jobDetailState}>{word(job).text} · {job.state === "running" ? span(now - job.startedAt) : job.endedAt ? ago(job.endedAt, now) : ""}{job.notices?.length ? ` · ${job.notices.length} 条通知` : ""}</span>
+            <span className={css.jobDetailGrow} />
             <Segmented<"notices" | "output"> label="看什么" value={view} onChange={setView} options={[{ value: "notices", label: "通知" }, { value: "output", label: "输出" }]} />
-            {job.state === "running" && <button type="button" className="icon-btn job-detail-stop" aria-label="停止" title="停止" onClick={() => stop(job)}><Stop size={16} /></button>}
+            {job.state === "running" && <button type="button" className={`${pagesCss.iconBtn} ${css.jobDetailStop}`} aria-label="停止" title="停止" onClick={() => stop(job)}><Stop size={16} /></button>}
           </div>
-          {job.command && <div className="job-detail-command" title={job.command}>{job.command}</div>}
+          {job.command && <div className={css.jobDetailCommand} title={job.command}>{job.command}</div>}
           {view === "notices"
-            ? <><div className="job-detail-notices"><Notices job={job} now={now} clockTimes /></div><LastOutput station={station} job={job} now={now} /></>
+            ? <><div className={css.jobDetailNotices}><Notices job={job} now={now} clockTimes /></div><LastOutput station={station} job={job} now={now} /></>
             : <Output station={station} job={job} />}
         </div>
       )}
@@ -309,7 +311,7 @@ function Output({ station, job }: { station: string; job: Job }) {
     if (el && atEnd.current) el.scrollTop = el.scrollHeight;
   }, [log?.text]);
   return (
-    <pre ref={box} className="job-output" onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
+    <pre ref={box} className={css.jobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
       {log === null ? "正在读取…" : log.text || "（还没有输出）"}
     </pre>
   );

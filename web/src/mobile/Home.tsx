@@ -10,6 +10,10 @@ import { useApp } from "./app.tsx";
 import { Avatar, Badge, Illustration, MakerIcon, Mark, NavButton, SectionHeader, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { openWorkspaces } from "./Workspaces.tsx";
+import * as css from "./Home.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as partsCss from "./styles/parts.css.ts";
+import * as homeCss from "./styles/home.css.ts";
 
 export function Home() {
   const app = useApp();
@@ -22,23 +26,23 @@ export function Home() {
   // No station yet: nothing of the workspace's lists works, so adding the first station is the page.
   const none = useStations(scope).value?.length === 0;
   return (
-    <div className="m-home">
+    <div className={css.mHome}>
       {none ? (
-        <div className="m-home-panes"><div className="m-home-pane" style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
+        <div className={css.mHomePanes}><div className={css.mHomePane} style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
       ) : (
-        <div className="m-home-panes" data-mine={onlyMine || undefined}>
+        <div className={css.mHomePanes} data-mine={onlyMine || undefined}>
           <ChatPane chats={all} onlyMine={false} />
           <ChatPane chats={mine} onlyMine />
         </div>
       )}
       {/* The lists run under both bars, which are frosted glass over them. */}
-      <header className="m-home-bar m-glass">
-        <button type="button" className="m-home-me" onClick={() => app.push(app.at("/settings/account"))} aria-label="我">
+      <header className={`${css.mHomeBar} ${pagesCss.mGlass}`}>
+        <button type="button" className={css.mHomeMe} onClick={() => app.push(app.at("/settings/account"))} aria-label="我">
           <Avatar id={account.email} name={account.name || account.email} size={34} picture={account.picture} />
         </button>
-        <button type="button" className="m-home-workspace" onClick={() => openWorkspaces(app)}>
+        <button type="button" className={css.mHomeWorkspace} onClick={() => openWorkspaces(app)}>
           <b>{app.entry.name}</b>
-          {invited && <span className="m-dot" aria-label="有邀请" />}
+          {invited && <span className={css.mDot} aria-label="有邀请" />}
           <ChevronDown size={16} />
         </button>
         {/* A station not working marks it: grey offline, orange coming back, red failing (the core's `trouble`); its page says which. */}
@@ -49,10 +53,10 @@ export function Home() {
       </header>
       {/* One capsule floating over the list, round at both ends like what is in it: the switch fills it, and the new-chat
           button closes it at the right, a disc in the accent. */}
-      {!none && <div className="m-home-toolbar">
-        <div className="m-floating m-home-capsule">
-          <Seg options={["全部", "我参与的"]} selected={onlyMine ? 1 : 0} onSelect={(i) => setOnlyMine(i === 1)} height={44} fill radius={22} inset={0} track={false} className="m-grow" />
-          <button type="button" className="m-new-chat" onClick={() => app.push(app.at("/new"))} aria-label="新建对话"><Edit size={20} /></button>
+      {!none && <div className={css.mHomeToolbar}>
+        <div className={`${pagesCss.mFloating} ${css.mHomeCapsule}`}>
+          <Seg options={["全部", "我参与的"]} selected={onlyMine ? 1 : 0} onSelect={(i) => setOnlyMine(i === 1)} height={44} fill radius={22} inset={0} track={false} className={partsCss.mGrow} />
+          <button type="button" className={css.mNewChat} onClick={() => app.push(app.at("/new"))} aria-label="新建对话"><Edit size={20} /></button>
         </div>
       </div>}
     </div>
@@ -63,7 +67,7 @@ export function Home() {
 function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine: boolean }) {
   const view = chats.value;
   return (
-    <div className="m-home-pane">
+    <div className={css.mHomePane}>
       {!view ? <Note text={chats.error?.message ?? "正在读取会话…"} error={!!chats.error} /> : (
         <>
           {/* A station's link coming back is said on its rows; only with no rows to show does the list say it. */}
@@ -83,18 +87,18 @@ function ChatPane({ chats, onlyMine }: { chats: TopicState<ChatsView>; onlyMine:
 }
 
 function Note({ text, error = false }: { text: string; error?: boolean }) {
-  return <p className="m-note" data-error={error || undefined}>{text}</p>;
+  return <p className={homeCss.mNote} data-error={error || undefined}>{text}</p>;
 }
 
 function Empty({ view, onlyMine }: { view: ChatsView; onlyMine: boolean }) {
   const app = useApp();
   const any = view.stations.length > 0;
   return (
-    <div className="m-empty">
+    <div className={css.mEmpty}>
       <Illustration name={any ? "new-chat" : "station-offline"} width={240} />
       {onlyMine ? <p>没有你参与的会话。</p>
-        : any ? <><p>还没有会话。在 Slack 里 @ {view.stations.length > 1 ? "它们" : "它"}，或者</p><button type="button" className="m-link" onClick={() => app.push(app.at("/new"))}>新建对话</button></>
-        : <><p>还没有 station。</p><button type="button" className="m-link" onClick={() => app.push(app.at("/settings/stations"))}>看看 Station</button></>}
+        : any ? <><p>还没有会话。在 Slack 里 @ {view.stations.length > 1 ? "它们" : "它"}，或者</p><button type="button" className={partsCss.mLink} onClick={() => app.push(app.at("/new"))}>新建对话</button></>
+        : <><p>还没有 station。</p><button type="button" className={partsCss.mLink} onClick={() => app.push(app.at("/settings/stations"))}>看看 Station</button></>}
     </div>
   );
 }
@@ -112,24 +116,24 @@ function ChatRow({ item }: { item: ChatItem }) {
   const longPressed = useRef(false);
   const release = () => { clearTimeout(timer.current); setHeld(false); };
   return (
-    <button type="button" className="m-chat-row" data-held={held || undefined} data-offline={item.offline ? true : undefined}
+    <button type="button" className={css.mChatRow} data-held={held || undefined} data-offline={item.offline ? true : undefined}
       aria-label={item.offline ? `${item.title}（${item.offline}）` : undefined}
       onPointerDown={() => { longPressed.current = false; timer.current = setTimeout(() => { longPressed.current = true; setHeld(true); }, 450); }}
       onPointerUp={release} onPointerCancel={release} onPointerLeave={release} onContextMenu={(e) => e.preventDefault()}
       onClick={() => { if (!longPressed.current) app.push(`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`); }}>
-      {item.unread && <span className="m-unread" aria-label="有未读消息" />}
+      {item.unread && <span className={css.mUnread} aria-label="有未读消息" />}
       <AgentsPicture item={item} />
-      <span className="m-chat-text">
-      <span className="m-chat-line1">
-        <span className="m-chat-title" data-unread={item.unread || undefined}>{item.title}</span>
+      <span className={css.mChatText}>
+      <span className={css.mChatLine1}>
+        <span className={css.mChatTitle} data-unread={item.unread || undefined}>{item.title}</span>
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
-        {item.offline ? <span className="m-chat-mark" title={item.offline}><Unplug size={13} /></span>
-          : item.reconnecting ? <span className="m-chat-mark" title={item.reconnecting} aria-label={item.reconnecting}><Spinner size={11} /></span>
-          : <span className="m-chat-mark">{item.connect && <span title={item.originText ?? "Slack"}><SlackMark size={13} /></span>}</span>}
+        {item.offline ? <span className={css.mChatMark} title={item.offline}><Unplug size={13} /></span>
+          : item.reconnecting ? <span className={css.mChatMark} title={item.reconnecting} aria-label={item.reconnecting}><Spinner size={11} /></span>
+          : <span className={css.mChatMark}>{item.connect && <span title={item.originText ?? "Slack"}><SlackMark size={13} /></span>}</span>}
       </span>
-      <span className="m-chat-line2">
-        <span className="m-chat-last">{item.last && <LastMessage item={item} />}</span>
-        <span className="m-chat-time" data-shown={held || undefined}>{item.time?.lastActiveAt?.ago ?? ""}</span>
+      <span className={css.mChatLine2}>
+        <span className={css.mChatLast}>{item.last && <LastMessage item={item} />}</span>
+        <span className={css.mChatTime} data-shown={held || undefined}>{item.time?.lastActiveAt?.ago ?? ""}</span>
       </span>
       </span>
     </button>
@@ -144,10 +148,10 @@ function AgentsPicture({ item }: { item: ChatItem }) {
   const agents = item.agents.slice(0, 2);
   const state = stateOf(item.state ?? undefined);
   return (
-    <span className="m-row-picture" data-count={agents.length || 1} aria-hidden="true">
+    <span className={css.mRowPicture} data-count={agents.length || 1} aria-hidden="true">
       {agents.length === 0
-        ? <span className="m-row-agent"><Mark size={26} /></span>
-        : agents.map((a) => <span key={a.key} className="m-row-agent"><MakerIcon maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 18 : 28} /></span>)}
+        ? <span className={css.mRowAgent}><Mark size={26} /></span>
+        : agents.map((a) => <span key={a.key} className={css.mRowAgent}><MakerIcon maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 18 : 28} /></span>)}
       {state !== "done" && <Badge state={state} size={10} ring={2} around="var(--m-bg)" style={{ position: "absolute", right: -2, bottom: -2 }} />}
     </span>
   );
@@ -155,5 +159,5 @@ function AgentsPicture({ item }: { item: ChatItem }) {
 
 /** The last thing said, on one line, in the secondary colour (the row's picture says who is in it). */
 function LastMessage({ item }: { item: ChatItem }) {
-  return <span className="m-last"><span className="m-last-text">{item.last!.preview}</span></span>;
+  return <span className={css.mLast}><span className={css.mLastText}>{item.last!.preview}</span></span>;
 }

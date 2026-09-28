@@ -2,6 +2,10 @@
 // the cloud's and the admin console's settings lists, which are drawn with the same rows.
 import { fallbackVar, globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { accountTrigger } from "./cloud/workspace.css.ts";
+import { iconBtn } from "./styles/pages.css.ts";
+import { shell } from "./styles/shell.css.ts";
+import { kindIcon, kindMark, resizeHandle } from "./ui.css.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -17,13 +21,13 @@ export const sidebar = style({
       selectors: { '[data-sidebar="closed"] &': { overflow: "hidden", borderRightColor: "transparent" } },
     },
     // On a narrow screen the sidebar is the page's list: it gives way to the page opened from it.
-    [narrow]: { borderRight: 0, selectors: { '.shell[data-detail="true"] &': { display: "none" } } },
+    [narrow]: { borderRight: 0, selectors: { [`${shell}[data-detail="true"] &`]: { display: "none" } } },
   },
 });
 globalStyle(`${sidebar} :is(input, textarea)`, { WebkitUserSelect: "text", userSelect: "text" });
 globalStyle(`${sidebar} :is(a, img, svg)`, { WebkitUserDrag: "none" });
 // Closing or opening, its contents keep their width and are cut, not laid out anew at every step.
-globalStyle(`${sidebar} > :not(.resize-handle)`, { "@media": { [wide]: { minWidth: `calc(${fallbackVar(vars.sidebarW, "240px")} - 1px)` } } });
+globalStyle(`${sidebar} > :not(${resizeHandle})`, { "@media": { [wide]: { minWidth: `calc(${fallbackVar(vars.sidebarW, "240px")} - 1px)` } } });
 
 /** The buddy's drawing starts a little inside the lockup: 16 px puts it on the rows' icons below. */
 export const brand = style({
@@ -51,8 +55,8 @@ globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "50%", contain:
 
 export const navFoot = style({ padding: 8, borderTop: `1px solid ${vars.line}` });
 export const navFootRow = style({ display: "flex", alignItems: "center", gap: 4 });
-globalStyle(`${navFootRow} .account-trigger`, { flex: 1, minWidth: 0 });
-globalStyle(`${navFootRow} > .icon-btn, ${navFootRow} > * > .icon-btn`, { flex: "none" });
+globalStyle(`${navFootRow} ${accountTrigger}`, { flex: 1, minWidth: 0 });
+globalStyle(`${navFootRow} > ${iconBtn}, ${navFootRow} > * > ${iconBtn}`, { flex: "none" });
 
 export const navHeading = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 8px 4px",
@@ -159,9 +163,9 @@ export const sessionKind = style({
     [`${navSession}[data-offline] &`]: { color: vars.subtle },
   },
 });
-globalStyle(`${sessionKind} .kind-icon`, { width: 14, height: 14 });
+globalStyle(`${sessionKind} ${kindIcon}`, { width: 14, height: 14 });
 // The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks.
-globalStyle(`${sessionKind} .kind-mark`, { margin: -1 });
+globalStyle(`${sessionKind} ${kindMark}`, { margin: -1 });
 /** Unread: a blue dot in the row's left margin, beside the title, taking no room from it. */
 export const unreadDot = style({ position: "absolute", left: 2, top: 14, width: 6, height: 6, borderRadius: "50%", background: vars.blue });
 export const rowArchive = style({

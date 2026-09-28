@@ -9,6 +9,9 @@ import { useApp } from "./app.tsx";
 import { ChatScreen, ComposerBar, DraftExtras, openAttach, useDraft, useUpload, type Draft } from "./Chat.tsx";
 import { NewChatScreen } from "./NewChat.tsx";
 import { Loading } from "./parts.tsx";
+import * as css from "./ChatHost.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as partsCss from "./styles/parts.css.ts";
 
 /** What the composer writes to, as the page above it says. */
 export interface HostComposer {
@@ -54,7 +57,7 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
     : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>;
   return (
     <HostContext.Provider value={{ draft, use }}>
-      <div className="m-chat-host" ref={root}>
+      <div className={css.mChatHost} ref={root}>
         {body}
         {/* Once shown, it stays (the page above changing hands it on). */}
         {shown && <Composer shown={shown} latest={latest} draft={draft} now={now} root={root} />}
@@ -83,17 +86,17 @@ function Composer({ shown, latest, draft, now, root }: {
     return () => observer.disconnect();
   }, [root]);
   return (
-    <div className="m-composer m-host-composer" ref={capsule}>
+    <div className={`${css.mComposer} ${css.mHostComposer}`} ref={capsule}>
       {/* Files pasted or dropped in go with the message, as ＋ adds them; offline, nothing goes to the station. */}
-      <div className="m-floating m-composer-capsule" onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
+      <div className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
         onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!shown.offline) upload(e.clipboardData.files); } }}
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !shown.offline) e.preventDefault(); }}
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!shown.offline) upload(e.dataTransfer.files); } }}>
-        {shown.offline && <p className="m-composer-offline">这台 station 离线了：这里是之前读到的内容，暂时不能发消息。</p>}
+        {shown.offline && <p className={css.mComposerOffline}>这台 station 离线了：这里是之前读到的内容，暂时不能发消息。</p>}
         <DraftExtras draft={draft} />
         <ComposerBar draft={draft} placeholder={shown.placeholder} locked={shown.offline}
           onPlus={() => openAttach(app, upload)} onType={() => latest.current?.type?.()} onSend={() => latest.current?.send(now.current)} />
-        {draft.error && <p className="m-error m-composer-error">{draft.error}</p>}
+        {draft.error && <p className={`${partsCss.mError} ${css.mComposerError}`}>{draft.error}</p>}
       </div>
     </div>
   );

@@ -19,6 +19,14 @@ import { ChatPanel } from "../Chat.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
 import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
+import * as sessionCss from "../styles/session.css.ts";
+import * as jobsCss from "../styles/jobs.css.ts";
+import * as sidebarCss from "../styles/sidebar.css.ts";
+import * as conversationCss from "../styles/conversation.css.ts";
+import * as css from "./ChatPage.css.ts";
+import * as pagesCss from "../styles/pages.css.ts";
+import * as controlsCss from "../styles/controls.css.ts";
+import * as shellCss from "../styles/shell.css.ts";
 
 /**
  * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
@@ -153,28 +161,28 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     ensureChat: async () => ({ key: session, thread: (await call.request<{ id: number }>("POST", "/threads", { session })).id }),
   };
   return (
-    <div className="session-page" data-panel={panel}>
-      <div className="session-main">
-      <header className="page-bar">
+    <div className={sessionCss.sessionPage} data-panel={panel}>
+      <div className={jobsCss.sessionMain}>
+      <header className={sidebarCss.pageBar}>
         <MobileBack to={link("/chats")} label="对话" />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
-        <div className="page-bar-title">
+        <div className={conversationCss.pageBarTitle}>
           <h1>{chat.title}</h1>
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a) => (
             <Tip key={a.session.key} label={`${a.session.agentText}${a.session.badgeText ? ` · ${a.session.badgeText}` : ""} · 执行历史`}>
-              <button type="button" className="agent-mark-btn" onClick={() => toggleHistory(a.session.key)} aria-label={`${a.session.agentText} 的执行历史`}>
+              <button type="button" className={css.agentMarkBtn} onClick={() => toggleHistory(a.session.key)} aria-label={`${a.session.agentText} 的执行历史`}>
                 <AgentMark maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={20} />
               </button>
             </Tip>
           ))}
         </div>
-        <div className="page-bar-actions">
+        <div className={css.pageBarActions}>
           <JobsPanel station={station.address} jobs={jobs} onService={(job) => openTab(`service:${job}`)} onTab={openJobs} />
           {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
           {slackUrl && (
             <Tip label="在 Slack 中打开">
-              <a className="icon-btn" href={slackUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
+              <a className={pagesCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
             </Tip>
           )}
           {!panel && agents[0] && <IconButton label="打开侧栏" icon={PanelOpen} onClick={() => openTab(agents[0]!.session.key)} />}
@@ -184,42 +192,42 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} {...firstMessage} />
       </div>
         {panel && shown && (
-          <Tabs.Root className="side-panel" value={shown} onValueChange={setActive} data-opening={opening || undefined} onAnimationEnd={(e) => { if (e.target === e.currentTarget) setOpening(false); }}>
+          <Tabs.Root className={css.sidePanel} value={shown} onValueChange={setActive} data-opening={opening || undefined} onAnimationEnd={(e) => { if (e.target === e.currentTarget) setOpening(false); }}>
             <ResizeHandle variable="--panel-w" edge="left" min={320} max={960} label="调整侧栏宽度" />
-            <div className="side-bar">
-              <Tabs.List className="side-tab-list" aria-label="执行历史">
+            <div className={css.sideBar}>
+              <Tabs.List className={css.sideTabList} aria-label="执行历史">
                 {open.map((key) => {
                   if (key === JOBS) {
                     return (
-                      <span key={key} className="side-tab-wrap">
-                        <Tabs.Trigger className="side-tab" value={key} title="服务和后台任务">
-                          <span className="side-tab-agent"><Boxes size={13} strokeWidth={1.75} /><span className="side-tab-text" data-text="任务">任务</span></span>
+                      <span key={key} className={css.sideTabWrap}>
+                        <Tabs.Trigger className={css.sideTab} value={key} title="服务和后台任务">
+                          <span className={css.sideTabAgent}><Boxes size={13} strokeWidth={1.75} /><span className={css.sideTabText} data-text="任务">任务</span></span>
                         </Tabs.Trigger>
-                        <button type="button" className="side-tab-close" aria-label="关闭任务" onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                        <button type="button" className={css.sideTabClose} aria-label="关闭任务" onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
                   }
                   const service = jobs.find((j) => j.id === serviceOf(key));
                   if (service) {
                     return (
-                      <span key={key} className="side-tab-wrap">
-                        <Tabs.Trigger className="side-tab" value={key} title={service.name}>
-                          <span className="side-tab-agent"><JobDot tone={toneOf(service)} /><span className="side-tab-text" data-text={service.name}>{service.name}</span></span>
+                      <span key={key} className={css.sideTabWrap}>
+                        <Tabs.Trigger className={css.sideTab} value={key} title={service.name}>
+                          <span className={css.sideTabAgent}><JobDot tone={toneOf(service)} /><span className={css.sideTabText} data-text={service.name}>{service.name}</span></span>
                         </Tabs.Trigger>
-                        <button type="button" className="side-tab-close" aria-label={`关闭 ${service.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                        <button type="button" className={css.sideTabClose} aria-label={`关闭 ${service.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
                   }
                   const a = agents.find((x) => x.session.key === key);
                   // Not known yet: its place, empty, until it is.
-                  if (!a) return <span key={key} className="side-tab-wrap" />;
+                  if (!a) return <span key={key} className={css.sideTabWrap} />;
                   const label = a.session.agentText;
                   return (
-                    <span key={key} className="side-tab-wrap">
-                      <Tabs.Trigger className="side-tab" value={key} title={`${label} 的执行历史`}>
-                        <span className="side-tab-agent"><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={13} /><span className="side-tab-text" data-text={label}>{label}</span></span>
+                    <span key={key} className={css.sideTabWrap}>
+                      <Tabs.Trigger className={css.sideTab} value={key} title={`${label} 的执行历史`}>
+                        <span className={css.sideTabAgent}><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={13} /><span className={css.sideTabText} data-text={label}>{label}</span></span>
                       </Tabs.Trigger>
-                      <button type="button" className="side-tab-close" aria-label={`关闭 ${label} 的执行历史`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                      <button type="button" className={css.sideTabClose} aria-label={`关闭 ${label} 的执行历史`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                     </span>
                   );
                 })}
@@ -230,7 +238,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             {open.map((key) => {
               if (key === JOBS) {
                 return (
-                  <Tabs.Content key={key} className="side-content" value={key}>
+                  <Tabs.Content key={key} className={css.sideContent} value={key}>
                     <JobsTab station={station.address} jobs={jobs} picked={jobPicked} onPick={pickJob} onService={(job) => openTab(`service:${job}`)} />
                   </Tabs.Content>
                 );
@@ -239,7 +247,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               // Kept loaded while another tab shows: switching back does not load it anew.
               if (service) {
                 return (
-                  <Tabs.Content key={key} className="side-content" value={key} forceMount>
+                  <Tabs.Content key={key} className={css.sideContent} value={key} forceMount>
                     {service.port !== undefined && (service.state === "running" || service.state === "exited")
                       ? <StationPreview station={station.address} port={service.port} name={service.name} service={service.id} restarting={service.state === "exited" ? { restarts: service.restarts ?? 0 } : null} />
                       : <Empty><p>「{service.name}」{service.state === "failed" ? "没能启动" : "已经停了"}。</p></Empty>}
@@ -247,9 +255,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                 );
               }
               const a = agents.find((x) => x.session.key === key);
-              if (!a) return <Tabs.Content key={key} className="side-content" value={key} />;
+              if (!a) return <Tabs.Content key={key} className={css.sideContent} value={key} />;
               return (
-                <Tabs.Content key={key} className="side-content" value={key}>
+                <Tabs.Content key={key} className={css.sideContent} value={key}>
                   <History station={station.address} sessionKey={key} actions={<SessionActions session={a.session} status={a.status} />}
                     focus={focus?.key === key ? focus : null}
                     summary={<HistorySummary agent={a} />}
@@ -280,11 +288,11 @@ function JobsPanel({ station, jobs, onService, onTab }: { station: string; jobs:
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label="服务和后台任务">
         <Popover.Trigger asChild>
-          <button type="button" className="icon-btn jobs-trigger" aria-label="服务和后台任务" data-alarm={alarm} data-none={jobs.length === 0 || undefined}><Web {...ICON} /></button>
+          <button type="button" className={`${pagesCss.iconBtn} ${css.jobsTrigger}`} aria-label="服务和后台任务" data-alarm={alarm} data-none={jobs.length === 0 || undefined}><Web {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
-        <Popover.Content className="popover jobs-panel" align="end" sideOffset={6} collisionPadding={8}>
+        <Popover.Content className={`${controlsCss.popover} ${css.jobsPanel}`} align="end" sideOffset={6} collisionPadding={8}>
           <JobsPopover station={station} jobs={jobs} onService={(job) => close(() => onService(job))} onTab={(job) => close(() => onTab(job))} />
         </Popover.Content>
       </Popover.Portal>
@@ -301,28 +309,28 @@ function slackConnect(chat: ChatView) {
 function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
   const link = useLink();
   const connect = slackConnect(chat);
-  const row = (label: string, value: ReactNode) => <div className="detail-row"><dt>{label}</dt><dd>{value}</dd></div>;
+  const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
   const where = chat.place;
   return (
     <Popover.Root>
       <Tip label="对话信息">
         <Popover.Trigger asChild>
-          <button type="button" className="icon-btn" aria-label="对话信息"><Info {...ICON} /></button>
+          <button type="button" className={pagesCss.iconBtn} aria-label="对话信息"><Info {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
-        <Popover.Content className="popover chat-info" align="end" sideOffset={6} collisionPadding={8}>
-          <dl className="details">
+        <Popover.Content className={`${controlsCss.popover} ${css.chatInfo}`} align="end" sideOffset={6} collisionPadding={8}>
+          <dl className={css.details}>
             {row("来自", where
-              ? <span className="detail-inline"><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className="detail-link">{connect.name}</Link> : "Slack"} · {where}</span>
+              ? <span className={css.detailInline}><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : "Slack"} · {where}</span>
               : "ember 对话")}
-            {row("发起", thread.creator ? <CreatorText creator={thread.creator} verb="发起" /> : <span className="muted">未记录</span>)}
-            {row("参与", <span className="detail-inline"><PeopleStack people={chat.people} max={8} />{chat.people.length} 人</span>)}
+            {row("发起", thread.creator ? <CreatorText creator={thread.creator} verb="发起" /> : <span className={shellCss.muted}>未记录</span>)}
+            {row("参与", <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{chat.people.length} 人</span>)}
             {row("创建", <Time stamp={thread.time?.createdAt} />)}
             {thread.lastMessage && row("最近消息", <Time stamp={thread.lastMessage.time?.createdAt} />)}
           </dl>
           {chat.agents.length > 0 && (
-            <ul className="details-list">
+            <ul className={css.detailsList}>
               {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
             </ul>
           )}
@@ -337,8 +345,8 @@ function AgentLine({ agent }: { agent: ChatAgent }) {
   const { session, connect } = agent;
   return (
     <li>
-      <span className="detail-inline"><AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={14} />{session.agentText}</span>
-      <span className="muted">
+      <span className={css.detailInline}><AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={14} />{session.agentText}</span>
+      <span className={shellCss.muted}>
         {connect ? <><ConnectKindIcon kind={connect.kind} size={11} /> {connect.name} · </> : null}{session.processText} · 最近活动 <Time stamp={session.time?.lastActiveAt} />
       </span>
     </li>
@@ -352,14 +360,14 @@ function AgentLine({ agent }: { agent: ChatAgent }) {
 function HistorySummary({ agent }: { agent: ChatAgent }) {
   if (agent.attention.length === 0) return null;
   return (
-    <span className="history-summary">
+    <span className={css.historySummary}>
       {agent.attention.map((a, i) => (
         a.quota ? (
           <Tip key={i} label={<>{a.text}{a.more && <><br />{a.more}</>}</>}>
-            <span className="attention attention-quota"><QuotaRing left={a.quota.left} level={a.quota.level} size={20} /><span className="quota-ring-letter">{a.quota.mark}</span></span>
+            <span className={`${css.attention} ${css.attentionQuota}`}><QuotaRing left={a.quota.left} level={a.quota.level} size={20} /><span className="quota-ring-letter">{a.quota.mark}</span></span>
           </Tip>
         ) : (
-          <span key={i} className="attention" data-tone={a.kind === "disk" ? "amber" : "red"}>{a.text}</span>
+          <span key={i} className={css.attention} data-tone={a.kind === "disk" ? "amber" : "red"}>{a.text}</span>
         )
       ))}
     </span>
@@ -381,24 +389,24 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
   const change = useAction((input: { profile?: string | null; model?: string | null; effort?: string | null }) => api.sessionSettings(session.key, input), () => toast("已改，下一轮起生效"));
   const usage = useHistory(station.address, session.key).value?.usageLine;
   return (
-    <div className="session-details">
+    <div className={css.sessionDetails}>
       {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota). */}
       <ModelTriple title="换模型、思考深度和账号" runtimeFixed
         options={agent.choices} current={agent.account}
         value={{ model: session.model ?? "", runtime: session.runtime, effort: session.effort ?? null, profile: session.profilePinned ? session.profile ?? null : null }}
         onPick={({ model, effort, profile }) => void change.run({ model, effort, profile })} />
-      {change.error && <p className="field-error" role="alert">{change.error.message}</p>}
+      {change.error && <p className={controlsCss.fieldError} role="alert">{change.error.message}</p>}
       {/* What it used: a line, quiet. */}
-      <p className="run-usage muted">
+      <p className={`${css.runUsage} ${shellCss.muted}`}>
         {session.runtimeText} · {session.processText}
         {usage && <> · {usage}</>}
-        {" · "}<Link className="detail-link" to={link(`/settings/accounts/${session.profile}`)}>Profile 详情</Link>
+        {" · "}<Link className={css.detailLink} to={link(`/settings/accounts/${session.profile}`)}>Profile 详情</Link>
       </p>
       {/* The station it runs on, and how loaded it is. */}
-      <div className="run-station">
-        <p className="muted">{station.name || host?.hostname || "本机"}{host ? ` · ${host.summary}` : ""}</p>
+      <div className={css.runStation}>
+        <p className={shellCss.muted}>{station.name || host?.hostname || "本机"}{host ? ` · ${host.summary}` : ""}</p>
         {host && (
-          <div className="resource-rings">
+          <div className={css.resourceRings}>
             {host.meters.map((m) => <Ring key={m.label} percent={m.percent} level={m.level} label={m.short} title={`${m.label} ${m.value}`} />)}
           </div>
         )}

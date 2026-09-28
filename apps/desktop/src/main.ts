@@ -324,7 +324,7 @@ function external(url: string): void {
 
 /**
  * A window of the app at `path`. The app's own window has no title bar: its buttons sit in the page's top row (44 px,
- * web/src/app.css), centred on it. A page of the app opened in a new window (a web service's page of its own) has one:
+ * web/src/styles), centred on it. A page of the app opened in a new window (a web service's page of its own) has one:
  * its page has no row for them.
  */
 function open(path = "/", titled = false): BrowserWindow {

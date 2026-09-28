@@ -10,12 +10,19 @@ import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { Check } from "../icons.tsx";
 import { Avatar, Button, Field, LargeTitle, ListCard, ListRow, Loading, PickRow, SectionHeader, TopBack } from "./parts.tsx";
 import { ask, confirm } from "./sheets.tsx";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as partsCss from "./styles/parts.css.ts";
+import * as listsCss from "./styles/lists.css.ts";
+import * as css from "./WorkspacePage.css.ts";
+import * as sheetsCss from "./styles/sheets.css.ts";
+import * as settingsCss from "./styles/settings.css.ts";
+import * as homeCss from "./styles/home.css.ts";
 
 export function WorkspaceScreen() {
   const app = useApp();
   const view = useWorkspace(app.entry.id).value;
   const me = app.entry.account;
-  if (!view) return <div className="m-screen"><TopBack label="会话" onBack={app.pop} /><Loading text="正在读取 workspace…" /></div>;
+  if (!view) return <div className={pagesCss.mScreen}><TopBack label="会话" onBack={app.pop} /><Loading text="正在读取 workspace…" /></div>;
   const manager = view.role === "owner" || view.role === "admin";
   const leave = () => confirm(app, {
     title: `退出「${view.name}」？`, text: "退出后你就不能再访问里面的 station，需要重新被邀请才能回来。", action: "退出", danger: true,
@@ -27,21 +34,21 @@ export function WorkspaceScreen() {
     run: () => cloud.deleteWorkspace(me.sub, view.id).then(() => { app.toast("已删除 workspace"); app.replace("/"); }),
   });
   return (
-    <div className="m-screen m-scroll">
+    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label="会话" onBack={app.pop} />
       <LargeTitle small={`你是${ROLE_LABEL[view.role]} · ${me.email}`} big={view.name} />
       {manager && (
         <ListCard>
           <ListRow onClick={() => ask(app, { title: "Workspace 名字", value: view.name, placeholder: "例如：产品团队", action: "保存",
             run: (name) => cloud.renameWorkspace(me.sub, view.id, name).then(() => app.toast("已改名")) })}>
-            <span className="m-grow m-row-title">改名</span>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>改名</span>
           </ListRow>
         </ListCard>
       )}
       <SectionHeader title={`成员 · ${view.members.length} 人`} start={24} />
       <ListCard>
         {view.members.map((m) => <MemberRow key={m.sub} view={view} m={m} me={me.sub} />)}
-        {manager && <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <AddSheet view={view} /> })}><span className="m-accent m-row-title">＋ 添加成员</span></ListRow>}
+        {manager && <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <AddSheet view={view} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>＋ 添加成员</span></ListRow>}
       </ListCard>
       {manager && view.added.length > 0 && (
         <>
@@ -49,8 +56,8 @@ export function WorkspaceScreen() {
           <ListCard>
             {view.added.map((a) => (
               <ListRow key={a.email}>
-                <span className="m-grow m-row-text"><span className="m-row-title">{a.email}</span><span className="m-row-note">{ROLE_LABEL[a.role]} · 第一次登录时自动加入</span></span>
-                <button type="button" className="m-link" onClick={() => void cloud.removeAdded(me.sub, view.id, a.email).then(() => app.toast("已移除"), (e: Error) => app.toast(e.message))}>移除</button>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{a.email}</span><span className={listsCss.mRowNote}>{ROLE_LABEL[a.role]} · 第一次登录时自动加入</span></span>
+                <button type="button" className={partsCss.mLink} onClick={() => void cloud.removeAdded(me.sub, view.id, a.email).then(() => app.toast("已移除"), (e: Error) => app.toast(e.message))}>移除</button>
               </ListRow>
             ))}
           </ListCard>
@@ -62,8 +69,8 @@ export function WorkspaceScreen() {
           <ListCard>
             {view.invitations.map((i) => (
               <ListRow key={i.id}>
-                <span className="m-grow m-row-text"><span className="m-row-title">{i.email ?? "任何拿到链接的人"}</span><span className="m-row-note">{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span></span>
-                <button type="button" className="m-link" onClick={() => void cloud.revokeInvitation(me.sub, view.id, i.id).then(() => app.toast("已撤回邀请"), (e: Error) => app.toast(e.message))}>撤回</button>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{i.email ?? "任何拿到链接的人"}</span><span className={listsCss.mRowNote}>{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span></span>
+                <button type="button" className={partsCss.mLink} onClick={() => void cloud.revokeInvitation(me.sub, view.id, i.id).then(() => app.toast("已撤回邀请"), (e: Error) => app.toast(e.message))}>撤回</button>
               </ListRow>
             ))}
           </ListCard>
@@ -71,8 +78,8 @@ export function WorkspaceScreen() {
       )}
       <SectionHeader title="离开" start={24} />
       <ListCard>
-        <ListRow onClick={leave}><span className="m-grow m-row-title m-red">退出这个 workspace</span></ListRow>
-        {view.role === "owner" && <ListRow onClick={remove}><span className="m-grow m-row-title m-red">删除 workspace</span></ListRow>}
+        <ListRow onClick={leave}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mRed}`}>退出这个 workspace</span></ListRow>
+        {view.role === "owner" && <ListRow onClick={remove}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mRed}`}>删除 workspace</span></ListRow>}
       </ListCard>
       <div style={{ height: 30 }} />
     </div>
@@ -87,11 +94,11 @@ function MemberRow({ view, m, me }: { view: WorkspaceView; m: MemberView; me: st
   return (
     <ListRow onClick={can ? () => app.sheet({ height: 0.5, content: () => <MemberSheet view={view} m={m} /> }) : undefined}>
       <Avatar id={m.email} name={m.name || m.email} size={28} picture={m.picture ?? undefined} />
-      <span className="m-grow m-row-text">
-        <span className="m-row-title">{m.name || m.email}{m.sub === me && <span className="m-you">你</span>}</span>
-        <span className="m-row-note">{m.email}</span>
+      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+        <span className={listsCss.mRowTitle}>{m.name || m.email}{m.sub === me && <span className={css.mYou}>你</span>}</span>
+        <span className={listsCss.mRowNote}>{m.email}</span>
       </span>
-      <span className="m-row-note">{ROLE_LABEL[m.role]}</span>
+      <span className={listsCss.mRowNote}>{ROLE_LABEL[m.role]}</span>
     </ListRow>
   );
 }
@@ -104,7 +111,7 @@ function MemberSheet({ view, m }: { view: WorkspaceView; m: MemberView }) {
     <>
       <SheetGrab />
       <SheetHead title={m.name || m.email} />
-      <div className="m-sheet-scroll">
+      <div className={sheetsCss.mSheetScroll}>
         {view.role === "owner" && (["owner", "admin", "member"] as Role[]).map((r) => (
           <PickRow key={r} label={ROLE_LABEL[r]} sub={ROLE_HINT[r]} checked={m.role === r} onClick={() => void setRole(r)} />
         ))}
@@ -147,47 +154,47 @@ function AddSheet({ view }: { view: WorkspaceView }) {
     <>
       <SheetGrab />
       <SheetHead title="添加成员" />
-      <div className="m-sheet-scroll m-form">
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
         {done ? (
           <>
             <p>{done}</p>
-            <div className="m-form-actions"><Button label="完成" primary onClick={() => app.sheet(null)} /></div>
+            <div className={sheetsCss.mFormActions}><Button label="完成" primary onClick={() => app.sheet(null)} /></div>
           </>
         ) : (
           <>
-            <p className="m-muted">直接加进「{view.name}」，不用对方接受：登录过 ember 的人马上加入，其他人第一次用这个邮箱登录时自动加入。</p>
-            <b className="m-form-label">邮箱</b>
+            <p className={partsCss.mMuted}>直接加进「{view.name}」，不用对方接受：登录过 ember 的人马上加入，其他人第一次用这个邮箱登录时自动加入。</p>
+            <b className={sheetsCss.mFormLabel}>邮箱</b>
             <Field value={text} onChange={setText} placeholder="name@example.com，可以粘贴多个" />
             {slack.available && (slack.people === null ? (
-              <button type="button" className="m-link m-step-alt" disabled={slack.busy} onClick={() => void slack.load()}>{slack.busy ? "正在读取 Slack 里的人…" : "从 Slack 里选人"}</button>
+              <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} disabled={slack.busy} onClick={() => void slack.load()}>{slack.busy ? "正在读取 Slack 里的人…" : "从 Slack 里选人"}</button>
             ) : (
               <>
-                <div className="m-profile-tools" style={{ padding: 0 }}>
-                  <span className="m-grow m-small m-muted">Slack 里 {slack.people.length} 人，选中 {[...picked].filter((e) => !inside.has(e)).length} 人</span>
-                  <button type="button" className="m-link" onClick={() => setPicked(new Set(slack.people!.filter((p) => !inside.has(p.email)).map((p) => p.email)))}>全选</button>
-                  <button type="button" className="m-link" onClick={() => setPicked(new Set())}>全不选</button>
+                <div className={settingsCss.mProfileTools} style={{ padding: 0 }}>
+                  <span className={`${partsCss.mGrow} ${partsCss.mSmall} ${partsCss.mMuted}`}>Slack 里 {slack.people.length} 人，选中 {[...picked].filter((e) => !inside.has(e)).length} 人</span>
+                  <button type="button" className={partsCss.mLink} onClick={() => setPicked(new Set(slack.people!.filter((p) => !inside.has(p.email)).map((p) => p.email)))}>全选</button>
+                  <button type="button" className={partsCss.mLink} onClick={() => setPicked(new Set())}>全不选</button>
                 </div>
                 <div>
                   {slack.people.map((p) => {
                     const already = inside.has(p.email);
                     const on = already || picked.has(p.email);
                     return (
-                      <button key={p.email} type="button" className="m-model-row" style={{ padding: "9px 0" }} disabled={already} onClick={() => toggle(p.email)}>
-                        <span className="m-check" data-on={on || undefined}>{on && <Check size={13} />}</span>
+                      <button key={p.email} type="button" className={settingsCss.mModelRow} style={{ padding: "9px 0" }} disabled={already} onClick={() => toggle(p.email)}>
+                        <span className={settingsCss.mCheck} data-on={on || undefined}>{on && <Check size={13} />}</span>
                         <Avatar id={p.email} name={p.name || p.email} size={26} picture={p.image ?? undefined} />
-                        <span className="m-grow m-row-text"><span className="m-row-title">{p.name}</span><span className="m-row-note">{p.email}</span></span>
-                        {already ? <span className="m-row-note">已在</span> : p.guest && <span className="m-row-note">访客</span>}
+                        <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.name}</span><span className={listsCss.mRowNote}>{p.email}</span></span>
+                        {already ? <span className={listsCss.mRowNote}>已在</span> : p.guest && <span className={listsCss.mRowNote}>访客</span>}
                       </button>
                     );
                   })}
                 </div>
-                {slack.errors.length > 0 && <p className="m-error">{slack.errors.join("；")}</p>}
+                {slack.errors.length > 0 && <p className={partsCss.mError}>{slack.errors.join("；")}</p>}
               </>
             ))}
-            <b className="m-form-label">角色</b>
+            <b className={sheetsCss.mFormLabel}>角色</b>
             {roles.map((r) => <PickRow key={r} label={ROLE_LABEL[r]} sub={ROLE_HINT[r]} checked={role === r} onClick={() => setRole(r)} />)}
-            {error && <p className="m-error">{error}</p>}
-            <div className="m-form-actions">
+            {error && <p className={partsCss.mError}>{error}</p>}
+            <div className={sheetsCss.mFormActions}>
               <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
               <Button label={emails.length > 1 ? `添加 ${emails.length} 人` : "添加"} primary busy={busy} enabled={emails.length > 0} onClick={() => {
                 setBusy(true); setError(null);
@@ -210,16 +217,16 @@ export function Devices() {
   const app = useApp();
   const me = app.entry.account;
   const devices = useTopic<LoginSession[]>({ topic: "loginSessions", account: me.sub });
-  if (!devices.value) return <p className="m-note">{devices.error ? `读不到登录记录：${devices.error.message}` : "正在读取…"}</p>;
+  if (!devices.value) return <p className={homeCss.mNote}>{devices.error ? `读不到登录记录：${devices.error.message}` : "正在读取…"}</p>;
   return (
     <ListCard>
       {devices.value.map((s) => (
         <ListRow key={s.id}>
-          <span className="m-grow m-row-text">
-            <span className="m-row-title">{s.name || "未命名设备"}{s.current && <span className="m-you">这里</span>}</span>
-            <span className="m-row-note">{stamp(s, "created_at")?.ago}登录 · {stamp(s, "expires_at")?.until}过期</span>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+            <span className={listsCss.mRowTitle}>{s.name || "未命名设备"}{s.current && <span className={css.mYou}>这里</span>}</span>
+            <span className={listsCss.mRowNote}>{stamp(s, "created_at")?.ago}登录 · {stamp(s, "expires_at")?.until}过期</span>
           </span>
-          {!s.current && <button type="button" className="m-link" onClick={() => void cloud.revokeLoginSession(me.sub, s.id).then(() => app.toast("已让那台设备退出"), (e: Error) => app.toast(e.message))}>退出</button>}
+          {!s.current && <button type="button" className={partsCss.mLink} onClick={() => void cloud.revokeLoginSession(me.sub, s.id).then(() => app.toast("已让那台设备退出"), (e: Error) => app.toast(e.message))}>退出</button>}
         </ListRow>
       ))}
     </ListCard>

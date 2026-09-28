@@ -2,6 +2,7 @@
 // Its origin gives it its own client core and so its own signed-in accounts:
 // signing in here signs in nowhere else. Sign-in goes through ember cloud like
 // the web app's and comes back to this host's /auth/callback.
+import "../styles/index.ts";
 import { applyAppearance } from "../theme.ts";
 import { startScrollbars } from "../scrollbars.ts";
 import { Tooltip } from "radix-ui";
@@ -15,7 +16,7 @@ import { Callback, SignInPage } from "../cloud/gate.tsx";
 import { ToastProvider } from "../toast.tsx";
 import { Button, Loading } from "../ui.tsx";
 import { Console, useAdminAccount } from "./console.tsx";
-import "../legacy.css";
+import * as shellCss from "../styles/shell.css.ts";
 
 function AdminApp() {
   return (
@@ -36,7 +37,7 @@ function Home() {
   const list = useAccounts();
   const account = useAdminAccount();
   if (list?.length === 0) return <SignInPage title="ember 管理后台" lead="只有 ember 的管理员能用这里。用管理员的 Google 账号登录。" />;
-  if (account === undefined) return <div className="gate"><Loading /></div>;
+  if (account === undefined) return <div className={shellCss.gate}><Loading /></div>;
   if (account === null) return <NoPermission />;
   return <Console account={account} />;
 }
@@ -45,7 +46,7 @@ function Home() {
 function NoPermission() {
   const list = useAccounts() ?? [];
   return (
-    <div className="gate">
+    <div className={shellCss.gate}>
       <Illustration name="sign-in" />
       <h1>没有权限</h1>
       <p>{list.map((a) => a.email).join("、")} 不是 ember 的管理员。</p>

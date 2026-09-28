@@ -26,6 +26,13 @@ import { Avatar } from "./gate.tsx";
 import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as nav from "../Sidebar.css.ts";
+import * as pagesCss from "../styles/pages.css.ts";
+import * as chatCss from "../styles/chat.css.ts";
+import * as controlsCss from "../styles/controls.css.ts";
+import * as additionsCss from "../styles/additions.css.ts";
+import * as shellCss from "../styles/shell.css.ts";
+import * as css from "./settings.css.ts";
+import * as waitingCss from "../styles/waiting.css.ts";
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", admin: "管理员", member: "成员" };
 export const ROLE_HINT: Record<Role, string> = {
@@ -59,9 +66,9 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
 
 function Page({ title, lead, back, actions, children }: { title: string; lead?: string; back: string; actions?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="page page-narrow">
+    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label="设置" />
-      <header className="page-head"><div><h1>{title}{lead && <About>{lead}</About>}</h1></div>{actions}</header>
+      <header className={pagesCss.pageHead}><div><h1>{title}{lead && <About>{lead}</About>}</h1></div>{actions}</header>
       {children}
     </div>
   );
@@ -78,26 +85,26 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
   return (
-    <div className="page page-narrow">
+    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={`/w/${entry.id}/settings`} label="设置" />
-      <header className="identity">
+      <header className={pagesCss.identity}>
         <Avatar account={account} size={52} />
-        <div className="identity-text">
-          <h1 className="identity-name">{account.name || account.email}</h1>
-          <p className="identity-sub"><span>{account.email}</span><span>Google 账号</span></p>
+        <div className={pagesCss.identityText}>
+          <h1 className={pagesCss.identityName}>{account.name || account.email}</h1>
+          <p className={pagesCss.identitySub}><span>{account.email}</span><span>Google 账号</span></p>
         </div>
       </header>
       <Section title="外观" description="浅色、深色，或跟着系统走。只对这个浏览器生效。">
-        <div className="appearance-setting"><AppearanceSetting /></div>
+        <div className={chatCss.appearanceSetting}><AppearanceSetting /></div>
       </Section>
       <Section title="登录的地方" description="这个账号在哪些浏览器或设备上登录了 ember。认不出来的可以让它退出。">
-        {!devices.value ? devices.error ? <p className="field-error">读不到登录记录：{devices.error.message}</p> : <Loading label="正在读取…" fill={false} /> : (
-          <ul className="list">
+        {!devices.value ? devices.error ? <p className={controlsCss.fieldError}>读不到登录记录：{devices.error.message}</p> : <Loading label="正在读取…" fill={false} /> : (
+          <ul className={pagesCss.list}>
             {devices.value.map((s) => (
-              <li key={s.id} className="list-row">
-                <span className="list-row-text">
-                  <span className="list-row-title">{s.name || "未命名设备"}{s.current && <span className="choice-badge">这里</span>}</span>
-                  <span className="muted"><Time stamp={stamp(s, "created_at")} />登录 · {stamp(s, "expires_at")?.until}过期</span>
+              <li key={s.id} className={pagesCss.listRow}>
+                <span className={pagesCss.listRowText}>
+                  <span className={pagesCss.listRowTitle}>{s.name || "未命名设备"}{s.current && <span className={additionsCss.choiceBadge}>这里</span>}</span>
+                  <span className={shellCss.muted}><Time stamp={stamp(s, "created_at")} />登录 · {stamp(s, "expires_at")?.until}过期</span>
                 </span>
                 {!s.current && <Button variant="ghost" busy={revoke.busy && revoke.arg === s.id} onClick={() => revoke.run(s.id)}>退出</Button>}
               </li>
@@ -106,8 +113,8 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
         )}
       </Section>
       <Section title="退出登录">
-        <div className="card card-row">
-          <div className="card-row-text"><strong>在这个浏览器上退出 {account.email}</strong><span className="muted">它所在的 workspace 会从这里消失；其他已登录的账号不受影响。</span></div>
+        <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
+          <div className={pagesCss.cardRowText}><strong>在这个浏览器上退出 {account.email}</strong><span className={shellCss.muted}>它所在的 workspace 会从这里消失；其他已登录的账号不受影响。</span></div>
           <Button icon={LogOut} onClick={() => setSigningOut(true)}>退出账号</Button>
         </div>
       </Section>
@@ -135,14 +142,14 @@ export function GeneralSettings({ entry }: { entry: WorkspaceEntry }) {
   return (
     <Page title="通用" back={`/w/${entry.id}/settings`}>
       <Section title="名字">
-        <div className="card">
+        <div className={pagesCss.card}>
           <Field label="Workspace 名字" htmlFor="ws-rename" hint={manager ? undefined : "只有 owner 和管理员能改名。"}>
-            <div className="input-row">
-              <input id="ws-rename" className="input" value={name} maxLength={80} disabled={!manager} onChange={(e) => setName(e.target.value)} />
+            <div className={additionsCss.inputRow}>
+              <input id="ws-rename" className={controlsCss.input} value={name} maxLength={80} disabled={!manager} onChange={(e) => setName(e.target.value)} />
               {manager && <Button variant="primary" disabled={!name.trim() || name.trim() === view.name} busy={rename.busy} onClick={() => rename.run()}>保存</Button>}
             </div>
           </Field>
-          <p className="muted card-foot">你在这里是{ROLE_LABEL[view.role]}，通过 {account.email} 访问。</p>
+          <p className={`${shellCss.muted} ${controlsCss.cardFoot}`}>你在这里是{ROLE_LABEL[view.role]}，通过 {account.email} 访问。</p>
         </div>
       </Section>
     </Page>
@@ -164,19 +171,19 @@ export function LeaveSettings({ entry }: { entry: WorkspaceEntry }) {
   return (
     <Page title="退出与删除" back={`/w/${entry.id}/settings`}>
       <Section title="账号">
-        <div className="card card-row">
-          <div className="card-row-text"><strong>在这个浏览器上退出 {account.email}</strong><span className="muted">它所在的 workspace 会从这里消失；其他已登录的账号不受影响。</span></div>
+        <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
+          <div className={pagesCss.cardRowText}><strong>在这个浏览器上退出 {account.email}</strong><span className={shellCss.muted}>它所在的 workspace 会从这里消失；其他已登录的账号不受影响。</span></div>
           <Button icon={LogOut} onClick={() => setSigningOut(true)}>退出账号</Button>
         </div>
       </Section>
       <Section title={`Workspace · ${view.name}`}>
-        <div className="card card-row">
-          <div className="card-row-text"><strong>退出这个 workspace</strong><span className="muted">退出后不能再访问里面的 station，需要重新被邀请。</span></div>
+        <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
+          <div className={pagesCss.cardRowText}><strong>退出这个 workspace</strong><span className={shellCss.muted}>退出后不能再访问里面的 station，需要重新被邀请。</span></div>
           <Button onClick={() => setLeaving(true)}>退出</Button>
         </div>
         {view.role === "owner" && (
-          <div className="card card-row">
-            <div className="card-row-text"><strong>删除 workspace</strong><span className="muted">所有成员失去访问权限，station 断开与 ember cloud 的连接；station 本机的数据不受影响。</span></div>
+          <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
+            <div className={pagesCss.cardRowText}><strong>删除 workspace</strong><span className={shellCss.muted}>所有成员失去访问权限，station 断开与 ember cloud 的连接；station 本机的数据不受影响。</span></div>
             <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>删除</Button>
           </div>
         )}
@@ -223,9 +230,9 @@ export function MemorySettings({ entry }: { entry: WorkspaceEntry }) {
   return (
     <Page title="记忆" lead="每台 station 上所有会话共用的记忆：全局记忆放跨项目的，项目记忆每个项目一份。记忆在各台 station 上，不互相同步。" back={`/w/${entry.id}/settings`}>
       {stations.map((s) => (
-        <div key={s.id} className="memory-station">
-          {stations.length > 1 && <h2 className="memory-station-name">{s.name}</h2>}
-          {s.online ? <MemoryView station={s.station} /> : <p className="muted">离线，等它上线再看。</p>}
+        <div key={s.id} className={css.memoryStation}>
+          {stations.length > 1 && <h2 className={css.memoryStationName}>{s.name}</h2>}
+          {s.online ? <MemoryView station={s.station} /> : <p className={shellCss.muted}>离线，等它上线再看。</p>}
         </div>
       ))}
     </Page>
@@ -264,15 +271,15 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
       {first ? (
         <FirstOne art={<Illustration name="no-profile" />} title="添加第一个 Profile" lead={PROFILE_LEAD}>
           {/* Each station in a row: where a profile is added is part of adding it. */}
-          <div className="first-stations">
+          <div className={css.firstStations}>
             {stations.map((s) => (
-              <div key={s.id} className="first-station">
-                <div className="first-station-row">
+              <div key={s.id} className={css.firstStation}>
+                <div className={css.firstStationRow}>
                   <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
-                  <span className="first-station-name">{s.name}</span>
+                  <span className={css.firstStationName}>{s.name}</span>
                   {s.online
                     ? <Button variant={stations.length === 1 ? "primary" : "secondary"} icon={Plus} onClick={() => { setAddKind("claude-sub"); setAdding(s.station); }}>添加 Profile</Button>
-                    : <span className="muted">离线，等它上线再加</span>}
+                    : <span className={shellCss.muted}>离线，等它上线再加</span>}
                 </div>
                 {s.online && (
                   <StationContext.Provider value={asStation(s)}>
@@ -288,14 +295,14 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
         const base = stationBase(station.station);
         return (
           <Section key={station.id}
-            title={<span className="station-heading"><StatusDot state={station.online ? "online" : "offline"} label={station.online ? "在线" : "离线"} />{station.name}</span>}
+            title={<span className={css.stationHeading}><StatusDot state={station.online ? "online" : "offline"} label={station.online ? "在线" : "离线"} />{station.name}</span>}
             actions={station.online && online.length > 1 && <Button variant="ghost" icon={Plus} onClick={() => setAdding(station.station)}>添加</Button>}>
-            {!station.online && !overview ? <p className="muted">离线，还没有读到过它的 Profile。</p>
+            {!station.online && !overview ? <p className={shellCss.muted}>离线，还没有读到过它的 Profile。</p>
               : !overview ? <Loading label={`正在连接 ${station.name}…`} fill={false} />
               : (
                 <>
-                  {overview.profiles.length === 0 ? <p className="muted">还没有 Profile。</p> : (
-                    <ul className="list">
+                  {overview.profiles.length === 0 ? <p className={shellCss.muted}>还没有 Profile。</p> : (
+                    <ul className={pagesCss.list}>
                       {overview.profiles.map((p) => (
                         <li key={p.id}>
                           <ProfileCard profile={p} to={`${base}/settings/accounts/${p.id}`} uses={p.usedBy.length ? `${p.usedBy.length} 个连接在用` : ""} />
@@ -326,15 +333,15 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   return (
     <Section title={`${stations.length} 台`} actions={manager && <Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button>}>
       {(
-        <ul className="list">
+        <ul className={pagesCss.list}>
           {stations.map((s) => (
-            <li key={s.id} className="station-item"><div className="list-row station-row">
+            <li key={s.id} className={css.stationItem}><div className={`${pagesCss.listRow} ${css.stationRow}`}>
               <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
-              <span className="list-row-text">
-                <span className="list-row-title">{s.name}</span>
-                <span className="muted">
+              <span className={pagesCss.listRowText}>
+                <span className={pagesCss.listRowTitle}>{s.name}</span>
+                <span className={shellCss.muted}>
                   {s.online ? "在线" : s.lastSeen ? <><Time stamp={stamp(s, "lastSeen")} />在线</> : "还没上线"}
-                  {s.version ? ` · ember-mesh ${s.version}` : ""} · <span className="mono">{s.id.slice(0, 12)}</span>
+                  {s.version ? ` · ember-mesh ${s.version}` : ""} · <span className={shellCss.mono}>{s.id.slice(0, 12)}</span>
                 </span>
               </span>
               {manager && <Menu items={[
@@ -343,7 +350,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
               ]} />}
             </div>
               {s.online && (
-                <div className="station-device">
+                <div className={css.stationDevice}>
                   <DeviceCard host={s.host} processes={s.overview?.processesText} />
                 </div>
               )}
@@ -378,13 +385,13 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
       </>}>
       {!enroll.result ? (
         <Field label="名字" htmlFor="station-name">
-          <input id="station-name" className="input" value={name} autoFocus placeholder="比如 studio、mac-mini" onChange={(e) => setName(e.target.value)} maxLength={80}
+          <input id="station-name" className={controlsCss.input} value={name} autoFocus placeholder="比如 studio、mac-mini" onChange={(e) => setName(e.target.value)} maxLength={80}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) enroll.run(); }} />
         </Field>
       ) : joined ? (
-        <div className="callout" data-tone="green"><Check {...ICON} /><span>「{joined.name}」已加入，现在可以打开它了。</span></div>
+        <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>「{joined.name}」已加入，现在可以打开它了。</span></div>
       ) : <EnrollSteps enrollment={enroll.result} />}
-      {enroll.error && <p className="field-error" role="alert">{enroll.error.message}</p>}
+      {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
     </Dialog>
   );
 }
@@ -395,9 +402,9 @@ function EnrollSteps({ enrollment }: { enrollment: { install: string } }) {
     <>
       <p>在那台机器的终端里执行<About>macOS（Apple 芯片）和 Linux 都行；装过 ember 的机器也用这条命令。</About></p>
       <CopyCommand text={enrollment.install} />
-      <div className="enroll-wait" role="status">
-        <span className="spinner" aria-hidden="true" />
-        <span><strong>等待这台机器加入</strong><span className="muted">执行命令后会自动继续 · 命令 1 小时内有效</span></span>
+      <div className={css.enrollWait} role="status">
+        <span className={waitingCss.spinner} aria-hidden="true" />
+        <span><strong>等待这台机器加入</strong><span className={shellCss.muted}>执行命令后会自动继续 · 命令 1 小时内有效</span></span>
       </div>
     </>
   );
@@ -416,18 +423,18 @@ export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
   // Joined: the page is gone (the workspace has a station), so this is said as it goes.
   useEffect(() => () => { if (shown.current) track("station_added", { ms: Math.round(performance.now() - shown.current), first: true }); }, []);
   if (!view) return <Loading label="正在读取 workspace…" fill={false} />;
-  if (!manager) return <div className="callout">这个 workspace 还没有 station，等管理员添加。</div>;
-  if (enroll.result) return <div className="onboarding-card"><EnrollSteps enrollment={enroll.result} /></div>;
+  if (!manager) return <div className={additionsCss.callout}>这个 workspace 还没有 station，等管理员添加。</div>;
+  if (enroll.result) return <div className={css.onboardingCard}><EnrollSteps enrollment={enroll.result} /></div>;
   return (
-    <div className="onboarding-card">
+    <div className={css.onboardingCard}>
       <Field label="给这台机器起个名字" htmlFor="first-station-name">
-        <div className="onboarding-row">
-          <input id="first-station-name" className="input" value={name} autoFocus placeholder="比如 studio、mac-mini" onChange={(e) => setName(e.target.value)} maxLength={80}
+        <div className={css.onboardingRow}>
+          <input id="first-station-name" className={controlsCss.input} value={name} autoFocus placeholder="比如 studio、mac-mini" onChange={(e) => setName(e.target.value)} maxLength={80}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && name.trim()) enroll.run(); }} />
           <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>生成命令</Button>
         </div>
       </Field>
-      {enroll.error && <p className="field-error" role="alert">{enroll.error.message}</p>}
+      {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
     </div>
   );
 }
@@ -441,16 +448,16 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
   const unadd = useAction((email: string) => cloud.removeAdded(account.sub, view.id, email));
   return (
     <Section title={`${view.members.length} 人`} actions={manager && <Button icon={UserPlus} onClick={() => setInviting(true)}>添加成员</Button>}>
-      <ul className="list">
+      <ul className={pagesCss.list}>
         {view.members.map((m) => (
-          <li key={m.sub} className="list-row">
+          <li key={m.sub} className={pagesCss.listRow}>
             <Avatar account={m} size={28} />
-            <span className="list-row-text">
-              <span className="list-row-title">{m.name || m.email}{m.sub === account.sub && <span className="choice-badge">你</span>}</span>
-              <span className="muted">{m.email}</span>
+            <span className={pagesCss.listRowText}>
+              <span className={pagesCss.listRowTitle}>{m.name || m.email}{m.sub === account.sub && <span className={additionsCss.choiceBadge}>你</span>}</span>
+              <span className={shellCss.muted}>{m.email}</span>
             </span>
             {view.role === "owner" && m.sub !== account.sub ? (
-              <div className="role-select">
+              <div className={css.roleSelect}>
                 <Select value={m.role} onChange={(role) => setRole.run({ sub: m.sub, role: role as Role })} label="角色"
                   options={(["owner", "admin", "member"] as Role[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
               </div>
@@ -461,16 +468,16 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
           </li>
         ))}
       </ul>
-      {(setRole.error || remove.error) && <p className="field-error" role="alert">{(setRole.error ?? remove.error)!.message}</p>}
+      {(setRole.error || remove.error) && <p className={controlsCss.fieldError} role="alert">{(setRole.error ?? remove.error)!.message}</p>}
       {manager && view.added.length > 0 && (
         <>
-          <div className="group-head"><strong>还没登录过</strong><span className="muted">{view.added.length} 人 · 第一次登录 ember 时自动加入</span></div>
-          <ul className="list">
+          <div className={css.groupHead}><strong>还没登录过</strong><span className={shellCss.muted}>{view.added.length} 人 · 第一次登录 ember 时自动加入</span></div>
+          <ul className={pagesCss.list}>
             {view.added.map((a) => (
-              <li key={a.email} className="list-row">
-                <span className="list-row-text">
-                  <span className="list-row-title">{a.email}</span>
-                  <span className="muted">{ROLE_LABEL[a.role]}</span>
+              <li key={a.email} className={pagesCss.listRow}>
+                <span className={pagesCss.listRowText}>
+                  <span className={pagesCss.listRowTitle}>{a.email}</span>
+                  <span className={shellCss.muted}>{ROLE_LABEL[a.role]}</span>
                 </span>
                 <Button variant="ghost" busy={unadd.busy && unadd.arg === a.email} onClick={() => unadd.run(a.email)}>移除</Button>
               </li>
@@ -480,13 +487,13 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
       )}
       {manager && view.invitations.length > 0 && (
         <>
-          <div className="group-head"><strong>未接受的邀请</strong><span className="muted">{view.invitations.length} 个</span></div>
-          <ul className="list">
+          <div className={css.groupHead}><strong>未接受的邀请</strong><span className={shellCss.muted}>{view.invitations.length} 个</span></div>
+          <ul className={pagesCss.list}>
             {view.invitations.map((i) => (
-              <li key={i.id} className="list-row">
-                <span className="list-row-text">
-                  <span className="list-row-title">{i.email ?? "任何拿到链接的人"}</span>
-                  <span className="muted">{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span>
+              <li key={i.id} className={pagesCss.listRow}>
+                <span className={pagesCss.listRowText}>
+                  <span className={pagesCss.listRowTitle}>{i.email ?? "任何拿到链接的人"}</span>
+                  <span className={shellCss.muted}>{ROLE_LABEL[i.role]} · {stamp(i, "expires_at")?.until}过期</span>
                 </span>
                 <Button variant="ghost" busy={revoke.busy && revoke.arg === i.id} onClick={() => revoke.run(i.id)}>撤回</Button>
               </li>
@@ -529,31 +536,31 @@ function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: A
       {!done ? (
         <>
           <Field label="邮箱" htmlFor="add-emails" hint="对方登录 ember 用的 Google 账号邮箱；一次可以粘贴多个。">
-            <textarea id="add-emails" className="input" rows={3} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="name@example.com" />
+            <textarea id="add-emails" className={controlsCss.input} rows={3} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="name@example.com" />
           </Field>
           {slack.available && (
             slack.people === null ? (
               <Button variant="secondary" busy={slack.busy} onClick={fromSlack}>从 Slack 里选人</Button>
             ) : (
-              <div className="model-pool">
-                <div className="model-pool-tools">
-                  <span className="muted">Slack 里 {slack.people.length} 人，选中 {[...picked].filter((e) => !inside.has(e)).length} 人</span>
-                  <button type="button" className="text-toggle" onClick={() => setPicked(new Set(slack.people!.filter((p) => !inside.has(p.email)).map((p) => p.email)))}>全选</button>
-                  <button type="button" className="text-toggle" onClick={() => setPicked(new Set())}>全不选</button>
+              <div className={chatCss.modelPool}>
+                <div className={chatCss.modelPoolTools}>
+                  <span className={shellCss.muted}>Slack 里 {slack.people.length} 人，选中 {[...picked].filter((e) => !inside.has(e)).length} 人</span>
+                  <button type="button" className={controlsCss.textToggle} onClick={() => setPicked(new Set(slack.people!.filter((p) => !inside.has(p.email)).map((p) => p.email)))}>全选</button>
+                  <button type="button" className={controlsCss.textToggle} onClick={() => setPicked(new Set())}>全不选</button>
                 </div>
-                <ul className="model-pool-list">
+                <ul className={chatCss.modelPoolList}>
                   {slack.people.map((p) => (
                     <li key={p.email}>
-                      <label className="model-pool-item" data-on={picked.has(p.email) || inside.has(p.email) || undefined}>
+                      <label className={chatCss.modelPoolItem} data-on={picked.has(p.email) || inside.has(p.email) || undefined}>
                         <input type="checkbox" disabled={inside.has(p.email)} checked={picked.has(p.email) || inside.has(p.email)} onChange={() => toggle(p.email)} />
                         <span>{p.name}</span>
-                        <span className="muted">{p.email}</span>
-                        {inside.has(p.email) ? <span className="muted">已在</span> : p.guest && <span className="muted">访客</span>}
+                        <span className={shellCss.muted}>{p.email}</span>
+                        {inside.has(p.email) ? <span className={shellCss.muted}>已在</span> : p.guest && <span className={shellCss.muted}>访客</span>}
                       </label>
                     </li>
                   ))}
                 </ul>
-                {slack.errors.length > 0 && <p className="field-error">{slack.errors.join("；")}</p>}
+                {slack.errors.length > 0 && <p className={controlsCss.fieldError}>{slack.errors.join("；")}</p>}
               </div>
             )
           )}
@@ -562,13 +569,13 @@ function AddDialog({ view, account, onClose }: { view: WorkspaceView; account: A
           </Field>
         </>
       ) : (
-        <div className="callout" data-tone="green"><Check {...ICON} /><span>{[
+        <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>{[
           done.joined.length ? `${done.joined.length} 人已经加入` : "",
           done.added.length ? `${done.added.length} 人第一次登录 ember 时自动加入` : "",
           done.already.length ? `${done.already.length} 人本来就在` : "",
         ].filter(Boolean).join("，")}。</span></div>
       )}
-      {add.error && <p className="field-error" role="alert">{add.error.message}</p>}
+      {add.error && <p className={controlsCss.fieldError} role="alert">{add.error.message}</p>}
     </Dialog>
   );
 }

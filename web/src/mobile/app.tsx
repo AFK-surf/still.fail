@@ -8,7 +8,8 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
-import "./legacy.css";
+import * as rootCss from "./styles/root.css.ts";
+import * as css from "./app.css.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface Entry { id: string; name: string; account: Account }
@@ -143,7 +144,7 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
   const below = pages.at(-2)?.key;
   return (
     <Context.Provider value={app}>
-      <div className="m">
+      <div className={rootCss.m}>
         {shown.map((p) => {
           const isTop = p.key === top.key;
           const inMove = moving && (p.key === moving.from.key || p.key === moving.to.key);
@@ -155,14 +156,14 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
           // A page swiped back leaves from where the finger let it go.
           if (role === "out" && moving && !moving.forward) style["--m-from"] = `${from.current}px`;
           return (
-            <div key={p.key} className="m-page" data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
+            <div key={p.key} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
               data-swiping={(swipe !== null && isTop) || undefined} style={style}>
               {routes(p.location)}
             </div>
           );
         })}
         {/* Where a swipe back starts: a strip along the left edge that the browser leaves to it (a finger only). */}
-        {!home_ && !moving && <div className="m-edge" {...swipeProps} />}
+        {!home_ && !moving && <div className={css.mEdge} {...swipeProps} />}
         <SheetHost spec={sheet} close={() => setSheet(null)} />
         <ReaderHost spec={reader} close={() => setReader(null)} />
         <MenuHost spec={menu} close={() => { menu?.onDismiss?.(); setMenu(null); }} />
@@ -251,9 +252,9 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     },
   };
   return (
-    <div className="m-overlay" data-open={open || undefined}>
-      <div className="m-scrim" onClick={close} />
-      <div className="m-sheet" data-open={open || undefined} data-dragging={dragging || undefined} style={{ height }} {...headDrag}>
+    <div className={css.mOverlay} data-open={open || undefined}>
+      <div className={css.mScrim} onClick={close} />
+      <div className={css.mSheet} data-open={open || undefined} data-dragging={dragging || undefined} style={{ height }} {...headDrag}>
         <SheetDragContext.Provider value={drag}>{shown.content()}</SheetDragContext.Provider>
       </div>
     </div>
@@ -265,7 +266,7 @@ export function SheetGrab() {
   const drag = useContext(SheetDragContext);
   const down = useRef<number | null>(null);
   return (
-    <div className="m-grab" data-draggable={drag?.draggable || undefined}
+    <div className={css.mGrab} data-draggable={drag?.draggable || undefined}
       onPointerDown={(e) => {
         if (!drag?.draggable) return;
         down.current = e.clientY;
@@ -286,7 +287,7 @@ export function SheetGrab() {
 }
 
 export function SheetHead({ title, trailing }: { title: string; trailing?: ReactNode }) {
-  return <div className="m-sheet-head"><b>{title}</b>{trailing}</div>;
+  return <div className={css.mSheetHead}><b>{title}</b>{trailing}</div>;
 }
 
 // ── the long-press menu, a short note, the reader ─────────────────────
@@ -311,9 +312,9 @@ function MenuHost({ spec, close }: { spec: MenuSpec | null; close: () => void })
   const below = shown.anchor.bottom + 6;
   const y = below + height < window.innerHeight - 24 ? below : Math.max(24, shown.anchor.top - height - 6);
   return (
-    <div className="m-overlay m-menu-layer" data-open={open || undefined}>
-      <div className="m-scrim" onPointerDown={() => { pressed.current = true; }} onClick={() => { if (pressed.current) close(); pressed.current = false; }} />
-      <div className="m-menu" data-open={open || undefined} style={{ left: x, top: y, width }}>
+    <div className={`${css.mOverlay} ${css.mMenuLayer}`} data-open={open || undefined}>
+      <div className={css.mScrim} onPointerDown={() => { pressed.current = true; }} onClick={() => { if (pressed.current) close(); pressed.current = false; }} />
+      <div className={css.mMenu} data-open={open || undefined} style={{ left: x, top: y, width }}>
         {shown.items.map((item) => (
           <button key={item.label} type="button" onClick={() => { close(); item.action(); }}>{item.label}{item.icon}</button>
         ))}
@@ -330,7 +331,7 @@ function ToastHost({ toast }: { toast: { text: string; n: number } | null }) {
     const timer = setTimeout(() => setShown((t) => (t?.n === toast.n ? null : t)), 2600);
     return () => clearTimeout(timer);
   }, [toast]);
-  return <div className="m-toast" data-open={shown ? true : undefined} role="status">{shown?.text}</div>;
+  return <div className={css.mToast} data-open={shown ? true : undefined} role="status">{shown?.text}</div>;
 }
 
 /** The reader comes in from the side over everything; ‹ returns to where it was opened. */
@@ -345,10 +346,10 @@ function ReaderHost({ spec, close }: { spec: ReaderSpec | null; close: () => voi
   }, [spec]);
   if (!shown) return null;
   return (
-    <div className="m-reader" data-open={open || undefined}>
-      <div className="m-reader-bar"><NavBack label="执行历史" onClick={close} /></div>
-      <div className="m-reader-body">
-        <div className="m-reader-label">{shown.label}</div>
+    <div className={css.mReader} data-open={open || undefined}>
+      <div className={css.mReaderBar}><NavBack label="执行历史" onClick={close} /></div>
+      <div className={css.mReaderBody}>
+        <div className={css.mReaderLabel}>{shown.label}</div>
         {shown.content}
       </div>
     </div>

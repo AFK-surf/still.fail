@@ -17,6 +17,13 @@ import { useHost } from "./ChatHost.tsx";
 import { Button, Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow, Spinner } from "./parts.tsx";
 import { MachineLoginOffers } from "./Profiles.tsx";
 import { Buddy, FirstStation } from "./Stations.tsx";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as css from "./NewChat.css.ts";
+import * as newChatCss from "./styles/new-chat.css.ts";
+import * as chatCss from "./styles/chat.css.ts";
+import * as partsCss from "./styles/parts.css.ts";
+import * as sheetsCss from "./styles/sheets.css.ts";
+import * as settingsCss from "./styles/settings.css.ts";
 
 /** What the new chat runs on; kept per station for next time. */
 interface Choice { runtime: string; model: string; effort: string }
@@ -37,12 +44,12 @@ export function NewChatScreen() {
   const [picked, setPicked] = useState<string | null>(() => localStorage.getItem(`${KEY}.last`));
   const view = online.find((s) => s.station === picked) ?? online[0];
   return (
-    <div className="m-screen m-newchat-screen">
+    <div className={`${pagesCss.mScreen} ${css.mNewchatScreen}`}>
       <NavBar back="取消" onBack={app.pop} title="新对话" />
       {!all ? <Loading text={stations.error?.message ?? "正在读取 station…"} />
         : !view ? (
           all.length === 0 ? <FirstStation /> : (
-            <div className="m-new-none">
+            <div className={newChatCss.mNewNone}>
               <Illustration name="station-offline" width={240} />
               <b>没有在线的 station</b>
               <p>在一台机器上打开 ember，它就会连上这个 workspace。</p>
@@ -121,12 +128,12 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
   if (sent.length) {
     // Laid out as the chat's page (its list and bar; the composer is the host's), so it gives way to it without a move.
     return (
-      <div className="m-chat m-new-as-chat">
-        <div className="m-messages">
+      <div className={`${chatCss.mChat} ${css.mNewAsChat}`}>
+        <div className={chatCss.mMessages}>
           {sent.map((text, i) => (
-            <div key={i} className="m-mine">
-              <div className="m-bubble">{text}</div>
-              <span className="m-meta m-waiting"><Spinner size={10} />正在发送</span>
+            <div key={i} className={chatCss.mMine}>
+              <div className={chatCss.mBubble}>{text}</div>
+              <span className={`${chatCss.mMeta} ${chatCss.mWaiting}`}><Spinner size={10} />正在发送</span>
             </div>
           ))}
         </div>
@@ -136,22 +143,22 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
   }
   return (
     <>
-      <div className="m-new-body">
+      <div className={css.mNewBody}>
         <Illustration name="new-chat" width={230} />
         <h2>想让 agent 做什么？</h2>
-        <p className="m-muted">说要做什么。它会在 {view.name} 上用选好的模型开一个新会话。</p>
-        {problem && <p className="m-new-problem" data-wait={!view.overview || undefined}>{problem}</p>}
+        <p className={partsCss.mMuted}>说要做什么。它会在 {view.name} 上用选好的模型开一个新会话。</p>
+        {problem && <p className={css.mNewProblem} data-wait={!view.overview || undefined}>{problem}</p>}
         {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}
         {view.overview && profiles.length === 0 && <NoProfile view={view} />}
-        {making && <p className="m-muted m-small">正在 {view.name} 上创建会话…</p>}
+        {making && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>正在 {view.name} 上创建会话…</p>}
       </div>
       {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
       {entry?.spent && (
-        <p className="m-new-spent">{entry.name} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。</p>
+        <p className={css.mNewSpent}>{entry.name} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。</p>
       )}
       {/* The choices, then the composer as a floating capsule, as in a chat. */}
-      <div className="m-new-bottom">
-        <div className="m-choosers">
+      <div className={css.mNewBottom}>
+        <div className={css.mChoosers}>
           <Chooser leading={<Server size={13} />} label={view.name} onClick={() => pickStation(app, stations, view.station, onStation)} />
           {!runtime || !model ? (
             // Nothing to choose from: the chooser leads to where models are enabled.
@@ -174,14 +181,14 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
 
 function Chooser({ leading, label, onClick }: { leading?: ReactNode; label: string; onClick: () => void }) {
   // The same glass as the composer's capsule under it.
-  return <button type="button" className="m-chooser m-floating" onClick={onClick}>{leading}<span>{label}</span></button>;
+  return <button type="button" className={`${css.mChooser} ${pagesCss.mFloating}`} onClick={onClick}>{leading}<span>{label}</span></button>;
 }
 
 function pickStation(app: MobileApp, stations: StationView[], current: string, onPick: (s: string) => void) {
   app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab /><SheetHead title="在哪台 station 上跑" />
-      <div className="m-sheet-scroll">{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.station); app.sheet(null); }} />)}</div>
+      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.station); app.sheet(null); }} />)}</div>
     </>
   ) });
 }
@@ -190,7 +197,7 @@ function pickModel(app: MobileApp, view: StationView, current: string, onPick: (
   app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab /><SheetHead title="用哪个模型" />
-      <div className="m-sheet-scroll">
+      <div className={sheetsCss.mSheetScroll}>
         {view.models.map((m) => (
           <PickRow key={m.model} label={m.name} sub={[m.runtimes.map((r) => RUNTIME_LABEL[r] ?? r).join(" · "), m.spent?.text].filter(Boolean).join(" · ")}
             checked={m.model === current} leading={<ModelMark maker={m.maker} runtime={m.runtimes[0]!} size={36} />} onClick={() => { onPick(m); app.sheet(null); }} />
@@ -204,7 +211,7 @@ function pickRuntime(app: MobileApp, runtimes: string[], current: string, onPick
   app.sheet({ height: 0.36, content: () => (
     <>
       <SheetGrab /><SheetHead title="用哪个运行时" />
-      <div className="m-sheet-scroll">{runtimes.map((rt) => <PickRow key={rt} label={RUNTIME_LABEL[rt as RuntimeKind] ?? rt} checked={rt === current} leading={<ModelMark runtime={rt as RuntimeKind} size={36} />} onClick={() => { onPick(rt); app.sheet(null); }} />)}</div>
+      <div className={sheetsCss.mSheetScroll}>{runtimes.map((rt) => <PickRow key={rt} label={RUNTIME_LABEL[rt as RuntimeKind] ?? rt} checked={rt === current} leading={<ModelMark runtime={rt as RuntimeKind} size={36} />} onClick={() => { onPick(rt); app.sheet(null); }} />)}</div>
     </>
   ) });
 }
@@ -213,7 +220,7 @@ function pickEffort(app: MobileApp, efforts: string[], current: string, onPick: 
   app.sheet({ height: 0.48, content: () => (
     <>
       <SheetGrab /><SheetHead title="思考深度" />
-      <div className="m-sheet-scroll">
+      <div className={sheetsCss.mSheetScroll}>
         <PickRow label="默认" checked={current === ""} onClick={() => { onPick(""); app.sheet(null); }} />
         {efforts.map((e) => <PickRow key={e} label={e} checked={current === e} onClick={() => { onPick(e); app.sheet(null); }} />)}
       </div>
@@ -227,9 +234,9 @@ function NoProfile({ view }: { view: StationView }) {
   const station: Station = { id: view.id, name: view.name, online: view.online, address: view.station, base: stationBase(view.station), settings: `/w/${app.entry.id}/settings` };
   return (
     <StationContext.Provider value={station}>
-      <p className="m-new-problem" data-wait>给 {view.name} 添加一个 Profile。agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。</p>
+      <p className={css.mNewProblem} data-wait>给 {view.name} 添加一个 Profile。agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。</p>
       <Button label="添加 Profile" primary onClick={() => app.push(app.at(`/s/${view.id}/profiles/new`))} />
-      <div className="m-form m-steps" style={{ alignSelf: "stretch", marginTop: 12, padding: 0, textAlign: "left" }}>
+      <div className={`${sheetsCss.mForm} ${settingsCss.mSteps}`} style={{ alignSelf: "stretch", marginTop: 12, padding: 0, textAlign: "left" }}>
         <MachineLoginOffers inForm logins={view.overview?.machineLogins} profiles={view.overview?.profiles ?? []}
           onSignIn={(kind) => app.push(app.at(`/s/${view.id}/profiles/new?kind=${kind}`))} />
       </div>

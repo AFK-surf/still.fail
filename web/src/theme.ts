@@ -1,6 +1,6 @@
 // 外观: follow the system, or always light, or always dark — kept in this
 // browser. The choice is data-theme on the root ("light"/"dark"; absent for the
-// system), which the palette in theme.css and the brand pictures follow.
+// system), which the palette in styles/global.css.ts and the brand pictures follow.
 import { useEffect, useState } from "react";
 
 export type Appearance = "system" | "light" | "dark";

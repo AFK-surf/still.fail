@@ -19,6 +19,11 @@ import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAct
 import { Illustration } from "../brand.tsx";
 import { PageViews, track } from "../telemetry.ts";
 import { stationApi, useStationCall } from "../api.ts";
+import * as controlsCss from "../styles/controls.css.ts";
+import * as shellCss from "../styles/shell.css.ts";
+import * as css from "./CloudApp.css.ts";
+import * as pagesCss from "../styles/pages.css.ts";
+import * as additionsCss from "../styles/additions.css.ts";
 
 export function CloudApp() {
   return (
@@ -56,12 +61,12 @@ function SlackInstalled() {
     sent.current = true;
     api.slackInstalled(code, state).then(setResult, (error: Error) => setResult({ error: error.message }));
   }, [api, code, state, list]);
-  const back = <a className="btn btn-secondary" href="/">回到 ember</a>;
-  if (query.get("error") || !code) return <div className="gate"><h1>没有安装</h1><p>Slack 里没有允许安装这个 app。回到 ember 重新点「安装到工作区」。</p>{back}</div>;
-  if (list && list.length === 0) return <div className="gate"><h1>先登录 ember</h1><p>要用建这个 app 的账号登录，才能把安装交给 station。登录后再从 ember 里点一次「安装到工作区」。</p>{back}</div>;
+  const back = <a className={`${controlsCss.btn} btn-secondary`} href="/">回到 ember</a>;
+  if (query.get("error") || !code) return <div className={shellCss.gate}><h1>没有安装</h1><p>Slack 里没有允许安装这个 app。回到 ember 重新点「安装到工作区」。</p>{back}</div>;
+  if (list && list.length === 0) return <div className={shellCss.gate}><h1>先登录 ember</h1><p>要用建这个 app 的账号登录，才能把安装交给 station。登录后再从 ember 里点一次「安装到工作区」。</p>{back}</div>;
   if (!result) return <Splash label="正在把安装交给 station…" />;
-  if ("error" in result) return <div className="gate"><h1>没能完成安装</h1><p>{result.error}</p>{back}</div>;
-  return <div className="gate"><h1>已装进「{result.team ?? "工作区"}」</h1><p>回到 ember：这个 app 在「连接」页等着，填上 App-Level Token 就能连上。这个页面可以关了。</p></div>;
+  if ("error" in result) return <div className={shellCss.gate}><h1>没能完成安装</h1><p>{result.error}</p>{back}</div>;
+  return <div className={shellCss.gate}><h1>已装进「{result.team ?? "工作区"}」</h1><p>回到 ember：这个 app 在「连接」页等着，填上 App-Level Token 就能连上。这个页面可以关了。</p></div>;
 }
 
 function Home() {
@@ -119,12 +124,12 @@ function Landing() {
   if (first) return <Navigate to={`/w/${first.id}`} replace />;
   if (ready && pending.length > 0) {
     return (
-      <div className="gate invite-page">
+      <div className={`${shellCss.gate} ${css.invitePage}`}>
         <Illustration name="sign-in" />
         <h1>你收到了邀请</h1>
         {pending.map((i) => (
-          <div key={i.id} className="card card-row invite-card">
-            <div className="card-row-text"><strong>{i.name}</strong><span className="muted">{i.inviter || "有人"}邀请 {i.account.email} 以{ROLE_LABEL[i.role]}身份加入</span></div>
+          <div key={i.id} className={`${pagesCss.card} ${pagesCss.cardRow} ${css.inviteCard}`}>
+            <div className={pagesCss.cardRowText}><strong>{i.name}</strong><span className={shellCss.muted}>{i.inviter || "有人"}邀请 {i.account.email} 以{ROLE_LABEL[i.role]}身份加入</span></div>
             <Button variant="primary" busy={accept.busy && accept.arg?.id === i.id} onClick={() => accept.run({ sub: i.account.sub, id: i.id })}>加入</Button>
           </div>
         ))}
@@ -136,7 +141,7 @@ function Landing() {
   }
   if (asking) {
     return (
-      <div className="gate invite-page">
+      <div className={`${shellCss.gate} ${css.invitePage}`}>
         <Illustration name="sign-in" />
         <h1>ember 目前只对受邀的人开放</h1>
         <p>有邀请码的话填在下面，就能建一个自己的 workspace。也可以请已经在用 ember 的人把 {list[0]!.email} 邀请进他们的 workspace。</p>
@@ -147,12 +152,12 @@ function Landing() {
   }
   if (ready) {
     return (
-      <div className="gate invite-page">
+      <div className={`${shellCss.gate} ${css.invitePage}`}>
         <Illustration name="sign-in" />
         <h1>你还不在任何 workspace 里</h1>
         <p>可以请已经在用 ember 的人把 {list[0]!.email} 邀请进他们的 workspace，也可以自己建一个。</p>
         <Button variant="primary" busy={create.busy} onClick={() => create.run(inviteCode())}>建一个 workspace</Button>
-        {create.error && <p className="field-error" role="alert">{errorText(create.error)}</p>}
+        {create.error && <p className={controlsCss.fieldError} role="alert">{errorText(create.error)}</p>}
         <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
       </div>
     );
@@ -166,13 +171,13 @@ function InviteCodeForm({ create }: { create: { run(code: string): void; busy: b
   // Nothing was wrong with a code nobody had typed yet.
   const said = create.error && create.arg ? errorText(create.error) : null;
   return (
-    <form className="invite-code" onSubmit={(e) => { e.preventDefault(); if (code.trim()) create.run(code.trim()); }}>
-      <div className="input-row">
-        <input className="input mono" aria-label="邀请码" value={code} autoFocus placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
+    <form className={css.inviteCode} onSubmit={(e) => { e.preventDefault(); if (code.trim()) create.run(code.trim()); }}>
+      <div className={additionsCss.inputRow}>
+        <input className={`${controlsCss.input} ${shellCss.mono}`} aria-label="邀请码" value={code} autoFocus placeholder="XXXX-XXXX-XXXX" maxLength={32} spellCheck={false} autoComplete="off"
           onChange={(e) => setCode(e.target.value)} />
         <Button variant="primary" type="submit" disabled={!code.trim()} busy={create.busy}>建 workspace</Button>
       </div>
-      {said && <p className="field-error" role="alert">{said}</p>}
+      {said && <p className={controlsCss.fieldError} role="alert">{said}</p>}
     </form>
   );
 }
@@ -185,7 +190,7 @@ function WorkspaceRoute() {
   if (!workspaces) return <Splash label="正在打开 workspace…" />;
   const owner = workspaces.find((a) => a.workspaces.some((w) => w.id === ws));
   const found = owner?.workspaces.find((w) => w.id === ws);
-  if (!owner || !found) return <div className="gate"><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className="btn btn-secondary" href="/">回到 ember</a></div>;
+  if (!owner || !found) return <div className={shellCss.gate}><h1>打不开这个 workspace</h1><p>你登录的账号都不在里面。</p><a className={`${controlsCss.btn} btn-secondary`} href="/">回到 ember</a></div>;
   const entry = { id: ws, name: found.name, account: owner.account };
   // A narrow screen is the Android app's (../mobile).
   return narrow
@@ -216,22 +221,22 @@ function Invite() {
   if (!list) return <Splash />;
   if (list.length === 0) return <SignInPage lead="你收到了一个 ember workspace 的邀请。先用 Google 账号登录，再决定是否加入。" />;
   return (
-    <div className="gate invite-page">
+    <div className={`${shellCss.gate} ${css.invitePage}`}>
       <Illustration name="sign-in" />
       {!preview ? <h1>正在读取邀请…</h1> : "error" in preview ? (
-        <><h1>邀请不能用</h1><p>{preview.error.message}</p><a className="btn btn-secondary" href="/">回到 ember</a></>
+        <><h1>邀请不能用</h1><p>{preview.error.message}</p><a className={`${controlsCss.btn} btn-secondary`} href="/">回到 ember</a></>
       ) : (
         <>
           <h1>加入「{preview.data.name}」</h1>
           <p>{preview.data.inviter || "有人"}邀请你以{ROLE_LABEL[preview.data.role]}身份加入。{preview.data.email ? `这个邀请只能由 ${preview.data.email} 接受。` : ""}</p>
           {list.length > 1 && (
-            <div className="invite-account"><Select value={sub} onChange={setChosen} label="用哪个账号加入" options={list.map((a) => ({ value: a.sub, label: a.email }))} /></div>
+            <div className={css.inviteAccount}><Select value={sub} onChange={setChosen} label="用哪个账号加入" options={list.map((a) => ({ value: a.sub, label: a.email }))} /></div>
           )}
-          <div className="invite-actions">
+          <div className={css.inviteActions}>
             <Button variant="ghost" onClick={() => void signIn()}>换一个账号</Button>
             <Button variant="primary" busy={accept.busy} onClick={() => accept.run()}>以 {list.find((a) => a.sub === sub)?.email} 加入</Button>
           </div>
-          {accept.error && <p className="field-error" role="alert">{accept.error.message}</p>}
+          {accept.error && <p className={controlsCss.fieldError} role="alert">{accept.error.message}</p>}
         </>
       )}
     </div>

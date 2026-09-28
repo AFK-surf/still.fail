@@ -1,0 +1,28 @@
+import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "./tokens.css.ts";
+
+export const composerBox = style({
+  selectors: {
+    "&[data-dragging]": {
+      borderColor: vars.fieldFocus,
+      background: `color-mix(in oklch, ${vars.fieldFocus} 8%, color-mix(in oklch, ${vars.canvas} 45%, transparent))`,
+    },
+  },
+});
+/** Here rather than with its class: it comes after .composer-box[data-dragging], and wins over it. */
+globalStyle(`${composerBox}:focus-within`, { borderColor: vars.fieldFocus });
+/** Here rather than with its class: it comes after .composer-box:not([data-multiline]), and wins over it. */
+globalStyle(`${composerBox}[data-multiline]`, {
+  flexDirection: "column", alignItems: "stretch", gap: "8px", padding: "12px",
+  borderRadius: `calc(32px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+});
+/** Composer: one line sits on the frame's centre line; files ride above the text. */
+/** Here rather than with its class: it comes after .composer-box[data-multiline], and wins over it. */
+globalStyle(`${composerBox}:not([data-multiline])`, { alignItems: "center", gap: "2px", paddingLeft: "6px" });
+/** Here rather than with its class: it comes after .composer-box:not([data-multiline]), and wins over it. */
+globalStyle(`${composerBox}[data-multiline]`, { gap: "10px" });
+/** Here rather than with its class: it comes after .composer-box[data-dragging], and wins over it. */
+globalStyle(`${composerBox}:focus-within`, {
+  border: "0", background: `color-mix(in oklch, ${vars.canvas} 45%, transparent)`, WebkitBackdropFilter: "blur(10px)",
+  backdropFilter: "blur(10px)", boxShadow: "0 6px 16px rgb(0 0 0 / .14), 0 2px 5px rgb(0 0 0 / .1)",
+});

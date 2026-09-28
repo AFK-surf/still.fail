@@ -17,6 +17,7 @@ import { toMadeChat } from "./Chat.tsx";
 import { ComposerDock } from "./dock.tsx";
 import { Mark } from "./brand.tsx";
 import { ServicePage } from "./Preview.tsx";
+import * as shellCss from "./styles/shell.css.ts";
 
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
 function useDetailOpen(): boolean {
@@ -36,21 +37,21 @@ export function App() {
   if (!overview.value && overview.error) {
     const denied = overview.error.status === 403;
     return (
-      <div className="gate">
+      <div className={shellCss.gate}>
         <Mark size={40} />
         <h1>{denied ? "没有访问权限" : "连不上 ember"}</h1>
         <p>{overview.error.message}</p>
       </div>
     );
   }
-  if (!overview.value) return <div className="gate"><Loading label="正在连接 ember…" /></div>;
+  if (!overview.value) return <div className={shellCss.gate}><Loading label="正在连接 ember…" /></div>;
 
   return (
     <ToastProvider>
       <Tooltip.Provider delayDuration={400} skipDelayDuration={200}>
-      <div className="shell" data-detail={detail}>
+      <div className={shellCss.shell} data-detail={detail}>
         <Sidebar />
-        <main className="main">
+        <main className={shellCss.main}>
           <ComposerDock>
           <Routes>
             <Route path="/" element={<Navigate to="/chats" replace />} />

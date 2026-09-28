@@ -9,6 +9,7 @@ import remarkGfm from "remark-gfm";
 import type { HighlighterCore } from "shiki/core";
 import type { Attachment } from "./core/shapes.ts";
 import { inlineFile } from "./Prose.css.ts";
+import * as css from "./Prose.css.ts";
 
 let highlighter: Promise<HighlighterCore> | null = null;
 const THEME = "vitesse-light";
@@ -69,14 +70,14 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   };
   const current = html && cache.get(`${language}\n${text}`) === html ? html : null;
   return (
-    <div className="code-block">
-      <div className="code-bar">
-        <span className="code-lang">{language ?? "text"}</span>
-        <button type="button" className="code-copy" onClick={copy} aria-label="复制代码">
+    <div className={css.codeBlock}>
+      <div className={css.codeBar}>
+        <span className={css.codeLang}>{language ?? "text"}</span>
+        <button type="button" className={css.codeCopy} onClick={copy} aria-label="复制代码">
           {copied ? <Check size={12} /> : <Copy size={12} />}{copied ? "已复制" : "复制"}
         </button>
       </div>
-      {current ? <div className="code-shiki" dangerouslySetInnerHTML={{ __html: current }} /> : <pre><code>{text}</code></pre>}
+      {current ? <div className={css.codeShiki} dangerouslySetInnerHTML={{ __html: current }} /> : <pre><code>{text}</code></pre>}
     </div>
   );
 }

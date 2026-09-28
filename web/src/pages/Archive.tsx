@@ -7,16 +7,20 @@ import { stationApi, useStations, useStationCall, type ArchivedChat as ChatRow, 
 import { useToast } from "../toast.tsx";
 import { About, Button, Confirm, MobileBack } from "../ui.tsx";
 import * as nav from "../Sidebar.css.ts";
+import * as pagesCss from "../styles/pages.css.ts";
+import * as shellCss from "../styles/shell.css.ts";
+import * as css from "./Archive.css.ts";
+import * as controlsCss from "../styles/controls.css.ts";
 
 export function ArchivePage({ scope, back }: { scope: string; back: string }) {
   const stations = useStations(scope);
   const online = (stations.value ?? []).filter((s) => s.online);
   return (
-    <div className="page page-narrow">
+    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label="对话" />
-      <header className="page-head"><div><h1>已归档<About>手动归档的对话，和空闲超过一天、已经做完的对话（没在跑、没停在 block、没有未读）。对话里有新消息时会自动回到列表。</About></h1></div></header>
-      {!stations.value && <p className="muted">正在读取 station…</p>}
-      {stations.value && online.length === 0 && <p className="muted">没有在线的 station。</p>}
+      <header className={pagesCss.pageHead}><div><h1>已归档<About>手动归档的对话，和空闲超过一天、已经做完的对话（没在跑、没停在 block、没有未读）。对话里有新消息时会自动回到列表。</About></h1></div></header>
+      {!stations.value && <p className={shellCss.muted}>正在读取 station…</p>}
+      {stations.value && online.length === 0 && <p className={shellCss.muted}>没有在线的 station。</p>}
       {online.map((view) => <ArchivedOn key={view.station} view={view} named={scope !== "local" && online.length > 1} />)}
     </div>
   );
@@ -64,22 +68,22 @@ function ArchivedOn({ view, named }: { view: StationView; named: boolean }) {
   };
   const sorted = [...(rows ?? [])].sort((a, b) => (b.archived?.at ?? 0) - (a.archived?.at ?? 0));
   return (
-    <section className="archive-station" aria-label={view.name}>
+    <section className={css.archiveStation} aria-label={view.name}>
       {named && <div className={nav.navHeading}>{view.name}</div>}
-      {error && <p className="field-error">{error}</p>}
-      {!rows && !error && <p className="muted">正在读取…</p>}
-      {rows && sorted.length === 0 && <p className="muted">没有归档的对话。</p>}
-      <div className="archive-list">
+      {error && <p className={controlsCss.fieldError}>{error}</p>}
+      {!rows && !error && <p className={shellCss.muted}>正在读取…</p>}
+      {rows && sorted.length === 0 && <p className={shellCss.muted}>没有归档的对话。</p>}
+      <div className={css.archiveList}>
         {sorted.map((row) => (
-          <div key={`${row.thread ?? row.session}`} className="archive-row">
-            <div className="archive-text">
-              <span className="archive-title">{row.title}</span>
-              <span className="archive-meta">
+          <div key={`${row.thread ?? row.session}`} className={css.archiveRow}>
+            <div className={css.archiveText}>
+              <span className={css.archiveTitle}>{row.title}</span>
+              <span className={css.archiveMeta}>
                 {row.archived?.by === "auto" ? "空闲后自动归档" : "手动归档"} · {when(row.archived?.at ?? row.lastActiveAt)}
                 {row.last?.text ? ` · ${row.last.text}` : ""}
               </span>
             </div>
-            <div className="archive-actions">
+            <div className={css.archiveActions}>
               <Button variant="ghost" onClick={() => void restore(row)}>恢复</Button>
               {/* A chat archived alone has agents still at work elsewhere: nothing of theirs is deleted from here. */}
               {!row.archived?.alone && <Button variant="ghost" onClick={() => { setDeleteError(null); setDeleting(row); }}>删除</Button>}

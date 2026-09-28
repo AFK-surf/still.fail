@@ -11,6 +11,11 @@ import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
 import { Segmented } from "./ui.tsx";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
+import * as css2 from "./FilePreview.css.ts";
+import * as waitingCss from "./styles/waiting.css.ts";
+import * as controlsCss from "./styles/controls.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
+import * as conversationCss from "./styles/conversation.css.ts";
 
 export function fileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -158,34 +163,34 @@ function Viewer({ onClose, sessionKey, file }: { onClose(): void; sessionKey: st
   }, [blob, known.kind]);
   const kind = known.kind ?? sniffed;
   let body: ReactNode;
-  if (loaded.state === "loading" || (kind === null && loaded.state === "ready")) body = <div className="fp-note"><span className="spinner" aria-hidden="true" />正在载入…</div>;
-  else if (loaded.state === "error") body = <div className="fp-note">载入失败：{loaded.message}</div>;
+  if (loaded.state === "loading" || (kind === null && loaded.state === "ready")) body = <div className={css2.fpNote}><span className={waitingCss.spinner} aria-hidden="true" />正在载入…</div>;
+  else if (loaded.state === "error") body = <div className={css2.fpNote}>载入失败：{loaded.message}</div>;
   else {
     const { url, blob } = loaded;
     switch (kind) {
       case "image": body = <ImageViewer url={url} file={file} setControls={setControls} />; break;
-      case "video": body = <video className="fp-video" src={url} controls autoPlay playsInline />; break;
-      case "audio": body = <div className="fp-audio"><span className="fp-audio-name">{file.name}</span><audio src={url} controls autoPlay /></div>; break;
+      case "video": body = <video className={css2.fpVideo} src={url} controls autoPlay playsInline />; break;
+      case "audio": body = <div className={css2.fpAudio}><span className={css2.fpAudioName}>{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
         body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} />; break;
-      default: body = <div className="fp-note">这种文件没法在这里预览<a className="btn" href={url} download={file.name}><Download size={16} />下载</a></div>;
+      default: body = <div className={css2.fpNote}>这种文件没法在这里预览<a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />下载</a></div>;
     }
   }
   return (
-    <RDialog.Content className="fp" data-kind={kind ?? undefined} aria-describedby={undefined}
+    <RDialog.Content className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined}
       // The page itself takes focus, not its first button: no ring on the close button for a tap or click.
       onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
-      <header className="fp-head">
-        <div className="fp-title">
-          <RDialog.Title className="fp-name" title={file.path}>{file.name}</RDialog.Title>
-          <span className="fp-meta">{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${KIND_LABEL[kind as PreviewKind]}` : ""}</span>
+      <header className={css2.fpHead}>
+        <div className={css2.fpTitle}>
+          <RDialog.Title className={css2.fpName} title={file.path}>{file.name}</RDialog.Title>
+          <span className={css2.fpMeta}>{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${KIND_LABEL[kind as PreviewKind]}` : ""}</span>
         </div>
-        <div className="fp-tools">{controls}</div>
-        {loaded.state === "ready" && <a className="icon-btn" href={loaded.url} download={file.name} title="下载" aria-label="下载"><Download size={18} /></a>}
-        <RDialog.Close className="icon-btn" aria-label="关闭" title="关闭（Esc）"><Close size={18} /></RDialog.Close>
+        <div className={css2.fpTools}>{controls}</div>
+        {loaded.state === "ready" && <a className={pagesCss.iconBtn} href={loaded.url} download={file.name} title="下载" aria-label="下载"><Download size={18} /></a>}
+        <RDialog.Close className={pagesCss.iconBtn} aria-label="关闭" title="关闭（Esc）"><Close size={18} /></RDialog.Close>
       </header>
-      <div className="fp-body">{body}</div>
+      <div className={css2.fpBody}>{body}</div>
     </RDialog.Content>
   );
 }
@@ -347,11 +352,11 @@ function ImageViewer({ url, file, setControls }: { url: string; file: Attachment
   const scale = view?.scale ?? fit;
   useEffect(() => {
     setControls(
-      <span className="fp-zoom">
-        <button type="button" className="icon-btn" aria-label="缩小" title="缩小（-）" disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button>
-        <button type="button" className="fp-tool-text fp-percent" title="适应窗口（0）" onClick={reset}>{Math.round(scale * 100)}%</button>
-        <button type="button" className="icon-btn" aria-label="放大" title="放大（+）" disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button>
-        <button type="button" className="fp-tool-text" title="原始大小（1）" onClick={() => zoomTo(1)}>1:1</button>
+      <span className={css2.fpZoom}>
+        <button type="button" className={pagesCss.iconBtn} aria-label="缩小" title="缩小（-）" disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button>
+        <button type="button" className={`${css2.fpToolText} ${css2.fpPercent}`} title="适应窗口（0）" onClick={reset}>{Math.round(scale * 100)}%</button>
+        <button type="button" className={pagesCss.iconBtn} aria-label="放大" title="放大（+）" disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button>
+        <button type="button" className={css2.fpToolText} title="原始大小（1）" onClick={() => zoomTo(1)}>1:1</button>
       </span>,
     );
   }, [scale, minScale, zoomTo, reset, setControls]);
@@ -359,9 +364,9 @@ function ImageViewer({ url, file, setControls }: { url: string; file: Attachment
 
   const larger = !!natural && !!box && !!view && (natural.w * view.scale > box.w + 1 || natural.h * view.scale > box.h + 1);
   return (
-    <div ref={stage} className="fp-stage" data-pan={larger || undefined} data-zoomed={(view && view.scale > fit * 1.01) || undefined}
+    <div ref={stage} className={css2.fpStage} data-pan={larger || undefined} data-zoomed={(view && view.scale > fit * 1.01) || undefined}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onDoubleClick={onDoubleClick}>
-      <img className="fp-image" src={url} alt={file.name} draggable={false}
+      <img className={css2.fpImage} src={url} alt={file.name} draggable={false}
         onLoad={(e) => { const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
         style={natural && view ? { width: natural.w, height: natural.h, transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.scale})` } : { visibility: "hidden" }} />
     </div>
@@ -400,9 +405,9 @@ function PdfViewer({ blob }: { blob: Blob }) {
     return () => observer.disconnect();
   }, []);
   return (
-    <div ref={page} className="fp-page fp-pdf">
-      {error ? <div className="fp-plain">这个 PDF 打不开：{error}</div>
-        : !doc || width <= 0 ? <div className="fp-plain"><span className="spinner" aria-hidden="true" /></div>
+    <div ref={page} className={`${css2.fpPage} ${css2.fpPdf}`}>
+      {error ? <div className={css2.fpPlain}>这个 PDF 打不开：{error}</div>
+        : !doc || width <= 0 ? <div className={css2.fpPlain}><span className={waitingCss.spinner} aria-hidden="true" /></div>
         : Array.from({ length: doc.numPages }, (_, i) => <PdfPage key={i} doc={doc} number={i + 1} width={width} />)}
     </div>
   );
@@ -445,7 +450,7 @@ function PdfPage({ doc, number, width }: { doc: PDFDocumentProxy; number: number
     return () => { live = false; task?.cancel(); };
   }, [doc, number, near, size, width]);
   const shown = size ? { width, aspectRatio: `${size.w} / ${size.h}` } : { width, aspectRatio: "210 / 297" };
-  return <canvas ref={canvas} className="fp-pdf-page" style={shown} aria-label={`第 ${number} 页`} />;
+  return <canvas ref={canvas} className={css2.fpPdfPage} style={shown} aria-label={`第 ${number} 页`} />;
 }
 
 // ── text ───────────────────────────────────────────────────────────────
@@ -473,25 +478,25 @@ function TextViewer({ blob, kind, language, name, setControls }: { blob: Blob; k
     );
     return () => setControls(null);
   }, [rendered, source, setControls]);
-  if (text === null) return <div className="fp-note"><span className="spinner" aria-hidden="true" />正在载入…</div>;
+  if (text === null) return <div className={css2.fpNote}><span className={waitingCss.spinner} aria-hidden="true" />正在载入…</div>;
   let content: ReactNode;
   if (kind === "html" && !source) {
     // Its scripts run, but in an origin of its own: nothing of ember's is reachable from it.
-    content = <iframe className="fp-frame fp-html" sandbox="allow-scripts" srcDoc={text} title={name} />;
-    return <div className="fp-page fp-page-frame">{content}</div>;
+    content = <iframe className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" srcDoc={text} title={name} />;
+    return <div className={`${css2.fpPage} ${css2.fpPageFrame}`}>{content}</div>;
   }
-  if (kind === "markdown" && !source) content = <div className="markdown fp-markdown"><Prose>{text}</Prose></div>;
+  if (kind === "markdown" && !source) content = <div className={`${conversationCss.markdown} ${css2.fpMarkdown}`}><Prose>{text}</Prose></div>;
   else if (kind === "csv" && !source) content = <CsvTable text={text} tab={name.toLowerCase().endsWith(".tsv")} />;
   else {
     const lang = kind === "markdown" ? "markdown" : kind === "csv" ? undefined : language;
     const fence = "`".repeat(Math.max(3, ...[...text.matchAll(/`{3,}/g)].map((m) => m[0].length + 1)));
     content = lang && text.length <= HIGHLIGHT_LIMIT
-      ? <div className="markdown fp-code"><Prose>{`${fence}${lang}\n${text}\n${fence}`}</Prose></div>
-      : <pre className="fp-plain">{text}</pre>;
+      ? <div className={`${conversationCss.markdown} ${css2.fpCode}`}><Prose>{`${fence}${lang}\n${text}\n${fence}`}</Prose></div>
+      : <pre className={css2.fpPlain}>{text}</pre>;
   }
   return (
-    <div className="fp-page">
-      {cut && <div className="fp-cut">文件较大，只显示前 {fileSize(SHOW_LIMIT)}，完整内容请下载。</div>}
+    <div className={css2.fpPage}>
+      {cut && <div className={css2.fpCut}>文件较大，只显示前 {fileSize(SHOW_LIMIT)}，完整内容请下载。</div>}
       {content}
     </div>
   );
@@ -521,17 +526,17 @@ export function parseCsv(text: string, separator: string, limit = Infinity): str
 function CsvTable({ text, tab }: { text: string; tab: boolean }) {
   const rows = parseCsv(text, tab ? "\t" : ",", TABLE_ROWS + 1);
   const [head, ...body] = rows;
-  if (!head) return <pre className="fp-plain">{text}</pre>;
+  if (!head) return <pre className={css2.fpPlain}>{text}</pre>;
   const more = body.length > TABLE_ROWS;
   return (
     <>
-      <div className="fp-table-wrap">
-        <table className="fp-table">
+      <div className={css2.fpTableWrap}>
+        <table className={css2.fpTable}>
           <thead><tr><th aria-label="行号" />{head.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
-          <tbody>{body.slice(0, TABLE_ROWS).map((r, i) => <tr key={i}><td className="fp-row">{i + 1}</td>{head.map((_, j) => <td key={j}>{r[j] ?? ""}</td>)}</tr>)}</tbody>
+          <tbody>{body.slice(0, TABLE_ROWS).map((r, i) => <tr key={i}><td className={css2.fpRow}>{i + 1}</td>{head.map((_, j) => <td key={j}>{r[j] ?? ""}</td>)}</tr>)}</tbody>
         </table>
       </div>
-      {more && <div className="fp-cut">只显示前 {TABLE_ROWS} 行，完整内容请下载。</div>}
+      {more && <div className={css2.fpCut}>只显示前 {TABLE_ROWS} 行，完整内容请下载。</div>}
     </>
   );
 }

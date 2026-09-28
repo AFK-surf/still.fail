@@ -15,6 +15,17 @@ import { ModelTriple, optionOf } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
 import { keepTabs } from "./chatTabs.ts";
+import * as css from "./NewChat.css.ts";
+import * as cloudCss from "./styles/cloud.css.ts";
+import * as composerCss from "./styles/composer.css.ts";
+import * as controlsCss from "./styles/controls.css.ts";
+import * as shellCss from "./styles/shell.css.ts";
+import * as chatCss from "./styles/chat.css.ts";
+import * as sessionCss from "./styles/session.css.ts";
+import * as jobsCss from "./styles/jobs.css.ts";
+import * as sidebarCss from "./styles/sidebar.css.ts";
+import * as conversationCss from "./styles/conversation.css.ts";
+import * as waitingCss from "./styles/waiting.css.ts";
 
 interface Choice { runtime: RuntimeKind | ""; model: string; effort: string; profile?: string }
 const LAST = "ember.newChat";
@@ -50,15 +61,15 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
   if (!stations.value) {
     // Laid out as the page will be (the composer's place held, the words under it), so nothing moves when it comes.
     return (
-      <div className="new-chat"><div className="new-chat-inner">
-        <Illustration name="new-chat" /><h1 className="new-chat-title">新对话</h1><p className="new-chat-sub">说要做什么。它会在选好的 station 上用选好的模型开一个新会话。</p>
-        <div className="composer-wrap"><div className="composer-box new-chat-held" /></div>
-        <p className={`new-chat-status${stations.error ? " field-error" : ""}`}>{stations.error?.message ?? "正在读取 station…"}</p>
+      <div className={css.newChat}><div className={css.newChatInner}>
+        <Illustration name="new-chat" /><h1 className={css.newChatTitle}>新对话</h1><p className={css.newChatSub}>说要做什么。它会在选好的 station 上用选好的模型开一个新会话。</p>
+        <div className={cloudCss.composerWrap}><div className={`${composerCss.composerBox} ${css.newChatHeld}`} /></div>
+        <p className={`${css.newChatStatus}${stations.error ? ` ${controlsCss.fieldError}` : ""}`}>{stations.error?.message ?? "正在读取 station…"}</p>
       </div></div>
     );
   }
   if (!view) {
-    return <div className="new-chat"><div className="new-chat-inner"><Illustration name="station-offline" /><h1 className="new-chat-title">新对话</h1><p className="muted">没有在线的 station。到设置里添加一台，或者启动已添加的 station。</p></div></div>;
+    return <div className={css.newChat}><div className={css.newChatInner}><Illustration name="station-offline" /><h1 className={css.newChatTitle}>新对话</h1><p className={shellCss.muted}>没有在线的 station。到设置里添加一台，或者启动已添加的 station。</p></div></div>;
   }
   // The composer's files and links belong to the station the chat goes to.
   const station: Station = { id: view.id, name: scope === "local" ? "" : view.name, base: stationBase(view.station), address: view.station, online: true, settings: scope === "local" ? "/settings" : `/w/${scope}/settings` };
@@ -135,7 +146,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       )}
       {!runtime || !model ? (
         // Nothing to choose from: the chooser leads to where models are enabled.
-        <Link className="chooser" to={profilesPage(station)} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
+        <Link className={chatCss.chooser} to={profilesPage(station)} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
       ) : (
         <ModelTriple side="top" title="用哪个模型、运行时、思考深度和账号" options={view.models}
           value={{ model, runtime, effort: choice.effort || null, profile: choice.profile || null }}
@@ -179,16 +190,16 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   if (sent.length) {
     // Laid out as the chat's page (its bar, its list, its composer), so it gives way to it without a move.
     return (
-      <div className="session-page">
-        <div className="session-main">
-          <header className="page-bar"><div className="page-bar-title"><h1>{sent[0]}</h1></div></header>
-          <section className="chat" aria-label="对话">
-            <div className="chat-pane">
-              <div className="chat-list">
+      <div className={sessionCss.sessionPage}>
+        <div className={jobsCss.sessionMain}>
+          <header className={sidebarCss.pageBar}><div className={conversationCss.pageBarTitle}><h1>{sent[0]}</h1></div></header>
+          <section className={sessionCss.chat} aria-label="对话">
+            <div className={sessionCss.chatPane}>
+              <div className={sessionCss.chatList}>
                 {sent.map((text, i) => (
-                  <div key={i} className="msg msg-mine" data-author="你" data-role="person">
-                    <div className="msg-bubble"><div className="msg-plain">{text}</div></div>
-                    <span className="msg-time msg-waiting msg-sending"><span className="spinner" aria-hidden="true" />正在发送</span>
+                  <div key={i} className={`${conversationCss.msg} ${chatCss.msgMine}`} data-author="你" data-role="person">
+                    <div className={conversationCss.msgBubble}><div className={chatCss.msgPlain}>{text}</div></div>
+                    <span className={`${conversationCss.msgTime} ${chatCss.msgWaiting} ${chatCss.msgSending}`}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>
                   </div>
                 ))}
               </div>
@@ -203,13 +214,13 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   const blocked = view.overview && sent.length === 0 ? (profiles.length === 0 ? "profile" : view.models.length === 0 ? "models" : null) : null;
   if (blocked) {
     return (
-      <div className="new-chat">
-        <div className="new-chat-inner">
+      <div className={css.newChat}>
+        <div className={css.newChatInner}>
           <FirstOne art={<Illustration name="no-profile" />} title={blocked === "profile" ? `给 ${station.name || "这台机器"} 添加一个 Profile` : "勾选要用的模型"}
             lead={blocked === "profile" ? PROFILE_LEAD : `${station.name || "这台机器"} 的 Profile 还没有启用模型，勾选之后就能开始对话。`}>
             {blocked === "profile"
               ? <Button variant="primary" icon={Plus} onClick={() => { setProfileKind("claude-sub"); setAddingProfile(true); }}>添加 Profile</Button>
-              : <Link className="btn btn-primary" to={profilesPage(station)}>去勾选模型</Link>}
+              : <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profilesPage(station)}>去勾选模型</Link>}
             {stations.length > 1 && (
               <Chooser side="bottom" label={<><Server size={13} />{station.name}</>} title="换一台 station">
                 {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={13} />{s.name}</Item>)}
@@ -223,20 +234,20 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
     );
   }
   return (
-    <div className="new-chat">
-      <div className="new-chat-inner">
+    <div className={css.newChat}>
+      <div className={css.newChatInner}>
         <Illustration name="new-chat" />
-        <h1 className="new-chat-title">新对话</h1>
-        <p className="new-chat-sub">说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
+        <h1 className={css.newChatTitle}>新对话</h1>
+        <p className={css.newChatSub}>说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
         {entry?.spent && (
-          <p className="spent-notice" role="status">
+          <p className={css.spentNotice} role="status">
             {entry.name} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。
           </p>
         )}
         {composer}
         {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
-        <p className="new-chat-status">{making ? `正在 ${station.name} 上创建会话…` : !view.overview ? `正在读取 ${station.name} 的 Profile…` : ""}</p>
+        <p className={css.newChatStatus}>{making ? `正在 ${station.name} 上创建会话…` : !view.overview ? `正在读取 ${station.name} 的 Profile…` : ""}</p>
       </div>
     </div>
   );
