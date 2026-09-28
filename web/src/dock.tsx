@@ -29,6 +29,9 @@ interface Dock {
 
 const DockContext = createContext<Dock | null>(null);
 
+/** Frames its place stays put before it stops following it. */
+const STILL_FRAMES = 30;
+
 export function ComposerDock({ children }: { children: ReactNode }) {
   const [spec, setSpec] = useState<ComposerSpec | null>(null);
   const [height, setHeight] = useState(0);
@@ -38,21 +41,30 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   const put = () => {
     const el = box.current;
     const at = slot.current;
-    if (!el || !at || !at.isConnected) return;
+    if (!el || !at || !at.isConnected) return false;
     const host = el.offsetParent as HTMLElement | null;
     const base = host?.getBoundingClientRect() ?? { left: 0, top: 0 };
     const r = at.getBoundingClientRect();
     const left = `${Math.round(r.left - base.left)}px`, top = `${Math.round(r.top - base.top)}px`, width = `${Math.round(r.width)}px`;
-    if (el.style.left !== left) el.style.left = left;
-    if (el.style.top !== top) el.style.top = top;
-    if (el.style.width !== width) el.style.width = width;
+    if (el.style.left === left && el.style.top === top && el.style.width === width) return false;
+    el.style.left = left;
+    el.style.top = top;
+    el.style.width = width;
+    return true;
   };
   // Without a place (not a chat page), it is put away by the next frame; while a new chat hands its draft on to the chat
   // it makes (the chat page may take a moment to hold a place), it stays where it was, focus and all.
   const [shown, setShown] = useState(true);
   const away = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [dock] = useState<Dock>(() => ({
-    place(at, next) { clearTimeout(away.current); slot.current = at; setSpec(next); setShown(true); },
+    place(at, next) {
+      // Laid out for another page: where it is now is where it goes from.
+      if (next.variant !== variant.current) seen();
+      clearTimeout(away.current);
+      if (slot.current !== at) { slot.current = at; wake.current(); }
+      setSpec(next);
+      setShown(true);
+    },
     leave(at) {
       if (slot.current !== at) return;
       slot.current = null;
@@ -62,16 +74,47 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     height: 0,
     carryTo(key) { carry.current = key; },
   }));
-  // Where its place is, now and as the page lays out anew (it moves with it, at once).
-  useLayoutEffect(put);
+  // Where its place is, now and as the page lays out anew (it moves with it, at once). It is followed frame by frame
+  // only while something may be moving it (the window or its place resized, a transition or animation starting, a new
+  // place), until it has stayed still a moment: a loop every frame kept the page from ever being idle, and cost
+  // scrolling frames.
+  const wake = useRef(() => {});
+  useLayoutEffect(() => { put(); });
   useLayoutEffect(() => {
-    let frame = requestAnimationFrame(function follow() { put(); seen(); frame = requestAnimationFrame(follow); });
-    return () => cancelAnimationFrame(frame);
+    let frame = 0;
+    let still = 0;
+    const follow = () => {
+      still = put() ? 0 : still + 1;
+      frame = still < STILL_FRAMES ? requestAnimationFrame(follow) : 0;
+    };
+    const start = () => {
+      still = 0;
+      if (!frame) frame = requestAnimationFrame(follow);
+    };
+    const resize = new ResizeObserver(start);
+    wake.current = () => {
+      resize.disconnect();
+      const at = slot.current;
+      for (const el of [at, at?.parentElement, box.current?.offsetParent, document.documentElement]) if (el) resize.observe(el);
+      start();
+    };
+    wake.current();
+    window.addEventListener("resize", start);
+    document.addEventListener("transitionrun", start, true);
+    document.addEventListener("animationstart", start, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      wake.current = () => {};
+      window.removeEventListener("resize", start);
+      document.removeEventListener("transitionrun", start, true);
+      document.removeEventListener("animationstart", start, true);
+    };
   }, []);
   // Laid out for another page (a new chat becoming its chat, a chat left for a new one), the box goes from where and how
-  // big it was to where and how big it is now: one composer changing, not one fading out as another fades in. Its place
-  // is read each frame (the last one before the change is where it goes from); a page change's picture leaves it out
-  // (its styles), so what shows of it is the live box.
+  // big it was to where and how big it is now: one composer changing, not one fading out as another fades in. Where it
+  // was is read as the new page takes it (`place`); a page change's picture leaves it out (its styles), so what shows of
+  // it is the live box.
   const inner = () => box.current?.querySelector<HTMLElement>(`.${composerCss.composerBox}`) ?? null;
   const was = useRef<{ rect: DOMRect; radius: number } | null>(null);
   const seen = () => {
