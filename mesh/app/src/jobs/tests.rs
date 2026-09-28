@@ -16,7 +16,7 @@ fn rig_on(dir: tempfile::TempDir, store: Arc<Store>) -> Rig {
         store.clone(),
         dir.path(),
         Arc::new(move |session, text| heard.lock().unwrap().push((session.to_string(), text))),
-        Arc::new(|session, port| Some(format!("https://ember.test/o/ws/st/{session}?preview={port}"))),
+        Arc::new(|session, job| Some(format!("https://ember.test/o/ws/st/{session}?service={job}"))),
     )
     .unwrap();
     let work = dir.path().join("work");
@@ -120,7 +120,7 @@ async fn the_agents_tools_start_list_read_and_stop_their_sessions_jobs_only() {
     };
     let made: Value = serde_json::from_str(&call("job_start", "s1", json!({ "command": "echo hello; sleep 5", "name": "hi", "port": 5010 })).await.unwrap()).unwrap();
     let id = made["id"].as_str().unwrap().to_string();
-    assert_eq!(made["link"], json!("https://ember.test/o/ws/st/s1?preview=5010"));
+    assert_eq!(made["link"], json!(format!("https://ember.test/o/ws/st/s1?service={id}")));
     assert!(made.get("token").is_none(), "its token is not said");
     until("it writes", || tail(&r.dir_log(&id), 5) == "hello").await;
     assert_eq!(call("job_log", "s1", json!({ "id": id })).await.unwrap(), "hello");

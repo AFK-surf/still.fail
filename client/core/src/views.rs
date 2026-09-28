@@ -826,6 +826,8 @@ impl Views {
                 .filter(|t| t.get("endedAt").is_none_or(Value::is_null)).and_then(|t| t.get("startedAt")).cloned().unwrap_or(Value::Null),
             "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
             "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
+            // Its background jobs and web services (a station yet to update says none).
+            "jobs": detail.get("jobs").cloned().unwrap_or_else(|| json!([])),
         }))
     }
 

@@ -6,8 +6,10 @@
 // like any other call, and hands the answer back. No port on the station is
 // open to anyone. The desktop app needs none of that: the frame is at
 // ember-preview://, which the app serves itself through its core.
-import { Retry } from "./icons.tsx";
+import { ArrowLeft, ArrowRight, External, Refresh } from "./icons.tsx";
 import { useEffect, useRef, useState } from "react";
+import { useHref } from "react-router";
+import { useLink } from "./station.tsx";
 import { useCall } from "./core/react.ts";
 
 declare const __PREVIEW_ORIGIN__: string;
@@ -23,25 +25,50 @@ const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCo
 
 interface Asked { id: number; method: string; path: string; headers: [string, string][]; body: Uint8Array | null }
 
-export function StationPreview({ station, port }: { station: string; port: number }) {
-  return window.emberDesktop ? <DesktopPreview station={station} port={port} /> : <WebPreview station={station} port={port} />;
+/** A service beside a chat, or on a page of its own (`alone`): the bar has no "open on its own" there. */
+export function StationPreview({ station, port, alone = false }: { station: string; port: number; alone?: boolean }) {
+  // Its page of its own, at the station's pages' place (a new window or tab: the browser's).
+  const own = useHref(useLink()(`/preview/${port}`));
+  const external = alone ? undefined : own;
+  return window.emberDesktop ? <DesktopPreview station={station} port={port} external={external} /> : <WebPreview station={station} port={port} external={external} />;
 }
 
-/** Where it is and a reload, over the frame. */
-function PreviewBar({ port, typed, setTyped, go }: { port: number; typed: string; setTyped: (path: string) => void; go: (path: string) => void }) {
+interface Bar {
+  port: number;
+  /** Where the service is now, as its frame says (null: not known). */
+  at: string | null;
+  go(path: string): void;
+  reload(): void;
+  /** Absent where the frame's history cannot be reached (the desktop app's frame). */
+  back?(): void;
+  forward?(): void;
+  external?: string | undefined;
+}
+
+/** Back, forward, reload, where it is (typed to go elsewhere), and its page of its own: over the frame. */
+function PreviewBar({ port, at, go, reload, back, forward, external }: Bar) {
+  const [typed, setTyped] = useState(at ?? "/");
+  const [editing, setEditing] = useState(false);
+  // Where it went is what the bar says, unless someone is typing there.
+  useEffect(() => { if (at !== null && !editing) setTyped(at); }, [at, editing]);
+  const icon = { size: 14, strokeWidth: 1.75 };
   return (
-    <form className="preview-bar" onSubmit={(e) => { e.preventDefault(); go(typed); }}>
-      <span className="preview-host">localhost:{port}</span>
-      <input className="preview-path" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="路径" spellCheck={false} />
-      <button type="button" className="icon-btn" aria-label="重新载入" title="重新载入" onClick={() => go(typed)}><Retry size={14} strokeWidth={1.75} /></button>
+    <form className="preview-bar" onSubmit={(e) => { e.preventDefault(); go(typed.startsWith("/") ? typed : `/${typed}`); (document.activeElement as HTMLElement | null)?.blur(); }}>
+      {back && <button type="button" className="icon-btn" aria-label="后退" title="后退" onClick={back}><ArrowLeft {...icon} /></button>}
+      {forward && <button type="button" className="icon-btn" aria-label="前进" title="前进" onClick={forward}><ArrowRight {...icon} /></button>}
+      <button type="button" className="icon-btn" aria-label="刷新" title="刷新" onClick={reload}><Refresh {...icon} /></button>
+      <label className="preview-address">
+        <span className="preview-host">localhost:{port}</span>
+        <input className="preview-path" value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />
+      </label>
+      {external && <a className="icon-btn" href={external} target="_blank" rel="noopener" aria-label="在新窗口打开" title="在新窗口打开"><External {...icon} /></a>}
     </form>
   );
 }
 
-function DesktopPreview({ station, port }: { station: string; port: number }) {
+function DesktopPreview({ station, port, external }: { station: string; port: number; external?: string | undefined }) {
   const [host, setHost] = useState<string | null>(null);
   const [path, setPath] = useState("/");
-  const [typed, setTyped] = useState("/");
   const [n, setN] = useState(0);
   useEffect(() => {
     let live = true;
@@ -49,31 +76,33 @@ function DesktopPreview({ station, port }: { station: string; port: number }) {
     return () => { live = false; };
   }, [station, port]);
   const go = (to: string) => {
-    const next = to.startsWith("/") ? to : `/${to}`;
-    setTyped(next);
-    setPath(next);
+    setPath(to);
     setN((x) => x + 1);
   };
   return (
     <div className="preview">
-      <PreviewBar port={port} typed={typed} setTyped={setTyped} go={go} />
+      <PreviewBar port={port} at={path} go={go} reload={() => setN((x) => x + 1)} external={external} />
       {host && <iframe key={n} className="preview-frame" title={`localhost:${port}`} src={`ember-preview://${host}${path}`} />}
     </div>
   );
 }
 
-function WebPreview({ station, port }: { station: string; port: number }) {
+function WebPreview({ station, port, external }: { station: string; port: number; external?: string | undefined }) {
   const call = useCall();
-  const [path, setPath] = useState("/");
-  const [typed, setTyped] = useState("/");
-  // A new one opens the frame anew (a reload): its bridge is made again for it.
-  const [nonce, setNonce] = useState(() => crypto.randomUUID());
+  // One frame for as long as this shows: moving about (back, reload, a path) is the frame's own, told to it.
+  const [nonce] = useState(() => crypto.randomUUID());
+  const [first] = useState("/");
+  const [at, setAt] = useState<string | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     const bridges: MessagePort[] = [];
     const onMessage = (event: MessageEvent) => {
-      if (event.origin !== ORIGIN || event.source !== frame.current?.contentWindow) return;
-      if (event.data?.type !== "ember-preview-ready" || event.data.nonce !== nonce) return;
+      if (event.origin !== ORIGIN || event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce) return;
+      if (event.data?.type === "ember-preview-at" && typeof event.data.path === "string") {
+        setAt(event.data.path);
+        return;
+      }
+      if (event.data?.type !== "ember-preview-ready") return;
       const { port1, port2 } = new MessageChannel();
       bridges.push(port1);
       port1.onmessage = async ({ data }: MessageEvent<Asked>) => {
@@ -95,17 +124,16 @@ function WebPreview({ station, port }: { station: string; port: number }) {
       for (const bridge of bridges) bridge.close();
     };
   }, [nonce, station, port, call]);
-  const go = (to: string) => {
-    const next = to.startsWith("/") ? to : `/${to}`;
-    setTyped(next);
-    setPath(next);
-    setNonce(crypto.randomUUID());
-  };
+  const nav = (action: "back" | "forward" | "reload" | "go", path?: string) => frame.current?.contentWindow?.postMessage({ type: "ember-preview-nav", action, path }, ORIGIN);
   return (
     <div className="preview">
-      <PreviewBar port={port} typed={typed} setTyped={setTyped} go={go} />
-      <iframe key={nonce} ref={frame} className="preview-frame" title={`localhost:${port}`}
-        src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(path)}`} />
+      <PreviewBar port={port} at={at} go={(path) => nav("go", path)} reload={() => nav("reload")} back={() => nav("back")} forward={() => nav("forward")} external={external} />
+      <iframe ref={frame} className="preview-frame" title={`localhost:${port}`} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} />
     </div>
   );
+}
+
+/** A service on a page of its own: the whole window, with its bar (opened from a preview's "open on its own"). */
+export function PreviewPage({ station, port }: { station: string; port: number }) {
+  return <div className="preview-page"><StationPreview station={station} port={port} alone /></div>;
 }

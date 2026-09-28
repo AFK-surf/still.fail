@@ -53,13 +53,37 @@ const FRAME = `<!doctype html>
     port.onmessage = fromClient;
     start().catch((error) => { document.body.innerHTML = "<p></p>"; document.querySelector("p").textContent = "预览没能启动：" + error.message; });
   });
+  // The service's frame: moved by the client's bar (back, forward, reload, go), and where it is said back to it, as it
+  // loads and as a page moves itself on (history.pushState).
+  let inner = null;
+  let said = "";
+  const report = () => {
+    try {
+      const at = inner.contentWindow.location;
+      const path = at.pathname + at.search + at.hash;
+      if (path === said) return;
+      said = path;
+      parent.postMessage({ type: "ember-preview-at", nonce, path }, "*");
+    } catch {}
+  };
+  window.addEventListener("message", (event) => {
+    if (event.source !== parent || event.data?.type !== "ember-preview-nav" || !inner) return;
+    const service = inner.contentWindow;
+    const { action, path } = event.data;
+    if (action === "back") service.history.back();
+    else if (action === "forward") service.history.forward();
+    else if (action === "reload") service.location.reload();
+    else if (action === "go" && typeof path === "string" && path.startsWith("/")) inner.src = path;
+  });
   async function start() {
     await navigator.serviceWorker.register("/_ember/sw.js", { scope: "/" });
     const worker = (await navigator.serviceWorker.ready).active;
     worker.postMessage({ type: "ember-preview-frame", nonce });
-    const inner = document.createElement("iframe");
+    inner = document.createElement("iframe");
     inner.src = params.get("path") || "/";
+    inner.addEventListener("load", () => { said = ""; report(); });
     document.body.append(inner);
+    setInterval(report, 500);
   }
   parent.postMessage({ type: "ember-preview-ready", nonce }, "*");
 </script>

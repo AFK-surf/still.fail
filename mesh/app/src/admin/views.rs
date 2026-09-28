@@ -278,7 +278,9 @@ impl AdminApi {
                 v
             })
             .collect();
-        Ok(json!({ "session": self.summary(key)?, "threads": self.threads(viewer, Some(key))?, "turns": turns }))
+        // Its background jobs and web services (jobs.rs), newest first.
+        let jobs = self.deps.store.list_jobs(Some(key))?;
+        Ok(json!({ "session": self.summary(key)?, "threads": self.threads(viewer, Some(key))?, "turns": turns, "jobs": jobs }))
     }
 
     // ── threads ────────────────────────────────────────────────────────────

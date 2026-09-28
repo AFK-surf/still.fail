@@ -497,6 +497,14 @@ impl AdminApi {
 
         match (resource, id, action, method) {
             (Some("sessions"), Some(key), None, "GET") => return ok(self.session(key, viewer)?),
+            // A background job's last output, for the pages (`lines`, default 200).
+            (Some("jobs"), Some(id), Some("log"), "GET") => {
+                let job = self.deps.store.get_job(id)?.ok_or_else(|| http_error(404, format!("no job {id}")))?;
+                let lines = asked.param("lines").and_then(|l| l.parse::<usize>().ok()).unwrap_or(200).clamp(1, 1000);
+                return ok(json!({ "text": crate::jobs::tail(std::path::Path::new(&job.log), lines) }));
+            }
+            // A background job (a web service's own page finds its port by it).
+            (Some("jobs"), Some(id), None, "GET") => return ok(serde_json::to_value(self.deps.store.get_job(id)?.ok_or_else(|| http_error(404, format!("no job {id}")))?)?),
             (Some("sessions"), Some(key), None, "DELETE") => {
                 self.session_row(key)?;
                 self.deps.hub.delete_session(key).await?;

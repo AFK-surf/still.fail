@@ -1202,6 +1202,29 @@ pub struct ChatAgent {
     pub since: Option<i64>,
     pub turns: Vec<TurnRecord>,
     pub threads: Vec<ChatThread>,
+    /// Its background jobs, newest first; those with a port are web services, shown by their names.
+    pub jobs: Vec<Job>,
+}
+
+/// A background job an agent started (a web service when it has a port): shown by its name; the port is how the
+/// station reaches a service, not for people.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Job {
+    pub id: String,
+    pub name: String,
+    /// running | exited | stopped | failed (a service that exited is being started again)
+    pub state: String,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub port: Option<i64>,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub exit_code: Option<i64>,
+    #[typeshare(serialized_as = "I54")]
+    pub started_at: i64,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub ended_at: Option<i64>,
 }
 
 /// A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it.

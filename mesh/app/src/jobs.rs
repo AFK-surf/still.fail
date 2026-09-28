@@ -44,9 +44,9 @@ esac
 
 /// Tells a session's agent something (Hub::notify).
 pub type Notify = Arc<dyn Fn(&str, String) + Send + Sync>;
-/// A session's web service as members open it: its link (ember cloud's /o/ link with the port), when the station is
-/// in a workspace.
-pub type Link = Arc<dyn Fn(&str, u16) -> Option<String> + Send + Sync>;
+/// A session's web service as members open it: its link (ember cloud's /o/ link of the session, naming the service),
+/// when the station is in a workspace.
+pub type Link = Arc<dyn Fn(&str, &str) -> Option<String> + Send + Sync>;
 
 struct Running {
     pgid: i32,
@@ -333,8 +333,8 @@ impl Jobs {
     /// A job as the agent reads it.
     fn view(&self, job: &JobRow) -> Value {
         let mut v = serde_json::to_value(job).unwrap_or(Value::Null);
-        if let (Some(port), Some(o)) = (job.port, v.as_object_mut()) {
-            o.insert("link".into(), json!((self.link)(&job.session_key, port as u16)));
+        if let (Some(_), Some(o)) = (job.port, v.as_object_mut()) {
+            o.insert("link".into(), json!((self.link)(&job.session_key, &job.id)));
         }
         v
     }

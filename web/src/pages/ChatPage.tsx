@@ -231,7 +231,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             </div>
             {open.map((key) => {
               const port = previewPort(key);
-              if (port !== null) return <Tabs.Content key={key} className="side-content" value={key}><StationPreview station={station.address} port={port} /></Tabs.Content>;
+              // Kept loaded while another tab shows: switching back does not load it anew.
+              if (port !== null) return <Tabs.Content key={key} className="side-content" value={key} forceMount><StationPreview station={station.address} port={port} /></Tabs.Content>;
               const a = agents.find((x) => x.session.key === key);
               if (!a) return <Tabs.Content key={key} className="side-content" value={key} />;
               return (

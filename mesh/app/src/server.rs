@@ -202,10 +202,10 @@ impl App {
                     }
                 }
             }),
-            Arc::new(move |session: &str, port: u16| {
+            Arc::new(move |session: &str, job: &str| {
                 let status = linked.status();
                 match (status.origin, status.station, status.workspace_id) {
-                    (Some(origin), Some(station), Some(workspace)) => Some(format!("{origin}/o/{workspace}/{station}/{}?preview={port}", encode(session))),
+                    (Some(origin), Some(station), Some(workspace)) => Some(format!("{origin}/o/{workspace}/{station}/{}?service={}", encode(session), encode(job))),
                     _ => None,
                 }
             }),
