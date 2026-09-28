@@ -8,7 +8,8 @@ import { useToast } from "./toast.tsx";
 import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, StatusDot, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
-import { useCallback } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
+import { archiveKey, PendingArchives } from "./pendingArchives.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -56,13 +57,21 @@ function SettingsNav() {
  * ones the viewer started, with `newChat` above them and the way to the `archive` under them. With no station its empty
  * state leads to `stationsPage` (the page itself, where stations are added: nothing is appended to it).
  */
+const ArchivesContext = createContext<PendingArchives | null>(null);
+
 export function ChatList({ scope, newChat, stationsPage, archive }: { scope: string; newChat: string; stationsPage: string; archive: string }) {
   const [onlyMine] = useOnlyMine();
+  const [pending] = useState(() => new PendingArchives());
   // Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
   const all = useChats(scope, false);
   const mine = useChats(scope, true);
+  useEffect(() => {
+    if (all.value && mine.value) {
+      pending.reconcile(new Set([...all.value.days, ...mine.value.days].flatMap((day) => day.items.map(archiveKey))));
+    }
+  }, [pending, all.value, mine.value]);
   return (
-    <>
+    <ArchivesContext.Provider value={pending}>
       <div className={nav.navNew}>
         <NavLink className={nav.navRow} to={newChat}><Compose {...ICON} />新建对话</NavLink>
         {/* Nothing to narrow while there is no chat at all. */}
@@ -74,7 +83,7 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
           <ChatPane chats={mine} scope={scope} onlyMine stationsPage={stationsPage} archive={archive} hidden={!onlyMine} />
         </div>
       </div>
-    </>
+    </ArchivesContext.Provider>
   );
 }
 
@@ -99,9 +108,11 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
 
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
 function ChatPane({ chats, scope, onlyMine, stationsPage, archive, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; stationsPage: string; archive: string; hidden: boolean }) {
+  const pending = useContext(ArchivesContext)!;
+  const archived = useSyncExternalStore(pending.subscribe, pending.getSnapshot);
   const view = chats.value;
   const stations = view?.stations ?? [];
-  const days = view?.days ?? [];
+  const days = (view?.days ?? []).map((day) => ({ ...day, items: day.items.filter((item) => !archived.has(archiveKey(item))) })).filter((day) => day.items.length > 0);
   // One station of one's own: its name says nothing, and its state is the page's.
   const several = scope !== "local";
   const connecting = several ? stations.filter((s) => s.state === "connecting") : [];
@@ -189,17 +200,22 @@ function ChatRow({ item }: { item: ChatItem }) {
 
 /** Beside a chat's row while pointed at: puts it in the archive (its session with it when it is that session's own). */
 function ArchiveButton({ item, to }: { item: ChatItem; to: string }) {
+  const pending = useContext(ArchivesContext)!;
   const api = stationApi(useStationCall(item.station));
   const path = useLocation().pathname;
   const navigate = useNavigate();
   const toast = useToast();
   const archive = async () => {
+    const key = archiveKey(item);
+    if (!pending.begin(key)) return;
+    // Move away now; a slow response must not navigate over a chat opened meanwhile.
+    if (decodeURIComponent(path) === decodeURIComponent(to)) navigate(`${stationBase(item.station)}/chats`);
     try {
       await api.archive(item, true);
-      // The chat in view went: the list's page instead.
-      if (decodeURIComponent(path) === decodeURIComponent(to)) navigate(`${stationBase(item.station)}/chats`);
+      pending.finish(key);
       toast("已归档");
     } catch (error) {
+      pending.fail(key);
       toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
     }
   };
