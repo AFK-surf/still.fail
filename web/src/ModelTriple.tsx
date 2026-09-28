@@ -60,6 +60,8 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
   const shown = kept ?? current;
   const set = (patch: Partial<Pick>) => setDraft((d) => ({ ...d, ...patch }));
   const [filter, setFilter] = useState("");
+  // The models' column keeps the width it opened with, whatever the filter leaves in it.
+  const [modelsWidth, setModelsWidth] = useState<number | null>(null);
   const words = filter.trim().toLowerCase();
   const listed = options.filter((o) => [o.name, o.model, ...o.ids].some((s) => s.toLowerCase().includes(words)));
   // By series, in the core's order (Claude's biggest first, the rest by name; newest first in each).
@@ -90,7 +92,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
   }, [label]);
 
   return (
-    <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) { setDraft(value); setFilter(""); } }}>
+    <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) { setDraft(value); setFilter(""); setModelsWidth(null); } }}>
       <span className={css2.modelTripleFit} ref={fit}>
         <Popover.Trigger className={css2.modelTriple} title={title} disabled={options.length === 0} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className={css2.tripleModel}>没有可用模型</span> : (
@@ -112,7 +114,8 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css2.runPickerPanel}`} side={side} align="start" sideOffset={6} collisionPadding={8}>
           <div className={css2.runPicker}>
-            <div className={`${css2.runPickerColumn} ${css2.runPickerModels}`}>
+            <div className={`${css2.runPickerColumn} ${css2.runPickerModels}`} style={modelsWidth === null ? undefined : { width: modelsWidth }}
+              ref={(el) => { if (el && modelsWidth === null) setModelsWidth(Math.ceil(parseFloat(getComputedStyle(el).width))); }}>
               <h4>模型</h4>
               {/* Many models: a filter; the models by series. */}
               {options.length > 8 && (
@@ -124,7 +127,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
                   {list.map((o) => (
                     <button key={o.model} type="button" className={css2.runPickerOption} title={o.ids.join("\n")} aria-pressed={option === o} onClick={() => set({ model: o.model })}>
                       <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={13} />
-                      <span className={css2.runOptionText}><span>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}</span>
+                      <span className={css2.runOptionText}><span className={css2.runOptionName}>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}</span>
                     </button>
                   ))}
                 </div>
@@ -141,7 +144,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
                 ))}
               </div>
             )}
-            <div className={css2.runPickerColumn}>
+            <div className={`${css2.runPickerColumn} ${css2.runPickerEfforts}`}>
               <h4>思考深度</h4>
               {[null, ...efforts].map((e) => (
                 <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={effort === e} onClick={() => set({ effort: e })}>{e ?? "默认"}</button>

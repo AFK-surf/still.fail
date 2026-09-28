@@ -30,6 +30,7 @@ export const runPickerColumn = style({
   display: "flex", flexDirection: "column", gap: "1px", minWidth: "110px", overflowY: "auto",
 });
 export const runPickerAccounts = style({ minWidth: "260px" });
+export const runPickerEfforts = style({ minWidth: "80px" });
 export const runPickerOption = style({
   display: "flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: "4px 8px", border: "0",
   borderRadius: `calc(6px * ${vars.cornerScale})`, background: "none", color: vars.text, font: "inherit",
@@ -108,7 +109,10 @@ export const tripleEffort = style({
   },
 });
 export const runPickerSpent = style({ fontSize: vars.textXs, color: vars.amber });
-export const runPickerModels = style({ minWidth: "200px" });
+/** As wide as its models when the panel opens, within bounds (100–280px); a filter then leaves it as it is (ModelTriple keeps it). */
+export const runPickerModels = style({ minWidth: "100px", maxWidth: "280px", flex: "none" });
+/** A model's name too long for the column is cut short. */
+export const runOptionName = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const runPickerFilter = style({ height: "30px", margin: "0 4px 6px", fontSize: vars.textSm });
 export const runPickerGroup = style({});
 export const runPickerEmpty = style({ margin: "4px 8px", fontSize: vars.textXs });
