@@ -26,6 +26,7 @@ import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
 import { toMadeChat } from "../Chat.tsx";
 import { ComposerDock } from "../dock.tsx";
+import { Previews } from "../Previews.tsx";
 import { signIn, useAccounts, type Account } from "./accounts.ts";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
 import { Avatar } from "./gate.tsx";
@@ -105,6 +106,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
           </Routes>
           </ComposerDock>
         </main>
+        <Previews />
       </div>
     </PeopleContext.Provider>
   );

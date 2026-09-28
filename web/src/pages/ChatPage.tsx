@@ -1,7 +1,7 @@
 // A chat: a thread (a Slack thread or a chat on ember's page) with its people
 // and agents. The messages are the page; each agent's execution history can
 // be opened beside them, one tab per agent.
-import { StationPreview } from "../Preview.tsx";
+import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
 import { Boxes, Close, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
@@ -94,6 +94,10 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
   // Its agents' background jobs; a service's tab (`service:<job>`) is the chat's own while one of them has it.
   const jobs = agents.flatMap((a) => a.jobs ?? []);
+  // A kept web service that stopped is not kept any longer.
+  useEffect(() => {
+    for (const job of jobs) if (job.state !== "running" && job.state !== "exited") closePreview(previewKey(station.address, job.id));
+  }, [jobs, station.address]);
   const open = agents.length ? tabs.filter((key) => key === JOBS || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
   // The job picked in the 任务 tab.
   const [jobPicked, pickJob] = useState<string | null>(null);
@@ -113,6 +117,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     commit(open.includes(key) ? open : [...open, key], key);
   };
   const closeTab = (key: string) => {
+    const service = serviceOf(key);
+    if (service) closePreview(previewKey(station.address, service));
     const next = open.filter((t) => t !== key);
     commit(next, shown === key ? next.at(-1) ?? null : active);
   };
@@ -304,12 +310,12 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                 );
               }
               const service = jobs.find((j) => j.id === serviceOf(key));
-              // Kept loaded while another tab shows: switching back does not load it anew.
+              // Kept loaded while another tab, chat or page shows (Previews.tsx): only closing its tab ends it.
               if (service) {
                 return (
                   <Tabs.Content key={key} className={css.sideContent} value={key} forceMount>
                     {service.port !== undefined && (service.state === "running" || service.state === "exited")
-                      ? <StationPreview station={station.address} port={service.port} name={service.name} service={service.id} restarting={service.state === "exited" ? { restarts: service.restarts ?? 0 } : null} draftKey={chatKey} />
+                      ? <PreviewSlot station={station.address} port={service.port} name={service.name} service={service.id} restarting={service.state === "exited" ? { restarts: service.restarts ?? 0 } : null} draftKey={chatKey} />
                       : <Empty><p>「{service.name}」{service.state === "failed" ? "没能启动" : "已经停了"}。</p></Empty>}
                   </Tabs.Content>
                 );

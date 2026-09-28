@@ -18,6 +18,7 @@ import { toMadeChat } from "./Chat.tsx";
 import { ComposerDock } from "./dock.tsx";
 import { Mark } from "./brand.tsx";
 import { ServicePage } from "./Preview.tsx";
+import { Previews } from "./Previews.tsx";
 import { GlobalShortcuts } from "./Switcher.tsx";
 import { ShortcutsPage } from "./Shortcuts.tsx";
 import { CHANGEABLE } from "./keymap.ts";
@@ -77,6 +78,7 @@ export function App() {
           </Routes>
           </ComposerDock>
         </main>
+        <Previews />
       </div>
       </Tooltip.Provider>
     </ToastProvider>

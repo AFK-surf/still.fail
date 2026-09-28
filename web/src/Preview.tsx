@@ -30,7 +30,7 @@ const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCo
 
 interface Asked { id: number; method: string; path: string; headers: [string, string][]; body: Uint8Array | null }
 
-interface Shown {
+export interface Shown {
   station: string;
   /** How the station reaches it; never shown. */
   port: number;
@@ -43,14 +43,18 @@ interface Shown {
   draftKey?: string | undefined;
 }
 
-interface Restarting { restarts: number }
+export interface Restarting { restarts: number }
 
 /** A web service beside a chat, or on a page of its own (`alone`: no "open on its own" there). */
 export function StationPreview({ station, port, name, service, alone = false, restarting = null, draftKey }:
   { station: string; port: number; name: string; service: string; alone?: boolean; restarting?: Restarting | null; draftKey?: string }) {
   // Its page of its own, at the station's pages' place (a new window or tab: the browser's).
   const own = useHref(useLink()(`/services/${encodeURIComponent(service)}`));
-  const shown: Shown = { station, port, name, external: alone ? undefined : own, restarting, draftKey };
+  return <ServiceFrame station={station} port={port} name={name} external={alone ? undefined : own} restarting={restarting} draftKey={draftKey} />;
+}
+
+/** The frame and its bar, wherever it is put (Previews.tsx keeps it in one place while it moves). */
+export function ServiceFrame(shown: Shown) {
   return window.emberDesktop ? <DesktopPreview {...shown} /> : <WebPreview {...shown} />;
 }
 
