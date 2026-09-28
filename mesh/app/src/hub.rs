@@ -1019,6 +1019,50 @@ impl Hub {
                 }),
                 run: run(|hub, key, args| Box::pin(async move { hub.chat_history(&key, &args).await })),
             },
+            Tool {
+                name: "chat_list".into(),
+                description: "List the conversations on this station (ember chats and Slack threads), the latest first: each with its address, title, agents (session keys) and last message. Use it to find a chat people refer to.".into(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "query": { "type": "string", "description": "Only conversations whose title, last message or agents contain this (case-insensitive)." },
+                        "limit": { "type": "integer", "minimum": 1, "maximum": 100, "description": "Default 20." },
+                    },
+                    "additionalProperties": false,
+                }),
+                run: run(|hub, key, args| Box::pin(async move { hub.chat_list(&key, &args) })),
+            },
+            Tool {
+                name: "chat_read".into(),
+                description: "Read the messages of any conversation on this station, not only your own, oldest first: the chat people refer to by its link.".into(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "chat": { "type": "string", "description": "The chat: its link as people give it (…/chats/<key>, …/o/<workspace>/<station>/<key>), a thread address CHANNEL/THREAD_TS, or a session key (reads that session's chat)." },
+                        "before": { "type": "string", "description": "Only messages older than this message ts." },
+                        "limit": { "type": "integer", "minimum": 1, "maximum": 200, "description": "Default 30." },
+                    },
+                    "required": ["chat"],
+                    "additionalProperties": false,
+                }),
+                run: run(|hub, key, args| Box::pin(async move { hub.chat_read(&key, &args).await })),
+            },
+            Tool {
+                name: "session_history".into(),
+                description: "Read a session's execution history, as the pages show it: what its agent thought, the tools it called and what they returned, numbered #0 onwards. The latest entries unless before is given.".into(),
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "chat": { "type": "string", "description": "Whose: a session key, a chat's link (…/chats/<key>, …/o/…/<key>, or an execution history link with ?history=<key>&entry=<n>, which shows the entries around n), or a thread address CHANNEL/THREAD_TS with one agent." },
+                        "before": { "type": "integer", "minimum": 0, "description": "Only entries before #before (the reply says where older ones start)." },
+                        "limit": { "type": "integer", "minimum": 1, "maximum": 200, "description": "Default 40." },
+                        "max_chars": { "type": "integer", "minimum": 100, "maximum": 4000, "description": "Each entry cut to this many characters. Default 1500." },
+                    },
+                    "required": ["chat"],
+                    "additionalProperties": false,
+                }),
+                run: run(|hub, _key, args| Box::pin(async move { tokio::task::spawn_blocking(move || hub.session_history(&args)).await? })),
+            },
         ]
     }
 
@@ -1081,23 +1125,28 @@ impl Hub {
     }
 
     async fn chat_history(&self, key: &str, args: &Map<String, Value>) -> Result<String> {
+        let thread = self.target(key, args.get("to"))?;
+        let to = args.get("to").map(js_string).unwrap_or_default();
+        self.thread_history(key, &thread.thread, &thread.connect, &to, args).await
+    }
+
+    /// A thread's messages as chat_history and chat_read give them: `before` (a message ts) and `limit` from `args`,
+    /// people named through `connect`, `key`'s own posts as "you". `named`: the thread as the agent named it.
+    async fn thread_history(&self, key: &str, thread: &ThreadRow, connect: &str, named: &str, args: &Map<String, Value>) -> Result<String> {
         let limit = match args.get("limit").and_then(js_number) {
             Some(n) if n != 0.0 => n.clamp(1.0, 200.0) as usize,
             _ => 30,
         };
         let before = args.get("before").and_then(Value::as_str).filter(|b| !b.is_empty());
-        let thread = self.target(key, args.get("to"))?;
         let from = match before {
-            Some(before) => Some(self.store.message_at(thread.thread.id, before)?.ok_or_else(|| {
-                anyhow!("no message {before} in {}", args.get("to").map(js_string).unwrap_or_default())
-            })?),
+            Some(before) => Some(self.store.message_at(thread.id, before)?.ok_or_else(|| anyhow!("no message {before} in {named}"))?),
             None => None,
         };
-        let messages = self.store.messages_before(thread.thread.id, from.map(|m| m.n), limit)?;
+        let messages = self.store.messages_before(thread.id, from.map(|m| m.n), limit)?;
         if messages.is_empty() {
             return Ok("No earlier messages.".into());
         }
-        let chat = self.chat_of(&thread.connect);
+        let chat = self.chat_of(connect);
         let mut names = HashMap::new();
         for m in messages.iter().filter(|m| m.author_kind == AuthorKind::Person) {
             if names.contains_key(&m.author) {
@@ -1110,8 +1159,8 @@ impl Hub {
                 names.insert(m.author.clone(), name);
             }
         }
-        let place = thread_address(&thread.thread.channel, &thread.thread.thread_ts);
-        Ok(format_history(&messages, &thread.thread.surface, &place, key, &names))
+        let place = thread_address(&thread.channel, &thread.thread_ts);
+        Ok(format_history(&messages, &thread.surface, &place, key, &names))
     }
 
     /// A Slack Web API call from session `key` (slack_api), as the bot of `via` (else the session's own connect).
@@ -1398,6 +1447,8 @@ pub fn post_entries(posts: &[Post]) -> Vec<TimelineEntry> {
         })
         .collect()
 }
+
+mod others;
 
 #[cfg(test)]
 mod tests;

@@ -236,7 +236,7 @@ pub fn full(bytes: impl Into<Bytes>) -> Body {
     Full::new(bytes.into()).map_err(|never: Infallible| match never {}).boxed_unsync()
 }
 
-fn percent_decode(s: &str) -> String {
+pub(crate) fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;

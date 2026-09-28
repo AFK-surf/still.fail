@@ -10,6 +10,8 @@ import type { HighlighterCore } from "shiki/core";
 import type { Attachment } from "./core/shapes.ts";
 import { inlineFile } from "./Prose.css.ts";
 import * as css from "./Prose.css.ts";
+import { RefChip } from "./ChatRef.tsx";
+import { isChatLink } from "./chatRefs.ts";
 
 let highlighter: Promise<HighlighterCore> | null = null;
 const THEME = "vitesse-light";
@@ -86,7 +88,11 @@ export function Code({ text, language }: { text: string; language?: string | und
   );
 }
 
-const components: Components = { pre: ({ children }) => <CodeBlock>{children}</CodeBlock> };
+const components: Components = {
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+  // A link to another chat: a reference to it, drawn as the composer showed it.
+  a: ({ node: _, ...props }) => (isChatLink(props.href) ? <RefChip title={props.children} href={props.href!} /> : <a {...props} />),
+};
 
 /** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`. */
 function nameOf(url: string): string {
@@ -137,7 +143,7 @@ export function Prose({ children, files, file }: { children: string; files?: Map
         return only ? <div className={inlineFile}>{draw(only, "shown")}</div> : <p {...props}>{children}</p>;
       },
       img: ({ node: _, ...props }) => { const f = at(props.src); return f ? <span className={inlineFile}>{draw(f, "shown")}</span> : <img {...props} />; },
-      a: ({ node: _, ...props }) => { const f = at(props.href); return f ? draw(f, "link", props.children) : <a {...props} />; },
+      a: ({ node: _, ...props }) => { const f = at(props.href); return f ? draw(f, "link", props.children) : isChatLink(props.href) ? <RefChip title={props.children} href={props.href!} /> : <a {...props} />; },
     };
   }, [placing]);
   // Links to the files are kept as written (the default would empty a file:// one); any other goes through the default.

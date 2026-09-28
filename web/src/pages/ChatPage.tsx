@@ -8,7 +8,7 @@ import { Boxes, Close, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "..
 import { alarmOf, JobDot, JobsPopover, JobsTab, toneOf, useNow } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { lastChat, PENDING } from "../lastChat.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
 import type { Job } from "../core/shapes.ts";
@@ -134,14 +134,22 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   // ember's own links (/o/<workspace>/<station>/<session>, as agents post them): one of this chat's agents' web services
   // opens beside the chat; another session of the workspace opens here, in the page, not through the desktop app. In
   // the desktop app (at app://ember) ember cloud's links are its own too.
-  const opens = useRef({ agents, openTab });
-  opens.current = { agents, openTab };
+  const root = useHref("/").replace(/\/$/, "");
+  const opens = useRef({ agents, openTab, root });
+  opens.current = { agents, openTab, root };
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!anchor) return;
       const url = new URL(anchor.href, location.href);
+      // Another chat's page on this origin (as a reference to it is written, ChatRef.tsx): opened here.
+      const page = url.origin === location.origin && url.pathname.startsWith(`${opens.current.root}/`) ? url.pathname.slice(opens.current.root.length) : null;
+      if (page && /^(\/w\/[^/]+\/s\/[^/]+)?\/chats\/[^/]+\/?$/.test(page)) {
+        event.preventDefault();
+        navigate(`${page}${url.search}`);
+        return;
+      }
       const item = /^\/o\/([^/]+)\/([^/]+)\/([^/]+)\/?$/.exec(url.pathname);
       if (!item) return;
       const session = decodeURIComponent(item[3]!);

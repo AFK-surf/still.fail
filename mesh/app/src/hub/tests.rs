@@ -528,6 +528,35 @@ async fn the_agents_posts_are_recorded_in_the_thread_and_chat_history_shows_them
 }
 
 #[tokio::test]
+async fn an_agent_reads_another_sessions_chat_by_its_link_or_address_and_finds_it_in_the_list() {
+    let r = setup();
+    let (a, b) = (say("<@UBOT> look at the build"), say("<@UBOT> what did the other chat find?"));
+    r.accept(&a).await;
+    r.accept(&b).await;
+    settle().await;
+    let (key_a, key_b) = (session_key("cl", "C1", &a.thread_ts), session_key("cl", "C1", &b.thread_ts));
+    let to_a = format!("C1/{}", a.thread_ts);
+    r.call(&key_a, "chat_post", json!({ "to": to_a, "text": "the build is green" })).await.unwrap();
+    // Not one of B's conversations, yet B reads it: by its address, by its chat's link, by its session key.
+    let link = format!("https://ember.test/w/ws/s/st/chats/{}", key_a.replace(':', "%3A"));
+    for chat in [to_a.clone(), link, key_a.clone()] {
+        let read = r.call(&key_b, "chat_read", json!({ "chat": chat })).await.unwrap();
+        assert!(matches(&read, &[&format!("Conversation {to_a}; its agents: {key_a}."), "from=\"U1\"", "look at the build", &format!("from=\"{key_a}\" bot"), "the build is green"]), "{read}");
+    }
+    let listed = r.call(&key_b, "chat_list", json!({ "query": "BUILD" })).await.unwrap();
+    assert!(matches(&listed, &[&format!("- {to_a} (Slack thread)"), &format!("agents: {key_a};"), "the build is green"]), "{listed}");
+    assert!(!listed.contains(&b.thread_ts), "{listed}");
+    let mine = r.call(&key_b, "chat_list", json!({})).await.unwrap();
+    assert!(mine.contains(&format!("{key_b} (you)")), "{mine}");
+    let history = r.call(&key_b, "session_history", json!({ "chat": to_a })).await.unwrap();
+    assert_eq!(history, format!("Session {key_a} has no execution history yet."));
+    let e = r.call(&key_b, "chat_read", json!({ "chat": "https://ember.test/o/ws/st/nope" })).await.unwrap_err().to_string();
+    assert!(e.contains("not on this station"), "{e}");
+    let e = r.call(&key_b, "chat_read", json!({ "chat": "C9/1.000001" })).await.unwrap_err().to_string();
+    assert!(e.contains("no conversation C9/1.000001"), "{e}");
+}
+
+#[tokio::test]
 async fn slack_edits_are_appended_to_the_thread_as_entries_of_their_own() {
     let r = setup();
     let m = say("<@UBOT> typo");

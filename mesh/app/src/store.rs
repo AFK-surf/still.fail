@@ -1064,6 +1064,14 @@ impl Store {
         self.with(|i, _| i.thread_at(surface, channel, thread_ts))
     }
 
+    /// The threads at CHANNEL/THREAD_TS on any surface (an agent names a conversation without its surface).
+    pub fn threads_at(&self, channel: &str, thread_ts: &str) -> Result<Vec<ThreadRow>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare("SELECT * FROM threads WHERE channel = ? AND thread_ts = ? ORDER BY id")?;
+            Ok(stmt.query_map(params![channel, thread_ts], to_thread)?.collect::<rusqlite::Result<_>>()?)
+        })
+    }
+
     /// The thread at this address, made if new.
     pub fn open_thread(&self, surface: &str, channel: &str, thread_ts: &str, title: Option<&str>, created_by: Option<&str>) -> Result<ThreadRow> {
         self.open_thread_of(surface, channel, thread_ts, title, created_by, None)

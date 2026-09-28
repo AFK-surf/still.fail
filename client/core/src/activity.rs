@@ -22,7 +22,7 @@ pub fn kind_of(tool: &str) -> &'static str {
         "Bash" | "BashOutput" | "KillShell" | "exec_command" | "shell" | "local_shell" | "write_stdin" | "unified_exec" => "command",
         "WebFetch" | "WebSearch" | "web_search" => "web",
         "Task" | "Agent" | "spawn_agent" => "agent",
-        "chat_history" => "thread",
+        "chat_history" | "chat_list" | "chat_read" | "session_history" => "thread",
         _ => "other",
     }
 }

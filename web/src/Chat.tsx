@@ -20,6 +20,9 @@ import * as chatCss from "./mobile/styles/chat.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as css from "./Chat.css.ts";
+import * as refCss from "./ChatRef.css.ts";
+import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs, type ChatRef } from "./ChatRef.tsx";
+import { refMark } from "./chatRefs.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
@@ -445,7 +448,7 @@ export function MineMessage({ children, ...data }: Data & { children: ReactNode 
 
 /** The words of a viewer's own message, in their bubble. */
 export function MineBubble({ text }: { text: string }) {
-  return text ? <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{text}</div></div> : null;
+  return text ? <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}><WithRefs text={text} /></div></div> : null;
 }
 
 /** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says. */
@@ -693,6 +696,41 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     warmed.current = Date.now();
     void api.warm(sessionKey).catch(() => {});
   };
+  // `@` and a few letters: a menu of the station's other chats, the one chosen put in as a link (ChatRef.tsx).
+  const [reference, setReference] = useState<{ start: number; query: string } | null>(null);
+  const [active, setActive] = useState(0);
+  const refItems = useRef<{ ref: ChatRef }[]>([]);
+  // A reference in the text shows as a chip: a mirror of the text under it (see-through then) draws it.
+  const mirror = useRef<HTMLDivElement>(null);
+  const marked = /@\[[^\]\n]{1,120}\]/.test(text);
+  const closedAt = useRef<number | null>(null);
+  const lookForReference = (el: HTMLTextAreaElement) => {
+    const at = el.selectionStart === el.selectionEnd ? refAt(el.value, el.selectionStart) : null;
+    if (!at) closedAt.current = null;
+    const next = at && at.start !== closedAt.current ? at : null;
+    setReference((now) => (now?.start === next?.start && now?.query === next?.query ? now : next));
+    if (next?.query !== reference?.query) setActive(0);
+  };
+  const pickReference = (ref: ChatRef) => {
+    const el = input.current;
+    if (!el || !reference) return;
+    const link = refMark(ref.title, ref.link);
+    const end = el.selectionStart;
+    const next = `${text.slice(0, reference.start)}${link} ${text.slice(end)}`;
+    const caret = reference.start + link.length + 1;
+    caretAt.current = caret;
+    setText(next);
+    setReference(null);
+  };
+  // Where the caret goes once the text changed by hand is drawn (before anything more is typed).
+  const caretAt = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const el = input.current, at = caretAt.current;
+    if (!el || at === null) return;
+    caretAt.current = null;
+    el.focus();
+    el.setSelectionRange(at, at);
+  }, [text]);
   const quoteInputs = useRef(new Map<string, HTMLInputElement>());
   useEffect(() => {
     if (!focusQuote) return;
@@ -736,8 +774,21 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
       el.style.height = `${Math.min(el.scrollHeight, limit)}px`;
       el.style.overflowY = el.scrollHeight > limit + 1 ? "auto" : "hidden";
       edges();
+      over();
     };
     // Scrolling, the lines it cuts fade out at its edges (its styles) rather than stop at a hard line.
+    // The mirror lies right over it, scrolled as it is.
+    const over = () => {
+      const m = mirror.current;
+      if (!m) return;
+      const host = el.offsetParent === m.offsetParent ? null : el.closest("form");
+      const base = host?.getBoundingClientRect(), at = el.getBoundingClientRect();
+      m.style.left = `${base ? at.left - base.left : el.offsetLeft}px`;
+      m.style.top = `${base ? at.top - base.top : el.offsetTop}px`;
+      m.style.width = `${el.offsetWidth}px`;
+      m.style.height = `${el.offsetHeight}px`;
+      m.scrollTop = el.scrollTop;
+    };
     const edges = () => {
       const over = el.scrollHeight > el.clientHeight + 1;
       el.toggleAttribute("data-more-above", over && el.scrollTop > 1);
@@ -747,8 +798,9 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     let width = el.clientWidth;
     const resize = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; fit(); } });
     resize.observe(el);
-    el.addEventListener("scroll", edges);
-    return () => { resize.disconnect(); el.removeEventListener("scroll", edges); };
+    const scrolled = () => { edges(); over(); };
+    el.addEventListener("scroll", scrolled);
+    return () => { resize.disconnect(); el.removeEventListener("scroll", scrolled); };
   }, [text]);
   const ready = draft.ready && !locked;
   const submit = () => {
@@ -756,7 +808,12 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   };
   return (
     <div className={cloudCss.composerWrap}>
-      <form className={composerCss.composerBox} data-multiline={roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0 || undefined} data-dragging={dragging || undefined}
+      {reference && !locked && (
+        <div className={refCss.refAnchor}>
+          <ChatRefMenu query={reference.query} here={sessionKey} active={active} onPick={pickReference} found={(items) => { refItems.current = items; }} />
+        </div>
+      )}
+      <form className={`${composerCss.composerBox} ${refCss.refHost}`} data-multiline={roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0 || undefined} data-dragging={dragging || undefined}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
         // Locked (its station offline), no file is taken in.
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
@@ -790,10 +847,28 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
             })}
           </div>
         )}
-        <textarea ref={input} className={css.composerText} rows={1} value={text} placeholder={placeholder} aria-label="消息"
-          onChange={(e) => { setText(e.target.value); warm(); }}
+        {marked && <RefMirror text={text} className={css.composerText} mirror={mirror} />}
+        <textarea ref={input} className={`${css.composerText}${marked ? ` ${refCss.refTextSeeThrough}` : ""}`} rows={1} value={text} placeholder={placeholder} aria-label="消息"
+          onChange={(e) => { setText(e.target.value); warm(); lookForReference(e.target); }}
+          onSelect={(e) => lookForReference(e.currentTarget)}
+          onBlur={() => setReference(null)}
           onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); } }}
           onKeyDown={(e) => {
+            if (reference && !e.nativeEvent.isComposing) {
+              const n = refItems.current.length;
+              if (e.key === "Escape") { e.preventDefault(); closedAt.current = reference.start; setReference(null); return; }
+              if (n && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); setActive((i) => (i + (e.key === "ArrowDown" ? 1 : n - 1)) % n); return; }
+              if (n && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey) { e.preventDefault(); pickReference(refItems.current[Math.min(active, n - 1)]!.ref); return; }
+            }
+            // A reference goes whole.
+            const caret = e.currentTarget.selectionStart;
+            const mark = e.key === "Backspace" && caret === e.currentTarget.selectionEnd ? markBefore(text, caret) : null;
+            if (mark !== null) {
+              e.preventDefault();
+              caretAt.current = mark;
+              setText(text.slice(0, mark) + text.slice(caret));
+              return;
+            }
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); return; }
             // Nothing typed: ↑ / ↓ go to the chat above or below, as the sidebar lists them now.
             if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !text && !e.nativeEvent.isComposing && !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {

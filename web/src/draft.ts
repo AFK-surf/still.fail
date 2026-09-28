@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { useChatSend, type Attachment, type ChatTo, type Quote } from "./api.ts";
 import { track } from "./telemetry.ts";
+import { expandRefs } from "./chatRefs.ts";
 
 export const MAX_FILE = 50 * 1024 * 1024;
 
@@ -137,7 +138,7 @@ export function useDraft({ key, carry, upload, quotes: held }: {
   const uploading = files.some((f) => !f.done && !f.error);
   const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !starting;
   const take = () => {
-    const taken = { text: text.trim(), files, quotes };
+    const taken = { text: expandRefs(text.trim()), files, quotes };
     setText(""); setFiles([]); setQuotes(() => []); setError(null);
     return taken;
   };
