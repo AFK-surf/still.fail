@@ -17,6 +17,10 @@ export function Agent(props: IconProps) {
   return <Svg {...props}><path d="M11 9.5H8Q3.5 9.5 3.5 13.5V17Q3.5 20.5 8 20.5H11Q15.5 20.5 15.5 17V13.5 M14 10L20.5 3.5 M15.5 3.5H20.5V8.5" /><circle cx="7" cy="15" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="15" r="1" fill="currentColor" stroke="none" /></Svg>;
 }
 
+export function Archive(props: IconProps) {
+  return <Svg {...props}><path d="M4.5 4H19.5Q20.5 4 20.5 5V7.5Q20.5 8.5 19.5 8.5H4.5Q3.5 8.5 3.5 7.5V5Q3.5 4 4.5 4Z M5 8.5V17Q5 20.5 8.5 20.5H15.5Q19 20.5 19 17V8.5 M10 12.5H14" /></Svg>;
+}
+
 export function ArrowDown(props: IconProps) {
   return <Svg {...props}><path d="M12 4V20 M6 14L12 20L18 14" /></Svg>;
 }
@@ -272,6 +276,7 @@ export function Web(props: IconProps) {
 /** Every icon by its name in design/icons, as the core names them (activity rows). */
 export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "agent": Agent,
+  "archive": Archive,
   "arrow-down": ArrowDown,
   "arrow-left": ArrowLeft,
   "arrow-right": ArrowRight,

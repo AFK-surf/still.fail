@@ -1,9 +1,10 @@
-import { ArrowLeft, Brain, ChevronRight, Compose, Key, Monitor, Plug, Settings, Unplug } from "./icons.tsx";
+import { Archive, ArrowLeft, Brain, ChevronRight, Compose, Key, Monitor, Plug, Settings, Unplug } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
-import { NavLink, useLocation } from "react-router";
-import { useChats, type ChatItem } from "./api.ts";
+import { NavLink, useLocation, useNavigate } from "react-router";
+import { stationApi, useChats, useStationCall, type ChatItem } from "./api.ts";
+import { useToast } from "./toast.tsx";
 import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, StatusDot, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
@@ -20,7 +21,7 @@ export function Sidebar() {
       </div>
       {settings ? <SettingsNav /> : (
         <>
-          <ChatList scope="local" newChat="/new" stationsPage="/settings" />
+          <ChatList scope="local" newChat="/new" stationsPage="/settings" archive="/archive" />
           <div className="nav-foot">
             <NavLink className="nav-row" to="/settings"><Settings {...ICON} />设置</NavLink>
           </div>
@@ -48,10 +49,10 @@ function SettingsNav() {
 /**
  * The chats of a scope (a workspace, or this station), newest first and
  * grouped by day, as the core's `chats` view has them; optionally only the
- * ones the viewer started, with `newChat` above them. With no station its empty state leads to `stationsPage` (the page
- * itself, where stations are added: nothing is appended to it).
+ * ones the viewer started, with `newChat` above them and the way to the `archive` under them. With no station its empty
+ * state leads to `stationsPage` (the page itself, where stations are added: nothing is appended to it).
  */
-export function ChatList({ scope, newChat, stationsPage }: { scope: string; newChat: string; stationsPage: string }) {
+export function ChatList({ scope, newChat, stationsPage, archive }: { scope: string; newChat: string; stationsPage: string; archive: string }) {
   const [onlyMine] = useOnlyMine();
   // Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
   const all = useChats(scope, false);
@@ -65,8 +66,8 @@ export function ChatList({ scope, newChat, stationsPage }: { scope: string; newC
       </div>
       <div className="nav-slider">
         <div className="nav-track" data-mine={onlyMine || undefined}>
-          <ChatPane chats={all} scope={scope} onlyMine={false} stationsPage={stationsPage} hidden={onlyMine} />
-          <ChatPane chats={mine} scope={scope} onlyMine stationsPage={stationsPage} hidden={!onlyMine} />
+          <ChatPane chats={all} scope={scope} onlyMine={false} stationsPage={stationsPage} archive={archive} hidden={onlyMine} />
+          <ChatPane chats={mine} scope={scope} onlyMine stationsPage={stationsPage} archive={archive} hidden={!onlyMine} />
         </div>
       </div>
     </>
@@ -93,7 +94,7 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
 }
 
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
-function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; stationsPage: string; hidden: boolean }) {
+function ChatPane({ chats, scope, onlyMine, stationsPage, archive, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; stationsPage: string; archive: string; hidden: boolean }) {
   const view = chats.value;
   const stations = view?.stations ?? [];
   const days = view?.days ?? [];
@@ -121,6 +122,8 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
           {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} />)}
         </section>
       ))}
+      {/* Under the list, whatever it holds: chats archived by hand or for idling are there. */}
+      {view && !loading && stations.length > 0 && <NavLink className="nav-row nav-archive" to={archive}><Archive {...ICON} />已归档</NavLink>}
     </div>
   );
 }
@@ -147,8 +150,10 @@ function useScrolling() {
  */
 function ChatRow({ item }: { item: ChatItem }) {
   const { connect } = item;
+  const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   return (
-    <NavLink className="nav-row nav-session" to={`${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={chatClicked}
+    <div className="nav-session-wrap">
+    <NavLink className="nav-row nav-session" to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={chatClicked}
       // Pressing a chat does not take the focus from the composer: it stays there, focused, into the next chat.
       onMouseDown={(e) => e.preventDefault()}>
       {item.unread && <span className="unread-dot" role="img" aria-label="有未读消息" />}
@@ -173,6 +178,33 @@ function ChatRow({ item }: { item: ChatItem }) {
         </span>
       </span>
     </NavLink>
+    {!item.offline && <ArchiveButton item={item} to={to} />}
+    </div>
+  );
+}
+
+/** Beside a chat's row while pointed at: puts it in the archive (its session with it when it is that session's own). */
+function ArchiveButton({ item, to }: { item: ChatItem; to: string }) {
+  const api = stationApi(useStationCall(item.station));
+  const path = useLocation().pathname;
+  const navigate = useNavigate();
+  const toast = useToast();
+  const archive = async () => {
+    try {
+      await api.archive(item, true);
+      // The chat in view went: the list's page instead.
+      if (decodeURIComponent(path) === decodeURIComponent(to)) navigate(`${stationBase(item.station)}/chats`);
+      toast("已归档");
+    } catch (error) {
+      toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+  return (
+    <Tip label="归档" side="right">
+      <button type="button" className="icon-btn row-archive" aria-label={`归档「${item.title}」`} onMouseDown={(e) => e.preventDefault()} onClick={() => void archive()}>
+        <Archive size={15} />
+      </button>
+    </Tip>
   );
 }
 

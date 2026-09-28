@@ -171,6 +171,11 @@ export function stationApi(t: StationCall) {
   const at = (id: string) => encodeURIComponent(id);
   return {
     stop: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/stop`),
+    /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */
+    archive: (of: { thread?: number | null; session: string }, archived: boolean) =>
+      request<unknown>(archived ? "POST" : "DELETE", of.thread != null ? `/threads/${of.thread}/archive` : `/sessions/${at(of.session)}/archive`),
+    archivedChats: () => request<Station.ChatRow[]>("GET", "/chats?archived=1"),
+    deleteSession: (key: string) => request<{ ok: true }>("DELETE", `/sessions/${at(key)}`),
     evict: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/evict`),
     putConnect: (id: string, input: ConnectInput) => request<Overview>("PUT", `/connects/${at(id)}`, input),
     deleteConnect: (id: string) => request<Overview>("DELETE", `/connects/${at(id)}`),

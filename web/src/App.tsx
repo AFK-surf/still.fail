@@ -8,6 +8,7 @@ import { ConnectPage } from "./pages/Connect.tsx";
 import { ConnectsPage } from "./pages/Connects.tsx";
 import { DevicePage } from "./pages/Device.tsx";
 import { MemoryPage } from "./Memory.tsx";
+import { ArchivePage } from "./pages/Archive.tsx";
 import { ChatPage } from "./pages/ChatPage.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ToastProvider } from "./toast.tsx";
@@ -20,7 +21,7 @@ import { ServicePage } from "./Preview.tsx";
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
 function useDetailOpen(): boolean {
   const path = useLocation().pathname;
-  return /^\/(new$|chats\/.+|connects\/.+|settings(\/.*)?$)/.test(path);
+  return /^\/(new$|archive$|chats\/.+|connects\/.+|settings(\/.*)?$)/.test(path);
 }
 
 export function App() {
@@ -55,6 +56,7 @@ export function App() {
             <Route path="/" element={<Navigate to="/chats" replace />} />
             <Route path="/chats/:chat?" element={<ChatPage />} />
             <Route path="/new" element={<LocalNewChat />} />
+            <Route path="/archive" element={<ArchivePage scope="local" back="/chats" />} />
             <Route path="/connects/:id" element={<ConnectPage />} />
             <Route path="/bots/:id" element={<LegacyBot />} />
             <Route path="/settings" element={<Navigate to="/settings/connects" replace />} />

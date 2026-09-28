@@ -15,6 +15,7 @@ import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble } from "../Sidebar.tsx";
+import { ArchivePage } from "../pages/Archive.tsx";
 import { AccountSettings, ConnectsSettings, FirstStation, GeneralSettings, LeaveSettings, MembersSettings, MemorySettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
@@ -42,7 +43,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
   const path = useLocation().pathname;
   const navigate = useNavigate();
   useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/chats\/.+)$/.test(p));
-  const detail = /\/(s\/[^/]+\/.+|settings|new$)/.test(path);
+  const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
   const people = useMemo(() => new Map((view?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view]);
@@ -83,6 +84,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/memory" element={<MemorySettings entry={entry} />} />
             <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
             <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
+            <Route path="archive" element={<ArchivePage scope={entry.id} back={`/w/${entry.id}`} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
@@ -162,7 +164,7 @@ function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
     <nav className="sidebar" aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
       <div className="brand brand-compact"><SidebarBrand /></div>
-      <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} />
+      <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} />
       <div className="nav-foot">
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
         <div className="nav-foot-row">

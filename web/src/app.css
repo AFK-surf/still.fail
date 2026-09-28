@@ -98,6 +98,15 @@
 /* Unread: a blue dot in the row's left margin, beside the title, taking no room from it. */
 .nav-session { position: relative; }
 .unread-dot { position: absolute; left: 2px; top: 14px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+/* Archiving a chat: a button at the row's top right while it is pointed at, the title making room for it. */
+.nav-session-wrap { position: relative; }
+.row-archive { position: absolute; top: 7px; right: 6px; width: 24px; height: 24px; opacity: 0; pointer-events: none; }
+.nav-session-wrap:hover .row-archive, .row-archive:focus-visible { opacity: 1; pointer-events: auto; }
+.nav-session-wrap:hover .nav-session-head { padding-right: 24px; }
+/* Pointing at the button is still pointing at the row. */
+.nav-session-wrap:hover .nav-session:not([aria-current="page"]) { background: var(--hover); }
+.nav-session-wrap + .nav-session-wrap { margin-top: 2px; }
+.nav-archive { margin-top: 8px; color: var(--muted); }
 .nav-session-last { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--muted); }
 /* Centred on the line: aligned by baseline, the letter inside a small avatar would pull it down. */
 /* An agent: its model's maker on a tile; where it stands is a badge at the corner, as on the phone. Nothing blinks. */
@@ -685,7 +694,7 @@
 .nav-session-meta .nav-time { margin-left: auto; flex: none; }
 /* When is rarely what one looks for in the list: it shows on hover (and keyboard focus), giving its room to the message otherwise. */
 .nav-session .nav-time { display: none; }
-.nav-session:hover .nav-time, .nav-session:focus-visible .nav-time { display: inline; }
+.nav-session-wrap:hover .nav-time, .nav-session:focus-visible .nav-time { display: inline; }
 
 /* ── waiting ─────────────────────────────────────────────────────────── */
 /* Loading says so only when it takes a while: a page that is there in a moment (from the device) shows nothing before it. */
@@ -1745,3 +1754,13 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .memory-none { margin: 0; font-size: var(--text-sm); }
 .memory-station + .memory-station { margin-top: 36px; }
 .memory-station-name { margin: 0 0 8px; font-size: var(--text-md); font-weight: 600; }
+
+/* The archive: one row a chat, what it is on the left and what can be done on the right; no lines between. */
+.archive-station + .archive-station { margin-top: 24px; }
+.archive-list { display: grid; gap: 2px; }
+.archive-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--r-nav); corner-shape: var(--corner-shape); }
+.archive-row:hover { background: var(--hover); }
+.archive-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.archive-title { font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-meta { font-size: var(--text-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archive-actions { display: flex; gap: 4px; flex: none; }
