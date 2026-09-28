@@ -165,6 +165,8 @@ globalStyle("body", {
  */
 globalStyle("h1, h2, h3", { textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere" });
 globalStyle("button, input, select, textarea", { font: "inherit", color: "inherit" });
+// The browser pads a button 1px 6px: an icon button narrower than its icon plus that pushes the icon off center.
+globalStyle("button", { padding: "0" });
 globalStyle("a", { color: "inherit", textDecoration: "none" });
 globalStyle("code, pre", { fontFamily: vars.fontMono });
 globalStyle("[hidden]", { display: "none !important" });

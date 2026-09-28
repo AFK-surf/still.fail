@@ -143,7 +143,7 @@ export const sideTabWrap = style({
   },
 });
 export const sideTabClose = style({
-  display: "grid", placeItems: "center", width: "20px", height: "20px", marginRight: "6px", border: "0",
+  display: "grid", placeItems: "center", width: "20px", height: "20px", marginRight: "5px", border: "0",
   borderRadius: `calc(6px * ${vars.cornerScale})`, background: "none", color: vars.muted, cursor: "pointer",
   cornerShape: vars.cornerShape,
   selectors: {
