@@ -2784,17 +2784,17 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .chat[data-under-composer] > .composer-slot { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; }
 .chat[data-under-composer] .chat-list { padding-bottom: calc(24px + var(--composer-height)); }
 .chat[data-under-composer] .chat-to-bottom {
-  bottom: calc(12px + var(--composer-height)); border: 0.5px solid var(--line);
+  bottom: calc(12px + var(--composer-height)); border: 0;
   background: color-mix(in oklch, var(--canvas) 45%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   box-shadow: 0 6px 16px rgb(0 0 0 / .14), 0 2px 5px rgb(0 0 0 / .1);
 }
 .chat[data-under-composer] > .offline-notice { margin-bottom: calc(8px + var(--composer-height)); }
 .composer-dock[data-variant="chat"] .composer-wrap { pointer-events: none; }
 .composer-dock[data-variant="chat"] .composer-wrap > * { pointer-events: auto; }
-/* As the phone's capsule (mobile.css .m-floating): frosted, raised, a hairline round it; its send a dark disc. Thinner
+/* As the phone's capsule (mobile.css .m-floating): frosted and raised, with no line round it; its send a dark disc. Thinner
    and less blurred than the phone's: over a white page and thin text, more of either showed as plain white. */
 .composer-dock[data-variant="chat"] .composer-box, .composer-dock[data-variant="chat"] .composer-box:focus-within {
-  border: 0.5px solid var(--line);
+  border: 0;
   background: color-mix(in oklch, var(--canvas) 45%, transparent);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   box-shadow: 0 6px 16px rgb(0 0 0 / .14), 0 2px 5px rgb(0 0 0 / .1);
