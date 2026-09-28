@@ -490,6 +490,35 @@ impl AdminApi {
             }
             ("POST", "/slack/config-tokens") => return ok(self.add_config_token(&read_json(body).await?, viewer).await?),
             ("GET", "/slack/people") => return ok(self.slack_people().await),
+            // The agents' memory: the global one, and the shared skills (projects' memories among them).
+            ("GET", "/memory") => {
+                let home = self.config().agent_home.clone();
+                let path = crate::agent_home::agent_home_paths(&home).0;
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                return ok(json!({ "global": { "path": path.to_string_lossy(), "text": text }, "skills": crate::agent_home::list_skills(&home) }));
+            }
+            ("PUT", "/memory/global") => {
+                let input = read_json(body).await?;
+                let path = crate::agent_home::agent_home_paths(&self.config().agent_home).0;
+                std::fs::write(&path, input.text("text"))?;
+                info!(by = viewer.id(), "global memory edited from the admin page");
+                return ok(json!({ "path": path.to_string_lossy(), "text": input.text("text") }));
+            }
+            // A new project's memory: a skill whose description says it is one, and when it applies.
+            ("POST", "/memory/skills") => {
+                let input = read_json(body).await?;
+                let (name, about) = (input.text("name").trim().to_string(), input.text("about").trim().to_string());
+                if about.is_empty() {
+                    return Err(http_error(400, "say when this project's memory applies"));
+                }
+                let home = self.config().agent_home.clone();
+                if crate::agent_home::list_skills(&home).iter().any(|s| s.name == name) {
+                    return Err(http_error(409, format!("there is a skill named {name} already")));
+                }
+                let made = crate::agent_home::save_skill(&home, &name, &crate::agent_home::project_skill_text(&name, &about)).map_err(|e| http_error(400, e.to_string()))?;
+                info!(skill = name, by = viewer.id(), "project memory made from the admin page");
+                return ok(serde_json::to_value(made)?);
+            }
             ("GET", "/slack/create-app-url") => {
                 let name = asked.param("name").map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| http_error(400, "name is required"))?;
                 return ok(json!({ "url": crate::chat::slack_apps::create_app_url(name) }));
@@ -499,6 +528,12 @@ impl AdminApi {
 
         match (resource, id, action, method) {
             (Some("sessions"), Some(key), None, "GET") => return ok(self.session(key, viewer)?),
+            (Some("memory"), Some("skills"), Some(name), "PUT") => {
+                let input = read_json(body).await?;
+                let saved = crate::agent_home::save_skill(&self.config().agent_home, name, &input.text("text")).map_err(|e| http_error(400, e.to_string()))?;
+                info!(skill = name, by = viewer.id(), "skill edited from the admin page");
+                return ok(serde_json::to_value(saved)?);
+            }
             // A background job's last output, for the pages (`lines`, default 200).
             (Some("jobs"), Some(id), Some("log"), "GET") => {
                 let job = self.deps.store.get_job(id)?.ok_or_else(|| http_error(404, format!("no job {id}")))?;

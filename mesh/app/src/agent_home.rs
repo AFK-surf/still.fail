@@ -83,6 +83,80 @@ fn link(target: &Path, path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// A skill in the shared skills directory as the pages show it: its name (its directory), what its SKILL.md says it is
+/// for, whether it is a project's memory (its description says so), and whether it is the station's own (rewritten at
+/// every start, so not edited on the pages).
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillFile {
+    pub name: String,
+    pub description: String,
+    pub project: bool,
+    pub builtin: bool,
+    pub text: String,
+}
+
+/// What a project memory's description starts with.
+pub const PROJECT_PREFIX: &str = "项目记忆：";
+
+/// A SKILL.md's frontmatter field (`key: value`), if it has one.
+fn front(text: &str, key: &str) -> Option<String> {
+    let body = text.strip_prefix("---\n")?;
+    let end = body.find("\n---")?;
+    body[..end].lines().find_map(|line| line.strip_prefix(&format!("{key}:")).map(|v| v.trim().trim_matches('"').to_string()))
+}
+
+/// Whether a skill's name is one a directory can safely have: letters, digits, `-` and `_` (CJK letters too).
+pub fn skill_name_ok(name: &str) -> bool {
+    !name.is_empty() && name.chars().count() <= 64 && !name.starts_with('.') && name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+}
+
+/// The shared skills, by name: the team's and the station's own.
+pub fn list_skills(agent_home: &Path) -> Vec<SkillFile> {
+    let (_, dir) = agent_home_paths(agent_home);
+    let mut skills: Vec<SkillFile> = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let text = std::fs::read_to_string(entry.path().join("SKILL.md")).ok()?;
+            let description = front(&text, "description").unwrap_or_default();
+            Some(SkillFile {
+                project: description.starts_with(PROJECT_PREFIX),
+                builtin: BUILTIN_SKILLS.iter().any(|(n, _)| *n == name),
+                name,
+                description,
+                text,
+            })
+        })
+        .collect();
+    skills.sort_by(|a, b| (a.builtin, !a.project, a.name.clone()).cmp(&(b.builtin, !b.project, b.name.clone())));
+    skills
+}
+
+/// Writes a team skill's SKILL.md (a new one, or over what it had); the station's own are not the team's to change.
+pub fn save_skill(agent_home: &Path, name: &str, text: &str) -> Result<SkillFile> {
+    if !skill_name_ok(name) {
+        anyhow::bail!("a skill's name is letters, digits, - and _");
+    }
+    if BUILTIN_SKILLS.iter().any(|(n, _)| *n == name) {
+        anyhow::bail!("{name} is the station's own skill: it is rewritten at every start");
+    }
+    let (_, skills) = agent_home_paths(agent_home);
+    let dir = skills.join(name);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("SKILL.md"), text)?;
+    list_skills(agent_home).into_iter().find(|s| s.name == name).ok_or_else(|| anyhow::anyhow!("{name} not written"))
+}
+
+/// A new project memory's SKILL.md: its name, when it applies, and where its lessons go.
+pub fn project_skill_text(name: &str, about: &str) -> String {
+    format!(
+        "---\nname: {name}\ndescription: {PROJECT_PREFIX}{about}\n---\n\n# {name}\n\n只跟这个项目有关的长期约定和教训写在这里；跨项目通用的写全局记忆。保持简短，不写凭据和一次性细节。\n"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,5 +213,20 @@ mod tests {
         write_builtin_skills(&home).unwrap();
         assert!(std::fs::read_to_string(&path).unwrap().contains("job_start"), "the station's own, as it has it");
         assert_eq!(std::fs::read_to_string(home.join("skills").join("team-skill").join("SKILL.md")).unwrap(), "ours", "the team's stay");
+    }
+
+    #[test]
+    fn skills_are_listed_with_what_they_are_for_and_projects_memories_told_apart() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("agent");
+        write_builtin_skills(&home).unwrap();
+        let made = save_skill(&home, "发版", &project_skill_text("发版", "每周发版和上线检查时使用。")).unwrap();
+        assert!(made.project && !made.builtin);
+        assert_eq!(made.description, "项目记忆：每周发版和上线检查时使用。");
+        save_skill(&home, "pdf", "---\nname: pdf\ndescription: Reading PDFs.\n---\n").unwrap();
+        let names: Vec<(String, bool, bool)> = list_skills(&home).into_iter().map(|s| (s.name, s.project, s.builtin)).collect();
+        assert_eq!(names, [("发版".into(), true, false), ("pdf".into(), false, false), ("ember-jobs".into(), false, true)]);
+        assert!(save_skill(&home, "ember-jobs", "x").is_err(), "the station's own");
+        assert!(save_skill(&home, "../out", "x").is_err());
     }
 }
