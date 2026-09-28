@@ -63,9 +63,41 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   // Where its place is, now and as the page lays out anew (it moves with it, at once).
   useLayoutEffect(put);
   useLayoutEffect(() => {
-    let frame = requestAnimationFrame(function follow() { put(); frame = requestAnimationFrame(follow); });
+    let frame = requestAnimationFrame(function follow() { put(); seen(); frame = requestAnimationFrame(follow); });
     return () => cancelAnimationFrame(frame);
   }, []);
+  // Laid out for another page (a new chat becoming its chat, a chat left for a new one), the box goes from where and how
+  // big it was to where and how big it is now: one composer changing, not one fading out as another fades in. Its place
+  // is read each frame (the last one before the change is where it goes from); a page change's picture leaves it out
+  // (app.css), so what shows of it is the live box.
+  const inner = () => box.current?.querySelector<HTMLElement>(".composer-box") ?? null;
+  const was = useRef<{ rect: DOMRect; radius: number } | null>(null);
+  const seen = () => {
+    const b = inner();
+    if (b) was.current = { rect: b.getBoundingClientRect(), radius: parseFloat(getComputedStyle(b).borderTopLeftRadius) };
+  };
+  const variant = useRef(spec?.variant);
+  useLayoutEffect(() => {
+    const before = variant.current;
+    variant.current = spec?.variant;
+    const from = was.current;
+    const b = inner();
+    const wrap = b?.parentElement;
+    if (!before || !spec || before === spec.variant || !from || !b || !wrap) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    put();
+    const to = b.getBoundingClientRect();
+    const radius = parseFloat(getComputedStyle(b).borderTopLeftRadius);
+    // Laid out from the wrap's left edge while it moves (its auto margins would move it as its width changes).
+    const left = wrap.getBoundingClientRect().left + parseFloat(getComputedStyle(wrap).paddingLeft);
+    const ease = getComputedStyle(document.documentElement).getPropertyValue("--ease-out").trim() || "ease-out";
+    b.animate([
+      { marginLeft: "0px", transform: `translate(${from.rect.left - left}px, ${from.rect.top - to.top}px)`, width: `${from.rect.width}px`,
+        height: `${from.rect.height}px`, borderRadius: `${Math.min(from.radius, from.rect.height / 2)}px` },
+      { marginLeft: "0px", transform: `translate(${to.left - left}px, 0px)`, width: `${to.width}px`, height: `${to.height}px`,
+        borderRadius: `${Math.min(radius, to.height / 2)}px` },
+    ], { duration: 340, easing: ease });
+  }, [spec?.variant]); // eslint-disable-line react-hooks/exhaustive-deps
   // Its height, for its place to keep: watched once it is there (the first page to hold a place makes it).
   const made = spec !== null;
   useLayoutEffect(() => {

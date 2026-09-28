@@ -1330,7 +1330,7 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .new-chat-inner > .composer-slot { justify-self: stretch; }
 .composer-dock { position: absolute; z-index: 3; }
 /* Named only while a page changes (transitionTo): named, it would be a backdrop root and its glass would blur nothing. */
-:root[data-transitioning] .composer-dock { view-transition-name: composer; }
+:root[data-transitioning] .composer-dock { view-transition-name: dock; }
 .composer-dock .composer, .composer-dock .composer-wrap { border-top: 0; }
 .composer-dock[data-variant="new"] .composer-wrap { padding: 0; text-align: left; }
 .composer-dock[data-variant="new"] .composer-box { min-height: 96px; }
@@ -1344,6 +1344,10 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 ::view-transition-group(composer) { animation-duration: 340ms; animation-timing-function: var(--ease-out); }
 ::view-transition-old(composer), ::view-transition-new(composer) { height: 100%; object-fit: none; object-position: left top; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; }
+/* The desktop composer is not pictured in a page change: the live box shows through, and moves and resizes itself
+   (dock.tsx). Its old picture would fade out as a second composer. */
+::view-transition-group(dock), ::view-transition-new(dock) { animation: none; }
+::view-transition-old(dock) { display: none; }
 /* A new chat that looks like its chat already gives way to it without a move. */
 :root[data-still]::view-transition-group(*), :root[data-still]::view-transition-old(*), :root[data-still]::view-transition-new(*) { animation: none; }
 :root[data-still]::view-transition-old(*) { display: none; }
