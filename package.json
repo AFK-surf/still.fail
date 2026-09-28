@@ -12,7 +12,9 @@
     "build:cloud": "sh client/wasm/build.sh && vite build --config web/vite.config.ts --mode cloud && vite build --config web/vite.config.ts --mode cloud-admin && node cloud/build-static.ts",
     "dev:web": "vite --config web/vite.config.ts",
     "typecheck": "sh scripts/shapes.sh --check && python3 scripts/icons.py --check && tsgo -p tsconfig.json && tsgo -p web/tsconfig.json",
-    "test": "node --test --test-timeout=60000 \"test/**/*.test.ts\""
+    "test": "node --test --test-timeout=60000 \"test/**/*.test.ts\"",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
+    "check": "sh scripts/check.sh all"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.2.0",
