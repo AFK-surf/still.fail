@@ -2674,11 +2674,16 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
    shows through, blurred. The list's foot leaves the composer's height free, so its last message still ends above it. */
 .chat[data-under-composer] > .composer-slot { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; }
 .chat[data-under-composer] .chat-list { padding-bottom: calc(24px + var(--composer-height)); }
+/* Right over the send button: the composer's box is its width (760px at most, 32px in from each side, 12px in a narrow
+   pane) and the button 6px in from its right, as big as the send. */
 .chat[data-under-composer] .chat-to-bottom {
+  --composer-inset: 32px;
+  right: calc((100% - min(760px, 100% - 2 * var(--composer-inset))) / 2 + 6px); width: 32px; height: 32px;
   bottom: calc(12px + var(--composer-height)); border: 0;
   background: color-mix(in oklch, var(--canvas) 45%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   box-shadow: 0 6px 16px rgb(0 0 0 / .14), 0 2px 5px rgb(0 0 0 / .1);
 }
+@media (max-width: 700px) { .chat[data-under-composer] .chat-to-bottom { --composer-inset: 12px; } }
 .chat[data-under-composer] > .offline-notice { margin-bottom: calc(8px + var(--composer-height)); }
 .composer-dock[data-variant="chat"] .composer-wrap { pointer-events: none; }
 .composer-dock[data-variant="chat"] .composer-wrap > * { pointer-events: auto; }
