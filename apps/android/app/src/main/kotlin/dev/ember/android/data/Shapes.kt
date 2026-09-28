@@ -453,6 +453,20 @@ data class ChatThread (
 	val time: Map<String, Stamp>? = null
 )
 
+/// A background job an agent started (a web service when it has a port): shown by its name; the port is how the
+/// station reaches a service, not for people.
+@Serializable
+data class Job (
+	val id: String,
+	val name: String,
+	/// running | exited | stopped | failed (a service that exited is being started again)
+	val state: String,
+	val port: Long? = null,
+	val exitCode: Long? = null,
+	val startedAt: Long,
+	val endedAt: Long? = null
+)
+
 /// An agent of a chat: its session, the connect that started it, its profile, and what it can move to.
 @Serializable
 data class ChatAgent (
@@ -469,7 +483,9 @@ data class ChatAgent (
 	/// When its running turn began; absent when none runs.
 	val since: Long? = null,
 	val turns: List<TurnRecord>,
-	val threads: List<ChatThread>
+	val threads: List<ChatThread>,
+	/// Its background jobs, newest first; those with a port are web services, shown by their names.
+	val jobs: List<Job>
 )
 
 /// An agent of a sidebar row, with what its mark shows.

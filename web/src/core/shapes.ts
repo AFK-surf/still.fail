@@ -423,6 +423,21 @@ export interface ChatThread {
 	time?: Record<string, Stamp>;
 }
 
+/**
+ * A background job an agent started (a web service when it has a port): shown by its name; the port is how the
+ * station reaches a service, not for people.
+ */
+export interface Job {
+	id: string;
+	name: string;
+	/** running | exited | stopped | failed (a service that exited is being started again) */
+	state: string;
+	port?: number;
+	exitCode?: number;
+	startedAt: number;
+	endedAt?: number;
+}
+
 /** An agent of a chat: its session, the connect that started it, its profile, and what it can move to. */
 export interface ChatAgent {
 	session: Session;
@@ -439,6 +454,8 @@ export interface ChatAgent {
 	since?: number;
 	turns: TurnRecord[];
 	threads: ChatThread[];
+	/** Its background jobs, newest first; those with a port are web services, shown by their names. */
+	jobs: Job[];
 }
 
 /** An agent of a sidebar row, with what its mark shows. */
