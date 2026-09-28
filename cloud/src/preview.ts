@@ -4,14 +4,15 @@
 // Worker of its own (ember-preview): these files, written out by
 // build-static.ts, with the headers in its _headers.
 //
-// It serves two files and nothing else. /_ember/frame is the frame a client
+// It serves three files and nothing else. /_ember/frame is the frame a client
 // puts in its page; it registers /_ember/sw.js for the whole host, then shows
 // the service in a frame of its own at the service's own paths. The service
 // worker answers every request of that inner frame by handing it to the
 // outer frame, which hands it (over a MessagePort) to the client that made
 // it; the client sends it to the station through its core — over the mesh,
 // like any other call — and the answer comes back the same way. Nothing of
-// the service passes through here.
+// the service passes through here. /_ember/annotate.js, which the frame
+// loads, marks the service's page for a chat (web/src/annotate/frame.ts).
 //
 // Its limits: WebSockets are not requests a service worker sees (a dev
 // server's live reload does not work), and cookies the service sets are not
@@ -26,6 +27,7 @@ const FRAME = `<!doctype html>
   iframe { display: block; width: 100%; height: 100%; border: 0; }
   p { margin: 0; padding: 24px; font: 14px system-ui, sans-serif; color: #777; }
 </style>
+<script src="/_ember/annotate.js"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const nonce = params.get("n") || "";
@@ -75,7 +77,7 @@ const FRAME = `<!doctype html>
     const state = path + "|" + here + "|" + trail.length;
     if (state === said) return;
     said = state;
-    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1 }, "*");
+    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1, annotate: !!window.emberAnnotate }, "*");
   };
   const replace = (path) => {
     moving = true;
@@ -97,6 +99,8 @@ const FRAME = `<!doctype html>
     inner.src = params.get("path") || "/";
     inner.addEventListener("load", () => { report(); moving = false; });
     document.body.append(inner);
+    // Marking the page for a chat (/_ember/annotate.js, web/src/annotate/frame.ts), when it loaded.
+    window.emberAnnotate?.attach(inner, nonce);
     setInterval(report, 500);
   }
   parent.postMessage({ type: "ember-preview-ready", nonce }, "*");
@@ -152,13 +156,15 @@ async function relay(event, url) {
 `;
 
 /** The preview host's files, by path under its assets directory. */
-export function previewFiles(): Record<string, string> {
+export function previewFiles(annotate = ""): Record<string, string> {
   return {
     "_ember/frame.html": FRAME,
     "_ember/sw.js": WORKER,
+    // Marking the page for a chat (web/src/annotate/frame.ts), bundled by build-static.ts.
+    "_ember/annotate.js": annotate,
     // Only reached before the service worker runs, or when a frame opens this host by itself.
     "404.html": `<!doctype html><meta charset="utf-8"><title>ember preview</title><p>这是 ember 的预览地址：在 ember 里打开一个预览。</p>`,
     // The service worker is the whole host's, from under /_ember/.
-    "_headers": "/_ember/sw.js\n  Service-Worker-Allowed: /\n  Cache-Control: no-cache\n/_ember/frame\n  Cache-Control: no-cache\n",
+    "_headers": "/_ember/sw.js\n  Service-Worker-Allowed: /\n  Cache-Control: no-cache\n/_ember/frame\n  Cache-Control: no-cache\n/_ember/annotate.js\n  Cache-Control: no-cache\n",
   };
 }

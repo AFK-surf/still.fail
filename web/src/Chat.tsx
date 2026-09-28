@@ -14,7 +14,7 @@ import { placeFiles, Prose } from "./Prose.tsx";
 import { useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileUrl, useNear } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
-import { useDraft, type DraftQuote } from "./draft.ts";
+import { useDraft, useDraftInbox, type DraftQuote } from "./draft.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss from "./mobile/styles/chat.css.ts";
@@ -529,10 +529,14 @@ function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
 
 /** One quote: the passage with whose it is, and the comment. Also the composer's pending quote, with an editable comment. */
 function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?: (() => void) | undefined; comment?: ReactNode; onRemove?: () => void }) {
+  // A mark on a previewed page (annotate/Marks.tsx): its pin's number and what it is; where it is is for the agent.
+  const pin = quote.role === "page" ? /(\d+)$/.exec(quote.author)?.[1] : undefined;
   return (
     <div className={css.quoteCard}>
-      <button type="button" className={css.quoteCardSource} onClick={onJump} disabled={!onJump} title={onJump ? "跳到原消息" : undefined}>
-        <span className={css.quoteCardText}><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className={css.quoteCardWho}>{quote.author}：</span>{quote.text}</span>
+      <button type="button" className={css.quoteCardSource} onClick={onJump} disabled={!onJump} title={onJump ? "跳到原消息" : pin ? quote.text : undefined}>
+        {pin
+          ? <span className={css.quoteCardText}><span className={css.quoteCardPin}>{pin}</span>{quote.text.split("\n")[0]}</span>
+          : <span className={css.quoteCardText}><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className={css.quoteCardWho}>{quote.author}：</span>{quote.text}</span>}
       </button>
       {comment ?? (quote.comment ? <div className={css.quoteCardComment}>{quote.comment}</div> : null)}
       {onRemove && <button type="button" className={css.quoteCardRemove} aria-label="移除引用" onClick={onRemove}><Close size={12} /></button>}
@@ -735,6 +739,12 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     el.focus();
     el.setSelectionRange(at, at);
   }, [text]);
+  // A preview's marks beside the chat: their screenshot and a quote each, to say more about before sending.
+  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added }) => {
+    if (offered.length) add(offered);
+    if (added.length) setQuotes((all) => [...all, ...added]);
+    input.current?.focus();
+  });
   const quoteInputs = useRef(new Map<string, HTMLInputElement>());
   useEffect(() => {
     if (!focusQuote) return;

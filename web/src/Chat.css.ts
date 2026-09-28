@@ -352,6 +352,12 @@ export const quoteCardSource = style({
   },
 });
 export const quoteCardWho = style({ fontWeight: "500", color: vars.text });
+/** A page mark's number, as its pin on the page (annotate/Marks.css.ts). */
+export const quoteCardPin = style({
+  display: "inline-grid", placeItems: "center", minWidth: "16px", height: "16px", padding: "0 4px", marginRight: "6px",
+  boxSizing: "border-box", borderRadius: "8px 8px 8px 2px", background: vars.accent, color: "#fff", fontSize: "10px",
+  fontWeight: "650", lineHeight: "1", verticalAlign: "1px",
+});
 export const quoteCardText = style({
   whiteSpace: "pre-wrap", overflow: "hidden", WebkitBoxOrient: "vertical", display: "-webkit-box",
   WebkitLineClamp: "2", fontSize: vars.textXs, lineHeight: "1.5", color: vars.muted,

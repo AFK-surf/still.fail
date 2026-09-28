@@ -27,6 +27,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "csstype": "^3.2.3",
     "mediabunny": "^1.60.0",
+    "modern-screenshot": "^4.7.0",
     "pdfjs-dist": "^6.3.289",
     "posthog-js": "^1.434.14",
     "radix-ui": "^1.6.7",

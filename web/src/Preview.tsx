@@ -8,12 +8,13 @@
 // ember-preview://, which the app serves itself through its core; the bar
 // over it is the same.
 import { ArrowLeft, ArrowRight, External, Refresh, Web } from "./icons.tsx";
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
 import { useLink } from "./station.tsx";
 import { useCall } from "./core/react.ts";
 import * as css from "./Preview.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
+import { useMarks } from "./annotate/Marks.tsx";
 
 declare const __PREVIEW_ORIGIN__: string;
 const ORIGIN = __PREVIEW_ORIGIN__;
@@ -37,16 +38,18 @@ interface Shown {
   external?: string | undefined;
   /** It ended and the station starts it again (how often so far); null while it is up. */
   restarting?: Restarting | null | undefined;
+  /** The chat beside it, whose draft its marks go into (annotate/Marks.tsx); none: no marking. */
+  draftKey?: string | undefined;
 }
 
 interface Restarting { restarts: number }
 
 /** A web service beside a chat, or on a page of its own (`alone`: no "open on its own" there). */
-export function StationPreview({ station, port, name, service, alone = false, restarting = null }:
-  { station: string; port: number; name: string; service: string; alone?: boolean; restarting?: Restarting | null }) {
+export function StationPreview({ station, port, name, service, alone = false, restarting = null, draftKey }:
+  { station: string; port: number; name: string; service: string; alone?: boolean; restarting?: Restarting | null; draftKey?: string }) {
   // Its page of its own, at the station's pages' place (a new window or tab: the browser's).
   const own = useHref(useLink()(`/services/${encodeURIComponent(service)}`));
-  const shown: Shown = { station, port, name, external: alone ? undefined : own, restarting };
+  const shown: Shown = { station, port, name, external: alone ? undefined : own, restarting, draftKey };
   return window.emberDesktop ? <DesktopPreview {...shown} /> : <WebPreview {...shown} />;
 }
 
@@ -62,10 +65,14 @@ interface Bar {
   canBack?: boolean;
   canForward?: boolean;
   external?: string | undefined;
+  /** Anything else of the bar's (marking the page), before its page of its own. */
+  extra?: ReactNode;
+  /** What shows in the address's place for now (marking the page). */
+  instead?: ReactNode;
 }
 
 /** Back, forward, reload, where it is (typed to go elsewhere), and its page of its own: over the frame. */
-function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canForward = false, external }: Bar) {
+function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canForward = false, external, extra, instead }: Bar) {
   const [typed, setTyped] = useState(at ?? "/");
   const [editing, setEditing] = useState(false);
   // Where it went is what the bar says, unless someone is typing there.
@@ -76,11 +83,14 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
       {back && <button type="button" className={pagesCss.iconBtn} aria-label="后退" title="后退" disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button>}
       {forward && <button type="button" className={pagesCss.iconBtn} aria-label="前进" title="前进" disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button>}
       <button type="button" className={pagesCss.iconBtn} aria-label="刷新" title="刷新" onClick={reload}><Refresh {...icon} /></button>
-      <label className={css.previewAddress}>
-        <Web size={14} strokeWidth={1.75} />
-        <span className={css.previewHost}>{name}</span>
-        <input className={css.previewPath} value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />
-      </label>
+      {instead ?? (
+        <label className={css.previewAddress}>
+          <Web size={14} strokeWidth={1.75} />
+          <span className={css.previewHost}>{name}</span>
+          <input className={css.previewPath} value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />
+        </label>
+      )}
+      {extra}
       {external && <a className={pagesCss.iconBtn} href={external} target="_blank" rel="noopener" aria-label="在新窗口打开" title="在新窗口打开"><External {...icon} /></a>}
     </form>
   );
@@ -107,10 +117,13 @@ function Restart({ name, restarting, reload }: { name: string; restarting: Resta
  * apps/desktop/src/main.ts): it says where the service is and whether it can go back or on (ember-preview-at), and is
  * told where to go (ember-preview-nav). `frame` is the frame at `origin`, loaded with `src`.
  */
-function Framed({ name, external, restarting, origin, src, nonce, frame }:
+function Framed({ name, external, restarting, draftKey, origin, src, nonce, frame }:
   Omit<Shown, "station" | "port"> & { origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null> }) {
   const [at, setAt] = useState<string | null>(null);
   const [moves, setMoves] = useState({ back: false, forward: false });
+  // A frame that can mark the page says so (an older one does not).
+  const [markable, setMarkable] = useState(false);
+  const marks = useMarks({ frame, origin, nonce, name, draftKey, able: markable });
   useEffect(() => {
     if (!origin) return;
     const onMessage = (event: MessageEvent) => {
@@ -118,6 +131,7 @@ function Framed({ name, external, restarting, origin, src, nonce, frame }:
       if (event.data?.type !== "ember-preview-at" || typeof event.data.path !== "string") return;
       setAt(event.data.path);
       setMoves({ back: event.data.back === true, forward: event.data.forward === true });
+      setMarkable(event.data.annotate === true);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -128,10 +142,11 @@ function Framed({ name, external, restarting, origin, src, nonce, frame }:
   const reload = useCallback(() => nav("reload"), [nav]);
   return (
     <div className={css.preview}>
-      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={reload} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} />
+      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={reload} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} extra={marks.button} instead={marks.address} />
       <div className={css.previewStage}>
         {src && <iframe ref={frame} className={css.previewFrame} title={name} src={src} />}
         <Restart name={name} restarting={restarting} reload={reload} />
+        {marks.over}
       </div>
     </div>
   );

@@ -81,7 +81,13 @@ pub fn message_for_agent(m: &MessageRow) -> String {
         .quotes
         .iter()
         .map(|q| {
-            let whose = if q.role.as_deref() == Some("agent") { "your own earlier message".to_string() } else { format!("a message from {}", q.author) };
+            let whose = match q.role.as_deref() {
+                Some("agent") => "your own earlier message".to_string(),
+                // A mark on a web service's page in a preview: where it is on the page, its number boxed in the
+                // screenshot attached (web/src/annotate).
+                Some("page") => format!("a web page shown in the chat's preview ({}), marked with its number in the attached screenshot", q.author),
+                _ => format!("a message from {}", q.author),
+            };
             let which = match &q.ts {
                 Some(ts) => format!("{whose} {ts} in this conversation"),
                 None => whose,

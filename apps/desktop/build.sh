@@ -32,6 +32,8 @@ cd "$here"
 # electron-builder packs the Electron that electron's install script fetches (pnpm may have skipped it).
 [ -d node_modules/electron/dist ] || node node_modules/electron/install.js
 pnpm exec esbuild src/main.ts src/core.ts src/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=build/app --log-level=warning
+# The page marking in a preview's frame (web/src/annotate/frame.ts), which main.ts serves as its /_ember/annotate.js.
+pnpm exec esbuild "$root/web/src/annotate/frame.ts" --bundle --format=iife --minify --outfile=build/app/annotate.js --log-level=warning
 [ -z "${DEV:-}" ] || { echo "$here/build"; exit 0; }
 version="0.1.$(git -C "$root" rev-list --count HEAD)"
 pnpm exec electron-builder --mac --arm64 --publish never -c.extraMetadata.version="$version"

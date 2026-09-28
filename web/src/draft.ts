@@ -45,6 +45,31 @@ export interface Draft {
   send(open: () => Promise<ChatTo>, options?: { first?: boolean; onSending?: (text: string | null) => void }): Promise<ChatTo | null>;
 }
 
+/** What another part of the page puts into a chat's draft (a preview's marks: its screenshot and a quote each). */
+export interface Offer { files: File[]; quotes: DraftQuote[] }
+
+/** The composer showing each chat's draft, by its key: what takes an offer for it. */
+const inboxes = new Map<string, (offer: Offer) => void>();
+
+/** Puts files and quotes into the draft of the chat `key`, when its composer is there: says whether it was. */
+export function offerToDraft(key: string, offer: Offer): boolean {
+  const take = inboxes.get(key);
+  take?.(offer);
+  return take !== undefined;
+}
+
+/** Takes what is offered to the draft `key` while it shows. */
+export function useDraftInbox(key: string | undefined, take: (offer: Offer) => void): void {
+  const latest = useRef(take);
+  latest.current = take;
+  useEffect(() => {
+    if (key === undefined) return;
+    const inbox = (offer: Offer) => latest.current(offer);
+    inboxes.set(key, inbox);
+    return () => { if (inboxes.get(key) === inbox) inboxes.delete(key); };
+  }, [key]);
+}
+
 /** Drafts put away, by chat. */
 const kept = new Map<string, { text: string; files: Pending[]; quotes: DraftQuote[] }>();
 

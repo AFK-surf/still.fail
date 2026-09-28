@@ -85,3 +85,12 @@ fn addresses_are_channel_slash_ts() {
     assert_eq!(parse_thread_address("c1/1.0"), None);
     assert_eq!(parse_thread_address("C1/1"), None);
 }
+
+#[test]
+fn a_mark_on_a_previewed_page_is_said_to_be_one_with_its_screenshot() {
+    let mut m = message(2, "101.0", "U1", true, AuthorKind::Person);
+    m.quotes = vec![Quote { author: "网页 demo 标注 1".into(), text: "button.btn「升级」\n选择器 main > button".into(), comment: "换个颜色".into(), ts: None, role: Some("page".into()) }];
+    assert!(message_for_agent(&m).starts_with(
+        "[Quote] From a web page shown in the chat's preview (网页 demo 标注 1), marked with its number in the attached screenshot:\n> button.btn「升级」\n> 选择器 main > button\nTheir comment on it: 换个颜色"
+    ));
+}

@@ -9,7 +9,7 @@ import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, writeFileSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -134,6 +134,7 @@ const FRAME = `<!doctype html>
   html, body { margin: 0; height: 100%; background: #fff; }
   iframe { display: block; width: 100%; height: 100%; border: 0; }
 </style>
+<script src="/_ember/annotate.js"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const nonce = params.get("n") || "";
@@ -161,7 +162,7 @@ const FRAME = `<!doctype html>
     const state = path + "|" + here + "|" + trail.length;
     if (state === said) return;
     said = state;
-    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1 }, "*");
+    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1, annotate: !!window.emberAnnotate }, "*");
   };
   const replace = (path) => {
     moving = true;
@@ -177,7 +178,11 @@ const FRAME = `<!doctype html>
   });
   inner.src = params.get("path") || "/";
   inner.addEventListener("load", () => { report(); moving = false; });
-  addEventListener("DOMContentLoaded", () => document.body.append(inner));
+  addEventListener("DOMContentLoaded", () => {
+    document.body.append(inner);
+    // Marking the page for a chat (/_ember/annotate.js, web/src/annotate/frame.ts), when it loaded.
+    window.emberAnnotate?.attach(inner, nonce);
+  });
   setInterval(report, 500);
 </script>
 <body></body>
@@ -193,6 +198,7 @@ async function preview(request: Request): Promise<Response> {
   const station = host ? previewStations.get(host[2]!) : undefined;
   if (!host || !station) return plain(404, "预览已经失效：在 ember 里重新打开它。");
   if (url.pathname === "/_ember/frame") return new Response(FRAME, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+  if (url.pathname === "/_ember/annotate.js") return new Response(await readFile(join(__dirname, "annotate.js")).catch(() => ""), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });
   const body = request.method === "GET" || request.method === "HEAD" ? "" : Buffer.from(await request.arrayBuffer()).toString("base64");
   const headers: [string, string][] = [];
   request.headers.forEach((value, name) => headers.push([name, value]));

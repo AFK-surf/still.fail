@@ -309,7 +309,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                 return (
                   <Tabs.Content key={key} className={css.sideContent} value={key} forceMount>
                     {service.port !== undefined && (service.state === "running" || service.state === "exited")
-                      ? <StationPreview station={station.address} port={service.port} name={service.name} service={service.id} restarting={service.state === "exited" ? { restarts: service.restarts ?? 0 } : null} />
+                      ? <StationPreview station={station.address} port={service.port} name={service.name} service={service.id} restarting={service.state === "exited" ? { restarts: service.restarts ?? 0 } : null} draftKey={chatKey} />
                       : <Empty><p>「{service.name}」{service.state === "failed" ? "没能启动" : "已经停了"}。</p></Empty>}
                   </Tabs.Content>
                 );
