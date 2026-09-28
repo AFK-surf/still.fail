@@ -1,22 +1,13 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { muted } from "../styles/shell.css.ts";
-import { list } from "../styles/pages.css.ts";
 import { command, runtimeLogo } from "../ui.css.ts";
 import { machineLogins } from "../pages/Accounts.css.ts";
 import { btn } from "../styles/controls.css.ts";
 
 export const groupHead = style({});
-export const stationRow = style({});
 export const roleSelect = style({ width: "120px", flex: "none" });
 export const stationHeading = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
-export const stationItem = style({
-  selectors: {
-    "& + &": { borderTop: `1px solid ${vars.line}` },
-    [`${list} &`]: { display: "block" },
-  },
-});
-export const stationDevice = style({ padding: "4px 16px 16px 36px" });
 /** Concentric with what is inside: its fields' and commands' corner (--r-field) plus its padding. */
 export const onboardingCard = style({
   width: "100%", textAlign: "left", padding: "20px", border: `1px solid ${vars.line}`,
@@ -37,7 +28,6 @@ export const firstStationName = style({
 export const firstStation = style({});
 export const memoryStation = style({});
 export const memoryStationName = style({ margin: "0 0 8px", fontSize: vars.textMd, fontWeight: "600" });
-globalStyle(`${stationRow} ${btn}`, { flex: "none" });
 globalStyle(`${groupHead} ${runtimeLogo}`, { alignSelf: "center" });
 /** As tall as the field beside it. */
 globalStyle(`${onboardingRow} ${btn}`, { height: "auto" });

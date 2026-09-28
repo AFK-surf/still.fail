@@ -10,9 +10,10 @@ import { useStations, type StationView } from "../api.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
-import { DeviceCard, QuotaBars } from "../components.tsx";
+import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
+import { StationList } from "./StationCards.tsx";
 import { MemoryView } from "../Memory.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
@@ -302,32 +303,10 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
   return (
     <Section title={`${stations.length} 台`} actions={manager && <Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button>}>
-      {(
-        <ul className={pagesCss.list}>
-          {stations.map((s) => (
-            <li key={s.id} className={css.stationItem}><div className={`${pagesCss.listRow} ${css.stationRow}`}>
-              <StatusDot state={s.online ? "online" : "offline"} label={s.online ? "在线" : "离线"} />
-              <span className={pagesCss.listRowText}>
-                <span className={pagesCss.listRowTitle}>{s.name}</span>
-                <span className={shellCss.muted}>
-                  {s.online ? "在线" : s.lastSeen ? <><Time stamp={stamp(s, "lastSeen")} />在线</> : "还没上线"}
-                  {s.version ? ` · ember-mesh ${s.version}` : ""} · <span className={shellCss.mono}>{s.id.slice(0, 12)}</span>
-                </span>
-              </span>
-              {manager && <Menu items={[
-                { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.run({ id: s.id, name: n.trim() }); } },
-                { label: "从 workspace 移除", icon: Trash, danger: true, onSelect: () => setRemoving(s) },
-              ]} />}
-            </div>
-              {s.online && (
-                <div className={css.stationDevice}>
-                  <DeviceCard host={s.host} processes={s.overview?.processesText} />
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      <StationList stations={stations} menu={(s) => manager && <Menu items={[
+        { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.run({ id: s.id, name: n.trim() }); } },
+        { label: "从 workspace 移除", icon: Trash, danger: true, onSelect: () => setRemoving(s) },
+      ]} />} />
       {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} busy={remove.busy} onConfirm={() => removing && remove.run(removing)}
         title={`移除「${removing?.name ?? ""}」？`} action="移除 station"
