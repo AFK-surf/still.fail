@@ -107,7 +107,8 @@ impl AdminApi {
         let config = self.config();
         let store = &self.deps.store;
         let sessions = store.list_sessions().unwrap_or_default();
-        let processes = store.list_processes().unwrap_or_default();
+        // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
+        let processes: Vec<_> = store.list_processes().unwrap_or_default().into_iter().filter(|p| p.runtime != "job").collect();
         let memory = process_memory(&processes.iter().map(|p| p.pgid).collect::<Vec<_>>());
         let connects: Vec<Value> = config
             .connects
