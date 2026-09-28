@@ -663,12 +663,21 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   useLayoutEffect(() => {
     if (window.matchMedia("(pointer: fine)").matches) input.current?.focus();
   }, [thread]);
-  // Grow with the text up to the frame's limit; the frame is never resized by hand.
+  // Grow with the text up to the frame's limit; the frame is never resized by hand. Its width changing re-wraps the
+  // text (or the placeholder), so it is measured again then; below the limit it never scrolls.
   useEffect(() => {
     const el = input.current;
     if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    const fit = () => {
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+      el.style.overflowY = el.scrollHeight > 160 ? "auto" : "hidden";
+    };
+    fit();
+    let width = el.clientWidth;
+    const resize = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; fit(); } });
+    resize.observe(el);
+    return () => resize.disconnect();
   }, [text]);
   const uploading = files.some((f) => !f.done && !f.error);
   const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !starting && !locked;

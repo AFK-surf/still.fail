@@ -823,7 +823,8 @@
   flex: 1; min-height: 20px; max-height: 160px; padding: 6px 8px 4px; border: 0; outline: none; resize: none;
   background: transparent; font: inherit; font-size: var(--text-body); line-height: 1.5; color: var(--text);
 }
-.composer-box[data-multiline] .composer-text { padding: 8px 8px 0; }
+/* In a column, flex: 1 would size it by its one row, not the height it is given: it would not grow. */
+.composer-box[data-multiline] .composer-text { flex: none; padding: 8px 8px 0; }
 .composer-text::placeholder { color: var(--subtle); }
 .composer-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex: none; }
 .send-btn {
