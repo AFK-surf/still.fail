@@ -1337,10 +1337,13 @@ pub struct ConnectsView {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Place {
+    /// An ember chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
     pub name: String,
     /// ember | slack
     pub surface: String,
     pub session: Option<String>,
+    /// A Slack thread's link in Slack, while a connect is signed in to its workspace.
+    pub url: Option<String>,
 }
 
 #[typeshare]

@@ -192,7 +192,9 @@ function Pill({ text, tone }: { text: string; tone: "blue" | "red" | "accent" })
 function PlaceMark({ station, chat, place }: { station: string; chat: string; place: Place }) {
   const app = useApp();
   // An ember chat is its agent's item: opened by the session it is bound to.
-  const open = place.session ? () => { if (place.session !== chat) app.push(`${stationBase(station)}/chats/${encodeURIComponent(place.session!)}`); else app.sheet(null); } : undefined;
+  // A Slack thread opens in Slack.
+  const open = place.url ? () => { window.open(place.url!, "_blank", "noopener"); }
+    : place.session ? () => { if (place.session !== chat) app.push(`${stationBase(station)}/chats/${encodeURIComponent(place.session!)}`); else app.sheet(null); } : undefined;
   return (
     <button type="button" className="m-h-place" data-link={open ? true : undefined} disabled={!open} onClick={open}>
       {place.surface === "ember" ? <Mark size={12} /> : <SlackMark size={12} />}<b>{place.name}</b>

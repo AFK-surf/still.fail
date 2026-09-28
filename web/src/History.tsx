@@ -28,6 +28,8 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   const where = (place: Place | null): ReactNode => {
     if (!place) return null;
     const inner = <>{place.surface === "ember" ? <Mark size={13} /> : <SlackLogo size={13} />}<span className="h-place-name">{place.name}</span></>;
+    // A Slack thread opens in Slack; an ember chat, its agent's page.
+    if (place.url) return <a className="h-place" href={place.url} target="_blank" rel="noopener" title="在 Slack 中打开">{inner}</a>;
     return place.session
       ? <Link className="h-place" to={link(`/chats/${encodeURIComponent(place.session)}`)} title="打开对话">{inner}</Link>
       : <span className="h-place">{inner}</span>;
