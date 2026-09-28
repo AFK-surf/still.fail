@@ -192,7 +192,7 @@ globalStyle(accountMenu, { minWidth: "260px" });
 /** Here rather than with its class: it comes after .history-body > *, and wins over it. */
 globalStyle(mineFilterBtn, {
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", flex: "none", height: "32px",
-  minWidth: "32px", padding: "0 8px", border: "0", borderRadius: `calc(8px * ${vars.cornerScale})`,
+  minWidth: "32px", padding: "0 8px", border: "0", borderRadius: vars.rNav,
   cornerShape: vars.cornerShape, background: "none", color: vars.muted, font: "inherit", fontSize: vars.textSm,
   cursor: "pointer",
 });
