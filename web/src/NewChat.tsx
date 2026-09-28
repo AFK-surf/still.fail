@@ -41,9 +41,26 @@ function lastChoice(station: string): Partial<Choice> {
 function keepChoice(station: string, choice: Choice): void {
   try {
     const all = JSON.parse(localStorage.getItem(LAST) ?? "{}") as Record<string, Choice>;
-    localStorage.setItem(LAST, JSON.stringify({ ...all, [station]: choice, last: station }));
+    localStorage.setItem(LAST, JSON.stringify({ ...all, [station]: choice }));
   } catch {
     // storage full or blocked: choices are just not remembered
+  }
+}
+/** The station a scope's last chat was started on (or last picked there); `last` is what older pages kept, for any scope. */
+function lastStation(scope: string): string {
+  try {
+    const all = JSON.parse(localStorage.getItem(LAST) ?? "{}") as { last?: string; lastIn?: Record<string, string> };
+    return all.lastIn?.[scope] ?? all.last ?? "";
+  } catch {
+    return "";
+  }
+}
+function keepStation(scope: string, station: string): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(LAST) ?? "{}") as { lastIn?: Record<string, string> };
+    localStorage.setItem(LAST, JSON.stringify({ ...all, last: station, lastIn: { ...all.lastIn, [scope]: station } }));
+  } catch {
+    // storage full or blocked: the first online station is taken
   }
 }
 
@@ -51,13 +68,11 @@ function keepChoice(station: string, choice: Choice): void {
 export function NewChat({ scope, onCreated }: { scope: string; onCreated(station: string, session: string): void }) {
   const stations = useStations(scope);
   const online = (stations.value ?? []).filter((s) => s.online);
-  const [stationId, setStationId] = useState(() => {
-    try {
-      return (JSON.parse(localStorage.getItem(LAST) ?? "{}") as { last?: string }).last ?? "";
-    } catch {
-      return "";
-    }
-  });
+  const [stationId, setStationId] = useState(() => lastStation(scope));
+  const onStation = (id: string) => {
+    setStationId(id);
+    keepStation(scope, id);
+  };
   const view = online.find((s) => s.id === stationId) ?? online[0];
   if (!stations.value) {
     // Laid out as the page will be (the composer's place held, the words under it), so nothing moves when it comes.
@@ -76,7 +91,7 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
   const station: Station = { id: view.id, name: scope === "local" ? "" : view.name, base: stationBase(view.station), address: view.station, online: true, settings: scope === "local" ? "/settings" : `/w/${scope}/settings` };
   return (
     <StationContext.Provider value={station}>
-      <NewChatOn key={view.station} view={view} station={station} stations={online} onStation={setStationId} onCreated={onCreated} />
+      <NewChatOn key={view.station} view={view} station={station} stations={online} onStation={onStation} onCreated={onCreated} />
     </StationContext.Provider>
   );
 }
@@ -133,6 +148,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         ...(choice.profile && entry?.accounts[runtime]?.some((a) => a.id === choice.profile) ? { profile: choice.profile } : {}),
       });
       track("chat_created", { runtime, model, ...(choice.effort ? { effort: choice.effort } : {}), ms: Math.round(performance.now() - at) });
+      // The chat is started here: the next new chat starts here too.
+      onStation(station.id);
       setMadeKey(key);
       return { key, thread: thread.id };
     })().catch((error: unknown) => { made.current = null; setMaking(false); throw error; });
