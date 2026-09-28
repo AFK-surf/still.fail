@@ -208,7 +208,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                     return (
                       <span key={key} className="side-tab-wrap">
                         <Tabs.Trigger className="side-tab" value={key} title={service.name}>
-                          <span className="side-tab-agent"><Web size={13} strokeWidth={1.75} />{service.name}</span>
+                          <span className="side-tab-agent"><Web size={13} strokeWidth={1.75} /><span className="side-tab-text" data-text={service.name}>{service.name}</span></span>
                         </Tabs.Trigger>
                         <button type="button" className="side-tab-close" aria-label={`关闭 ${service.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
@@ -221,7 +221,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   return (
                     <span key={key} className="side-tab-wrap">
                       <Tabs.Trigger className="side-tab" value={key} title={`${label} 的执行历史`}>
-                        <span className="side-tab-agent"><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={13} />{label}</span>
+                        <span className="side-tab-agent"><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={13} /><span className="side-tab-text" data-text={label}>{label}</span></span>
                       </Tabs.Trigger>
                       <button type="button" className="side-tab-close" aria-label={`关闭 ${label} 的执行历史`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                     </span>

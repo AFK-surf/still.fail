@@ -386,6 +386,9 @@
 .history-sep { color: var(--subtle); }
 .history-summary { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .side-tab-agent { display: inline-flex; align-items: center; gap: 6px; line-height: 1; }
+/* A tab is as wide as its label in the active weight, active or not: choosing one does not move the others. */
+.side-tab-text { display: inline-flex; flex-direction: column; }
+.side-tab-text::after { content: attr(data-text); height: 0; overflow: hidden; visibility: hidden; font-weight: 500; user-select: none; pointer-events: none; }
 .chat-info { width: 320px; padding: 12px 14px; }
 .chat-info .details-list { margin-top: 10px; }
 .history-tools { display: flex; align-items: center; gap: 2px; flex: none; }
