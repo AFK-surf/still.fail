@@ -423,6 +423,12 @@ export interface ChatThread {
 	time?: Record<string, Stamp>;
 }
 
+/** Something a job said, and when. */
+export interface JobNotice {
+	at: number;
+	text: string;
+}
+
 /**
  * A background job an agent started (a web service when it has a port): shown by its name; the port is how the
  * station reaches a service, not for people.
@@ -436,6 +442,14 @@ export interface Job {
 	exitCode?: number;
 	startedAt: number;
 	endedAt?: number;
+	/** What it runs (sh -c). */
+	command?: string;
+	/** How often a service was started again after it ended. */
+	restarts?: number;
+	/** What it said lately (`ember-job notify`), newest first: how people see what a long-running job is up to. */
+	notices?: JobNotice[];
+	/** When its output last grew; absent when it has none. */
+	outputAt?: number;
 }
 
 /** An agent of a chat: its session, the connect that started it, its profile, and what it can move to. */

@@ -306,6 +306,13 @@ impl Jobs {
         Ok(self.store.get_job(id)?.unwrap_or(job))
     }
 
+    /// Stops a job for someone on the pages: its agent is told who did (it did not ask for it).
+    pub async fn stop_for(&self, id: &str, who: &str) -> Result<JobRow> {
+        let job = self.stop(id).await?;
+        self.tell(&job, format!("{} was stopped by {who} from ember's page.", Self::named(&job)));
+        Ok(job)
+    }
+
     /// After a start of the station: what was running runs again, and its agent is told.
     pub fn relaunch(&self) {
         for job in self.store.list_jobs(None).unwrap_or_default().into_iter().filter(|j| j.state == "running") {

@@ -4,7 +4,8 @@
 import { StationPreview } from "../Preview.tsx";
 import { useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Close, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
+import { Boxes, Close, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
+import { alarmOf, JobDot, JobsPopover, JobsTab, toneOf, useNow } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router";
@@ -69,7 +70,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
   // Its agents' background jobs; a service's tab (`service:<job>`) is the chat's own while one of them has it.
   const jobs = agents.flatMap((a) => a.jobs ?? []);
-  const open = agents.length ? tabs.filter((key) => (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
+  const open = agents.length ? tabs.filter((key) => key === JOBS || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
+  // The job picked in the 任务 tab.
+  const [jobPicked, pickJob] = useState<string | null>(null);
   const shown = active && open.includes(active) ? active : open[0] ?? null;
   // Tabs and the one in front change together, and are kept for this chat in one write.
   const commit = (next: string[], front: string | null) => {
@@ -88,6 +91,10 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const closeTab = (key: string) => {
     const next = open.filter((t) => t !== key);
     commit(next, shown === key ? next.at(-1) ?? null : active);
+  };
+  const openJobs = (job?: string) => {
+    if (job) pickJob(job);
+    openTab(JOBS);
   };
   const toggleHistory = (key: string) => (open.includes(key) && shown === key ? closeTab(key) : openTab(key));
   // An activity row: its agent's history, open at that entry.
@@ -162,7 +169,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
           ))}
         </div>
         <div className="page-bar-actions">
-          <JobsPanel station={station.address} jobs={jobs} onOpen={(job) => openTab(`service:${job}`)} />
+          <JobsPanel station={station.address} jobs={jobs} onService={(job) => openTab(`service:${job}`)} onTab={openJobs} />
           {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
           {slackUrl && (
             <Tip label="在 Slack 中打开">
@@ -181,12 +188,22 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
             <div className="side-bar">
               <Tabs.List className="side-tab-list" aria-label="执行历史">
                 {open.map((key) => {
+                  if (key === JOBS) {
+                    return (
+                      <span key={key} className="side-tab-wrap">
+                        <Tabs.Trigger className="side-tab" value={key} title="服务和后台任务">
+                          <span className="side-tab-agent"><Boxes size={13} strokeWidth={1.75} /><span className="side-tab-text" data-text="任务">任务</span></span>
+                        </Tabs.Trigger>
+                        <button type="button" className="side-tab-close" aria-label="关闭任务" onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                      </span>
+                    );
+                  }
                   const service = jobs.find((j) => j.id === serviceOf(key));
                   if (service) {
                     return (
                       <span key={key} className="side-tab-wrap">
                         <Tabs.Trigger className="side-tab" value={key} title={service.name}>
-                          <span className="side-tab-agent"><Web size={13} strokeWidth={1.75} /><span className="side-tab-text" data-text={service.name}>{service.name}</span></span>
+                          <span className="side-tab-agent"><JobDot tone={toneOf(service)} /><span className="side-tab-text" data-text={service.name}>{service.name}</span></span>
                         </Tabs.Trigger>
                         <button type="button" className="side-tab-close" aria-label={`关闭 ${service.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
@@ -210,13 +227,20 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               <IconButton label="收起侧栏" icon={PanelClose} onClick={() => saveTabs([])} />
             </div>
             {open.map((key) => {
+              if (key === JOBS) {
+                return (
+                  <Tabs.Content key={key} className="side-content" value={key}>
+                    <JobsTab station={station.address} jobs={jobs} picked={jobPicked} onPick={pickJob} onService={(job) => openTab(`service:${job}`)} />
+                  </Tabs.Content>
+                );
+              }
               const service = jobs.find((j) => j.id === serviceOf(key));
               // Kept loaded while another tab shows: switching back does not load it anew.
               if (service) {
                 return (
                   <Tabs.Content key={key} className="side-content" value={key} forceMount>
                     {service.port !== undefined && (service.state === "running" || service.state === "exited")
-                      ? <StationPreview station={station.address} port={service.port} name={service.name} service={service.id} />
+                      ? <StationPreview station={station.address} port={service.port} name={service.name} service={service.id} restarting={service.state === "exited" ? { restarts: service.restarts ?? 0 } : null} />
                       : <Empty><p>「{service.name}」{service.state === "failed" ? "没能启动" : "已经停了"}。</p></Empty>}
                   </Tabs.Content>
                 );
@@ -238,73 +262,29 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   );
 }
 
+/** The 任务 tab's key: every service and job of the chat's agents. */
+const JOBS = "jobs";
+
 /** A web service's tab: its job, from its key (`service:<job>`); null for an agent's history tab. */
 function serviceOf(key: string): string | null {
   return key.startsWith("service:") ? key.slice("service:".length) : null;
 }
 
-/** A job's state, in words. */
-function jobState(job: Job): string {
-  switch (job.state) {
-    case "running": return "运行中";
-    case "exited": return job.port !== undefined ? "正在重启" : job.exitCode === 0 ? "已完成" : `已结束（退出码 ${job.exitCode ?? "?"}）`;
-    case "stopped": return "已停止";
-    default: return "没能启动";
-  }
-}
-
-/** The chat's web services (opened beside it) and background jobs (their last output): from the title bar. */
-function JobsPanel({ station, jobs, onOpen }: { station: string; jobs: Job[]; onOpen: (job: string) => void }) {
-  const call = useStationCall(station);
+/** The chat's web services and background jobs, from the title bar: what matters now, the rest in the 任务 tab. */
+function JobsPanel({ station, jobs, onService, onTab }: { station: string; jobs: Job[]; onService: (job: string) => void; onTab: (job?: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [shown, setShown] = useState<{ id: string; text: string | null } | null>(null);
-  const services = jobs.filter((j) => j.port !== undefined);
-  const plain = jobs.filter((j) => j.port === undefined);
-  const log = (id: string) => {
-    if (shown?.id === id) return setShown(null);
-    setShown({ id, text: null });
-    void call.request<{ text: string }>("GET", `/jobs/${encodeURIComponent(id)}/log?lines=80`)
-      .then((r) => setShown((now) => (now?.id === id ? { id, text: r.text || "（还没有输出）" } : now)), (e: Error) => setShown((now) => (now?.id === id ? { id, text: `读不到输出：${e.message}` } : now)));
-  };
+  const alarm = alarmOf(jobs, useNow(30_000));
+  const close = (then: () => void) => { setOpen(false); then(); };
   return (
-    <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (!next) setShown(null); }}>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label="服务和后台任务">
         <Popover.Trigger asChild>
-          <button type="button" className="icon-btn" aria-label="服务和后台任务" data-count={jobs.length || undefined}><Web {...ICON} /></button>
+          <button type="button" className="icon-btn jobs-trigger" aria-label="服务和后台任务" data-alarm={alarm} data-none={jobs.length === 0 || undefined}><Web {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
         <Popover.Content className="popover jobs-panel" align="end" sideOffset={6} collisionPadding={8}>
-          {jobs.length === 0 && <p className="jobs-empty">这个对话里还没有服务或后台任务。agent 起了以后会列在这里。</p>}
-          {services.length > 0 && (
-            <section>
-              <div className="jobs-head">服务</div>
-              {services.map((j) => {
-                const up = j.state === "running" || j.state === "exited";
-                return (
-                  <div key={j.id} className="jobs-row">
-                    <span className="jobs-name">{j.name}</span>
-                    <span className="jobs-state" data-state={j.state}>{jobState(j)}</span>
-                    {up && <button type="button" className="btn btn-secondary jobs-open" onClick={() => { onOpen(j.id); setOpen(false); }}>打开</button>}
-                  </div>
-                );
-              })}
-            </section>
-          )}
-          {plain.length > 0 && (
-            <section>
-              <div className="jobs-head">后台任务</div>
-              {plain.map((j) => (
-                <div key={j.id}>
-                  <button type="button" className="jobs-row jobs-toggle" aria-expanded={shown?.id === j.id} onClick={() => log(j.id)}>
-                    <span className="jobs-name">{j.name}</span>
-                    <span className="jobs-state" data-state={j.state}>{jobState(j)}</span>
-                  </button>
-                  {shown?.id === j.id && <pre className="code jobs-log">{shown.text ?? "正在读取…"}</pre>}
-                </div>
-              ))}
-            </section>
-          )}
+          <JobsPopover station={station} jobs={jobs} onService={(job) => close(() => onService(job))} onTab={(job) => close(() => onTab(job))} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

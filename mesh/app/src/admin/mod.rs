@@ -140,6 +140,8 @@ pub struct AdminDeps {
     pub machine_logins: Option<Arc<MachineLogins>>,
     /// Development only (EMBER_DEV=1): POST /dev/inject.
     pub dev: bool,
+    /// Background jobs, for the pages to stop one; None where there are none (tests).
+    pub jobs: Option<Arc<crate::jobs::Jobs>>,
 }
 
 /// An error that is the asker's: its status and what to tell them.
@@ -506,6 +508,13 @@ impl AdminApi {
             }
             // A background job (a web service's own page finds its port by it).
             (Some("jobs"), Some(id), None, "GET") => return ok(crate::jobs::shown(&self.deps.store, &self.deps.store.get_job(id)?.ok_or_else(|| http_error(404, format!("no job {id}")))?)),
+            // A background job stopped from the pages, as its agent's job_stop does.
+            (Some("jobs"), Some(id), Some("stop"), "POST") => {
+                let jobs = self.deps.jobs.clone().ok_or_else(|| http_error(404, "no jobs here".to_string()))?;
+                let job = jobs.stop_for(id, &viewer.id()).await?;
+                info!(job = id, by = viewer.id(), "job stopped from the admin page");
+                return ok(crate::jobs::shown(&self.deps.store, &job));
+            }
             (Some("sessions"), Some(key), None, "DELETE") => {
                 self.session_row(key)?;
                 self.deps.hub.delete_session(key).await?;

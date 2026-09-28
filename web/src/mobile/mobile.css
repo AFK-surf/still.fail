@@ -631,3 +631,23 @@ button.m-agent-head { cursor: pointer; }
 
 /* A new chat once its first message is sent: the chat's page already, over the new chat's (its bar and all). */
 .m-new-as-chat { z-index: 5; }
+
+/* A chat's services and background jobs (../Jobs.tsx): the dot on the name's line, what it is up to under it. */
+.m-job { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 12px; }
+.m-job[data-off] { opacity: .55; }
+.m-job > .job-dot { margin-top: calc((15px * 1.45 - 8px) / 2 - .5px); }
+.m-job-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.m-job-text b { font-size: 15px; font-weight: 500; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-job-text > span, .m-job-head span > span { font-size: 12.5px; color: var(--m-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-job-head { display: flex; align-items: flex-start; gap: 12px; padding: 4px 22px 14px; }
+.m-job-head > .job-dot { margin-top: calc((16px * 1.45 - 8px) / 2 - .5px); }
+.m-job-head span { display: flex; flex-direction: column; min-width: 0; }
+.m-job-head b { font-size: 16px; font-weight: 600; line-height: 1.45; }
+.m-job-body { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
+.m-job-notices { display: grid; gap: 12px; font-size: 14px; overflow-y: auto; }
+.m-job-notices p { margin: 0; display: grid; grid-template-columns: 3.4em 1fr; gap: 10px; }
+.m-job-notices time { color: var(--m-subtle); font-variant-numeric: tabular-nums; }
+.m-job-output { margin: 0; padding: 12px 14px; max-height: 50vh; overflow: auto; border-radius: 16px; background: color-mix(in srgb, var(--m-ink) 5%, transparent); font: 11.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.m-job-last { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--m-subtle); }
+.m-job-last code { font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--m-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-job-stop { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 46px; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--m-red) 12%, transparent); color: var(--m-red); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }

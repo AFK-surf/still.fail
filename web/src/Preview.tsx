@@ -6,8 +6,8 @@
 // like any other call, and hands the answer back. No port on the station is
 // open to anyone. The desktop app needs none of that: the frame is at
 // ember-preview://, which the app serves itself through its core.
-import { ArrowLeft, ArrowRight, External, Refresh } from "./icons.tsx";
-import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, External, Refresh, Web } from "./icons.tsx";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useHref } from "react-router";
 import { useLink } from "./station.tsx";
 import { useCall } from "./core/react.ts";
@@ -32,13 +32,18 @@ interface Shown {
   /** What people know it by. */
   name: string;
   external?: string | undefined;
+  /** It ended and the station starts it again (how often so far); null while it is up. */
+  restarting?: Restarting | null | undefined;
 }
 
+interface Restarting { restarts: number }
+
 /** A web service beside a chat, or on a page of its own (`alone`: no "open on its own" there). */
-export function StationPreview({ station, port, name, service, alone = false }: { station: string; port: number; name: string; service: string; alone?: boolean }) {
+export function StationPreview({ station, port, name, service, alone = false, restarting = null }:
+  { station: string; port: number; name: string; service: string; alone?: boolean; restarting?: Restarting | null }) {
   // Its page of its own, at the station's pages' place (a new window or tab: the browser's).
   const own = useHref(useLink()(`/services/${encodeURIComponent(service)}`));
-  const shown: Shown = { station, port, name, external: alone ? undefined : own };
+  const shown: Shown = { station, port, name, external: alone ? undefined : own, restarting };
   return window.emberDesktop ? <DesktopPreview {...shown} /> : <WebPreview {...shown} />;
 }
 
@@ -69,6 +74,7 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
       {forward && <button type="button" className="icon-btn" aria-label="前进" title="前进" disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button>}
       <button type="button" className="icon-btn" aria-label="刷新" title="刷新" onClick={reload}><Refresh {...icon} /></button>
       <label className="preview-address">
+        <Web size={14} strokeWidth={1.75} />
         <span className="preview-host">{name}</span>
         <input className="preview-path" value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />
       </label>
@@ -77,7 +83,23 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
   );
 }
 
-function DesktopPreview({ station, port, name, external }: Shown) {
+/** Over the page while its service starts again; once it is up the page loads anew (`reload`). */
+function Restart({ name, restarting, reload }: { name: string; restarting: Restarting | null | undefined; reload: () => void }) {
+  const was = useRef(restarting);
+  useEffect(() => {
+    if (was.current && !restarting) reload();
+    was.current = restarting;
+  }, [restarting, reload]);
+  if (!restarting) return null;
+  return (
+    <div className="preview-restart" role="status">
+      <span className="preview-restart-dot" aria-hidden="true" />
+      <span><b>{name}正在重启</b><span>{restarting.restarts ? `第 ${restarting.restarts} 次 · ` : ""}起来后自动刷新</span></span>
+    </div>
+  );
+}
+
+function DesktopPreview({ station, port, name, external, restarting }: Shown) {
   const [host, setHost] = useState<string | null>(null);
   const [path, setPath] = useState("/");
   const [n, setN] = useState(0);
@@ -90,15 +112,19 @@ function DesktopPreview({ station, port, name, external }: Shown) {
     setPath(to);
     setN((x) => x + 1);
   };
+  const reloadDesktop = useCallback(() => setN((x) => x + 1), []);
   return (
     <div className="preview">
       <PreviewBar name={name} at={path} go={go} reload={() => setN((x) => x + 1)} external={external} />
-      {host && <iframe key={n} className="preview-frame" title={name} src={`ember-preview://${host}${path}`} />}
+      <div className="preview-stage">
+        {host && <iframe key={n} className="preview-frame" title={name} src={`ember-preview://${host}${path}`} />}
+        <Restart name={name} restarting={restarting} reload={reloadDesktop} />
+      </div>
     </div>
   );
 }
 
-function WebPreview({ station, port, name, external }: Shown) {
+function WebPreview({ station, port, name, external, restarting }: Shown) {
   const call = useCall();
   // One frame for as long as this shows: moving about (back, reload, a path) is the frame's own, told to it.
   const [nonce] = useState(() => crypto.randomUUID());
@@ -138,10 +164,14 @@ function WebPreview({ station, port, name, external }: Shown) {
     };
   }, [nonce, station, port, call]);
   const nav = (action: "back" | "forward" | "reload" | "go", path?: string) => frame.current?.contentWindow?.postMessage({ type: "ember-preview-nav", action, path }, ORIGIN);
+  const reloadWeb = useCallback(() => frame.current?.contentWindow?.postMessage({ type: "ember-preview-nav", action: "reload" }, ORIGIN), []);
   return (
     <div className="preview">
       <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={() => nav("reload")} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} />
-      <iframe ref={frame} className="preview-frame" title={name} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} />
+      <div className="preview-stage">
+        <iframe ref={frame} className="preview-frame" title={name} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} />
+        <Restart name={name} restarting={restarting} reload={reloadWeb} />
+      </div>
     </div>
   );
 }

@@ -439,6 +439,7 @@ async fn setup_with(o: Setup) -> Rig {
         check_on_start: false,
         machine_logins: o.machine,
         dev: false,
+        jobs: None,
     });
     Rig { _dir: dir, data, path, settings, store, hub, conns, connections, claude, slack, api, logins }
 }

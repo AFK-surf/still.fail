@@ -257,6 +257,7 @@ impl App {
             check_on_start: true,
             machine_logins: Some(machine_logins),
             dev: std::env::var("EMBER_DEV").as_deref() == Ok("1"),
+            jobs: Some(jobs.clone()),
         });
         let access = settings.clone();
         let gate = AccessGate::new(move || access.config().admin_access.clone(), None, || None);
