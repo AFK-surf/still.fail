@@ -22,8 +22,8 @@ export const chatToBottom = style({
     [`${chat}[data-under-composer] &`]: {
       right: "calc((100% - min(760px, 100% - 2 * var(--composer-inset))) / 2 + 6px)", width: "32px", height: "32px",
       bottom: "calc(12px + var(--composer-height))", border: "0",
-      background: `color-mix(in oklch, ${vars.canvas} 45%, transparent)`, WebkitBackdropFilter: "blur(10px)",
-      backdropFilter: "blur(10px)", boxShadow: "0 6px 16px rgb(0 0 0 / .14), 0 2px 5px rgb(0 0 0 / .1)",
+      background: `color-mix(in oklch, ${vars.canvas} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
+      backdropFilter: "blur(20px)", boxShadow: "0 4px 12px rgb(0 0 0 / .07), 0 1px 3px rgb(0 0 0 / .05)",
       vars: { "--composer-inset": "32px" },
     },
   },

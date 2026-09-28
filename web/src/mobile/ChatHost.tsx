@@ -6,7 +6,9 @@ import { createContext, useContext, useLayoutEffect, useRef, useState, type RefO
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { ChatScreen, ComposerBar, DraftExtras, openAttach, useDraft, useUpload, type Draft } from "./Chat.tsx";
+import { ChatScreen, ComposerBar, DraftExtras, openAttach, type Draft } from "./Chat.tsx";
+import { useDraft } from "../draft.ts";
+import { useStationCall, type Attachment } from "../api.ts";
 import { NewChatScreen } from "./NewChat.tsx";
 import { Loading } from "./parts.tsx";
 import * as css from "./ChatHost.css.ts";
@@ -37,8 +39,13 @@ export function useHost(): Host {
 }
 
 export function ChatHost({ stations }: { stations: Station[] | undefined }) {
-  const { station: id } = useParams();
-  const draft = useDraft();
+  const { station: id, chat } = useParams();
+  // Each chat keeps what is written to it; a new chat's goes on into the chat it makes. Files go to the station the
+  // page writes to (its composer says which).
+  const upload = useRef<(file: File) => Promise<Attachment>>(() => Promise.reject(new Error("没有 station")));
+  const shared = useDraft({ key: chat === undefined ? undefined : `${id}:${chat}`, upload: (file) => upload.current(file) });
+  const [focus, setFocus] = useState(0);
+  const draft: Draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
   const now = useRef(draft);
   now.current = draft;
   const root = useRef<HTMLDivElement>(null);
@@ -60,19 +67,21 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
       <div className={css.mChatHost} ref={root}>
         {body}
         {/* Once shown, it stays (the page above changing hands it on). */}
-        {shown && <Composer shown={shown} latest={latest} draft={draft} now={now} root={root} />}
+        {shown && <Composer shown={shown} latest={latest} draft={draft} now={now} root={root} upload={upload} />}
       </div>
     </HostContext.Provider>
   );
 }
 
 /** The composer: a floating capsule at the page's foot, with the files and quotes going with the message. */
-function Composer({ shown, latest, draft, now, root }: {
+function Composer({ shown, latest, draft, now, root, upload: uploader }: {
   shown: Pick<HostComposer, "station" | "placeholder" | "offline">; latest: RefObject<HostComposer | null>; draft: Draft; now: RefObject<Draft>;
-  root: RefObject<HTMLDivElement | null>;
+  root: RefObject<HTMLDivElement | null>; upload: RefObject<(file: File) => Promise<Attachment>>;
 }) {
   const app = useApp();
-  const upload = useUpload(draft, shown.station);
+  const call = useStationCall(shown.station);
+  uploader.current = (file) => call.upload(file);
+  const upload = draft.add;
   const capsule = useRef<HTMLDivElement>(null);
   // What is above keeps its end clear of the capsule, whatever its height.
   useLayoutEffect(() => {

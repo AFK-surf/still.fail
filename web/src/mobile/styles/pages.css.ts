@@ -18,8 +18,8 @@ export const mGlass = style({
 /** A capsule floating over the list: raised, frosted, with a hairline round it. */
 export const mFloating = style({
   background: "color-mix(in srgb, var(--m-surface) 72%, transparent)", WebkitBackdropFilter: "blur(20px)",
-  backdropFilter: "blur(20px)", border: "0.5px solid var(--m-line)",
-  boxShadow: "0 6px 16px rgba(0, 0, 0, .14), 0 2px 5px rgba(0, 0, 0, .1)",
+  backdropFilter: "blur(20px)",
+  boxShadow: "0 4px 12px rgba(0, 0, 0, .07), 0 1px 3px rgba(0, 0, 0, .05)",
   selectors: {
     [`:root[data-theme="dark"] ${m} &`]: { background: "color-mix(in srgb, var(--m-surface2) 72%, transparent)" },
   },

@@ -34,11 +34,10 @@ globalStyle(composerBox, {
 globalStyle(`${newChatInner} > ${composerWrap}, ${newChatInner} > form`, { justifySelf: "stretch", textAlign: "left" });
 /**
  * The composer, a new chat's (roomy) and a chat's (at its foot) alike, as the phone's capsule (the phone's mFloating):
- * frosted and raised, with no line round it; its send a dark disc. Thinner and less blurred than the phone's: over a white
- * page and thin text, more of either showed as plain white.
+ * frosted and raised, with no line round it, its glass and shadow the phone's; its send a dark disc.
  */
 /** Here rather than with its class: it comes after .new-chat-held, and wins over it. */
 globalStyle(composerBox, {
-  border: "0", background: `color-mix(in oklch, ${vars.canvas} 45%, transparent)`, WebkitBackdropFilter: "blur(10px)",
-  backdropFilter: "blur(10px)", boxShadow: "0 6px 16px rgb(0 0 0 / .14), 0 2px 5px rgb(0 0 0 / .1)",
+  border: "0", background: `color-mix(in oklch, ${vars.canvas} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
+  backdropFilter: "blur(20px)", boxShadow: "0 4px 12px rgb(0 0 0 / .07), 0 1px 3px rgb(0 0 0 / .05)",
 });

@@ -243,3 +243,7 @@ globalStyle(`${mJobHead} span > span`, {
 globalStyle(`${mJobHead} > ${jobDot}`, { marginTop: "calc((16px * 1.45 - 8px) / 2 - .5px)" });
 globalStyle(`${mJobNotices} p`, { margin: "0", display: "grid", gridTemplateColumns: "3.4em 1fr", gap: "10px" });
 globalStyle(`${mJobNotices} time`, { color: "var(--m-subtle)", fontVariantNumeric: "tabular-nums" });
+/** Who said it, as the wide screen names them: in the accent's ink, cut short past its room. */
+globalStyle(`${mAgentHead} b`, {
+  minWidth: "0", fontWeight: "650", color: "var(--m-accent-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});

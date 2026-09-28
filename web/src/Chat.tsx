@@ -12,7 +12,7 @@ import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, useFileUrl, useNear } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
-import { track } from "./telemetry.ts";
+import { useDraft, type DraftQuote } from "./draft.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss from "./mobile/styles/chat.css.ts";
@@ -49,37 +49,16 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const composerHeight = useComposerHeight();
   const floor = useRef<HTMLDivElement>(null);
   const sending = useChatSend();
-  const { thread, outbox, messages } = chat;
+  const { thread, outbox } = chat;
   const id = thread?.id ?? null;
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
-  // Whose a message is, the core says.
-  const mineOf = (m: ChatMessage) => m.mine;
-  useStickToBottom(list, `.${conversationCss.msg}`, floor);
-  // Without a chat there is nothing older to load and nothing to read.
-  const older = () => (id === null ? Promise.resolve() : sending.older(id));
-  useOlderOnScroll(list, chat, older);
-  useMarkRead(floor, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
-  const returning = useRememberPlace(list, `${useStation().address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, messages.length > 0);
-  const divider = useUnreadLine(list, chat, messages, mineOf, older, returning);
-  const away = useAwayFromBottom(list);
-  // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
-  const sentHere = useRef(new Set<string>());
-  for (const o of outbox) sentHere.current.add(o.text);
-  // Messages there when the chat opened (and older pages loaded later) show at once; newer ones ease in, except a reply that already streamed in place.
-  const firstSeq = useRef<number | null>(null);
-  if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
+  const { messages, divider, away, shown, rowOf, poseOf } = useMessageList(list, floor, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives);
   const agents: AgentHere[] = chat.agents.map(({ session, status, since }) => (
     { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, session, status, live: lives.get(session.key), since }
   ));
   const agentOf = (key: string) => agents.find((a) => a.key === key);
-  const working = agents.filter((a) => a.status === "running");
-  // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
-  const atWork: AgentAtWork[] = working.map((a) => ({ key: a.key, who: a.who, runtime: a.runtime, maker: a.maker, activity: a.live?.activity ?? null, since: a.since }));
-  const emissions = useEmissions(list);
-  const shown = useLinger(atWork, emissions.keeps);
-  emissions.take(messages, firstSeq.current, new Set(shown.map((s) => s.agent.key)));
   // Where agents post to reach this chat.
   const address = thread ? `${thread.channel}/${thread.threadTs}` : null;
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
@@ -134,13 +113,10 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           </div>
         )}
         {messages.map((m) => {
-          const fresh = m.seq > firstSeq.current!;
-          const mine = mineOf(m);
-          const enter = fresh && !(mine && sentHere.current.has(m.text)) ? true : undefined;
           const line = m.seq === divider ? <div key={`new-${m.seq}`} className={css.chatUnreadLine} data-unread-line role="separator"><span>以下是新消息</span></div> : null;
-          const told = !mine && !m.system;
+          const { enter, emitted } = rowOf(m);
           return [line, (
-            <MessageRow key={m.seq} message={m} enter={told && emissions.emits(m.seq) ? undefined : enter} emitted={told ? emissions.stateOf(m.seq) : null}
+            <MessageRow key={m.seq} message={m} enter={enter} emitted={emitted}
               agentHere={m.by.agent ? agentOf(m.by.agent) !== undefined : false} owners={owners} owner={stable.owner} onOpenHistory={stable.open} />
           )];
         })}
@@ -148,7 +124,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           <div key={o.id} className={`${conversationCss.msg} ${chatCss2.msgMine}`} data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
             <Quotes quotes={o.quotes} />
             {o.text && <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{o.text}</div></div>}
-            <Files owner={ownerOf} files={o.attachments} />
+            <Files owner={ownerOf} files={o.attachments} look={look} />
             {o.state === "failed"
               // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
               ? <div className={css.msgUnsent}>
@@ -163,7 +139,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
         ))}
         {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
         {shown.map(({ agent, leaving }) => (
-          <Activity key={agent.key} agent={agent} leaving={leaving} pose={emissions.poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
+          <Activity key={agent.key} agent={agent} leaving={leaving} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
         ))}
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
@@ -192,6 +168,57 @@ export function historyLink(href: string): { key: string; entry: number } | null
   const key = url.searchParams.get("history");
   const entry = Number(url.searchParams.get("entry") ?? 0);
   return key ? { key, entry: Number.isInteger(entry) && entry >= 0 ? entry : 0 } : null;
+}
+
+/** How a message of the list comes in: easing in (`enter`), or held in its agent's activity and sent out of it (`emitted`). */
+export interface RowState { enter: true | undefined; emitted: "held" | "emitting" | null }
+
+/**
+ * A chat's list as both screens run it (this page, and the phone's, mobile/Chat.tsx): it follows its bottom, loads
+ * older pages near its top, records what is read, keeps the reader's place (`place`: whose it is), draws the unread
+ * line, and shows its agents at work, their replies coming out of their activity. Answers what the list shows: its
+ * messages, where the unread line goes, whether the reader is away from the bottom, the agents at work, and how each
+ * message comes in.
+ */
+export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: RefObject<HTMLDivElement | null>, chat: ChatView, place: string, lives: ReadonlyMap<string, Live>) {
+  const sending = useChatSend();
+  const id = chat.thread?.id ?? null;
+  const messages = chat.messages;
+  // Whose a message is, the core says.
+  const mineOf = (m: ChatMessage) => m.mine;
+  useStickToBottom(list, `.${conversationCss.msg}`, floor);
+  // Without a chat there is nothing older to load and nothing to read.
+  const older = () => (id === null ? Promise.resolve() : sending.older(id));
+  useOlderOnScroll(list, chat, older);
+  useMarkRead(floor, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
+  const returning = useRememberPlace(list, place, messages.length > 0);
+  const divider = useUnreadLine(list, chat, messages, mineOf, older, returning);
+  const away = useAwayFromBottom(list);
+  // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
+  const sentHere = useRef(new Set<string>());
+  for (const o of chat.outbox) sentHere.current.add(o.text);
+  // Messages there when the chat opened (and older pages loaded later) show at once; newer ones ease in, except a reply that already streamed in place.
+  const firstSeq = useRef<number | null>(null);
+  if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
+  // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
+  const atWork: AgentAtWork[] = chat.agents.filter((a) => a.status === "running").map(({ session, since }) => (
+    { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, activity: lives.get(session.key)?.activity ?? null, since }
+  ));
+  const emissions = useEmissions(list);
+  const shown = useLinger(atWork, emissions.keeps);
+  emissions.take(messages, firstSeq.current, new Set(shown.map((s) => s.agent.key)));
+  const rowOf = (m: ChatMessage): RowState => {
+    const mine = mineOf(m);
+    const told = !mine && !m.system;
+    const enter = m.seq > firstSeq.current! && !(mine && sentHere.current.has(m.text)) && !(told && emissions.emits(m.seq)) ? true : undefined;
+    return { enter, emitted: told ? emissions.stateOf(m.seq) : null };
+  };
+  return { messages, divider, away, shown, rowOf, poseOf: emissions.poseOf };
+}
+
+/** The core hands the chat over anew as it changes: a message is the same one if all it holds is (its times in words too). */
+export function sameMessage(a: ChatMessage, b: ChatMessage): boolean {
+  return a === b || JSON.stringify(a) === JSON.stringify(b);
 }
 
 /**
@@ -368,7 +395,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
       <MineMessage data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
         <Quotes quotes={m.quotes} />
         <MineBubble text={m.text} />
-        <Files owner={owner} files={m.attachments} />
+        <Files owner={owner} files={m.attachments} look={look} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting
           ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
@@ -399,13 +426,11 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} />
       {m.authorKind === "person"
-        ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={owner} files={m.attachments} /></>
-        : <ProseWithFiles owner={owner} text={m.text} files={m.attachments} />}
+        ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={owner} files={m.attachments} look={look} /></>
+        : <ProseWithFiles owner={owner} text={m.text} files={m.attachments} look={look} className={conversationCss.markdown} />}
     </OthersMessage>
   );
-}, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners
-  // The core hands the chat over anew as it changes: a message is the same one if all it holds is (its times in words too).
-  && (a.message === b.message || JSON.stringify(a.message) === JSON.stringify(b.message)));
+}, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && sameMessage(a.message, b.message));
 
 type Data = { [key: `data-${string}`]: string | number | boolean | undefined };
 
@@ -506,25 +531,42 @@ function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?
 
 // ── files ───────────────────────────────────────────────────────────────
 
+/** How a screen draws a message's files (this page's `look`; the phone's, mobile/Chat.tsx): what differs is only the look. */
+export interface FileLook {
+  /** The list of a message's files. */
+  files: string;
+  /** An image's button, and the box it takes before it loads. */
+  image: string; box(file: Attachment): CSSProperties;
+  /** What an image shows until it loads; without it, its button is disabled until then. */
+  wait?: string;
+  /** A file's button, around its card. */
+  open: string; card(file: Attachment): ReactNode;
+}
+
 /** An agent's Markdown with its files: those its text names shown there, the rest below it. */
-function ProseWithFiles({ owner, text, files }: { owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined }) {
+export function ProseWithFiles({ owner, text, files, look, className, prose, markdown }: {
+  owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined; look: FileLook;
+  /** Around the Markdown; `prose`, what else it holds (a long-press on the phone); `markdown`, a frame of its own inside. */
+  className: string; prose?: React.HTMLAttributes<HTMLDivElement> & Record<`data-${string}`, unknown>; markdown?: string;
+}) {
   const { placed, rest } = useMemo(() => placeFiles(text, files), [text, files]);
+  const words = <Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <FileItem sessionKey={owner(f)} file={f} look={look} />}>{text}</Prose>;
   return (
     <>
-      <div className={conversationCss.markdown}><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <FileItem sessionKey={owner(f)} file={f} />}>{text}</Prose></div>
-      <Files owner={owner} files={rest} />
+      <div className={className} {...prose}>{markdown ? <div className={markdown}>{words}</div> : words}</div>
+      <Files owner={owner} files={rest} look={look} />
     </>
   );
 }
 
 /** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */
-function Files({ owner, files }: { owner: (file: Attachment) => string | null; files: Attachment[] | undefined }) {
+export function Files({ owner, files, look }: { owner: (file: Attachment) => string | null; files: Attachment[] | undefined; look: FileLook }) {
   if (!files?.length) return null;
-  return <div className={css.msgFiles}>{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} />)}</div>;
+  return <div className={look.files}>{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} look={look} />)}</div>;
 }
 
-/** Images show themselves at their own proportions; other files are a card. Either opens in a preview. */
-function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
+/** Images show themselves at their own proportions, fetched as they come near the screen; other files are a card. Either opens in a preview. */
+function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file: Attachment; look: FileLook }) {
   const image = isImage(file.name);
   const box = useRef<HTMLButtonElement>(null);
   const near = useNear(box, image);
@@ -534,21 +576,24 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={css.msgImage} onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`} style={imageBox(file)}>
-          {url ? <img src={url} alt={file.name} /> : <span className={css.msgImageWait} />}
+        <button ref={box} type="button" className={look.image} onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`} style={look.box(file)}
+          disabled={look.wait === undefined && !url}>
+          {url ? <img src={url} alt={file.name} /> : look.wait !== undefined && <span className={look.wait} />}
         </button>
         {preview}
       </>
     );
   }
-  if (sessionKey === null) return <FileCard file={file} />;
+  if (sessionKey === null) return look.card(file);
   return (
     <>
-      <button type="button" className={css.fileCardOpen} onClick={() => setOpen(true)} aria-label={`查看 ${file.name}`}><FileCard file={file} /></button>
+      <button type="button" className={look.open} onClick={() => setOpen(true)} aria-label={`查看 ${file.name}`}>{look.card(file)}</button>
       {preview}
     </>
   );
 }
+
+const look: FileLook = { files: css.msgFiles, image: css.msgImage, wait: css.msgImageWait, box: (f) => imageBox(f), open: css.fileCardOpen, card: (f) => <FileCard file={f} /> };
 
 /**
  * The box an image takes in the chat, known before it loads: its own
@@ -576,16 +621,7 @@ function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "
   );
 }
 
-// ── quotes being written ────────────────────────────────────────────────
-
-export interface DraftQuote extends Quote { id: string }
-
 // ── composer ────────────────────────────────────────────────────────────
-
-const MAX_FILE = 50 * 1024 * 1024;
-
-/** A file on its way to the station: uploading, uploaded, or failed. */
-interface Pending { id: number; name: string; size: number; done: Attachment | null; error: string | null; preview?: string }
 
 /**
  * Where people write to a chat; a new chat is made by the first message or
@@ -619,17 +655,13 @@ export interface ComposerProps {
   carry?: MutableRefObject<string | null>;
 }
 
-/** Drafts put away as the composer moved to another chat, by key. */
-const drafts = new Map<string, { text: string; files: Pending[] }>();
-
 export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = "发消息", locked = false, roomy = false, draftKey, carry }: ComposerProps) {
   const api = useApi();
-  const [text, setText] = useState("");
-  const [files, setFiles] = useState<Pending[]>([]);
+  const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file) => api.uploadFile(file), quotes: [quotes, setQuotes] });
+  const { text, setText, files, add, uploading, starting } = draft;
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
-  const nextId = useRef(1);
   // Typing starts the session's runtime, so a cold start overlaps the writing.
   const warmed = useRef(0);
   const warm = () => {
@@ -643,65 +675,9 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     quoteInputs.current.get(focusQuote)?.focus();
     onFocused();
   }, [focusQuote]);
-  const target = async (): Promise<{ key: string | null; thread: number }> => (thread !== null ? { key: sessionKey, thread } : await ensureChat!());
-  const chat = useChatSend();
-  const [starting, setStarting] = useState(false);
-  const [sendError, setSendError] = useState<Error | null>(null);
-  // Another chat: what is typed is kept for the one before, and the next one's comes back; unless it is to go on.
-  const shownKey = useRef(draftKey);
-  useLayoutEffect(() => {
-    const before = shownKey.current;
-    if (before === draftKey) return;
-    shownKey.current = draftKey;
-    if (carry && draftKey !== undefined && carry.current === draftKey) { carry.current = null; return; }
-    if (before !== undefined && (text || files.length)) drafts.set(before, { text, files });
-    const next = draftKey === undefined ? undefined : drafts.get(draftKey);
-    if (draftKey !== undefined) drafts.delete(draftKey);
-    setText(next?.text ?? ""); setFiles(next?.files ?? []); setSendError(null);
-  }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  // The composer empties at once: the message lives in the chat's outbox until the station has it (a failure shows there too).
-  const send = async (value: string) => {
-    const kept = { text, files, quotes };
-    const attachments = files.flatMap((f) => (f.done ? [f.done] : []));
-    const sent = quotes.map(({ author, text: t, comment, ts, role }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}) }));
-    setText(""); setFiles([]); setQuotes(() => []); setSendError(null);
-    if (thread === null) onSending?.(value);
-    let to: number;
-    try {
-      setStarting(thread === null);
-      to = (await target()).thread;
-    } catch (error) {
-      // No chat to send into (a new one could not be made): the draft comes back.
-      setText(kept.text); setFiles(kept.files); setQuotes(() => kept.quotes);
-      onSending?.(null);
-      setSendError(error instanceof Error ? error : new Error(String(error)));
-      return;
-    } finally {
-      setStarting(false);
-    }
-    for (const f of kept.files) if (f.preview) URL.revokeObjectURL(f.preview);
-    const at = performance.now();
-    const counts = { attachments: attachments.length, quotes: sent.length, first: thread === null };
-    void chat.send(to, value, attachments, sent).then(
-      () => track("message_sent", { ...counts, ok: true, ms: Math.round(performance.now() - at) }),
-      () => track("message_sent", { ...counts, ok: false }),
-    );
-    onSent?.(to);
-  };
-  const add = (list: FileList | File[]) => {
-    for (const file of Array.from(list)) {
-      const id = nextId.current++;
-      const tooBig = file.size > MAX_FILE;
-      // Images show at once from the local file; the preview URL lives until the file leaves the composer.
-      const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-      setFiles((all) => [...all, { id, name: file.name, size: file.size, done: null, error: tooBig ? "超过 50 MB" : null, ...(preview ? { preview } : {}) }]);
-      if (tooBig) continue;
-      // The file waits on the station in no chat: a new chat is made only with the first message, which takes it in.
-      api.uploadFile(file).then(
-        (done) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, done } : f))),
-        (error: unknown) => setFiles((all) => all.map((f) => (f.id === id ? { ...f, error: error instanceof Error ? error.message : "上传失败" } : f))),
-      );
-    }
+  const send = async () => {
+    const to = await draft.send(async () => (thread !== null ? thread : (await ensureChat!()).thread), { first: thread === null, ...(onSending ? { onSending } : {}) });
+    if (to !== null) onSent?.(to);
   };
   // Switching to a chat puts the cursor in its composer (not on touch screens, where it would raise the keyboard),
   // before it is first drawn: it never shows unfocused first.
@@ -734,10 +710,9 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     el.addEventListener("scroll", edges);
     return () => { resize.disconnect(); el.removeEventListener("scroll", edges); };
   }, [text]);
-  const uploading = files.some((f) => !f.done && !f.error);
-  const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !starting && !locked;
+  const ready = draft.ready && !locked;
   const submit = () => {
-    if (ready) void send(text.trim());
+    if (ready) void send();
   };
   return (
     <div className={cloudCss.composerWrap}>
@@ -764,7 +739,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
         {files.length > 0 && (
           <div className={css.composerFiles}>
             {files.map((f) => {
-              const remove = () => { if (f.preview) URL.revokeObjectURL(f.preview); setFiles((all) => all.filter((x) => x.id !== f.id)); };
+              const remove = () => draft.remove(f.id);
               return f.preview ? (
                 <span key={f.id} className={css.composerThumb} title={f.error ?? f.name} data-error={f.error ? true : undefined}>
                   <img src={f.preview} alt={f.name} />
@@ -800,7 +775,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
           </Tip>
         </div>
       </form>
-      {sendError && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{sendError.message}</p>}
+      {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
     </div>
   );
 }

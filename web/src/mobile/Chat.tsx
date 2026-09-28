@@ -3,15 +3,15 @@
 // or name. Your messages sit right in a bubble; everyone else gets a face, a name and the time over their words.
 // Long-press quotes or copies a message; ＋ adds files. The list's behaviour (following its end, older pages, what is
 // read, the unread line, where it was left, messages coming out of an agent's avatar) is the desktop's (../Chat.tsx).
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useParams } from "react-router";
-import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
+import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatMessage, type ChatThread, type ChatView, type Maker, type Outgoing, type Quote, type RuntimeKind } from "../api.ts";
 import { useHost, type HostComposer } from "./ChatHost.tsx";
-import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, useFileUrl, useNear } from "../FilePreview.tsx";
-import { Activity, useAwayFromBottom, useEmissions, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
+import type { Draft as SharedDraft } from "../draft.ts";
+import { chatImages, fileSize, Gallery } from "../FilePreview.tsx";
+import { Activity, Files, ProseWithFiles, sameMessage, useMessageList, type FileLook } from "../Chat.tsx";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
-import { placeFiles, Prose } from "../Prose.tsx";
-import { useStickToBottom } from "../scroll.ts";
+import { Prose } from "../Prose.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { ask } from "./sheets.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
@@ -117,31 +117,17 @@ function Messages({ view, lives, list, floor, draft, here }: {
   view: ChatView; lives: ReturnType<typeof useLives>; list: RefObject<HTMLDivElement | null>; floor: RefObject<HTMLDivElement | null>; draft: Draft; here: Here;
 }) {
   const app = useApp();
-  const sending = useChatSend();
   const thread = view.thread;
-  const id = thread?.id ?? null;
-  const messages = view.messages;
-  const mine = (m: ChatMessage) => m.mine;
-  useStickToBottom(list, `.${conversationCss.msg}`, floor);
-  const older = () => (id === null ? Promise.resolve() : sending.older(id));
-  useOlderOnScroll(list, view, older);
-  useMarkRead(floor, view, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
-  const returning = useRememberPlace(list, `${here.station}:${thread?.id ?? here.key}`, messages.length > 0);
-  const divider = useUnreadLine(list, view, messages, mine, older, returning);
-  const away = useAwayFromBottom(list);
-  // Messages there when the chat opened (and older pages loaded later) show at once; newer ones come up as they fade in.
-  const firstSeq = useRef<number | null>(null);
-  if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
-  const sentHere = useRef(new Set<string>());
-  for (const o of view.outbox) sentHere.current.add(o.text);
-  const working = view.agents.filter((a) => a.status === "running");
-  // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
-  const atWork: AgentAtWork[] = working.map((a) => ({ key: a.session.key, who: a.session.agentText, runtime: a.session.runtime, maker: a.session.maker, activity: lives.get(a.session.key)?.activity ?? null, since: a.since }));
-  const emissions = useEmissions(list);
-  const shown = useLinger(atWork, emissions.keeps);
-  emissions.take(messages, firstSeq.current, new Set(shown.map((s) => s.agent.key)));
+  const { messages, divider, away, shown, rowOf, poseOf } = useMessageList(list, floor, view, `${here.station}:${thread?.id ?? here.key}`, lives);
   const agentOf = (key: string | undefined) => view.agents.find((a) => a.session.key === key);
   const images = () => chatImages([...messages, ...view.outbox.map((o) => ({ authorKind: "person", ...o }))], (f) => ownerOf(here, f));
+  // The messages are kept as they are while nothing they show changes (Said): what they are handed stays the same
+  // function, the latest one behind it, and `owners` says when whose files are whose has changed.
+  const latest = useRef({ here, draft, images });
+  latest.current = { here, draft, images };
+  const [act] = useState<Act>(() => ({ owner: (file) => ownerOf(latest.current.here, file), quote: (q) => latest.current.draft.quote(q) }));
+  const [gallery] = useState(() => () => latest.current.images());
+  const owners = view.agents.map((a) => `${a.session.key}=${a.session.workspace}`).join(" ");
   // Words selected with a mouse inside one message offer to quote them.
   const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number } | null>(null);
   // ember's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
@@ -166,26 +152,25 @@ function Messages({ view, lives, list, floor, draft, here }: {
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
-      <Gallery.Provider value={images}>
+      <Gallery.Provider value={gallery}>
       <div className={chatCss.mMessages} ref={list} onClick={onLink} onMouseUp={() => setTimeout(() => setPicked(selectedQuote(list.current)), 0)} onScroll={() => setPicked(null)}>
         {view.more && <div className={css.mOlder}><Spinner size={16} /></div>}
         {messages.length === 0 && view.outbox.length === 0 && <p className={css.mChatEmpty}>在这里发消息，这个对话里的 agent 会在这里回复。</p>}
         {messages.map((m) => {
-          const fresh = m.seq > firstSeq.current!;
-          const enter = fresh && !(m.mine && sentHere.current.has(m.text)) && !emissions.emits(m.seq) ? true : undefined;
-          const state = emissions.stateOf(m.seq);
+          const { enter, emitted: state } = rowOf(m);
+          const agent = agentOf(m.by.agent)?.session;
           return [
             m.seq === divider ? <UnreadLine key={`line-${m.seq}`} /> : null,
             <div key={m.seq} className={`${conversationCss.msg} ${css.mRow}`} data-seq={m.seq} data-ts={m.ts} data-enter={enter}
               data-author={m.mine ? "你" : m.by.name} data-role={m.authorKind === "agent" ? "agent" : "person"}
               data-held={state === "held" || undefined} data-emitting={state === "emitting" || undefined} data-covered={state === "emitting" || undefined}>
-              <Said m={m} agent={agentOf(m.by.agent)} here={here} draft={draft} list={list} />
+              <Said m={m} agent={agent ? { key: agent.key, maker: agent.maker, runtime: agent.runtime } : undefined} station={here.station} sessionKey={here.key} owners={owners} act={act} list={list} />
             </div>,
           ];
         })}
         {view.outbox.map((o) => <div key={o.id} className={`${conversationCss.msg} ${css.mRow}`} data-enter><Out o={o} here={here} /></div>)}
         {shown.map(({ agent, leaving }) => (
-          <Activity key={agent.key} agent={agent} leaving={leaving} pose={emissions.poseOf(agent.key)} className={css.mActivity}
+          <Activity key={agent.key} agent={agent} leaving={leaving} pose={poseOf(agent.key)} className={css.mActivity}
             mark={<ModelMark maker={agent.maker} runtime={agent.runtime} size={20} />} onOpen={() => openHistory(app, here.station, here.key, agent.key)} />
         ))}
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
@@ -222,7 +207,7 @@ function plain(text: string): string {
 }
 
 /** Long-press on a message: quote it, or copy it. While its menu is open the message is marked. */
-function useHold(text: string, who: string, ts: string | undefined, role: "agent" | "person", draft: Draft) {
+function useHold(text: string, who: string, ts: string | undefined, role: "agent" | "person", quote: Act["quote"]) {
   const app = useApp();
   const [pressed, setPressed] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -231,7 +216,7 @@ function useHold(text: string, who: string, ts: string | undefined, role: "agent
     app.menu({
       anchor: el.getBoundingClientRect(),
       items: [
-        { label: "引用", icon: <QuoteIcon size={16} />, action: () => draft.quote({ author: who, text: plain(text), ...(ts ? { ts } : {}), role }) },
+        { label: "引用", icon: <QuoteIcon size={16} />, action: () => quote({ author: who, text: plain(text), ...(ts ? { ts } : {}), role }) },
         { label: "拷贝", icon: <Copy size={16} />, action: () => { void navigator.clipboard.writeText(text).then(() => app.toast("已拷贝")); } },
       ],
       onDismiss: () => setPressed(false),
@@ -257,7 +242,22 @@ function useHold(text: string, who: string, ts: string | undefined, role: "agent
   };
 }
 
-function Said({ m, agent, here, draft, list }: { m: ChatMessage; agent: ChatAgent | undefined; here: Here; draft: Draft; list: RefObject<HTMLDivElement | null> }) {
+/** What a message does from its page: whose files are whose, and quoting it (the same functions while the page lasts). */
+interface Act { owner(file: Attachment): string | null; quote(q: Omit<Quote, "comment">): void }
+
+/** An agent of the chat, as its messages show it. */
+interface SaidBy { key: string; maker: Maker | undefined; runtime: RuntimeKind }
+
+/**
+ * One message. It is drawn again only when something it shows changes: an agent at work makes the chat draw again
+ * many times a second (its activity), and every message's Markdown would be laid out anew each time.
+ */
+const Said = memo(function Said({ m, agent, station, sessionKey, act, list }: {
+  m: ChatMessage; agent: SaidBy | undefined; station: string; sessionKey: string;
+  /** Whose files are whose, in a word: when it changes, the files are drawn again. */
+  owners: string;
+  act: Act; list: RefObject<HTMLDivElement | null>;
+}) {
   const app = useApp();
   const jump = (ts: string) => {
     const target = list.current?.querySelector<HTMLElement>(`[data-ts="${ts}"]`);
@@ -266,8 +266,7 @@ function Said({ m, agent, here, draft, list }: { m: ChatMessage; agent: ChatAgen
     list.current!.scrollTop += target.getBoundingClientRect().top - list.current!.getBoundingClientRect().top - 80;
   };
   const who = m.by.name;
-  const { placed, rest } = useMemo(() => placeFiles(m.text, m.attachments), [m.text, m.attachments]);
-  const hold = useHold(m.text, m.mine ? "你" : who, m.ts, m.authorKind === "agent" ? "agent" : "person", draft);
+  const hold = useHold(m.text, m.mine ? "你" : who, m.ts, m.authorKind === "agent" ? "agent" : "person", act.quote);
   // What ember itself says: a notice across the chat, apart from people's and agents' messages.
   if (m.system) {
     return <div className={css.mSystem}><Mark size={14} /><div className={`${chatCss.mMarkdown} ${css.mMd14}`}><Prose>{m.text}</Prose></div></div>;
@@ -277,7 +276,7 @@ function Said({ m, agent, here, draft, list }: { m: ChatMessage; agent: ChatAgen
       <div className={chatCss.mMine}>
         {m.quotes.map((q, i) => <QuoteCard key={i} q={q} onJump={jump} />)}
         {m.text && <div className={chatCss.mBubble} data-pressed={hold.pressed || undefined} {...hold.props}>{m.text}</div>}
-        <Files here={here} files={m.attachments} />
+        <Files owner={act.owner} files={m.attachments} look={look} />
         {m.waiting
           ? <span className={`${chatCss.mMeta} ${chatCss.mWaiting}`}><Spinner size={10} />等待 agent 接收</span>
           : <span className={chatCss.mMeta}>{m.time?.createdAt?.ago ?? ""}</span>}
@@ -288,8 +287,8 @@ function Said({ m, agent, here, draft, list }: { m: ChatMessage; agent: ChatAgen
     <div className={css.mSaid}>
       <div className={`${conversationCss.msgHead} ${css.mSaidHead}`}>
         {agent ? (
-          <button type="button" className={css.mAgentHead} onClick={() => openHistory(app, here.station, here.key, agent.session.key)}>
-            <span className={chatCss2.msgAvatar}><ModelMark maker={agent.session.maker} runtime={agent.session.runtime} size={20} /></span>
+          <button type="button" className={css.mAgentHead} onClick={() => openHistory(app, station, sessionKey, agent.key)}>
+            <span className={chatCss2.msgAvatar}><ModelMark maker={agent.maker} runtime={agent.runtime} size={20} /></span>
             <b>{who}</b>
           </button>
         ) : (
@@ -301,13 +300,17 @@ function Said({ m, agent, here, draft, list }: { m: ChatMessage; agent: ChatAgen
         <span className={chatCss.mMeta}>{m.time?.createdAt?.ago ?? ""}</span>
       </div>
       {m.quotes.map((q, i) => <QuoteCard key={i} q={q} onJump={jump} />)}
-      <div className={css.mSaidBody} data-pressed={hold.pressed || undefined} {...hold.props}>
-        {m.authorKind === "person" ? m.text && <p className={chatCss.mPlain}>{m.text}</p> : <div className={chatCss.mMarkdown}><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={ownerOf(here, f)} file={f}>{words}</FileLink> : <OneFile here={here} file={f} />}>{m.text}</Prose></div>}
-      </div>
-      <Files here={here} files={m.authorKind === "person" ? m.attachments : rest} />
+      {m.authorKind === "person"
+        ? <>
+            <div className={css.mSaidBody} data-pressed={hold.pressed || undefined} {...hold.props}>{m.text && <p className={chatCss.mPlain}>{m.text}</p>}</div>
+            <Files owner={act.owner} files={m.attachments} look={look} />
+          </>
+        : <ProseWithFiles owner={act.owner} text={m.text} files={m.attachments} look={look}
+            className={css.mSaidBody} prose={{ "data-pressed": hold.pressed || undefined, ...hold.props }} markdown={chatCss.mMarkdown} />}
     </div>
   );
-}
+}, (a, b) => a.station === b.station && a.sessionKey === b.sessionKey && a.owners === b.owners && a.act === b.act && a.list === b.list
+  && JSON.stringify(a.agent) === JSON.stringify(b.agent) && sameMessage(a.m, b.m));
 
 /** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
 function Out({ o, here }: { o: Outgoing; here: Here }) {
@@ -318,7 +321,7 @@ function Out({ o, here }: { o: Outgoing; here: Here }) {
     <div className={chatCss.mMine} data-unsent={o.state === "failed" || undefined}>
       {o.quotes.map((q, i) => <QuoteCard key={i} q={q} />)}
       {o.text && <div className={chatCss.mBubble}>{o.text}</div>}
-      <Files here={here} files={o.attachments} />
+      <Files owner={(f) => ownerOf(here, f)} files={o.attachments} look={look} />
       {o.state === "failed" ? (
         // Not sent: said briefly (a tap says why); sending it again or dropping it right beside.
         <div className={css.mUnsent}>
@@ -349,49 +352,19 @@ function QuoteCard({ q, onJump }: { q: Quote; onJump?: (ts: string) => void }) {
 
 // ── files ──────────────────────────────────────────────────────────────
 
-function Files({ here, files }: { here: Here; files: Attachment[] | undefined }) {
-  if (!files?.length) return null;
-  return <div className={css.mFiles}>{files.map((f) => <OneFile key={f.path} here={here} file={f} />)}</div>;
-}
-
 /** The session a file is kept by: the agent whose workspace holds it, else the first. */
 function ownerOf(here: Here, file: Attachment): string | null {
   return here.view.agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.session.key ?? here.view.agents[0]?.session.key ?? null;
 }
 
-/** One file: an image, or a card. */
-function OneFile({ here, file }: { here: Here; file: Attachment }) {
-  const key = ownerOf(here, file);
-  if (!key) return <FileCard name={file.name} size={file.size} />;
-  return isImage(file.name) ? <StationImage sessionKey={key} file={file} /> : <StationFile sessionKey={key} file={file} />;
-}
-
-/** An image at its own proportions within 240×200 (known before it loads); a tap shows it whole. */
-function StationImage({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
-  const at = useRef<HTMLButtonElement>(null);
-  const url = useFileUrl(sessionKey, file, useNear(at, true));
-  const [open, setOpen] = useState(false);
-  const box = file.width && file.height
+/** Files as the phone draws them (../Chat.tsx's `Files`): images at their own proportions within 240×200, known before they load; a tap shows one whole. */
+const look: FileLook = {
+  files: css.mFiles, image: css.mImage, open: css.mFileOpen,
+  box: (file) => (file.width && file.height
     ? (() => { const scale = Math.min(1, 240 / file.width, 200 / file.height); return { width: Math.max(40, file.width * scale), height: Math.max(40, file.height * scale) }; })()
-    : { width: 170, height: 120 };
-  return (
-    <>
-      <button ref={at} type="button" className={css.mImage} style={box} disabled={!url} onClick={() => setOpen(true)}>{url && <img src={url} alt={file.name} />}</button>
-      <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
-    </>
-  );
-}
-
-/** Any other file: its card, a tap shows it (or says it cannot, and offers the download). */
-function StationFile({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button type="button" className={css.mFileOpen} onClick={() => setOpen(true)} aria-label={`查看 ${file.name}`}><FileCard name={file.name} size={file.size} /></button>
-      <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
-    </>
-  );
-}
+    : { width: 170, height: 120 }),
+  card: (file) => <FileCard name={file.name} size={file.size} />,
+};
 
 function FileCard({ name, size, note, busy = false, onRemove, inComposer = false }: { name: string; size: number; note?: string | null | undefined; busy?: boolean; onRemove?: () => void; inComposer?: boolean }) {
   return (
@@ -405,56 +378,8 @@ function FileCard({ name, size, note, busy = false, onRemove, inComposer = false
 
 // ── the composer ───────────────────────────────────────────────────────
 
-/** A file on its way to the station: uploading, uploaded, or failed. */
-interface Pending { id: number; name: string; size: number; preview: string | null; done: Attachment | null; error: string | null }
-/** A passage quoted in the message being written, with what is said about it. */
-interface DraftQuote extends Quote { id: number }
-
-/** What is being written: text, quotes, files. Kept while the chat is open. */
-export interface Draft {
-  text: string; setText: (t: string) => void;
-  quotes: DraftQuote[]; setQuotes: (f: (q: DraftQuote[]) => DraftQuote[]) => void;
-  files: Pending[]; setFiles: (f: (p: Pending[]) => Pending[]) => void;
-  focusQuote: number | null; setFocusQuote: (id: number | null) => void;
-  quote: (q: Omit<Quote, "comment">) => void;
-  starting: boolean; setStarting: (on: boolean) => void;
-  error: string | null; setError: (e: string | null) => void;
-  focus: number; bumpFocus: () => void;
-}
-
-export function useDraft(): Draft {
-  const [text, setText] = useState("");
-  const [quotes, setQuotes] = useState<DraftQuote[]>([]);
-  const [files, setFiles] = useState<Pending[]>([]);
-  const [focusQuote, setFocusQuote] = useState<number | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [focus, setFocus] = useState(0);
-  return {
-    text, setText, quotes, setQuotes, files, setFiles, focusQuote, setFocusQuote, starting, setStarting, error, setError, focus,
-    bumpFocus: () => setFocus((n) => n + 1),
-    quote: (q) => { const id = Date.now(); setQuotes((all) => [...all, { ...q, comment: "", id }]); setFocusQuote(id); },
-  };
-}
-
-const MAX_FILE = 50 * 1024 * 1024;
-
-/** Files go to the station as soon as they are added, and wait there in no chat: the message that sends them takes them into its chat. */
-export function useUpload(draft: Draft, station: string) {
-  const call = useStationCall(station);
-  return (picked: FileList | File[]) => {
-    for (const file of Array.from(picked)) {
-      const id = Date.now() + Math.random();
-      const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
-      draft.setFiles((all) => [...all, { id, name: file.name, size: file.size, preview, done: null, error: file.size > MAX_FILE ? "超过 50 MB" : null }]);
-      if (file.size > MAX_FILE) continue;
-      call.upload(file).then(
-        (done) => draft.setFiles((all) => all.map((p) => (p.id === id ? { ...p, done } : p))),
-        (error: unknown) => draft.setFiles((all) => all.map((p) => (p.id === id ? { ...p, error: error instanceof Error ? error.message : String(error) } : p))),
-      );
-    }
-  };
-}
+/** What is being written (../draft.ts), and asking for the field's focus (a quote's comment done, a tap on the capsule). */
+export type Draft = SharedDraft & { focus: number; bumpFocus(): void };
 
 /** ＋: take a photo, pick photos, pick files. */
 export function openAttach(app: MobileApp, onPicked: (files: FileList) => void) {
@@ -500,7 +425,7 @@ export function DraftExtras({ draft }: { draft: Draft }) {
       {draft.files.length > 0 && (
         <div className={css.mDraftFiles}>
           {draft.files.map((f) => {
-            const remove = () => draft.setFiles((all) => all.filter((x) => x.id !== f.id));
+            const remove = () => draft.remove(f.id);
             return f.preview ? (
               <span key={f.id} className={css.mDraftThumb}>
                 <img src={f.preview} alt={f.name} />
@@ -515,12 +440,12 @@ export function DraftExtras({ draft }: { draft: Draft }) {
   );
 }
 
-function QuoteComment({ draft, q }: { draft: Draft; q: DraftQuote }) {
+function QuoteComment({ draft, q }: { draft: Draft; q: Draft["quotes"][number] }) {
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (draft.focusQuote !== q.id) return;
     input.current?.focus();
-    draft.setFocusQuote(null);
+    draft.quoteFocused();
   }, [draft.focusQuote]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <input ref={input} className={css.mDraftQuoteComment} value={q.comment} placeholder="对这段说点什么（可以不写）"
@@ -532,8 +457,7 @@ function QuoteComment({ draft, q }: { draft: Draft; q: DraftQuote }) {
 /** The bar, inside a floating capsule that is its frame: ＋, a field that grows with the text, and a round send button (a spinner while a new chat is made). */
 export function ComposerBar({ draft, placeholder, locked = false, onPlus, onType, onSend }: { draft: Draft; placeholder: string; locked?: boolean; onPlus: () => void; onType: () => void; onSend: () => void }) {
   const field = useRef<HTMLTextAreaElement>(null);
-  const uploading = draft.files.some((f) => !f.done && !f.error);
-  const ready = (draft.text.trim() !== "" || draft.files.some((f) => f.done) || draft.quotes.length > 0) && !uploading && !draft.starting && !locked;
+  const ready = draft.ready && !locked;
   useEffect(() => { if (draft.focus > 0) field.current?.focus(); }, [draft.focus]);
   // The field grows with what is typed, up to six lines.
   useLayoutEffect(() => {
@@ -563,31 +487,12 @@ export function ComposerBar({ draft, placeholder, locked = false, onPlus, onType
 function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostComposer) => void) {
   const api = useApi();
   const call = useStationCall(here.station);
-  const sending = useChatSend();
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);
   const send = (draft: Draft) => {
-    const text = draft.text.trim();
-    const files = draft.files;
-    const quotes = draft.quotes;
-    draft.setText(""); draft.setFiles(() => []); draft.setQuotes(() => []); draft.setError(null);
-    void (async () => {
-      let thread = view.thread?.id;
-      if (thread === undefined) {
-        draft.setStarting(true);
-        try {
-          thread = (await call.request<{ id: number }>("POST", "/threads", { session: here.key })).id;
-        } catch (error) {
-          // No chat to send into: the draft comes back.
-          draft.setText(text); draft.setFiles(() => files); draft.setQuotes(() => quotes);
-          draft.setError(error instanceof Error ? error.message : String(error));
-          return;
-        } finally {
-          draft.setStarting(false);
-        }
-      }
-      sending.send(thread, text, files.flatMap((f) => (f.done ? [f.done] : [])), quotes.map(({ id: _, ...q }) => q)).catch(() => {});
-    })();
+    // Before the agent has a chat, the message makes one.
+    const thread = view.thread?.id;
+    void draft.send(async () => thread ?? (await call.request<{ id: number }>("POST", "/threads", { session: here.key })).id, { first: thread === undefined });
   };
   useLayoutEffect(() => use({
     station: here.station, placeholder: "发消息", offline: view.offline, send,
