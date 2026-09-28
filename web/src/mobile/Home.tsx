@@ -2,12 +2,13 @@
 // and grouped by day. A fixed head (you → settings · workspace · stations) and one bottom toolbar (全部 / 我参与的 · new
 // chat). Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
 import { useRef, useState } from "react";
-import { useChats, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
+import { useChats, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
 import { ChevronDown, Edit, Server, Unplug } from "../icons.tsx";
 import { stationBase, useOnlyMine } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { Avatar, Badge, Illustration, MakerIcon, Mark, NavButton, SectionHeader, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
+import { FirstStation } from "./Stations.tsx";
 import { openWorkspaces } from "./Workspaces.tsx";
 
 export function Home() {
@@ -18,12 +19,18 @@ export function Home() {
   const [onlyMine, setOnlyMine] = useOnlyMine();
   const account = app.entry.account;
   const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
+  // No station yet: nothing of the workspace's lists works, so adding the first station is the page.
+  const none = useStations(scope).value?.length === 0;
   return (
     <div className="m-home">
-      <div className="m-home-panes" data-mine={onlyMine || undefined}>
-        <ChatPane chats={all} onlyMine={false} />
-        <ChatPane chats={mine} onlyMine />
-      </div>
+      {none ? (
+        <div className="m-home-panes"><div className="m-home-pane" style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
+      ) : (
+        <div className="m-home-panes" data-mine={onlyMine || undefined}>
+          <ChatPane chats={all} onlyMine={false} />
+          <ChatPane chats={mine} onlyMine />
+        </div>
+      )}
       {/* The lists run under both bars, which are frosted glass over them. */}
       <header className="m-home-bar m-glass">
         <button type="button" className="m-home-me" onClick={() => app.push(app.at("/settings/account"))} aria-label="我">
@@ -42,12 +49,12 @@ export function Home() {
       </header>
       {/* One capsule floating over the list, round at both ends like what is in it: the switch fills it, and the new-chat
           button closes it at the right, a disc in the accent. */}
-      <div className="m-home-toolbar">
+      {!none && <div className="m-home-toolbar">
         <div className="m-floating m-home-capsule">
           <Seg options={["全部", "我参与的"]} selected={onlyMine ? 1 : 0} onSelect={(i) => setOnlyMine(i === 1)} height={44} fill radius={22} inset={0} track={false} className="m-grow" />
           <button type="button" className="m-new-chat" onClick={() => app.push(app.at("/new"))} aria-label="新建对话"><Edit size={20} /></button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

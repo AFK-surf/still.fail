@@ -2,20 +2,37 @@
 // page (whether it works, signing a subscription in, its allowance, which of its models may be used, who uses it, its
 // key or variables; renaming, checking and deleting under "…"), and a new one.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router";
-import { stationApi, useOverview, useStationCall, type LoginJob, type Profile, type ProfileInput } from "../api.ts";
+import { useParams, useSearchParams } from "react-router";
+import { stationApi, useOverview, useStationCall, type LoginJob, type Profile, type ProfileInput, type Quota, type Tone } from "../api.ts";
+import type { MachineLogin } from "../core/shapes.ts";
 import { ACCESS, KEYED } from "../format.ts";
 import { Check, More } from "../icons.tsx";
 import { CHOICES } from "../pages/Accounts.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
-import { Button, Field, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRing, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
+import { Presence } from "./Connects.tsx";
+import { Button, Field, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRing, QuotaRings, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 
 function useApi() {
   const station = useStation();
   const call = useStationCall(station.address);
   return useMemo(() => stationApi(call), [call]);
+}
+
+/** A check's tone as a presence dot (./Connects.tsx): green up, red failing, the rest on its way or unknown. */
+export function toneDot(tone: Tone | string): string {
+  return tone === "green" ? "online" : tone === "red" ? "error" : tone === "neutral" ? "offline" : "busy";
+}
+
+/** Why an allowance could not be read (an account its provider refuses, a sign-in gone stale), when that is so. */
+export function quotaTrouble(quota: Quota | null | undefined): string | null {
+  return quota && (quota.state === "blocked" || quota.state === "unavailable") ? quota.detail ?? (quota.state === "blocked" ? "这个账号被服务商停用了。" : "查不到额度。") : null;
+}
+
+/** What a profile is, in a word: the machine's own login, or its kind of access. */
+export function accessLabel(p: Profile): string {
+  return p.machine ? "本机登录" : ACCESS[p.access.kind].label;
 }
 
 /** A profile of the station in context, by the page's :id. */
@@ -40,7 +57,7 @@ function ProfilePage({ p }: { p: Profile }) {
   const keyed = KEYED.has(p.access.kind);
   return (
     <div className="m-screen">
-      <NavBar back={station.name || "Station"} onBack={app.pop} title={p.name} sub={<span className="m-navbar-note">{ACCESS[p.access.kind].label}</span>}
+      <NavBar back={station.name || "Station"} onBack={app.pop} title={p.name} sub={<span className="m-navbar-note">{accessLabel(p)}</span>}
         trailing={<NavButton icon={More} label="更多" onClick={() => app.sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
       <div className="m-scroll m-station-page">
         <div className="m-card m-profile-head">
@@ -114,9 +131,25 @@ function ProfileMenu({ p }: { p: Profile }) {
   );
 }
 
-/** Its allowance, window by window: what is left and when it refills. */
+/** Its allowance, window by window: what is left and when it refills; why it cannot be read, when the provider says. */
 function Quota({ p }: { p: Profile }) {
   const windows = p.quota?.state === "ok" ? p.quota.windows : [];
+  const trouble = quotaTrouble(p.quota);
+  if (trouble) {
+    return (
+      <>
+        <SectionHeader title="额度" trailing={p.quota?.time?.checkedAt ? `${p.quota.time.checkedAt.ago}查询` : undefined} start={24} />
+        <ListCard>
+          <ListRow>
+            <span className="m-grow m-row-text">
+              <span className="m-row-title"><Presence state={p.quota?.state === "blocked" ? "error" : "offline"} /> {p.quota?.state === "blocked" ? "被停用" : "查不到额度"}</span>
+              <span className="m-row-note m-wrap">{trouble}</span>
+            </span>
+          </ListRow>
+        </ListCard>
+      </>
+    );
+  }
   if (!windows.length) return null;
   return (
     <>
@@ -293,7 +326,9 @@ export function NewProfileScreen() {
   const api = useApi();
   const station = useStation();
   const overview = useOverview(station.address).value;
-  const [choice, setChoice] = useState<Choice>("claude-sub");
+  // `?kind=`: the kind chosen as it opens (a machine login kept in the keychain, signed in again for ember).
+  const [params] = useSearchParams();
+  const [choice, setChoice] = useState<Choice>(() => { const k = params.get("kind"); return k && k in CHOICES ? k as Choice : "claude-sub"; });
   const { kind, runtime } = CHOICES[choice];
   const [key, setKey] = useState("");
   const [login, setLogin] = useState<string | null>(null);
@@ -320,6 +355,11 @@ export function NewProfileScreen() {
           ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login, code)} />
         ) : (
           <>
+            {overview && (
+              <MachineLoginOffers inForm logins={overview.machineLogins} profiles={overview.profiles}
+                onSignIn={(c) => { setChoice(c); setBusy(true); setError(null); api.newLogin(CHOICES[c].runtime!).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} />
+            )}
+            {overview && machineOffers(overview.machineLogins, overview.profiles).length > 0 && <b className="m-form-label">或者添加一个新的</b>}
             <ListCard>
               {(Object.keys(CHOICES) as Choice[]).map((c) => (
                 <PickRow key={c} label={CHOICES[c].title} sub={CHOICES[c].description} checked={choice === c} onClick={() => setChoice(c)}
@@ -346,3 +386,59 @@ export function NewProfileScreen() {
   );
 }
 
+/** The machine's logins no profile is on yet. */
+function machineOffers(logins: MachineLogin[] | undefined, profiles: Profile[]): MachineLogin[] {
+  const taken = new Set(profiles.filter((p) => p.machine).map((p) => p.runtime));
+  return (logins ?? []).filter((l) => l.loggedIn && l.plan && !taken.has(l.runtime));
+}
+
+const MACHINE_RUNTIME: Record<MachineLogin["runtime"], string> = { claude: "Claude Code", codex: "Codex" };
+
+/**
+ * The accounts the station machine's own Claude Code and Codex are signed in with, not used by a profile yet (as the
+ * desktop's MachineLoginOffers, ../pages/Accounts.tsx): one kept in a file is used as it is (a profile on the machine's
+ * login, which follows it); one kept only in the keychain is offered as a sign-in with the same account (`onSignIn`); a
+ * refused account is said so, with its reason, and nothing to do with it. The station in context.
+ */
+export function MachineLoginOffers({ logins, profiles, onSignIn, inForm = false }: { logins: MachineLogin[] | undefined; profiles: Profile[]; onSignIn: (choice: Choice) => void; inForm?: boolean }) {
+  const app = useApp();
+  const api = useApi();
+  const station = useStation();
+  const [busy, setBusy] = useState(false);
+  const offers = machineOffers(logins, profiles);
+  if (!offers.length) return null;
+  const use = (l: MachineLogin) => {
+    setBusy(true);
+    api.useMachineLogin(l.runtime).then(({ id }) => {
+      app.toast("已添加 Profile，用的是这台机器的登录");
+      app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`);
+    }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false));
+  };
+  return (
+    <>
+      {inForm ? <b className="m-form-label">这台机器上已经登录了</b> : <SectionHeader title="这台机器上已经登录了" start={24} />}
+      <ListCard>
+        {offers.map((l) => {
+          const blocked = l.quota?.state === "blocked";
+          const trouble = quotaTrouble(l.quota);
+          const plan = l.plan ? `${l.plan[0]!.toUpperCase()}${l.plan.slice(1)}` : null;
+          return (
+            <ListRow key={l.runtime}>
+              <ProviderMark runtime={l.runtime} kind="subscription" size={18} />
+              <span className="m-grow m-row-text">
+                <span className="m-row-title"><Presence state={blocked ? "error" : "online"} /> {MACHINE_RUNTIME[l.runtime]}{plan && <span className="m-row-aside"> · {plan}</span>}</span>
+                <span className="m-row-note">{blocked ? "被停用" : "本机已登录"}{l.email ? ` · ${l.email}` : ""}</span>
+                {trouble && <span className="m-row-note m-wrap">{trouble}</span>}
+              </span>
+              <QuotaRings quota={l.quota} />
+              {blocked ? null : l.usable
+                ? <button type="button" className="m-link" disabled={busy} onClick={() => use(l)}>用这个账号</button>
+                : <button type="button" className="m-link" onClick={() => onSignIn(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</button>}
+            </ListRow>
+          );
+        })}
+      </ListCard>
+      <p className={inForm ? "m-small m-muted" : "m-page-note"}>「用这个账号」直接用这台机器的登录，在这台机器上换号或登出，它也跟着变；存在钥匙串里的登录不能直接用，要为 ember 单独登录一次，原来的登录不受影响。</p>
+    </>
+  );
+}

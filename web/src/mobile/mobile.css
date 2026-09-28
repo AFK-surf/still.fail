@@ -651,3 +651,13 @@ button.m-agent-head { cursor: pointer; }
 .m-job-last { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--m-subtle); }
 .m-job-last code { font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--m-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-job-stop { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 46px; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--m-red) 12%, transparent); color: var(--m-red); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
+.m-job-command { font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--m-muted); overflow-wrap: anywhere; }
+/* The chat bar's button for its services and jobs: a small dot on it when one died lately (red) or a service restarts (amber). */
+.m-jobs-trigger { position: relative; }
+.m-jobs-alarm { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 2px var(--m-bg); pointer-events: none; }
+.m-jobs-alarm[data-alarm="fail"] { background: var(--m-red); }
+.m-jobs-alarm[data-alarm="restart"] { background: var(--m-warn); }
+.m-jobs-empty { display: flex; flex-direction: column; gap: 4px; padding: 12px 2px; font-size: 13px; color: var(--m-muted); }
+.m-jobs-empty b { font-size: 15px; font-weight: 600; color: var(--m-ink); }
+.m-jobs-all { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 14px; padding: 6px 2px; border: 0; background: none; color: var(--m-accent); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.m-jobs-all span { font-size: 12px; color: var(--m-muted); }

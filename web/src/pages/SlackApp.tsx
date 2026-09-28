@@ -112,7 +112,7 @@ export function ConfigTokenForm({ replacing, onSaved }: { replacing?: boolean; o
  * Crops an image to a centred square and scales it to 1024 px, the size Slack wants (512–2000), as a JPEG: small enough
  * to send (a PNG of a rich picture is megabytes).
  */
-async function toIcon(file: File): Promise<string> {
+export async function toIcon(file: File): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
     const image = new Image();
@@ -136,12 +136,12 @@ async function toIcon(file: File): Promise<string> {
  * An avatar to start from: a drawing on a background colour of its own (a mono mark is drawn white). `thumb`: a small
  * copy for the picker, when the drawing is a large picture.
  */
-interface Avatar { id: string; label: string; src: string; thumb?: string; bg: string; mono?: boolean }
+export interface Avatar { id: string; label: string; src: string; thumb?: string; bg: string; mono?: boolean }
 
 const BASE = import.meta.env.BASE_URL;
 
 /** The model makers' marks, each on its own colour. */
-const MAKERS: Avatar[] = [
+export const MAKERS: Avatar[] = [
   { id: "anthropic", label: "Anthropic", src: `${BASE}models/anthropic.svg`, bg: "#D97757", mono: true },
   { id: "openai", label: "OpenAI", src: `${BASE}models/openai.svg`, bg: "#0D0D0D", mono: true },
   { id: "gemini", label: "Gemini", src: `${BASE}models/gemini.svg`, bg: "#FFFFFF" },
@@ -163,14 +163,14 @@ function loadBuddies(): Promise<Avatar[]> {
     .then((list) => list.map((a) => ({ ...a, src: `${BASE}avatars/${a.id}.webp`, thumb: `${BASE}avatars/${a.id}.thumb.webp` })), () => []);
   return buddies;
 }
-function useBuddies(): Avatar[] | null {
+export function useBuddies(): Avatar[] | null {
   const [list, setList] = useState<Avatar[] | null>(null);
   useEffect(() => { void loadBuddies().then(setList); }, []);
   return list;
 }
 
 /** An avatar as the app's icon (a JPEG, its colour filling it): 1024 px, its colour behind it, the drawing centred (a maker's mark smaller, in white when mono). */
-async function renderAvatar(avatar: Avatar, bg: string, maker: boolean): Promise<string> {
+export async function renderAvatar(avatar: Avatar, bg: string, maker: boolean): Promise<string> {
   const image = new Image();
   image.src = avatar.src;
   await image.decode();
@@ -222,7 +222,7 @@ function drawnBox(image: HTMLImageElement): [number, number, number, number] {
 }
 
 /** The colour an uploaded picture sits on best: the average of its edge. */
-function edgeColour(dataUrl: string): Promise<string> {
+export function edgeColour(dataUrl: string): Promise<string> {
   return new Promise((resolve) => {
     const image = new Image();
     image.onload = () => {

@@ -1,14 +1,15 @@
 // Connects on a narrow screen (what the desktop's ../pages/Connects.tsx and Connect.tsx do, in the Android app's
 // manner): the list, all or the viewer's; a connect's page (how it runs, how its conversations become sessions, its
 // Slack link, what is done to it less often under "…"); how it runs, picked on a page of its own; a new one, in steps.
-import { useMemo, useState } from "react";
-import { useParams } from "react-router";
-import { stationApi, useConnects, useOverview, useStationCall, useStations, type Connect, type ConnectItem, type ConnectMode, type MadeSlackApp, type ModelOption, type RunnableProfile, type RuntimeKind, type SlackIdentity } from "../api.ts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useSearchParams } from "react-router";
+import { stationApi, useConnects, useOverview, useStationCall, useStations, type Connect, type ConnectItem, type ConnectMode, type MadeSlackApp, type ModelOption, type RunnableProfile, type RuntimeKind, type SlackAppSettings, type SlackIdentity } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
 import { MODE, RUNTIME_LABEL } from "../format.ts";
+import { illustrationUrl } from "../brand.tsx";
 import { ChevronRight, More } from "../icons.tsx";
 import { consequences } from "../pages/Connect.tsx";
-import { NEW_APP } from "../pages/SlackApp.tsx";
+import { edgeColour, MAKERS, NEW_APP, renderAvatar, toIcon, useBuddies, type Avatar } from "../pages/SlackApp.tsx";
 import { useTokenCheck, type TokenCheck } from "../slack.tsx";
 import { stationBase, useOnlyMine, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
@@ -17,21 +18,71 @@ import { Button, Field, GroupLabel, LargeTitle, ListCard, ListRow, Loading, Make
 import { ask, confirm } from "./sheets.tsx";
 
 /** A connect's presence as a dot: online green, at work orange, failing red, offline hollow. */
-function Presence({ state }: { state: string }) {
+export function Presence({ state }: { state: string }) {
   return <span className="m-presence" data-state={state} />;
+}
+
+/** A connect as its people see it in Slack: its bot's picture; Slack's mark until Slack has said what that is. */
+function ConnectAvatar({ connect, size }: { connect: Connect; size: number }) {
+  return connect.botImage ? <img className="bot-avatar" src={connect.botImage} width={size} height={size} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <SlackMark size={Math.round(size * 0.55)} />;
 }
 
 /** A connect in its station's list: its mark and name, how it runs, and its presence. */
 export function ConnectRow({ connect: c, onClick }: { connect: Connect; onClick: () => void }) {
   return (
     <ListRow onClick={onClick}>
-      {c.botImage ? <img className="bot-avatar" src={c.botImage} width={30} height={30} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <SlackMark size={16} />}
+      <ConnectAvatar connect={c} size={30} />
       <span className="m-grow m-row-text">
         <span className="m-row-title">{c.name}{c.team && <span className="m-row-aside"> · {c.team}</span>}</span>
         <span className="m-row-note">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>
       </span>
       <span className="m-row-status"><Presence state={c.presence} />{c.statusText}</span>
     </ListRow>
+  );
+}
+
+/** Where a Slack app made and not connected yet stands, in words. */
+function waitingText(made: MadeSlackApp): string {
+  return made.installed ? `已装进「${made.installedTeam ?? made.team ?? "工作区"}」，还差 App-Level Token` : made.install ? "还没安装到工作区" : "还差 token";
+}
+
+/**
+ * A Slack app made and not connected yet, in its station's list (the station in context): where it stands; going on
+ * from there (its station online), or dropping it (it stays in Slack), in a sheet.
+ */
+export function WaitingAppRow({ made, online }: { made: MadeSlackApp; online: boolean }) {
+  const app = useApp();
+  return (
+    <ListRow onClick={() => app.sheet({ height: 0.4, content: () => <WaitingAppSheet made={made} online={online} /> })}>
+      <SlackMark size={16} />
+      <span className="m-grow m-row-text">
+        <span className="m-row-title">{made.name}{made.team && <span className="m-row-aside"> · {made.team}</span>}</span>
+        <span className="m-row-note">{waitingText(made)}</span>
+      </span>
+      {online ? <span className="m-link">继续</span> : <span className="m-row-note">station 离线</span>}
+    </ListRow>
+  );
+}
+
+function WaitingAppSheet({ made, online }: { made: MadeSlackApp; online: boolean }) {
+  const app = useApp();
+  const api = useApi();
+  const station = useStation();
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={made.name} />
+      <div className="m-sheet-scroll">
+        <p className="m-muted m-pad m-small">{waitingText(made)}。</p>
+        <PickRow label={made.installed ? "填 App-Level Token" : made.install ? "继续安装" : "填 token"} enabled={online} sub={online ? undefined : "station 离线，等它上线再继续"}
+          onClick={() => { app.sheet(null); app.push(`${stationBase(station.address)}/connects/new?resume=${encodeURIComponent(made.appId)}`); }} />
+        <PickRow label="从这里移除" accent onClick={() => confirm(app, {
+          title: `移除「${made.name}」？`, action: "移除", danger: true,
+          text: "只从 ember 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。",
+          run: () => api.dropSlackApp(made.appId).then(() => app.toast("已移除")),
+        })} />
+      </div>
+    </>
   );
 }
 
@@ -69,6 +120,14 @@ function ConnectPage({ item }: { item: ConnectItem }) {
       <NavBar back="连接" onBack={app.pop} title={connect.name} sub={<span className="m-navbar-note"><Presence state={connect.presence} /> {connect.statusText}</span>}
         trailing={<NavButton icon={More} label="更多" onClick={() => app.sheet({ height: 0.6, content: () => <ConnectMenu connect={connect} /> })} />} />
       <div className="m-scroll m-station-page">
+        {/* Who it is in Slack: its bot's picture, its Slack workspace, whose it is. */}
+        <div className="m-card m-profile-head">
+          <ConnectAvatar connect={connect} size={44} />
+          <span className="m-grow">
+            <span className="m-row-title">{connect.team ?? "Slack"}</span>
+            <span className="m-row-note">{station.name}{connect.createdBy ? ` · 所属 ${connect.createdBy.shown?.display ?? connect.createdBy.name}` : ""}</span>
+          </span>
+        </div>
         {(c.state === "no_tokens" || c.state === "error" || (c.state === "reconnecting" && c.lastError)) && (
           <div className="m-callout">
             {c.state === "no_tokens" ? <>这个连接还没接上 Slack。<button type="button" className="m-link" onClick={() => openTokens(app, connect)}>填 token</button></>
@@ -368,11 +427,16 @@ export function NewConnectScreen() {
   const overview = useOverview(station.address).value;
   const view = useStations(station.address.split("/")[0]!).value?.find((s) => s.station === station.address);
   const teams = overview?.slackTeams ?? [];
-  const [step, setStep] = useState<Step>("team");
+  // `?resume=`: an app made before and still waiting on the station, picked up where it was left (installing it).
+  const [params] = useSearchParams();
+  const resume = params.get("resume");
+  const [step, setStep] = useState<Step>(resume ? "install" : "team");
   const [team, setTeam] = useState<string | null>(null);
   const [appSettings, setAppSettings] = useState(NEW_APP);
+  const [icon, setIcon] = useState<string | null>(null);
+  const [iconError, setIconError] = useState<string | null>(null);
   // The app made, as the station keeps it (it outlives this screen until a connect takes it).
-  const [madeId, setMadeId] = useState<string | null>(null);
+  const [madeId, setMadeId] = useState<string | null>(resume);
   const made: MadeSlackApp | undefined = madeId ? overview?.slackApps?.find((a) => a.appId === madeId) : undefined;
   const [tokens, setTokens] = useState<Tokens>(NO_TOKENS);
   const check = useTokenCheck(tokens, setTokens, { install: made?.state ?? undefined });
@@ -389,14 +453,23 @@ export function NewConnectScreen() {
   const order: Step[] = step === "manual" || (step === "bind" && !madeId) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
   const titles: Record<Step, string> = { team: "选 Slack 工作区", token: "加配置 token", app: "配置 app", install: "安装", manual: "连接 Slack", bind: "绑定模型" };
   const run = (work: () => Promise<unknown>) => { setBusy(true); setError(null); work().catch((e: Error) => setError(e.message)).finally(() => setBusy(false)); };
-  const back = () => ({ team: app.pop, token: () => setStep("team"), app: () => setStep("team"), install: () => setStep("app"), manual: () => setStep("team"), bind: () => setStep(madeId ? "install" : "manual") }[step]());
+  const back = () => ({ team: app.pop, token: () => setStep("team"), app: () => setStep("team"), install: resume ? app.pop : () => setStep("app"), manual: () => setStep("team"), bind: () => setStep(madeId ? "install" : "manual") }[step]());
+  // A connect runs a profile's model: with none on the station, the first step is a profile.
+  const noProfile = !resume && overview !== undefined && overview.profiles.length === 0;
   return (
     <div className="m-screen">
-      <NavBar back={step === "team" ? "取消" : "上一步"} onBack={back} title="添加连接" sub={<span className="m-navbar-note">{titles[step]} · {Math.max(1, order.indexOf(step) + 1)} / {order.length}</span>} />
+      <NavBar back={step === "team" || (resume && step === "install") ? "取消" : "上一步"} onBack={back} title="添加连接" sub={<span className="m-navbar-note">{titles[step]} · {Math.max(1, order.indexOf(step) + 1)} / {order.length}</span>} />
       <div className="m-scroll m-pad-x-18 m-steps">
-        {step === "team" && (teams.length === 0 ? (
+        {step === "team" && noProfile ? (
+          <div className="m-new-none">
+            <img className="m-illus" src={illustrationUrl("no-profile")} alt="" width={240} />
+            <b>先添加一个 Profile</b>
+            <p>连接要用 Profile 来跑模型。先添加一个，再来加连接。</p>
+            <Button label="去添加 Profile" primary onClick={() => app.replace(`${stationBase(station.address)}/profiles/new`)} />
+          </div>
+        ) : step === "team" && (teams.length === 0 ? (
           <>
-            <p className="m-muted">有了 Slack 的配置 token，ember 替你在 Slack 建好 app：名字、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。</p>
+            <p className="m-muted">有了 Slack 的配置 token，ember 替你在 Slack 建好 app：名字、头像、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。</p>
             <Button label="添加配置 token" primary onClick={() => setStep("token")} />
             <button type="button" className="m-link m-step-alt" onClick={() => setStep("manual")}>不用配置 token，自己在 Slack 建 app</button>
           </>
@@ -428,13 +501,17 @@ export function NewConnectScreen() {
             <Field value={appSettings.name} onChange={(v) => setAppSettings({ ...appSettings, name: v, displayName: v })} placeholder="ember" />
             <b className="m-form-label">描述</b>
             <Field value={appSettings.description} onChange={(v) => setAppSettings({ ...appSettings, description: v })} placeholder="Coding agent in your threads" />
-            <p className="m-small m-muted">头像、颜色和权限用默认的；建好以后可以在电脑上改。</p>
+            <AppLook settings={appSettings} onChange={setAppSettings} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
+            {iconError && <p className="m-error">{iconError}</p>}
+            <p className="m-small m-muted">权限用默认的（全部打开）；建好以后可以在电脑上改。</p>
             <Button label="创建 app" primary busy={busy} enabled={!!appSettings.name.trim() && !!chosen}
-              onClick={() => run(() => api.makeSlackApp({ team: chosen!.teamId, settings: appSettings }).then((r) => { setMadeId(r.appId); setStep("install"); }))} />
+              onClick={() => run(() => api.makeSlackApp({ team: chosen!.teamId, settings: appSettings, ...(icon ? { icon } : {}) }).then((r) => { setMadeId(r.appId); setIconError(r.iconError); setStep("install"); }))} />
           </>
         )}
+        {step === "install" && !made && <p className="m-muted">{overview ? "这个 app 已经不在这台 station 上了：可能已经连上，或者被移除了。" : "正在读取…"}</p>}
         {step === "install" && made && (
           <>
+            {iconError && <p className="m-error">图标没传上：{iconError}</p>}
             <ol className="m-steps-list">
               {made.install ? (
                 <li>{made.installed ? `已装进「${made.installedTeam ?? made.team ?? "工作区"}」。` : <>app 已经建好。<a href={made.install} target="_blank" rel="noopener">安装到工作区</a>：在 Slack 里点「允许」，bot token 会自动交给 station。</>}</li>
@@ -489,3 +566,86 @@ export function NewConnectScreen() {
   );
 }
 
+/**
+ * A new app's look, as the desktop's AppFields (../pages/SlackApp.tsx) has it: an avatar picked from ember's buddies or
+ * the model makers, or uploaded, on its colour; the colour follows the avatar until it is set by hand (and can go back).
+ * It starts as the general helper.
+ */
+function AppLook({ settings, onChange, icon, onIcon }: {
+  settings: SlackAppSettings; onChange: (s: SlackAppSettings) => void; icon: string | null; onIcon: (icon: string | null, error: string | null) => void;
+}) {
+  const file = useRef<HTMLInputElement>(null);
+  const buddies = useBuddies();
+  const [picked, setPicked] = useState<{ avatar: Avatar; maker: boolean } | { upload: true; bg: string } | null>(null);
+  const [colourSet, setColourSet] = useState(false);
+  const recommended = picked ? ("upload" in picked ? picked.bg : picked.avatar.bg) : null;
+  const draw = (p: typeof picked, bg: string) => {
+    if (p && !("upload" in p)) void renderAvatar(p.avatar, bg, p.maker).then((i) => onIcon(i, null), () => onIcon(null, "画不出这个头像"));
+  };
+  const pick = (avatar: Avatar, maker: boolean) => {
+    const p = { avatar, maker };
+    setPicked(p);
+    const bg = colourSet ? settings.backgroundColor : avatar.bg;
+    if (bg !== settings.backgroundColor) onChange({ ...settings, backgroundColor: bg });
+    draw(p, bg);
+  };
+  const colour = (bg: string, byHand: boolean) => {
+    setColourSet(byHand);
+    onChange({ ...settings, backgroundColor: bg });
+    if (/^#[0-9a-fA-F]{6}$/.test(bg)) draw(picked, bg);
+  };
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || icon || !buddies?.length) return;
+    started.current = true;
+    pick(buddies.find((a) => a.id === "general-helper") ?? buddies[0]!, false);
+  });
+  const isPicked = (a: Avatar) => picked !== null && !("upload" in picked) && picked.avatar.id === a.id;
+  const tile = (a: Avatar, maker: boolean) => (
+    <button key={a.id} type="button" aria-label={a.label} onClick={() => pick(a, maker)}
+      style={{ display: "grid", placeItems: "center", aspectRatio: "1", padding: 0, border: 0, borderRadius: 12, overflow: "hidden", background: a.bg, cursor: "pointer",
+        boxShadow: isPicked(a) ? "0 0 0 2px var(--m-bg), 0 0 0 4px var(--m-accent)" : undefined }}>
+      <img src={a.thumb ?? a.src} alt="" loading="lazy"
+        style={maker ? { width: "55%", height: "55%", filter: a.mono ? "brightness(0) invert(1)" : undefined } : { width: "100%", height: "100%", transform: "scale(1.18)" }} />
+    </button>
+  );
+  const hex = /^#[0-9a-fA-F]{6}$/.test(settings.backgroundColor) ? settings.backgroundColor : "#7a2e0e";
+  return (
+    <>
+      <b className="m-form-label">头像</b>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <button type="button" aria-label="上传图片" onClick={() => file.current?.click()}
+          style={{ flex: "none", width: 72, height: 72, padding: 0, border: 0, borderRadius: 18, overflow: "hidden", background: settings.backgroundColor || undefined, cursor: "pointer" }}>
+          {icon ? <img src={icon} alt="头像" width={72} height={72} style={{ display: "block" }} /> : <span className="m-small m-muted">上传</span>}
+        </button>
+        <span className="m-grow m-row-text">
+          <span className="m-row-note m-wrap">在下面挑一个，或者上传一张图片。</span>
+          <button type="button" className="m-link m-step-alt" onClick={() => file.current?.click()}>上传图片</button>
+        </span>
+        <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) void toIcon(f).then(async (i) => {
+            const bg = await edgeColour(i);
+            setPicked({ upload: true, bg });
+            onIcon(i, null);
+            if (!colourSet) onChange({ ...settings, backgroundColor: bg });
+          }, () => onIcon(null, "读不了这张图片"));
+        }} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(48px, 1fr))", gap: 10 }} aria-label="头像">
+        {(buddies ?? []).map((a) => tile(a, false))}
+        {MAKERS.map((a) => tile(a, true))}
+      </div>
+      <b className="m-form-label">底色</b>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <input type="color" aria-label="底色" value={hex} onChange={(e) => colour(e.target.value.toUpperCase(), true)}
+          style={{ flex: "none", width: 44, height: 44, padding: 0, border: 0, borderRadius: 12, background: "none", cursor: "pointer" }} />
+        <input className="m-field" data-mono aria-label="底色色值" spellCheck={false} value={settings.backgroundColor} onChange={(e) => colour(e.target.value, true)} />
+        {recommended && colourSet && recommended.toLowerCase() !== settings.backgroundColor.toLowerCase() && (
+          <button type="button" className="m-link" style={{ flex: "none" }} onClick={() => colour(recommended, false)}>用推荐色</button>
+        )}
+      </div>
+    </>
+  );
+}

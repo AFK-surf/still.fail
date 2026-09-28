@@ -8,7 +8,7 @@ import { useLocation, useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
 import { useHost, type HostComposer } from "./ChatHost.tsx";
 import { Activity, fileSize, Lightbox, useAwayFromBottom, useEmissions, useFileUrl, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
-import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop } from "../icons.tsx";
+import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
 import { Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
 import { stationBase, useStation } from "../station.tsx";
@@ -16,7 +16,8 @@ import { ask } from "./sheets.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { openHistory } from "./History.tsx";
 import { Avatar, GroupLabel, InfoList, InfoRow, Mark, ModelMark, NavButton, PeopleStack, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
-import { ago, clock, isService, JobDot, metaOf, sorted, toneOf, useJobLog, useNow, useStopJob } from "../Jobs.tsx";
+import { ago, alarmOf, clock, isCurrent, isService, JobDot, metaOf, sorted, toneOf, useJobLog, useNow, useStopJob, type Tone } from "../Jobs.tsx";
+import { emberLinkClicked } from "../emberLink.ts";
 import type { Job } from "../core/shapes.ts";
 
 export function ChatScreen() {
@@ -26,7 +27,7 @@ export function ChatScreen() {
   const app = useApp();
   const asked = new URLSearchParams(useLocation().search).get("service");
   useEffect(() => {
-    if (asked) app.push(`${stationBase(station.address)}/chats/${encodeURIComponent(key)}/services/${encodeURIComponent(asked)}`);
+    if (asked) app.push(servicePath(station.address, key, asked));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
   const chat = useChat(station.address, { session: key });
@@ -46,6 +47,11 @@ export function ChatScreen() {
 
 /** What the page knows of an agent: its chat entry and its live view. */
 interface Here { station: string; key: string; view: ChatView }
+
+/** A web service's page (./Preview.tsx), over its chat. */
+function servicePath(station: string, key: string, job: string): string {
+  return `${stationBase(station)}/chats/${encodeURIComponent(key)}/services/${encodeURIComponent(job)}`;
+}
 
 function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string; lives: ReturnType<typeof useLives> }) {
   const station = useStation();
@@ -67,8 +73,10 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
 function ChatBar({ view, here }: { view: ChatView; here: Here }) {
   const app = useApp();
   const thread = view.thread;
+  const jobs = jobsOf(view);
   return (
-    <BarFrame title={view.title} more={!!thread} onMore={() => thread && openChatInfo(app, here, thread)}>
+    <BarFrame title={view.title} more={!!thread} onMore={() => thread && openChatInfo(app, here, thread)}
+      trailing={jobs.length > 0 ? <JobsButton here={here} jobs={jobs} /> : null}>
       {view.people.length > 0 && <PeopleStack people={view.people.slice(0, 5)} size={16} />}
       {view.agents.map((a) => (
         <button key={a.session.key} type="button" className="m-bar-agent" onClick={() => openHistory(app, here.station, here.key, a.session.key)} aria-label={`${a.session.agentText} 的执行历史`}>
@@ -79,13 +87,14 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
   );
 }
 
-/** The bar's frame, the same while the chat loads and once it has: back, the title, what follows it, and "…". */
-export function BarFrame({ title, more, onMore, children }: { title: string; more: boolean; onMore?: () => void; children?: ReactNode }) {
+/** The bar's frame, the same while the chat loads and once it has: back, the title, what follows it, what is at its end, and "…". */
+export function BarFrame({ title, more, onMore, trailing, children }: { title: string; more: boolean; onMore?: () => void; trailing?: ReactNode; children?: ReactNode }) {
   const app = useApp();
   return (
     <header className="m-chat-bar m-glass">
       <button type="button" className="m-chat-back" onClick={app.pop} aria-label="返回"><ChevronLeft size={22} /></button>
       <span className="m-chat-bar-title"><b>{title}</b>{children}</span>
+      {trailing}
       {more && onMore && <NavButton icon={More} label="对话信息" onClick={onMore} />}
     </header>
   );
@@ -123,6 +132,20 @@ function Messages({ view, lives, list, floor, draft, here }: {
   const agentOf = (key: string | undefined) => view.agents.find((a) => a.session.key === key);
   // Words selected with a mouse inside one message offer to quote them.
   const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number } | null>(null);
+  // ember's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
+  // chat and what is being written stay under them): one of this chat's agents' web services, or another session.
+  const onLink = (event: React.MouseEvent) => {
+    const link = emberLinkClicked(event);
+    if (!link) return;
+    if (link.service && view.agents.some((a) => a.session.key === link.session)) {
+      event.preventDefault();
+      app.push(servicePath(here.station, here.key, link.service));
+    } else if (link.sameOrigin) {
+      event.preventDefault();
+      const path = `/w/${link.workspace}/s/${link.station}/chats/${encodeURIComponent(link.session)}`;
+      if (`${path}${link.search}` !== `${stationBase(here.station)}/chats/${encodeURIComponent(here.key)}`) app.push(`${path}${link.search}`);
+    }
+  };
   return (
     <>
       {picked && (
@@ -131,7 +154,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
-      <div className="m-messages" ref={list} onMouseUp={() => setTimeout(() => setPicked(selectedQuote(list.current)), 0)} onScroll={() => setPicked(null)}>
+      <div className="m-messages" ref={list} onClick={onLink} onMouseUp={() => setTimeout(() => setPicked(selectedQuote(list.current)), 0)} onScroll={() => setPicked(null)}>
         {view.more && <div className="m-older"><Spinner size={16} /></div>}
         {messages.length === 0 && view.outbox.length === 0 && <p className="m-chat-empty">在这里发消息，这个对话里的 agent 会在这里回复。</p>}
         {messages.map((m) => {
@@ -549,19 +572,94 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
   }));
 }
 
-// ── the chat's own sheet ───────────────────────────────────────────────
-
-/** The chat itself: where it came from, who started it and takes part, its agents (each leads to its history). */
-function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
-  app.sheet({ height: 0.72, draggable: true, content: () => <ChatInfo here={here} thread={thread} /> });
-}
+// ── services and background jobs ───────────────────────────────────────
 
 /** The chat's agents' services and background jobs: those that matter now first, what is over faded and last. */
 function jobsOf(view: ChatView) {
   return sorted(view.agents.flatMap((a) => a.jobs ?? []));
 }
 
-/** A job's row in the chat's sheet: its dot on its name's line, what it is up to under it. */
+/** The bar's button for the chat's services and jobs, with a dot when one died lately (red) or a service restarts (amber). */
+function JobsButton({ here, jobs }: { here: Here; jobs: Job[] }) {
+  const app = useApp();
+  const alarm = alarmOf(jobs, useNow(30_000));
+  return (
+    <button type="button" className="m-nav-button m-jobs-trigger" aria-label="服务和后台任务" onClick={() => openJobs(app, here)}>
+      <Web size={18} />
+      {alarm && <span className="m-jobs-alarm" data-alarm={alarm} aria-hidden="true" />}
+    </button>
+  );
+}
+
+/** What matters now of the chat's services and jobs, as the desktop's title bar popover has it; the rest a tap away. */
+function openJobs(app: MobileApp, here: Here) {
+  app.sheet({ height: 0.62, draggable: true, content: () => <JobsNow here={here} /> });
+}
+
+function JobsNow({ here }: { here: Here }) {
+  const now = useNow();
+  const view = useChat(here.station, { session: here.key }).value ?? here.view;
+  const jobs = jobsOf(view);
+  const [all, setAll] = useState(false);
+  const current = jobs.filter((j) => isCurrent(j, now));
+  const shown = all ? jobs : current;
+  const hidden = jobs.length - current.length;
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title="服务和后台任务" />
+      <div className="m-sheet-scroll m-pad-18">
+        {jobs.length === 0 && <div className="m-jobs-empty"><b>还没有服务或后台任务</b><span>agent 开网页、或挂上长期盯着的任务时，会列在这里。</span></div>}
+        {jobs.length > 0 && shown.length === 0 && <p className="m-note">眼下没有在跑的服务或任务。</p>}
+        <JobGroups here={here} view={view} jobs={shown} now={now} notes />
+        {hidden > 0 && (
+          <button type="button" className="m-jobs-all" onClick={() => setAll(!all)}>
+            {all ? "只看眼下的" : <>全部 {jobs.length} 个<span>另有 {hidden} 个已停止或结束</span></>}
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Services, then background jobs. A service up or restarting opens its page; one that did not start (or is over), and
+ * any job, opens what it said and its output. With `notes` each group's head says how many are up or alive.
+ */
+function JobGroups({ here, view, jobs, now, notes = false }: { here: Here; view: ChatView; jobs: Job[]; now: number; notes?: boolean }) {
+  const app = useApp();
+  const services = jobs.filter(isService);
+  const plain = jobs.filter((j) => !isService(j));
+  const count = (list: Job[], tone: Tone) => list.filter((j) => toneOf(j) === tone).length;
+  const serviceNote = [count(services, "up") && `${count(services, "up")} 个在线`, count(services, "restart") && `${count(services, "restart")} 个在重启`].filter(Boolean).join("，");
+  const plainNote = count(plain, "live") ? `${count(plain, "live")} 个在盯着` : "";
+  const details = (j: Job) => app.sheet({ height: 0.8, draggable: true, content: () => <JobSheet station={here.station} sessionKey={here.key} jobId={j.id} view={view} /> });
+  return (
+    <>
+      {services.length > 0 && (
+        <>
+          <GroupLabel>服务{notes && serviceNote ? ` · ${serviceNote}` : ""}</GroupLabel>
+          <InfoList>
+            {services.map((j) => {
+              const up = toneOf(j) === "up" || toneOf(j) === "restart";
+              return <JobInfoRow key={j.id} job={j} now={now} onClick={up ? () => app.push(servicePath(here.station, here.key, j.id)) : () => details(j)} />;
+            })}
+          </InfoList>
+        </>
+      )}
+      {plain.length > 0 && (
+        <>
+          <GroupLabel>后台任务{notes && plainNote ? ` · ${plainNote}` : ""}</GroupLabel>
+          <InfoList>
+            {plain.map((j) => <JobInfoRow key={j.id} job={j} now={now} onClick={() => details(j)} />)}
+          </InfoList>
+        </>
+      )}
+    </>
+  );
+}
+
+/** A job's row in the chat's sheets: its dot on its name's line, what it is up to under it. */
 function JobInfoRow({ job, now, onClick }: { job: Job; now: number; onClick?: (() => void) | undefined }) {
   const tone = toneOf(job);
   const body = (
@@ -576,15 +674,21 @@ function JobInfoRow({ job, now, onClick }: { job: Job; now: number; onClick?: ((
   return onClick ? <InfoRow onClick={onClick}>{body}</InfoRow> : <InfoRow>{body}</InfoRow>;
 }
 
-/** A job, from the chat's sheet: what it said, or its output as it grows; stopped from here. */
+/**
+ * A service or a job, from the chat's sheets: its command, then what it said or its output as it grows (a service, its
+ * output); stopped from here.
+ */
 function JobSheet({ station, sessionKey, jobId, view: first }: { station: string; sessionKey: string; jobId: string; view: ChatView }) {
   const here = useChat(station, { session: sessionKey }).value ?? first;
   const job = here.agents.flatMap((a) => a.jobs ?? []).find((j) => j.id === jobId);
   const now = useNow();
   const stop = useStopJob(station);
-  const [tab, setTab] = useState(0);
-  const log = useJobLog(station, job && tab === 1 ? job.id : null, 300, job?.state === "running" ? 2000 : 60_000);
-  const last = useJobLog(station, job && tab === 0 && job.state === "running" ? job.id : null, 1, 3000);
+  const [picked, setTab] = useState(0);
+  const service = !!job && isService(job);
+  const tab = service ? 1 : picked;
+  const running = job?.state === "running";
+  // Its last line: read again while it runs, once when it is over.
+  const last = useJobLog(station, job && tab === 0 ? job.id : null, 1, running ? 3000 : 600_000);
   if (!job) return <><SheetGrab /><SheetHead title="任务" /><p className="m-note">这个任务已经不在了。</p></>;
   const lastAt = last?.outputAt ?? job.outputAt;
   return (
@@ -595,7 +699,8 @@ function JobSheet({ station, sessionKey, jobId, view: first }: { station: string
         <span className="m-grow"><b>{job.name}</b><span>{metaOf(job, now)}</span></span>
       </div>
       <div className="m-pad-18 m-job-body">
-        <Seg options={["通知", "输出"]} selected={tab} onSelect={setTab} fill height={34} />
+        {job.command && <div className="m-job-command">{job.command}</div>}
+        {!service && <Seg options={["通知", "输出"]} selected={tab} onSelect={setTab} fill height={34} />}
         {tab === 0
           ? (
             <div className="m-job-notices">
@@ -603,12 +708,35 @@ function JobSheet({ station, sessionKey, jobId, view: first }: { station: string
               {(job.notices ?? []).map((n, i) => <p key={`${n.at}-${i}`}><time>{clock(n.at, now)}</time><span>{n.text}</span></p>)}
             </div>
           )
-          : <pre className="m-job-output">{log === null ? "正在读取…" : log.text || "（还没有输出）"}</pre>}
+          : <JobOutput station={station} job={job} />}
         {tab === 0 && (lastAt || last?.text) && <div className="m-job-last"><span>最后输出{lastAt ? ` · ${ago(lastAt, now)}` : ""}</span>{last?.text && <code>{last.text.trim()}</code>}</div>}
-        {job.state === "running" && <button type="button" className="m-job-stop" onClick={() => stop(job)}><Stop size={16} />停止</button>}
+        {running && <button type="button" className="m-job-stop" onClick={() => stop(job)}><Stop size={16} />停止</button>}
       </div>
     </>
   );
+}
+
+/** A job's output, following its end while it is scrolled there (as the desktop's 任务 tab has it). */
+function JobOutput({ station, job }: { station: string; job: Job }) {
+  const log = useJobLog(station, job.id, 300, job.state === "running" ? 2000 : 60_000);
+  const box = useRef<HTMLPreElement>(null);
+  const atEnd = useRef(true);
+  useEffect(() => {
+    const el = box.current;
+    if (el && atEnd.current) el.scrollTop = el.scrollHeight;
+  }, [log?.text]);
+  return (
+    <pre ref={box} className="m-job-output" onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
+      {log === null ? "正在读取…" : log.text || "（还没有输出）"}
+    </pre>
+  );
+}
+
+// ── the chat's own sheet ───────────────────────────────────────────────
+
+/** The chat itself: where it came from, who started it and takes part, its agents (each leads to its history). */
+function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
+  app.sheet({ height: 0.72, draggable: true, content: () => <ChatInfo here={here} thread={thread} /> });
 }
 
 function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
@@ -628,27 +756,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
           <InfoDetail label="创建" value={thread.time?.createdAt?.ago ?? ""} />
           {thread.lastMessage && <InfoDetail label="最近消息" value={thread.lastMessage.time?.createdAt?.ago ?? ""} />}
         </InfoList>
-        {jobsOf(view).some(isService) && (
-          <>
-            <GroupLabel>服务</GroupLabel>
-            <InfoList>
-              {jobsOf(view).filter(isService).map((j) => {
-                const up = toneOf(j) === "up" || toneOf(j) === "restart";
-                return <JobInfoRow key={j.id} job={j} now={now} onClick={up ? () => app.push(`${stationBase(here.station)}/chats/${encodeURIComponent(here.key)}/services/${encodeURIComponent(j.id)}`) : undefined} />;
-              })}
-            </InfoList>
-          </>
-        )}
-        {jobsOf(view).some((j) => !isService(j)) && (
-          <>
-            <GroupLabel>后台任务</GroupLabel>
-            <InfoList>
-              {jobsOf(view).filter((j) => !isService(j)).map((j) => (
-                <JobInfoRow key={j.id} job={j} now={now} onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <JobSheet station={here.station} sessionKey={here.key} jobId={j.id} view={view} /> })} />
-              ))}
-            </InfoList>
-          </>
-        )}
+        <JobGroups here={here} view={view} jobs={jobsOf(view)} now={now} />
         {view.slackUrl && (
           <>
             <GroupLabel>在 Slack 里</GroupLabel>

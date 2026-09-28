@@ -1,14 +1,17 @@
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
 // with the buddy's face for its state and its load as rings; one station's profiles (which models may be used) and
 // connections.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { stationApi, useStationCall, useStations, type Profile, type StationView } from "../api.ts";
+import { illustrationUrl } from "../brand.tsx";
 import { Check, ChevronRight, More } from "../icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
+import { track } from "../telemetry.ts";
 import { useDark } from "../theme.ts";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
-import { ConnectRow } from "./Connects.tsx";
+import { ConnectRow, Presence, WaitingAppRow } from "./Connects.tsx";
+import { accessLabel, MachineLoginOffers, quotaTrouble, toneDot } from "./Profiles.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Button, Card, Field, Illustration, LargeTitle, ListCard, ListRow, Loading, Mark, NavBar, NavButton, PickRow, QuotaRings, Ring, SectionHeader, SlackMark, Spinner, TopBack } from "./parts.tsx";
 
@@ -26,6 +29,15 @@ export function StationsScreen() {
   const stations = useStations(app.entry.id);
   const list = stations.value;
   const manager = useManager();
+  // No station yet: adding the first one is the page.
+  if (list && list.length === 0) {
+    return (
+      <div className="m-screen m-scroll">
+        <TopBack label="会话" onBack={app.pop} />
+        <FirstStation />
+      </div>
+    );
+  }
   return (
     <div className="m-screen m-scroll">
       <TopBack label="会话" onBack={app.pop} />
@@ -93,17 +105,7 @@ function AddStationSheet({ known }: { known: string[] }) {
             <p>「{joined.name}」已加入，现在可以打开它了。</p>
             <div className="m-form-actions"><Button label="完成" primary onClick={() => app.sheet(null)} /></div>
           </>
-        ) : (
-          <>
-            <p>在要当 station 的机器（macOS，Apple 芯片）上打开「终端」，执行：</p>
-            <CommandBox text={made.install} />
-            <p className="m-muted m-small">它会装好 ember、加入这个 workspace，并在后台一直运行（开机自动启动）。之后在电脑上的「设置 → Profile」里登录 Claude Code 或 Codex 的账号。</p>
-            <b className="m-form-label">这台机器上已经有 ember 了</b>
-            <p className="m-muted m-small">在 ember 的目录里执行下面这行，然后重启 ember：</p>
-            <CommandBox text={`bin/${made.command}`} />
-            <p className="m-muted m-small m-waiting"><Spinner size={10} />等待 station 加入… 命令 1 小时内有效，只能用一次。</p>
-          </>
-        )}
+        ) : <EnrollSteps install={made.install} />}
       </div>
     </>
   );
@@ -138,17 +140,88 @@ export function StationScreen() {
                 {s.overview.profiles.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}
                 {s.online && <ListRow onClick={() => app.push(app.at(`/s/${s.id}/profiles/new`))}><span className="m-accent m-row-title">＋ 添加 Profile</span></ListRow>}
               </ListCard>
+              {/* The machine's own logins not used yet, each offered as a profile. */}
+              {s.online && <MachineLoginOffers logins={s.overview.machineLogins} profiles={s.overview.profiles}
+                onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />}
               <SectionHeader title="连接" start={24} />
               <ListCard>
                 {s.overview.connects.map((c) => <ConnectRow key={c.id} connect={c} onClick={() => app.push(app.at(`/s/${s.id}/connects/${encodeURIComponent(c.id)}`))} />)}
                 <ListRow><Mark size={14} /><span className="m-grow m-row-title">ember 对话</span><span className="m-row-note">内置</span></ListRow>
-                {s.online && <ListRow onClick={() => app.push(app.at(`/s/${s.id}/connects/new`))}><span className="m-accent m-row-title">＋ 添加连接</span></ListRow>}
+                {s.online && (
+                  <ListRow onClick={() => app.push(app.at(`/s/${s.id}/connects/new`))}>
+                    <span className="m-grow m-row-text">
+                      <span className="m-accent m-row-title">＋ 添加连接</span>
+                      {s.overview.profiles.length === 0 && <span className="m-row-note">连接要用 Profile 来跑模型，先添加一个 Profile</span>}
+                    </span>
+                  </ListRow>
+                )}
               </ListCard>
+              {/* The Slack apps made here that no connect has taken yet: to be finished any time. */}
+              {(s.overview.slackApps?.length ?? 0) > 0 && (
+                <>
+                  <SectionHeader title="还没连上的 Slack app" start={24} />
+                  <ListCard>{s.overview.slackApps!.map((a) => <WaitingAppRow key={a.appId} made={a} online={s.online} />)}</ListCard>
+                </>
+              )}
             </>
           )}
           <div style={{ height: 30 }} />
         </div>
       )}
+    </div>
+  );
+}
+
+/** The command that adds a station, to copy and run on that machine, and the wait for it to join. */
+function EnrollSteps({ install }: { install: string }) {
+  return (
+    <>
+      <p>在那台机器的终端里执行：</p>
+      <CommandBox text={install} />
+      <p className="m-muted m-small">macOS（Apple 芯片）和 Linux 都行；装过 ember 的机器也用这条命令。它会装好 ember、加入这个 workspace，并在后台一直运行。加入以后，在它的 Station 页添加 Profile。</p>
+      <p className="m-muted m-small m-waiting"><Spinner size={10} />等待这台机器加入… 执行命令后会自动继续 · 命令 1 小时内有效</p>
+    </>
+  );
+}
+
+/**
+ * A workspace's first station, added in the page (as the desktop's Onboarding, ../cloud/workspace.tsx): what a station
+ * is, its name, then the command to copy and the wait. The workspace's pages take over once it has joined. Only its
+ * owner and admins add one; anyone else is told to wait for them.
+ */
+export function FirstStation() {
+  const app = useApp();
+  const view = useWorkspace(app.entry.id).value;
+  const manager = view?.role === "owner" || view?.role === "admin";
+  const [name, setName] = useState("");
+  const [made, setMade] = useState<{ install: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const shown = useRef(0);
+  useEffect(() => { if (made) shown.current = performance.now(); }, [made]);
+  // Joined: the page is gone (the workspace has a station), so this is said as it goes.
+  useEffect(() => () => { if (shown.current) track("station_added", { ms: Math.round(performance.now() - shown.current), first: true }); }, []);
+  return (
+    <div className="m-new-none">
+      <img className="m-illus" src={illustrationUrl("no-station")} alt="" width={240} />
+      <b>添加第一台 station</b>
+      <p>agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。</p>
+      <div className="m-form m-steps" style={{ alignSelf: "stretch", padding: 0, textAlign: "left" }}>
+        {!view ? <p className="m-muted m-waiting"><Spinner size={12} />正在读取 workspace…</p>
+          : !manager ? <p className="m-callout">这个 workspace 还没有 station，等管理员添加。</p>
+          : made ? <EnrollSteps install={made.install} />
+          : (
+            <>
+              <b className="m-form-label">给这台机器起个名字</b>
+              <Field value={name} onChange={setName} placeholder="比如 studio、mac-mini" />
+              {error && <p className="m-error">{error}</p>}
+              <Button label="生成命令" primary busy={busy} enabled={!!name.trim()} onClick={() => {
+                setBusy(true); setError(null);
+                cloud.enroll(app.entry.account.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message)).finally(() => setBusy(false));
+              }} />
+            </>
+          )}
+      </div>
     </div>
   );
 }
@@ -180,12 +253,20 @@ function StationMenu({ s }: { s: StationView }) {
   );
 }
 
-/** A profile on its station's page: its allowance and how many of its models are enabled; its page picks them. */
+/**
+ * A profile on its station's page: whether it works (a dot before its name, its state in words, why when its provider
+ * refuses it), what it is, how many of its models are enabled, and its allowance; its page picks them.
+ */
 function ProfileRow({ station, p }: { station: StationView; p: Profile }) {
   const app = useApp();
+  const trouble = quotaTrouble(p.quota);
   return (
     <ListRow onClick={() => app.push(app.at(`/s/${station.id}/settings/accounts/${encodeURIComponent(p.id)}`))}>
-      <span className="m-grow m-row-text"><span className="m-row-title">{p.name}</span><span className="m-row-note">{p.modelsText}</span></span>
+      <span className="m-grow m-row-text">
+        <span className="m-row-title"><Presence state={toneDot(p.checkTone)} /> {p.name}</span>
+        <span className="m-row-note">{p.checkText} · {accessLabel(p)} · {p.modelsText}</span>
+        {trouble && <span className="m-row-note m-wrap">{trouble}</span>}
+      </span>
       <QuotaRings quota={p.quota} />
       <ChevronRight size={14} className="m-subtle" />
     </ListRow>

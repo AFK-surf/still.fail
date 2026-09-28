@@ -8,13 +8,14 @@ import { RUNTIME_LABEL } from "../format.ts";
 import { Server } from "../icons.tsx";
 import { toMadeChat } from "../Chat.tsx";
 import { transitionTo } from "../ui.tsx";
-import { stationBase } from "../station.tsx";
+import { StationContext, stationBase, type Station } from "../station.tsx";
 import { useNavigate } from "react-router";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { BarFrame, type Draft } from "./Chat.tsx";
 import { useHost } from "./ChatHost.tsx";
-import { Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow, Spinner } from "./parts.tsx";
-import { Buddy } from "./Stations.tsx";
+import { Button, Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow, Spinner } from "./parts.tsx";
+import { MachineLoginOffers } from "./Profiles.tsx";
+import { Buddy, FirstStation } from "./Stations.tsx";
 
 /** What the new chat runs on; kept per station for next time. */
 interface Choice { runtime: string; model: string; effort: string }
@@ -39,11 +40,13 @@ export function NewChatScreen() {
       <NavBar back="取消" onBack={app.pop} title="新对话" />
       {!all ? <Loading text={stations.error?.message ?? "正在读取 station…"} />
         : !view ? (
-          <div className="m-new-none">
-            <Illustration name="station-offline" width={240} />
-            <b>没有在线的 station</b>
-            <p>在一台机器上打开 ember，它就会连上这个 workspace。</p>
-          </div>
+          all.length === 0 ? <FirstStation /> : (
+            <div className="m-new-none">
+              <Illustration name="station-offline" width={240} />
+              <b>没有在线的 station</b>
+              <p>在一台机器上打开 ember，它就会连上这个 workspace。</p>
+            </div>
+          )
         )
         : <NewChatOn key={view.station} view={view} stations={online} onStation={setPicked} />}
     </div>
@@ -79,7 +82,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const navigate = useNavigate();
   const problem = !view.overview ? `正在读取 ${view.name} 的 Profile…`
-    : profiles.length === 0 ? "这台 station 还没有 Profile，先在电脑上到 设置 → Profile 里加一个。"
+    : profiles.length === 0 ? null
     : view.models.length === 0 ? "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。" : null;
   // The first message makes the page the chat's at once: the scene fades, the message is where the chat has it. More
   // can follow before the chat is made: they go in order once it is, and the page gives way to the chat.
@@ -137,6 +140,8 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
         <h2>想让 agent 做什么？</h2>
         <p className="m-muted">说要做什么。它会在 {view.name} 上用选好的模型开一个新会话。</p>
         {problem && <p className="m-new-problem" data-wait={!view.overview || undefined}>{problem}</p>}
+        {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}
+        {view.overview && profiles.length === 0 && <NoProfile view={view} />}
         {making && <p className="m-muted m-small">正在 {view.name} 上创建会话…</p>}
       </div>
       {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
@@ -213,4 +218,20 @@ function pickEffort(app: MobileApp, efforts: string[], current: string, onPick: 
       </div>
     </>
   ) });
+}
+
+/** A station with no profile: what one is, adding one, and the machine's own logins as ones to use right away. */
+function NoProfile({ view }: { view: StationView }) {
+  const app = useApp();
+  const station: Station = { id: view.id, name: view.name, online: view.online, address: view.station, base: stationBase(view.station), settings: `/w/${app.entry.id}/settings` };
+  return (
+    <StationContext.Provider value={station}>
+      <p className="m-new-problem" data-wait>给 {view.name} 添加一个 Profile。agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。</p>
+      <Button label="添加 Profile" primary onClick={() => app.push(app.at(`/s/${view.id}/profiles/new`))} />
+      <div className="m-form m-steps" style={{ alignSelf: "stretch", marginTop: 12, padding: 0, textAlign: "left" }}>
+        <MachineLoginOffers inForm logins={view.overview?.machineLogins} profiles={view.overview?.profiles ?? []}
+          onSignIn={(kind) => app.push(app.at(`/s/${view.id}/profiles/new?kind=${kind}`))} />
+      </div>
+    </StationContext.Provider>
+  );
 }

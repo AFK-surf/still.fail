@@ -1,12 +1,13 @@
 // The workspace itself on a narrow screen: its name, its people (invited, their roles, moved out), and leaving or
 // deleting it. What the desktop's 通用, 成员 and 退出与删除 settings do, on one page in the Android app's manner.
-import { parseEmails } from "../cloud/adding.ts";
-import { useState } from "react";
+import { parseEmails, useSlackPeople } from "../cloud/adding.ts";
+import { useEffect, useState } from "react";
 import { stamp } from "../api.ts";
 import { cloud, useWorkspace, type LoginSession, type MemberView, type Role, type WorkspaceView } from "../cloud/api.ts";
 import { useTopic } from "../core/react.ts";
 import { ROLE_HINT, ROLE_LABEL } from "../cloud/settings.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
+import { Check } from "../icons.tsx";
 import { Avatar, Button, Field, LargeTitle, ListCard, ListRow, Loading, PickRow, SectionHeader, TopBack } from "./parts.tsx";
 import { ask, confirm } from "./sheets.tsx";
 
@@ -40,7 +41,7 @@ export function WorkspaceScreen() {
       <SectionHeader title={`成员 · ${view.members.length} 人`} start={24} />
       <ListCard>
         {view.members.map((m) => <MemberRow key={m.sub} view={view} m={m} me={me.sub} />)}
-        {manager && <ListRow onClick={() => app.sheet({ height: 0.62, content: () => <AddSheet view={view} /> })}><span className="m-accent m-row-title">＋ 添加成员</span></ListRow>}
+        {manager && <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <AddSheet view={view} /> })}><span className="m-accent m-row-title">＋ 添加成员</span></ListRow>}
       </ListCard>
       {manager && view.added.length > 0 && (
         <>
@@ -129,7 +130,19 @@ function AddSheet({ view }: { view: WorkspaceView }) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const roles: Role[] = view.role === "owner" ? ["member", "admin", "owner"] : ["member", "admin"];
-  const emails = parseEmails(text);
+  // The people of the Slack workspaces the stations are in, read when asked for; the workspace's own picked, guests left to choose.
+  const slack = useSlackPeople(view.id);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const inside = new Set([...view.members.map((m) => m.email.toLowerCase()), ...view.added.map((a) => a.email)]);
+  useEffect(() => {
+    if (slack.people) setPicked(new Set(slack.people.filter((p) => !p.guest && !inside.has(p.email)).map((p) => p.email)));
+  }, [slack.people]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (email: string) => setPicked((now) => {
+    const next = new Set(now);
+    if (next.has(email)) next.delete(email); else next.add(email);
+    return next;
+  });
+  const emails = [...new Set([...parseEmails(text), ...picked])].filter((e) => !inside.has(e));
   return (
     <>
       <SheetGrab />
@@ -145,6 +158,32 @@ function AddSheet({ view }: { view: WorkspaceView }) {
             <p className="m-muted">直接加进「{view.name}」，不用对方接受：登录过 ember 的人马上加入，其他人第一次用这个邮箱登录时自动加入。</p>
             <b className="m-form-label">邮箱</b>
             <Field value={text} onChange={setText} placeholder="name@example.com，可以粘贴多个" />
+            {slack.available && (slack.people === null ? (
+              <button type="button" className="m-link m-step-alt" disabled={slack.busy} onClick={() => void slack.load()}>{slack.busy ? "正在读取 Slack 里的人…" : "从 Slack 里选人"}</button>
+            ) : (
+              <>
+                <div className="m-profile-tools" style={{ padding: 0 }}>
+                  <span className="m-grow m-small m-muted">Slack 里 {slack.people.length} 人，选中 {[...picked].filter((e) => !inside.has(e)).length} 人</span>
+                  <button type="button" className="m-link" onClick={() => setPicked(new Set(slack.people!.filter((p) => !inside.has(p.email)).map((p) => p.email)))}>全选</button>
+                  <button type="button" className="m-link" onClick={() => setPicked(new Set())}>全不选</button>
+                </div>
+                <div>
+                  {slack.people.map((p) => {
+                    const already = inside.has(p.email);
+                    const on = already || picked.has(p.email);
+                    return (
+                      <button key={p.email} type="button" className="m-model-row" style={{ padding: "9px 0" }} disabled={already} onClick={() => toggle(p.email)}>
+                        <span className="m-check" data-on={on || undefined}>{on && <Check size={13} />}</span>
+                        <Avatar id={p.email} name={p.name || p.email} size={26} picture={p.image ?? undefined} />
+                        <span className="m-grow m-row-text"><span className="m-row-title">{p.name}</span><span className="m-row-note">{p.email}</span></span>
+                        {already ? <span className="m-row-note">已在</span> : p.guest && <span className="m-row-note">访客</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {slack.errors.length > 0 && <p className="m-error">{slack.errors.join("；")}</p>}
+              </>
+            ))}
             <b className="m-form-label">角色</b>
             {roles.map((r) => <PickRow key={r} label={ROLE_LABEL[r]} sub={ROLE_HINT[r]} checked={role === r} onClick={() => setRole(r)} />)}
             {error && <p className="m-error">{error}</p>}

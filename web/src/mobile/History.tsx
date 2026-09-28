@@ -447,9 +447,11 @@ export function AccountList({ accounts, runtime, picked, onPick }: { accounts: R
     <div className="m-scroll m-pad-x-18">
       <p className="m-small m-muted m-account-note">自动分配时，额度用完或登录失效会换一个；指定了就一直用它。</p>
       <PickLine label="自动分配" checked={picked === null} onClick={() => onPick(null)} />
+      {/* An account its provider refuses says so (a red dot, 被停用) where its allowance would be. */}
       {accounts.map((p) => (
         <PickLine key={p.id} label={p.name} checked={picked === p.id} onClick={() => onPick(p.id)}
-          leading={<ProviderMark runtime={p.runtime ?? runtime} kind={p.kind} size={18} />} trailing={<QuotaRings quota={p.quota} />} />
+          leading={<ProviderMark runtime={p.runtime ?? runtime} kind={p.kind} size={18} />}
+          trailing={p.quota?.state === "blocked" ? <span className="m-row-status" title={p.quota.detail}><span className="m-presence" data-state="error" />被停用</span> : <QuotaRings quota={p.quota} />} />
       ))}
     </div>
   );
