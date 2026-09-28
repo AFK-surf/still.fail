@@ -100,11 +100,13 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
     <section className={sessionCss.chat} aria-label="对话" data-under-composer="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
       <div className={sessionCss.chatPane}>
       {away && (
+        <Tip label="跳到最新" shortcut="chat.latest" side="top">
         <button type="button" className={css.chatToBottom} aria-label="跳到最新"
           // Glides down, and follows new messages again (scroll.ts).
           onClick={() => list.current?.dispatchEvent(new Event("to-bottom"))}>
           <ArrowDown size={16} strokeWidth={2} />
         </button>
+        </Tip>
       )}
       <Gallery.Provider value={stable.images}>
       <div className={sessionCss.chatList} ref={list} onMouseUp={() => setTimeout(onSelect, 0)} onScroll={() => setPicked(null)}
@@ -915,7 +917,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
           }} />
         <div className={css.composerToolbar}>
           <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
-          <Tip label="发送文件">
+          <Tip label="发送文件" shortcut="composer.file">
             <button type="button" className={css.attachBtn} aria-label="发送文件" disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
               <Plus size={18} />
             </button>

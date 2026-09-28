@@ -3,7 +3,8 @@
 // workspace itself (its name, members, stations, connects and the stations'
 // runtime accounts).
 import { Illustration } from "../brand.tsx";
-import { ArrowLeft, Brain, Check, Key, LogOut, Plug, Plus, Server, Settings, Sliders, Trash, UserPlus, Users } from "../icons.tsx";
+import { CHANGEABLE } from "../keymap.ts";
+import { ArrowLeft, Brain, Check, Key, LogOut, Plug, Plus, Server, Settings, Sliders, Command, Trash, UserPlus, Users } from "../icons.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, useNavigate } from "react-router";
 import { useStations, type StationView } from "../api.ts";
@@ -52,6 +53,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
       <NavLink className={nav.navRow} to={lastChat(entry.id, `/w/${entry.id}`)} end><ArrowLeft {...ICON} />{some ? "返回会话" : "返回"}</NavLink>
       <div className={nav.navHeading}>客户端</div>
       <NavLink className={nav.navRow} to={`${base}/appearance`}><Sliders {...ICON} />外观</NavLink>
+      {CHANGEABLE && <NavLink className={nav.navRow} to={`${base}/shortcuts`}><Command {...ICON} />快捷键</NavLink>}
       <div className={nav.navHeading}>Station</div>
       <NavLink className={nav.navRow} to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
       {some && <NavLink className={nav.navRow} to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>}

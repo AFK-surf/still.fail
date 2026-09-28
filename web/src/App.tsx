@@ -19,6 +19,8 @@ import { ComposerDock } from "./dock.tsx";
 import { Mark } from "./brand.tsx";
 import { ServicePage } from "./Preview.tsx";
 import { GlobalShortcuts } from "./Switcher.tsx";
+import { ShortcutsPage } from "./Shortcuts.tsx";
+import { CHANGEABLE } from "./keymap.ts";
 import * as shellCss from "./styles/shell.css.ts";
 
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
@@ -67,6 +69,7 @@ export function App() {
             <Route path="/settings/connects" element={<ConnectsPage />} />
             <Route path="/settings/device" element={<DevicePage />} />
             <Route path="/settings/appearance" element={<AppearancePage back="/settings" />} />
+            {CHANGEABLE && <Route path="/settings/shortcuts" element={<ShortcutsPage back="/settings" />} />}
             <Route path="/settings/memory" element={<MemoryPage />} />
             <Route path="/settings/accounts" element={<AccountsPage />} />
             <Route path="/settings/accounts/:id" element={<AccountPage />} />

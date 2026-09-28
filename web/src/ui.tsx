@@ -2,6 +2,7 @@
 // dismissal come from Radix), styled with ember's tokens. Pages compose these
 // instead of styling their own buttons, fields or menus.
 import { Mark } from "./brand.tsx";
+import { shortcutOf, useKeymap, type Action } from "./keymap.ts";
 import type { Badge, Maker, Stamp } from "./api.ts";
 import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, Info, More, Sliders } from "./icons.tsx";
 import {
@@ -38,10 +39,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
 );
 
 /** An icon-only button; its label shows as a tooltip and names it for screen readers. */
-export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: IconType }>(
-  function IconButton({ label, icon: Icon, className, ...rest }, ref) {
+export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: IconType; shortcut?: Action }>(
+  function IconButton({ label, icon: Icon, className, shortcut, ...rest }, ref) {
     return (
-      <Tip label={label}>
+      <Tip label={label} {...(shortcut ? { shortcut } : {})}>
         <button ref={ref} type="button" aria-label={label} {...rest} className={`${pagesCss.iconBtn}${className ? ` ${className}` : ""}`}>
           <Icon {...ICON} />
         </button>
@@ -50,12 +51,19 @@ export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTM
   },
 );
 
-export function Tip({ label, children, side = "bottom" }: { label: ReactNode; children: ReactNode; side?: "top" | "bottom" | "left" | "right" }) {
+function TipKeys({ action }: { action: Action }) {
+  useKeymap();
+  const keys = shortcutOf(action);
+  return keys ? <span className={css.tipKeys}>{keys}</span> : null;
+}
+
+/** A tip over a control; with a `shortcut`, the keys that do the same follow what it says. */
+export function Tip({ label, children, side = "bottom", shortcut }: { label: ReactNode; children: ReactNode; side?: "top" | "bottom" | "left" | "right"; shortcut?: Action }) {
   return (
     <Tooltip.Root>
       <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content className={css.tooltip} side={side} sideOffset={6} collisionPadding={8}>{label}</Tooltip.Content>
+        <Tooltip.Content className={css.tooltip} side={side} sideOffset={6} collisionPadding={8}>{label}{shortcut && <TipKeys action={shortcut} />}</Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>
   );

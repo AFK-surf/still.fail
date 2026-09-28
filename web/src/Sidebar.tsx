@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Brain, ChevronRight, Compose, Key, Monitor, Plug, Settings, Sliders, Unplug } from "./icons.tsx";
+import { Archive, ArrowLeft, Brain, ChevronRight, Command, Compose, Key, Monitor, Plug, Settings, Sliders, Unplug } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
@@ -10,7 +10,7 @@ import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
-import { useShortcut } from "./keymap.ts";
+import { CHANGEABLE, useShortcut } from "./keymap.ts";
 import { ChatMark } from "./ChatMark.tsx";
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { archiveKey, PendingArchives } from "./pendingArchives.ts";
@@ -48,6 +48,7 @@ function SettingsNav() {
       <NavLink className={nav.navRow} to={link(lastChat("local", "/chats"))}><ArrowLeft {...ICON} />返回会话</NavLink>
       <div className={nav.navHeading}>客户端</div>
       <NavLink className={nav.navRow} to={link("/settings/appearance")}><Sliders {...ICON} />外观</NavLink>
+      {CHANGEABLE && <NavLink className={nav.navRow} to={link("/settings/shortcuts")}><Command {...ICON} />快捷键</NavLink>}
       <div className={nav.navHeading}>Station</div>
       <NavLink className={nav.navRow} to={link("/settings/connects")} aria-current={connectOpen ? "page" : undefined}><Plug {...ICON} />连接</NavLink>
       <NavLink className={nav.navRow} to={link("/settings/accounts")}><Key {...ICON} />Profile</NavLink>

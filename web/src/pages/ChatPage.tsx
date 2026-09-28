@@ -245,7 +245,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               <a className={pagesCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label="在 Slack 中打开"><SlackLogo /></a>
             </Tip>
           )}
-          {!panel && agents[0] && <IconButton label="打开侧栏" icon={PanelOpen} onClick={() => openTab(agents[0]!.session.key)} />}
+          {!panel && agents[0] && <IconButton label="打开侧栏" icon={PanelOpen} shortcut="chat.history" onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
@@ -293,7 +293,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                 })}
               </Tabs.List>
               {/* The panel's switch stays in the top-right corner, open or closed. */}
-              <IconButton label="收起侧栏" icon={PanelClose} onClick={() => saveTabs([])} />
+              <IconButton label="收起侧栏" icon={PanelClose} shortcut="panel.close" onClick={() => saveTabs([])} />
             </div>
             {open.map((key) => {
               if (key === JOBS) {
@@ -346,7 +346,7 @@ function JobsPanel({ station, jobs, onService, onTab }: { station: string; jobs:
   const close = (then: () => void) => { setOpen(false); then(); };
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      <Tip label="服务和后台任务">
+      <Tip label="服务和后台任务" shortcut="chat.jobs">
         <Popover.Trigger asChild>
           <button type="button" className={`${pagesCss.iconBtn} ${css.jobsTrigger}`} aria-label="服务和后台任务" data-alarm={alarm} data-none={jobs.length === 0 || undefined}><Web {...ICON} /></button>
         </Popover.Trigger>
@@ -483,7 +483,7 @@ function SessionActions({ session, status }: { session: Session; status: Status 
   const evict = useAction(() => api.evict(session.key), () => toast("已释放进程"));
   return (
     <>
-      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Stop} onClick={() => void stop.run()} disabled={stop.busy} />}
+      {(status === "running" || status === "queued") && <IconButton label="停止当前任务" icon={Stop} shortcut="chat.stop" onClick={() => void stop.run()} disabled={stop.busy} />}
       {session.process === "warm" && <IconButton label="释放进程" icon={Unplug} onClick={() => void evict.run()} disabled={evict.busy} />}
     </>
   );

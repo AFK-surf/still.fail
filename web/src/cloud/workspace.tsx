@@ -16,6 +16,8 @@ import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble } from "../Sidebar.tsx";
 import { GlobalShortcuts } from "../Switcher.tsx";
+import { ShortcutsPage } from "../Shortcuts.tsx";
+import { CHANGEABLE } from "../keymap.ts";
 import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
 import { AccountSettings, ConnectsSettings, FirstStation, MemorySettings, RuntimeSettings, SettingsNav, StationsSettings, WorkspaceSettings } from "./settings.tsx";
@@ -85,6 +87,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route index element={<WorkspaceHome id={entry.id} stations={found.value && stations} />} />
             <Route path="settings" element={<Navigate to="stations" replace />} />
             <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
+            {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
             <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />
             {/* Pages the workspace page took in: links to them still land there. */}

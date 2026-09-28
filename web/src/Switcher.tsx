@@ -6,6 +6,7 @@ import { useNavigate } from "react-router";
 import { useChats, type ChatItem } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { useShortcut } from "./keymap.ts";
+import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { stationBase } from "./station.tsx";
 import { ModelLogo, Time } from "./ui.tsx";
 import * as css from "./Switcher.css.ts";
@@ -14,12 +15,19 @@ import * as css from "./Switcher.css.ts";
 export function GlobalShortcuts({ scope, newChat, settings }: { scope: string; newChat: string; settings: string }) {
   const navigate = useNavigate();
   const [switching, setSwitching] = useState(false);
+  const [listing, setListing] = useState(false);
   useShortcut("chat.switch", () => setSwitching((s) => !s));
+  useShortcut("shortcuts", () => setListing((s) => !s));
   useShortcut("chat.new", () => navigate(newChat));
   useShortcut("settings", () => navigate(settings));
   useShortcut("nav.back", () => history.back());
   useShortcut("nav.forward", () => history.forward());
-  return <ChatSwitcher scope={scope} open={switching} onClose={() => setSwitching(false)} />;
+  return (
+    <>
+      <ChatSwitcher scope={scope} open={switching} onClose={() => setSwitching(false)} />
+      <ShortcutsDialog open={listing} onClose={() => setListing(false)} settings={`${settings}/shortcuts`} />
+    </>
+  );
 }
 
 function ChatSwitcher({ scope, open, onClose }: { scope: string; open: boolean; onClose(): void }) {

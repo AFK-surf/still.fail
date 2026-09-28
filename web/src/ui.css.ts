@@ -168,6 +168,8 @@ export const avatar = style({
   display: "inline-grid", placeItems: "center", flex: "none", color: "#fff", fontWeight: "650", lineHeight: "1",
 });
 export const tooltip = style({});
+/** A tip's keys, after what it says: quieter. */
+export const tipKeys = style({ marginLeft: "8px", opacity: ".6" });
 export const command = style({
   display: "flex", alignItems: "center", gap: "8px", padding: "6px 6px 6px 14px", borderRadius: vars.rField,
   background: vars.paper, cornerShape: vars.cornerShape,

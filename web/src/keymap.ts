@@ -1,20 +1,20 @@
 // The app's keyboard shortcuts, all in one place: what each does, and the keys that do it. A component that can do an
 // action says so with useShortcut (the one mounted last answers); one listener on the window finds the action a key
-// press is bound to. The keys can be changed on this device (`ember.keys` in localStorage): what shows a shortcut
+// press is bound to. The keys can be changed in the desktop app (`ember.keys` in its localStorage): what shows a shortcut
 // (a tooltip, the list of them) reads it from here too.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 
 export type Action =
   | "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings"
   | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.archive"
-  | "panel.close";
+  | "panel.close" | "shortcuts";
 
 /**
  * A binding: modifiers, then a key, joined by "+" ("Mod+Shift+H"). Mod is ⌘ on a Mac and Ctrl elsewhere. The key is
  * where it is on the keyboard (a letter, a digit, Up/Down/Left/Right, Space, Escape, or one of \ [ ] . , / ;), so ⌥
  * or ⇧ changing the character typed does not change which binding it is.
  */
-type Binding = string;
+export type Binding = string;
 
 interface Spec {
   label: string;
@@ -38,6 +38,7 @@ export const ACTIONS: Record<Action, Spec> = {
   "nav.back": { label: "后退", group: "全局", keys: [], desktop: ["Mod+["], typing: "yes" },
   "nav.forward": { label: "前进", group: "全局", keys: [], desktop: ["Mod+]"], typing: "yes" },
   "settings": { label: "设置", group: "全局", keys: [], desktop: ["Mod+,"], typing: "yes" },
+  "shortcuts": { label: "快捷键一览", group: "全局", keys: ["Mod+/"], typing: "yes" },
   "composer.focus": { label: "回到输入框", group: "对话", keys: ["Space"], typing: "no" },
   "composer.file": { label: "发送文件", group: "对话", keys: ["Mod+U"], typing: "yes" },
   "chat.stop": { label: "停止当前任务", group: "对话", keys: ["Mod+."], typing: "yes" },
@@ -51,7 +52,11 @@ export const ACTIONS: Record<Action, Spec> = {
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 const STORE = "ember.keys";
 
+/** Keys are changed only in the desktop app; the web pages keep the app's own. */
+export const CHANGEABLE = !!window.emberDesktop;
+
 function overrides(): Partial<Record<Action, Binding[]>> {
+  if (!CHANGEABLE) return {};
   try { return JSON.parse(localStorage.getItem(STORE) ?? "{}") as Partial<Record<Action, Binding[]>>; } catch { return {}; }
 }
 
@@ -68,12 +73,43 @@ export function setKeys(action: Action, keys: Binding[] | null): void {
   const all = overrides();
   if (keys) all[action] = keys; else delete all[action];
   try { localStorage.setItem(STORE, JSON.stringify(all)); } catch { /* private mode: not kept */ }
+  version++;
+  for (const f of watchers) f();
+}
+
+/** Whether an action's keys were changed on this device. */
+export function changed(action: Action): boolean {
+  return overrides()[action] !== undefined;
+}
+
+let version = 0;
+const watchers = new Set<() => void>();
+const watch = (f: () => void) => { watchers.add(f); return () => { watchers.delete(f); }; };
+
+/** Redrawn when any action's keys change: what shows them reads them anew. */
+export function useKeymap(): number {
+  return useSyncExternalStore(watch, () => version);
+}
+
+/** The action other than `except` a binding already does, if any. */
+export function boundTo(binding: Binding, except: Action): Action | null {
+  return (Object.keys(ACTIONS) as Action[]).find((a) => a !== except && keysOf(a).includes(binding)) ?? null;
 }
 
 const CODES: Record<string, string> = {
   Up: "ArrowUp", Down: "ArrowDown", Left: "ArrowLeft", Right: "ArrowRight", Space: "Space", Escape: "Escape", Enter: "Enter",
   "\\": "Backslash", "[": "BracketLeft", "]": "BracketRight", ".": "Period", ",": "Comma", "/": "Slash", ";": "Semicolon",
 };
+const KEYS = Object.fromEntries(Object.entries(CODES).map(([key, code]) => [code, key]));
+
+/** The binding a key press makes (Mod+Shift+H), or null for a key that is none (a modifier alone, a key with no name here). */
+export function bindingOf(e: KeyboardEvent): Binding | null {
+  const key = KEYS[e.code] ?? (/^Key[A-Z]$/.test(e.code) ? e.code.slice(3) : /^Digit\d$/.test(e.code) ? e.code.slice(5) : null);
+  if (!key) return null;
+  const mods = [MAC && e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", (MAC ? e.metaKey : e.ctrlKey) && "Mod"].filter(Boolean);
+  return [...mods, key].join("+");
+}
+
 const SHOWN: Record<string, string> = { Up: "↑", Down: "↓", Left: "←", Right: "→", Space: "空格", Escape: "Esc", Enter: "↩" };
 
 interface Parsed { mod: boolean; shift: boolean; alt: boolean; ctrl: boolean; code: string }
@@ -130,6 +166,8 @@ function onKey(e: KeyboardEvent) {
     if (!handler || !keysOf(action).some((k) => matches(k, e))) continue;
     const spec = ACTIONS[action];
     if (field && (spec.typing === "no" || spec.typing === "empty" && "value" in field && field.value !== "")) continue;
+    // A key that types something, bound on its own (changed to one here), is never taken from a text field.
+    if (field && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key.length === 1)) continue;
     // A key with no modifier is the focused control's own (Space presses a button).
     if (!e.metaKey && !e.ctrlKey && !e.altKey && at?.closest(PRESSED) && !field) continue;
     if (document.querySelector(OVER)) continue;

@@ -77,3 +77,4 @@ import "../cloud/StationCards.css.ts";
 import "../Sidebar.css.ts";
 import "../ChatMark.css.ts";
 import "../Switcher.css.ts";
+import "../Shortcuts.css.ts";
