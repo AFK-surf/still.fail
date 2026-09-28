@@ -1176,13 +1176,11 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .msg-avatar-agent img { width: 12px; height: 12px; }
 /* Someone's message has its avatar in a column of its own, held in view while the message scrolls past: however long
    a reply, whose it is shows at the top of the pane. An agent at work shows the same avatar, where its message lands. */
-.msg-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; align-items: start; }
+.msg-row { display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: 10px; align-items: start; }
 /* Sticky offsets count from inside the list's padding: these put the avatar 8px under the pane's top. */
 .msg-row > .msg-avatar { position: sticky; top: -16px; }
 @media (max-width: 700px) { .msg-row > .msg-avatar { top: -8px; } }
-.msg-row > .msg-avatar, .chat-list .activity-avatar .msg-avatar { width: 28px; height: 28px; }
-.msg-row > .msg-avatar-agent img, .chat-list .activity-avatar .msg-avatar-agent img { width: 16px; height: 16px; }
-.msg-row .msg-head { min-height: 28px; }
+.msg-row > .msg-avatar { margin-top: 3px; }
 
 /* Steps as they stream: the reply grows with a caret, a tool shows what it runs and its output as it comes. */
 .h-live > :last-child::after { content: ""; display: inline-block; width: 7px; height: 1em; margin-left: 2px; vertical-align: -2px; background: var(--accent); animation: caret 1s steps(1) infinite; }
@@ -1337,10 +1335,12 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
    list's height is only what shows). Coming out, it takes its whole place at once and what it says unrolls from its
    avatar's corner, drawn by the compositor alone: however long, nothing is laid out again while it moves. */
 .msg[data-held] { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 0fr; margin-top: -28px; overflow: hidden; }
-.msg-row[data-held] { grid-template-columns: 28px minmax(0, 1fr); }
+.msg-row[data-held] { grid-template-columns: 18px minmax(0, 1fr); }
 .msg[data-held] > * { min-height: 0; overflow: hidden; visibility: hidden; }
 .msg[data-emitting] > * { transform-origin: 12px 12px; will-change: transform, clip-path; animation: emit-out 380ms var(--ease-out) both; }
 .msg[data-covered] > .msg-avatar { visibility: hidden; }
+/* What it says sits beside its avatar's column (18px and a 10px gap): it still unrolls from the avatar. */
+.msg-row[data-emitting] > .msg-main { transform-origin: -19px 12px; }
 @keyframes emit-out {
   from { opacity: 0; transform: scale(.35); clip-path: inset(0 0 100% 0); }
   35% { opacity: 1; }
