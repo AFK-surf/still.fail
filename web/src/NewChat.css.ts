@@ -27,8 +27,8 @@ export const newChatHeld = style({ border: `1px solid ${vars.line}` });
 /** Here rather than with its class: it comes after .new-chat-held, and wins over it. */
 globalStyle(composerBox, {
   display: "flex", alignItems: "flex-end", gap: "8px", padding: "6px 6px 6px 12px",
+  // Its corners go from capsule to box with its height (Chat.tsx's Composer), not on their own.
   border: `1px solid ${vars.lineStrong}`, borderRadius: "999px", background: vars.canvas, cursor: "text",
-  transition: `border-radius ${vars.dur} ${vars.easeOut}`,
 });
 /** Centred, except what one writes in: the composer keeps the full width and its text starts on the left. */
 globalStyle(`${newChatInner} > ${composerWrap}, ${newChatInner} > form`, { justifySelf: "stretch", textAlign: "left" });

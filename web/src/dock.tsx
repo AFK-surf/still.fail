@@ -4,6 +4,7 @@
 // under way all stay. What is typed is kept by chat (its `draftKey`): each chat has its own, and a new chat's goes on
 // into the chat it makes.
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate } from "react-router";
 import { Composer, type ComposerProps } from "./Chat.tsx";
 import { StationContext, type Station } from "./station.tsx";
@@ -46,12 +47,17 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     const at = slot.current;
     if (!el || !at || !at.isConnected) return false;
     const host = el.offsetParent as HTMLElement | null;
-    const base = host?.getBoundingClientRect() ?? { left: 0, top: 0 };
+    const base = host?.getBoundingClientRect() ?? { left: 0, top: 0, bottom: window.innerHeight };
     const r = at.getBoundingClientRect();
-    const left = `${Math.round(r.left - base.left)}px`, top = `${Math.round(r.top - base.top)}px`, width = `${Math.round(r.width)}px`;
-    if (el.style.left === left && el.style.top === top && el.style.width === width) return false;
+    // At a chat's foot it hangs from its place's bottom: growing (a line more, capsule to box) it grows upwards at once,
+    // not down past the window until its place has followed.
+    const foot = variant.current === "chat";
+    const left = `${Math.round(r.left - base.left)}px`, width = `${Math.round(r.width)}px`;
+    const top = foot ? "" : `${Math.round(r.top - base.top)}px`, bottom = foot ? `${Math.round(base.bottom - r.bottom)}px` : "";
+    if (el.style.left === left && el.style.top === top && el.style.bottom === bottom && el.style.width === width) return false;
     el.style.left = left;
     el.style.top = top;
+    el.style.bottom = bottom;
     el.style.width = width;
     return true;
   };
@@ -183,7 +189,9 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     const el = box.current;
     if (!made || !el) return;
     setHeight(el.offsetHeight);
-    const resize = new ResizeObserver(() => { if (!moving.current) setHeight(el.offsetHeight); });
+    // Taken in the frame it changes (the composer growing a line, or moving from capsule to box): its place, and the
+    // list's foot with it, keep up with it frame by frame rather than a frame or two behind.
+    const resize = new ResizeObserver(() => { if (!moving.current) flushSync(() => setHeight(el.offsetHeight)); });
     resize.observe(el);
     return () => resize.disconnect();
   }, [made]);

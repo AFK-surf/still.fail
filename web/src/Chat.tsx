@@ -757,8 +757,9 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   });
   useShortcut("composer.file", locked ? null : () => { picker.current?.click(); });
   // Grow with the text up to three lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
-  // the text (or the placeholder), so it is measured again then; below the limit it never scrolls.
-  useEffect(() => {
+  // the text (or the placeholder), so it is measured again then; below the limit it never scrolls. Sized before it is
+  // drawn (and before the composer's change of shape below reads where things end up).
+  useLayoutEffect(() => {
     const el = input.current;
     if (!el) return;
     const fit = () => {
@@ -797,6 +798,49 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     return () => { resize.disconnect(); el.removeEventListener("scroll", scrolled); };
   }, [text]);
   const ready = draft.ready && !locked;
+  // Capsule ⇄ box, in one motion: it grows or shrinks to its new height, its corners going from the one to the other
+  // on the way (its ends' radius, half its height, to the box's, and their shape), and what it holds (the text, the
+  // buttons) moving from where it was to where it is now, rather than jumping there.
+  const multiline = roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0;
+  const box = useRef<HTMLFormElement>(null);
+  const shape = useRef<{ frame: Keyframe; height: number; parts: Map<Element, { x: number; y: number }> } | null>(null);
+  const shapeOf = (el: HTMLElement) => {
+    const style = getComputedStyle(el);
+    const height = el.offsetHeight;
+    // Where each part shows (mid-way, when it moves: a change then goes on from there).
+    const parts = new Map<Element, { x: number; y: number }>();
+    for (const part of el.querySelectorAll("textarea, button")) {
+      const r = part.getBoundingClientRect();
+      parts.set(part, { x: r.left, y: r.top });
+    }
+    const frame: Keyframe = { height: `${height}px`, borderRadius: `${Math.min(parseFloat(style.borderTopLeftRadius), height / 2)}px`, cornerShape: style.getPropertyValue("corner-shape") };
+    return { frame, height, parts };
+  };
+  useLayoutEffect(() => {
+    const el = box.current;
+    const was = shape.current;
+    if (!el || !was || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    for (const a of el.getAnimations({ subtree: true })) a.cancel();
+    const now = shapeOf(el);
+    const ease = getComputedStyle(document.documentElement).getPropertyValue("--ease-out").trim() || "ease-out";
+    const timing = { duration: 260, easing: ease };
+    el.animate([{ ...was.frame, overflow: "clip" }, { ...now.frame, overflow: "clip" }], timing);
+    // Its foot stays where it is (at a chat's foot it hangs from it), and its parts are laid out in the height it has
+    // on the way: from its top in a box, about its middle in a capsule. Each starts where it showed, as the new layout
+    // puts it at the height it starts from.
+    const bottom = el.getBoundingClientRect().bottom;
+    const along = multiline ? 0 : 0.5;
+    const shift = (bottom - now.height + along * now.height) - (bottom - was.height + along * was.height);
+    for (const [part, to] of now.parts) {
+      const from = was.parts.get(part);
+      if (!from) continue;
+      const x = from.x - to.x, y = from.y - to.y + shift;
+      if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue;
+      part.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing);
+    }
+  }, [multiline]);
+  // How it is after each change (read after the one above: mid-way, when it moves), for the next time it changes.
+  useLayoutEffect(() => { if (box.current) shape.current = shapeOf(box.current); });
   const submit = () => {
     if (ready) void send();
   };
@@ -807,7 +851,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
           <ChatRefMenu query={reference.query} here={sessionKey} active={active} onPick={pickReference} found={(items) => { refItems.current = items; }} />
         </div>
       )}
-      <form className={`${composerCss.composerBox} ${refCss.refHost}`} data-multiline={roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0 || undefined} data-dragging={dragging || undefined}
+      <form ref={box} className={`${composerCss.composerBox} ${refCss.refHost}`} data-multiline={multiline || undefined} data-dragging={dragging || undefined}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
         // Locked (its station offline), no file is taken in.
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
