@@ -115,7 +115,8 @@ for its member credential (30 days, kept on the device: docs/cloud.md).
 // live
 {
   "loaded": true,             // the stream has sent the transcript it had; until then `timeline` may be partial
-  "timeline": [ … ],          // TimelineEntry: the whole transcript from entry 0, appended as it grows
+  "first": 800,               // where `timeline` starts in the transcript: its latest page first, `history.older` loads those before
+  "timeline": [ … ],          // TimelineEntry: the transcript from entry `first`, appended as it grows
   "usage": { "modelCalls": 3, "inputTokens": 1200, "cachedTokens": 900, "outputTokens": 80, "model": "claude-…" } | null,
   "steps": [ … ],             // steps in flight (LiveStep; an ended one keeps "ended": true until the entry that records it arrives)
   "phase": { "phase": "requesting", "since": 1790000000000 } | null
@@ -168,10 +169,12 @@ that only notifications change it:
   page. What it reads is kept (docs/station-storage.md, In the client core),
   with the thread's summary and its sidebar title as `threads` and `chatRows`
   have them.
-- `live` starts from the transcript kept on the device and holds
-  `/sessions/:key/live?from=<entries it has>` open, keeping what comes; a
-  timeline message that cannot be placed starts it over from 0 (and forgets
-  what is kept).
+- `live` starts from the latest page (200 entries) of the transcript kept on
+  the device and follows it on `/events?live=<key>&from=<entries it has>&last=200`,
+  keeping what comes: the station sends no more than the last 200 entries, so
+  a timeline message past what it has (or before it: the transcript written
+  anew) starts the timeline there. `history.older` brings the pages before, from
+  what is kept, else `GET /sessions/:key/timeline?before=&limit=`.
 
 A topic nobody subscribes to is dropped after a minute.
 
@@ -313,6 +316,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `chat.send` | `station`, `thread`, `text`, `attachments?`, `quotes?` | `{ seq }`, once the station has it and the chat's `thread` topic (when read) holds it. Only chats on ember's page take messages (the station refuses the rest). Meanwhile the message is in the view's `outbox` as `sending` (a failure leaves it there as `failed`, with `error`) |
 | `chat.retry` / `chat.discard` | `station`, `thread`, `id` | sends a failed outbox message again / drops it |
 | `chat.older` | `station`, `thread` | `{ more }`: loads the page (50 entries) before the chat's oldest loaded entry into its `thread` topic — from what is kept, else from the station — so `messages` grows in front |
+| `history.older` | `station`, `key` | `{ more }`: loads the page (200 entries) of the session's transcript before its `live` topic's `first` into it — from what is kept, else from the station — so the `history` view's `items` grow in front (`more` in the view: there are older ones) |
 | `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to entry `seq` (`PUT /threads/:id/read {n}`); nothing is sent when it is read that far already. `unread` in `chats` follows |
 | `station.upload` | `station`, `key`, `name`, `bytes` | the attachment (into that session's workspace; a message may carry uploads of any session in its chat) |
 | `station.file` | `station`, `key`, `name` | `{ type, bytes }` |

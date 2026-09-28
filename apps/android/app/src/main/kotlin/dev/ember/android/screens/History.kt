@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -198,27 +199,47 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: Histor
     val lines = items.map { Line.Item(it) } + history.live.map { Line.Live(it) } + listOfNotNull(history.phase?.let { Line.Phase(it) })
     val list = rememberLazyListState()
     val follow = rememberFollow(list)
+    val api = LocalApp.current.api(station)
+    // Only its latest entries come first: near the top, the page before comes in (once per page).
+    val more = history.more == true
+    val first = items.firstOrNull()?.key
+    val asked = remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(more, first, follow.placed) {
+        if (!more || !follow.placed) return@LaunchedEffect
+        snapshotFlow { list.firstVisibleItemIndex }.collect { index ->
+            if (index <= 2 && asked.value != first) {
+                asked.value = first
+                try { api.historyOlder(agent.session.key) } catch (_: CoreException) { asked.value = null }
+            }
+        }
+    }
     // It opens at its newest, and follows new steps while the reader stays there.
     val density = LocalDensity.current
     // Opened at an entry (an activity row): that item, near the top, for a moment marked; else the newest, followed.
-    var marked by remember { mutableStateOf(-1) }
-    LaunchedEffect(Unit) {
+    // One before what is loaded: the pages before come first.
+    var marked by remember { mutableStateOf<String?>(null) }
+    val before = entry != null && more && entry < (items.firstOrNull()?.entries?.firstOrNull() ?: 0L)
+    LaunchedEffect(before, first) {
+        if (follow.placed) return@LaunchedEffect
+        if (before) {
+            try { api.historyOlder(agent.session.key); return@LaunchedEffect } catch (_: CoreException) {}
+        }
         val at = entry?.let { e -> items.indexOfFirst { it.entries.size == 2 && e in it.entries[0]..it.entries[1] } }?.takeIf { it >= 0 }
         if (at != null) {
             list.scrollToItem(at + 1, -with(density) { 24.dp.roundToPx() })
             follow.placed = true; follow.on = false
-            marked = at
-            delay(1600); marked = -1
+            marked = items[at].key
+            delay(1600); marked = null
         } else {
             follow.toEnd(); follow.placed = true; follow.on = true
         }
     }
     LazyColumn(Modifier.fillMaxWidth(), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item(key = "edge") { Edge(history.edge) }
-        itemsIndexed(lines, key = { _, l -> when (l) { is Line.Live -> "live/${l.step.id}"; is Line.Phase -> "phase"; is Line.Item -> l.item.key } }) { i, line ->
+        itemsIndexed(lines, key = { _, l -> when (l) { is Line.Live -> "live/${l.step.id}"; is Line.Phase -> "phase"; is Line.Item -> l.item.key } }) { _, line ->
             when (line) {
                 is Line.Item -> {
-                    val shade by androidx.compose.animation.animateColorAsState(if (i == marked) C.accent.copy(alpha = 0.10f) else androidx.compose.ui.graphics.Color.Transparent, tween(900), label = "marked")
+                    val shade by androidx.compose.animation.animateColorAsState(if (line.item.key == marked) C.accent.copy(alpha = 0.10f) else androidx.compose.ui.graphics.Color.Transparent, tween(900), label = "marked")
                     Box(Modifier.clip(RoundedCornerShape(8.dp)).background(shade)) { Item(line.item, station, of, agent) }
                 }
                 is Line.Live -> Text(line.step.text, fontSize = 13.sp, color = C.muted, maxLines = 1)

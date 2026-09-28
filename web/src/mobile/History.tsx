@@ -4,11 +4,12 @@
 // (how it runs, what it used, the station). Changing how it runs is a page of its own.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router";
-import { stationApi, useApi, useChat, useHistory, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
+import { stationApi, useApi, useChat, useHistory, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
 import { ArrowRight, Check, ChevronDown, ChevronRight, Received, Send, Stop, Unplug } from "../icons.tsx";
 import { modelName, optionOf } from "../ModelTriple.tsx";
 import { Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
+import { useOlderOnScroll } from "../Chat.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { SheetGrab, useApp, type MobileApp } from "./app.tsx";
 import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, ProviderMark, QuotaRing, QuotaRings, Ring, Seg, SlackMark, Spinner, stateOf, type Icon } from "./parts.tsx";
@@ -95,21 +96,33 @@ function Steps({ station, chat, agent, history, entry }: { station: string; chat
   const list = useRef<HTMLDivElement>(null);
   // It opens at its newest, and follows new steps while the reader stays there.
   useStickToBottom(list, ".m-h-line");
-  const [marked, setMarked] = useState(-1);
+  const [marked, setMarked] = useState<string | null>(null);
   const items = history?.items ?? [];
-  // Opened at an entry (an activity row): that item, near the top, for a moment marked.
+  // Only its latest entries come first: the pages before them load as the reader nears the top.
+  const older = useHistoryOlder(station, agent.session.key);
+  useOlderOnScroll(list, history?.more ?? false, items[0]?.key, older);
+  // Opened at an entry (an activity row): that item, near the top, for a moment marked. One before what is loaded: the
+  // pages before come first.
   const placed = useRef(false);
   useEffect(() => {
     if (placed.current || !history || entry === undefined) return;
-    placed.current = true;
     const at = items.findIndex((it) => it.entries.length === 2 && entry >= it.entries[0]! && entry <= it.entries[1]!);
+    if (at < 0 && history.more && entry < (items[0]?.entries[0] ?? 0)) {
+      void older().catch(() => { placed.current = true; });
+      return;
+    }
+    placed.current = true;
     if (at < 0) return;
     const el = list.current?.querySelector<HTMLElement>(`[data-item="${at}"]`);
-    if (!el || !list.current) return;
-    list.current.dispatchEvent(new WheelEvent("wheel"));
-    list.current.scrollTop += el.getBoundingClientRect().top - list.current.getBoundingClientRect().top - 24;
-    setMarked(at);
-    const timer = setTimeout(() => setMarked(-1), 1600);
+    const pane = list.current;
+    if (!el || !pane) return;
+    // Once the pages just loaded are laid out (the pane holds its bottom through them until then).
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      pane.dispatchEvent(new WheelEvent("wheel"));
+      pane.scrollTop += el.getBoundingClientRect().top - pane.getBoundingClientRect().top - 24;
+    }));
+    setMarked(items[at]!.key);
+    const timer = setTimeout(() => setMarked(null), 1600);
     return () => clearTimeout(timer);
   }, [history]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!history) return <Edge text="正在读取执行历史…" />;
@@ -118,7 +131,7 @@ function Steps({ station, chat, agent, history, entry }: { station: string; chat
     <div className={css.mHSteps} ref={list}>
       <Edge text={history.edge} />
       {items.map((item, i) => (
-        <div key={item.key} className={`m-h-line ${css.mHItem}`} data-item={i} data-marked={i === marked || undefined}>
+        <div key={item.key} className={`m-h-line ${css.mHItem}`} data-item={i} data-marked={item.key === marked || undefined}>
           <Item item={item} station={station} chat={chat} agent={agent} />
         </div>
       ))}

@@ -416,14 +416,20 @@ impl AdminApi {
             ("GET", "/host") => return ok(serde_json::to_value(crate::host::host_info(&self.config().data_dir).await)?),
             ("GET", "/overview") => return ok(self.overview(viewer)),
             ("GET", "/events") => {
-                // `live=<key>&from=<n>`, repeated: those sessions as they run, on this same stream.
+                // `live=<key>&from=<n>&last=<m>`, repeated: those sessions as they run, on this same stream (from
+                // entry `n`, but no more than the last `m` of the transcript; `last=0`: all of it).
                 let froms = asked.params("from");
+                let lasts = asked.params("last");
                 let live = asked
                     .params("live")
                     .into_iter()
                     .enumerate()
                     .filter(|(_, key)| matches!(self.deps.store.get_session(key), Ok(Some(_))))
-                    .map(|(i, key)| (key.to_string(), froms.get(i).and_then(|f| f.parse::<f64>().ok()).map(|f| f.max(0.0) as usize).unwrap_or(0)))
+                    .map(|(i, key)| {
+                        let from = froms.get(i).and_then(|f| f.parse::<f64>().ok()).map(|f| f.max(0.0) as usize).unwrap_or(0);
+                        let last = lasts.get(i).and_then(|l| l.parse::<usize>().ok()).filter(|l| *l > 0);
+                        (key.to_string(), from, last)
+                    })
                     .collect();
                 return Ok(self.events.open(viewer.clone(), asked.param("host") == Some("1"), live));
             }
@@ -563,6 +569,15 @@ impl AdminApi {
                 return ok(json!({ "session": found, "total": total, "said": &said[total.saturating_sub(limit)..] }));
             }
             (Some("sessions"), Some(key), None, "GET") => return ok(self.session(key, viewer)?),
+            // Transcript entries before those a page was sent (`/events`' `last`): up to `limit` before entry `before`.
+            (Some("sessions"), Some(key), Some("timeline"), "GET") => {
+                self.session_row(key)?;
+                let before = asked.param("before").and_then(|b| b.parse::<usize>().ok()).unwrap_or(0);
+                let limit = asked.param("limit").and_then(|l| l.parse::<usize>().ok()).unwrap_or(200).clamp(1, 1000);
+                let (live, key) = (self.deps.hub.live.clone(), key.to_string());
+                let (start, entries) = tokio::task::spawn_blocking(move || live.before(&key, before, limit)).await?.unwrap_or((0, vec![]));
+                return ok(json!({ "start": start, "entries": entries }));
+            }
             // A background job's last output, for the pages (`lines`, default 200).
             (Some("jobs"), Some(id), Some("log"), "GET") => {
                 let job = self.deps.store.get_job(id)?.ok_or_else(|| http_error(404, format!("no job {id}")))?;

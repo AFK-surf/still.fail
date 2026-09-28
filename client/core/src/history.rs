@@ -5,7 +5,8 @@
 //! The view is `HistoryView` in client/shapes: its items (each `{ key, entries, body }`, `entries` the transcript
 //! entries it draws, first and last, for an activity row to open the history there; `body` what kind of item it is and
 //! what that kind says), what streams now, where the turn stands, the model's use, and what shows at its top. A place
-//! is `format::place`'s.
+//! is `format::place`'s. Only the transcript's latest entries are there at first (`more`: `history.older` loads the
+//! ones before); items count entries from the transcript's start all the same.
 
 use serde_json::{Value, json};
 
@@ -198,6 +199,8 @@ enum Item {
 pub fn present(live: &Value, cx: &Context) -> Value {
     let empty = Vec::new();
     let timeline = live.get("timeline").and_then(Value::as_array).unwrap_or(&empty);
+    // Where the timeline starts in the transcript: what is before it is not loaded (yet).
+    let base = live.get("first").and_then(Value::as_u64).unwrap_or(0) as usize;
     let s = |e: &Value, k: &str| e.get(k).and_then(Value::as_str).unwrap_or("").to_string();
     let flag = |e: &Value, k: &str| e.get(k).and_then(Value::as_bool).unwrap_or(false);
 
@@ -312,7 +315,7 @@ pub fn present(live: &Value, cx: &Context) -> Value {
         };
         // Its kind, and what that kind says (shapes: HistoryBody).
         let kind = v.as_object_mut().and_then(|o| o.remove("kind")).unwrap_or(Value::Null);
-        json!({ "key": format!("e{first}"), "entries": [first, last], "body": { "kind": kind, "content": v } })
+        json!({ "key": format!("e{}", base + first), "entries": [base + first, base + last], "body": { "kind": kind, "content": v } })
     }).collect();
 
     // Only thinking and the reply stream here; a tool call shows once it is done, from the transcript.
@@ -351,13 +354,15 @@ pub fn present(live: &Value, cx: &Context) -> Value {
     let loaded = flag(live, "loaded");
     let (edge, is_empty) = if !loaded && shown.is_empty() {
         ("正在读取执行历史…", true)
-    } else if shown.is_empty() && live_steps.is_empty() && phase.is_none() {
+    } else if shown.is_empty() && live_steps.is_empty() && phase.is_none() && base == 0 {
         let why = if flag(live, "offline") { "station 离线，这台设备上还没有这个会话的执行历史。" } else if cx.started { "找不到运行时记录，可能已归档。" } else { "运行时还没开始这个会话。" };
         (why, true)
+    } else if base > 0 {
+        ("正在读取更早的执行历史…", false)
     } else {
         ("已到 Session 开始处", false)
     };
-    json!({ "items": shown, "live": live_steps, "phase": phase, "usage": usage, "usageLine": usage_line, "edge": edge, "empty": is_empty, "loaded": loaded })
+    json!({ "items": shown, "live": live_steps, "phase": phase, "usage": usage, "usageLine": usage_line, "edge": edge, "empty": is_empty, "loaded": loaded, "more": base > 0 })
 }
 
 fn group(timeline: &[Value], steps: &[Step], members: &[usize], thinking: &[usize]) -> Value {
@@ -522,5 +527,19 @@ mod tests {
         assert_eq!(edge(json!({"loaded": false}), true), "正在读取执行历史…");
         assert_eq!(edge(json!({"loaded": true}), false), "运行时还没开始这个会话。");
         assert_eq!(edge(json!({"loaded": true, "offline": true}), true), "station 离线，这台设备上还没有这个会话的执行历史。");
+    }
+
+    #[test]
+    fn a_timeline_loaded_from_further_on_counts_entries_from_the_transcripts_start() {
+        let none: [Value; 0] = [];
+        let live = json!({"loaded": true, "first": 400, "timeline": [
+            {"kind": "user", "text": "hi"},
+            {"kind": "tool_call", "tool": "Bash", "text": "{\"command\":\"ls\"}", "callId": "a"},
+            {"kind": "tool_result", "callId": "a", "ok": true, "text": "x"},
+        ]});
+        let h = present(&live, &cx(&none, &none, &[]));
+        assert_eq!((h["items"][0]["key"].clone(), h["items"][1]["entries"].clone()), (json!("e400"), json!([401, 402])));
+        assert_eq!((h["more"].clone(), h["edge"].clone(), h["empty"].clone()), (json!(true), json!("正在读取更早的执行历史…"), json!(false)));
+        assert_eq!(present(&json!({"loaded": true, "first": 400, "timeline": []}), &cx(&none, &none, &[]))["more"], true);
     }
 }

@@ -416,6 +416,7 @@ impl Inner {
                 Ok(Value::Null)
             }
             Call::ChatOlder { station, thread } => Ok(json!({ "more": self.stations.older(&StationAddr::parse(&station)?, thread).await? })),
+            Call::HistoryOlder { station, key } => Ok(json!({ "more": self.stations.history_older(&StationAddr::parse(&station)?, &key).await? })),
             Call::ChatRead { station, thread, seq } => {
                 self.stations.read(&StationAddr::parse(&station)?, thread, seq).await?;
                 Ok(Value::Null)
@@ -954,6 +955,7 @@ enum Call {
     ChatRetry { station: String, thread: u64, id: String },
     ChatDiscard { station: String, thread: u64, id: String },
     ChatOlder { station: String, thread: u64 },
+    HistoryOlder { station: String, key: String },
     ChatRead { station: String, thread: u64, seq: u64 },
     StationUpload { station: String, name: String, bytes: Vec<u8> },
     StationFile { station: String, key: String, name: String, thumb: bool },
@@ -967,7 +969,7 @@ impl Call {
         match self {
             Call::StationRequest { station, .. } | Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
-            Call::StationPreview { station, .. } => Some(station),
+            Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::CloudRequest { .. } | Call::Migrate { .. } | Call::ClientError { .. } => None,
         }
     }
@@ -1037,6 +1039,11 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         station: String,
         thread: u64,
         seq: u64,
+    }
+    #[derive(Deserialize)]
+    struct Session {
+        station: String,
+        key: String,
     }
     #[derive(Deserialize)]
     struct Upload {
@@ -1111,6 +1118,10 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         "chat.older" => {
             let p: Chat = read(params)?;
             Call::ChatOlder { station: p.station, thread: p.thread }
+        }
+        "history.older" => {
+            let p: Session = read(params)?;
+            Call::HistoryOlder { station: p.station, key: p.key }
         }
         "chat.read" => {
             let p: Read = read(params)?;
@@ -1246,6 +1257,7 @@ mod tests {
             Call::ChatDiscard { station: "w/s".into(), thread: 7, id: "out-1".into() }
         );
         assert_eq!(parse_call("chat.older", json!({"station": "w/s", "thread": 7})).unwrap(), Call::ChatOlder { station: "w/s".into(), thread: 7 });
+        assert_eq!(parse_call("history.older", json!({"station": "w/s", "key": "ember:c-1"})).unwrap(), Call::HistoryOlder { station: "w/s".into(), key: "ember:c-1".into() });
         assert_eq!(parse_call("chat.read", json!({"station": "w/s", "thread": 7, "seq": 12})).unwrap(), Call::ChatRead { station: "w/s".into(), thread: 7, seq: 12 });
         // A chat is a thread: a session key does not name one.
         assert_eq!(code(parse_call("chat.send", json!({"station": "w/s", "key": "k", "text": "hi"}))), "invalid_params");

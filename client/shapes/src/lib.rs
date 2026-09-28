@@ -958,14 +958,16 @@ pub struct Activity {
     pub now: ActivityNow,
 }
 
-/// A session as it runs: its transcript (all of it once `loaded`), the model's use, the steps in flight, where the
-/// turn stands, how fast it writes, and its activity.
+/// A session as it runs: its transcript (its latest entries once `loaded`, from entry `first`; `history.older` loads
+/// those before), the model's use, the steps in flight, where the turn stands, how fast it writes, and its activity.
 #[typeshare]
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Live {
     pub loaded: bool,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub first: Option<i64>,
     pub timeline: Vec<TimelineEntry>,
     pub usage: Option<TranscriptUsage>,
     pub steps: Vec<LiveStep>,
@@ -1583,6 +1585,8 @@ pub struct HistoryView {
     pub edge: String,
     pub empty: bool,
     pub loaded: bool,
+    /// Older entries exist: `history.older` loads the page before them.
+    pub more: Option<bool>,
 }
 
 // ── conforming ───────────────────────────────────────────────────────────

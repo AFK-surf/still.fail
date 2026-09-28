@@ -869,6 +869,8 @@ export interface HistoryView {
 	edge: string;
 	empty: boolean;
 	loaded: boolean;
+	/** Older entries exist: `history.older` loads the page before them. */
+	more?: boolean;
 }
 
 export interface Memory {
@@ -946,11 +948,12 @@ export interface Phase {
 }
 
 /**
- * A session as it runs: its transcript (all of it once `loaded`), the model's use, the steps in flight, where the
- * turn stands, how fast it writes, and its activity.
+ * A session as it runs: its transcript (its latest entries once `loaded`, from entry `first`; `history.older` loads
+ * those before), the model's use, the steps in flight, where the turn stands, how fast it writes, and its activity.
  */
 export interface Live {
 	loaded: boolean;
+	first?: number;
 	timeline: TimelineEntry[];
 	usage?: TranscriptUsage;
 	steps: LiveStep[];

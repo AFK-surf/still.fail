@@ -176,9 +176,10 @@ impl LiveHub {
         self.soon(key);
     }
 
-    /// Follows a session: first the transcript entries from index `from` on (and the usage so far), the steps in
-    /// flight, then everything new. Returns what stops it (unsubscribe).
-    pub fn subscribe(self: &Arc<Self>, key: &str, from: usize, listener: Listener) -> u64 {
+    /// Follows a session: first the transcript entries from index `from` on (only the `last` of them, when given: a
+    /// long transcript is not sent whole; the ones before come by [`LiveHub::before`]) and the usage so far, the steps
+    /// in flight, then everything new. Returns what stops it (unsubscribe).
+    pub fn subscribe(self: &Arc<Self>, key: &str, from: usize, last: Option<usize>, listener: Listener) -> u64 {
         let mut state = self.state.lock().unwrap();
         state.next_id += 1;
         let id = state.next_id;
@@ -186,12 +187,31 @@ impl LiveHub {
         if self.watch(&mut state, key) {
             let watched = &state.watched[key];
             // A watcher that has more than the transcript (it was written anew) is told where it ends.
-            let start = from.min(watched.tail.entries.len());
+            let len = watched.tail.entries.len();
+            let start = from.min(len).max(last.map_or(0, |last| len.saturating_sub(last)));
             let _ = listener.send(LiveMessage::Timeline { start, entries: watched.tail.entries[start..].to_vec(), usage: watched.tail.usage.clone() });
         }
         let phase = state.phase.get(key).map(|(phase, at)| LivePhaseView { phase: *phase, elapsed_ms: now_ms() - at });
         let _ = listener.send(LiveMessage::Steps { steps: state.steps.get(key).cloned().unwrap_or_default(), phase });
         id
+    }
+
+    /// Up to `limit` transcript entries just before index `before`, and the index of the first: from what is watched,
+    /// else read now. None when the session has no transcript.
+    pub fn before(self: &Arc<Self>, key: &str, before: usize, limit: usize) -> Option<(usize, Vec<TimelineEntry>)> {
+        let slice = |entries: &[TimelineEntry]| {
+            let end = before.min(entries.len());
+            let start = end.saturating_sub(limit);
+            (start, entries[start..end].to_vec())
+        };
+        if let Some(watched) = self.state.lock().unwrap().watched.get(key) {
+            return Some(slice(&watched.tail.entries));
+        }
+        let (runtime, path) = (self.locate)(key)?;
+        let mut tail = TranscriptTail::new(runtime, path);
+        tail.read();
+        tail.weave((self.posts)(key));
+        Some(slice(&tail.entries))
     }
 
     pub fn unsubscribe(&self, key: &str, id: u64) {
@@ -355,7 +375,7 @@ mod tests {
         hub.event("s", LiveEvent::start("x", LiveStepKind::Text));
         hub.event("s", LiveEvent::delta("x", LiveField::Text, "wri"));
         let (tx, mut rx) = mpsc::unbounded_channel();
-        let id = hub.subscribe("s", 1, tx);
+        let id = hub.subscribe("s", 1, None, tx);
         let got = drain(&mut rx);
         match (&got[0], &got[1]) {
             (LiveMessage::Timeline { entries, .. }, LiveMessage::Steps { steps, .. }) => {
@@ -380,10 +400,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_watcher_can_take_only_the_latest_entries_and_ask_for_those_before() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.jsonl");
+        std::fs::write(&path, line("one", "m1") + &line("two", "m2") + &line("three", "m3")).unwrap();
+        let located = path.clone();
+        let hub = LiveHub::new(Arc::new(move |_| Some((RuntimeKind::Claude, located.clone()))), Arc::new(|_| vec![]));
+        let texts = |entries: &[TimelineEntry]| entries.iter().map(|e| e.text.clone()).collect::<Vec<_>>();
+        // Not watched yet: read for the asking.
+        assert_eq!(hub.before("s", 2, 1).map(|(start, e)| (start, texts(&e))), Some((1, vec!["two".to_string()])));
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        hub.subscribe("s", 0, Some(1), tx);
+        match &drain(&mut rx)[0] {
+            LiveMessage::Timeline { start, entries, .. } => assert_eq!((*start, texts(entries)), (2, vec!["three".to_string()])),
+            other => panic!("{other:?}"),
+        }
+        // Watched: from what is held.
+        assert_eq!(hub.before("s", 2, 5).map(|(start, e)| (start, texts(&e))), Some((0, vec!["one".to_string(), "two".to_string()])));
+        assert_eq!(hub.before("s", 0, 5).map(|(start, e)| (start, e.len())), Some((0, 0)));
+    }
+
+    #[tokio::test]
     async fn how_fast_the_model_writes_is_told_once_half_a_second_of_it_has_come() {
         let hub = LiveHub::new(Arc::new(|_| None), Arc::new(|_| vec![]));
         let (tx, mut rx) = mpsc::unbounded_channel();
-        hub.subscribe("s", 0, tx);
+        hub.subscribe("s", 0, None, tx);
         let mut got = drain(&mut rx);
         hub.event("s", LiveEvent::start("x", LiveStepKind::Text));
         hub.event("s", LiveEvent::delta("x", LiveField::Text, "x".repeat(400)));

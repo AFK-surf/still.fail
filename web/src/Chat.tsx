@@ -189,7 +189,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   useStickToBottom(list, `.${conversationCss.msg}`, floor);
   // Without a chat there is nothing older to load and nothing to read.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
-  useOlderOnScroll(list, chat, older);
+  useOlderOnScroll(list, chat.more, chat.messages[0]?.seq, older);
   useMarkRead(floor, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
   const returning = useRememberPlace(list, place, messages.length > 0);
   const divider = useUnreadLine(list, chat, messages, mineOf, older, returning);
@@ -322,16 +322,14 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
 }
 
 /**
- * Loads the page of messages before those shown when the reader comes near
- * the top (or when what is loaded does not fill the pane). What is on screen
- * stays put: the pane keeps its distance from the bottom as content grows
- * above (scroll.ts).
+ * Loads the page before what is shown (`more`: there is one; `first`: what is
+ * shown first) when the reader comes near the top (or when what is loaded does
+ * not fill the pane). What is on screen stays put: the pane keeps its distance
+ * from the bottom as content grows above (scroll.ts).
  */
-export function useOlderOnScroll(ref: RefObject<HTMLElement | null>, chat: ChatView, older: () => Promise<unknown>): void {
-  // The oldest message a page was asked before: one request per page.
-  const asked = useRef<number | undefined>(undefined);
-  const more = chat.more;
-  const first = chat.messages[0]?.seq;
+export function useOlderOnScroll(ref: RefObject<HTMLElement | null>, more: boolean, first: number | string | undefined, older: () => Promise<unknown>): void {
+  // What was shown first when a page was asked before it: one request per page.
+  const asked = useRef<number | string | undefined>(undefined);
   const load = useRef(older);
   load.current = older;
   useEffect(() => {

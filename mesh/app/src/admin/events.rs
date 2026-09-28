@@ -131,7 +131,7 @@ impl Events {
     }
 
     /// Opens a stream for `viewer`: the sidebar as it is now is remembered, so later changes are told against it.
-    pub fn open(self: &Arc<Self>, viewer: Viewer, host: bool, live: Vec<(String, usize)>) -> Response<Body> {
+    pub fn open(self: &Arc<Self>, viewer: Viewer, host: bool, live: Vec<(String, usize, Option<usize>)>) -> Response<Body> {
         let (out, rx) = mpsc::unbounded_channel::<Bytes>();
         let _ = out.send(Bytes::from_static(b"retry: 3000\n\n"));
         let id = self.next.fetch_add(1, Ordering::SeqCst);
@@ -139,9 +139,9 @@ impl Events {
         if let Some(api) = self.api.upgrade() {
             client.rows = api.chats(&viewer, false).unwrap_or_default().into_iter().map(|row| (row["id"].as_str().unwrap_or("").to_string(), row.to_string())).collect();
             // Those sessions as they run, on this same stream: each message a `live` event with its key.
-            for (key, from) in live {
+            for (key, from, last) in live {
                 let (tx, mut messages) = mpsc::unbounded_channel();
-                let sub = api.deps.hub.live.subscribe(&key, from, tx);
+                let sub = api.deps.hub.live.subscribe(&key, from, last, tx);
                 client.live.push((key.clone(), sub));
                 let out = out.clone();
                 tokio::spawn(async move {

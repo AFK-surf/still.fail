@@ -5,12 +5,13 @@ import { useToast } from "./toast.tsx";
 import { ChevronDown, ChevronRight, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { useApi, useHistory, type HistoryGroup, type HistoryItem, type HistoryView, type Place } from "./api.ts";
+import { useApi, useHistory, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryView, type Place } from "./api.ts";
 import { ICON, Pill, SlackLogo } from "./ui.tsx";
 import { useLink } from "./station.tsx";
 import { Link } from "react-router";
 import { Prose } from "./Prose.tsx";
 import { useStickToBottom } from "./scroll.ts";
+import { useOlderOnScroll } from "./Chat.tsx";
 import { Mark } from "./brand.tsx";
 import * as css from "./History.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
@@ -44,20 +45,31 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   // Follow new steps while the reader is at the bottom; leave them alone when they scrolled up.
   useStickToBottom(body, `.${css.hItem}, .live-tail, .${css.hText}`);
   const items = history?.items ?? [];
-  // Opened at an entry (an activity row): the item that draws it comes into view, and says so for a moment.
+  // Only its latest entries come first: the pages before them load as the reader nears the top.
+  const older = useHistoryOlder(station, sessionKey);
+  useOlderOnScroll(body, history?.more ?? false, items[0]?.key, older);
+  // Opened at an entry (an activity row): the item that draws it comes into view, and says so for a moment. One before
+  // what is loaded: the pages before come first.
+  const focused = useRef<number | null>(null);
   useEffect(() => {
-    if (!focus) return;
+    if (!focus || focused.current === focus.n) return;
     const at = items.findIndex((item) => (item.entries[0] ?? 0) <= focus.entry && focus.entry <= (item.entries[1] ?? -1));
     const el = at < 0 ? null : body.current?.querySelector<HTMLElement>(`[data-item="${at}"]`);
-    if (!el) return;
-    el.scrollIntoView({ block: "center" });
-    el.dataset.focus = "";
-    const timer = setTimeout(() => delete el.dataset.focus, 1600);
-    return () => clearTimeout(timer);
-  }, [focus?.n, items.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
-  // What was there when the history opened shows at once; only what comes later animates.
-  const firstCount = useRef(Number.POSITIVE_INFINITY);
-  if (firstCount.current === Number.POSITIVE_INFINITY && history?.loaded) firstCount.current = items.length;
+    if (!el) {
+      if (history?.more && focus.entry < (items[0]?.entries[0] ?? 0)) void older().catch(() => {});
+      return;
+    }
+    focused.current = focus.n;
+    // Once the pages just loaded are laid out (the pane holds its bottom through them until then).
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.scrollIntoView({ block: "center" });
+      el.dataset.focus = "";
+      setTimeout(() => delete el.dataset.focus, 1600);
+    }));
+  }, [focus?.n, items[0]?.key, items.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  // What was there when the history opened (and older pages loaded later) shows at once; only what comes later animates.
+  const seen = useRef(Number.POSITIVE_INFINITY);
+  if (seen.current === Number.POSITIVE_INFINITY && history?.loaded) seen.current = items.at(-1)?.entries[1] ?? -1;
   const usage = history?.usage;
 
   return (
@@ -83,7 +95,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
             <p className={css.historyEdge}>{history.edge}</p>
             {items.map((item, i) => (
               // Entries that arrive while watching ease in; a reply that streamed in place does not (it is already there).
-              <div key={item.key} className={css.hItem} data-item={i} data-enter={i >= firstCount.current && item.body.kind !== "text" ? true : undefined}>
+              <div key={item.key} className={css.hItem} data-item={i} data-enter={(item.entries[0] ?? 0) > seen.current && item.body.kind !== "text" ? true : undefined}>
                 <HistoryItemView item={item} where={where} />
               </div>
             ))}

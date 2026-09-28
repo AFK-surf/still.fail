@@ -108,6 +108,12 @@ export function useHistory(station: string, key: string): TopicState<HistoryView
   return useTopic<HistoryView>({ topic: "history", station, key });
 }
 
+/** Loads the page of an agent's execution history before what it shows (the core has its latest entries first). */
+export function useHistoryOlder(station: string, key: string): () => Promise<{ more: boolean }> {
+  const call = useCall();
+  return useCallback(() => call("history.older", { station, key }) as Promise<{ more: boolean }>, [call, station, key]);
+}
+
 /** Each session's live topic, by key: the agents of a chat as they run. */
 export function useLives(station: string, keys: string[]): ReadonlyMap<string, Live> {
   const states = useTopics<Live>(keys.map((key) => ({ topic: "live", station, key })));

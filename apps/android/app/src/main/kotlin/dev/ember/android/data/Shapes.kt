@@ -939,7 +939,9 @@ data class HistoryView (
 	/// What shows at its top: where the session begins, or why there is nothing (yet).
 	val edge: String,
 	val empty: Boolean,
-	val loaded: Boolean
+	val loaded: Boolean,
+	/// Older entries exist: `history.older` loads the page before them.
+	val more: Boolean? = null
 )
 
 @Serializable
@@ -1023,11 +1025,12 @@ data class Phase (
 	val since: Long
 )
 
-/// A session as it runs: its transcript (all of it once `loaded`), the model's use, the steps in flight, where the
-/// turn stands, how fast it writes, and its activity.
+/// A session as it runs: its transcript (its latest entries once `loaded`, from entry `first`; `history.older` loads
+/// those before), the model's use, the steps in flight, where the turn stands, how fast it writes, and its activity.
 @Serializable
 data class Live (
 	val loaded: Boolean,
+	val first: Long? = null,
 	val timeline: List<TimelineEntry>,
 	val usage: TranscriptUsage? = null,
 	val steps: List<LiveStep>,

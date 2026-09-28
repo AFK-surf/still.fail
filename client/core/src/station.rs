@@ -9,9 +9,11 @@
 //! the topics as it is; what an event does not carry (a thread's unread count)
 //! is read for that one thing. Host samples are asked for (`?host=1`) only
 //! while a `host` topic is live. A
-//! `live` topic is followed on the station's `/events` (`?live=<key>&from=<entries known>`): the
-//! transcript from its first entry and then as it grows, the steps in flight
-//! and the phase. Nothing here runs on a timer but reconnects.
+//! `live` topic is followed on the station's `/events`
+//! (`?live=<key>&from=<entries known>&last=<TRANSCRIPT_PAGE>`): the transcript's
+//! latest page (`first` says where it starts; `history.older` loads the pages
+//! before it) and then as it grows, the steps in flight and the phase. Nothing
+//! here runs on a timer but reconnects.
 //!
 //! A thread's entries and a session's transcript never change once written, so
 //! they are kept on the device ([`Kept`]): a `thread` topic shows what is kept
@@ -56,6 +58,8 @@ pub const STREAM_IDLE_MS: u64 = 40_000;
 pub const EVENTS_COALESCE_MS: u64 = 400;
 /// Entries per page of a thread.
 pub const PAGE: u64 = 50;
+/// Entries per page of a session's transcript (a step is a call and its result, so more of them).
+pub const TRANSCRIPT_PAGE: u64 = 200;
 /// How many of a station's chats (the latest active) are brought onto the device ahead of being opened.
 const WARM_CHATS: usize = 30;
 /// The pause between two of them.
@@ -406,7 +410,12 @@ struct LiveView {
 /// A `live` topic before its stream has said anything: `loaded` turns true with the stream's first steps, which
 /// follow the transcript entries it already has.
 fn live_start() -> Value {
-    json!({ "loaded": false, "timeline": [], "usage": null, "steps": [], "phase": null })
+    json!({ "loaded": false, "first": 0, "timeline": [], "usage": null, "steps": [], "phase": null })
+}
+
+/// Where a `live` topic's timeline starts in the transcript.
+fn first_of(live: &Value) -> u64 {
+    live.get("first").and_then(Value::as_u64).unwrap_or(0)
 }
 
 /// A `thread` topic's value: the entries loaded, `first ..= last` (none of an empty thread: `last` is `first - 1`),
@@ -936,8 +945,9 @@ impl Stations {
         }
         for key in &wants.live {
             let topic = Topic::Live { station: station.into(), key: key.clone() };
-            let from = self.sink.get(&topic).and_then(|v| v.get("timeline")?.as_array().map(Vec::len)).unwrap_or(0);
-            query.push(format!("live={}&from={from}", encode(key)));
+            let from = self.sink.get(&topic).and_then(|v| Some(first_of(&v) + v.get("timeline")?.as_array()?.len() as u64)).unwrap_or(0);
+            // No more than the latest page: a station older than `last` sends all from `from`.
+            query.push(format!("live={}&from={from}&last={TRANSCRIPT_PAGE}", encode(key)));
         }
         if query.is_empty() { "/events".into() } else { format!("/events?{}", query.join("&")) }
     }
@@ -1075,7 +1085,7 @@ impl Stations {
                     return;
                 }
                 if !self.on_live(station, key, &data) {
-                    // Entries that cannot be placed: that session from its first entry, on a stream opened anew.
+                    // Entries with no timeline to go in: that session from its latest page, on a stream opened anew.
                     let topic = Topic::Live { station: station.into(), key: key.into() };
                     if let Some(s) = self.stations.borrow_mut().get_mut(station).and_then(|s| s.lives.get_mut(key)) {
                         *s = LiveView::default();
@@ -1473,6 +1483,47 @@ impl Stations {
         Ok(still)
     }
 
+    /// The page of a session's transcript before what its `live` topic has, into it: from what is kept, else from the
+    /// station (and kept). Answers whether still older entries exist.
+    pub async fn history_older(&self, station: &StationAddr, key: &str) -> Result<bool> {
+        let name = station.to_string();
+        let topic = Topic::Live { station: name.clone(), key: key.to_string() };
+        let log = Log::transcript(&name, key);
+        let Some(before) = self.sink.get(&topic).map(|v| first_of(&v)) else { return Ok(false) };
+        if before == 0 {
+            return Ok(false);
+        }
+        let older = match self.kept.before(&log, before, TRANSCRIPT_PAGE).await {
+            Some(older) => older,
+            None => {
+                let page = self.json(station, "GET", &format!("/sessions/{}/timeline?before={before}&limit={TRANSCRIPT_PAGE}", encode(key)), None).await?;
+                let start = page.get("start").and_then(Value::as_u64).unwrap_or(0);
+                let older: Vec<Value> = page.get("entries").and_then(Value::as_array).cloned().unwrap_or_default();
+                // None, or not the entries just before (the transcript was written anew meanwhile: the stream says).
+                if older.is_empty() || start + older.len() as u64 != before {
+                    return Ok(false);
+                }
+                self.host.spawn(self.kept.write(&log, start, older.clone(), false, None));
+                older
+            }
+        };
+        let first = before - older.len() as u64;
+        let mut still = false;
+        self.sink.update(&topic, &mut |live| {
+            let loaded = first_of(live);
+            // Another page came first, or the timeline started anew: this one is not next to it any more.
+            if loaded != before {
+                still = loaded > 0;
+                return;
+            }
+            let Some(timeline) = live.get_mut("timeline").and_then(Value::as_array_mut) else { return };
+            timeline.splice(0..0, older.iter().cloned());
+            live["first"] = json!(first);
+            still = first > 0;
+        });
+        Ok(still)
+    }
+
     /// Keeps a page ahead of what a thread shows: the page before entry `before`, brought onto the device if it is not
     /// there, so the next `older` has it at once. Nothing when the thread starts there, or its station is offline.
     fn prefetch_before(&self, station: &str, thread: u64, before: u64) {
@@ -1515,23 +1566,28 @@ impl Stations {
         let kind = message.get("type").and_then(Value::as_str).unwrap_or("");
         let mut entries_came = false;
         if kind == "timeline" {
-            let start = message.get("start").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let start = message.get("start").and_then(Value::as_u64).unwrap_or(0);
             let entries = message.get("entries").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
             let mut placed = false;
             self.sink.update(&topic, &mut |live| {
+                let first = first_of(live);
                 let Some(timeline) = live.get_mut("timeline").and_then(Value::as_array_mut) else { return };
-                if start > timeline.len() {
-                    return;
+                if (first..=first + timeline.len() as u64).contains(&start) {
+                    timeline.truncate((start - first) as usize);
+                    timeline.extend(entries.iter().cloned());
+                } else {
+                    // Not next to what is here: past it (only the latest page was sent), or before it (the transcript
+                    // written anew): these start the timeline.
+                    *timeline = entries.to_vec();
+                    live["first"] = json!(start);
                 }
-                timeline.truncate(start);
-                timeline.extend(entries.iter().cloned());
                 live["usage"] = message.get("usage").cloned().unwrap_or(Value::Null);
                 placed = true;
             });
             if !placed {
                 return false;
             }
-            self.host.spawn(self.kept.write(&Log::transcript(station, key), start as u64, entries.to_vec(), true, None));
+            self.host.spawn(self.kept.write(&Log::transcript(station, key), start, entries.to_vec(), true, None));
             entries_came = !entries.is_empty();
         }
         let view = {
@@ -1666,7 +1722,9 @@ impl Source for Stations {
                 let (this, station, key, topic) = (self.rc(), station.clone(), key.clone(), topic.clone());
                 self.spawn(async move {
                     let mut start = live_start();
-                    if let Some((_, entries)) = this.kept.open(&Log::transcript(&station, &key), u64::MAX).await {
+                    // Its latest page; `history.older` brings the rest.
+                    if let Some((held, entries)) = this.kept.open(&Log::transcript(&station, &key), TRANSCRIPT_PAGE).await {
+                        start["first"] = json!(held.first);
                         start["timeline"] = json!(entries);
                     }
                     // Offline, what was kept is all there is to read: it is loaded, and says why it ends there.
@@ -2054,7 +2112,7 @@ mod tests {
                 stations.start(&t);
             }
             host.settle().await;
-            assert_eq!(wire.open(), vec!["/admin/api/events?host=1&live=a&from=0"]);
+            assert_eq!(wire.open(), vec!["/admin/api/events?host=1&live=a&from=0&last=200"]);
             let requests = wire.calls.borrow().len();
             assert_eq!(requests, 7, "{:?}", wire.paths());
             host.sleeps.borrow_mut().clear();
@@ -2442,7 +2500,7 @@ mod tests {
             stations.start(&live("k"));
             host.settle().await;
             assert_eq!(live_of(&sink, "k"), live_start());
-            assert!(wire.paths().contains(&"GET /admin/api/events?live=k&from=0".to_string()));
+            assert!(wire.paths().contains(&"GET /admin/api/events?live=k&from=0&last=200".to_string()));
             let push = |v: Value| wire.event("live", with_key("k", v));
             push(json!({"type": "timeline", "start": 0, "entries": ["a", "b"], "usage": {"modelCalls": 1, "model": "claude-opus"}}));
             push(json!({"type": "steps", "steps": [], "phase": null}));
@@ -2460,14 +2518,14 @@ mod tests {
             // Reconnects ask from what is known.
             wire.end("/admin/api/events");
             wait(RECONNECT_MS + 50).await;
-            assert!(wire.paths().contains(&"GET /admin/api/events?live=k&from=4".to_string()), "{:?}", wire.paths());
+            assert!(wire.paths().contains(&"GET /admin/api/events?live=k&from=4&last=200".to_string()), "{:?}", wire.paths());
             // Reloaded: the kept transcript at once, and only what came after it is asked for.
             host.settle().await;
             let (reloaded, again, other) = reopened(&host);
             other.start(&live("k"));
             host.settle().await;
             assert_eq!(live_of(&reloaded, "k")["timeline"], json!(["a", "B", "c", "d"]));
-            assert!(again.paths().contains(&"GET /admin/api/events?live=k&from=4".to_string()), "{:?}", again.paths());
+            assert!(again.paths().contains(&"GET /admin/api/events?live=k&from=4&last=200".to_string()), "{:?}", again.paths());
             // Written anew and shorter: what is kept is cut there too.
             again.event("live", with_key("k", json!({"type": "timeline", "start": 1, "entries": [], "usage": {}})));
             host.settle().await;
@@ -2476,12 +2534,48 @@ mod tests {
             other.start(&live("k"));
             host.settle().await;
             assert_eq!(live_of(&reloaded, "k")["timeline"], json!(["a"]));
-            // A gap: from the start again, at once, and nothing kept.
+            // Past what is here (the station sent only its latest page): the timeline starts there, and so does what
+            // is kept.
             wire.event("live", with_key("k", json!({"type": "timeline", "start": 9, "entries": ["z"], "usage": {}})));
             host.settle().await;
-            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0"), 2);
-            assert_eq!(live_of(&sink, "k")["loaded"], false);
-            assert_eq!(host.stored("transcript/ws/st/k/meta"), None);
+            assert_eq!((live_of(&sink, "k")["first"].clone(), live_of(&sink, "k")["timeline"].clone()), (json!(9), json!(["z"])));
+            let (reloaded, again, other) = reopened(&host);
+            other.start(&live("k"));
+            host.settle().await;
+            assert_eq!((live_of(&reloaded, "k")["first"].clone(), live_of(&reloaded, "k")["timeline"].clone()), (json!(9), json!(["z"])));
+            assert!(again.paths().contains(&"GET /admin/api/events?live=k&from=10&last=200".to_string()), "{:?}", again.paths());
+        });
+    }
+
+    #[test]
+    fn a_transcript_shows_its_latest_page_and_the_ones_before_as_asked() {
+        run(async {
+            let (host, sink, wire, stations) = setup();
+            let entries = |from: u64, to: u64| (from..=to).map(|i| json!(format!("e{i}"))).collect::<Vec<_>>();
+            stations.start(&live("k"));
+            host.settle().await;
+            wire.event("live", with_key("k", json!({"type": "timeline", "start": 300, "entries": entries(300, 499), "usage": {}})));
+            host.settle().await;
+            assert_eq!(live_of(&sink, "k")["first"], 300);
+            // From the station, and kept.
+            wire.answer("GET /admin/api/sessions/k/timeline?before=300&limit=200", 200, json!({"start": 100, "entries": entries(100, 299)}));
+            assert!(stations.history_older(&remote(), "k").await.unwrap());
+            let v = live_of(&sink, "k");
+            assert_eq!((v["first"].clone(), v["timeline"].as_array().unwrap().len(), v["timeline"][0].clone()), (json!(100), 400, json!("e100")));
+            wire.answer("GET /admin/api/sessions/k/timeline?before=100&limit=200", 200, json!({"start": 0, "entries": entries(0, 99)}));
+            assert!(!stations.history_older(&remote(), "k").await.unwrap());
+            assert_eq!(live_of(&sink, "k")["first"], 0);
+            assert!(!stations.history_older(&remote(), "k").await.unwrap());
+            host.settle().await;
+            // Opened again: the latest page from the device, the one before it from the device too.
+            let (reloaded, again, other) = reopened(&host);
+            other.start(&live("k"));
+            host.settle().await;
+            assert_eq!((live_of(&reloaded, "k")["first"].clone(), live_of(&reloaded, "k")["timeline"][0].clone()), (json!(300), json!("e300")));
+            assert!(again.paths().contains(&"GET /admin/api/events?live=k&from=500&last=200".to_string()), "{:?}", again.paths());
+            assert!(other.history_older(&remote(), "k").await.unwrap());
+            assert_eq!(live_of(&reloaded, "k")["first"], 100);
+            assert!(!again.paths().iter().any(|p| p.contains("/timeline")), "{:?}", again.paths());
         });
     }
 
@@ -2494,15 +2588,15 @@ mod tests {
             let wait = |ms: u64| wait(ms / 100);
             stations.start(&live("k"));
             host.settle().await;
-            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0"), 1);
+            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0&last=200"), 1);
             // The keepalive keeps it open.
             wait(STREAM_IDLE_MS / 2).await;
             wire.push("/admin/api/events", ": ping\n\n");
             wait(STREAM_IDLE_MS / 2 + 5_000).await;
-            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0"), 1);
+            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0&last=200"), 1);
             // Nothing at all for longer: the link is taken for gone, and it is asked for again.
             wait(STREAM_IDLE_MS + RECONNECT_MS + 5_000).await;
-            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0"), 2);
+            assert_eq!(wire.count("GET", "/admin/api/events?live=k&from=0&last=200"), 2);
         });
     }
 

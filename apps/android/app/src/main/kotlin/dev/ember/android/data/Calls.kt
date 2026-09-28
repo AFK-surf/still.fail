@@ -49,6 +49,9 @@ class StationApi(private val core: EmberCore, val station: String) {
     /** Brings the page before the chat's first loaded message into the view. */
     suspend fun older(thread: Long) { chat("chat.older", thread) }
 
+    /** Brings the page of an agent's execution history before what it shows into the view. */
+    suspend fun historyOlder(key: String) { core.call("history.older", buildJsonObject { put("station", station); put("key", key) }) }
+
     /** The viewer has read the chat up to `seq`. */
     suspend fun read(thread: Long, seq: Long) { chat("chat.read", thread) { put("seq", seq) } }
 
