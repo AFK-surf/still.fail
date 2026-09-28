@@ -734,6 +734,13 @@ impl Hub {
         Ok(profile)
     }
 
+    /// A word from the station for a session's agent, outside any conversation (see SessionActor::notify).
+    pub fn notify(&self, key: &str, text: String) -> Result<()> {
+        let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session {key}"))?;
+        drop(self.actor(&row)?.notify(text));
+        Ok(())
+    }
+
     /// Starts a session's runtime ahead of a message; see SessionActor::warm.
     pub async fn warm(&self, key: &str) -> Result<()> {
         if let Some(row) = self.store.get_session(key)? {

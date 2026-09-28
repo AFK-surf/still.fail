@@ -5,7 +5,7 @@
 // not on the page.
 import { Tooltip } from "radix-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { ToastProvider } from "../toast.tsx";
 import { Button, Select, Splash, useNarrow } from "../ui.tsx";
 import { signIn, useAccounts } from "./accounts.ts";
@@ -243,7 +243,9 @@ function Invite() {
  */
 function OpenItem() {
   const { ws = "", station = "", session = "" } = useParams();
-  const target = `/w/${ws}/s/${station}/chats/${encodeURIComponent(session)}`;
+  // `?preview=<port>`: a web service of the session's, opened beside its chat.
+  const { search } = useLocation();
+  const target = `/w/${ws}/s/${station}/chats/${encodeURIComponent(session)}${search}`;
   const inDesktop = "emberDesktop" in window;
   const phone = /Android|iPhone|iPad/i.test(navigator.userAgent);
   const [here, setHere] = useState(inDesktop || phone);
@@ -253,7 +255,7 @@ function OpenItem() {
     // If the desktop app takes it, this page loses focus: it stays as it is, for a second look.
     const away = () => clearTimeout(timer);
     window.addEventListener("blur", away, { once: true });
-    window.location.href = `ember://o/${ws}/${station}/${encodeURIComponent(session)}`;
+    window.location.href = `ember://o/${ws}/${station}/${encodeURIComponent(session)}${search}`;
     return () => { clearTimeout(timer); window.removeEventListener("blur", away); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (here) return <Navigate to={target} replace />;

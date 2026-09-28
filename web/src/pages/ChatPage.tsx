@@ -7,7 +7,7 @@ import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
 import { Close, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
 import { useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
@@ -112,6 +112,15 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const toggleHistory = (key: string) => (open.includes(key) && shown === key ? closeTab(key) : openTab(key));
   // An activity row: its agent's history, open at that entry.
   const [focus, setFocus] = useState<{ key: string; entry: number; n: number } | null>(null);
+  // A link that names a web service of the chat's (`?preview=<port>`, a job's link in Slack): its tab, open.
+  const [search, setSearch] = useSearchParams();
+  const asked = search.get("preview");
+  useEffect(() => {
+    if (!asked || !/^\d{1,5}$/.test(asked)) return;
+    openTab(`preview:${asked}`);
+    setSearch((now) => { now.delete("preview"); return now; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
   const openHistory = (key: string, entry?: number) => {
     if (entry === undefined) return toggleHistory(key);
     openTab(key);

@@ -346,6 +346,52 @@ impl NewMessage {
     }
 }
 
+/// A background job a session started (jobs.rs): a command the station runs and keeps, a web service when it has a
+/// port.
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct JobRow {
+    pub id: String,
+    #[serde(rename = "session")]
+    pub session_key: String,
+    pub name: String,
+    pub command: String,
+    pub cwd: String,
+    pub port: Option<i64>,
+    /// What `ember-job notify` presents; not for the pages.
+    #[serde(skip)]
+    pub token: String,
+    /// running | exited (ended by itself) | stopped (by request) | failed (could not start)
+    pub state: String,
+    pub pgid: Option<i64>,
+    pub exit_code: Option<i64>,
+    pub started_at: i64,
+    pub ended_at: Option<i64>,
+    /// How often a service was started again after it ended.
+    pub restarts: i64,
+    /// Its output, as a file.
+    pub log: String,
+}
+
+fn job_row(r: &rusqlite::Row) -> rusqlite::Result<JobRow> {
+    Ok(JobRow {
+        id: r.get("id")?,
+        session_key: r.get("session_key")?,
+        name: r.get("name")?,
+        command: r.get("command")?,
+        cwd: r.get("cwd")?,
+        port: r.get("port")?,
+        token: r.get("token")?,
+        state: r.get("state")?,
+        pgid: r.get("pgid")?,
+        exit_code: r.get("exit_code")?,
+        started_at: r.get("started_at")?,
+        ended_at: r.get("ended_at")?,
+        restarts: r.get("restarts")?,
+        log: r.get("log")?,
+    })
+}
+
 /// What the store says changed, for whoever follows it (the admin API's /events, the hub).
 #[derive(Debug, Clone, PartialEq)]
 pub enum StoreChange {
@@ -475,6 +521,23 @@ CREATE TABLE IF NOT EXISTS processes (
   runtime TEXT NOT NULL,
   label TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS jobs (
+  id TEXT PRIMARY KEY,
+  session_key TEXT NOT NULL,
+  name TEXT NOT NULL,
+  command TEXT NOT NULL,
+  cwd TEXT NOT NULL,
+  port INTEGER,
+  token TEXT NOT NULL UNIQUE,
+  state TEXT NOT NULL,
+  pgid INTEGER,
+  exit_code INTEGER,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  restarts INTEGER NOT NULL DEFAULT 0,
+  log TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS jobs_by_session ON jobs (session_key);
 CREATE TABLE IF NOT EXISTS identities (
   viewer TEXT NOT NULL,
   slack_user TEXT NOT NULL,
@@ -839,6 +902,7 @@ impl Store {
             tx.execute("DELETE FROM deliveries WHERE session = ?", [key])?;
             tx.execute("DELETE FROM turns WHERE session_key = ?", [key])?;
             tx.execute("DELETE FROM bindings WHERE session_key = ?", [key])?;
+            tx.execute("DELETE FROM jobs WHERE session_key = ?", [key])?;
             tx.execute("DELETE FROM sessions WHERE key = ?", [key])?;
             let mut kept = Vec::new();
             let mut removed = Vec::new();
@@ -1470,6 +1534,56 @@ impl Store {
                 changes.push(StoreChange::Processes);
             }
             Ok(())
+        })
+    }
+
+    // ── background jobs ───────────────────────────────────────────────────
+
+    pub fn insert_job(&self, job: &JobRow) -> Result<()> {
+        self.with(|i, changes| {
+            i.db.execute(
+                "INSERT INTO jobs (id, session_key, name, command, cwd, port, token, state, pgid, exit_code, started_at, ended_at, restarts, log) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                params![job.id, job.session_key, job.name, job.command, job.cwd, job.port, job.token, job.state, job.pgid, job.exit_code, job.started_at, job.ended_at, job.restarts, job.log],
+            )?;
+            changes.push(StoreChange::Session(job.session_key.clone()));
+            Ok(())
+        })
+    }
+
+    /// A job started (again): running, in this process group.
+    pub fn job_started(&self, id: &str, pgid: i64, restarted: bool) -> Result<()> {
+        self.job_update(id, "UPDATE jobs SET state = 'running', pgid = ?1, exit_code = NULL, ended_at = NULL, restarts = restarts + ?2 WHERE id = ?3", params![pgid, restarted as i64, id])
+    }
+
+    /// A job ended: `state` exited, stopped or failed.
+    pub fn job_ended(&self, id: &str, state: &str, exit_code: Option<i64>) -> Result<()> {
+        self.job_update(id, "UPDATE jobs SET state = ?1, exit_code = ?2, ended_at = ?3, pgid = NULL WHERE id = ?4", params![state, exit_code, now_ms(), id])
+    }
+
+    fn job_update(&self, id: &str, sql: &str, args: impl rusqlite::Params) -> Result<()> {
+        self.with(|i, changes| {
+            i.db.execute(sql, args)?;
+            if let Some(session) = i.db.query_row("SELECT session_key FROM jobs WHERE id = ?", [id], |r| r.get::<_, String>(0)).optional()? {
+                changes.push(StoreChange::Session(session));
+            }
+            Ok(())
+        })
+    }
+
+    pub fn get_job(&self, id: &str) -> Result<Option<JobRow>> {
+        self.with(|i, _| Ok(i.db.query_row("SELECT * FROM jobs WHERE id = ?", [id], job_row).optional()?))
+    }
+
+    pub fn job_by_token(&self, token: &str) -> Result<Option<JobRow>> {
+        self.with(|i, _| Ok(i.db.query_row("SELECT * FROM jobs WHERE token = ?", [token], job_row).optional()?))
+    }
+
+    /// A session's jobs (all sessions' with None), newest first.
+    pub fn list_jobs(&self, session: Option<&str>) -> Result<Vec<JobRow>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare("SELECT * FROM jobs WHERE ?1 IS NULL OR session_key = ?1 ORDER BY started_at DESC")?;
+            let rows = stmt.query_map([session], job_row)?;
+            Ok(rows.collect::<rusqlite::Result<_>>()?)
         })
     }
 

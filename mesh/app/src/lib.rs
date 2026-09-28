@@ -12,6 +12,7 @@ pub mod host;
 pub mod hub;
 pub mod image_size;
 pub mod instructions;
+pub mod jobs;
 pub mod live;
 pub mod login;
 pub mod machine_logins;

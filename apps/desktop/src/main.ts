@@ -232,7 +232,8 @@ function open(path = "/"): BrowserWindow {
 function arrived(url: string): void {
   const item = /^ember:\/\/o\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)/.exec(url);
   if (!url.startsWith(AUTH_CALLBACK) && !item) return;
-  const path = item ? `/o/${item[1]}/${item[2]}/${item[3]}` : `/auth/callback${new URL(url).search}`;
+  // An item's link may name a web service to open with it (?preview=<port>).
+  const path = item ? `/o/${item[1]}/${item[2]}/${item[3]}${new URL(url).search}` : `/auth/callback${new URL(url).search}`;
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   if (!window) {
     open(path);

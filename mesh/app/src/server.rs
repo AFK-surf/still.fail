@@ -110,6 +110,7 @@ pub struct App {
     settings: Arc<Settings>,
     connections: Arc<Connections>,
     hub: Arc<Hub>,
+    jobs: Arc<crate::jobs::Jobs>,
     logins: Arc<LoginManager>,
     admin: Arc<AdminApi>,
     gate: AccessGate,
@@ -185,8 +186,32 @@ impl App {
             })),
         });
         let _ = hub_cell.set(hub.clone());
-        let tokens = store.clone();
-        let mcp = Arc::new(McpEndpoint::new(move |token| tokens.session_by_token(token).ok().flatten().map(|row| row.key), hub.tools()));
+        // Background jobs and web services (jobs.rs): their agents told through the hub; a service's link is ember
+        // cloud's /o/ link of its session, with its port.
+        let (told, linked) = (Arc::downgrade(&hub), mesh.clone());
+        let jobs = crate::jobs::Jobs::new(
+            store.clone(),
+            &options.data,
+            Arc::new(move |session: &str, text: String| {
+                if let Some(hub) = told.upgrade() {
+                    if let Err(e) = hub.notify(session, text) {
+                        warn!(session, error = %e, "job notice not given");
+                    }
+                }
+            }),
+            Arc::new(move |session: &str, port: u16| {
+                let status = linked.status();
+                match (status.origin, status.station, status.workspace_id) {
+                    (Some(origin), Some(station), Some(workspace)) => Some(format!("{origin}/o/{workspace}/{station}/{}?preview={port}", encode(session))),
+                    _ => None,
+                }
+            }),
+        )?;
+        jobs.set_notify_url(format!("http://{}:{port}/jobs/notify", config.http.host));
+        let (tokens, homes_of) = (store.clone(), store.clone());
+        let mut tools = hub.tools();
+        tools.extend(jobs.tools(Arc::new(move |key| homes_of.get_session(key).ok().flatten().map(|row| PathBuf::from(row.workspace)))));
+        let mcp = Arc::new(McpEndpoint::new(move |token| tokens.session_by_token(token).ok().flatten().map(|row| row.key), tools));
         let logins = LoginManager::new(&config.data_dir, LoginCommands::default());
         // The machine's own Claude Code and Codex logins, read at start and again as pages ask.
         let machine_logins = MachineLogins::new(
@@ -232,7 +257,7 @@ impl App {
         });
         let access = settings.clone();
         let gate = AccessGate::new(move || access.config().admin_access.clone(), None, || None);
-        let app = Arc::new(App { settings: settings.clone(), connections: connections.clone(), hub: hub.clone(), logins, admin, gate, ui: options.ui, up: AtomicBool::new(false), mesh });
+        let app = Arc::new(App { settings: settings.clone(), connections: connections.clone(), hub: hub.clone(), jobs: jobs.clone(), logins, admin, gate, ui: options.ui, up: AtomicBool::new(false), mesh });
 
         // Edits apply as they are saved: homes linked, connects (re)connected.
         let mut edits = settings.subscribe();
@@ -244,13 +269,14 @@ impl App {
                 reconnect.reconcile(&config).await;
             }
         });
-        tokio::spawn(serve_mcp(listener, mcp));
+        tokio::spawn(serve_mcp(listener, mcp, jobs.clone()));
         info!(port, "ember listening");
         connections.reconcile(&config).await;
         if connections.ids().is_empty() {
             warn!("no connect is connected; add or enable one on the admin page");
         }
         hub.recover()?;
+        jobs.relaunch();
         app.up.store(true, Ordering::SeqCst);
         Ok(app)
     }
@@ -325,6 +351,7 @@ impl App {
         self.up.store(false, Ordering::SeqCst);
         self.logins.stop_all();
         self.connections.stop_all().await;
+        self.jobs.shutdown().await;
         self.hub.shutdown().await;
         drop(self.settings.clone());
     }
@@ -372,8 +399,9 @@ fn encode(s: &str) -> String {
         .collect()
 }
 
-/// The agents' MCP endpoint: loopback only, /mcp and /health.
-async fn serve_mcp(listener: tokio::net::TcpListener, mcp: Arc<McpEndpoint>) {
+/// The agents' MCP endpoint, and what their jobs say (`ember-job notify`): loopback only, /mcp, /jobs/notify and
+/// /health.
+async fn serve_mcp(listener: tokio::net::TcpListener, mcp: Arc<McpEndpoint>, jobs: Arc<crate::jobs::Jobs>) {
     loop {
         let (stream, _) = match listener.accept().await {
             Ok(accepted) => accepted,
@@ -382,20 +410,31 @@ async fn serve_mcp(listener: tokio::net::TcpListener, mcp: Arc<McpEndpoint>) {
                 continue;
             }
         };
-        let mcp = mcp.clone();
+        let (mcp, jobs) = (mcp.clone(), jobs.clone());
         tokio::spawn(async move {
             let service = hyper::service::service_fn(move |req: Request<hyper::body::Incoming>| {
-                let mcp = mcp.clone();
-                async move { Ok::<_, Infallible>(answer_mcp(&mcp, req).await) }
+                let (mcp, jobs) = (mcp.clone(), jobs.clone());
+                async move { Ok::<_, Infallible>(answer_mcp(&mcp, &jobs, req).await) }
             });
             let _ = hyper::server::conn::http1::Builder::new().serve_connection(TokioIo::new(stream), service).await;
         });
     }
 }
 
-async fn answer_mcp(mcp: &McpEndpoint, req: Request<hyper::body::Incoming>) -> Response<Body> {
+async fn answer_mcp(mcp: &McpEndpoint, jobs: &crate::jobs::Jobs, req: Request<hyper::body::Incoming>) -> Response<Body> {
     match req.uri().path() {
         "/health" => json_response(200, &json!({ "ok": true })),
+        "/jobs/notify" if req.method() == hyper::Method::POST => {
+            let token = req.headers().get("authorization").and_then(|v| v.to_str().ok()).and_then(|a| a.strip_prefix("Bearer ")).unwrap_or("").to_string();
+            let body = match http_body_util::Limited::new(req.into_body(), 64 * 1024).collect().await {
+                Ok(body) => body.to_bytes(),
+                Err(e) => return json_response(400, &json!({ "error": e.to_string() })),
+            };
+            match jobs.notified(&token, &String::from_utf8_lossy(&body)) {
+                Ok(()) => json_response(200, &json!({ "ok": true })),
+                Err(e) => json_response(400, &json!({ "error": e.to_string() })),
+            }
+        }
         "/mcp" => {
             let method = req.method().as_str().to_string();
             let authorization = req.headers().get("authorization").and_then(|v| v.to_str().ok()).map(String::from);

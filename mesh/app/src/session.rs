@@ -82,6 +82,8 @@ struct State {
     working_for: Vec<Working>,
     /// Tool calls under way in the running turn, in the order they started: what the status line says.
     tools: Vec<(String, String)>,
+    /// The station's words for the agent outside any conversation (a job's notices), not yet given to it.
+    notices: Vec<String>,
 }
 
 type Task = Box<dyn FnOnce(Arc<SessionActor>) -> BoxFuture<'static, Result<()>> + Send>;
@@ -181,6 +183,13 @@ impl SessionActor {
         self.enqueue(|a| async move { a.pump().await })
     }
 
+    /// A word from the station for the agent, outside any conversation (a background job's notice): it joins the
+    /// running turn, or runs as a turn of its own; one the running turn cannot take waits for its end.
+    pub fn notify(&self, text: String) -> impl Future<Output = ()> + Send + 'static {
+        self.st().notices.push(text);
+        self.enqueue(|a| async move { a.give_notices().await })
+    }
+
     /// Called by the MCP tools while a turn runs.
     pub fn declare(&self, state: DeclaredState) {
         if let Some(turn) = self.st().turn.as_mut() {
@@ -258,6 +267,30 @@ impl SessionActor {
     }
 
     // ── internals (always inside the queue) ────────────────────────────────
+
+    /// The notices waiting, as the agent reads them: each a message from ember.
+    fn take_notices(&self) -> Option<String> {
+        let notices = std::mem::take(&mut self.st().notices);
+        if notices.is_empty() {
+            return None;
+        }
+        let at = crate::chat::internal::next_ts();
+        Some(notices.iter().map(|n| format!("<message via=\"ember\" from=\"ember\" ts=\"{at}\">\n{n}\n</message>")).collect::<Vec<_>>().join("\n"))
+    }
+
+    async fn give_notices(self: &Arc<Self>) -> Result<()> {
+        let deps = self.deps()?;
+        if let Some(agent) = self.agent().filter(|a| a.busy()) {
+            let Some(text) = self.take_notices() else { return Ok(()) };
+            if !agent.steer(&text).await {
+                // Not now: after the running turn.
+                self.st().notices.insert(0, text);
+            }
+            return Ok(());
+        }
+        let Some(text) = self.take_notices() else { return Ok(()) };
+        self.start_turn(&deps, "job", &text).await
+    }
 
     async fn pump(self: &Arc<Self>) -> Result<()> {
         let deps = self.deps()?;
@@ -572,6 +605,9 @@ impl SessionActor {
 
         if !store.pending_messages(&self.key)?.is_empty() {
             return self.pump().await;
+        }
+        if !self.st().notices.is_empty() {
+            return self.give_notices().await;
         }
         deps.idle(&self.key);
         if outcome != TurnOutcome::Completed || turn.as_ref().is_some_and(|t| t.declared.is_some()) {
