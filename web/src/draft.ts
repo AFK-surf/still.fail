@@ -3,7 +3,7 @@
 // another chat, or leaving the page, puts it away, and coming back brings it back. Sending empties it at once (the
 // message waits in the chat's outbox until the station has it); if the chat it goes to cannot be made, it comes back.
 import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
-import { useChatSend, type Attachment, type Quote } from "./api.ts";
+import { useChatSend, type Attachment, type ChatTo, type Quote } from "./api.ts";
 import { track } from "./telemetry.ts";
 
 export const MAX_FILE = 50 * 1024 * 1024;
@@ -41,7 +41,7 @@ export interface Draft {
    * Sends what is written into the chat `open` answers (the chat's thread; making it first for a new one, `first`).
    * Answers the thread, or null when there was no chat to send into (the draft is back, and says why).
    */
-  send(open: () => Promise<number>, options?: { first?: boolean; onSending?: (text: string | null) => void }): Promise<number | null>;
+  send(open: () => Promise<ChatTo>, options?: { first?: boolean; onSending?: (text: string | null) => void }): Promise<ChatTo | null>;
 }
 
 /** Drafts put away, by chat. */
@@ -140,7 +140,7 @@ export function useDraft({ key, carry, upload, quotes: held }: {
     const attachments = files.flatMap((f) => (f.done ? [f.done] : []));
     const sent = quotes.map(({ author, text: t, comment, ts, role }) => ({ author, text: t, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}) }));
     if (first) onSending?.(value);
-    let to: number;
+    let to: ChatTo;
     try {
       setStarting(first);
       to = await open();

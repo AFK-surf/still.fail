@@ -5,7 +5,7 @@
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
-import { useApi, useChatSend, type Activity as ActivityView, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
+import { useApi, useChatSend, type ChatTo, type Activity as ActivityView, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
@@ -40,10 +40,12 @@ export function toMadeChat(go: () => void): void {
   void transitionTo(go, () => document.querySelector(`:is(.${sessionCss.chatList}, .${chatCss.mMessages}) :is(.${chatCss2.msgMine}, .${chatCss.mMine})`) !== null, true);
 }
 
-export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent }: {
+export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent, made }: {
   /** Whose draft the composer shows here. */
   chat: ChatView; draftKey: string; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
-  ensureChat?: () => Promise<{ key: string; thread: number }>; onSent?: (thread: number) => void;
+  ensureChat?: () => Promise<{ key: string; thread: ChatTo }>; onSent?: (to: ChatTo) => void;
+  /** The core's key of a chat made here (`chat.create`): sent to by it until its thread is known. */
+  made?: string;
 }) {
   const station = useStation();
   const list = useRef<HTMLDivElement>(null);
@@ -53,6 +55,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const api = useApi();
   const { thread, outbox } = chat;
   const id = thread?.id ?? null;
+  const to: ChatTo | null = id ?? made ?? null;
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
@@ -109,7 +112,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           if (to) { e.preventDefault(); onOpenHistory(to.key, to.entry); }
         }}>
         {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
-        {messages.length === 0 && (
+        {messages.length === 0 && outbox.length === 0 && (
           <div className={css.chatEmpty}>
             <p>在这里发消息，这个对话里的 agent 会在这里回复。</p>
           </div>
@@ -133,8 +136,8 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
                   <Tip label={o.error ? `没发出去：${o.error}` : "没发出去"}>
                     <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />未发送</span>
                   </Tip>
-                  <button type="button" className={css.msgUnsentBtn} disabled={chat.offline || !!chat.archived} onClick={() => void (id !== null && sending.retry(id, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
-                  <button type="button" className={css.msgUnsentBtn} onClick={() => void (id !== null && sending.discard(id, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
+                  <button type="button" className={css.msgUnsentBtn} disabled={chat.offline || !!chat.archived} onClick={() => void (to !== null && sending.retry(to, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
+                  <button type="button" className={css.msgUnsentBtn} onClick={() => void (to !== null && sending.discard(to, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
                 </div>
               : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
           </div>
@@ -157,7 +160,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
-      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)}
+      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)}
         locked={chat.offline || !!chat.archived} placeholder={chat.archived ? "还原对话后才能发送" : "发消息"} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
@@ -650,14 +653,17 @@ function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "
  */
 /** What the composer writes to, and how it shows. */
 export interface ComposerProps {
-  /** The chat written to, and its session; both null for a new chat, made by `ensureChat` with the first message. */
-  thread: number | null;
+  /**
+   * The chat written to (its thread, or the core's key of one made here), and its session; both null for a new chat,
+   * made by `ensureChat` with the first message.
+   */
+  thread: ChatTo | null;
   sessionKey: string | null;
   quotes?: DraftQuote[]; setQuotes?(update: (all: DraftQuote[]) => DraftQuote[]): void;
   /** A quote just added: its comment line takes the focus. */
   focusQuote?: string | null; onFocused?(): void;
-  ensureChat?: () => Promise<{ key: string; thread: number }>;
-  onSent?: (thread: number) => void;
+  ensureChat?: () => Promise<{ key: string; thread: ChatTo }>;
+  onSent?: (to: ChatTo) => void;
   /** A new chat's first message leaving the composer (null: it came back, the chat not made). */
   onSending?: (text: string | null) => void;
   /** Choices shown in the toolbar, between attach and send (a new chat's station, model and effort). */

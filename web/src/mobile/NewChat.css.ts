@@ -28,7 +28,5 @@ export const mChooser = style({
   display: "inline-flex", alignItems: "center", gap: "6px", flex: "none", height: "30px", boxSizing: "border-box",
   padding: "0 11px", borderRadius: "15px", fontSize: "13px !important", whiteSpace: "nowrap", cursor: "pointer",
 });
-/** A new chat once its first message is sent: the chat's page already, over the new chat's (its bar and all). */
-export const mNewAsChat = style({ zIndex: "5" });
 globalStyle(`${mNewBody} h2`, { margin: "6px 0 0", fontSize: "22px", fontWeight: "700" });
 globalStyle(`${mNewBody} > p`, { fontSize: "14px" });

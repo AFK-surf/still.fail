@@ -583,6 +583,8 @@ export interface ChatItem {
 	reconnecting?: string;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
+	/** A new chat asked for here that its station has not made yet. Absent otherwise. */
+	pending?: boolean;
 }
 
 /** A day of the list, with its heading (今天, 昨天, 星期三, 9月20日). */
@@ -680,6 +682,12 @@ export interface ChatView {
 	outbox: Outgoing[];
 	link: Link;
 	offline: boolean;
+	/** A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox. */
+	pending?: boolean;
+	/** The key its station gave a chat asked for here, once made: the page, opened under the core's key, goes by it. */
+	key?: string;
+	/** Why the station could not make it, the last time it was tried. */
+	failed?: string;
 }
 
 export interface StationState {

@@ -7,20 +7,18 @@ import { useCall } from "../core/react.ts";
 import { RUNTIME_LABEL } from "../format.ts";
 import { Server } from "../icons.tsx";
 import { toMadeChat } from "../Chat.tsx";
-import { transitionTo } from "../ui.tsx";
 import { optionOf } from "../ModelTriple.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { useNavigate } from "react-router";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { BarFrame, type Draft } from "./Chat.tsx";
+import type { Draft } from "./Chat.tsx";
 import { useHost } from "./ChatHost.tsx";
-import { Button, Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow, Spinner } from "./parts.tsx";
+import { Button, Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow } from "./parts.tsx";
 import { MachineLoginOffers } from "./Profiles.tsx";
 import { Buddy, FirstStation } from "./Stations.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./NewChat.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
-import * as chatCss from "./styles/chat.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
@@ -83,62 +81,33 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
   useEffect(() => {
     for (const p of profiles) if (!p.check && !checked.current.has(p.id)) { checked.current.add(p.id); api.checkProfile(p.id).catch(() => {}); }
   }, [profiles, api]);
-  const [making, setMaking] = useState(false);
-  /** What was sent from here, in order: once there is any, the page is the chat's (its messages on their way). */
-  const [sent, setSent] = useState<string[]>([]);
-  const made = useRef<Promise<{ key: string; thread: { id: number } }> | null>(null);
-  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  // The core has the chat at once (its page, its row, what is sent waiting in it); the station makes it behind it.
+  const made = useRef<Promise<string> | null>(null);
   const navigate = useNavigate();
   const problem = !view.overview ? `正在读取 ${view.name} 的 Profile…`
     : profiles.length === 0 ? null
     : view.models.length === 0 ? "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。" : null;
-  // The first message makes the page the chat's at once: the scene fades, the message is where the chat has it. More
-  // can follow before the chat is made: they go in order once it is, and the page gives way to the chat.
-  const sentCount = useRef(0);
+  // The first message makes the chat and the page becomes it, the message already there; what follows goes in after it.
   const send = (draft: Draft) => {
+    if (!model || !runtime) return draft.setError("先在 Profile 里启用模型");
     const { text, files } = draft.take();
-    if (sentCount.current++ === 0) void transitionTo(() => setSent([text]));
-    else setSent((all) => [...all, text]);
-    if (!made.current) {
-      const making = (async () => {
-        if (!model || !runtime) throw new Error("先在 Profile 里启用模型");
-        setMaking(true);
-        try { return await api.newChat({ runtime: runtime as RuntimeKind, model, ...(effort ? { effort } : {}) }); } finally { setMaking(false); }
-      })();
-      made.current = making;
-      making.then(
-        // The new item's page, by its agent (its address from now on).
-        (m) => toMadeChat(() => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(m.key)}`, { replace: true })),
-        // No chat to send into: what was sent comes back to the composer.
-        (error: unknown) => {
-          made.current = null;
-          sentCount.current = 0;
-          setSent((all) => { draft.setText(all.join("\n\n")); return []; });
-          draft.setError(error instanceof Error ? error.message : String(error));
-        },
-      );
-    }
-    const making = made.current;
-    queue.current = queue.current.then(() => making).then((m) =>
-      call("chat.send", { station: view.station, thread: m.thread.id, text, attachments: files.flatMap((f) => (f.done ? [f.done] : [])), quotes: [] })).catch(() => {});
-  };
-  useLayoutEffect(() => use({ station: view.station, placeholder: sent.length ? "发消息" : "做任何事", offline: false, send }));
-  if (sent.length) {
-    // Laid out as the chat's page (its list and bar; the composer is the host's), so it gives way to it without a move.
-    return (
-      <div className={`${chatCss.mChat} ${css.mNewAsChat}`}>
-        <div className={chatCss.mMessages}>
-          {sent.map((text, i) => (
-            <div key={i} className={chatCss.mMine}>
-              <div className={chatCss.mBubble}>{text}</div>
-              <span className={`${chatCss.mMeta} ${chatCss.mWaiting}`}><Spinner size={10} />正在发送</span>
-            </div>
-          ))}
-        </div>
-        <BarFrame title={sent[0]!} more={false} />
-      </div>
+    const first = !made.current;
+    made.current ??= (call("chat.create", { station: view.station, runtime, model, ...(effort ? { effort } : {}) }) as Promise<{ key: string }>).then((m) => m.key);
+    made.current.then(
+      (key) => {
+        void call("chat.send", { station: view.station, session: key, text, attachments: files.flatMap((f) => (f.done ? [f.done] : [])), quotes: [] }).catch(() => {});
+        // The new item's page (its address from now on, until its station's key takes over: ChatScreen).
+        if (first) toMadeChat(() => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(key)}`, { replace: true }));
+      },
+      // No chat to send into: what was sent comes back to the composer.
+      (error: unknown) => {
+        made.current = null;
+        draft.setText(text);
+        draft.setError(error instanceof Error ? error.message : String(error));
+      },
     );
-  }
+  };
+  useLayoutEffect(() => use({ station: view.station, placeholder: "做任何事", offline: false, send }));
   return (
     <>
       <div className={css.mNewBody}>
@@ -148,7 +117,6 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
         {problem && <p className={css.mNewProblem} data-wait={!view.overview || undefined}>{problem}</p>}
         {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}
         {view.overview && profiles.length === 0 && <NoProfile view={view} />}
-        {making && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>正在 {view.name} 上创建会话…</p>}
       </div>
       {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
       {entry?.spent && (

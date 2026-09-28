@@ -4,12 +4,10 @@
 import { Key, Plus, Server } from "./icons.tsx";
 import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useApi, useStations, type RuntimeKind, type StationView } from "./api.ts";
-import { useTopic } from "./core/react.ts";
-import type { ChatView } from "./core/shapes.ts";
+import { useApi, useChatSend, useStations, type RuntimeKind, type StationView } from "./api.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
-import { Button, Chooser, ChooserItem as Item, FirstOne, transitionTo } from "./ui.tsx";
+import { Button, Chooser, ChooserItem as Item, FirstOne } from "./ui.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice as ProfileKind } from "./pages/Accounts.tsx";
 import { ModelTriple, optionOf } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
@@ -21,11 +19,6 @@ import * as composerCss from "./styles/composer.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
-import * as sessionCss from "./styles/session.css.ts";
-import * as jobsCss from "./styles/jobs.css.ts";
-import * as sidebarCss from "./styles/sidebar.css.ts";
-import * as conversationCss from "./styles/conversation.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 import { MachineSessions } from "./MachineSessions.tsx";
 
 interface Choice { runtime: RuntimeKind | ""; model: string; effort: string; profile?: string }
@@ -119,16 +112,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       void api.checkProfile(p.id).catch(() => {});
     }
   }, [profiles, api]);
-  const made = useRef<Promise<{ key: string; thread: number }> | null>(null);
-  const [making, setMaking] = useState(false);
-  /** What was sent from here, in order: once there is any, the page is the chat's (its messages on their way). */
-  const [sent, setSent] = useState<string[]>([]);
-  const left = useRef(false);
-  // The chat made, read from here before going to it: its page then has its messages at once (from the core, which
-  // keeps the topic) instead of showing an empty list until they come — over the relay that can take a second or more.
-  const [madeKey, setMadeKey] = useState<string | null>(null);
-  const madeChat = useTopic<ChatView>(madeKey ? { topic: "chat", station: station.address, session: madeKey } : null).value;
-  const [leaving, setLeaving] = useState(false);
+  const chats = useChatSend();
+  const made = useRef<Promise<{ key: string; thread: string }> | null>(null);
   const [addingProfile, setAddingProfile] = useState(false);
   const [profileKind, setProfileKind] = useState<ProfileKind>("claude-sub");
   const pick = (next: Partial<Choice>) => {
@@ -138,21 +123,19 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   };
   const ensureChat = () => {
     if (!runtime || !model) return Promise.reject(new Error("先在 Profile 里启用模型"));
+    // The core has it at once (its page, its row, the message waiting in it); the station makes it behind it.
     made.current ??= (async () => {
-      setMaking(true);
-      const at = performance.now();
-      const { key, thread } = await api.newChat({
+      const { key } = await chats.create({
         runtime, model,
         ...(choice.effort ? { effort: choice.effort } : {}),
         // Kept to a profile only while it still runs the model there.
         ...(choice.profile && entry?.accounts[runtime]?.some((a) => a.id === choice.profile) ? { profile: choice.profile } : {}),
       });
-      track("chat_created", { runtime, model, ...(choice.effort ? { effort: choice.effort } : {}), ms: Math.round(performance.now() - at) });
+      track("chat_created", { runtime, model, ...(choice.effort ? { effort: choice.effort } : {}) });
       // The chat is started here: the next new chat starts here too.
       onStation(station.id);
-      setMadeKey(key);
-      return { key, thread: thread.id };
-    })().catch((error: unknown) => { made.current = null; setMaking(false); throw error; });
+      return { key, thread: key };
+    })().catch((error: unknown) => { made.current = null; throw error; });
     return made.current;
   };
   const toolbar = useMemo(() => (
@@ -174,62 +157,22 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   ), [stations, station, view, runtime, choice, model]);
 
   const carry = useCarryDraft();
-  // The chat pages' one composer (dock.tsx): here in the page, then, once something is sent, at the foot as the chat's.
+  // The chat pages' one composer (dock.tsx): here in the page, then, once the first message is sent, in the chat's page,
+  // where that message already waits for the chat to be made.
   const composer = (
-    <ComposerSlot variant={sent.length ? "chat" : "new"} station={station} draftKey={`new:${station.address}`} thread={null} sessionKey={null} ensureChat={ensureChat}
-      placeholder={sent.length ? "发消息" : "做任何事"} {...(sent.length ? {} : { toolbar })} locked={!runtime || !model} roomy={!sent.length}
-      // The first message makes the page the chat's at once: the scene fades, the message is where the chat has it,
-      // the composer goes down to where the chat's is. More can follow before the chat is made; they go in order.
-      onSending={(text) => {
-        if (text === null) return void setSent((all) => all.slice(0, -1));
-        if (sent.length === 0) void transitionTo(() => setSent([text]));
-        else setSent((all) => [...all, text]);
-      }}
-      onSent={() => setLeaving(true)} />
+    <ComposerSlot variant="new" station={station} draftKey={`new:${station.address}`} thread={null} sessionKey={null} ensureChat={ensureChat}
+      placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
+      onSent={(to) => {
+        const key = String(to);
+        // What is being typed goes on in the chat, in the same composer.
+        carry(`${station.address}:${key}`);
+        // Made here, the chat opens without its agent's history beside: it is opened from the agent when wanted.
+        keepTabs(`${station.address}:${key}`, { tabs: [], active: null });
+        onCreated(station.address, key);
+      }} />
   );
-  // Once the first message is sent, on to the chat as soon as it has what was sent from here (or, whatever it has, after
-  // a while: its page then says it is loading).
-  useEffect(() => {
-    if (!leaving || !madeKey || left.current) return;
-    const go = () => {
-      if (left.current) return;
-      left.current = true;
-      // What is being typed goes on in the chat, in the same composer.
-      carry(`${station.address}:${madeKey}`);
-      // Made here, the chat opens without its agent's history beside: it is opened from the agent when wanted.
-      keepTabs(`${station.address}:${madeKey}`, { tabs: [], active: null });
-      onCreated(station.address, madeKey);
-    };
-    const shown = madeChat ? madeChat.messages.filter((m) => m.mine).length + madeChat.outbox.length : 0;
-    if (shown >= sent.length) return go();
-    const late = setTimeout(go, 8000);
-    return () => clearTimeout(late);
-  }, [leaving, madeKey, madeChat, sent.length]);
-  if (sent.length) {
-    // Laid out as the chat's page (its bar, its list, its composer), so it gives way to it without a move.
-    return (
-      <div className={sessionCss.sessionPage}>
-        <div className={jobsCss.sessionMain}>
-          <header className={sidebarCss.pageBar}><div className={conversationCss.pageBarTitle}><h1>{sent[0]}</h1></div></header>
-          <section className={sessionCss.chat} aria-label="对话">
-            <div className={sessionCss.chatPane}>
-              <div className={sessionCss.chatList}>
-                {sent.map((text, i) => (
-                  <div key={i} className={`${conversationCss.msg} ${chatCss.msgMine}`} data-author="你" data-role="person">
-                    <div className={conversationCss.msgBubble}><div className={chatCss.msgPlain}>{text}</div></div>
-                    <span className={`${conversationCss.msgTime} ${chatCss.msgWaiting} ${chatCss.msgSending}`}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {composer}
-          </section>
-        </div>
-      </div>
-    );
-  }
   // Nothing to run a chat with yet: its first step is the page (the composer comes once it can send).
-  const blocked = view.overview && sent.length === 0 ? (profiles.length === 0 ? "profile" : view.models.length === 0 ? "models" : null) : null;
+  const blocked = view.overview ? (profiles.length === 0 ? "profile" : view.models.length === 0 ? "models" : null) : null;
   if (blocked) {
     return (
       <div className={css.newChat}>
@@ -265,7 +208,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         )}
         {composer}
         {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
-        <p className={css.newChatStatus}>{making ? `正在 ${station.name} 上创建会话…` : !view.overview ? `正在读取 ${station.name} 的 Profile…` : ""}</p>
+        <p className={css.newChatStatus}>{!view.overview ? `正在读取 ${station.name} 的 Profile…` : ""}</p>
         {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}
         <div className={css.newChatOffer}>
           <MachineSessions models={view.models} onContinued={(key) => {

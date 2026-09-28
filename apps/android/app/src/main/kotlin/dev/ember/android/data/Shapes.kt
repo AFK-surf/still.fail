@@ -613,7 +613,9 @@ data class ChatItem (
 	/// turning ring. Absent while linked (and while offline).
 	val reconnecting: String? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
-	val time: Map<String, Stamp>? = null
+	val time: Map<String, Stamp>? = null,
+	/// A new chat asked for here that its station has not made yet. Absent otherwise.
+	val pending: Boolean? = null
 )
 
 /// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日).
@@ -716,7 +718,13 @@ data class ChatView (
 	val more: Boolean,
 	val outbox: List<Outgoing>,
 	val link: Link,
-	val offline: Boolean
+	val offline: Boolean,
+	/// A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox.
+	val pending: Boolean? = null,
+	/// The key its station gave a chat asked for here, once made: the page, opened under the core's key, goes by it.
+	val key: String? = null,
+	/// Why the station could not make it, the last time it was tried.
+	val failed: String? = null
 )
 
 @Serializable

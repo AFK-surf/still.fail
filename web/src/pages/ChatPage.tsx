@@ -9,7 +9,7 @@ import { alarmOf, JobDot, JobsPopover, JobsTab, toneOf, useNow } from "../Jobs.t
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router";
-import { lastChat } from "../lastChat.ts";
+import { lastChat, PENDING } from "../lastChat.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
 import type { Job } from "../core/shapes.ts";
 import { useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
@@ -40,9 +40,14 @@ export function ChatPage() {
   // There is always a chat in view: the one last open, or a new one. In ember cloud the workspace decides which.
   if (!chat) return <Navigate to={station.base ? station.base.replace(/\/s\/[^/]+$/, "") : lastChat("local", "/new")} replace />;
   // An item is its agent's: the address is the session, whether or not it has a chat yet (the core shows the chat
-  // once there is one, at the same address).
-  return <ChatScreen key={chat} of={{ session: chat }} />;
+  // once there is one, at the same address). A chat made here keeps the page it opened with under the core's key
+  // when its address becomes its station's.
+  const opened = renamed.get(chat) ?? chat;
+  return <ChatScreen key={opened} of={{ session: opened }} />;
 }
+
+/** Chats made here, by the key their station gave them: the core's key their page was opened with. */
+const renamed = new Map<string, string>();
 
 /** Reports how long the chat took to show its messages, once, when they first do. */
 function useChatOpened(chat: ChatView | undefined): void {
@@ -64,6 +69,15 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const call = useStationCall(station.address);
   const chatView = useChat(station.address, of);
   useChatOpened(chatView.value);
+  // A chat made here (`chat.create`) goes by the core's key until its station has made it: sent to by it meanwhile, and
+  // then at the station's key, the address changed in place (the page stays as it is).
+  const made = "session" in of && of.session.startsWith(PENDING) ? of.session : undefined;
+  const stationKey = chatView.value?.key;
+  useEffect(() => {
+    if (!made || !stationKey) return;
+    renamed.set(stationKey, made);
+    navigate(`${link(`/chats/${encodeURIComponent(stationKey)}`)}${location.search}`, { replace: true });
+  }, [made, stationKey]);
   const agents = chatView.value?.agents ?? [];
   const lives = useLives(station.address, agents.map((a) => a.session.key));
   // One history tab per agent, by session key; each can be closed, and with none open the panel goes away.
@@ -168,7 +182,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const slackUrl = chat.slackUrl;
   // Before its agent has a chat, the first message makes one, bound to the agent; the page stays (the core shows the
   // chat at the same address once it is there).
-  const session = "session" in of && !chat.thread ? of.session : null;
+  const session = "session" in of && !chat.thread && !made ? of.session : null;
   const firstMessage = session === null ? {} : {
     ensureChat: async () => ({ key: session, thread: (await call.request<{ id: number }>("POST", "/threads", { session })).id }),
   };
@@ -201,7 +215,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
         </div>
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
-      <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} {...firstMessage} />
+      <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} {...firstMessage} {...(made ? { made } : {})} />
       </div>
         {panel && shown && (
           <Tabs.Root className={css.sidePanel} value={shown} onValueChange={setActive} data-opening={opening || undefined} onAnimationEnd={(e) => { if (e.target === e.currentTarget) setOpening(false); }}>

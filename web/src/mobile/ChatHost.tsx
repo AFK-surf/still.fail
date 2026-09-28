@@ -7,7 +7,7 @@ import { createContext, useContext, useLayoutEffect, useRef, useState, type RefO
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { ChatScreen, ComposerBar, DraftExtras, openAttach, type Draft } from "./Chat.tsx";
+import { ChatScreen, ComposerBar, DraftExtras, openAttach, openedAs, type Draft } from "./Chat.tsx";
 import { useDraft } from "../draft.ts";
 import { useStationCall, type Attachment } from "../api.ts";
 import { NewChatScreen } from "./NewChat.tsx";
@@ -46,7 +46,7 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   // Each chat keeps what is written to it; a new chat's goes on into the chat it makes. Files go to the station the
   // page writes to (its composer says which).
   const upload = useRef<(file: File) => Promise<Attachment>>(() => Promise.reject(new Error("没有 station")));
-  const shared = useDraft({ key: chat === undefined ? undefined : `${id}:${chat}`, upload: (file) => upload.current(file) });
+  const shared = useDraft({ key: chat === undefined ? undefined : `${id}:${openedAs(chat)}`, upload: (file) => upload.current(file) });
   const [focus, setFocus] = useState(0);
   const draft: Draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
   const now = useRef(draft);

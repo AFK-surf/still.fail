@@ -39,7 +39,28 @@ pub struct Views {
     /// Messages sent from here that the chat does not show yet, per (station, thread), oldest first.
     outbox: RefCell<HashMap<(String, u64), Vec<Value>>>,
     sent: Cell<u64>,
+    /// Chats asked for here (`chat.create`) by the key the core gave them, until the station has made them and ever
+    /// after (a page that opened one keeps its key).
+    pending: RefCell<HashMap<String, Pending>>,
 }
+
+/// A chat asked for here. Until its station has made it, it is shown at once from what is known here: its page,
+/// its row, the messages sent to it waiting in its queue; then it is the station's chat under the core's key too.
+struct Pending {
+    station: String,
+    /// What `POST /sessions` is sent.
+    ask: Value,
+    created_at: f64,
+    /// What was sent to it before it was made, oldest first: as the outbox has them.
+    queue: Vec<Value>,
+    /// Why it could not be made, the last time it was tried.
+    failed: Option<String>,
+    /// Its session and thread, once made.
+    made: Option<(String, u64)>,
+}
+
+/// The prefix of the keys the core gives chats not made yet: no station's session key starts so.
+pub const PENDING_PREFIX: &str = "new:";
 
 /// A station of a scope, as the workspace lists it.
 /// Whether a station is taken for down: its link found it so, or — not found out yet this time — it was, last.
@@ -69,7 +90,198 @@ impl Views {
             views: RefCell::default(),
             outbox: RefCell::default(),
             sent: Cell::new(0),
+            pending: RefCell::default(),
         })
+    }
+
+    /// A chat to be made on a station with what `POST /sessions` is sent: answers the key it goes by here at once.
+    pub fn pending_new(&self, station: &str, ask: Value) -> String {
+        self.sent.set(self.sent.get() + 1);
+        let now = self.host.now_ms();
+        let key = format!("{PENDING_PREFIX}{}-{}", now.round() as i64, self.sent.get());
+        let chat = Pending { station: station.to_string(), ask, created_at: now, queue: Vec::new(), failed: None, made: None };
+        self.pending.borrow_mut().insert(key.clone(), chat);
+        self.pending_changed(&key);
+        key
+    }
+
+    /// A chat asked for here, on this station: `Some(None)` while it is not made, `Some(Some(thread))` once it is.
+    pub fn pending_thread(&self, station: &str, key: &str) -> Option<Option<u64>> {
+        let pending = self.pending.borrow();
+        let chat = pending.get(key).filter(|c| c.station == station)?;
+        Some(chat.made.as_ref().map(|(_, thread)| *thread))
+    }
+
+    /// What to ask its station for, the chat set to be tried (again): its queue is `sending` once more.
+    pub fn pending_try(&self, key: &str) -> Option<(String, Value)> {
+        let mut pending = self.pending.borrow_mut();
+        let chat = pending.get_mut(key).filter(|c| c.made.is_none())?;
+        chat.failed = None;
+        for m in &mut chat.queue {
+            m["state"] = json!("sending");
+            m["error"] = Value::Null;
+        }
+        let asked = (chat.station.clone(), chat.ask.clone());
+        drop(pending);
+        self.pending_changed(key);
+        Some(asked)
+    }
+
+    /// A message sent to a chat not made yet: it waits in its queue, shown as `sending` (or `failed`, as the chat).
+    pub fn pending_queue(&self, key: &str, message: Value) -> Option<String> {
+        self.sent.set(self.sent.get() + 1);
+        let id = format!("out-{}", self.sent.get());
+        let mut pending = self.pending.borrow_mut();
+        let chat = pending.get_mut(key).filter(|c| c.made.is_none())?;
+        let mut entry = message;
+        entry["id"] = json!(id);
+        entry["after"] = json!(0);
+        entry["createdAt"] = json!(self.host.now_ms().round() as i64);
+        entry["state"] = json!(if chat.failed.is_some() { "failed" } else { "sending" });
+        entry["error"] = json!(chat.failed);
+        chat.queue.push(entry);
+        drop(pending);
+        self.pending_changed(key);
+        Some(id)
+    }
+
+    /// Drops a message waiting for its chat to be made. A chat whose every message is dropped before it was made is
+    /// given up (it answers true then).
+    pub fn pending_discard(&self, key: &str, id: &str) -> bool {
+        let mut pending = self.pending.borrow_mut();
+        let Some(chat) = pending.get_mut(key).filter(|c| c.made.is_none()) else { return false };
+        chat.queue.retain(|m| m["id"] != id);
+        let gone = chat.queue.is_empty() && chat.failed.is_some();
+        if gone {
+            pending.remove(key);
+        }
+        drop(pending);
+        self.pending_changed(key);
+        gone
+    }
+
+    /// Whether it could not be made, the last time it was tried.
+    pub fn pending_failed_now(&self, key: &str) -> bool {
+        self.pending.borrow().get(key).is_some_and(|c| c.made.is_none() && c.failed.is_some())
+    }
+
+    /// It could not be made: its messages say why, and wait to be tried again.
+    pub fn pending_failed(&self, key: &str, error: &str) {
+        if let Some(chat) = self.pending.borrow_mut().get_mut(key).filter(|c| c.made.is_none()) {
+            chat.failed = Some(error.to_string());
+            for m in &mut chat.queue {
+                m["state"] = json!("failed");
+                m["error"] = json!(error);
+            }
+        }
+        self.pending_changed(key);
+    }
+
+    /// Its station made it as `session`, `thread`: what waited in its queue goes to the chat's outbox, in order, and is
+    /// answered (id, message) to be delivered.
+    pub fn pending_made(&self, key: &str, session: &str, thread: u64) -> Vec<(String, Value)> {
+        let (station, queue) = {
+            let mut pending = self.pending.borrow_mut();
+            let Some(chat) = pending.get_mut(key).filter(|c| c.made.is_none()) else { return Vec::new() };
+            chat.made = Some((session.to_string(), thread));
+            (chat.station.clone(), std::mem::take(&mut chat.queue))
+        };
+        let sends = queue.iter().map(|m| (m["id"].as_str().unwrap_or("").to_string(), json!({ "text": m["text"], "attachments": m["attachments"], "quotes": m["quotes"] }))).collect();
+        if !queue.is_empty() {
+            self.outbox.borrow_mut().entry((station.clone(), thread)).or_default().extend(queue);
+        }
+        self.pending_changed(key);
+        self.outbox_changed(&station, thread);
+        sends
+    }
+
+    /// Its page and the sidebars show it anew.
+    fn pending_changed(&self, key: &str) {
+        let views: Vec<Topic> = self.views.borrow().keys().cloned().collect();
+        for view in views {
+            let shows = match &view {
+                Topic::Chat { thread: None, session: Some(k), .. } => k == key,
+                Topic::Chats { .. } => true,
+                _ => false,
+            };
+            if shows {
+                self.store.invalidate(&view);
+            }
+        }
+    }
+
+    /// A pending chat's page: its station's chat once made and read, else what is known here.
+    fn pending_chat(&self, station: &str, key: &str) -> Option<Result<Value>> {
+        let (made, queue, failed) = {
+            let pending = self.pending.borrow();
+            let chat = pending.get(key)?;
+            (chat.made.clone(), chat.queue.clone(), chat.failed.clone())
+        };
+        if let Some((session, thread)) = &made
+            && let Some(Ok(mut view)) = self.chat(station, *thread)
+        {
+            view["key"] = json!(session);
+            return Some(Ok(view));
+        }
+        let outbox = match &made {
+            Some((_, thread)) => self.outbox.borrow().get(&(station.to_string(), *thread)).cloned().unwrap_or_default(),
+            None => queue,
+        };
+        let scope = station.split_once('/').map_or(station, |(workspace, _)| workspace);
+        let title = outbox.first().and_then(|m| m.get("text")).and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty())
+            .and_then(|t| t.lines().map(str::trim).find(|l| !l.is_empty())).unwrap_or("新对话").to_string();
+        Some(Ok(json!({
+            "me": self.me(scope),
+            "thread": null,
+            "title": title,
+            "people": [],
+            "agents": [],
+            "messages": [],
+            "more": false,
+            "outbox": outbox,
+            "link": self.link(station),
+            "offline": self.offline(station),
+            // Not made yet (its messages wait for it); once it is, the key its station gave it.
+            "pending": made.is_none(),
+            "key": made.map(|(session, _)| session),
+            "failed": failed,
+        })))
+    }
+
+    /// The rows of the chats asked for here on a station that its rows do not have yet: each as the station would
+    /// list it, under the key its station gave it once made.
+    fn pending_rows(&self, station: &str, rows: &[Value]) -> Vec<Value> {
+        let pending = self.pending.borrow();
+        let mut out = Vec::new();
+        for (key, chat) in pending.iter().filter(|(_, c)| c.station == station) {
+            let (id, thread) = match &chat.made {
+                Some((session, thread)) => (session.clone(), json!(thread)),
+                None => (key.clone(), Value::Null),
+            };
+            if rows.iter().any(|r| r.get("id").and_then(Value::as_str) == Some(&id)) {
+                continue;
+            }
+            // Made, it has no queue: its first message is in the outbox until the station's rows come.
+            let first = chat.queue.first().cloned().or_else(|| {
+                let (_, thread) = chat.made.as_ref()?;
+                self.outbox.borrow().get(&(station.to_string(), *thread))?.first().cloned()
+            });
+            let text = first.as_ref().and_then(|m| m.get("text")).and_then(Value::as_str).unwrap_or("").trim().to_string();
+            // Nothing sent to it yet, and not made: not a chat to list.
+            if first.is_none() && chat.made.is_none() {
+                continue;
+            }
+            let title = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("新对话").to_string();
+            let mut row = json!({
+                "id": id, "session": id, "thread": thread, "title": title, "agents": [], "last": null, "unread": false,
+                "mine": true, "lastActiveAt": chat.created_at.round() as i64, "connect": null, "origin": null,
+            });
+            if chat.made.is_none() {
+                row["pending"] = json!(true);
+            }
+            out.push(row);
+        }
+        out
     }
 
     /// A message on its way to a chat: shown in it at once, as `sending`. Answers its id. `after` is the chat's newest
@@ -140,6 +352,7 @@ impl Views {
             .into_iter()
             .filter(|view| match view {
                 Topic::Chat { station: s, thread: Some(t), .. } => s == station && *t == thread,
+                Topic::Chat { station: s, thread: None, session: Some(key) } if key.starts_with(PENDING_PREFIX) => s == station && self.pending_thread(s, key) == Some(Some(thread)),
                 Topic::Chat { station: s, thread: None, session: Some(key) } => s == station && self.bound_thread(s, key) == Some(thread),
                 _ => false,
             })
@@ -174,6 +387,9 @@ impl Views {
             Topic::Stations { scope } => self.stations_view(scope),
             Topic::Connects { scope, mine } => self.connects(scope, *mine),
             Topic::Chat { station, thread: Some(thread), .. } => self.chat(station, *thread),
+            Topic::Chat { station, thread: None, session: Some(key) } if key.starts_with(PENDING_PREFIX) => {
+                self.pending_chat(station, key).or_else(|| Some(Err(CoreError::new("http_404", "没有这个对话").with_status(404))))
+            }
             // An item's page by its agent: its chat once it has one (made here or elsewhere), else the agent alone.
             Topic::Chat { station, thread: None, session: Some(key) } => match self.bound_thread(station, key) {
                 Some(thread) => self.chat(station, thread),
@@ -216,6 +432,17 @@ impl Views {
             Topic::Stations { scope } => (scope.as_str(), |station| vec![Topic::Link { station: station.clone() }, Topic::Overview { station: station.clone() }, Topic::Host { station }]),
             // Its sessions (the recent ones, the one it delivers into) and the chats they were last talked to in.
             Topic::Connects { scope, .. } => (scope.as_str(), |station| vec![Topic::Overview { station: station.clone() }, Topic::Sessions { station: station.clone() }, Topic::Threads { station }]),
+            Topic::Chat { station, thread: None, session: Some(key) } if key.starts_with(PENDING_PREFIX) => {
+                // Asked for here: the chat its station made, once it has; else whether the station is up.
+                if let Some(Some(thread)) = self.pending_thread(station, key) {
+                    return self.sources(&Topic::Chat { station: station.clone(), thread: Some(thread), session: None });
+                }
+                topics.insert(Topic::Link { station: station.clone() });
+                if let Some((scope, _)) = station.split_once('/') {
+                    topics.insert(Topic::Workspace { workspace: scope.to_string() });
+                }
+                return topics;
+            }
             Topic::Chat { station, thread: None, session: Some(key) } if self.bound_thread(station, key).is_some() => {
                 let thread = self.bound_thread(station, key);
                 return self.sources(&Topic::Chat { station: station.clone(), thread, session: None });
@@ -377,7 +604,9 @@ impl Views {
                 let slack_users: Vec<String> = self.ok(Topic::Overview { station: s.address.clone() })
                     .and_then(|o| o.get("slackUsers").and_then(Value::as_array).cloned())
                     .unwrap_or_default().iter().filter_map(|u| u.as_str().map(str::to_string)).collect();
-                for row in list.as_array().into_iter().flatten() {
+                let listed = list.as_array().cloned().unwrap_or_default();
+                let asked = self.pending_rows(&s.address, &listed);
+                for row in asked.iter().chain(listed.iter()) {
                     if mine && row.get("mine").and_then(Value::as_bool) != Some(true) {
                         continue;
                     }
@@ -1273,8 +1502,21 @@ mod tests {
 
         /// Lets the coalescing window pass and applies what client 1 got for `id`.
         async fn read(&self, ui: &mut Ui, id: RequestId) {
+            self.read_all(&mut [(ui, id)]).await;
+        }
+
+        /// The same for several subscriptions at once.
+        async fn read_all(&self, uis: &mut [(&mut Ui, RequestId)]) {
             self.host.settle().await;
             for (_, message) in self.host.take_emitted() {
+                let at = match &message {
+                    CoreMessage::Value { id, .. } | CoreMessage::Delta { id, .. } | CoreMessage::Error { id, .. } | CoreMessage::Ok { id, .. } => *id,
+                };
+                if let CoreMessage::Error { error, .. } = &message && error.code == "shape" {
+                    panic!("{}", error.message);
+                }
+                let Some((ui, id)) = uis.iter_mut().find(|(_, id)| *id == at) else { continue };
+                let (ui, id) = (&mut **ui, *id);
                 match message {
                     CoreMessage::Value { id: i, value } if i == id => (ui.value, ui.error) = (Some(value), None),
                     CoreMessage::Delta { id: i, delta } if i == id => delta::apply(ui.value.as_mut().expect("a delta needs a value"), &delta),
@@ -2160,6 +2402,64 @@ mod tests {
             let id = views.outbox_add("ws/b", 1, json!({"text": "x"}));
             views.outbox_sent("ws/b", 1, &id, 1);
             assert!(views.outbox_get("ws/b", 1, &id).is_none());
+        });
+    }
+
+    #[test]
+    fn a_chat_asked_for_here_shows_at_once_and_becomes_its_stations_under_the_same_key() {
+        run(async {
+            let t = setup();
+            let views = t.router.views();
+            let key = views.pending_new("local", json!({"runtime": "claude"}));
+            let (mut screen, mut list) = (Ui::default(), Ui::default());
+            t.subscribe(1, agent_page("local", &key));
+            t.subscribe(2, Topic::Chats { scope: "local".into(), mine: true });
+            t.set(rows("local"), json!([row("7", t.host.now_ms() - 1000.0)]));
+            t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
+            let v = screen.value.clone().unwrap();
+            assert_eq!((v["pending"].clone(), v["key"].clone(), v["outbox"].clone(), v["title"].clone()), (json!(true), Value::Null, json!([]), json!("新对话")));
+            // Nothing sent to it yet: not a row.
+            assert_eq!(list.value.clone().unwrap()["days"].as_array().map(Vec::len), Some(0));
+
+            let first = views.pending_queue(&key, json!({"text": "修一下登录\n细节…", "attachments": [], "quotes": []})).unwrap();
+            t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
+            let v = screen.value.clone().unwrap();
+            assert_eq!((v["title"].as_str(), v["outbox"][0]["id"].as_str(), v["outbox"][0]["state"].as_str()), (Some("修一下登录"), Some(first.as_str()), Some("sending")));
+            let items = list.value.clone().unwrap()["days"][0]["items"].clone();
+            assert_eq!((items[0]["id"].as_str(), items[0]["pending"].as_bool(), items[0]["title"].as_str()), (Some(key.as_str()), Some(true), Some("修一下登录")));
+
+            // It could not be made: its message says why; tried again, it is on its way again.
+            views.pending_failed(&key, "no claude profile configured");
+            t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
+            let out = screen.value.clone().unwrap()["outbox"].clone();
+            assert_eq!((out[0]["state"].as_str(), out[0]["error"].as_str()), (Some("failed"), Some("no claude profile configured")));
+            assert_eq!(views.pending_try(&key).map(|(station, _)| station), Some("local".to_string()));
+            t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
+            assert_eq!(screen.value.clone().unwrap()["outbox"][0]["state"], "sending");
+
+            // Made: what waited is the chat's outbox, to be delivered; the page is the station's chat once it is read,
+            // with the key the station gave it.
+            let sends = views.pending_made(&key, "ember:c-1", 9);
+            assert_eq!(sends.iter().map(|(id, m)| (id.clone(), m["text"].clone())).collect::<Vec<_>>(), vec![(first.clone(), json!("修一下登录\n细节…"))]);
+            assert_eq!(views.pending_thread("local", &key), Some(Some(9)));
+            t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
+            let v = screen.value.clone().unwrap();
+            assert_eq!((v["pending"].clone(), v["key"].clone(), v["outbox"][0]["id"].as_str()), (json!(false), json!("ember:c-1"), Some(first.as_str())));
+            t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
+            assert_eq!(list.value.clone().unwrap()["days"][0]["items"][0]["id"], "ember:c-1");
+            t.set(threads("local"), json!([thread(9, &["ember:c-1"], t.host.now_ms())]));
+            t.set(page_of("local", 9), page(1, &["修一下登录\n细节…"], Value::Null));
+            t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
+            let v = screen.value.clone().unwrap();
+            assert_eq!((v["key"].as_str(), v["thread"]["id"].as_u64(), v["messages"].as_array().map(Vec::len)), (Some("ember:c-1"), Some(9), Some(1)));
+            // Its row is the station's once the station lists it.
+            let mut made = row("ember:c-1", t.host.now_ms());
+            made["thread"] = json!(9);
+            made["mine"] = json!(true);
+            t.set(rows("local"), json!([made]));
+            t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
+            let items = list.value.clone().unwrap()["days"][0]["items"].clone();
+            assert_eq!((items.as_array().map(Vec::len), items[0]["pending"].clone()), (Some(1), Value::Null));
         });
     }
 

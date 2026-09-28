@@ -405,6 +405,49 @@ impl Inner {
                 let id = self.views.outbox_add(&station, thread, message.clone());
                 self.deliver(&station, thread, &id, message).await
             }
+            Call::ChatCreate { station, ask } => {
+                StationAddr::parse(&station)?;
+                let key = self.views.pending_new(&station, ask);
+                self.make_chat(&key);
+                Ok(json!({ "key": key }))
+            }
+            Call::ChatSendTo { station, session, text, attachments, quotes } => {
+                let message = json!({ "text": text, "attachments": attachments, "quotes": quotes });
+                match self.views.pending_thread(&station, &session) {
+                    Some(Some(thread)) => {
+                        let id = self.views.outbox_add(&station, thread, message.clone());
+                        self.deliver(&station, thread, &id, message).await
+                    }
+                    // It waits for the chat; one that could not be made is tried again with it.
+                    Some(None) => {
+                        let failed = self.views.pending_failed_now(&session);
+                        let id = self.views.pending_queue(&session, message).ok_or_else(|| CoreError::invalid("没有这个对话"))?;
+                        if failed {
+                            self.make_chat(&session);
+                        }
+                        Ok(json!({ "id": id }))
+                    }
+                    None => Err(CoreError::invalid("没有这个对话")),
+                }
+            }
+            Call::ChatRetryIn { station, session, id } => match self.views.pending_thread(&station, &session) {
+                Some(Some(thread)) => Box::pin(self.execute(Call::ChatRetry { station, thread, id })).await,
+                Some(None) => {
+                    self.make_chat(&session);
+                    Ok(Value::Null)
+                }
+                None => Err(CoreError::invalid("没有这个对话")),
+            },
+            Call::ChatDiscardIn { station, session, id } => {
+                match self.views.pending_thread(&station, &session) {
+                    Some(Some(thread)) => self.views.outbox_remove(&station, thread, &id),
+                    Some(None) => {
+                        self.views.pending_discard(&session, &id);
+                    }
+                    None => return Err(CoreError::invalid("没有这个对话")),
+                }
+                Ok(Value::Null)
+            }
             Call::ChatRetry { station, thread, id } => {
                 let entry = self.views.outbox_get(&station, thread, &id).ok_or_else(|| CoreError::invalid("没有这条待发的消息"))?;
                 self.views.outbox_state(&station, thread, &id, None);
@@ -442,6 +485,30 @@ impl Inner {
                 Ok(Value::Null)
             }
         }
+    }
+
+    /// Has the station make a chat asked for here (`chat.create`), in the background: then what was sent to it
+    /// meanwhile goes in, in order. Failing, the chat and its messages say why, until tried again.
+    fn make_chat(&self, key: &str) {
+        let Some((station, ask)) = self.views.pending_try(key) else { return };
+        let (Some(core), key) = (self.me.upgrade(), key.to_string()) else { return };
+        self.host.spawn(async move {
+            let made = async { core.stations.request(&StationAddr::parse(&station)?, "POST", "/sessions", Some(ask)).await }.await;
+            let made = made.and_then(|answer| {
+                let session = answer.get("key").and_then(Value::as_str).map(str::to_string);
+                let thread = answer.get("thread").and_then(|t| t.get("id")).and_then(Value::as_u64);
+                session.zip(thread).ok_or_else(|| CoreError::new("bad_response", "station 的回复里没有新会话"))
+            });
+            match made {
+                Ok((session, thread)) => {
+                    for (id, message) in core.views.pending_made(&key, &session, thread) {
+                        // One failing stays in the outbox as failed; the rest still go, in order.
+                        let _ = core.deliver(&station, thread, &id, message).await;
+                    }
+                }
+                Err(error) => core.views.pending_failed(&key, &error.message),
+            }
+        }.boxed_local());
     }
 
     /// Posts an outgoing message into a chat. The entry leaves the outbox in the emission that brings the message
@@ -952,6 +1019,13 @@ enum Call {
     CloudRequest { account: String, method: String, path: String, body: Option<Value> },
     StationRequest { station: String, method: String, path: String, body: Option<Value> },
     ChatSend { station: String, thread: u64, text: String, attachments: Value, quotes: Value },
+    /// A new chat on a station (`POST /sessions` with `ask`): answered at once with the key it goes by here; the
+    /// station makes it meanwhile (views.rs, `Pending`).
+    ChatCreate { station: String, ask: Value },
+    /// Sending, trying again, dropping in a chat by its key: one asked for here goes to its thread once made.
+    ChatSendTo { station: String, session: String, text: String, attachments: Value, quotes: Value },
+    ChatRetryIn { station: String, session: String, id: String },
+    ChatDiscardIn { station: String, session: String, id: String },
     ChatRetry { station: String, thread: u64, id: String },
     ChatDiscard { station: String, thread: u64, id: String },
     ChatOlder { station: String, thread: u64 },
@@ -968,6 +1042,7 @@ impl Call {
     fn station(&self) -> Option<&str> {
         match self {
             Call::StationRequest { station, .. } | Call::ChatSend { station, .. } | Call::ChatRetry { station, .. } | Call::ChatDiscard { station, .. } => Some(station),
+            Call::ChatCreate { station, .. } | Call::ChatSendTo { station, .. } | Call::ChatRetryIn { station, .. } | Call::ChatDiscardIn { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
             Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::CloudRequest { .. } | Call::Migrate { .. } | Call::ClientError { .. } => None,
@@ -1022,6 +1097,34 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
     }
     fn empty_list() -> Value {
         json!([])
+    }
+    #[derive(Deserialize)]
+    struct SendTo {
+        station: String,
+        session: String,
+        #[serde(default)]
+        text: String,
+        #[serde(default = "empty_list")]
+        attachments: Value,
+        #[serde(default = "empty_list")]
+        quotes: Value,
+    }
+    #[derive(Deserialize)]
+    struct OutgoingIn {
+        station: String,
+        session: String,
+        id: String,
+    }
+    #[derive(Deserialize)]
+    struct Create {
+        station: String,
+        runtime: String,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        effort: Option<String>,
+        #[serde(default)]
+        profile: Option<String>,
     }
     #[derive(Deserialize)]
     struct Outgoing {
@@ -1102,6 +1205,29 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         "station.request" => {
             let p: StationRequest = read(params)?;
             Call::StationRequest { station: p.station, method: p.method, path: p.path, body: p.body }
+        }
+        "chat.create" => {
+            let p: Create = read(params)?;
+            let mut ask = json!({ "runtime": p.runtime });
+            for (name, value) in [("model", p.model), ("effort", p.effort), ("profile", p.profile)] {
+                if let Some(value) = value.filter(|v| !v.is_empty()) {
+                    ask[name] = json!(value);
+                }
+            }
+            Call::ChatCreate { station: p.station, ask }
+        }
+        // By its key (`session`) rather than its thread: a chat asked for here, made or not.
+        "chat.send" if params.get("session").is_some() && params.get("thread").is_none() => {
+            let p: SendTo = read(params)?;
+            Call::ChatSendTo { station: p.station, session: p.session, text: p.text, attachments: p.attachments, quotes: p.quotes }
+        }
+        "chat.retry" if params.get("session").is_some() && params.get("thread").is_none() => {
+            let p: OutgoingIn = read(params)?;
+            Call::ChatRetryIn { station: p.station, session: p.session, id: p.id }
+        }
+        "chat.discard" if params.get("session").is_some() && params.get("thread").is_none() => {
+            let p: OutgoingIn = read(params)?;
+            Call::ChatDiscardIn { station: p.station, session: p.session, id: p.id }
         }
         "chat.send" => {
             let p: Send = read(params)?;
@@ -1261,6 +1387,16 @@ mod tests {
         assert_eq!(parse_call("chat.read", json!({"station": "w/s", "thread": 7, "seq": 12})).unwrap(), Call::ChatRead { station: "w/s".into(), thread: 7, seq: 12 });
         // A chat is a thread: a session key does not name one.
         assert_eq!(code(parse_call("chat.send", json!({"station": "w/s", "key": "k", "text": "hi"}))), "invalid_params");
+        assert_eq!(
+            parse_call("chat.create", json!({"station": "w/s", "runtime": "claude", "model": "opus", "effort": ""})).unwrap(),
+            Call::ChatCreate { station: "w/s".into(), ask: json!({"runtime": "claude", "model": "opus"}) }
+        );
+        assert_eq!(
+            parse_call("chat.send", json!({"station": "w/s", "session": "new:1-1", "text": "hi"})).unwrap(),
+            Call::ChatSendTo { station: "w/s".into(), session: "new:1-1".into(), text: "hi".into(), attachments: json!([]), quotes: json!([]) }
+        );
+        assert_eq!(parse_call("chat.retry", json!({"station": "w/s", "session": "k", "id": "out-1"})).unwrap(), Call::ChatRetryIn { station: "w/s".into(), session: "k".into(), id: "out-1".into() });
+        assert_eq!(parse_call("chat.discard", json!({"station": "w/s", "session": "k", "id": "out-1"})).unwrap(), Call::ChatDiscardIn { station: "w/s".into(), session: "k".into(), id: "out-1".into() });
     }
 
     #[test]
@@ -1619,6 +1755,51 @@ mod tests {
             // Stations still hear that these are not recorded.
             let parents: Vec<String> = host.requests.borrow().iter().filter_map(|r| header(r, "traceparent")).collect();
             assert!(!parents.is_empty() && parents.iter().all(|p| p.ends_with("-00")), "{parents:?}");
+        });
+    }
+
+    #[test]
+    fn a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_station_has_made_it() {
+        run(async {
+            let (host, core) = local_core(0.0).await;
+            let up = Rc::new(Cell::new(false));
+            let station_up = up.clone();
+            host.on_fetch(move |req| {
+                let path = req.url.trim_start_matches("https://ember.test");
+                match (req.method.as_str(), path) {
+                    ("POST", "/admin/api/sessions") if !station_up.get() => json_response(400, json!({"error": "no claude profile configured"})),
+                    ("POST", "/admin/api/sessions") => json_response(200, json!({"key": "ember:c-1", "thread": {
+                        "id": 9, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": "9.0", "title": null, "createdBy": "local",
+                        "creator": null, "createdAt": 1, "sessions": [{ "thread": 9, "session": "ember:c-1", "connect": "ember", "joinedAt": 1 }],
+                        "last": 0, "lastMessage": null, "read": 0, "unread": 0, "people": [], "firstText": null,
+                    }})),
+                    ("POST", "/admin/api/threads/9/messages") => json_response(200, json!({"n": 1})),
+                    _ => json_response(404, json!({})),
+                }
+            });
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Call { id: 1, call: "chat.create".into(), params: json!({"station": "local", "runtime": "claude", "model": "opus"}) });
+            host.settle().await;
+            let answers = host.take_emitted();
+            let key = answers.iter().find_map(|(_, m)| match m { CoreMessage::Ok { id: 1, ok } => ok["key"].as_str().map(str::to_string), _ => None }).expect("answered at once");
+            assert!(key.starts_with(crate::views::PENDING_PREFIX), "{key}");
+            // The station could not make it: what is sent waits, and has it tried again.
+            core.receive(ui, ClientMessage::Subscribe { id: 2, subscribe: Topic::Chat { station: "local".into(), thread: None, session: Some(key.clone()) } });
+            host.settle().await;
+            let mut values = HashMap::new();
+            apply(&host, &mut values);
+            assert_eq!(values[&2]["pending"], true);
+            up.set(true);
+            core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({"station": "local", "session": key, "text": "修一下登录"}) });
+            host.settle().await;
+            let asked: Vec<(String, String)> = host.requests.borrow().iter().filter(|r| r.method == "POST" && r.url.contains("/admin/api/"))
+                .map(|r| (r.url.trim_start_matches("https://ember.test/admin/api").to_string(), String::from_utf8(r.body.clone().unwrap_or_default()).unwrap())).collect();
+            assert_eq!(asked.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), ["/sessions", "/sessions", "/threads/9/messages"]);
+            assert_eq!(serde_json::from_str::<Value>(&asked[0].1).unwrap(), json!({"runtime": "claude", "model": "opus"}));
+            assert_eq!(serde_json::from_str::<Value>(&asked[2].1).unwrap()["text"], "修一下登录");
+            // The page is the station's chat now, under the key it was opened with, and says the one the station gave it.
+            apply(&host, &mut values);
+            assert_eq!((values[&2]["pending"].clone(), values[&2]["key"].clone()), (json!(false), json!("ember:c-1")));
         });
     }
 

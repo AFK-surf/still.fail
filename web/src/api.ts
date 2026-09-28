@@ -299,20 +299,26 @@ export function stationApi(t: StationCall) {
 export type Api = ReturnType<typeof stationApi>;
 
 /**
- * A chat's calls, by its thread. Sending: the message shows at once from the core's outbox; a failed one can be
- * sent again or dropped. `older` loads the page before the messages shown; `read` records how far the viewer has read.
+ * A chat's calls, by its thread (or, for a chat made here, the key the core gave it: `chat.create`). Sending: the
+ * message shows at once from the core's outbox; a failed one can be sent again or dropped. `older` loads the page before the messages shown; `read` records how far the viewer has read.
  */
 export function useChatSend() {
   const call = useCall();
   const station = useStation().address;
   return useMemo(() => ({
-    send: (thread: number, text: string, attachments: Attachment[], quotes: Quote[]) => call("chat.send", { station, thread, text, attachments, quotes }),
-    retry: (thread: number, id: string) => call("chat.retry", { station, thread, id }),
-    discard: (thread: number, id: string) => call("chat.discard", { station, thread, id }),
+    send: (to: ChatTo, text: string, attachments: Attachment[], quotes: Quote[]) => call("chat.send", { station, ...chatTo(to), text, attachments, quotes }),
+    retry: (to: ChatTo, id: string) => call("chat.retry", { station, ...chatTo(to), id }),
+    discard: (to: ChatTo, id: string) => call("chat.discard", { station, ...chatTo(to), id }),
+    /** A new chat: there at once under the key answered (its page, its row); the station makes it behind it. */
+    create: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => call("chat.create", { station, ...input }) as Promise<{ key: string }>,
     older: (thread: number) => call("chat.older", { station, thread }) as Promise<{ more: boolean }>,
     read: (thread: number, seq: number) => call("chat.read", { station, thread, seq }),
   }), [call, station]);
 }
+
+/** Where a message goes: a chat's thread, or the key of a chat made here (`chat.create`), made by its station or not. */
+export type ChatTo = number | string;
+const chatTo = (to: ChatTo) => (typeof to === "number" ? { thread: to } : { session: to });
 
 /** The admin API of the station in context. */
 export function useApi(): Api {

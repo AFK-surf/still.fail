@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { useLocation } from "react-router";
 
 const KEY = "ember.lastChat";
+/** How the keys the core gives chats made here, before their station has made them, begin (views.rs, PENDING_PREFIX). */
+export const PENDING = "new:";
 
 function all(): Record<string, string> {
   try {
@@ -17,7 +19,8 @@ function all(): Record<string, string> {
 export function useRememberChat(scope: string, isChat: (path: string) => boolean): void {
   const path = useLocation().pathname;
   useEffect(() => {
-    if (isChat(path)) localStorage.setItem(KEY, JSON.stringify({ ...all(), [scope]: path }));
+    // A chat made here is remembered once its station has made it, under its station's key (ChatPage.tsx).
+    if (isChat(path) && !path.includes(`/chats/${encodeURIComponent(PENDING)}`)) localStorage.setItem(KEY, JSON.stringify({ ...all(), [scope]: path }));
   }, [scope, path]);
 }
 

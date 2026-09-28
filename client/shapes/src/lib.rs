@@ -1126,6 +1126,8 @@ pub struct ChatItem {
     pub reconnecting: Option<String>,
     /// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
     pub time: Option<HashMap<String, Stamp>>,
+    /// A new chat asked for here that its station has not made yet. Absent otherwise.
+    pub pending: Option<bool>,
 }
 
 /// A day of the list, with its heading (今天, 昨天, 星期三, 9月20日).
@@ -1329,6 +1331,13 @@ pub struct ChatView {
     pub outbox: Vec<Outgoing>,
     pub link: Link,
     pub offline: bool,
+    /// A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox.
+    #[serde(default)]
+    pub pending: bool,
+    /// The key its station gave a chat asked for here, once made: the page, opened under the core's key, goes by it.
+    pub key: Option<String>,
+    /// Why the station could not make it, the last time it was tried.
+    pub failed: Option<String>,
 }
 
 #[typeshare]

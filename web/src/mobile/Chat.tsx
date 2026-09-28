@@ -4,7 +4,7 @@
 // Long-press quotes or copies a message; ＋ adds files. The list's behaviour (following its end, older pages, what is
 // read, the unread line, where it was left, messages coming out of an agent's avatar) is the desktop's (../Chat.tsx).
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { useLocation, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatMessage, type ChatThread, type ChatView, type Maker, type Outgoing, type Quote, type RuntimeKind } from "../api.ts";
 import { useHost, type HostComposer } from "./ChatHost.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
@@ -13,6 +13,7 @@ import { Activity, Files, ProseWithFiles, sameMessage, useMessageList, type File
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
 import { Prose } from "../Prose.tsx";
 import { stationBase, useStation } from "../station.tsx";
+import { PENDING } from "../lastChat.ts";
 import { ask } from "./sheets.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { openHistory } from "./History.tsx";
@@ -32,7 +33,9 @@ import * as homeCss from "./styles/home.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 
 export function ChatScreen() {
-  const { chat: key = "" } = useParams();
+  const { chat: address = "" } = useParams();
+  // A chat made here keeps the key the core gave it when its address becomes its station's (below).
+  const key = openedAs(address);
   const station = useStation();
   // A service's link (`?service=<job>`, from Slack): the service, full screen, over the chat.
   const app = useApp();
@@ -43,6 +46,13 @@ export function ChatScreen() {
   }, [asked]);
   const chat = useChat(station.address, { session: key });
   const view = chat.value;
+  const navigate = useNavigate();
+  const stationKey = key.startsWith(PENDING) ? view?.key : undefined;
+  useEffect(() => {
+    if (!stationKey) return;
+    renamed.set(stationKey, key);
+    navigate(`${stationBase(station.address)}/chats/${encodeURIComponent(stationKey)}`, { replace: true });
+  }, [stationKey]);
   const lives = useLives(station.address, (view?.agents ?? []).map((a) => a.session.key));
   // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in place.
   if (!view) {
@@ -55,6 +65,11 @@ export function ChatScreen() {
   }
   return <Chat view={view} sessionKey={key} lives={lives} />;
 }
+
+/** Chats made here, by the key their station gave them: the core's key their page was opened with. */
+const renamed = new Map<string, string>();
+/** The key a chat's page goes by: the one it was opened with, for a chat made here. */
+export const openedAs = (address: string) => renamed.get(address) ?? address;
 
 /** What the page knows of an agent: its chat entry and its live view. */
 interface Here { station: string; key: string; view: ChatView }
@@ -316,7 +331,7 @@ const Said = memo(function Said({ m, agent, station, sessionKey, act, list }: {
 function Out({ o, here }: { o: Outgoing; here: Here }) {
   const app = useApp();
   const sending = useChatSend();
-  const thread = here.view.thread;
+  const to = here.view.thread?.id ?? (here.key.startsWith(PENDING) ? here.key : null);
   return (
     <div className={chatCss.mMine} data-unsent={o.state === "failed" || undefined}>
       {o.quotes.map((q, i) => <QuoteCard key={i} q={q} />)}
@@ -326,8 +341,8 @@ function Out({ o, here }: { o: Outgoing; here: Here }) {
         // Not sent: said briefly (a tap says why); sending it again or dropping it right beside.
         <div className={css.mUnsent}>
           <button type="button" className={css.mUnsentNote} onClick={() => app.toast(o.error ? `没发出去：${o.error}` : "没发出去")}>未发送</button>
-          <button type="button" className={css.mUnsentBtn} disabled={here.view.offline || !!here.view.archived} onClick={() => void (thread && sending.retry(thread.id, o.id).catch(() => {}))}>重试</button>
-          <button type="button" className={css.mUnsentBtn} onClick={() => void (thread && sending.discard(thread.id, o.id))}>删除</button>
+          <button type="button" className={css.mUnsentBtn} disabled={here.view.offline || !!here.view.archived} onClick={() => void (to !== null && sending.retry(to, o.id).catch(() => {}))}>重试</button>
+          <button type="button" className={css.mUnsentBtn} onClick={() => void (to !== null && sending.discard(to, o.id))}>删除</button>
         </div>
       ) : <span className={`${chatCss.mMeta} ${chatCss.mWaiting}`}><Spinner size={10} />正在发送</span>}
     </div>
@@ -491,8 +506,8 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
   const warmed = useRef(0);
   const send = (draft: Draft) => {
     if (view.offline || view.archived) return;
-    // Before the agent has a chat, the message makes one.
-    const thread = view.thread?.id;
+    // Before the agent has a chat, the message makes one; a chat made here is sent to by its key until its thread is known.
+    const thread = view.thread?.id ?? (here.key.startsWith(PENDING) ? here.key : undefined);
     void draft.send(async () => thread ?? (await call.request<{ id: number }>("POST", "/threads", { session: here.key })).id, { first: thread === undefined });
   };
   useLayoutEffect(() => use({
