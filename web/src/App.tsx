@@ -18,6 +18,7 @@ import { toMadeChat } from "./Chat.tsx";
 import { ComposerDock } from "./dock.tsx";
 import { Mark } from "./brand.tsx";
 import { ServicePage } from "./Preview.tsx";
+import { GlobalShortcuts } from "./Switcher.tsx";
 import * as shellCss from "./styles/shell.css.ts";
 
 /** On phones the sidebar is the home screen; any opened item takes the whole screen. */
@@ -52,6 +53,7 @@ export function App() {
       <Tooltip.Provider delayDuration={400} skipDelayDuration={200}>
       <div className={shellCss.shell} data-detail={detail}>
         <Sidebar />
+        <GlobalShortcuts scope="local" newChat="/new" settings="/settings" />
         <main className={shellCss.main}>
           <ComposerDock>
           <Routes>

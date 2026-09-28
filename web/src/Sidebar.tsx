@@ -9,6 +9,8 @@ import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, StatusDot
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
+import { goToNeighbour } from "./Chat.tsx";
+import { useShortcut } from "./keymap.ts";
 import { ChatMark } from "./ChatMark.tsx";
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { archiveKey, PendingArchives } from "./pendingArchives.ts";
@@ -67,6 +69,8 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
   const [onlyMine] = useOnlyMine();
   const [pending] = useState(() => new PendingArchives());
   const move = useComposerMove();
+  useShortcut("chat.prev", () => goToNeighbour(-1));
+  useShortcut("chat.next", () => goToNeighbour(1));
   // Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
   const all = useChats(scope, false);
   const mine = useChats(scope, true);

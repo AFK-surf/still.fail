@@ -11,6 +11,7 @@ import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
+import { useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileUrl, useNear } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { useDraft, type DraftQuote } from "./draft.ts";
@@ -79,6 +80,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   latest.current = { ownerOf, onOpenHistory, images };
   const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key), images: () => latest.current.images() }));
   const owners = `${keeper ?? ""} ${agents.map((a) => `${a.key}=${a.session.workspace}`).join(" ")}`;
+  useShortcut("chat.latest", () => { list.current?.dispatchEvent(new Event("to-bottom")); });
 
   // Selecting text inside one message offers to quote it.
   const onSelect = () => {
@@ -748,20 +750,12 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   }, [thread]);
   // Space with nothing that takes keys focused (the cursor lost to a click on the messages, a closed menu…) puts it
   // back in the composer, rather than scrolling the page.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== " " || e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      const at = e.target instanceof Element ? e.target : null;
-      if (at?.closest("input, textarea, select, button, a[href], summary, [contenteditable]:not([contenteditable='false']), [role='button'], [role='link'], [role='menuitem'], [role='tab'], [role='option'], [role='checkbox'], [role='radio'], [role='switch'], [role='slider'], [role='textbox'], [role='combobox']")) return;
-      if (document.querySelector("[role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']")) return;
-      const el = input.current;
-      if (!el || el.disabled || !el.getClientRects().length) return;
-      e.preventDefault();
-      el.focus();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useShortcut("composer.focus", () => {
+    const el = input.current;
+    if (!el || el.disabled || !el.getClientRects().length) return false;
+    el.focus();
+  });
+  useShortcut("composer.file", locked ? null : () => { picker.current?.click(); });
   // Grow with the text up to three lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
   // the text (or the placeholder), so it is measured again then; below the limit it never scrolls.
   useEffect(() => {
@@ -1180,7 +1174,7 @@ function flashRange(range: Range): void {
 }
 
 /** Opens the chat `step` rows above (-1) or below (1) the open one in the sidebar; false when there is none. */
-function goToNeighbour(step: -1 | 1): boolean {
+export function goToNeighbour(step: -1 | 1): boolean {
   // The list in view: the other one (全部 or 我参与的) sits beside it out of view, and a row of it is not a neighbour.
   const rows = [...document.querySelectorAll<HTMLAnchorElement>(`.${nav.sidebar} .${nav.navScroll}:not([inert]) a.${nav.navSession}`)];
   const at = rows.findIndex((row) => row.getAttribute("aria-current") === "page");

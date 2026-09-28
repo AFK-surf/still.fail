@@ -12,10 +12,11 @@ import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from
 import { lastChat, PENDING } from "../lastChat.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
 import type { Job } from "../core/shapes.ts";
-import { useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
+import { stationApi, useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { ChatPanel } from "../Chat.tsx";
+import { useShortcut } from "../keymap.ts";
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
@@ -170,6 +171,31 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     openTab(key);
     setFocus({ key, entry, n: Date.now() });
   };
+  const api = stationApi(call);
+  const toast = useToast();
+  const running = agents.filter((a) => a.status === "running" || a.status === "queued");
+  useShortcut("chat.stop", running.length ? () => {
+    for (const a of running) void api.stop(a.session.key).catch(() => {});
+    toast("已请求停止");
+  } : null);
+  // The history tab in front closes the panel; else the first agent's opens.
+  useShortcut("chat.history", agents[0] ? () => {
+    const front = agents.find((a) => a.session.key === shown);
+    if (front) saveTabs([]); else openTab(agents[0]!.session.key);
+  } : null);
+  useShortcut("chat.jobs", () => (shown === JOBS ? closeTab(JOBS) : openJobs()));
+  useShortcut("panel.close", open.length ? () => saveTabs([]) : null);
+  const thread = chatView.value?.thread?.id ?? null;
+  const keeper = agents[0]?.session.key ?? ("session" in of ? of.session : null);
+  useShortcut("chat.archive", chatView.value && !chatView.value.archived && !chatView.value.offline && keeper ? async () => {
+    navigate(link("/chats"));
+    try {
+      await api.archive({ thread, session: keeper }, true);
+      toast("已归档");
+    } catch (error) {
+      toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
+    }
+  } : null);
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>读不到这个对话：{chatView.error.message}</p></Empty>;
     // Laid out as the chat will be, its composer already in its place: coming from another chat page, the composer

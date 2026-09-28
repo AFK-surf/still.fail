@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDark } from "./theme.ts";
 import type { AppUpdate } from "./core/client.ts";
+import { useShortcut } from "./keymap.ts";
 import * as css from "./brand.css.ts";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
@@ -73,6 +74,7 @@ function SidebarBuddy() {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setPose(next ? "rest" : "push"), 380);
   };
+  useShortcut("sidebar.toggle", toggle);
   // On the page itself, not in the sidebar: a closed sidebar clips what is in it, and the desktop app's window would
   // then take a click on the buddy for a drag of the window.
   return createPortal(

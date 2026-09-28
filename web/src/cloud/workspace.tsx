@@ -15,6 +15,7 @@ import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble } from "../Sidebar.tsx";
+import { GlobalShortcuts } from "../Switcher.tsx";
 import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
 import { AccountSettings, ConnectsSettings, FirstStation, MemorySettings, RuntimeSettings, SettingsNav, StationsSettings, WorkspaceSettings } from "./settings.tsx";
@@ -77,6 +78,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
         {settings
           ? <nav className={nav.sidebar} aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WorkspaceSwitcher current={entry} /></div></nav>
           : <WorkspaceSidebar entry={entry} />}
+        <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
         <main className={shellCss.main}>
           <ComposerDock>
           <Routes>
