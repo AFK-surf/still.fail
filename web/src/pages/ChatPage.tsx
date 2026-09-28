@@ -252,7 +252,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} {...firstMessage} {...(made ? { made } : {})} />
       </div>
         {panel && shown && (
-          <Tabs.Root className={css.sidePanel} value={shown} onValueChange={setActive} data-opening={opening || undefined} onAnimationEnd={(e) => { if (e.target === e.currentTarget) setOpening(false); }}>
+          <Tabs.Root className={css.sidePanel} data-over-composer value={shown} onValueChange={setActive} data-opening={opening || undefined} onAnimationEnd={(e) => { if (e.target === e.currentTarget) setOpening(false); }}>
             <ResizeHandle variable="--panel-w" edge="left" min={320} max={960} label="调整侧栏宽度" />
             <div className={css.sideBar}>
               <Tabs.List className={css.sideTabList} aria-label="执行历史">

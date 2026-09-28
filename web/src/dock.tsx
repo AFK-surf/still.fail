@@ -12,6 +12,7 @@ import { pageChanging, transitionTo } from "./ui.tsx";
 import * as sessionCss from "./styles/session.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
 import * as css from "./dock.css.ts";
+import { easeOut, morph, shapeOf, stop, type Shape } from "./morph.ts";
 
 export interface ComposerSpec extends ComposerProps {
   /** The station it sends to (uploads, warming, sending are its). */
@@ -39,6 +40,8 @@ const STILL_FRAMES = 30;
 export function ComposerDock({ children }: { children: ReactNode }) {
   const [spec, setSpec] = useState<ComposerSpec | null>(null);
   const [height, setHeight] = useState(0);
+  const heightNow = useRef(0);
+  heightNow.current = height;
   const slot = useRef<HTMLElement | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const carry = useRef<string | null>(null);
@@ -67,13 +70,14 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   const away = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [dock] = useState<Dock>(() => ({
     place(at, next) {
-      // Laid out for another page: where it is now is where it goes from.
       // Laid out for another page: where it is now is where it goes from, read once (a page may hand over its place
       // again before the dock has drawn the change, and by then it has moved there).
       if (next.variant !== variant.current && next.variant !== seenFor.current) { seen(); seenFor.current = next.variant; }
       clearTimeout(away.current);
       if (slot.current !== at) { slot.current = at; wake.current(); }
-      setSpec(next);
+      // The same as before (a page drawn again as the composer's height changes, every frame it grows): kept, so the
+      // composer is not drawn again for nothing.
+      setSpec((now) => (now && Object.keys({ ...now, ...next }).every((k) => now[k as keyof ComposerSpec] === next[k as keyof ComposerSpec]) ? now : next));
       setShown(true);
     },
     leave(at) {
@@ -127,11 +131,12 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   // was is read as the new page takes it (`place`); a page change's picture leaves it out (its styles), so what shows of
   // it is the live box.
   const inner = () => box.current?.querySelector<HTMLElement>(`.${composerCss.composerBox}`) ?? null;
-  const was = useRef<{ rect: DOMRect; radius: number } | null>(null);
+  const was = useRef<Shape | null>(null);
   const seenFor = useRef<string | undefined>(undefined);
   const seen = () => {
     const b = inner();
-    if (b) was.current = { rect: b.getBoundingClientRect(), radius: parseFloat(getComputedStyle(b).borderTopLeftRadius) };
+    // Not while it is put away (no page held a place): it would start from nowhere, off the page's corner.
+    if (b && b.getClientRects().length && b.getBoundingClientRect().width > 0) was.current = shapeOf(b);
   };
   const variant = useRef(spec?.variant);
   // Laid out for another page, its new height is taken at once, not when the observer tells of it: a new chat becoming
@@ -151,41 +156,69 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     const wrap = b?.parentElement;
     if (!before || !spec || before === spec.variant || !from || !b || !wrap) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    // From where it was to where its place is now (read without the move under way).
-    const animate = (running?: Animation) => {
-      running?.cancel();
+    // From where it was to where its place is now (read without the move under way), its shape and what it holds with
+    // it (morph.ts).
+    const animate = () => {
+      stop(b);
+      // Its place keeps the height it has now (read with the next page's draft in it), and it goes to where that
+      // place is laid out then: kept at the height it had before, a centred place moved it once it was over.
+      if (box.current && box.current.offsetHeight !== heightNow.current) flushSync(() => setHeight(box.current!.offsetHeight));
       put();
       const to = b.getBoundingClientRect();
-      const radius = parseFloat(getComputedStyle(b).borderTopLeftRadius);
       // Laid out from the wrap's left edge while it moves (its auto margins would move it as its width changes).
       const left = wrap.getBoundingClientRect().left + parseFloat(getComputedStyle(wrap).paddingLeft);
-      const ease = getComputedStyle(document.documentElement).getPropertyValue("--ease-out").trim() || "ease-out";
-      const move = b.animate([
-        { marginLeft: "0px", transform: `translate(${from.rect.left - left}px, ${from.rect.top - to.top}px)`, width: `${from.rect.width}px`,
-          height: `${from.rect.height}px`, borderRadius: `${Math.min(from.radius, from.rect.height / 2)}px` },
-        { marginLeft: "0px", transform: `translate(${to.left - left}px, 0px)`, width: `${to.width}px`, height: `${to.height}px`,
-          borderRadius: `${Math.min(radius, to.height / 2)}px` },
-      ], { duration: 340, easing: ease });
+      // Hung from its place's foot (a chat's), its top follows its height as it goes: it is placed by its foot then.
+      const foot = !!box.current?.style.bottom;
+      const y = foot ? from.rect.bottom - to.bottom : from.rect.top - to.top;
+      const all = morph(b, "page", from, [
+        // A new chat's box holds a least height (dock.css.ts): not while it grows to it from a capsule.
+        { marginLeft: "0px", transform: `translate(${from.rect.left - left}px, ${y}px)`, width: `${from.rect.width}px`, height: `${from.rect.height}px`, minHeight: "0px" },
+        { marginLeft: "0px", transform: `translate(${to.left - left}px, 0px)`, width: `${to.width}px`, height: `${to.height}px`, minHeight: "0px" },
+      ], { duration: 340, easing: easeOut() });
       moving.current = true;
-      void move.finished.then(() => {
+      void all[0]!.finished.then(() => {
         moving.current = false;
         if (box.current) setHeight(box.current.offsetHeight);
       }, () => {});
-      return move;
+      return all;
     };
-    let move = animate();
-    // In a page change it waits where it starts until the change moves, and starts from where its place is by then:
-    // the next page may be waited for, and put its place elsewhere (a chat's, read, is not where it was while read).
-    const changing = pageChanging();
-    if (changing) {
-      move.pause();
-      changing.settle.push(() => {
-        if (variant.current !== spec.variant || !b.isConnected) return;
-        move = animate(move);
-        move.pause();
-      });
-      void changing.moving.then(() => move.play());
-    }
+    // Read once what the page's change changes in it has been drawn too (its text: the next page's draft comes in an
+    // update of its own, right after this), before anything is shown: its new shape is what it will have.
+    queueMicrotask(() => {
+      if (variant.current !== spec.variant || !b.isConnected) return;
+      let move = animate();
+      // In a page change it waits where it starts until the change moves, and starts from where its place is by then:
+      // the next page may be waited for, and put its place elsewhere (a chat's, read, is not where it was while read).
+      const changing = pageChanging();
+      if (changing) {
+        for (const a of move) a.pause();
+        changing.settle.push(() => {
+          if (variant.current !== spec.variant || !b.isConnected) return;
+          move = animate();
+          for (const a of move) a.pause();
+        });
+        void changing.moving.then(() => {
+          // Its place may have moved again as the next page settled (its list, its height): read it now, as the change
+          // starts to show it, and go from where it was to there.
+          if (variant.current !== spec.variant || !b.isConnected) return;
+          move = animate();
+          // A page change draws it over the pages (a picture of its own, dock.css.ts): what lies over it on the next
+          // page (a chat's panel over a narrow chat, `data-over-composer`) would be under it. It is cut where they are
+          // until the change is over.
+          const dock = box.current;
+          if (!dock) return;
+          const at = dock.getBoundingClientRect();
+          const over = [...document.querySelectorAll("[data-over-composer]")]
+            .filter((e) => getComputedStyle(e).position === "fixed")
+            .map((e) => e.getBoundingClientRect())
+            .filter((r) => r.width > 0 && r.left > at.left);
+          if (!over.length) return;
+          const x = Math.min(...over.map((r) => r.left)) - at.left;
+          dock.style.clipPath = `polygon(-100vw -100vh, ${x}px -100vh, ${x}px 200vh, -100vw 200vh)`;
+          void changing.done.then(() => { dock.style.clipPath = ""; });
+        });
+      }
+    });
   }, [spec?.variant]); // eslint-disable-line react-hooks/exhaustive-deps
   // Its height, for its place to keep: watched once it is there (the first page to hold a place makes it).
   const made = spec !== null;
@@ -210,13 +243,15 @@ export function ComposerDock({ children }: { children: ReactNode }) {
   }, [switching, spec?.variant]);
   // Changes only with the height: the places re-render then, not each time a page hands over what it writes to.
   const value = useMemo(() => ({ ...dock, height }), [dock, height]);
+  // Drawn anew with what the page hands it, not with the dock's own height (which changes every frame it grows).
+  const composer = useMemo(() => spec && <Composer {...spec} carry={carry} />, [spec]);
   return (
     <DockContext.Provider value={value}>
       {children}
       {spec && (
         <div ref={box} className={css.composerDock} data-variant={spec.variant} data-switching={switching || undefined} hidden={!shown}>
           <StationContext.Provider value={spec.station}>
-            <Composer {...spec} carry={carry} />
+            {composer}
           </StationContext.Provider>
         </div>
       )}

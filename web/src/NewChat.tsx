@@ -6,7 +6,7 @@ import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useChatSend, useStations, type RuntimeKind, type StationView } from "./api.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
-import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
+import { LOCAL_STATION, profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Button, Chooser, ChooserItem as Item, FirstOne, Tip } from "./ui.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice as ProfileKind } from "./pages/Accounts.tsx";
 import { ModelTriple, optionOf } from "./ModelTriple.tsx";
@@ -14,8 +14,6 @@ import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
 import { keepTabs } from "./chatTabs.ts";
 import * as css from "./NewChat.css.ts";
-import * as cloudCss from "./styles/cloud.css.ts";
-import * as composerCss from "./styles/composer.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -68,11 +66,16 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
   };
   const view = online.find((s) => s.id === stationId) ?? online[0];
   if (!stations.value) {
+    // The station it will most likely be, by the one last written to (its draft comes with it).
+    const address = scope === "local" ? "local" : `${scope}/${stationId}`;
+    const held: Station = scope === "local" ? LOCAL_STATION : { id: stationId, name: "", base: stationBase(address), address, online: true, settings: `/w/${scope}/settings` };
     // Laid out as the page will be (the composer's place held, the words under it), so nothing moves when it comes.
     return (
       <div className={css.newChat}><div className={css.newChatInner}>
         <Illustration name="new-chat" /><h1 className={css.newChatTitle}>新对话</h1><p className={css.newChatSub}>说要做什么。它会在选好的 station 上用选好的模型开一个新会话。</p>
-        <div className={cloudCss.composerWrap}><div className={`${composerCss.composerBox} ${css.newChatHeld}`} /></div>
+        {/* The composer itself (dock.tsx), locked until there is a station to write to: it goes on from the page before
+            without leaving the screen for as long as the stations take to come (the first time the page is opened). */}
+        <ComposerSlot variant="new" station={held} draftKey={`new:${held.address}`} thread={null} sessionKey={null} placeholder="做任何事" locked roomy />
         <p className={`${css.newChatStatus}${stations.error ? ` ${controlsCss.fieldError}` : ""}`}>{stations.error?.message ?? "正在读取 station…"}</p>
       </div></div>
     );

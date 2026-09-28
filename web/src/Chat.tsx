@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, type ChatTo, type Activity as ActivityView, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
@@ -24,6 +24,7 @@ import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
 import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs, type ChatRef } from "./ChatRef.tsx";
 import { refMark } from "./chatRefs.ts";
+import { easeOut, morph, movingBy, shapeOf, stop, type Shape } from "./morph.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
@@ -62,6 +63,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const to: ChatTo | null = id ?? made ?? null;
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
+  const quoteFocused = useCallback(() => setFocusQuote(null), []);
   const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
   const { messages, divider, away, shown, rowOf, poseOf } = useMessageList(list, floor, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives);
   const agents: AgentHere[] = chat.agents.map(({ session, status, since }) => (
@@ -167,7 +169,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
-      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)}
+      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
         locked={chat.offline || !!chat.archived} placeholder={chat.archived ? "还原对话后才能发送" : "发消息"} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
@@ -773,12 +775,25 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   useLayoutEffect(() => {
     const el = input.current;
     if (!el) return;
+    // Measured on an unseen copy, so the text box itself is written only when its height changes: it was reset to
+    // `auto` and back to measure it every frame its width changed (the composer moving between pages), and its caret
+    // flickered as it moved.
+    const probe = el.cloneNode() as HTMLTextAreaElement;
+    probe.removeAttribute("aria-label");
+    probe.setAttribute("aria-hidden", "true");
+    probe.tabIndex = -1;
+    probe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;height:auto;overflow-y:hidden;left:0;top:0;";
+    el.after(probe);
     const fit = () => {
       const style = getComputedStyle(el);
       const limit = 3 * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-      el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, limit)}px`;
-      el.style.overflowY = el.scrollHeight > limit + 1 ? "auto" : "hidden";
+      probe.style.width = `${el.clientWidth}px`;
+      probe.placeholder = el.placeholder;
+      probe.value = el.value;
+      const height = `${Math.min(probe.scrollHeight, limit)}px`;
+      const overflow = probe.scrollHeight > limit + 1 ? "auto" : "hidden";
+      if (el.style.height !== height) el.style.height = height;
+      if (el.style.overflowY !== overflow) el.style.overflowY = overflow;
       edges();
       over();
     };
@@ -806,59 +821,31 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     resize.observe(el);
     const scrolled = () => { edges(); over(); };
     el.addEventListener("scroll", scrolled);
-    return () => { resize.disconnect(); el.removeEventListener("scroll", scrolled); };
+    return () => { resize.disconnect(); el.removeEventListener("scroll", scrolled); probe.remove(); };
   }, [text]);
   const ready = draft.ready && !locked;
-  // Capsule ⇄ box, in one motion: it grows or shrinks to its new height, its corners going from the one to the other
-  // on the way (its ends' radius, half its height, to the box's, and their shape), and what it holds (the text, the
-  // buttons) moving from where it was to where it is now, rather than jumping there.
+  // Capsule ⇄ box, in one motion (morph.ts): how it shows is read in the render that changes it (the page still shows
+  // what was), and it goes from there to its new shape once that is laid out. Laid out for another page (a new chat's
+  // roomy box ⇄ a chat's foot), the dock moves it (dock.tsx), not this; nor does this cut into that move.
   const multiline = roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0;
   const box = useRef<HTMLFormElement>(null);
-  const shape = useRef<{ frame: Keyframe; height: number; parts: Map<Element, { x: number; y: number }> } | null>(null);
-  const shapeOf = (el: HTMLElement) => {
-    const style = getComputedStyle(el);
-    const height = el.offsetHeight;
-    // Where each part shows (mid-way, when it moves: a change then goes on from there).
-    const parts = new Map<Element, { x: number; y: number }>();
-    for (const part of el.querySelectorAll("textarea, button")) {
-      const r = part.getBoundingClientRect();
-      parts.set(part, { x: r.left, y: r.top });
-    }
-    const frame: Keyframe = { height: `${height}px`, borderRadius: `${Math.min(parseFloat(style.borderTopLeftRadius), height / 2)}px`, cornerShape: style.getPropertyValue("corner-shape") };
-    return { frame, height, parts };
-  };
-  // Its own moves, so a change of mind stops those and nothing else: the dock moves the same box between pages.
-  const moves = useRef<Animation[]>([]);
-  const wasRoomy = useRef(roomy);
+  // What it is laid out by: any change of it may change its height (a line more or less, capsule ⇄ box, files).
+  const laidOut = `${multiline}|${text}|${files.length}|${quotes.length}`;
+  const shown = useRef({ laidOut, roomy });
+  const from = useRef<Shape | null>(null);
+  if (box.current && shown.current.laidOut !== laidOut && !from.current) from.current = shapeOf(box.current);
   useLayoutEffect(() => {
-    const el = box.current;
-    const was = shape.current;
-    const paged = wasRoomy.current !== roomy;
-    wasRoomy.current = roomy;
-    for (const a of moves.current) a.cancel();
-    moves.current = [];
-    // Laid out for another page (a new chat's roomy box ⇄ a chat's foot), the dock moves it (dock.tsx), not this.
-    if (!el || !was || paged || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const now = shapeOf(el);
-    const ease = getComputedStyle(document.documentElement).getPropertyValue("--ease-out").trim() || "ease-out";
-    const timing = { duration: 260, easing: ease };
-    moves.current.push(el.animate([{ ...was.frame, overflow: "clip" }, { ...now.frame, overflow: "clip" }], timing));
-    // Its foot stays where it is (at a chat's foot it hangs from it), and its parts are laid out in the height it has
-    // on the way: from its top in a box, about its middle in a capsule. Each starts where it showed, as the new layout
-    // puts it at the height it starts from.
-    const bottom = el.getBoundingClientRect().bottom;
-    const along = multiline ? 0 : 0.5;
-    const shift = (bottom - now.height + along * now.height) - (bottom - was.height + along * was.height);
-    for (const [part, to] of now.parts) {
-      const from = was.parts.get(part);
-      if (!from) continue;
-      const x = from.x - to.x, y = from.y - to.y + shift;
-      if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue;
-      moves.current.push(part.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
-    }
-  }, [multiline]);
-  // How it is after each change (read after the one above: mid-way, when it moves), for the next time it changes.
-  useLayoutEffect(() => { if (box.current) shape.current = shapeOf(box.current); });
+    const el = box.current, was = from.current;
+    const paged = shown.current.roomy !== roomy;
+    from.current = null;
+    shown.current = { laidOut, roomy };
+    if (!el || !was || paged || movingBy(el) === "page" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    stop(el);
+    const height = el.getBoundingClientRect().height;
+    // Its size unchanged (a letter more on the same line), nothing moves.
+    if (Math.abs(height - was.rect.height) < 0.5 && was.corner === getComputedStyle(el).getPropertyValue("corner-shape")) return;
+    morph(el, "text", was, [{ height: `${was.rect.height}px` }, { height: `${height}px` }], { duration: 260, easing: easeOut() });
+  }, [laidOut, roomy]);
   const submit = () => {
     if (ready) void send();
   };

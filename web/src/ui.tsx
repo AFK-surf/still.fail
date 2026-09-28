@@ -582,12 +582,12 @@ export function Time({ stamp, className, fixed = false }: { stamp: Stamp | undef
   );
 }
 
-let changing: { settle: (() => void)[]; moving: Promise<void> } | null = null;
+let changing: { settle: (() => void)[]; moving: Promise<void>; done: Promise<void> } | null = null;
 /**
  * While a page change (transitionTo) is under way: `settle` is run once the next page is there, as its picture is about
- * to be taken; `moving` is when the change starts to move. Else null.
+ * to be taken; `moving` is when the change starts to move, `done` when it is over. Else null.
  */
-export function pageChanging(): { settle: (() => void)[]; moving: Promise<void> } | null {
+export function pageChanging(): { settle: (() => void)[]; moving: Promise<void>; done: Promise<void> } | null {
   return changing;
 }
 
@@ -609,7 +609,7 @@ export function transitionTo(go: () => void, ready?: () => boolean, still = fals
     while (ready && !ready() && performance.now() < until) await new Promise((r) => setTimeout(r, 16));
     for (const settle of now.settle.splice(0)) settle();
   });
-  const now = { settle: [] as (() => void)[], moving: transition.ready.catch(() => {}) };
+  const now = { settle: [] as (() => void)[], moving: transition.ready.catch(() => {}), done: transition.finished.catch(() => {}) };
   changing = now;
   return transition.finished.catch(() => {}).finally(() => { if (changing === now) changing = null; delete document.documentElement.dataset.transitioning; if (still) delete document.documentElement.dataset.still; });
 }
