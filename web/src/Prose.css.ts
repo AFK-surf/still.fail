@@ -7,6 +7,11 @@ import { markdown } from "./styles/conversation.css.ts";
 export const inlineFile = style({ display: "flex", margin: "8px 0" });
 globalStyle(`${inlineFile}:first-child`, { marginTop: 0 });
 globalStyle(`${inlineFile}:last-child`, { marginBottom: 0 });
+/** Images written in one paragraph: in a row, wrapping onto the next when the row is full. */
+export const inlineFiles = style([inlineFile, { flexWrap: "wrap", gap: "8px" }]);
+export const inlineFilesItem = style({ display: "block", minWidth: 0 });
+/** The image takes its place in the row, whatever size its own box would be. */
+globalStyle(`${inlineFilesItem} > button`, { width: "100% !important", height: "auto !important", aspectRatio: "var(--ratio) !important" });
 
 /** A link within a sentence to one of the message's files: looks like any link, opens the file. */
 export const fileLink = style({

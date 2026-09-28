@@ -3,12 +3,12 @@
 // Grammars load on demand, one chunk per language, with Shiki's JavaScript
 // regex engine so no wasm is fetched.
 import { Check, Copy } from "./icons.tsx";
-import { isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { isValidElement, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { HighlighterCore } from "shiki/core";
 import type { Attachment } from "./core/shapes.ts";
-import { inlineFile } from "./Prose.css.ts";
+import { inlineFile, inlineFiles } from "./Prose.css.ts";
 import * as css from "./Prose.css.ts";
 import { RefChip } from "./ChatRef.tsx";
 import { isChatLink } from "./chatRefs.ts";
@@ -119,6 +119,12 @@ export function placeFiles(text: string, files: Attachment[] | undefined): { pla
   return { placed, rest: files.filter((f) => !used.has(f)) };
 }
 
+/** An image in a row of them: widths in proportion to their shapes, so a row's images share one height (120px or a little more, 200px at most). */
+function rowItem(f: Attachment): CSSProperties {
+  const r = f.width && f.height ? Math.min(4, Math.max(0.25, f.width / f.height)) : 1.5;
+  return { flex: `${r} ${r} ${Math.round(r * 120)}px`, maxWidth: `${Math.round(r * 200)}px`, "--ratio": r } as CSSProperties;
+}
+
 /**
  * Markdown. With `files` (from placeFiles), a link or image naming one of the
  * message's files shows it there, as `file` draws it: shown whole for an
@@ -140,7 +146,11 @@ export function Prose({ children, files, file }: { children: string; files?: Map
       p: ({ node, children, ...props }) => {
         const parts = node?.children.filter((c) => c.type !== "text" || c.value.trim()) ?? [];
         const only = parts.length === 1 && parts[0]!.type === "element" && parts[0]!.tagName === "a" ? at(parts[0]!.properties.href) : undefined;
-        return only ? <div className={inlineFile}>{draw(only, "shown")}</div> : <p {...props}>{children}</p>;
+        if (only) return <div className={inlineFile}>{draw(only, "shown")}</div>;
+        // A paragraph of the message's images and nothing else: side by side, wrapping when they don't fit.
+        const images = parts.map((c) => (c.type === "element" && c.tagName === "img" ? at(c.properties.src) : undefined));
+        if (images.length > 1 && images.every(Boolean)) return <div className={inlineFiles}>{images.map((f, i) => <span key={i} className={css.inlineFilesItem} style={rowItem(f!)}>{draw(f!, "shown")}</span>)}</div>;
+        return <p {...props}>{children}</p>;
       },
       img: ({ node: _, ...props }) => { const f = at(props.src); return f ? <span className={inlineFile}>{draw(f, "shown")}</span> : <img {...props} />; },
       a: ({ node: _, ...props }) => { const f = at(props.href); return f ? draw(f, "link", props.children) : isChatLink(props.href) ? <RefChip title={props.children} href={props.href!} /> : <a {...props} />; },
