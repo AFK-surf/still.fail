@@ -1753,17 +1753,19 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .chat[data-under-composer] > .offline-notice { margin-bottom: calc(8px + var(--composer-height)); }
 .composer-dock[data-variant="chat"] .composer-wrap { pointer-events: none; }
 .composer-dock[data-variant="chat"] .composer-wrap > * { pointer-events: auto; }
-/* As the phone's capsule (mobile.css .m-floating): frosted and raised, with no line round it; its send a dark disc. Thinner
-   and less blurred than the phone's: over a white page and thin text, more of either showed as plain white. */
-.composer-dock[data-variant="chat"] .composer-box, .composer-dock[data-variant="chat"] .composer-box:focus-within {
+/* The composer, a new chat's (roomy) and a chat's (at its foot) alike, as the phone's capsule (mobile.css .m-floating):
+   frosted and raised, with no line round it; its send a dark disc. Thinner and less blurred than the phone's: over a white
+   page and thin text, more of either showed as plain white. */
+.composer-box, .composer-box:focus-within {
   border: 0;
   background: color-mix(in oklch, var(--canvas) 45%, transparent);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   box-shadow: 0 6px 16px rgb(0 0 0 / .14), 0 2px 5px rgb(0 0 0 / .1);
 }
-.composer-dock[data-variant="chat"] .send-btn:not(:disabled) { background: var(--text); color: var(--canvas); }
-.composer-dock[data-variant="chat"] .send-btn:disabled { background: var(--line); color: var(--canvas); }
-.composer-dock[data-variant="chat"] .composer-box[data-dragging] { background: color-mix(in oklch, var(--field-focus) 8%, color-mix(in oklch, var(--canvas) 45%, transparent)); }
+.composer-box .send-btn:not(:disabled) { background: var(--text); color: var(--canvas); }
+.composer-box .send-btn:disabled { background: var(--line); color: var(--canvas); }
+.composer-box .send-btn:hover:not(:disabled) { background: color-mix(in oklch, var(--text) 82%, var(--canvas)); }
+.composer-box[data-dragging] { background: color-mix(in oklch, var(--field-focus) 8%, color-mix(in oklch, var(--canvas) 45%, transparent)); }
 
 /* A draft past its three lines scrolls: what is cut above or below fades out over a line's height, not at a hard edge. */
 .composer-text { --more-above: 0px; --more-below: 0px; }
