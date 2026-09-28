@@ -1720,10 +1720,10 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 /* A bot's picture, as Slack shows it: a rounded square. */
 .bot-avatar { flex: none; display: block; border-radius: calc(22% * var(--corner-scale)); corner-shape: var(--corner-shape); object-fit: cover; background: var(--neutral-bg); }
 
-/* ── the agents' memory (Memory.tsx): global, projects', other skills ── */
-.memory-editor { display: flex; flex-direction: column; gap: 10px; }
-.memory-text { min-height: 200px; resize: vertical; font: 12.5px/1.6 var(--font-mono); white-space: pre-wrap; }
-.memory-actions { display: flex; gap: 8px; }
+/* ── the agents' memory (Memory.tsx): global, projects', other skills, read as rendered markdown ── */
+.memory-doc { font-size: var(--text-body); }
+.memory-doc > :first-child { margin-top: 0; }
+.memory-doc > :last-child { margin-bottom: 0; }
 .memory-skill { display: flex; flex-direction: column; }
 .memory-skill + .memory-skill { margin-top: 2px; }
 .memory-skill-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: var(--r-option); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; corner-shape: var(--corner-shape); transition: background var(--dur) var(--ease-out); }
@@ -1733,8 +1733,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .memory-skill-text b { display: flex; align-items: baseline; gap: 8px; font-size: var(--text-sm); font-weight: 500; line-height: 1.55; }
 .memory-skill-text > span { font-size: var(--text-xs); color: var(--muted); }
 .memory-skill-own { font-size: var(--text-xs); font-weight: 400; color: var(--subtle); }
-.memory-skill .memory-editor { padding: 10px 12px 14px 38px; }
-.memory-new { display: flex; flex-direction: column; gap: 14px; padding: 4px 0 16px; }
+.memory-skill .memory-doc { padding: 12px 12px 18px 38px; }
 .memory-none { margin: 0; font-size: var(--text-sm); }
 .memory-station + .memory-station { margin-top: 36px; }
 .memory-station-name { margin: 0 0 8px; font-size: var(--text-md); font-weight: 600; }

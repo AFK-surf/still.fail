@@ -13,7 +13,7 @@ import { stamp } from "../api.ts";
 import { AppearanceSetting, DeviceCard, QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
-import { MemoryEditor } from "../Memory.tsx";
+import { MemoryView } from "../Memory.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { useTopic } from "../core/react.ts";
 import { useToast } from "../toast.tsx";
@@ -214,7 +214,7 @@ export function MemorySettings({ entry }: { entry: WorkspaceEntry }) {
       {stations.map((s) => (
         <div key={s.id} className="memory-station">
           {stations.length > 1 && <h2 className="memory-station-name">{s.name}</h2>}
-          {s.online ? <MemoryEditor station={s.station} /> : <p className="muted">离线，等它上线再看。</p>}
+          {s.online ? <MemoryView station={s.station} /> : <p className="muted">离线，等它上线再看。</p>}
         </div>
       ))}
     </Page>
