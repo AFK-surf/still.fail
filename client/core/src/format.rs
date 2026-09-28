@@ -2,6 +2,7 @@
 //! and durations in words, day headings, a thread's name, an agent's label, a model's maker, a runtime's efforts, a
 //! connect's state. Times are the viewer's local ones: `offset_min` is their UTC offset at that moment (Host).
 
+use std::collections::HashMap;
 use serde_json::{Value, json};
 
 const MINUTE: f64 = 60_000.0;
@@ -216,12 +217,32 @@ pub fn split_thread(address: &str) -> Option<(&str, &str)> {
 
 /// A thread address as a place in a client: `{ name, surface: ember | slack, session? }` (an ember chat opens its
 /// agent's page), or null for anything else.
-pub fn place(threads: &[Value], address: &str, offset_min: i32) -> Value {
+/// A Slack workspace as the station's connects know it: its name, and its address while a connect is signed in there.
+#[derive(Debug, Clone, Default)]
+pub struct SlackWorkspace {
+    pub name: String,
+    pub url: Option<String>,
+}
+
+/// A thread a history entry came from or went to: its name, where it is, and the way there. A Slack thread is named
+/// with its workspace (`Cue#ops`) and links to itself in Slack; an ember chat opens its agent's page.
+pub fn place(threads: &[Value], address: &str, offset_min: i32, workspaces: &HashMap<String, SlackWorkspace>) -> Value {
     let Some((channel, ts)) = split_thread(address) else { return Value::Null };
     let (name, _) = thread_name(threads, channel, ts, offset_min);
     let thread = threads.iter().find(|t| t.get("channel").and_then(Value::as_str) == Some(channel) && t.get("threadTs").and_then(Value::as_str) == Some(ts));
     let session = thread.and_then(|t| t.get("sessions")?.as_array()?.first()?.get("session")?.as_str().map(str::to_string));
-    json!({ "name": name, "surface": if channel == "EMBER" { "ember" } else { "slack" }, "session": session })
+    if channel == "EMBER" {
+        return json!({ "name": name, "surface": "ember", "session": session });
+    }
+    // Its workspace, by the thread's surface ("slack:<team id>").
+    let team = thread.and_then(|t| t.get("surface")?.as_str()?.strip_prefix("slack:")).and_then(|id| workspaces.get(id));
+    let named = match team.map(|w| w.name.as_str()).filter(|n| !n.is_empty()) {
+        Some(team) if name.starts_with('#') => format!("{team}{name}"),
+        Some(team) => format!("{team} {name}"),
+        None => name,
+    };
+    let url = team.and_then(|w| w.url.as_deref()).map(|u| format!("{}/archives/{channel}/p{}", u.trim_end_matches('/'), ts.replace('.', "")));
+    json!({ "name": named, "surface": "slack", "session": session, "url": url })
 }
 
 /// Who made a model, by its name: `(id, name)` for its mark (anthropic, openai, deepseek, qwen, zhipu, gemini, kimi,

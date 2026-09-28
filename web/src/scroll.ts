@@ -32,6 +32,8 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       if (!f) return;
       const end = el.scrollTop + f.getBoundingClientRect().top - el.getBoundingClientRect().top;
       if (el.clientWidth !== width) { width = el.clientWidth; reached = 0; }
+      // Only messages' room is held: what a pane shows before it has any (loading, an empty chat's note) is not.
+      if (!lastMessage()) reached = 0;
       reached = Math.max(reached, end);
       const height = `${Math.round(reached - end)}px`;
       if (f.style.height !== height) f.style.height = height;

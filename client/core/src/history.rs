@@ -27,6 +27,8 @@ pub struct Context<'a> {
     /// The runtime has begun the session (it has a transcript somewhere).
     pub started: bool,
     pub offset_min: i32,
+    /// The Slack workspaces the station's connects are in, by team id: where a Slack thread is, and the way to it.
+    pub workspaces: &'a std::collections::HashMap<String, format::SlackWorkspace>,
 }
 
 fn verb_unit(kind: &str) -> (&'static str, &'static str) {
@@ -270,7 +272,7 @@ pub fn present(live: &Value, cx: &Context) -> Value {
     }
 
     let failed_of = |step: &Step| step.result.is_some_and(|r| timeline[r].get("ok") == Some(&Value::Bool(false)));
-    let place = |address: Option<&str>| address.map_or(Value::Null, |a| format::place(cx.threads, a, cx.offset_min));
+    let place = |address: Option<&str>| address.map_or(Value::Null, |a| format::place(cx.threads, a, cx.offset_min, cx.workspaces));
     let shown: Vec<Value> = items.iter().map(|(item, first, last)| {
         let mut v: Value = match item {
             Item::Received(i) => {
@@ -432,7 +434,22 @@ mod tests {
     use super::*;
 
     fn cx<'a>(threads: &'a [Value], members: &'a [Value], slack: &'a [String]) -> Context<'a> {
-        Context { threads, members, slack_users: slack, bot_user_id: Some("UBOT"), bot_name: "ds-ember", runtime: "codex", started: true, offset_min: 480 }
+        let workspaces = Box::leak(Box::new(std::collections::HashMap::from([(
+            "T1".to_string(),
+            format::SlackWorkspace { name: "Acme".into(), url: Some("https://acme.slack.com/".into()) },
+        )])));
+        Context { threads, members, slack_users: slack, bot_user_id: Some("UBOT"), bot_name: "ds-ember", runtime: "codex", started: true, offset_min: 480, workspaces }
+    }
+
+    #[test]
+    fn a_slack_place_is_named_with_its_workspace_and_links_to_its_thread() {
+        let threads = vec![json!({ "surface": "slack:T1", "channel": "C1", "threadTs": "1.000200", "channelName": "ops", "sessions": [{ "session": "s1" }] })];
+        let (members, slack) = (vec![], vec![]);
+        let cx = cx(&threads, &members, &slack);
+        let place = format::place(cx.threads, "C1/1.000200", cx.offset_min, cx.workspaces);
+        assert_eq!((place["name"].as_str(), place["url"].as_str()), (Some("Acme#ops"), Some("https://acme.slack.com/archives/C1/p1000200")));
+        let unknown = format::place(cx.threads, "C9/2.0", cx.offset_min, cx.workspaces);
+        assert_eq!((unknown["name"].as_str(), unknown["url"].as_str()), (Some("#C9"), None), "a thread it has not seen: no workspace, no link");
     }
 
     #[test]

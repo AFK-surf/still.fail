@@ -417,12 +417,13 @@
 .h-group { border-radius: calc(12px * var(--corner-scale)); corner-shape: var(--corner-shape); }
 .h-group-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; margin: 0 -8px; border: 0; border-radius: calc(10px * var(--corner-scale)); background: none; color: var(--muted); font-size: var(--text-xs); text-align: left; cursor: pointer; corner-shape: var(--corner-shape); }
 .h-group-head:hover { background: var(--hover); color: var(--text); }
-.h-group-head > span:first-of-type { flex: 1; }
+/* One line each: what does not fit ends in an ellipsis (the whole of it is the row's tooltip). */
+.h-group-head > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h-steps { display: grid; gap: 2px; margin: 4px 0 0 6px; padding-left: 10px; border-left: 1px solid var(--line); }
 .h-step summary { display: flex; align-items: baseline; gap: 8px; padding: 5px 6px; border-radius: calc(8px * var(--corner-scale)); list-style: none; cursor: pointer; font-size: var(--text-xs); corner-shape: var(--corner-shape); }
 .h-step summary::-webkit-details-marker { display: none; }
 .h-step summary:hover { background: var(--hover); }
-.h-step-name { font-weight: 600; flex: none; }
+.h-step-name { font-weight: 600; flex: none; white-space: nowrap; }
 .h-step-hint { flex: 1; min-width: 0; color: var(--muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h-step-meta { flex: none; color: var(--subtle); font-variant-numeric: tabular-nums; }
 .h-step[data-failed="true"] .h-step-name, .h-step[data-failed="true"] .h-step-meta { color: var(--red); }

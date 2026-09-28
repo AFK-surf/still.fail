@@ -753,8 +753,18 @@ impl Views {
             .filter_map(|u| u.as_str().map(str::to_string)).collect();
         let members: Vec<Value> = station.split_once('/').and_then(|(scope, _)| self.ok(Topic::Workspace { workspace: scope.to_string() }))
             .and_then(|w| w.get("members").and_then(Value::as_array).cloned()).unwrap_or_default();
+        // Every Slack workspace a connect of the station is in: its name as last seen, its address while signed in.
+        let mut workspaces = std::collections::HashMap::new();
+        for c in overview.as_ref().and_then(|o| o.get("connects")).and_then(Value::as_array).into_iter().flatten() {
+            let seen = c.get("connection").filter(|conn| matches!(conn.get("state").and_then(Value::as_str), Some("connected" | "reconnecting"))).and_then(|conn| conn.get("workspace"));
+            let Some(team) = seen.and_then(|w| w.get("teamId")).and_then(Value::as_str) else { continue };
+            let name = seen.and_then(|w| w.get("team")).and_then(Value::as_str).or_else(|| c.get("team").and_then(Value::as_str)).unwrap_or("");
+            let url = seen.and_then(|w| w.get("url")).and_then(Value::as_str).filter(|u| !u.is_empty()).map(str::to_string);
+            workspaces.entry(team.to_string()).or_insert(crate::format::SlackWorkspace { name: name.to_string(), url });
+        }
         let now = self.host.now_ms();
         let cx = crate::history::Context {
+            workspaces: &workspaces,
             threads: &threads,
             members: &members,
             slack_users: &slack_users,
