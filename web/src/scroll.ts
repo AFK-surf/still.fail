@@ -45,6 +45,16 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     let goal = 0;
     let frame = 0;
     let settled = false;
+    /** Whether this change may glide: messages arriving or growing, after the pane's opening moments. Anything else
+     *  (a slot or the floor taking its size, the pane resized, what a newly opened chat first shows) is taken at once. */
+    let smooth = false;
+    const born = performance.now();
+    const grown = () => performance.now() - born > 500;
+    /** The message a node is in (or is). */
+    const messageOf = (node: Node | null): Element | null => {
+      for (let n: Node | null = node; n && n !== el; n = n.parentNode) if (isMessage(n)) return n;
+      return null;
+    };
     let lastFrame = 0;
     /** Where this last put the pane: a scroll to anywhere else is someone else's. */
     let placed = el.scrollTop;
@@ -77,6 +87,8 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       }
     };
     const hold = () => {
+      const glides = smooth;
+      smooth = false;
       keepHeight();
       const bottom = Math.max(0, el.scrollHeight - el.clientHeight);
       if (!following) {
@@ -105,8 +117,9 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
         anchor = null;
         return;
       }
-      // Following on down glides; the first position, or back up, is taken at once.
-      if (settled && target > el.scrollTop + 0.5) {
+      // Following on down glides (messages arriving or growing); the first position, back up, or anything else that
+      // changed is taken at once.
+      if (settled && glides && target > el.scrollTop + 0.5) {
         goal = target;
         if (!frame) { lastFrame = performance.now(); frame = requestAnimationFrame(glide); }
         return;
@@ -132,11 +145,14 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       moved();
     };
     const input = () => { lastInput = Date.now(); };
-    const toBottom = () => { anchor = null; reading = null; following = true; hold(); };
+    const toBottom = () => { anchor = null; reading = null; following = true; smooth = true; hold(); };
     el.addEventListener("to-bottom", toBottom);
     el.addEventListener("scroll", onScroll, { passive: true });
     for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, input, { passive: true });
-    const resize = new ResizeObserver(hold);
+    const resize = new ResizeObserver((entries) => {
+      smooth = grown() && entries.some((e) => e.target !== el && isMessage(e.target));
+      hold();
+    });
     const watch = () => { resize.disconnect(); resize.observe(el); for (const child of el.children) resize.observe(child); };
     watch();
     const mutations = new MutationObserver((records) => {
@@ -146,11 +162,13 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       const kids = [...el.children].filter(isMessage);
       const arrived = added.filter((n) => kids.slice(kids.indexOf(n) + 1).every((k) => added.includes(k) || k.hasAttribute("data-transient")));
       if (arrived.length && following) anchor = arrived.at(-1)!;
+      smooth = grown() && (arrived.length > 0 || records.some((r) => r.target !== el && messageOf(r.target) !== null));
       watch();
       hold();
     });
     mutations.observe(el, { childList: true, subtree: true, characterData: true });
-    const onLoad = () => hold();
+    // An image loading in a message grows it.
+    const onLoad = (event: Event) => { smooth = grown() && messageOf(event.target as Node) !== null; hold(); };
     el.addEventListener("load", onLoad, true);
     hold();
     settled = true;
