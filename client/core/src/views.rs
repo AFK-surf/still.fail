@@ -314,9 +314,11 @@ impl Views {
     }
 
     /// The station has the message as entry `seq`: it stays until the chat's entries reach it (and leaves in that
-    /// emission). Nobody looking at the chat: it goes now.
+    /// emission). Nobody looking at the chat: it goes now, but for a chat asked for here, whose page is on its way to
+    /// it (else that page opens with neither the message nor its entry, and says the chat is empty).
     pub fn outbox_sent(&self, station: &str, thread: u64, id: &str, seq: u64) {
-        if self.chat_views(station, thread).is_empty() {
+        let made_here = self.pending.borrow().values().any(|c| c.station == station && c.made.as_ref().is_some_and(|(_, t)| *t == thread));
+        if !made_here && self.chat_views(station, thread).is_empty() {
             return self.outbox_remove(station, thread, id);
         }
         if let Some(entry) = self.outbox.borrow_mut().get_mut(&(station.to_string(), thread)).and_then(|list| list.iter_mut().find(|m| m["id"] == id)) {
@@ -2462,6 +2464,30 @@ mod tests {
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             let items = list.value.clone().unwrap()["days"][0]["items"].clone();
             assert_eq!((items.as_array().map(Vec::len), items[0]["pending"].clone()), (Some(1), Value::Null));
+        });
+    }
+
+    #[test]
+    fn a_chat_made_here_keeps_its_first_message_until_its_page_has_the_entry() {
+        run(async {
+            let t = setup();
+            let views = t.router.views();
+            let key = views.pending_new("local", json!({"runtime": "claude"}));
+            let first = views.pending_queue(&key, json!({"text": "修一下登录", "attachments": [], "quotes": []})).unwrap();
+            // Made and delivered before its page looks: the message stays, as sent.
+            views.pending_made(&key, "ember:c-1", 9);
+            views.outbox_sent("local", 9, &first, 1);
+            let mut screen = Ui::default();
+            t.subscribe(1, agent_page("local", &key));
+            t.read(&mut screen, 1).await;
+            let v = screen.value.clone().unwrap();
+            assert_eq!((v["messages"].as_array().map(Vec::len), v["outbox"][0]["id"].as_str()), (Some(0), Some(first.as_str())));
+            // Its entry in: it is a message of the chat, and the outbox lets it go.
+            t.set(threads("local"), json!([thread(9, &["ember:c-1"], t.host.now_ms())]));
+            t.set(page_of("local", 9), page(1, &["修一下登录"], Value::Null));
+            t.read(&mut screen, 1).await;
+            let v = screen.value.clone().unwrap();
+            assert_eq!((v["messages"].as_array().map(Vec::len), v["outbox"].as_array().map(Vec::len)), (Some(1), Some(0)));
         });
     }
 
