@@ -101,6 +101,9 @@ fn link_homes(config: &Config) {
     if let Err(e) = link_agent_home(&config.agent_home, &refs) {
         warn!(error = %e, "agent home not linked");
     }
+    if let Err(e) = crate::agent_home::write_builtin_skills(&config.agent_home) {
+        warn!(error = %e, "the station's skills not written");
+    }
     if let Err(e) = link_transcripts(&config.data_dir, &refs) {
         warn!(error = %e, "transcripts not linked");
     }

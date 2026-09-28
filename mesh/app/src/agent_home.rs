@@ -12,6 +12,24 @@ pub fn agent_home_paths(agent_home: &Path) -> (PathBuf, PathBuf) {
     (agent_home.join("MEMORY.md"), agent_home.join("skills"))
 }
 
+/// The skills the station brings, by directory name: about its own tools, so they are rewritten at every start and
+/// change with the station (the team's own skills sit beside them).
+const BUILTIN_SKILLS: &[(&str, &str)] = &[("ember-jobs", include_str!("skills/ember-jobs.md"))];
+
+/// Writes the station's own skills into the shared skills directory.
+pub fn write_builtin_skills(agent_home: &Path) -> Result<()> {
+    let (_, skills) = agent_home_paths(agent_home);
+    for (name, text) in BUILTIN_SKILLS {
+        let dir = skills.join(name);
+        std::fs::create_dir_all(&dir)?;
+        let path = dir.join("SKILL.md");
+        if std::fs::read_to_string(&path).ok().as_deref() != Some(*text) {
+            std::fs::write(&path, text)?;
+        }
+    }
+    Ok(())
+}
+
 /// Creates the agent home if missing and links it into every profile home (id, runtimes, home).
 pub fn link_agent_home(agent_home: &Path, profiles: &[(&str, &[RuntimeKind], &Path)]) -> Result<()> {
     let (memory, skills) = agent_home_paths(agent_home);
@@ -106,5 +124,20 @@ mod tests {
         assert_eq!(std::fs::read_link(both.join("projects")).unwrap(), root.path().join("transcripts/claude"));
         assert_eq!(std::fs::read_link(both.join("sessions")).unwrap(), root.path().join("transcripts/codex"));
         assert!(std::fs::symlink_metadata(own.join("sessions")).unwrap().is_dir());
+    }
+
+    #[test]
+    fn the_stations_own_skills_are_written_and_kept_as_the_station_has_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("agent");
+        std::fs::create_dir_all(home.join("skills").join("team-skill")).unwrap();
+        std::fs::write(home.join("skills").join("team-skill").join("SKILL.md"), "ours").unwrap();
+        write_builtin_skills(&home).unwrap();
+        let path = home.join("skills").join("ember-jobs").join("SKILL.md");
+        assert!(std::fs::read_to_string(&path).unwrap().starts_with("---\nname: ember-jobs\n"));
+        std::fs::write(&path, "edited by hand").unwrap();
+        write_builtin_skills(&home).unwrap();
+        assert!(std::fs::read_to_string(&path).unwrap().contains("job_start"), "the station's own, as it has it");
+        assert_eq!(std::fs::read_to_string(home.join("skills").join("team-skill").join("SKILL.md")).unwrap(), "ours", "the team's stay");
     }
 }
