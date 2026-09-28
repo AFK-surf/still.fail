@@ -164,7 +164,7 @@ export function useStopJob(station: string): (job: Job) => void {
 
 /** The last line a job wrote, and when. */
 function LastOutput({ station, job, now }: { station: string; job: Job; now: number }) {
-  const log = useJobLog(station, job.state === "running" ? job.id : null, 1, 3000);
+  const log = useJobLog(station, job.id, 1, job.state === "running" ? 3000 : 600_000);
   const at = log?.outputAt ?? job.outputAt;
   const line = log?.text.trim();
   if (!at && !line) return null;
