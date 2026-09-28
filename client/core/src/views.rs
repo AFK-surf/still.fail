@@ -1065,24 +1065,41 @@ fn runnable_on(overview: Option<&Value>, session: &Value, now: f64) -> Value {
 fn choices(overview: Option<&Value>, session: &Value, now: f64) -> Value {
     let runtime = session.get("runtime").and_then(Value::as_str).unwrap_or("");
     let current = session.get("profile").and_then(Value::as_str);
-    let models: BTreeSet<&str> = overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
+    let mut by_key: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
+    for p in overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
         .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
-        .flat_map(|p| p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str))
-        .collect();
-    Value::Array(models.into_iter()
-        .map(|model| json!({
-            "model": model, "maker": crate::present::maker(Some(model)), "runtimes": [runtime],
-            "efforts": { runtime: crate::format::efforts(runtime) },
-            "accounts": { runtime: profiles_running(overview, runtime, Some(model), current, now) },
-        }))
+    {
+        for model in p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+            by_key.entry(ember_shapes::model::key(model)).or_default().insert(model);
+        }
+    }
+    let mut by_key: Vec<(String, BTreeSet<&str>)> = by_key.into_iter().collect();
+    by_key.sort_by_cached_key(|(key, _)| ember_shapes::model::order(key));
+    Value::Array(by_key.into_iter()
+        .map(|(key, ids)| {
+            let (model, ids) = spellings(&key, ids);
+            json!({
+                "model": model, "name": ember_shapes::model::name(model), "family": ember_shapes::model::family(model), "ids": ids,
+                "maker": crate::present::maker(Some(model)), "runtimes": [runtime],
+                "efforts": { runtime: crate::format::efforts(runtime) },
+                "accounts": { runtime: profiles_running(overview, runtime, Some(model), current, now) },
+            })
+        })
         .collect())
+}
+
+/// A model's spellings, the one it sends first: the one that is its key when a profile has it, else the first.
+fn spellings<'a>(key: &str, ids: BTreeSet<&'a str>) -> (&'a str, Vec<&'a str>) {
+    let mut ids: Vec<&str> = ids.into_iter().collect();
+    ids.sort_by_key(|id| *id != key);
+    (ids[0], ids)
 }
 
 fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>, current: Option<&str>, now: f64) -> Value {
     Value::Array(overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
         .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
         // With a model chosen, only those that have it enabled can run it.
-        .filter(|p| model.is_none_or(|m| p.get("models").and_then(Value::as_array).is_some_and(|ms| ms.iter().any(|x| x.as_str() == Some(m)))))
+        .filter(|p| model.is_none_or(|m| p.get("models").and_then(Value::as_array).is_some_and(|ms| ms.iter().filter_map(Value::as_str).any(|x| ember_shapes::model::same(x, m)))))
         .map(|p| {
             let id = p.get("id").and_then(Value::as_str).unwrap_or("");
             let spent = spent_until(p);
@@ -1101,19 +1118,30 @@ fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>
 /// The models the station can run, each with the runtimes it runs on (those of the profiles that have it enabled):
 /// a model is chosen first, and a runtime only when it has more than one.
 fn models(overview: Option<&Value>, now: f64) -> Value {
-    let mut on: BTreeMap<&str, (BTreeSet<&str>, Vec<Option<f64>>)> = BTreeMap::new();
+    // One model however its profiles spell it (openai/gpt-6-astra, gpt-6-astra).
+    let mut on: BTreeMap<String, (BTreeSet<&str>, Vec<Option<f64>>, BTreeSet<&str>)> = BTreeMap::new();
     for p in overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten() {
         let runtimes: Vec<&str> = p.get("runtimes").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
         let back = spent_until(p);
+        let mut keys = BTreeSet::new();
         for model in p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
-            let entry = on.entry(model).or_default();
+            let key = ember_shapes::model::key(model);
+            let entry = on.entry(key.clone()).or_default();
             entry.0.extend(runtimes.iter().copied());
-            entry.1.push(back);
+            entry.2.insert(model);
+            // A profile counts once for a model it has in two spellings.
+            if keys.insert(key) {
+                entry.1.push(back);
+            }
         }
     }
     // Claude Code first where both run it: it is the one most chats use.
     let order = |r: &&str| RUNTIMES.iter().position(|x| x == r).unwrap_or(usize::MAX);
-    Value::Array(on.into_iter().map(|(model, (runtimes, backs))| {
+    // By series, newest first (ember_shapes::model::order).
+    let mut on: Vec<_> = on.into_iter().collect();
+    on.sort_by_cached_key(|(key, _)| ember_shapes::model::order(key));
+    Value::Array(on.into_iter().map(|(key, (runtimes, backs, ids))| {
+        let (model, ids) = spellings(&key, ids);
         let mut runtimes: Vec<&str> = runtimes.into_iter().collect();
         runtimes.sort_by_key(order);
         // Spent when every account that runs it has a window used up; back when the first of them refills.
@@ -1122,7 +1150,8 @@ fn models(overview: Option<&Value>, now: f64) -> Value {
         let efforts: serde_json::Map<String, Value> = runtimes.iter().map(|r| (r.to_string(), json!(crate::format::efforts(r)))).collect();
         let accounts: serde_json::Map<String, Value> = runtimes.iter().map(|r| (r.to_string(), profiles_running(overview, r, Some(model), None, now))).collect();
         json!({
-            "model": model, "runtimes": runtimes, "maker": crate::present::maker(Some(model)),
+            "model": model, "name": ember_shapes::model::name(model), "family": ember_shapes::model::family(model), "ids": ids,
+            "runtimes": runtimes, "maker": crate::present::maker(Some(model)),
             "efforts": efforts, "accounts": accounts,
             "spent": spent.map(|until| spent_view(until, now)),
         })
@@ -1726,6 +1755,8 @@ mod tests {
                 profile("p3", json!({"runtimes": ["claude"], "models": ["sonnet"]})),
                 profile("p4", json!({"runtimes": ["claude"], "models": ["opus", "sonnet"]})),
                 profile("p5", json!({"runtimes": ["claude", "codex"], "models": ["deepseek-flash"]})),
+                // gpt-5 through a router: the same model, its week used up too.
+                profile("p6", json!({"runtimes": ["codex"], "models": ["openai/gpt-5"], "quota": {"state": "ok", "detail": null, "checkedAt": 1, "windows": [{"label": "每周", "usedPercent": 100, "resetsAt": 6000}]}})),
             ]);
             t.set(overview("ws/a"), overview_a.clone());
             t.set(host_of("ws/a"), host_info("studio"));
@@ -1740,19 +1771,26 @@ mod tests {
             assert_eq!(v[0]["online"], true);
             assert_eq!(v[0]["link"], json!({"state": "error", "message": "没有权限"}));
             let ids: Vec<&str> = v[0]["overview"]["profiles"].as_array().unwrap().iter().filter_map(|p| p["id"].as_str()).collect();
-            assert_eq!(ids, ["p1", "p2", "p3", "p4", "p5"]);
+            assert_eq!(ids, ["p1", "p2", "p3", "p4", "p5", "p6"]);
             assert_eq!(v[0]["host"]["hostname"], "studio");
-            assert_eq!(v[0]["runtimes"], json!([{"runtime": "claude", "models": ["deepseek-flash", "opus", "sonnet"]}, {"runtime": "codex", "models": ["deepseek-flash", "gpt-5", "o3"]}]));
+            assert_eq!(v[0]["runtimes"], json!([{"runtime": "claude", "models": ["deepseek-flash", "opus", "sonnet"]}, {"runtime": "codex", "models": ["deepseek-flash", "gpt-5", "o3", "openai/gpt-5"]}]));
             // An account run on both offers its model on both: a runtime is chosen for it.
             let models: Vec<Value> = v[0]["models"].as_array().unwrap().iter().map(|m| json!({"model": m["model"], "runtimes": m["runtimes"], "spent": m["spent"]["until"]})).collect();
+            // By series (Claude's biggest first, the rest by name), newest first.
             assert_eq!(models, vec![
+                json!({"model": "opus", "runtimes": ["claude"], "spent": null}), json!({"model": "sonnet", "runtimes": ["claude"], "spent": null}),
                 json!({"model": "deepseek-flash", "runtimes": ["claude", "codex"], "spent": null}), json!({"model": "gpt-5", "runtimes": ["codex"], "spent": 5000.0}),
-                json!({"model": "o3", "runtimes": ["codex"], "spent": 5000.0}), json!({"model": "opus", "runtimes": ["claude"], "spent": null}), json!({"model": "sonnet", "runtimes": ["claude"], "spent": null}),
+                json!({"model": "o3", "runtimes": ["codex"], "spent": 5000.0}),
             ]);
             // Each with its maker, how hard each runtime can think, who runs it there, and a used-up quota in words.
-            let gpt = &v[0]["models"][1];
+            let gpt = &v[0]["models"][3];
+            assert_eq!(gpt["family"], "GPT");
             assert_eq!((gpt["maker"]["id"].as_str(), gpt["efforts"]["codex"][0].as_str(), gpt["accounts"]["codex"][0]["id"].as_str()), (Some("openai"), Some("minimal"), Some("p1")));
             assert!(gpt["spent"]["text"].as_str().unwrap().starts_with("额度用完 · "));
+            // One model however it is spelled: named, with its spellings, run by the accounts of each.
+            assert_eq!((gpt["name"].as_str(), gpt["ids"].clone()), (Some("GPT-5"), json!(["gpt-5", "openai/gpt-5"])));
+            let runs: Vec<&str> = gpt["accounts"]["codex"].as_array().unwrap().iter().filter_map(|a| a["id"].as_str()).collect();
+            assert_eq!(runs, ["p1", "p6"]);
             // Offline: what it was, and since when.
             assert_eq!(
                 plain(&v[1]),

@@ -91,7 +91,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
                 <ConnectAvatar connect={c} />
                 <span className="list-row-text">
                   <span className="list-row-title">{c.name}{c.team && <span className="connect-team"><SlackLogo size={11} />{c.team}</span>}</span>
-                  <span className="muted">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>
+                  <span className="muted">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span>
                 </span>
                 <span className="connect-facts">
                   {showStation && <span className="station-tag">{stationName}</span>}

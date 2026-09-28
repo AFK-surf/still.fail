@@ -127,7 +127,7 @@ pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value
             let model = agent.and_then(|a| a.get("model")).and_then(Value::as_str);
             json!({
                 "kind": "agent",
-                "name": model.or(said_name).unwrap_or("agent"),
+                "name": model.map(ember_shapes::model::name).or(said_name.map(str::to_string)).unwrap_or_else(|| "agent".into()),
                 "model": model,
                 "runtime": agent.and_then(|a| a.get("runtime")).cloned().unwrap_or(json!("claude")),
                 "mine": false,
@@ -246,6 +246,7 @@ pub fn session(s: &mut Value) {
     let effort = str_of("effort");
     let process = str_of("process");
     s["agentText"] = json!(format::agent_label(model.as_deref(), effort.as_deref()));
+    s["modelName"] = json!(model.as_deref().filter(|m| !m.is_empty()).map(ember_shapes::model::name));
     s["maker"] = maker(model.as_deref());
     s["runtimeText"] = json!(format::runtime_label(&runtime));
     s["processText"] = json!(process.map(|p| format::process_text(&p)));
@@ -287,6 +288,7 @@ pub fn connect(c: &mut Value) {
     c["modeShort"] = json!(mode_short);
     c["runtimeText"] = json!(format::runtime_label(runtime));
     c["runText"] = json!(format!("{} · {label}", format::runtime_label(runtime)));
+    c["modelName"] = json!(bind.get("model").and_then(Value::as_str).filter(|m| !m.is_empty()).map(ember_shapes::model::name));
 }
 
 /// A profile with its last check in words, and the makers of its models and of those its check found (`makers`, by model).
@@ -309,8 +311,30 @@ pub fn profile(p: &mut Value) {
     all.sort_unstable();
     all.dedup();
     let text = if all.is_empty() { "还没有列出模型".to_string() } else { format!("已启用 {} / {} 个模型", enabled.len(), all.len()) };
+    let by_series = series(&all);
+    let names: serde_json::Map<String, Value> = p.get("models").and_then(Value::as_array).into_iter().flatten().chain(found.iter())
+        .chain(p.get("model").into_iter())
+        .filter_map(Value::as_str).filter(|m| !m.is_empty()).map(|m| (m.to_string(), json!(ember_shapes::model::name(m)))).collect();
     p["makers"] = Value::Object(makers);
+    p["names"] = Value::Object(names);
+    p["series"] = by_series;
     p["modelsText"] = json!(text);
+}
+
+/// Models by series, newest first (ember_shapes::model::order), those of no known series last as 其他:
+/// `[{ name, models }]`.
+pub fn series(models: &[&str]) -> Value {
+    let mut sorted: Vec<&str> = models.to_vec();
+    sorted.sort_by_cached_key(|m| ember_shapes::model::order(m));
+    let mut out: Vec<(String, Vec<&str>)> = Vec::new();
+    for m in sorted {
+        let family = ember_shapes::model::family(m).unwrap_or_else(|| "其他".into());
+        match out.iter_mut().find(|(f, _)| *f == family) {
+            Some((_, list)) => list.push(m),
+            None => out.push((family, vec![m])),
+        }
+    }
+    Value::Array(out.into_iter().map(|(name, models)| json!({ "name": name, "models": models })).collect())
 }
 
 /// A machine as the clients show it: `summary` (8 核 · 32 GB), `line` (macOS · 8 核 · 32 GB · 已运行 3 天), `facts`
@@ -447,11 +471,23 @@ mod tests {
             "last": {"authorKind": kind, "author": author, "authorName": null, "text": "hi"},
         });
         let agent = last_by(&row("agent", "k"), &me, &[], &members).unwrap();
-        assert_eq!((agent["name"].as_str(), agent["state"].as_str()), (Some("deepseek-flash"), Some("block")));
+        assert_eq!((agent["name"].as_str(), agent["state"].as_str()), (Some("DeepSeek Flash"), Some("block")));
         let other = last_by(&row("person", "b@x.com"), &me, &[], &members).unwrap();
         assert_eq!((other["name"].as_str(), other["picture"].as_str(), other["mine"].as_bool()), (Some("阿二"), Some("https://p/b"), Some(false)));
         assert_eq!(last_by(&row("person", "A@x.com"), &me, &[], &members).unwrap()["name"], "你");
         assert_eq!(last_by(&row("person", "U7"), &me, &["U7".into()], &members).unwrap()["mine"], true, "a Slack user who is the viewer");
+    }
+
+    #[test]
+    fn a_profiles_models_come_by_series() {
+        let mut p = json!({"models": ["claude-opus-5-5"], "check": {"models": ["claude-sonnet-5", "claude-opus-4-8", "claude-opus-5-5", "my-model", "claude-fable-5-1"]}});
+        profile(&mut p);
+        assert_eq!(p["series"], json!([
+            {"name": "Fable", "models": ["claude-fable-5-1"]},
+            {"name": "Opus", "models": ["claude-opus-5-5", "claude-opus-4-8"]},
+            {"name": "Sonnet", "models": ["claude-sonnet-5"]},
+            {"name": "其他", "models": ["my-model"]},
+        ]));
     }
 
     #[test]
@@ -461,7 +497,8 @@ mod tests {
         let mut s = json!({"runtime": "codex", "model": "gpt-6-astra", "effort": "medium", "process": "warm", "lastTurn": {"declared": "block"}, "firstText": "<@U1> 看看 CI"});
         session(&mut s);
         assert_eq!((s["statusText"].as_str(), s["tone"].as_str(), s["badgeText"].as_str()), (Some("Block"), Some("blue"), Some("Block：agent 停下来等人处理")));
-        assert_eq!((s["titleText"].as_str(), s["agentText"].as_str(), s["maker"]["id"].as_str()), (Some("看看 CI"), Some("gpt-6-astra · medium"), Some("openai")));
+        assert_eq!((s["titleText"].as_str(), s["agentText"].as_str(), s["maker"]["id"].as_str()), (Some("看看 CI"), Some("GPT-6 Astra · medium"), Some("openai")));
+        assert_eq!(s["modelName"], "GPT-6 Astra");
         assert_eq!((s["processText"].as_str(), s["efforts"][0].as_str()), (Some("保温中"), Some("minimal")));
         // Times anywhere, and a quota's windows shortest first, marked.
         let mut v = json!({"createdAt": c.now - 180_000.0, "quota": {"windows": [

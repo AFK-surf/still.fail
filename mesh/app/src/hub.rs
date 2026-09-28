@@ -603,12 +603,17 @@ impl Hub {
                 bail!("「{}」不能跑 {runtime_name}", next.name);
             }
             let runs = new_model.clone().unwrap_or_else(|| row.model.clone());
-            if let Some(runs) = runs.filter(|m| !next.models.contains(m)) {
+            if let Some(runs) = runs.filter(|m| !next.runs(m)) {
                 bail!("「{}」没有启用 {runs}：换一个模型，或先在它的 Profile 里启用", next.name);
             }
         }
         let model = new_model.clone().unwrap_or_else(|| row.model.clone());
-        let remodel = model != row.model;
+        // Another spelling of its model is its model.
+        let remodel = match (&model, &row.model) {
+            (Some(a), Some(b)) => !ember_shapes::model::same(a, b),
+            (a, b) => a != b,
+        };
+        let model = if remodel { model } else { row.model.clone() };
         let effort = match &new_effort {
             Some(effort) => effort.clone(),
             None if remodel => None,
@@ -616,7 +621,7 @@ impl Hub {
         };
         // What changes is checked; what stays is as it was.
         if let (Some(Some(_)), Some(model)) = (&new_model, &model) {
-            if !config.profiles.iter().any(|p| p.runtimes.contains(&runtime) && p.models.contains(model)) {
+            if !config.profiles.iter().any(|p| p.runtimes.contains(&runtime) && p.runs(model)) {
                 bail!("没有能跑 {model} 的 {runtime_name} Profile：先在一个 Profile 上启用它");
             }
         }
@@ -737,7 +742,7 @@ impl Hub {
             None => self.pick(&profiles, model.as_deref(), true)?,
         };
         if let (Some(_), Some(model)) = (&options.profile, &model) {
-            if !profile.models.contains(model) {
+            if !profile.runs(model) {
                 bail!("「{}」没有启用 {model}", profile.name);
             }
         }

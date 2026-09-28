@@ -42,7 +42,7 @@ pub fn usable(health: &ProfileHealth) -> bool {
 
 /// A chosen model needs the profile to have it enabled; no model means the profile's own default.
 pub fn serves(profile: &Profile, model: Option<&str>) -> bool {
-    model.is_none_or(|m| profile.models.iter().any(|x| x == m))
+    model.is_none_or(|m| profile.runs(m))
 }
 
 /// `strict` (a chat started by hand): the model must be enabled on a profile. Otherwise (a connect's binding, set up
@@ -131,5 +131,20 @@ mod tests {
         let refused = pick_profile(&[&a, &b], Some("m2"), &signals(&health, &[], &[]), true).unwrap_err().to_string();
         assert!(refused.contains("no profile has m2 enabled"), "a model enabled nowhere is refused");
         assert_eq!(pick_profile(&[&a, &c], Some("m9"), &signals(&health, &[], &[]), false).unwrap().id, "c", "a connect's binding still runs on its healthy profiles");
+    }
+
+    #[test]
+    fn a_model_is_served_however_a_profile_spells_it() {
+        let (direct, router) = (profile("direct", &["gpt-6-astra"]), profile("router", &["openai/gpt-6-astra"]));
+        let health = HashMap::from([
+            ("direct".to_string(), ProfileHealth { check: ok("ok"), quota: quota(100.0) }),
+            ("router".to_string(), ProfileHealth { check: ok("ok"), quota: quota(10.0) }),
+        ]);
+        let signals = Signals { health, load: HashMap::new(), picked: HashMap::new() };
+        let picked = pick_profile(&[&direct, &router], Some("gpt-6-astra"), &signals, true).unwrap();
+        assert_eq!(picked.id, "router", "the direct account is spent; the router's spelling is the same model");
+        assert_eq!(picked.spelling("gpt-6-astra"), Some("openai/gpt-6-astra"), "and it runs as the router spells it");
+        assert_eq!(direct.spelling("openai/gpt-6-astra"), Some("gpt-6-astra"));
+        assert!(!serves(&direct, Some("gpt-6")));
     }
 }

@@ -162,6 +162,8 @@ export interface Session {
 	badgeText?: string;
 	titleText: string;
 	agentText: string;
+	/** Its model as people call it (Opus 5.5). */
+	modelName?: string;
 	maker?: Maker;
 	runtimeText: string;
 	processText?: string;
@@ -246,6 +248,8 @@ export interface Connect {
 	modeShort: string;
 	runtimeText: string;
 	runText: string;
+	/** Its bound model as people call it (Opus 5.5). */
+	modelName?: string;
 }
 
 export interface EnvVar {
@@ -300,6 +304,12 @@ export interface Quota {
 	time?: Record<string, Stamp>;
 }
 
+/** Models of one series (Opus), newest first. */
+export interface ModelSeries {
+	name: string;
+	models: string[];
+}
+
 /** A profile, with its last check in words and its models' makers. */
 export interface Profile {
 	id: string;
@@ -323,6 +333,13 @@ export interface Profile {
 	checkTone: Tone;
 	/** The makers of its models, and of those its check found, by model. */
 	makers: Record<string, Maker>;
+	/** Its models, its default and those its check found as people call them (Opus 5.5), by model. */
+	names: Record<string, string>;
+	/**
+	 * Its models and those its check found, by series (Claude's biggest first, the rest by name; 其他 last), newest
+	 * first: how the list to enable them from is laid out.
+	 */
+	series: ModelSeries[];
 	/** How many of the models it could run are enabled, in words. */
 	modelsText: string;
 }
@@ -347,7 +364,14 @@ export interface RunnableProfile {
 
 /** A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it. */
 export interface ModelOption {
+	/** The spelling a client sends: the one that is its key when a profile has that, else the first. */
 	model: string;
+	/** As people call it (Opus 5.5). */
+	name: string;
+	/** Its series (Opus, GPT), what a list groups it under; none when not known. Lists come by series, newest first. */
+	family?: string;
+	/** Every spelling of it the station's profiles have enabled (openai/gpt-6-astra, gpt-6-astra): one model. */
+	ids: string[];
 	maker?: Maker;
 	runtimes: RuntimeKind[];
 	efforts: Record<string, string[]>;

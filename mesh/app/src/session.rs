@@ -498,11 +498,13 @@ impl SessionActor {
         let row = store.get_session(&self.key)?.ok_or_else(|| anyhow!("session {} disappeared", self.key))?;
         let driver = deps.driver(self.runtime)?;
         let profile = deps.run_on(&self.key)?;
+        // The model as this profile spells it (openai/gpt-6-astra on a router for gpt-6-astra).
+        let model = row.model.as_deref().map(|m| profile.spelling(m).unwrap_or(m).to_string());
         let base = OpenOptions {
             profile,
             cwd: PathBuf::from(&row.workspace),
             resume: None,
-            model: row.model.clone(),
+            model,
             effort: row.effort.clone(),
             instructions: session_instructions(&row.workspace, &deps.repos_dir().to_string_lossy(), &deps.memory_path().to_string_lossy()),
             mcp_token: row.token.clone(),

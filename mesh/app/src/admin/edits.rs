@@ -172,7 +172,7 @@ impl AdminApi {
                     bail!("「{profile}」不能跑 {}", runtime_name(runtime));
                 }
                 if let (Some(model), Some(p)) = (&model, p) {
-                    if !p.models.as_deref().unwrap_or_default().contains(model) {
+                    if !p.models.as_deref().unwrap_or_default().iter().any(|m| ember_shapes::model::same(m, model)) {
                         bail!("「{}」没有启用 {model}", p.name.clone().unwrap_or_else(|| profile.clone()));
                     }
                 }

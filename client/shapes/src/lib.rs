@@ -6,6 +6,8 @@
 //! Station shapes are as src/admin/types.ts has them; what the core puts in for the clients to show is marked so
 //! (client/core/src/present.rs, format.rs, views.rs, history.rs, activity.rs).
 
+pub mod model;
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -232,6 +234,8 @@ pub struct Session {
     pub badge_text: Option<String>,
     pub title_text: String,
     pub agent_text: String,
+    /// Its model as people call it (Opus 5.5).
+    pub model_name: Option<String>,
     pub maker: Option<Maker>,
     pub runtime_text: String,
     pub process_text: Option<String>,
@@ -481,6 +485,8 @@ pub struct Connect {
     pub mode_short: String,
     pub runtime_text: String,
     pub run_text: String,
+    /// Its bound model as people call it (Opus 5.5).
+    pub model_name: Option<String>,
 }
 
 #[typeshare]
@@ -598,8 +604,22 @@ pub struct Profile {
     pub check_tone: Tone,
     /// The makers of its models, and of those its check found, by model.
     pub makers: HashMap<String, Option<Maker>>,
+    /// Its models, its default and those its check found as people call them (Opus 5.5), by model.
+    pub names: HashMap<String, String>,
+    /// Its models and those its check found, by series (Claude's biggest first, the rest by name; 其他 last), newest
+    /// first: how the list to enable them from is laid out.
+    pub series: Vec<ModelSeries>,
     /// How many of the models it could run are enabled, in words.
     pub models_text: String,
+}
+
+/// Models of one series (Opus), newest first.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelSeries {
+    pub name: String,
+    pub models: Vec<String>,
 }
 
 #[typeshare]
@@ -1317,7 +1337,14 @@ pub struct RuntimeModels {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelOption {
+    /// The spelling a client sends: the one that is its key when a profile has that, else the first.
     pub model: String,
+    /// As people call it (Opus 5.5).
+    pub name: String,
+    /// Its series (Opus, GPT), what a list groups it under; none when not known. Lists come by series, newest first.
+    pub family: Option<String>,
+    /// Every spelling of it the station's profiles have enabled (openai/gpt-6-astra, gpt-6-astra): one model.
+    pub ids: Vec<String>,
     pub maker: Option<Maker>,
     pub runtimes: Vec<RuntimeKind>,
     pub efforts: HashMap<String, Vec<String>>,

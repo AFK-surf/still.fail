@@ -177,6 +177,8 @@ data class Session (
 	val badgeText: String? = null,
 	val titleText: String,
 	val agentText: String,
+	/// Its model as people call it (Opus 5.5).
+	val modelName: String? = null,
 	val maker: Maker? = null,
 	val runtimeText: String,
 	val processText: String? = null,
@@ -261,7 +263,9 @@ data class Connect (
 	val modeText: String,
 	val modeShort: String,
 	val runtimeText: String,
-	val runText: String
+	val runText: String,
+	/// Its bound model as people call it (Opus 5.5).
+	val modelName: String? = null
 )
 
 @Serializable
@@ -321,6 +325,13 @@ data class Quota (
 	val time: Map<String, Stamp>? = null
 )
 
+/// Models of one series (Opus), newest first.
+@Serializable
+data class ModelSeries (
+	val name: String,
+	val models: List<String>
+)
+
 /// A profile, with its last check in words and its models' makers.
 @Serializable
 data class Profile (
@@ -345,6 +356,11 @@ data class Profile (
 	val checkTone: Tone,
 	/// The makers of its models, and of those its check found, by model.
 	val makers: Map<String, Maker?>,
+	/// Its models, its default and those its check found as people call them (Opus 5.5), by model.
+	val names: Map<String, String>,
+	/// Its models and those its check found, by series (Claude's biggest first, the rest by name; 其他 last), newest
+	/// first: how the list to enable them from is laid out.
+	val series: List<ModelSeries>,
 	/// How many of the models it could run are enabled, in words.
 	val modelsText: String
 )
@@ -372,7 +388,14 @@ data class RunnableProfile (
 /// A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it.
 @Serializable
 data class ModelOption (
+	/// The spelling a client sends: the one that is its key when a profile has that, else the first.
 	val model: String,
+	/// As people call it (Opus 5.5).
+	val name: String,
+	/// Its series (Opus, GPT), what a list groups it under; none when not known. Lists come by series, newest first.
+	val family: String? = null,
+	/// Every spelling of it the station's profiles have enabled (openai/gpt-6-astra, gpt-6-astra): one model.
+	val ids: List<String>,
 	val maker: Maker? = null,
 	val runtimes: List<RuntimeKind>,
 	val efforts: Map<String, List<String>>,

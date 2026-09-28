@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router";
 import { stationApi, useApi, useChat, useHistory, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
 import { ArrowRight, Check, ChevronDown, ChevronRight, Received, Send, Stop, Unplug } from "../icons.tsx";
+import { modelName, optionOf } from "../ModelTriple.tsx";
 import { Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
 import { stationBase, useStation } from "../station.tsx";
@@ -305,7 +306,7 @@ function RunRow({ agent, onOpen }: { agent: ChatAgent; onOpen: () => void }) {
   return (
     <button type="button" className="m-run-row" onClick={onOpen}>
       <MakerIcon maker={s.maker} runtime={s.runtime} size={15} />
-      <b>{s.model ?? "选模型"}</b>
+      <b>{s.model ? s.modelName ?? s.model : "选模型"}</b>
       <span>{` · ${s.effort ?? "默认深度"} · ${s.profilePinned ? name : `自动 · ${name}`}`}</span>
       <ChevronDown size={14} />
     </button>
@@ -342,26 +343,27 @@ export function RunSettingsScreen() {
   const effort = draft ? draft.effort : s.effort ?? null;
   const profile = draft ? draft.profile : kept;
   const set = (next: Partial<{ model: string | null; effort: string | null; profile: string | null }>) => setDraft({ model, effort, profile, ...next });
-  const choice = agent.choices.find((c) => c.model === model);
+  const choice = optionOf(agent.choices, model);
+  const named = (m: string | null) => (m === null ? null : m === s.model ? s.modelName ?? m : modelName(agent.choices, m));
   const accounts: RunnableProfile[] = choice?.accounts[s.runtime] ?? [];
   const chosen = profile && accounts.some((a) => a.id === profile) ? profile : null;
   const dropped = profile !== null && chosen === null;
   const efforts: (string | null)[] = [null, ...s.efforts];
-  const changed = model !== (s.model ?? null) || effort !== (s.effort ?? null) || chosen !== kept;
+  const changed = (model !== (s.model ?? null) && (!choice || choice !== optionOf(agent.choices, s.model))) || effort !== (s.effort ?? null) || chosen !== kept;
   const accountText = (id: string | null) => (id === null ? "自动分配" : accounts.find((a) => a.id === id)?.name ?? id);
   if (list === "model") return <div className="m-screen">{bar}<ModelList models={agent.choices} runtime={s.runtime} picked={model} onPick={(m) => { set({ model: m }); setList(null); }} /></div>;
   if (list === "account") return <div className="m-screen">{bar}<AccountList accounts={accounts} runtime={s.runtime} picked={chosen} onPick={(p) => { set({ profile: p }); setList(null); }} /></div>;
-  const was = [s.model ?? "默认模型", s.effort ?? "默认深度", kept !== null ? currentName : `自动 · ${currentName}`];
+  const was = [named(s.model ?? null) ?? "默认模型", s.effort ?? "默认深度", kept !== null ? currentName : `自动 · ${currentName}`];
   // The station's pick moves off an account without the model (the one it is on now, when it has it).
   const movesOff = chosen === null && kept === null && model !== null && !!current && !accounts.some((a) => a.id === current.id);
-  const becomes = [model ?? "默认模型", effort ?? "默认深度",
+  const becomes = [named(model) ?? "默认模型", effort ?? "默认深度",
     chosen !== null ? accountText(chosen) : movesOff ? "自动（换账号）" : current && accounts.some((a) => a.id === current.id) ? `自动 · ${currentName}` : "自动分配"];
-  const force = dropped ? `指定的账号「${accountText(profile)}」没有启用 ${model}，改成了自动分配`
-    : movesOff ? `现在的账号「${currentName}」没有启用 ${model}，会自动换一个启用了的` : null;
+  const force = dropped ? `指定的账号「${accountText(profile)}」没有启用 ${named(model)}，改成了自动分配`
+    : movesOff ? `现在的账号「${currentName}」没有启用 ${named(model)}，会自动换一个启用了的` : null;
   const save = () => {
     if (!changed || !choice) return app.pop();
     setBusy(true);
-    api.sessionSettings(s.key, { model: choice.model, effort, profile: chosen })
+    api.sessionSettings(s.key, { model: choice === optionOf(agent.choices, s.model) ? s.model ?? choice.model : choice.model, effort, profile: chosen })
       .then(() => { app.toast("已改，下一轮起生效"); app.pop(); }, (e: unknown) => app.toast(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
   };
@@ -386,7 +388,7 @@ export function RunSettingsScreen() {
         </div>
         <GroupLabel>模型</GroupLabel>
         <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={choice?.maker} runtime={s.runtime} size={18} />}>
-          <span className="m-setting-main">{model ?? "选一个模型"}</span>
+          <span className="m-setting-main">{named(model) ?? "选一个模型"}</span>
         </SettingRow>
         <GroupLabel>思考深度</GroupLabel>
         <p className="m-small m-muted m-effort-note">想得越深越慢，也越费额度。</p>
@@ -403,7 +405,7 @@ export function RunSettingsScreen() {
       </div>
       <button type="button" className="m-run-go" data-changed={changed || undefined} disabled={busy} onClick={save}>
         {busy && <Spinner size={14} />}
-        {changed ? `改成 ${model ?? "默认模型"} · ${effort ?? "默认深度"} · ${accountText(chosen)}` : "不变"}
+        {changed ? `改成 ${named(model) ?? "默认模型"} · ${effort ?? "默认深度"} · ${accountText(chosen)}` : "不变"}
       </button>
     </div>
   );
@@ -420,20 +422,23 @@ export function SettingRow({ onClick, leading, children }: { onClick: () => void
   );
 }
 
-/** Every model it can move to, by who made it (the core says); a filter once there are many. */
+/** Every model it can move to, by series (the core says); a filter once there are many. */
 export function ModelList({ models, runtime, picked, onPick }: { models: ModelOption[]; runtime: string; picked: string | null; onPick: (m: string) => void }) {
   const [filter, setFilter] = useState("");
-  const shown = models.filter((m) => m.model.toLowerCase().includes(filter.trim().toLowerCase()));
+  const words = filter.trim().toLowerCase();
+  const shown = models.filter((m) => [m.name, m.model, ...m.ids].some((s) => s.toLowerCase().includes(words)));
+  const on = optionOf(models, picked);
+  // By series, in the core's order.
   const groups = new Map<string, ModelOption[]>();
-  for (const m of shown) groups.set(m.maker?.name ?? "其他", [...(groups.get(m.maker?.name ?? "其他") ?? []), m]);
-  const names = [...groups.keys()].sort((a, b) => (a === "其他" ? 1 : b === "其他" ? -1 : a.localeCompare(b)));
+  for (const m of shown) groups.set(m.family ?? "其他", [...(groups.get(m.family ?? "其他") ?? []), m]);
+  const names = [...groups.keys()];
   return (
     <div className="m-scroll m-pad-x-18">
       {models.length > 8 && <input className="m-field m-filter" value={filter} placeholder="搜索模型" onChange={(e) => setFilter(e.target.value)} />}
       {names.map((who) => (
         <div key={who}>
           {names.length > 1 && <GroupLabel>{who}</GroupLabel>}
-          {groups.get(who)!.map((m) => <PickLine key={m.model} label={m.model} checked={m.model === picked} onClick={() => onPick(m.model)} leading={<MakerIcon maker={m.maker} runtime={runtime} size={18} />} />)}
+          {groups.get(who)!.map((m) => <PickLine key={m.model} label={m.name} checked={m === on} onClick={() => onPick(m.model)} leading={<MakerIcon maker={m.maker} runtime={runtime} size={18} />} />)}
         </div>
       ))}
       {shown.length === 0 && <p className="m-muted">没有叫这个的模型</p>}

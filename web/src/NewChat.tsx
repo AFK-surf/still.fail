@@ -11,7 +11,7 @@ import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Button, Chooser, ChooserItem as Item, FirstOne, transitionTo } from "./ui.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice as ProfileKind } from "./pages/Accounts.tsx";
-import { ModelTriple } from "./ModelTriple.tsx";
+import { ModelTriple, optionOf } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
 import { keepTabs } from "./chatTabs.ts";
@@ -76,7 +76,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   // The model first, from what the station's profiles have enabled; then, only when it runs on more than one, the
   // runtime. Which profile runs the chat is the station's account pool's choice. A remembered model or runtime that is
   // no longer there gives way to the first that is.
-  const entry = view.models.find((m) => m.model === choice.model) ?? view.models[0];
+  const entry = optionOf(view.models, choice.model) ?? view.models[0];
   const model = entry?.model ?? "";
   const runtimes = entry?.runtimes ?? [];
   const runtime: RuntimeKind | undefined = runtimes.includes(choice.runtime as RuntimeKind) ? (choice.runtime as RuntimeKind) : runtimes[0];
@@ -231,7 +231,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
         {entry?.spent && (
           <p className="spent-notice" role="status">
-            {entry.model} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。
+            {entry.name} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。
           </p>
         )}
         {composer}

@@ -75,7 +75,7 @@ function ProfilePage({ p }: { p: Profile }) {
           {users.length === 0 && <ListRow><span className="m-muted m-row-title">还没有连接使用这个 Profile。</span></ListRow>}
           {users.map((c) => (
             <ListRow key={c.id} onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(c.id)}`)}>
-              <SlackMark size={15} /><span className="m-grow m-row-title">{c.name}</span><span className="m-row-note">{c.bind.model ?? p.model ?? "默认模型"}</span>
+              <SlackMark size={15} /><span className="m-grow m-row-title">{c.name}</span><span className="m-row-note">{c.modelName ?? (p.model ? p.names[p.model] ?? p.model : "默认模型")}</span>
             </ListRow>
           ))}
         </ListCard>
@@ -172,7 +172,7 @@ function Models({ p, onSave }: { p: Profile; onSave: (models: string[]) => void 
   const [filter, setFilter] = useState("");
   const available = [...new Set([...(p.check?.models ?? []), ...p.models])];
   const all = [...available].sort();
-  const shown = all.filter((m) => m.toLowerCase().includes(filter.trim().toLowerCase()));
+  const shown = all.filter((m) => [m, p.names[m] ?? m].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
   const save = (models: string[]) => onSave([...new Set(models)].sort());
   const suffix = filter.trim() ? "筛选结果" : "";
   return (
@@ -186,13 +186,23 @@ function Models({ p, onSave }: { p: Profile; onSave: (models: string[]) => void 
           <button type="button" className="m-link" onClick={() => save(p.models.filter((m) => !shown.includes(m)))}>全不选{suffix}</button>
         </div>
       )}
-      {shown.map((m) => {
-        const on = p.models.includes(m);
+      {/* By series, newest first (the core's). */}
+      {p.series.map((s) => {
+        const list = s.models.filter((m) => shown.includes(m));
+        if (list.length === 0) return null;
         return (
-          <button key={m} type="button" className="m-model-row" onClick={() => save(on ? p.models.filter((x) => x !== m) : [...p.models, m])}>
-            <span className="m-check" data-on={on || undefined}>{on && <Check size={13} />}</span>
-            <span className="m-grow m-mono">{m}</span>
-          </button>
+          <div key={s.name}>
+            <div className="m-group-label" style={{ paddingLeft: 24, paddingRight: 24 }}>{s.name}</div>
+            {list.map((m) => {
+              const on = p.models.includes(m);
+              return (
+                <button key={m} type="button" className="m-model-row" onClick={() => save(on ? p.models.filter((x) => x !== m) : [...p.models, m])}>
+                  <span className="m-check" data-on={on || undefined}>{on && <Check size={13} />}</span>
+                  <span className="m-grow">{p.names[m] ?? m}</span>
+                </button>
+              );
+            })}
+          </div>
         );
       })}
     </>

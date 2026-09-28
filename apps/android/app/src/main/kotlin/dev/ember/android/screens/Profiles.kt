@@ -153,7 +153,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     ListRow(onClick = { app.push(Screen.Connect(address, c.id)) }) {
                         SlackMark(15.dp)
                         Text(c.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(c.bind.model ?: p.model ?: "默认模型", fontSize = 13.sp, color = C.muted)
+                        Text(c.modelName ?: p.model?.let { p.names[it] ?: it } ?: "默认模型", fontSize = 13.sp, color = C.muted)
                     }
                 }
             }
@@ -252,7 +252,7 @@ private fun QuotaSection(p: Profile) {
 private fun ModelsSection(p: Profile, onSave: (List<String>) -> Unit) {
     var filter by remember { mutableStateOf("") }
     val all = ((p.check?.models ?: emptyList()) + p.models).distinct().sorted()
-    val shown = all.filter { it.contains(filter.trim(), ignoreCase = true) }
+    val shown = all.filter { m -> listOf(m, p.names[m] ?: m).any { it.contains(filter.trim(), ignoreCase = true) } }
     val save = { models: List<String> -> onSave(models.distinct().sorted()) }
     val suffix = if (filter.isBlank()) "" else "筛选结果"
     SectionHeader("模型 · 启用 ${p.models.size} / ${all.size}", start = 24.dp)
@@ -265,17 +265,21 @@ private fun ModelsSection(p: Profile, onSave: (List<String>) -> Unit) {
         Text("全选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(p.models + shown) })
         Text("全不选$suffix", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { save(p.models - shown.toSet()) })
     }
-    // Plain rows on the page, no card behind them.
-    shown.forEach { m ->
-        val on = m in p.models
-        Row(
-            Modifier.fillMaxWidth().clickable { save(if (on) p.models - m else p.models + m) }.padding(horizontal = 24.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (on) C.accent else C.chip), contentAlignment = Alignment.Center) {
-                if (on) IconIn(Icons.Check, 13.dp, C.bg)
+    // Plain rows on the page, no card behind them; by series, newest first (the core's).
+    p.series.forEach { series ->
+        val list = series.models.filter { it in shown }
+        if (list.isNotEmpty()) Text(series.name, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(top = 14.dp, bottom = 2.dp))
+        list.forEach { m ->
+            val on = m in p.models
+            Row(
+                Modifier.fillMaxWidth().clickable { save(if (on) p.models - m else p.models + m) }.padding(horizontal = 24.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (on) C.accent else C.chip), contentAlignment = Alignment.Center) {
+                    if (on) IconIn(Icons.Check, 13.dp, C.bg)
+                }
+                Text(p.names[m] ?: m, fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(m, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

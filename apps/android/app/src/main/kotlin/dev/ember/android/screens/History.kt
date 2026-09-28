@@ -465,7 +465,7 @@ private fun RunRow(agent: ChatAgent, onOpen: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         MakerIcon(s.maker, s.runtime, 15.dp)
-        Text(s.model ?: "选模型", fontSize = 14.sp, color = C.ink, maxLines = 1, softWrap = false)
+        Text(s.model?.let { s.modelName ?: it } ?: "选模型", fontSize = 14.sp, color = C.ink, maxLines = 1, softWrap = false)
         Text(
             " · ${s.effort ?: "默认深度"} · ${if (s.profilePinned == true) name else "自动 · $name"}",
             fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
@@ -500,29 +500,31 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
         var effort by remember { mutableStateOf(s.effort) }
         var profile by remember { mutableStateOf(kept) }
         var busy by remember { mutableStateOf(false) }
-        val choice = agent.choices.firstOrNull { it.model == model }
+        val choice = agent.choices.optionOf(model)
+        val named = { m: String? -> m?.let { if (it == s.model) s.modelName ?: it else agent.choices.optionOf(it)?.name ?: it } }
         val accounts = choice?.accounts?.get(s.runtime).orEmpty()
         val chosen = profile?.takeIf { p -> accounts.any { it.id == p } }
         val dropped = profile != null && chosen == null
         val efforts = listOf<String?>(null) + s.efforts
-        val changed = model != s.model || effort != s.effort || chosen != kept
+        // Another spelling of its model is its model.
+        val changed = (model != s.model && (choice == null || choice != agent.choices.optionOf(s.model))) || effort != s.effort || chosen != kept
         val accountText = { id: String? -> if (id == null) "自动分配" else accounts.firstOrNull { it.id == id }?.name ?: id }
         if (list == "model") return ModelList(agent.choices, s.runtime, model) { model = it; list = null }
         if (list == "account") return AccountList(accounts, s.runtime, chosen) { profile = it; list = null }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             // Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why.
-            val was = listOf(s.model ?: "默认模型", s.effort ?: "默认深度", if (kept != null) currentName else "自动 · $currentName")
+            val was = listOf(named(s.model) ?: "默认模型", s.effort ?: "默认深度", if (kept != null) currentName else "自动 · $currentName")
             // The station's pick moves off an account without the model (the one it is on now, when it has it).
             val movesOff = chosen == null && kept == null && model != null && current != null && accounts.none { it.id == current.id }
-            val becomes = listOf(model ?: "默认模型", effort ?: "默认深度", when {
+            val becomes = listOf(named(model) ?: "默认模型", effort ?: "默认深度", when {
                 chosen != null -> accountText(chosen)
                 movesOff -> "自动（换账号）"
                 current != null && accounts.any { it.id == current.id } -> "自动 · $currentName"
                 else -> "自动分配"
             })
             val force = when {
-                dropped -> "指定的账号「${accountText(profile)}」没有启用 $model，改成了自动分配"
-                movesOff -> "现在的账号「$currentName」没有启用 $model，会自动换一个启用了的"
+                dropped -> "指定的账号「${accountText(profile)}」没有启用 ${named(model)}，改成了自动分配"
+                movesOff -> "现在的账号「$currentName」没有启用 ${named(model)}，会自动换一个启用了的"
                 else -> null
             }
             Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -542,7 +544,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 Text("改了以后从下一轮开始生效。", fontSize = 12.sp, color = C.subtle)
             }
             GroupLabel("模型")
-            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(choice?.maker, s.runtime, 18.dp) }) { Text(model ?: "选一个模型", fontSize = 15.sp, color = C.ink) }
+            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(choice?.maker, s.runtime, 18.dp) }) { Text(named(model) ?: "选一个模型", fontSize = 15.sp, color = C.ink) }
             GroupLabel("思考深度")
             Text("想得越深越慢，也越费额度。", fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
             EffortChips(efforts, effort) { effort = it }
@@ -562,7 +564,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                     if (!go) { app.pop(); return@clickable }
                     busy = true
                     scope.launch {
-                        try { app.api(station).sessionSettings(s.key, choice!!.model, effort, chosen); app.toast = "已改，下一轮起生效"; app.pop() }
+                        try { app.api(station).sessionSettings(s.key, if (choice == agent.choices.optionOf(s.model)) s.model ?: choice!!.model else choice!!.model, effort, chosen); app.toast = "已改，下一轮起生效"; app.pop() }
                         catch (err: CoreException) { app.toast = err.message }
                         finally { busy = false }
                     }
@@ -571,7 +573,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                if (changed) "改成 ${model ?: "默认模型"} · ${effort ?: "默认深度"} · ${accountText(chosen)}" else "不变",
+                if (changed) "改成 ${named(model) ?: "默认模型"} · ${effort ?: "默认深度"} · ${accountText(chosen)}" else "不变",
                 fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.bg else C.ink, maxLines = 2, textAlign = TextAlign.Center,
             )
         }
@@ -591,18 +593,24 @@ internal fun SettingRow(onClick: () -> Unit, leading: @Composable () -> Unit = {
     }
 }
 
-/** Every model it can move to, by who made it (the core says); a filter once there are many. */
+/** The option a model is, however it is spelled (openai/gpt-6-astra is gpt-6-astra). */
+internal fun List<ModelOption>.optionOf(model: String?): ModelOption? =
+    if (model == null) null else firstOrNull { it.model == model } ?: firstOrNull { model in it.ids }
+
+/** Every model it can move to, by series (the core says); a filter once there are many. */
 @Composable
 internal fun ModelList(models: List<ModelOption>, runtime: String, picked: String?, onPick: (String) -> Unit) {
     var filter by remember { mutableStateOf("") }
-    val shown = models.filter { it.model.contains(filter.trim(), ignoreCase = true) }
-    val groups = shown.groupBy { it.maker?.name ?: "其他" }.toSortedMap(compareBy<String> { it == "其他" }.thenBy { it })
+    val shown = models.filter { m -> (listOf(m.name, m.model) + m.ids).any { it.contains(filter.trim(), ignoreCase = true) } }
+    val on = models.optionOf(picked)
+    // By series, in the core's order.
+    val groups = shown.groupBy { it.family ?: "其他" }
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         if (models.size > 8) Field(filter, { filter = it }, "搜索模型", modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             groups.forEach { (who, list) ->
                 if (groups.size > 1) GroupLabel(who)
-                list.forEach { m -> PickLine(m.model, checked = m.model == picked, onClick = { onPick(m.model) }, leading = { MakerIcon(m.maker, runtime, 18.dp) }) }
+                list.forEach { m -> PickLine(m.name, checked = m == on, onClick = { onPick(m.model) }, leading = { MakerIcon(m.maker, runtime, 18.dp) }) }
             }
             if (shown.isEmpty()) Text("没有叫这个的模型", fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(vertical = 16.dp))
             Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars).height(16.dp))

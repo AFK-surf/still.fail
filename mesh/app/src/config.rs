@@ -291,6 +291,17 @@ pub struct Profile {
 }
 
 impl Profile {
+    /// Its own spelling of a model it has enabled, however the model is spelled (gpt-6-astra here may be
+    /// openai/gpt-6-astra there: ember_shapes::model::key).
+    pub fn spelling(&self, model: &str) -> Option<&str> {
+        self.models.iter().find(|m| *m == model).or_else(|| self.models.iter().find(|m| ember_shapes::model::same(m, model))).map(String::as_str)
+    }
+
+    /// Whether it has a model enabled, in any spelling.
+    pub fn runs(&self, model: &str) -> bool {
+        self.spelling(model).is_some()
+    }
+
     pub fn env(&self, runtime: RuntimeKind) -> BTreeMap<String, String> {
         self.envs.get(runtime_name(runtime)).cloned().unwrap_or_default()
     }

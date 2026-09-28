@@ -8,6 +8,7 @@ import type { ModelOption, RunnableProfile, RuntimeKind } from "./api.ts";
 import { QuotaBars } from "./components.tsx";
 import { RUNTIME_LABEL } from "./format.ts";
 import { ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
+import * as css from "./ModelTriple.css.ts";
 
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
 const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
@@ -15,6 +16,16 @@ const DROPS = ["", "name", "name account", "name account runtime", "name account
 /** `profile`: the one kept to; null: the station picks. */
 export interface Pick { model: string; runtime: RuntimeKind; effort: string | null; profile: string | null }
 
+/** The option a model is, however it is spelled (openai/gpt-6-astra is gpt-6-astra). */
+export function optionOf<O extends { model: string; ids?: string[] }>(options: O[], model: string | null | undefined): O | undefined {
+  if (!model) return undefined;
+  return options.find((o) => o.model === model) ?? options.find((o) => o.ids?.includes(model));
+}
+
+/** What a model is called: its option's name, else as it is spelled. */
+export function modelName(options: { model: string; name?: string; ids?: string[] }[], model: string): string {
+  return optionOf(options, model)?.name ?? model;
+}
 
 export function ModelTriple({ options, value, onPick, current, runtimeFixed, side = "bottom", title = "换模型" }: {
   options: ModelOption[];
@@ -28,7 +39,8 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Pick>(value);
-  const option = options.find((o) => o.model === draft.model);
+  const option = optionOf(options, draft.model);
+  const valueOption = optionOf(options, value.model);
   const on: RuntimeKind = runtimeFixed ? value.runtime : option?.runtimes.includes(draft.runtime) ? draft.runtime : option?.runtimes[0] ?? value.runtime;
   const askRuntime = !runtimeFixed && (option?.runtimes.length ?? 0) > 1;
   const accounts: RunnableProfile[] = option?.accounts[on] ?? [];
@@ -37,20 +49,19 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
   const profile = draft.profile && accounts.some((a) => a.id === draft.profile) ? draft.profile : null;
   const dropped = draft.profile !== null && profile === null;
   const effort = draft.effort && efforts.includes(draft.effort) ? draft.effort : null;
-  const next: Pick = { model: option?.model ?? value.model, runtime: on, effort, profile };
+  // The model it has, as it spells it, stays: another spelling of it is not a change.
+  const next: Pick = { model: option && option !== valueOption ? option.model : value.model, runtime: on, effort, profile };
   const changed = next.model !== value.model || next.runtime !== value.runtime || next.effort !== value.effort || next.profile !== value.profile;
-  const valueOption = options.find((o) => o.model === value.model);
   const kept = value.profile ? valueOption?.accounts[value.runtime]?.find((a) => a.id === value.profile) ?? current : undefined;
   const shown = kept ?? current;
   const set = (patch: Partial<Pick>) => setDraft((d) => ({ ...d, ...patch }));
   const [filter, setFilter] = useState("");
-  const listed = options.filter((o) => o.model.toLowerCase().includes(filter.trim().toLowerCase()));
-  const byMaker = new Map<string, ModelOption[]>();
-  for (const o of listed) {
-    const who = o.maker?.name ?? "其他";
-    byMaker.set(who, [...(byMaker.get(who) ?? []), o]);
-  }
-  const groups = [...byMaker].sort(([a], [b]) => (a === "其他" ? 1 : b === "其他" ? -1 : a.localeCompare(b)));
+  const words = filter.trim().toLowerCase();
+  const listed = options.filter((o) => [o.name, o.model, ...o.ids].some((s) => s.toLowerCase().includes(words)));
+  // By series, in the core's order (Claude's biggest first, the rest by name; newest first in each).
+  const bySeries = new Map<string, ModelOption[]>();
+  for (const o of listed) bySeries.set(o.family ?? "其他", [...(bySeries.get(o.family ?? "其他") ?? []), o]);
+  const groups = [...bySeries];
   // Shown within the room it has: the most it can say that fits, dropping what matters least first.
   const fit = useRef<HTMLSpanElement>(null);
   const [drop, setDrop] = useState(0);
@@ -80,7 +91,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
         <Popover.Trigger className="model-triple" title={title} disabled={options.length === 0} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className="triple-model">没有可用模型</span> : (
             <>
-              <span className="triple-model"><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={13} /><span className="triple-model-name">{value.model || "选模型"}</span></span>
+              <span className="triple-model"><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={13} /><span className="triple-model-name" title={value.model || undefined}>{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span>
               {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className="triple-part triple-runtime"><RuntimeLogo runtime={value.runtime} size={13} />{RUNTIME_LABEL[value.runtime]}</span>}
               <span className="triple-part triple-effort" data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
               <span className="triple-part triple-account">
@@ -99,17 +110,17 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
           <div className="run-picker">
             <div className="run-picker-column run-picker-models">
               <h4>模型</h4>
-              {/* Many models: a filter, and the models by who made them. */}
+              {/* Many models: a filter; the models by series. */}
               {options.length > 8 && (
                 <input className="input run-picker-filter" placeholder="搜索模型" value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
               )}
               {groups.map(([who, list]) => (
-                <div key={who} className="run-picker-group">
+                <div key={who} className={`run-picker-group ${css.series}`}>
                   {groups.length > 1 && <h5>{who}</h5>}
                   {list.map((o) => (
-                    <button key={o.model} type="button" className="run-picker-option" aria-pressed={next.model === o.model} onClick={() => set({ model: o.model })}>
+                    <button key={o.model} type="button" className="run-picker-option" title={o.ids.join("\n")} aria-pressed={option === o} onClick={() => set({ model: o.model })}>
                       <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={13} />
-                      <span className="run-option-text"><span>{o.model}</span>{o.spent && <span className="run-picker-spent">{o.spent.text}</span>}</span>
+                      <span className="run-option-text"><span>{o.name}</span>{o.spent && <span className="run-picker-spent">{o.spent.text}</span>}</span>
                     </button>
                   ))}
                 </div>
@@ -134,7 +145,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
             </div>
             <div className="run-picker-column run-picker-accounts">
               <h4>账号</h4>
-              {dropped && <p className="run-picker-note">指定的账号没有启用 {next.model}，改成了自动分配</p>}
+              {dropped && <p className="run-picker-note">指定的账号没有启用 {option?.name ?? next.model}，改成了自动分配</p>}
               <button type="button" className="run-picker-option" aria-pressed={profile === null} onClick={() => set({ profile: null })}>
                 <span className="run-option-text"><strong>自动分配</strong><span className="muted">额度用完或登录失效时换一个</span>{current && !value.profile && <span className="muted">现在：{current.name}</span>}</span>
               </button>

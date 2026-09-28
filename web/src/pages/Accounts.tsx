@@ -8,6 +8,7 @@ import { useAction, useApi, useOverview, type AccessKind, type LoginJob, type Ov
 import { ACCESS, ACCESS_KINDS, KEYED } from "../format.ts";
 import { useToast } from "../toast.tsx";
 import { QuotaBars } from "../components.tsx";
+import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard, ProfileCard } from "../ProfileCard.tsx";
 import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, BackLink, MobileBack, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, Time, Tip } from "../ui.tsx";
 
@@ -238,7 +239,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
         {users.length === 0 ? <p className="muted">还没有连接使用这个 Profile。</p> : (
           <ul className="list">
             {users.map((c) => (
-              <li key={c.id}><Link className="list-row" to={link(`/connects/${c.id}`)}><ConnectAvatar connect={c} size={24} /><span className="list-row-title">{c.name}</span><span className="muted">{c.bind.model ?? profile.model ?? "默认模型"}</span></Link></li>
+              <li key={c.id}><Link className="list-row" to={link(`/connects/${c.id}`)}><ConnectAvatar connect={c} size={24} /><span className="list-row-title">{c.name}</span><span className="muted">{c.modelName ?? (profile.model ? profile.names[profile.model] ?? profile.model : "默认模型")}</span></Link></li>
             ))}
           </ul>
         )}
@@ -475,7 +476,8 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
   const [filter, setFilter] = useState("");
   useEffect(() => setEnabled(new Set(profile.models)), [profile.models.join("\n")]);
   const all = [...new Set([...(found ?? []), ...profile.models])].sort();
-  const shown = all.filter((m) => m.toLowerCase().includes(filter.trim().toLowerCase()));
+  const name = (m: string) => profile.names[m] ?? m;
+  const shown = all.filter((m) => [m, name(m)].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
   const commit = (next: Set<string>) => {
     setEnabled(next);
     onSave([...next].sort());
@@ -488,7 +490,13 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
   // With none enabled yet (a profile just added), the whole list is out to choose from.
   const [picked, setChoosing] = useState<boolean | null>(null);
   const choosing = picked ?? enabled.size === 0;
-  const on = [...enabled].sort();
+  // By series, newest first (the core's); one a newer check found that the core has not placed yet goes with 其他.
+  const placed = new Set(profile.series.flatMap((s) => s.models));
+  const loose = all.filter((m) => !placed.has(m));
+  const series = [...profile.series.filter((s) => s.name !== "其他"),
+    ...((profile.series.find((s) => s.name === "其他")?.models.length ?? 0) + loose.length ? [{ name: "其他", models: [...(profile.series.find((s) => s.name === "其他")?.models ?? []), ...loose] }] : [])];
+  const ordered = series.flatMap((s) => s.models);
+  const on = [...enabled].sort((a, b) => ordered.indexOf(a) - ordered.indexOf(b));
   return (
     <Section title={<>模型<About>{all.length ? "只有启用的模型能在新对话和连接里选。" : "检查过 Profile 后，这里会列出它能用的模型，启用后才能使用。"}</About></>}
       actions={all.length > 0 && <Button variant="ghost" onClick={() => setChoosing(!choosing)}>{choosing ? "收起" : `选择模型（${enabled.size} / ${all.length}）`}</Button>}>
@@ -496,7 +504,7 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
       {all.length > 0 && !choosing && (
         on.length === 0 ? <p className="muted">还没有启用模型。</p> : (
           <ul className="model-chips">
-            {on.map((m) => <li key={m} className="model-chip"><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} /><span className="mono">{m}</span></li>)}
+            {on.map((m) => <li key={m} className="model-chip" title={m}><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} /><span>{name(m)}</span></li>)}
           </ul>
         )
       )}
@@ -507,18 +515,31 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
             <button type="button" className="text-toggle" onClick={() => commit(new Set([...enabled, ...shown]))}>全选{filter ? "筛选结果" : ""}</button>
             <button type="button" className="text-toggle" onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>全不选{filter ? "筛选结果" : ""}</button>
           </div>
-          <ul className="model-pool-list">
-            {shown.map((m) => (
-              <li key={m}>
-                <label className="model-pool-item" data-on={enabled.has(m) || undefined}>
-                  <input type="checkbox" checked={enabled.has(m)} onChange={() => toggle(m)} />
-                  <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} />
-                  <span className="mono">{m}</span>
-                  {found && !found.includes(m) && <span className="muted model-pool-gone">检查里没有了</span>}
-                </label>
-              </li>
-            ))}
-          </ul>
+          {series.map((s) => {
+            const list = s.models.filter((m) => shown.includes(m));
+            if (list.length === 0) return null;
+            const every = list.every((m) => enabled.has(m));
+            return (
+              <div key={s.name} className={modelCss.poolSeries}>
+                <div className={modelCss.poolSeriesHead}>
+                  <h4>{s.name}</h4>
+                  <button type="button" className="text-toggle" onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? "全不选" : "全选"}</button>
+                </div>
+                <ul className="model-pool-list">
+                  {list.map((m) => (
+                    <li key={m}>
+                      <label className="model-pool-item" data-on={enabled.has(m) || undefined} title={m}>
+                        <input type="checkbox" checked={enabled.has(m)} onChange={() => toggle(m)} />
+                        <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} />
+                        <span>{name(m)}</span>
+                        {found && !found.includes(m) && <span className="muted model-pool-gone">检查里没有了</span>}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       )}
     </Section>

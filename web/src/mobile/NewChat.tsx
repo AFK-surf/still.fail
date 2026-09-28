@@ -8,6 +8,7 @@ import { RUNTIME_LABEL } from "../format.ts";
 import { Server } from "../icons.tsx";
 import { toMadeChat } from "../Chat.tsx";
 import { transitionTo } from "../ui.tsx";
+import { optionOf } from "../ModelTriple.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { useNavigate } from "react-router";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
@@ -63,7 +64,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
   const [choice, setChoice] = useState<Choice | null>(() => lastChoice(view.station));
   // The model first, from what the station's profiles have enabled; the runtime only when it runs on more than one. A
   // remembered model or runtime no longer there gives way to the first that is.
-  const entry = view.models.find((m) => m.model === choice?.model) ?? view.models[0];
+  const entry = optionOf(view.models, choice?.model) ?? view.models[0];
   const model = entry?.model;
   const runtime = entry?.runtimes.find((r) => r === choice?.runtime) ?? entry?.runtimes[0];
   const efforts = runtime ? entry?.efforts[runtime] ?? [] : [];
@@ -146,7 +147,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
       </div>
       {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
       {entry?.spent && (
-        <p className="m-new-spent">{entry.model} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。</p>
+        <p className="m-new-spent">{entry.name} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。</p>
       )}
       {/* The choices, then the composer as a floating capsule, as in a chat. */}
       <div className="m-new-bottom">
@@ -157,7 +158,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
             <Chooser label="没有可用模型 · 去勾选" onClick={() => app.push(app.at(`/s/${view.id}/overview`))} />
           ) : (
             <>
-              <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={model}
+              <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={entry.name}
                 onClick={() => pickModel(app, view, model, (m) => { const rt = m.runtimes.find((r) => r === runtime) ?? m.runtimes[0]!; pick({ runtime: rt, model: m.model, effort: rt !== runtime ? "" : effort }); })} />
               {/* The runtime only when the model runs on more than one. */}
               {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={13} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
@@ -191,7 +192,7 @@ function pickModel(app: MobileApp, view: StationView, current: string, onPick: (
       <SheetGrab /><SheetHead title="用哪个模型" />
       <div className="m-sheet-scroll">
         {view.models.map((m) => (
-          <PickRow key={m.model} label={m.model} sub={[m.runtimes.map((r) => RUNTIME_LABEL[r] ?? r).join(" · "), m.spent?.text].filter(Boolean).join(" · ")}
+          <PickRow key={m.model} label={m.name} sub={[m.runtimes.map((r) => RUNTIME_LABEL[r] ?? r).join(" · "), m.spent?.text].filter(Boolean).join(" · ")}
             checked={m.model === current} leading={<ModelMark maker={m.maker} runtime={m.runtimes[0]!} size={36} />} onClick={() => { onPick(m); app.sheet(null); }} />
         ))}
       </div>

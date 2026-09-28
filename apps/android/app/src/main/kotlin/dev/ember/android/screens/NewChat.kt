@@ -121,7 +121,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
     var choice by remember(view.station) { mutableStateOf(app.lastChoice(view.station)) }
     // The model first, from what the station's profiles have enabled; the runtime only when it runs on more than one. A
     // remembered model or runtime no longer there gives way to the first that is.
-    val entry = view.models.firstOrNull { it.model == choice?.model } ?: view.models.firstOrNull()
+    val entry = view.models.optionOf(choice?.model) ?: view.models.firstOrNull()
     val model = entry?.model
     val runtime = entry?.runtimes?.firstOrNull { it == choice?.runtime } ?: entry?.runtimes?.firstOrNull()
     val efforts = runtime?.let { entry?.efforts?.get(it) }.orEmpty()
@@ -206,7 +206,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
                 // Nothing to choose from: the chooser leads to where models are enabled.
                 Chooser(haze, null, "没有可用模型 · 去勾选") { app.push(Screen.Station(view.station)) }
             } else {
-                Chooser(haze, { MakerIcon(entry.maker, runtime, 14.dp) }, model) {
+                Chooser(haze, { MakerIcon(entry.maker, runtime, 14.dp) }, entry.name) {
                     pickModel(app, view, model) { m -> val rt = m.runtimes.firstOrNull { it == runtime } ?: m.runtimes.first(); pick(Choice(rt, m.model, if (rt != runtime) "" else effort)) }
                 }
                 // The runtime only when the model runs on more than one.
@@ -275,7 +275,7 @@ private fun pickModel(app: AppState, view: StationView, current: String, onPick:
         SheetHead("用哪个模型")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             view.models.forEach { m ->
-                PickRow(m.model, listOfNotNull(m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, m.spent?.text).joinToString(" · "), checked = m.model == current, leading = { ModelMark(m.maker, m.runtimes.first(), 36.dp) }) { onPick(m); app.sheet = null }
+                PickRow(m.name, listOfNotNull(m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, m.spent?.text).joinToString(" · "), checked = m.model == current, leading = { ModelMark(m.maker, m.runtimes.first(), 36.dp) }) { onPick(m); app.sheet = null }
             }
         }
     }

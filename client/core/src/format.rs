@@ -274,9 +274,9 @@ pub fn maker_of(model: &str) -> Option<(&'static str, &'static str)> {
     })
 }
 
-/// How an agent is named: it has no name, only its model and effort as they are (gpt-6-astra · medium).
+/// How an agent is named: it has no name, only its model as people call it and its effort (GPT-6 Astra · medium).
 pub fn agent_label(model: Option<&str>, effort: Option<&str>) -> String {
-    let model = model.filter(|m| !m.is_empty()).unwrap_or("默认模型");
+    let model = model.filter(|m| !m.is_empty()).map_or_else(|| "默认模型".to_string(), ember_shapes::model::name);
     match effort.filter(|e| !e.is_empty()) {
         Some(effort) => format!("{model} · {effort}"),
         None => model.to_string(),
@@ -377,7 +377,8 @@ mod tests {
         assert_eq!(maker_of("deepseek-flash"), Some(("deepseek", "DeepSeek")));
         assert_eq!(maker_of("o3"), Some(("openai", "OpenAI")));
         assert_eq!(maker_of("something"), None);
-        assert_eq!(agent_label(Some("gpt-6-astra"), Some("medium")), "gpt-6-astra · medium");
+        assert_eq!(agent_label(Some("gpt-6-astra"), Some("medium")), "GPT-6 Astra · medium");
+        assert_eq!(agent_label(Some("my-model"), None), "my-model");
         assert_eq!(clean_text("<@U1> hi   there"), "hi there");
         assert_eq!(split_thread("C0OPS/1727.0001"), Some(("C0OPS", "1727.0001")));
         assert_eq!(split_thread("nope"), None);

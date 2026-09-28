@@ -119,7 +119,7 @@ fun ConnectRow(station: String, c: Connect) {
         ConnectAvatar(c, 30.dp)
         Column(Modifier.weight(1f)) {
             Text(c.name + (c.team?.let { " · $it" } ?: ""), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(c.modeText, c.runtimeText, c.bind.model).joinToString(" · "), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(c.modeText, c.runtimeText, c.bind.model?.let { c.modelName ?: it }).joinToString(" · "), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) { PresenceDot(c.presence); Text(c.statusText, fontSize = 12.sp, color = C.muted) }
     }
@@ -167,7 +167,7 @@ fun ConnectScreen(station: String, id: String) {
                 ListRow(onClick = { app.push(Screen.ConnectRun(station, connect.id)) }) {
                     Text("模型", fontSize = 13.sp, color = C.muted, modifier = Modifier.width(32.dp))
                     Text(
-                        "${connect.bind.model ?: "选模型"} · ${connect.bind.effort?.ifEmpty { null } ?: "默认深度"} · ${if (connect.bind.profile != null) "固定账号" else "自动分配"}",
+                        "${connect.bind.model?.let { connect.modelName ?: it } ?: "选模型"} · ${connect.bind.effort?.ifEmpty { null } ?: "默认深度"} · ${if (connect.bind.profile != null) "固定账号" else "自动分配"}",
                         fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                     )
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
@@ -477,16 +477,17 @@ fun ConnectRunScreen(station: String, id: String) {
         var effort by remember { mutableStateOf(connect.bind.effort ?: "") }
         var profile by remember { mutableStateOf(connect.bind.profile) }
         var busy by remember { mutableStateOf(false) }
-        val choice = models.firstOrNull { it.model == model }
+        val choice = models.optionOf(model)
+        val named = { m: String? -> m?.let { if (it == connect.bind.model) connect.modelName ?: it else models.optionOf(it)?.name ?: it } }
         val accounts = choice?.accounts?.get(runtime).orEmpty()
         val efforts = choice?.efforts?.get(runtime).orEmpty()
-        val changed = model != connect.bind.model || effort != (connect.bind.effort ?: "") || profile != connect.bind.profile
+        val changed = (model != connect.bind.model && (choice == null || choice != models.optionOf(connect.bind.model))) || effort != (connect.bind.effort ?: "") || profile != connect.bind.profile
         if (list == "model") return ModelList(models, runtime, model) { model = it; profile = null; list = null }
         if (list == "account") return AccountList(accounts, runtime, profile) { profile = it; list = null }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             if (models.isEmpty()) Text("${connect.runtimeText} 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。", fontSize = 13.sp, color = C.warn, modifier = Modifier.padding(top = 8.dp))
             GroupLabel("模型")
-            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(choice?.maker, runtime, 18.dp) }) { Text(model ?: "选一个模型", fontSize = 15.sp, color = C.ink) }
+            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(choice?.maker, runtime, 18.dp) }) { Text(named(model) ?: "选一个模型", fontSize = 15.sp, color = C.ink) }
             GroupLabel("思考深度")
             EffortChips(listOf<String?>(null) + efforts, effort.ifEmpty { null }) { effort = it ?: "" }
             GroupLabel("账号")
@@ -510,7 +511,7 @@ fun ConnectRunScreen(station: String, id: String) {
                     }
                 }.padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center,
-        ) { Text(if (changed) "改成 ${model ?: "默认模型"} · ${effort.ifEmpty { "默认深度" }}" else "不变", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.bg else C.ink) }
+        ) { Text(if (changed) "改成 ${named(model) ?: "默认模型"} · ${effort.ifEmpty { "默认深度" }}" else "不变", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.bg else C.ink) }
     }
 }
 
@@ -637,7 +638,7 @@ fun NewConnectScreen(station: String) {
                     GroupLabel("模型")
                     if (models.isEmpty()) Text("这台 station 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。", fontSize = 13.sp, color = C.warn)
                     else Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
-                        models.forEach { m -> PickRow(m.model, m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, checked = entry?.model == m.model, leading = { MakerIcon(m.maker, m.runtimes.first(), 18.dp) }) { model = m } }
+                        models.forEach { m -> PickRow(m.name, m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, checked = entry?.model == m.model, leading = { MakerIcon(m.maker, m.runtimes.first(), 18.dp) }) { model = m } }
                     }
                     if (entry != null && entry.runtimes.size > 1) {
                         GroupLabel("运行时（创建后不能换）")

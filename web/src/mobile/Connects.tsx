@@ -8,6 +8,7 @@ import { useWorkspace } from "../cloud/api.ts";
 import { MODE, RUNTIME_LABEL } from "../format.ts";
 import { illustrationUrl } from "../brand.tsx";
 import { ChevronRight, More } from "../icons.tsx";
+import { modelName, optionOf } from "../ModelTriple.tsx";
 import { consequences } from "../pages/Connect.tsx";
 import { edgeColour, MAKERS, NEW_APP, renderAvatar, toIcon, useBuddies, type Avatar } from "../pages/SlackApp.tsx";
 import { useTokenCheck, type TokenCheck } from "../slack.tsx";
@@ -34,7 +35,7 @@ export function ConnectRow({ connect: c, onClick }: { connect: Connect; onClick:
       <ConnectAvatar connect={c} size={30} />
       <span className="m-grow m-row-text">
         <span className="m-row-title">{c.name}{c.team && <span className="m-row-aside"> · {c.team}</span>}</span>
-        <span className="m-row-note">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.bind.model}` : ""}</span>
+        <span className="m-row-note">{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span>
       </span>
       <span className="m-row-status"><Presence state={c.presence} />{c.statusText}</span>
     </ListRow>
@@ -138,7 +139,7 @@ function ConnectPage({ item }: { item: ConnectItem }) {
         <ListCard>
           <ListRow onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(connect.id)}/run`)}>
             <span className="m-run-label">模型</span>
-            <span className="m-grow m-row-title">{connect.bind.model ?? "选模型"}<span className="m-muted"> · {connect.bind.effort || "默认深度"} · {connect.bind.profile ? "固定账号" : "自动分配"}</span></span>
+            <span className="m-grow m-row-title">{connect.bind.model ? connect.modelName ?? connect.bind.model : "选模型"}<span className="m-muted"> · {connect.bind.effort || "默认深度"} · {connect.bind.profile ? "固定账号" : "自动分配"}</span></span>
             <ChevronRight size={14} className="m-subtle" />
           </ListRow>
           <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <ModeSheet item={item} /> })}>
@@ -374,10 +375,11 @@ export function ConnectRunScreen() {
   const effort = draft ? draft.effort : connect.bind.effort ?? "";
   const profile = draft ? draft.profile : connect.bind.profile ?? null;
   const set = (next: Partial<{ model: string | null; effort: string; profile: string | null }>) => setDraft({ model, effort, profile, ...next });
-  const choice = models.find((m) => m.model === model);
+  const choice = optionOf(models, model);
+  const named = (m: string | null) => (m === null ? null : m === connect.bind.model ? connect.modelName ?? m : modelName(models, m));
   const accounts: RunnableProfile[] = choice?.accounts[runtime] ?? [];
   const efforts = choice?.efforts[runtime] ?? [];
-  const changed = model !== (connect.bind.model ?? null) || effort !== (connect.bind.effort ?? "") || profile !== (connect.bind.profile ?? null);
+  const changed = (model !== (connect.bind.model ?? null) && (!choice || choice !== optionOf(models, connect.bind.model))) || effort !== (connect.bind.effort ?? "") || profile !== (connect.bind.profile ?? null);
   if (list === "model") return <div className="m-screen">{bar}<ModelList models={models} runtime={runtime} picked={model} onPick={(m) => { set({ model: m, profile: null }); setList(null); }} /></div>;
   if (list === "account") return <div className="m-screen">{bar}<AccountList accounts={accounts} runtime={runtime} picked={profile} onPick={(p) => { set({ profile: p }); setList(null); }} /></div>;
   return (
@@ -386,7 +388,7 @@ export function ConnectRunScreen() {
       <div className="m-scroll m-pad-x-18">
         {models.length === 0 && <p className="m-callout">{connect.runtimeText} 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。</p>}
         <GroupLabel>模型</GroupLabel>
-        <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={choice?.maker} runtime={runtime} size={18} />}><span className="m-setting-main">{model ?? "选一个模型"}</span></SettingRow>
+        <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={choice?.maker} runtime={runtime} size={18} />}><span className="m-setting-main">{named(model) ?? "选一个模型"}</span></SettingRow>
         <GroupLabel>思考深度</GroupLabel>
         <div className="m-chips">
           {["", ...efforts].map((e) => <button key={e || "-"} type="button" className="m-chip" data-on={e === effort || undefined} onClick={() => set({ effort: e })}>{e || "默认"}</button>)}
@@ -404,7 +406,7 @@ export function ConnectRunScreen() {
           setBusy(true);
           api.putConnect(connect.id, { bind: { model: model ?? "", effort, profile } }).then(() => { app.toast("已保存，新会话会用新的设置"); app.pop(); }, (e: Error) => app.toast(e.message)).finally(() => setBusy(false));
         }}>
-        {busy && <Spinner size={14} />}{changed ? `改成 ${model ?? "默认模型"} · ${effort || "默认深度"}` : "不变"}
+        {busy && <Spinner size={14} />}{changed ? `改成 ${named(model) ?? "默认模型"} · ${effort || "默认深度"}` : "不变"}
       </button>
     </div>
   );
@@ -541,7 +543,7 @@ export function NewConnectScreen() {
           <>
             <GroupLabel>模型</GroupLabel>
             {models.length === 0 ? <p className="m-callout">这台 station 的 Profile 还没有启用模型，先在 Station 页的 Profile 里勾选。</p> : (
-              <ListCard>{models.map((m) => <PickRow key={m.model} label={m.model} sub={m.runtimes.map((r) => RUNTIME_LABEL[r] ?? r).join(" · ")} checked={entry?.model === m.model}
+              <ListCard>{models.map((m) => <PickRow key={m.model} label={m.name} sub={m.runtimes.map((r) => RUNTIME_LABEL[r] ?? r).join(" · ")} checked={entry?.model === m.model}
                 leading={<MakerIcon maker={m.maker} runtime={m.runtimes[0]} size={18} />} onClick={() => setModel(m)} />)}</ListCard>
             )}
             {entry && entry.runtimes.length > 1 && (
