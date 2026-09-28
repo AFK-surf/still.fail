@@ -487,12 +487,14 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
 /**
  * The box an image takes in the chat, known before it loads: its own
  * proportions (sent with it) within 360×300, or a fixed box for images sent
- * before sizes were recorded.
+ * before sizes were recorded. A narrower chat shrinks it (max-width), the
+ * proportions kept.
  */
-export function imageBox(file: Attachment): { width: number; height: number } {
-  if (!file.width || !file.height) return { width: 240, height: 160 };
+export function imageBox(file: Attachment): { width: number; aspectRatio: string } {
+  if (!file.width || !file.height) return { width: 240, aspectRatio: "240 / 160" };
   const scale = Math.min(1, 360 / file.width, 300 / file.height);
-  return { width: Math.max(40, Math.round(file.width * scale)), height: Math.max(40, Math.round(file.height * scale)) };
+  const width = Math.max(40, Math.round(file.width * scale)), height = Math.max(40, Math.round(file.height * scale));
+  return { width, aspectRatio: `${width} / ${height}` };
 }
 
 /** An image at full size over a dimmed page; Esc or a click outside closes it. */

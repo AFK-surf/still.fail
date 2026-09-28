@@ -422,7 +422,7 @@
 .h-group-head:hover { background: var(--hover); color: var(--text); }
 /* One line each: what does not fit ends in an ellipsis (the whole of it is the row's tooltip). */
 .h-group-head > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h-steps { display: grid; gap: 2px; margin: 4px 0 0 6px; padding-left: 10px; border-left: 1px solid var(--line); }
+.h-steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin: 4px 0 0 6px; padding-left: 10px; border-left: 1px solid var(--line); }
 .h-step summary { display: flex; align-items: baseline; gap: 8px; padding: 5px 6px; border-radius: calc(8px * var(--corner-scale)); list-style: none; cursor: pointer; font-size: var(--text-xs); corner-shape: var(--corner-shape); }
 .h-step summary::-webkit-details-marker { display: none; }
 .h-step summary:hover { background: var(--hover); }
@@ -1087,7 +1087,7 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .msg-mine { display: grid; justify-items: end; gap: 4px; }
 .msg-mine .msg-bubble { max-width: min(78%, 560px); padding: 8px 14px; border-radius: calc(18px * var(--corner-scale)); background: var(--neutral-bg); corner-shape: var(--corner-shape); }
 .msg-row { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; }
-.msg-main { min-width: 0; display: grid; gap: 4px; }
+.msg-main { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .msg-avatar { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; object-fit: cover; }
 .msg-avatar .avatar { border-radius: 50% !important; }
 .msg-avatar-agent { background: var(--neutral-bg); }
@@ -1102,7 +1102,7 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
   margin: 0; padding: 0 0 0 10px; border-left: 2px solid var(--line-strong); color: var(--muted); font-size: var(--text-sm);
   white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
 }
-.msg-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.msg-files { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; max-width: 100%; }
 .msg-mine .msg-files { justify-content: flex-end; }
 .file-card {
   display: inline-flex; align-items: center; gap: 10px; width: 236px; max-width: 100%; padding: 8px 10px;
@@ -1250,7 +1250,7 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 /* Motion: what arrives while you watch eases in; nothing moves on first paint or for reduced motion. */
 @keyframes enter-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-.h-item { display: grid; gap: 14px; min-width: 0; }
+.h-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
 [data-enter] { animation: enter-up 220ms var(--ease-out) both; }
 .h-phase-text { animation: fade-in 180ms var(--ease-out); }
 .composer-quote, .composer-files .file-card { animation: enter-up 180ms var(--ease-out) both; }
