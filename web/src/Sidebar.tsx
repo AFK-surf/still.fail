@@ -134,7 +134,7 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
   return (
     <div ref={scroller} className={nav.navScroll} aria-hidden={hidden || undefined} inert={hidden || undefined}>
       {chats.error && !view && <p className={`${nav.navEmpty} ${nav.navError}`}>{chats.error.message}</p>}
-      {days.length === 0 && !loading && failed.map((s) => <p key={s.station} className={`${nav.navEmpty} ${nav.navError}`} title={s.message ?? undefined}>连不上「{s.name}」，正在重试…</p>)}
+      {days.length === 0 && !loading && failed.map((s) => <Tip key={s.station} label={s.message ?? undefined}><p className={`${nav.navEmpty} ${nav.navError}`}>连不上「{s.name}」，正在重试…</p></Tip>)}
       {days.length === 0 && (loading || connecting.length > 0) && !chats.error && <SkeletonRows />}
       {days.length === 0 && view && !loading && !failed.length && !connecting.length && (
         <p className={nav.navEmpty}>{onlyMine ? "没有你参与的会话。"
@@ -243,12 +243,12 @@ function ArchiveButton({ item, to }: { item: ChatItem; to: string }) {
 function AgentsPicture({ item }: { item: ChatItem }) {
   const agents = item.agents.slice(0, 2);
   return (
-    <span className={nav.rowPicture} data-count={agents.length || 1} title={item.agents.map((a) => a.agentText).join("、") || undefined}>
+    <Tip label={item.agents.map((a) => a.agentText).join("、") || undefined}><span className={nav.rowPicture} data-count={agents.length || 1}>
       {agents.length === 0
         ? <span className={nav.rowAgent} aria-hidden="true"><Mark size={20} /></span>
         : agents.map((a) => <span key={a.key} className={nav.rowAgent} aria-hidden="true"><ModelLogo maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 14 : 26} /></span>)}
       <ChatMark item={item} />
-    </span>
+    </span></Tip>
   );
 }
 

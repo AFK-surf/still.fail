@@ -80,9 +80,9 @@ export function ArchivePage({ scope, back }: { scope: string; back: string }) {
             <div key={`${row.view.station}/${row.chat.thread ?? row.chat.session}`} className={css.archiveRow}>
               <div className={css.archiveHead}>
                 <span className={css.archiveTitle}>{row.chat.title}</span>
-                <span className={css.archiveWhen} title={row.chat.archived?.by === "auto" ? "空闲后自动归档" : "手动归档"}>
+                <Tip label={row.chat.archived?.by === "auto" ? "空闲后自动归档" : "手动归档"}><span className={css.archiveWhen}>
                   {named && <span>{row.view.name}</span>}{clock(archivedAt(row.chat))}
-                </span>
+                </span></Tip>
                 <div className={css.archiveActions}>
                   <Tip label="恢复到列表"><button type="button" className={`${pagesCss.iconBtn} ${css.archiveAction}`} aria-label={`恢复「${row.chat.title}」`} onClick={() => void restore(row)}><Retry size={14} /></button></Tip>
                   {/* A chat archived alone has agents still at work elsewhere: nothing of theirs is deleted from here. */}

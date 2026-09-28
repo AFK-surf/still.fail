@@ -9,6 +9,7 @@ import { offerToDraft, type DraftQuote } from "../draft.ts";
 import type { Picked } from "./frame.ts";
 import * as css from "./Marks.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
+import { Tip } from "../ui.tsx";
 
 interface Mark { picked: Picked; comment: string }
 interface Box { x: number; y: number; width: number; height: number }
@@ -107,10 +108,10 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able }:
   };
 
   const button = on ? (
-    <button type="button" className={pagesCss.iconBtn} aria-pressed={marking} aria-label="标注" title={marking ? "停止点选（Esc）" : "标注页面上的元素，发给 agent"}
+    <Tip label={marking ? "停止点选（Esc）" : "标注页面上的元素，发给 agent"}><button type="button" className={pagesCss.iconBtn} aria-pressed={marking} aria-label="标注"
       onClick={() => mark(!marking)}>
       <Edit size={14} strokeWidth={1.75} />
-    </button>
+    </button></Tip>
   ) : null;
 
   const active = on && (marking || marks.length > 0);
@@ -119,12 +120,12 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able }:
     <div className={css.mode} role="status">
       <span className={css.modeDot} data-on={marking || undefined} aria-hidden="true" />
       {error
-        ? <span className={css.modeError} title={error}>{error}</span>
+        ? <Tip label={error}><span className={css.modeError}>{error}</span></Tip>
         : <span className={css.modeText}>
             {marks.length ? `已标注 ${marks.length} 处` : "点选页面上的元素"}
             {marking && <span>{marks.length ? "可以继续点选" : "↑ ↓ 换一层 · Esc 停止"}</span>}
           </span>}
-      <button type="button" className={css.modeBtn} onClick={leave} disabled={busy} aria-label="取消标注" title="取消标注"><Close size={12} strokeWidth={2} /></button>
+      <Tip label="取消标注"><button type="button" className={css.modeBtn} onClick={leave} disabled={busy} aria-label="取消标注"><Close size={12} strokeWidth={2} /></button></Tip>
       <button type="button" className={css.modeSend} onClick={() => void send()} disabled={busy || !marks.length} aria-busy={busy}>
         <Send size={12} strokeWidth={2} />{busy ? "截图中…" : "放进对话"}
       </button>
@@ -141,8 +142,8 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able }:
         return (
           <div key={m.picked.n}>
             <div className={css.outline} data-open={open || undefined} style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />
-            <button type="button" className={css.pin} data-open={open || undefined} style={{ left: pin.x, top: pin.y }}
-              aria-label={`标注 ${m.picked.n}`} title={m.comment || m.picked.kind} onClick={() => setEditing(open ? null : m.picked.n)}>{m.picked.n}</button>
+            <Tip label={m.comment || m.picked.kind}><button type="button" className={css.pin} data-open={open || undefined} style={{ left: pin.x, top: pin.y }}
+              aria-label={`标注 ${m.picked.n}`} onClick={() => setEditing(open ? null : m.picked.n)}>{m.picked.n}</button></Tip>
             {open
               ? <Note mark={m} x={pin.x} y={pin.y}
                   onComment={(comment) => setMarks((all) => all.map((x) => (x.picked.n === m.picked.n ? { ...x, comment } : x)))}
@@ -174,7 +175,7 @@ function Note({ mark, x, y, onComment, onDone, onRemove }:
           else if (e.key === "Escape") { e.preventDefault(); if (mark.comment) onDone(); else onRemove(); }
         }} />
       <span className={css.noteKey} aria-hidden="true">↵</span>
-      <button type="button" className={css.noteRemove} aria-label="删掉这处标注" title="删掉这处标注" onClick={onRemove}><Trash size={13} strokeWidth={1.75} /></button>
+      <Tip label="删掉这处标注"><button type="button" className={css.noteRemove} aria-label="删掉这处标注" onClick={onRemove}><Trash size={13} strokeWidth={1.75} /></button></Tip>
     </div>
   );
 }

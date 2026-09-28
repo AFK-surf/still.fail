@@ -4,6 +4,7 @@ import { useDark } from "./theme.ts";
 import type { AppUpdate } from "./core/client.ts";
 import { shortcutOf, useKeymap, useShortcut } from "./keymap.ts";
 import * as css from "./brand.css.ts";
+import { Tip } from "./ui.tsx";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
 // picked by the OS theme like the rest of the app; the illustrations switch themselves.
@@ -80,9 +81,9 @@ function SidebarBuddy() {
   // On the page itself, not in the sidebar: a closed sidebar clips what is in it, and the desktop app's window would
   // then take a click on the buddy for a drag of the window.
   return createPortal(
-    <button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? "展开侧边栏" : "收起侧边栏"} title={`${closed ? "展开侧边栏" : "收起侧边栏"}${keys ? `  ${keys}` : ""}`}>
+    <Tip label={`${closed ? "展开侧边栏" : "收起侧边栏"}${keys ? `  ${keys}` : ""}`}><button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? "展开侧边栏" : "收起侧边栏"}>
       <Themed name={`buddy/${pose}`} width={28} height={28} />
-    </button>,
+    </button></Tip>,
     document.body,
   );
 }
@@ -106,9 +107,9 @@ function UpdateButton() {
   const busy = state.phase === "downloading" || state.phase === "installing";
   const title = state.phase === "failed" ? state.message : `更新到 ${state.version}：下载后 ember 会重启`;
   return createPortal(
-    <button type="button" className={css.sidebarUpdate} disabled={busy} aria-busy={busy} onClick={() => updates.start()} title={title}>
+    <Tip label={title}><button type="button" className={css.sidebarUpdate} disabled={busy} aria-busy={busy} onClick={() => updates.start()}>
       {label}
-    </button>,
+    </button></Tip>,
     document.body,
   );
 }

@@ -57,10 +57,13 @@ function TipKeys({ action }: { action: Action }) {
   return keys ? <span className={css.tipKeys}>{keys}</span> : null;
 }
 
-/** A tip over a control; with a `shortcut`, the keys that do the same follow what it says. */
+/**
+ * A tip over a control; with a `shortcut`, the keys that do the same follow what it says. The only way anything here
+ * explains itself on hover: no native `title`. With no label it never opens, but keeps its place in the tree.
+ */
 export function Tip({ label, children, side = "bottom", shortcut }: { label: ReactNode; children: ReactNode; side?: "top" | "bottom" | "left" | "right"; shortcut?: Action }) {
   return (
-    <Tooltip.Root>
+    <Tooltip.Root {...(label == null || label === "" ? { open: false } : {})}>
       <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content className={css.tooltip} side={side} sideOffset={6} collisionPadding={8}>{label}{shortcut && <TipKeys action={shortcut} />}</Tooltip.Content>
@@ -302,7 +305,7 @@ export function CopyCommand({ text }: { text: string }) {
 export function Chooser({ label, title, children, side = "bottom", className = chatCss.chooser }: { label: ReactNode; title: string; children: ReactNode; side?: "top" | "bottom"; className?: string }) {
   return (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger className={className} title={title}>{label}<ChevronDown size={12} className={chatCss.chooserChevron} /></DropdownMenu.Trigger>
+      <Tip label={title}><DropdownMenu.Trigger className={className}>{label}<ChevronDown size={12} className={chatCss.chooserChevron} /></DropdownMenu.Trigger></Tip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} side={side} align="start" sideOffset={6} collisionPadding={8}>{children}</DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -485,7 +488,7 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
     if (saved) document.documentElement.style.setProperty(variable, `${Math.min(max, Math.max(min, saved))}px`);
   }, [storage]);
   return (
-    <div className={css.resizeHandle} data-edge={edge} role="separator" aria-orientation="vertical" aria-label={label} title="拖动调整宽度，双击恢复"
+    <Tip label="拖动调整宽度，双击恢复"><div className={css.resizeHandle} data-edge={edge} role="separator" aria-orientation="vertical" aria-label={label}
       onDoubleClick={() => set(null)}
       onPointerDown={(e) => {
         const column = e.currentTarget.parentElement!.getBoundingClientRect();
@@ -504,7 +507,7 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
         handle.addEventListener("pointermove", move);
         handle.addEventListener("pointerup", up);
         e.preventDefault();
-      }} />
+      }} /></Tip>
   );
 }
 
@@ -514,7 +517,7 @@ const MONO = new Set(["anthropic", "openai", "kimi", "xai"]);
 /** The mark of the company that made a model (the core says which); the runtime's mark when it does not know. */
 export function ModelLogo({ maker, runtime, size = 14 }: { maker: Maker | null | undefined; runtime: "claude" | "codex"; size?: number }) {
   if (!maker) return <RuntimeLogo runtime={runtime} size={size} />;
-  return <img className={css.modelLogo} src={`${import.meta.env.BASE_URL}models/${maker.id}.svg`} alt={maker.name} title={maker.name} width={size} height={size} data-mono={MONO.has(maker.id) || undefined} />;
+  return <Tip label={maker.name}><img className={css.modelLogo} src={`${import.meta.env.BASE_URL}models/${maker.id}.svg`} alt={maker.name} width={size} height={size} data-mono={MONO.has(maker.id) || undefined} /></Tip>;
 }
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */
@@ -537,7 +540,7 @@ export function ProviderLogo({ runtime, kind, size = 16 }: { runtime: "claude" |
 export function RuntimeTags({ runtimes }: { runtimes: ("claude" | "codex")[] }) {
   return (
     <span className={waitingCss.runtimeTags}>
-      {runtimes.map((r) => <span key={r} className={waitingCss.runtimeTag} title={r === "claude" ? "Claude Code" : "Codex"}><RuntimeLogo runtime={r} size={11} />{r === "claude" ? "CC" : "Codex"}</span>)}
+      {runtimes.map((r) => <Tip key={r} label={r === "claude" ? "Claude Code" : "Codex"}><span className={waitingCss.runtimeTag}><RuntimeLogo runtime={r} size={11} />{r === "claude" ? "CC" : "Codex"}</span></Tip>)}
     </span>
   );
 }
@@ -572,10 +575,10 @@ export function Time({ stamp, className, fixed = false }: { stamp: Stamp | undef
   if (!stamp) return null;
   const absolute = switched && !fixed;
   return (
-    <time className={`${fixed ? "" : css.timeToggle}${className ? ` ${className}` : ""}`.trim()} dateTime={new Date(stamp.at).toISOString()} title={absolute ? stamp.ago : stamp.full}
+    <Tip label={absolute ? stamp.ago : stamp.full}><time className={`${fixed ? "" : css.timeToggle}${className ? ` ${className}` : ""}`.trim()} dateTime={new Date(stamp.at).toISOString()}
       onClick={fixed ? undefined : (e) => { e.preventDefault(); e.stopPropagation(); flip(); }}>
       {absolute ? stamp.full : stamp.ago}
-    </time>
+    </time></Tip>
   );
 }
 

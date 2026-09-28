@@ -9,6 +9,7 @@ import { Camera, ChevronLeft, ChevronRight, Landscape, Pause, Play } from "./ico
 import * as css from "./VideoViewer.css.ts";
 import * as fpCss from "./FilePreview.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
+import { Tip } from "./ui.tsx";
 
 type Canvas = HTMLCanvasElement | OffscreenCanvas;
 
@@ -311,7 +312,7 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
   const facts = decoded ? [
     { key: "frame", text: <><b className={css.vvNow}>{at + 1}</b><span className={css.vvDim}> / {count} 帧</span></> },
     { key: "time", text: clock(now) },
-    { key: "held", text: <span title="这一帧在屏幕上停留的时间">{`停留 ${(decoded.held(at) * 1000).toFixed(1)} ms`}</span> },
+    { key: "held", text: <Tip label="这一帧在屏幕上停留的时间"><span>{`停留 ${(decoded.held(at) * 1000).toFixed(1)} ms`}</span></Tip> },
     ...(rateInfo ? [{ key: "fps", text: <span className={css.vvDim}>{rateInfo.steady ? `${Math.round(rateInfo.fps)} fps` : `可变帧率 · 均 ${Math.round(rateInfo.fps)} fps`}</span> }] : []),
   ] : [
     { key: "time", text: <><b className={css.vvNow}>{clock(time)}</b><span className={css.vvDim}> / {clock(duration)}</span></> },
@@ -351,20 +352,20 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
         <Timeline start={decoded?.starts[0] ?? 0} end={decoded ? decoded.starts.at(-1)! + decoded.lastDuration : duration} now={now} onSeek={seek} />
         <div className={css.vvRow}>
           <span className={css.vvGroup}>
-            <button type="button" className={pagesCss.iconBtn} aria-label="上一帧" title="上一帧（← 或 ,；Shift 一次 10 帧）" onClick={() => go((i) => i - 1)}><ChevronLeft size={18} /></button>
-            <button type="button" className={pagesCss.iconBtn} aria-label={playing ? "暂停" : "播放"} title={playing ? "暂停（空格）" : "播放（空格）"} onClick={toggle}>
+            <Tip label="上一帧（← 或 ,；Shift 一次 10 帧）"><button type="button" className={pagesCss.iconBtn} aria-label="上一帧" onClick={() => go((i) => i - 1)}><ChevronLeft size={18} /></button></Tip>
+            <Tip label={playing ? "暂停（空格）" : "播放（空格）"}><button type="button" className={pagesCss.iconBtn} aria-label={playing ? "暂停" : "播放"} onClick={toggle}>
               {playing ? <Pause size={18} /> : <Play size={18} />}
-            </button>
-            <button type="button" className={pagesCss.iconBtn} aria-label="下一帧" title="下一帧（→ 或 .；Shift 一次 10 帧）" onClick={() => go((i) => i + 1)}><ChevronRight size={18} /></button>
+            </button></Tip>
+            <Tip label="下一帧（→ 或 .；Shift 一次 10 帧）"><button type="button" className={pagesCss.iconBtn} aria-label="下一帧" onClick={() => go((i) => i + 1)}><ChevronRight size={18} /></button></Tip>
           </span>
           <span className={css.vvInfo}>
             {facts.map((f) => <span key={f.key} className={css.vvFact} data-fact={f.key}>{f.text}</span>)}
           </span>
           <span className={css.vvGroup}>
             {zoomTools}
-            <button type="button" className={css.vvRate} title="播放速度（点一下换一档）"
-              onClick={() => setRate((r) => RATES[(RATES.indexOf(r) + RATES.length - 1) % RATES.length]!)}>{rate}×</button>
-            <button type="button" className={pagesCss.iconBtn} aria-label="保存这一帧" title="把这一帧存成 PNG" disabled={!still} onClick={save}><Camera size={18} /></button>
+            <Tip label="播放速度（点一下换一档）"><button type="button" className={css.vvRate}
+              onClick={() => setRate((r) => RATES[(RATES.indexOf(r) + RATES.length - 1) % RATES.length]!)}>{rate}×</button></Tip>
+            <Tip label="把这一帧存成 PNG"><button type="button" className={pagesCss.iconBtn} aria-label="保存这一帧" disabled={!still} onClick={save}><Camera size={18} /></button></Tip>
             {canTurn() && <button type="button" className={`${pagesCss.iconBtn} ${css.vvTurn}`} aria-label={turned ? "退出横屏" : "横屏"} aria-pressed={turned}
               onClick={() => void turn().catch((e: unknown) => console.warn("full screen:", e))}><Landscape size={18} /></button>}
           </span>

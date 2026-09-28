@@ -15,6 +15,7 @@ import { useCall } from "./core/react.ts";
 import * as css from "./Preview.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { useMarks } from "./annotate/Marks.tsx";
+import { Tip } from "./ui.tsx";
 
 declare const __PREVIEW_ORIGIN__: string;
 const ORIGIN = __PREVIEW_ORIGIN__;
@@ -80,9 +81,9 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
   const icon = { size: 14, strokeWidth: 1.75 };
   return (
     <form className={css.previewBar} onSubmit={(e) => { e.preventDefault(); go(typed.startsWith("/") ? typed : `/${typed}`); (document.activeElement as HTMLElement | null)?.blur(); }}>
-      {back && <button type="button" className={pagesCss.iconBtn} aria-label="后退" title="后退" disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button>}
-      {forward && <button type="button" className={pagesCss.iconBtn} aria-label="前进" title="前进" disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button>}
-      <button type="button" className={pagesCss.iconBtn} aria-label="刷新" title="刷新" onClick={reload}><Refresh {...icon} /></button>
+      {back && <Tip label="后退"><button type="button" className={pagesCss.iconBtn} aria-label="后退" disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button></Tip>}
+      {forward && <Tip label="前进"><button type="button" className={pagesCss.iconBtn} aria-label="前进" disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button></Tip>}
+      <Tip label="刷新"><button type="button" className={pagesCss.iconBtn} aria-label="刷新" onClick={reload}><Refresh {...icon} /></button></Tip>
       {instead ?? (
         <label className={css.previewAddress}>
           <Web size={14} strokeWidth={1.75} />
@@ -91,7 +92,7 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
         </label>
       )}
       {extra}
-      {external && <a className={pagesCss.iconBtn} href={external} target="_blank" rel="noopener" aria-label="在新窗口打开" title="在新窗口打开"><External {...icon} /></a>}
+      {external && <Tip label="在新窗口打开"><a className={pagesCss.iconBtn} href={external} target="_blank" rel="noopener" aria-label="在新窗口打开"><External {...icon} /></a></Tip>}
     </form>
   );
 }

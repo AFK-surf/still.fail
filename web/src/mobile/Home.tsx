@@ -15,6 +15,7 @@ import * as css from "./Home.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as homeCss from "./styles/home.css.ts";
+import { Tip } from "../ui.tsx";
 
 export function Home() {
   const app = useApp();
@@ -127,9 +128,9 @@ function ChatRow({ item }: { item: ChatItem }) {
       <span className={css.mChatLine1}>
         <span className={css.mChatTitle} data-unread={item.unread || undefined}>{item.title}</span>
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
-        {item.offline ? <span className={css.mChatMark} title={item.offline}><Unplug size={13} /></span>
-          : item.reconnecting ? <span className={css.mChatMark} title={item.reconnecting} aria-label={item.reconnecting}><Spinner size={11} /></span>
-          : <span className={css.mChatMark}>{item.connect && <span title={item.originText ?? "Slack"}><SlackMark size={13} /></span>}</span>}
+        {item.offline ? <Tip label={item.offline}><span className={css.mChatMark}><Unplug size={13} /></span></Tip>
+          : item.reconnecting ? <Tip label={item.reconnecting}><span className={css.mChatMark} aria-label={item.reconnecting}><Spinner size={11} /></span></Tip>
+          : <span className={css.mChatMark}>{item.connect && <Tip label={item.originText ?? "Slack"}><span><SlackMark size={13} /></span></Tip>}</span>}
       </span>
       <span className={css.mChatLine2}>
         <span className={css.mChatLast}>{item.last && <LastMessage item={item} />}</span>

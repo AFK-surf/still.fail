@@ -4,7 +4,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { stamp, type StationView } from "../api.ts";
 import type { Host, Level } from "../core/shapes.ts";
-import { StatusDot, Time } from "../ui.tsx";
+import { StatusDot, Time, Tip } from "../ui.tsx";
 import * as css from "./StationCards.css.ts";
 
 type Meter = Host["meters"][number];
@@ -47,14 +47,14 @@ function machine(host: Host | undefined): string {
 function Dial({ m }: { m: Meter }) {
   const size = 34, r = (size - 4) / 2, c = 2 * Math.PI * r;
   return (
-    <span className={css.dial} data-level={m.level} title={`${m.label} ${m.value}${m.note ? ` · ${m.note}` : ""}`}>
+    <Tip label={`${m.label} ${m.value}${m.note ? ` · ${m.note}` : ""}`}><span className={css.dial} data-level={m.level}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle className={css.dialTrack} cx={size / 2} cy={size / 2} r={r} />
         <circle className={css.dialFill} cx={size / 2} cy={size / 2} r={r} strokeDasharray={`${(c * m.percent) / 100} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
         <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle">{m.percent}</text>
       </svg>
       <span>{m.short}</span>
-    </span>
+    </span></Tip>
   );
 }
 

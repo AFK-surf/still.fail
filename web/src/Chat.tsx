@@ -433,7 +433,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
       data-enter={enter} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
       avatar={<MessageAvatar message={m} name={who} />} time={m.time?.createdAt}
       name={agent
-        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)} title="打开或关闭执行历史">{who}</button>
+        ? <Tip label="打开或关闭执行历史"><button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{who}</button></Tip>
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} />
       {m.authorKind === "person"
@@ -533,11 +533,11 @@ function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?
   const pin = quote.role === "page" ? /(\d+)$/.exec(quote.author)?.[1] : undefined;
   return (
     <div className={css.quoteCard}>
-      <button type="button" className={css.quoteCardSource} onClick={onJump} disabled={!onJump} title={onJump ? "跳到原消息" : pin ? quote.text : undefined}>
+      <Tip label={onJump ? "跳到原消息" : pin ? quote.text : undefined}><button type="button" className={css.quoteCardSource} onClick={onJump} disabled={!onJump}>
         {pin
           ? <span className={css.quoteCardText}><span className={css.quoteCardPin}>{pin}</span>{quote.text.split("\n")[0]}</span>
           : <span className={css.quoteCardText}><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className={css.quoteCardWho}>{quote.author}：</span>{quote.text}</span>}
-      </button>
+      </button></Tip>
       {comment ?? (quote.comment ? <div className={css.quoteCardComment}>{quote.comment}</div> : null)}
       {onRemove && <button type="button" className={css.quoteCardRemove} aria-label="移除引用" onClick={onRemove}><Close size={12} /></button>}
     </div>
@@ -593,14 +593,13 @@ function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file:
   if (video && sessionKey !== null) {
     return (
       <>
-        <button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} onClick={() => setOpen(true)}
-          title={file.name} aria-label={`${videoFailed ? "查看" : "播放"} ${file.name}`} style={look.box(file)} data-unavailable={videoFailed || undefined}>
+        <Tip label={file.name}><button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} onClick={() => setOpen(true)} aria-label={`${videoFailed ? "查看" : "播放"} ${file.name}`} style={look.box(file)} data-unavailable={videoFailed || undefined}>
           {url && !videoFailed && <video src={url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />}
           <span className={videoFailed ? css.msgVideoUnavailable : css.msgVideoPlay} aria-hidden="true">
             {videoFailed ? <><Read size={24} /><span>暂时无法预览</span><small>{fileSize(file.size)}</small></> : "▶"}
           </span>
           <span className={css.msgVideoName}>{file.name}</span>
-        </button>
+        </button></Tip>
         {preview}
       </>
     );
@@ -608,10 +607,10 @@ function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file:
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={look.image} onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`} style={look.box(file)}
+        <Tip label={file.path}><button ref={box} type="button" className={look.image} onClick={() => url && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
           disabled={look.wait === undefined && !url}>
           {url ? <img src={url} alt={file.name} /> : look.wait !== undefined && <span className={look.wait} />}
-        </button>
+        </button></Tip>
         {preview}
       </>
     );
@@ -642,14 +641,14 @@ export function imageBox(file: Attachment): { width: number; aspectRatio: string
 
 function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; error?: string | null }) {
   return (
-    <span className={css.fileCard} title={file.path ?? file.name} data-error={error ? true : undefined}>
+    <Tip label={file.path ?? file.name}><span className={css.fileCard} data-error={error ? true : undefined}>
       {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
       <span className={css.fileCardText}>
         <span className={css.fileCardName}>{file.name}</span>
         <span className={css.fileCardMeta}>{error ?? (pending ? "正在上传…" : fileSize(file.size))}</span>
       </span>
       {onRemove && <button type="button" className={css.fileCardRemove} aria-label={`移除 ${file.name}`} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
-    </span>
+    </span></Tip>
   );
 }
 
@@ -895,11 +894,11 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
             {files.map((f) => {
               const remove = () => draft.remove(f.id);
               return f.preview ? (
-                <span key={f.id} className={css.composerThumb} title={f.error ?? f.name} data-error={f.error ? true : undefined}>
+                <Tip key={f.id} label={f.error ?? f.name}><span className={css.composerThumb} data-error={f.error ? true : undefined}>
                   <img src={f.preview} alt={f.name} />
                   {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
                   <button type="button" className={css.composerThumbRemove} aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><Close size={11} /></button>
-                </span>
+                </span></Tip>
               ) : <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={remove} />;
             })}
           </div>
@@ -1131,7 +1130,7 @@ export function Activity({ agent, leaving, pose, onOpen, mark, className }: {
   const now = useSteady(agent.activity?.now ?? { key: "busy", text: "处理中" });
   return (
     <div className={`${conversationCss.msg} ${css.agentActivity}${className ? ` ${className}` : ""}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined}>
-      <button type="button" className={css.activityLine} onClick={onOpen} title="打开执行历史" aria-label={`${agent.who}：${now.current.text}`}>
+      <Tip label="打开执行历史"><button type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
         <span className={css.activityAvatar} aria-hidden="true">{mark ?? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span>}</span>
         <span className={css.activityTail}>
           <span className={css.activityNow}>
@@ -1140,7 +1139,7 @@ export function Activity({ agent, leaving, pose, onOpen, mark, className }: {
           </span>
           {agent.since ? <span className={css.activityElapsed}><Elapsed since={agent.since} /></span> : null}
         </span>
-      </button>
+      </button></Tip>
     </div>
   );
 }

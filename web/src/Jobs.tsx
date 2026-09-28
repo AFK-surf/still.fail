@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Job } from "./core/shapes.ts";
 import { useStationCall } from "./api.ts";
 import { ArrowRight, ChevronDown, ChevronRight, PanelOpen, Stop } from "./icons.tsx";
-import { Empty, Segmented } from "./ui.tsx";
+import { Empty, Segmented, Tip } from "./ui.tsx";
 import { useToast } from "./toast.tsx";
 import * as css from "./Jobs.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -289,9 +289,9 @@ export function JobsTab({ station, jobs, picked, onPick, onService }:
             <span className={css.jobDetailState}>{word(job).text} · {job.state === "running" ? span(now - job.startedAt) : job.endedAt ? ago(job.endedAt, now) : ""}{job.notices?.length ? ` · ${job.notices.length} 条通知` : ""}</span>
             <span className={css.jobDetailGrow} />
             <Segmented<"notices" | "output"> label="看什么" value={view} onChange={setView} options={[{ value: "notices", label: "通知" }, { value: "output", label: "输出" }]} />
-            {job.state === "running" && <button type="button" className={`${pagesCss.iconBtn} ${css.jobDetailStop}`} aria-label="停止" title="停止" onClick={() => stop(job)}><Stop size={16} /></button>}
+            {job.state === "running" && <Tip label="停止"><button type="button" className={`${pagesCss.iconBtn} ${css.jobDetailStop}`} aria-label="停止" onClick={() => stop(job)}><Stop size={16} /></button></Tip>}
           </div>
-          {job.command && <div className={css.jobDetailCommand} title={job.command}>{job.command}</div>}
+          {job.command && <Tip label={job.command}><div className={css.jobDetailCommand}>{job.command}</div></Tip>}
           {view === "notices"
             ? <><div className={css.jobDetailNotices}><Notices job={job} now={now} clockTimes /></div><LastOutput station={station} job={job} now={now} /></>
             : <Output station={station} job={job} />}

@@ -54,7 +54,7 @@ export function MachineLoginCard({ login, action, framed = true }: { login: Mach
           {plan && <span className={waitingCss.runtimeTags}><span className={waitingCss.runtimeTag}>{plan}</span></span>}
           <State pill={<Pill tone={blocked ? "red" : "green"}>{blocked ? "被停用" : "本机已登录"}</Pill>} why={trouble} />
         </>}
-        sub={[login.email ? <span key="email" className={css.profileCardEmail} title={login.email}>{login.email}</span> : "已登录"]}
+        sub={[login.email ? <Tip key="email" label={login.email}><span className={css.profileCardEmail}>{login.email}</span></Tip> : "已登录"]}
         quota={quota ? <QuotaBars quota={quota} compact /> : null}
         state={null}
         action={action ?? null}

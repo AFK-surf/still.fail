@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTopic } from "../core/react.ts";
 import { useAction, useApi, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
 import { useToast } from "../toast.tsx";
-import { Button, Dialog, Field, ICON, Section, SwitchRow } from "../ui.tsx";
+import { Button, Dialog, Field, ICON, Section, SwitchRow, Tip } from "../ui.tsx";
 import * as css from "./SlackApp.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
@@ -299,17 +299,17 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
   const on = (Object.keys(GROUPS) as SlackGroup[]).filter((g) => settings.groups[g]).length;
   const isPicked = (a: Avatar) => picked !== null && !("upload" in picked) && picked.avatar.id === a.id;
   const tile = (a: Avatar, maker: boolean) => (
-    <button key={a.id} type="button" className={css.avatarTile} data-picked={isPicked(a) || undefined} title={a.label} aria-label={a.label}
+    <Tip key={a.id} label={a.label}><button type="button" className={css.avatarTile} data-picked={isPicked(a) || undefined} aria-label={a.label}
       style={{ background: a.bg }} onClick={() => pick(a, maker)}>
       <img src={a.thumb ?? a.src} alt="" loading="lazy" data-mono={a.mono || undefined} data-maker={maker || undefined} />
-    </button>
+    </button></Tip>
   );
   return (
     <>
       <div className={css.appLook}>
-        <button type="button" className={css.appAvatar} onClick={() => file.current?.click()} title="上传图片" style={{ background: settings.backgroundColor || undefined }}>
+        <Tip label="上传图片"><button type="button" className={css.appAvatar} onClick={() => file.current?.click()} style={{ background: settings.backgroundColor || undefined }}>
           {icon ? <img src={icon} alt="头像" /> : <span className={css.appAvatarEmpty}><ImageUpload {...ICON} size={20} />{fresh ? "上传" : "保持现在的"}</span>}
-        </button>
+        </button></Tip>
         <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = "";

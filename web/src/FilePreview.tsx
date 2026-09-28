@@ -9,7 +9,7 @@ import { ChevronLeft, ChevronRight, Close, Download, Minus, Plus } from "./icons
 import { placeFiles, Prose } from "./Prose.tsx";
 import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
-import { Segmented } from "./ui.tsx";
+import { Segmented, Tip } from "./ui.tsx";
 import { VideoViewer } from "./VideoViewer.tsx";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
@@ -183,7 +183,7 @@ export function FileLink({ sessionKey, file, children }: { sessionKey: string | 
   if (sessionKey === null) return <>{children}</>;
   return (
     <>
-      <button type="button" className={fileLink} title={file.name} onClick={() => setOpen(true)}>{children}</button>
+      <Tip label={file.name}><button type="button" className={fileLink} onClick={() => setOpen(true)}>{children}</button></Tip>
       <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
     </>
   );
@@ -247,18 +247,18 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
       onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
       <header className={css2.fpHead}>
         <div className={css2.fpTitle}>
-          <RDialog.Title className={css2.fpName} title={file.path}>{file.name}</RDialog.Title>
+          <Tip label={file.path}><RDialog.Title className={css2.fpName}>{file.name}</RDialog.Title></Tip>
           <span className={css2.fpMeta}>{images.length > 1 && at >= 0 ? `${at + 1} / ${images.length} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${KIND_LABEL[kind as PreviewKind]}` : ""}</span>
         </div>
         <div className={css2.fpTools}>{controls}</div>
-        {loaded.state === "ready" && <a className={pagesCss.iconBtn} href={loaded.url} download={file.name} title="下载" aria-label="下载"><Download size={18} /></a>}
-        <RDialog.Close className={pagesCss.iconBtn} aria-label="关闭" title="关闭（Esc）"><Close size={18} /></RDialog.Close>
+        {loaded.state === "ready" && <Tip label="下载"><a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label="下载"><Download size={18} /></a></Tip>}
+        <Tip label="关闭（Esc）"><RDialog.Close className={pagesCss.iconBtn} aria-label="关闭"><Close size={18} /></RDialog.Close></Tip>
       </header>
       <div className={css2.fpBody}>
         {body}
         {images.length > 1 && at >= 0 && <>
-          <button type="button" className={css2.fpStep} data-side="before" aria-label="上一张" title="上一张（←）" disabled={!before} onClick={() => step(before)}><ChevronLeft size={22} /></button>
-          <button type="button" className={css2.fpStep} data-side="after" aria-label="下一张" title="下一张（→）" disabled={!after} onClick={() => step(after)}><ChevronRight size={22} /></button>
+          <Tip label="上一张（←）"><button type="button" className={css2.fpStep} data-side="before" aria-label="上一张" disabled={!before} onClick={() => step(before)}><ChevronLeft size={22} /></button></Tip>
+          <Tip label="下一张（→）"><button type="button" className={css2.fpStep} data-side="after" aria-label="下一张" disabled={!after} onClick={() => step(after)}><ChevronRight size={22} /></button></Tip>
         </>}
       </div>
     </RDialog.Content>
@@ -446,10 +446,10 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
   useEffect(() => {
     setControls(
       <span className={css2.fpZoom}>
-        <button type="button" className={pagesCss.iconBtn} aria-label="缩小" title="缩小（-）" disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button>
-        <button type="button" className={`${css2.fpToolText} ${css2.fpPercent}`} title="适应窗口（0）" onClick={reset}>{Math.round(scale * 100)}%</button>
-        <button type="button" className={pagesCss.iconBtn} aria-label="放大" title="放大（+）" disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button>
-        <button type="button" className={css2.fpToolText} title="原始大小（1）" onClick={() => zoomTo(1)}>1:1</button>
+        <Tip label="缩小（-）"><button type="button" className={pagesCss.iconBtn} aria-label="缩小" disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button></Tip>
+        <Tip label="适应窗口（0）"><button type="button" className={`${css2.fpToolText} ${css2.fpPercent}`} onClick={reset}>{Math.round(scale * 100)}%</button></Tip>
+        <Tip label="放大（+）"><button type="button" className={pagesCss.iconBtn} aria-label="放大" disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button></Tip>
+        <Tip label="原始大小（1）"><button type="button" className={css2.fpToolText} onClick={() => zoomTo(1)}>1:1</button></Tip>
       </span>,
     );
   }, [scale, minScale, zoomTo, reset, setControls]);

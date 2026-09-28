@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight, Received as ReceivedIcon, Send } from "./ico
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useApi, useHistory, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryView, type Place } from "./api.ts";
-import { ICON, Pill, SlackLogo } from "./ui.tsx";
+import { ICON, Pill, SlackLogo, Tip } from "./ui.tsx";
 import { useLink } from "./station.tsx";
 import { Link } from "react-router";
 import { Prose } from "./Prose.tsx";
@@ -37,9 +37,9 @@ export function History({ station, sessionKey, summary, actions, details, focus 
     if (!place) return null;
     const inner = <>{place.surface === "ember" ? <Mark size={13} /> : <SlackLogo size={13} />}<span className={css.hPlaceName}>{place.name}</span></>;
     // A Slack thread opens in Slack; an ember chat, its agent's page.
-    if (place.url) return <a className={css.hPlace} href={place.url} target="_blank" rel="noopener" title="在 Slack 中打开">{inner}</a>;
+    if (place.url) return <Tip label="在 Slack 中打开"><a className={css.hPlace} href={place.url} target="_blank" rel="noopener">{inner}</a></Tip>;
     return place.session
-      ? <Link className={css.hPlace} to={link(`/chats/${encodeURIComponent(place.session)}`)} title="打开对话">{inner}</Link>
+      ? <Tip label="打开对话"><Link className={css.hPlace} to={link(`/chats/${encodeURIComponent(place.session)}`)}>{inner}</Link></Tip>
       : <span className={css.hPlace}>{inner}</span>;
   };
   const [usageOpen, setUsageOpen] = useState(false);
@@ -179,12 +179,12 @@ function Group({ group }: { group: HistoryGroup }) {
   const { steps, thinking, failures, pending } = group;
   return (
     <div className={css.hGroup} data-failed={failures > 0}>
-      <button type="button" className={css.hGroupHead} aria-expanded={open} onClick={() => setOpen(!open)} title={group.title || undefined}>
+      <Tip label={group.title || undefined}><button type="button" className={css.hGroupHead} aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? <ChevronDown {...ICON} size={14} /> : <ChevronRight {...ICON} size={14} />}
         <span>{group.summary}</span>
         {failures > 0 && <Pill tone="red">{failures} 项失败</Pill>}
         {pending > 0 && <Pill tone="accent">{pending} 项进行中</Pill>}
-      </button>
+      </button></Tip>
       {open && (
         <div className={css.hSteps}>
           {thinking.map((t, i) => steps.length ? (

@@ -7,7 +7,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ModelOption, RunnableProfile, RuntimeKind } from "./api.ts";
 import { QuotaBars } from "./components.tsx";
 import { RUNTIME_LABEL } from "./format.ts";
-import { ModelLogo, ProviderLogo, RuntimeLogo } from "./ui.tsx";
+import { ModelLogo, ProviderLogo, RuntimeLogo, Tip } from "./ui.tsx";
 import * as css from "./ModelTriple.css.ts";
 import * as css2 from "./ModelTriple.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -94,10 +94,10 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
   return (
     <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) { setDraft(value); setFilter(""); setModelsWidth(null); } }}>
       <span className={css2.modelTripleFit} ref={fit}>
-        <Popover.Trigger className={css2.modelTriple} title={title} disabled={options.length === 0} data-drop={DROPS[drop]}>
+        <Tip label={title}><Popover.Trigger className={css2.modelTriple} disabled={options.length === 0} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className={css2.tripleModel}>没有可用模型</span> : (
             <>
-              <span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={13} /><span className="triple-model-name" title={value.model || undefined}>{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span>
+              <span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={13} /><Tip label={value.model || undefined}><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></Tip></span>
               {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={13} />{RUNTIME_LABEL[value.runtime]}</span>}
               <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
               <span className={`${css2.triplePart} ${css2.tripleAccount}`}>
@@ -109,7 +109,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
             </>
           )}
           <ChevronDown size={12} className={chatCss.chooserChevron} />
-        </Popover.Trigger>
+        </Popover.Trigger></Tip>
       </span>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css2.runPickerPanel}`} side={side} align="start" sideOffset={6} collisionPadding={8}>
@@ -125,10 +125,10 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
                 <div key={who} className={`${css2.runPickerGroup} ${css.series}`}>
                   {groups.length > 1 && <h5>{who}</h5>}
                   {list.map((o) => (
-                    <button key={o.model} type="button" className={css2.runPickerOption} title={o.ids.join("\n")} aria-pressed={option === o} onClick={() => set({ model: o.model })}>
+                    <Tip key={o.model} label={o.ids.join("\n")}><button type="button" className={css2.runPickerOption} aria-pressed={option === o} onClick={() => set({ model: o.model })}>
                       <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={13} />
                       <span className={css2.runOptionText}><span className={css2.runOptionName}>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}</span>
-                    </button>
+                    </button></Tip>
                   ))}
                 </div>
               ))}

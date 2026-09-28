@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useApi, type MachineSaid, type MachineSession, type RuntimeKind, type Stamp } from "./api.ts";
 import type { ModelOption } from "./core/shapes.ts";
 import { ArrowLeft, Monitor } from "./icons.tsx";
-import { Button, Dialog, RuntimeLogo, Time } from "./ui.tsx";
+import { Button, Dialog, RuntimeLogo, Time, Tip } from "./ui.tsx";
 import { AgentAvatar, AgentWords, MessageName, MineBubble, MineMessage, OthersMessage } from "./Chat.tsx";
 import { modelName, optionOf } from "./ModelTriple.tsx";
 import * as conversationCss from "./styles/conversation.css.ts";
@@ -70,14 +70,14 @@ export function MachineSessions({ models, onContinued }: { models: ModelOption[]
           <ul className={css.list}>
             {sessions.map((s) => (
               <li key={`${s.runtime}:${s.id}`}>
-                <button type="button" className={css.row} onClick={() => setLooking(s)} title={s.first ?? undefined}>
+                <Tip label={s.first ?? undefined}><button type="button" className={css.row} onClick={() => setLooking(s)}>
                   <RuntimeLogo runtime={s.runtime} size={18} />
                   <span className={css.main}>
                     <span className={css.title}>{s.title ?? s.first}</span>
                     <span className={css.meta}>{meta(s)}</span>
                   </span>
                   {s.session ? <span className={css.already}>已在 ember 里</span> : null}
-                </button>
+                </button></Tip>
               </li>
             ))}
           </ul>

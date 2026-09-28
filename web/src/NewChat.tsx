@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useChatSend, useStations, type RuntimeKind, type StationView } from "./api.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
-import { Button, Chooser, ChooserItem as Item, FirstOne } from "./ui.tsx";
+import { Button, Chooser, ChooserItem as Item, FirstOne, Tip } from "./ui.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice as ProfileKind } from "./pages/Accounts.tsx";
 import { ModelTriple, optionOf } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
@@ -147,7 +147,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       )}
       {!runtime || !model ? (
         // Nothing to choose from: the chooser leads to where models are enabled.
-        <Link className={chatCss.chooser} to={profilesPage(station)} title="到 Profile 里勾选可以用的模型">没有可用模型 · 去勾选</Link>
+        <Tip label="到 Profile 里勾选可以用的模型"><Link className={chatCss.chooser} to={profilesPage(station)}>没有可用模型 · 去勾选</Link></Tip>
       ) : (
         <ModelTriple side="top" title="用哪个模型、运行时、思考深度和账号" options={view.models}
           value={{ model, runtime, effort: choice.effort || null, profile: choice.profile || null }}

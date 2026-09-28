@@ -524,7 +524,7 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
       {all.length > 0 && !choosing && (
         on.length === 0 ? <p className={shellCss.muted}>还没有启用模型。</p> : (
           <ul className={css.modelChips}>
-            {on.map((m) => <li key={m} className={css.modelChip} title={m}><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} /><span>{name(m)}</span></li>)}
+            {on.map((m) => <Tip key={m} label={m}><li className={css.modelChip}><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} /><span>{name(m)}</span></li></Tip>)}
           </ul>
         )
       )}
@@ -548,12 +548,12 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
                 <ul className={chatCss.modelPoolList}>
                   {list.map((m) => (
                     <li key={m}>
-                      <label className={chatCss.modelPoolItem} data-on={enabled.has(m) || undefined} title={m}>
+                      <Tip label={m}><label className={chatCss.modelPoolItem} data-on={enabled.has(m) || undefined}>
                         <input type="checkbox" checked={enabled.has(m)} onChange={() => toggle(m)} />
                         <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} />
                         <span>{name(m)}</span>
                         {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>检查里没有了</span>}
-                      </label>
+                      </label></Tip>
                     </li>
                   ))}
                 </ul>

@@ -260,9 +260,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   if (key === JOBS) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tabs.Trigger className={css.sideTab} value={key} title="服务和后台任务">
+                        <Tip label="服务和后台任务"><Tabs.Trigger className={css.sideTab} value={key}>
                           <span className={css.sideTabAgent}><Boxes size={13} strokeWidth={1.75} /><span className={css.sideTabText} data-text="任务">任务</span></span>
-                        </Tabs.Trigger>
+                        </Tabs.Trigger></Tip>
                         <button type="button" className={css.sideTabClose} aria-label="关闭任务" onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
@@ -271,9 +271,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   if (service) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tabs.Trigger className={css.sideTab} value={key} title={service.name}>
+                        <Tip label={service.name}><Tabs.Trigger className={css.sideTab} value={key}>
                           <span className={css.sideTabAgent}><JobDot tone={toneOf(service)} /><span className={css.sideTabText} data-text={service.name}>{service.name}</span></span>
-                        </Tabs.Trigger>
+                        </Tabs.Trigger></Tip>
                         <button type="button" className={css.sideTabClose} aria-label={`关闭 ${service.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
@@ -284,9 +284,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   const label = a.session.agentText;
                   return (
                     <span key={key} className={css.sideTabWrap}>
-                      <Tabs.Trigger className={css.sideTab} value={key} title={`${label} 的执行历史`}>
+                      <Tip label={`${label} 的执行历史`}><Tabs.Trigger className={css.sideTab} value={key}>
                         <span className={css.sideTabAgent}><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={13} /><span className={css.sideTabText} data-text={label}>{label}</span></span>
-                      </Tabs.Trigger>
+                      </Tabs.Trigger></Tip>
                       <button type="button" className={css.sideTabClose} aria-label={`关闭 ${label} 的执行历史`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                     </span>
                   );

@@ -30,9 +30,9 @@ export function MineFilter({ label = "筛选", mine = "我创建的", compact, a
   );
   return (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} title={`筛选${label}`} aria-label={`筛选${label}：${onlyMine ? mine : "全部"}`} data-on={onlyMine || undefined}>
+      <Tip label={`筛选${label}`}><DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} aria-label={`筛选${label}：${onlyMine ? mine : "全部"}`} data-on={onlyMine || undefined}>
         <Filter size={15} strokeWidth={1.8} />{!compact && <span>{onlyMine ? mine : "全部"}</span>}
-      </DropdownMenu.Trigger>
+      </DropdownMenu.Trigger></Tip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
           onCloseAutoFocus={(e) => { if (leaving.current) { leaving.current = false; e.preventDefault(); } }}>
@@ -62,12 +62,12 @@ export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown
   if (!owner?.shown) return <span className={`${css.owner} ${css.ownerNone}`}>未设置所属用户</span>;
   const { name, picture, mine } = owner.shown;
   return (
-    <span className={css.owner} title={owner.id === "local" ? undefined : owner.id}>
+    <Tip label={owner.id === "local" ? undefined : owner.id}><span className={css.owner}>
       {picture
         ? <img className={cloudCss.person} src={picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
         : <span className={`${cloudCss.person} ${cloudCss.personLetter}`} style={{ width: 16, height: 16, fontSize: 9 }} aria-hidden="true">{([...name][0] ?? "?").toUpperCase()}</span>}
       {mine ? `${name}（你）` : name}
-    </span>
+    </span></Tip>
   );
 }
 
@@ -134,12 +134,12 @@ export function QuotaRing({ left, level, size = 26 }: { left: number; level: Lev
 export function PeopleStack({ people, max = 3 }: { people: { id: string; shown: PersonShown }[] | undefined; max?: number }) {
   if (!people?.length) return null;
   return (
-    <span className={css.peopleStack} title={`参与：${people.map((p) => p.shown.display).join("、")}`}>
+    <Tip label={`参与：${people.map((p) => p.shown.display).join("、")}`}><span className={css.peopleStack}>
       {people.slice(0, max).map((p) => p.shown.picture
         ? <img key={p.id} className={cloudCss.person} src={p.shown.picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
         : <span key={p.id} className={`${cloudCss.person} ${cloudCss.personLetter}`} aria-hidden="true">{([...p.shown.display][0] ?? "?").toUpperCase()}</span>)}
       {people.length > max && <span className={css.peopleMore}>+{people.length - max}</span>}
-    </span>
+    </span></Tip>
   );
 }
 
@@ -196,7 +196,7 @@ export function Ring({ percent, level, size = 28, label, title }: { percent: num
   const r = (size - 4) / 2;
   const c = 2 * Math.PI * r;
   return (
-    <span className={css.ring} title={title ?? `${label} ${p}%`}>
+    <Tip label={title ?? `${label} ${p}%`}><span className={css.ring}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle className={css.ringTrack} cx={size / 2} cy={size / 2} r={r} />
         <circle className={css.ringFill} data-level={level} cx={size / 2} cy={size / 2} r={r}
@@ -204,7 +204,7 @@ export function Ring({ percent, level, size = 28, label, title }: { percent: num
         <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle">{p}</text>
       </svg>
       <span className="ring-label">{label}</span>
-    </span>
+    </span></Tip>
   );
 }
 

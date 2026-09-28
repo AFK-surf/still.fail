@@ -22,6 +22,7 @@ import * as historyCss from "./styles/history.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
+import { Tip } from "../ui.tsx";
 
 /** Opens an agent's execution history over the item's page it belongs to; `entry`: the transcript entry to open at. */
 export function openHistory(app: MobileApp, station: string, chat: string, key: string, entry?: number) {
@@ -476,7 +477,7 @@ export function AccountList({ accounts, runtime, picked, onPick }: { accounts: R
       {accounts.map((p) => (
         <PickLine key={p.id} label={p.name} checked={picked === p.id} onClick={() => onPick(p.id)}
           leading={<ProviderMark runtime={p.runtime ?? runtime} kind={p.kind} size={18} />}
-          trailing={p.quota?.state === "blocked" ? <span className={settingsCss.mRowStatus} title={p.quota.detail}><span className={settingsCss.mPresence} data-state="error" />被停用</span> : <QuotaRings quota={p.quota} />} />
+          trailing={p.quota?.state === "blocked" ? <Tip label={p.quota.detail}><span className={settingsCss.mRowStatus}><span className={settingsCss.mPresence} data-state="error" />被停用</span></Tip> : <QuotaRings quota={p.quota} />} />
       ))}
     </div>
   );
