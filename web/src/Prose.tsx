@@ -3,7 +3,7 @@
 // Grammars load on demand, one chunk per language, with Shiki's JavaScript
 // regex engine so no wasm is fetched.
 import { Check, Copy } from "./icons.tsx";
-import { isValidElement, useEffect, useState, type ReactNode } from "react";
+import { isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { HighlighterCore } from "shiki/core";
@@ -116,20 +116,26 @@ export function placeFiles(text: string, files: Attachment[] | undefined): { pla
  * link (its words), opening the file.
  */
 export function Prose({ children, files, file }: { children: string; files?: Map<string, Attachment>; file?: (f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode }) {
-  const withFiles: Components = (() => {
-    if (!files?.size || !file) return components;
-    const at = (url: unknown) => (typeof url === "string" ? files.get(nameOf(url)) : undefined);
+  // The components are made once and read the files as last given: new ones each render would be new component types,
+  // and React would draw what they hold anew (an image fetched again, flashing, whenever the message rendered).
+  const given = useRef({ files, file });
+  given.current = { files, file };
+  const placing = !!files?.size && !!file;
+  const withFiles = useMemo<Components>(() => {
+    if (!placing) return components;
+    const at = (url: unknown) => (typeof url === "string" ? given.current.files?.get(nameOf(url)) : undefined);
+    const draw = (f: Attachment, as: "shown" | "link", words?: ReactNode) => given.current.file?.(f, as, words);
     return {
       ...components,
       p: ({ node, children, ...props }) => {
         const parts = node?.children.filter((c) => c.type !== "text" || c.value.trim()) ?? [];
         const only = parts.length === 1 && parts[0]!.type === "element" && parts[0]!.tagName === "a" ? at(parts[0]!.properties.href) : undefined;
-        return only ? <div className={inlineFile}>{file(only, "shown")}</div> : <p {...props}>{children}</p>;
+        return only ? <div className={inlineFile}>{draw(only, "shown")}</div> : <p {...props}>{children}</p>;
       },
-      img: ({ node: _, ...props }) => { const f = at(props.src); return f ? <span className={inlineFile}>{file(f, "shown")}</span> : <img {...props} />; },
-      a: ({ node: _, ...props }) => { const f = at(props.href); return f ? file(f, "link", props.children) : <a {...props} />; },
+      img: ({ node: _, ...props }) => { const f = at(props.src); return f ? <span className={inlineFile}>{draw(f, "shown")}</span> : <img {...props} />; },
+      a: ({ node: _, ...props }) => { const f = at(props.href); return f ? draw(f, "link", props.children) : <a {...props} />; },
     };
-  })();
+  }, [placing]);
   // Links to the files are kept as written (the default would empty a file:// one); any other goes through the default.
   const url = (u: string) => (files?.has(nameOf(u)) ? u : defaultUrlTransform(u));
   return <Markdown remarkPlugins={[remarkGfm]} components={withFiles} urlTransform={url}>{children}</Markdown>;
