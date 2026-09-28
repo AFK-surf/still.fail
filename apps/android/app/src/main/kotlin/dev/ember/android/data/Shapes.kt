@@ -818,10 +818,13 @@ data class HistoryMark (
 /// A place a message came from or went to: a chat on ember's page (`session`: the agent it opens), or a Slack thread.
 @Serializable
 data class Place (
+	/// An ember chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
 	val name: String,
 	/// ember | slack
 	val surface: String,
-	val session: String? = null
+	val session: String? = null,
+	/// A Slack thread's link in Slack, while a connect is signed in to its workspace.
+	val url: String? = null
 )
 
 @Serializable

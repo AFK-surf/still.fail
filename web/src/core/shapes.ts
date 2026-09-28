@@ -751,10 +751,13 @@ export interface HistoryMark {
 
 /** A place a message came from or went to: a chat on ember's page (`session`: the agent it opens), or a Slack thread. */
 export interface Place {
+	/** An ember chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
 	name: string;
 	/** ember | slack */
 	surface: string;
 	session?: string;
+	/** A Slack thread's link in Slack, while a connect is signed in to its workspace. */
+	url?: string;
 }
 
 export interface HistoryMessage {
