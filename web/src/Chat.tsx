@@ -141,9 +141,9 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           return [line, (
             <div key={m.seq} className="msg msg-row" data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
               data-enter={emissions.emits(m.seq) ? undefined : enter} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}>
+              <MessageAvatar message={m} name={who} />
               <div className="msg-main">
                 <div className="msg-head">
-                  <MessageAvatar message={m} name={who} />
                   {agent
                     ? <button type="button" className="msg-name msg-agent" onClick={() => onOpenHistory(agent.key)} title="打开或关闭执行历史">{who}</button>
                     : <span className="msg-name">{who}</span>}
@@ -357,12 +357,12 @@ export function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView
 }
 
 function MessageAvatar({ message, name }: { message: ChatMessage; name: string }) {
-  if (message.authorKind === "agent") return <span className="msg-avatar msg-avatar-agent">{message.by.runtime ? <ModelLogo maker={message.by.maker} runtime={message.by.runtime} size={12} /> : <Mark size={12} />}</span>;
-  if (message.authorKind === "ember") return <span className="msg-avatar msg-avatar-agent"><Mark size={12} /></span>;
+  if (message.authorKind === "agent") return <span className="msg-avatar msg-avatar-agent">{message.by.runtime ? <ModelLogo maker={message.by.maker} runtime={message.by.runtime} size={16} /> : <Mark size={16} />}</span>;
+  if (message.authorKind === "ember") return <span className="msg-avatar msg-avatar-agent"><Mark size={16} /></span>;
   const picture = message.by.picture;
   return picture
-    ? <img className="msg-avatar" src={picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />
-    : <span className="msg-avatar"><Avatar id={message.author} name={name} size={18} /></span>;
+    ? <img className="msg-avatar" src={picture} alt="" width={28} height={28} referrerPolicy="no-referrer" />
+    : <span className="msg-avatar"><Avatar id={message.author} name={name} size={28} /></span>;
 }
 
 /**
@@ -843,7 +843,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     const pane = list.current;
     const avatar = pane?.querySelector(`.agent-activity[data-agent="${CSS.escape(agent)}"] .activity-avatar`);
     const message = pane?.querySelector(`.msg[data-seq="${seq}"]`);
-    const landing = message?.querySelector(".msg-head .msg-avatar");
+    const landing = message?.querySelector(":scope > .msg-avatar");
     if (!pane || !avatar || !message || !landing) { finish(seq, agent); return; }
     let timer: ReturnType<typeof setTimeout> | undefined;
     let frame = 0;
@@ -932,7 +932,7 @@ export function Activity({ agent, leaving, pose, onOpen, mark, className }: {
   return (
     <div className={`msg agent-activity${className ? ` ${className}` : ""}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined}>
       <button type="button" className="activity-line" onClick={onOpen} title="打开执行历史" aria-label={`${agent.who}：${now.current.text}`}>
-        <span className="activity-avatar" aria-hidden="true">{mark ?? <span className="msg-avatar msg-avatar-agent"><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span>}</span>
+        <span className="activity-avatar" aria-hidden="true">{mark ?? <span className="msg-avatar msg-avatar-agent"><ModelLogo maker={agent.maker} runtime={agent.runtime} size={16} /></span>}</span>
         <span className="activity-tail">
           <span className="activity-now">
             {now.previous && <span key={`was-${now.n - 1}`} className="activity-now-text" data-out="">{now.previous.text}</span>}
