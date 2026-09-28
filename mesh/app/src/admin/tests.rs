@@ -804,7 +804,7 @@ async fn session_detail_is_the_session_its_threads_and_turns_its_transcript_come
     let detail = t.get(&format!("/sessions/{}", enc(&row.key))).await;
     let mut keys: Vec<&String> = detail.as_object().unwrap().keys().collect();
     keys.sort();
-    assert_eq!(keys, ["session", "threads", "turns"]);
+    assert_eq!(keys, ["jobs", "session", "threads", "turns"]);
     assert_eq!(detail["threads"].as_array().unwrap().len(), 1);
     assert_eq!(detail["threads"][0]["lastMessage"]["text"], "<@UBOT> hi");
     assert_eq!(detail["threads"][0]["surface"], "slack:T1");
