@@ -7,7 +7,8 @@ import { createContext, useContext, useLayoutEffect, useRef, useState, type RefO
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { ChatScreen, ComposerBar, DraftExtras, openAttach, openedAs, type Draft } from "./Chat.tsx";
+import { ChatScreen, openAttach, openedAs, useComposerBar, type Draft } from "./Chat.tsx";
+import { ComposerExtras } from "../Chat.tsx";
 import { useDraft } from "../draft.ts";
 import { useStationCall, type Attachment } from "../api.ts";
 import { NewChatScreen } from "./NewChat.tsx";
@@ -15,11 +16,14 @@ import { Loading } from "./parts.tsx";
 import * as css from "./ChatHost.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
+import * as rootCss from "./styles/root.css.ts";
 
 /** What the composer writes to, as the page above it says. */
 export interface HostComposer {
-  /** The station its files go to. */
+  /** The station its files and messages go to (its address). */
   station: string;
+  /** The session its chat's files are kept by (null: none yet, a new chat). */
+  session?: string | null;
   placeholder: string;
   /** Nothing can be sent (its station offline), and it says why. */
   offline: boolean;
@@ -41,45 +45,56 @@ export function useHost(): Host {
   return host;
 }
 
+/** Whose draft a chat's page writes (a station's id, the chat's key): what a preview over it offers its marks to. */
+export function draftKeyOf(station: string, chat: string): string {
+  return `${station}:${openedAs(chat)}`;
+}
+
+type Shown = Pick<HostComposer, "station" | "session" | "placeholder" | "offline" | "archived">;
+
 export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const { station: id, chat } = useParams();
+  // The callbacks as the page last gave them; what it shows, as state (changing only when it does).
+  const latest = useRef<HostComposer | null>(null);
+  const [shown, setShown] = useState<Shown | null>(null);
+  const use = (spec: HostComposer) => {
+    latest.current = spec;
+    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.archived === spec.archived ? was
+      : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
+  };
+  const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
+  // The host is outside the chat's StationContext: what it writes goes to the station the page says (a new chat's, as
+  // picked), else the chat's, by its address, not the context's.
+  const writesTo = stations?.find((s) => s.address === shown?.station) ?? station;
   // Each chat keeps what is written to it; a new chat's goes on into the chat it makes. Files go to the station the
   // page writes to (its composer says which).
   const upload = useRef<(file: File) => Promise<Attachment>>(() => Promise.reject(new Error("没有 station")));
-  const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
-  // The host is outside the chat's StationContext: its messages go to the chat's station by its address, not the context's.
-  const shared = useDraft({ key: chat === undefined ? undefined : `${id}:${openedAs(chat)}`, station: station?.address, upload: (file) => upload.current(file) });
+  const draftKey = chat === undefined || id === undefined ? undefined : draftKeyOf(id, chat);
+  const shared = useDraft({ key: draftKey, station: shown?.station ?? station?.address, upload: (file) => upload.current(file) });
   const [focus, setFocus] = useState(0);
   const draft: Draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
   const now = useRef(draft);
   now.current = draft;
   const root = useRef<HTMLDivElement>(null);
-  // The callbacks as the page last gave them; what it shows, as state (changing only when it does).
-  const latest = useRef<HostComposer | null>(null);
-  const [shown, setShown] = useState<Pick<HostComposer, "station" | "placeholder" | "offline" | "archived"> | null>(null);
-  const use = (spec: HostComposer) => {
-    latest.current = spec;
-    setShown((was) => (was && was.station === spec.station && was.placeholder === spec.placeholder && was.offline === spec.offline && was.archived === spec.archived ? was
-      : { station: spec.station, placeholder: spec.placeholder, offline: spec.offline, ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
-  };
   const body = id === undefined ? <NewChatScreen />
     : !stations ? <Loading text="正在读取…" />
     : !station ? <Loading text="这个 workspace 里没有这台 station。" />
     : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>;
+  const composer = shown && <Composer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} />;
   return (
     <HostContext.Provider value={{ draft, use }}>
       <div className={css.mChatHost} ref={root}>
         {body}
-        {/* Once shown, it stays (the page above changing hands it on). */}
-        {shown && <Composer shown={shown} latest={latest} draft={draft} now={now} root={root} upload={upload} />}
+        {/* Once shown, it stays (the page above changing hands it on); in its station (the chats its @ offers). */}
+        {writesTo ? <StationContext.Provider value={writesTo}>{composer}</StationContext.Provider> : composer}
       </div>
     </HostContext.Provider>
   );
 }
 
-/** The composer: a floating capsule at the page's foot, with the files and quotes going with the message. */
-function Composer({ shown, latest, draft, now, root, upload: uploader }: {
-  shown: Pick<HostComposer, "station" | "placeholder" | "offline" | "archived">; latest: RefObject<HostComposer | null>; draft: Draft; now: RefObject<Draft>;
+/** The composer: a floating capsule at the page's foot, with the files and quotes going with the message, as the wide screen's composer shows them. */
+function Composer({ shown, draftKey, latest, draft, now, root, upload: uploader }: {
+  shown: Shown; draftKey: string | undefined; latest: RefObject<HostComposer | null>; draft: Draft; now: RefObject<Draft>;
   root: RefObject<HTMLDivElement | null>; upload: RefObject<(file: File) => Promise<Attachment>>;
 }) {
   const app = useApp();
@@ -99,18 +114,21 @@ function Composer({ shown, latest, draft, now, root, upload: uploader }: {
     observer.observe(el);
     return () => observer.disconnect();
   }, [root]);
+  const { menu, bar } = useComposerBar({
+    draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked,
+    onPlus: () => openAttach(app, upload), onType: () => latest.current?.type?.(), onSend: () => latest.current?.send(now.current),
+  });
   return (
-    <div className={`${css.mComposer} ${css.mHostComposer}`} ref={capsule}>
-      {/* Files pasted or dropped in go with the message, as ＋ adds them; offline, nothing goes to the station. */}
+    <div className={`${css.mComposer} ${css.mHostComposer} ${rootCss.wide}`} ref={capsule}>
+      {menu}
+      {/* Files dropped in go with the message, as ＋ adds them (pasted ones, the text box takes); offline, nothing goes to the station. */}
       <div className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
-        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) upload(e.clipboardData.files); } }}
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) e.preventDefault(); }}
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!locked) upload(e.dataTransfer.files); } }}>
         {shown.archived && <ArchiveNotice className={css.mComposerOffline} offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}
         {shown.offline && <p className={css.mComposerOffline}>这台 station 离线了：这里是之前读到的内容，暂时不能发消息。</p>}
-        <DraftExtras draft={draft} />
-        <ComposerBar draft={draft} placeholder={shown.placeholder} locked={locked}
-          onPlus={() => openAttach(app, upload)} onType={() => latest.current?.type?.()} onSend={() => latest.current?.send(now.current)} />
+        <ComposerExtras draft={draft} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} onDone={draft.bumpFocus} />
+        {bar}
         {draft.error && <p className={`${partsCss.mError} ${css.mComposerError}`}>{draft.error}</p>}
       </div>
     </div>

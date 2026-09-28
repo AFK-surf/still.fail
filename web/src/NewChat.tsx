@@ -4,7 +4,7 @@
 import { Key, Plus, Server } from "./icons.tsx";
 import { Link } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useApi, useChatSend, useStations, type RuntimeKind, type StationView } from "./api.ts";
+import { useApi, useChatSend, useStations, type ModelOption, type RuntimeKind, type StationView } from "./api.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { LOCAL_STATION, profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Button, Chooser, ChooserItem as Item, FirstOne, Tip } from "./ui.tsx";
@@ -19,17 +19,18 @@ import * as shellCss from "./styles/shell.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import { MachineSessions } from "./MachineSessions.tsx";
 
-interface Choice { runtime: RuntimeKind | ""; model: string; effort: string; profile?: string }
+/** What a new chat runs on, kept per station (its id) for next time, on either screen (the phone's, mobile/NewChat.tsx). */
+export interface Choice { runtime: RuntimeKind | ""; model: string; effort: string; profile?: string }
 const LAST = "ember.newChat";
 
-function lastChoice(station: string): Partial<Choice> {
+export function lastChoice(station: string): Partial<Choice> {
   try {
     return (JSON.parse(localStorage.getItem(LAST) ?? "{}") as Record<string, Partial<Choice>>)[station] ?? {};
   } catch {
     return {};
   }
 }
-function keepChoice(station: string, choice: Choice): void {
+export function keepChoice(station: string, choice: Choice): void {
   try {
     const all = JSON.parse(localStorage.getItem(LAST) ?? "{}") as Record<string, Choice>;
     localStorage.setItem(LAST, JSON.stringify({ ...all, [station]: choice }));
@@ -38,7 +39,7 @@ function keepChoice(station: string, choice: Choice): void {
   }
 }
 /** The station a scope's last chat was started on (or last picked there); `last` is what older pages kept, for any scope. */
-function lastStation(scope: string): string {
+export function lastStation(scope: string): string {
   try {
     const all = JSON.parse(localStorage.getItem(LAST) ?? "{}") as { last?: string; lastIn?: Record<string, string> };
     return all.lastIn?.[scope] ?? all.last ?? "";
@@ -46,7 +47,7 @@ function lastStation(scope: string): string {
     return "";
   }
 }
-function keepStation(scope: string, station: string): void {
+export function keepStation(scope: string, station: string): void {
   try {
     const all = JSON.parse(localStorage.getItem(LAST) ?? "{}") as { lastIn?: Record<string, string> };
     localStorage.setItem(LAST, JSON.stringify({ ...all, last: station, lastIn: { ...all.lastIn, [scope]: station } }));
@@ -115,8 +116,6 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       void api.checkProfile(p.id).catch(() => {});
     }
   }, [profiles, api]);
-  const chats = useChatSend();
-  const made = useRef<Promise<{ key: string; thread: string }> | null>(null);
   const [addingProfile, setAddingProfile] = useState(false);
   const [profileKind, setProfileKind] = useState<ProfileKind>("claude-sub");
   const pick = (next: Partial<Choice>) => {
@@ -124,23 +123,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
     setChoice(c);
     keepChoice(station.id, c);
   };
-  const ensureChat = () => {
-    if (!runtime || !model) return Promise.reject(new Error("先在 Profile 里启用模型"));
-    // The core has it at once (its page, its row, the message waiting in it); the station makes it behind it.
-    made.current ??= (async () => {
-      const { key } = await chats.create({
-        runtime, model,
-        ...(choice.effort ? { effort: choice.effort } : {}),
-        // Kept to a profile only while it still runs the model there.
-        ...(choice.profile && entry?.accounts[runtime]?.some((a) => a.id === choice.profile) ? { profile: choice.profile } : {}),
-      });
-      track("chat_created", { runtime, model, ...(choice.effort ? { effort: choice.effort } : {}) });
-      // The chat is started here: the next new chat starts here too.
-      onStation(station.id);
-      return { key, thread: key };
-    })().catch((error: unknown) => { made.current = null; throw error; });
-    return made.current;
-  };
+  // The chat is started here: the next new chat starts here too.
+  const ensureChat = useEnsureChat(station.address, entry, runtime, choice, () => onStation(station.id));
   const toolbar = useMemo(() => (
     <>
       {station.name && (
@@ -224,3 +208,29 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   );
 }
 
+/**
+ * What makes a new chat with its first message, on either screen (the phone's, mobile/NewChat.tsx): on the station at
+ * `address`, the model `entry` on `runtime`, with the effort chosen and the profile chosen while it still runs the model
+ * there. The core has it at once (its page, its row, the message waiting in it); the station makes it behind it. Made
+ * once: what is sent meanwhile goes to the same chat; if it could not be made, the next message tries again.
+ */
+export function useEnsureChat(address: string, entry: ModelOption | undefined, runtime: RuntimeKind | undefined, choice: Pick<Choice, "effort" | "profile">, onMade: () => void) {
+  const chats = useChatSend(address);
+  const made = useRef<Promise<{ key: string; thread: string }> | null>(null);
+  return () => {
+    const model = entry?.model;
+    if (!runtime || !model) return Promise.reject(new Error("先在 Profile 里启用模型"));
+    made.current ??= (async () => {
+      const { key } = await chats.create({
+        runtime, model,
+        ...(choice.effort ? { effort: choice.effort } : {}),
+        // Kept to a profile only while it still runs the model there.
+        ...(choice.profile && entry.accounts[runtime]?.some((a) => a.id === choice.profile) ? { profile: choice.profile } : {}),
+      });
+      track("chat_created", { runtime, model, ...(choice.effort ? { effort: choice.effort } : {}) });
+      onMade();
+      return { key, thread: key };
+    })().catch((error: unknown) => { made.current = null; throw error; });
+    return made.current;
+  };
+}

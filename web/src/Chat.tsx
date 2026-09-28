@@ -5,7 +5,7 @@
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
-import { useApi, useChatSend, type ChatTo, type Activity as ActivityView, type AgentWait, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
+import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
@@ -14,10 +14,9 @@ import { placeFiles, Prose } from "./Prose.tsx";
 import { useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileUrl, useNear } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
-import { useDraft, useDraftInbox, type DraftQuote } from "./draft.ts";
+import { useDraft, useDraftInbox, type Draft, type DraftQuote } from "./draft.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
-import * as chatCss from "./mobile/styles/chat.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as css from "./Chat.css.ts";
@@ -30,21 +29,18 @@ import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 
-/** An agent of this chat as its messages and activity show it: who it is, and its execution history as it runs. */
-interface AgentHere { key: string; who: string; runtime: RuntimeKind; maker: Maker | undefined; session: Session; status: Status; live: Live | undefined; since: number | undefined }
-
-/**
- * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
- * `ensureChat` makes the chat with the first message, which `onSent` then follows.
- */
 /**
  * From a new chat, whose page already looks like the chat (its first messages on their way), to the chat itself: the
  * page is kept until the chat shows them, then gives way at once.
  */
 export function toMadeChat(go: () => void): void {
-  void transitionTo(go, () => document.querySelector(`:is(.${sessionCss.chatList}, .${chatCss.mMessages}) :is(.${chatCss2.msgMine}, .${chatCss.mMine})`) !== null, true);
+  void transitionTo(go, () => document.querySelector(`.${css.chatMessages} .${chatCss2.msgMine}`) !== null, true);
 }
 
+/**
+ * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
+ * `ensureChat` makes the chat with the first message, which `onSent` then follows.
+ */
 export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent, made }: {
   /** Whose draft the composer shows here. */
   chat: ChatView; draftKey: string; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
@@ -56,7 +52,6 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const list = useRef<HTMLDivElement>(null);
   const composerHeight = useComposerHeight();
   const floor = useRef<HTMLDivElement>(null);
-  const sending = useChatSend();
   const api = useApi();
   const { thread, outbox } = chat;
   const id = thread?.id ?? null;
@@ -64,44 +59,29 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
   const [focusQuote, setFocusQuote] = useState<string | null>(null);
   const quoteFocused = useCallback(() => setFocusQuote(null), []);
-  const [picked, setPicked] = useState<{ quote: DraftQuote; at: { x: number; y: number } } | null>(null);
-  const { messages, divider, away, shown, rowOf, poseOf } = useMessageList(list, floor, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives);
-  const agents: AgentHere[] = chat.agents.map(({ session, status, since }) => (
-    { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, session, status, live: lives.get(session.key), since }
-  ));
-  const agentOf = (key: string) => agents.find((a) => a.key === key);
-  // Where agents post to reach this chat.
-  const address = thread ? `${thread.channel}/${thread.threadTs}` : null;
+  const rows = useMessageList(list, floor, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives);
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
-  const keeper = agents[0]?.key ?? null;
-  const ownerOf = (file: Attachment) => agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.key ?? keeper;
+  const keeper = chat.agents[0]?.session.key ?? null;
+  const ownerOf = (file: Attachment) => ownerIn(chat, file);
   // The messages are kept as they are while nothing they show changes (MessageRow): what they are handed stays the same
   // function, the latest one behind it, and `owners` says when whose files are whose has changed.
-  const images = () => chatImages([...messages, ...outbox.map((o) => ({ authorKind: "person", ...o }))], ownerOf);
+  const images = () => chatImages([...rows.messages, ...outbox.map((o) => ({ authorKind: "person", ...o }))], ownerOf);
   const latest = useRef({ ownerOf, onOpenHistory, images });
   latest.current = { ownerOf, onOpenHistory, images };
   const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key), images: () => latest.current.images() }));
-  const owners = `${keeper ?? ""} ${agents.map((a) => `${a.key}=${a.session.workspace}`).join(" ")}`;
   useShortcut("chat.latest", () => { list.current?.dispatchEvent(new Event("to-bottom")); });
-
   // Selecting text inside one message offers to quote it.
-  const onSelect = () => {
-    const selection = window.getSelection();
-    const text = selection?.toString().trim();
-    if (!selection || !text || selection.rangeCount === 0) return setPicked(null);
-    const range = selection.getRangeAt(0);
-    const from = (range.commonAncestorContainer instanceof Element ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement)?.closest<HTMLElement>("[data-author]");
-    if (!from) return setPicked(null);
-    const rect = range.getBoundingClientRect();
-    const role = from.dataset.role === "agent" ? "agent" as const : "person" as const;
-    setPicked({ quote: { id: `${Date.now()}`, author: from.dataset.author!, text, comment: "", ...(from.dataset.ts ? { ts: from.dataset.ts } : {}), role }, at: { x: rect.left + rect.width / 2, y: rect.top } });
-  };
+  const quoting = useSelectionQuote(list, (q) => {
+    const quote = { ...q, comment: "", id: `${Date.now()}` };
+    setQuotes((all) => [...all, quote]);
+    setFocusQuote(quote.id);
+  });
 
   return (
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
     <section className={sessionCss.chat} aria-label="对话" data-under-composer="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
       <div className={sessionCss.chatPane}>
-      {away && (
+      {rows.away && (
         <Tip label="跳到最新" shortcut="chat.latest" side="top">
         <button type="button" className={css.chatToBottom} aria-label="跳到最新"
           // Glides down, and follows new messages again (scroll.ts).
@@ -111,61 +91,18 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
         </Tip>
       )}
       <Gallery.Provider value={stable.images}>
-      <div className={sessionCss.chatList} ref={list} onMouseUp={() => setTimeout(onSelect, 0)} onScroll={() => setPicked(null)}
+      <div className={`${sessionCss.chatList} ${css.chatMessages}`} ref={list} {...quoting.listProps}
         onClick={(e) => {
-          // `?history=<session>&entry=<n>`: that agent's execution history (a chat going on with a session from a terminal starts
-          // with a note linking to it, where what was said before is).
-          const anchor = (e.target as Element).closest?.("a[href]") as HTMLAnchorElement | null;
-          const to = anchor ? historyLink(anchor.href) : null;
+          const to = historyLinkClicked(e);
           // At the entry it names (else its start); opened, not toggled.
           if (to) { e.preventDefault(); onOpenHistory(to.key, to.entry); }
         }}>
-        {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
-        {messages.length === 0 && outbox.length === 0 && (
-          <div className={css.chatEmpty}>
-            <p>在这里发消息，这个对话里的 agent 会在这里回复。</p>
-          </div>
-        )}
-        {messages.map((m) => {
-          const line = m.seq === divider ? <div key={`new-${m.seq}`} className={css.chatUnreadLine} data-unread-line role="separator"><span>以下是新消息</span></div> : null;
-          const { enter, emitted } = rowOf(m);
-          return [line, (
-            <MessageRow key={m.seq} message={m} enter={enter} emitted={emitted}
-              agentHere={m.by.agent ? agentOf(m.by.agent) !== undefined : false} owners={owners} owner={stable.owner} onOpenHistory={stable.open} />
-          )];
-        })}
-        {outbox.map((o) => (
-          <div key={o.id} className={`${conversationCss.msg} ${chatCss2.msgMine}`} data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
-            <Quotes quotes={o.quotes} />
-            {o.text && <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{o.text}</div></div>}
-            <Files owner={ownerOf} files={o.attachments} look={look} />
-            {o.state === "failed"
-              // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
-              ? <div className={css.msgUnsent}>
-                  <Tip label={o.error ? `没发出去：${o.error}` : "没发出去"}>
-                    <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />未发送</span>
-                  </Tip>
-                  <button type="button" className={css.msgUnsentBtn} disabled={chat.offline || !!chat.archived} onClick={() => void (to !== null && sending.retry(to, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
-                  <button type="button" className={css.msgUnsentBtn} onClick={() => void (to !== null && sending.discard(to, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
-                </div>
-              : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
-          </div>
-        ))}
-        {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
-        {shown.map(({ agent, leaving }) => (
-          <Activity key={agent.key} agent={agent} leaving={leaving} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
-        ))}
+        <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} />
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
       </Gallery.Provider>
       </div>
-      {picked && (
-        <button type="button" className={css.quotePop} style={{ left: picked.at.x, top: picked.at.y }}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => { setQuotes((all) => [...all, picked.quote]); setFocusQuote(picked.quote.id); setPicked(null); window.getSelection()?.removeAllRanges(); }}>
-          <QuoteIcon size={12} strokeWidth={2.2} />引用
-        </button>
-      )}
+      {quoting.pop}
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
@@ -173,6 +110,112 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
         locked={chat.offline || !!chat.archived} placeholder={chat.archived ? "还原对话后才能发送" : "发消息"} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
+}
+
+/** The session of a chat that keeps a file: the agent whose workspace holds it, else the first (what is sent goes there). */
+export function ownerIn(chat: ChatView, file: Attachment): string | null {
+  return chat.agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.session.key ?? chat.agents[0]?.session.key ?? null;
+}
+
+/** Whose files are whose in a chat, in a word: when it changes, its messages' files are drawn again. */
+export function ownersOf(chat: ChatView): string {
+  return `${chat.agents[0]?.session.key ?? ""} ${chat.agents.map((a) => `${a.session.key}=${a.session.workspace}`).join(" ")}`;
+}
+
+/**
+ * What a chat's list holds, the same on both screens (this page; the phone's, mobile/Chat.tsx): older pages loading, its
+ * messages with the unread line, what is sent from here on its way (`to`: where it goes), and its agents at work.
+ * `owner` and `onOpenHistory` stay the same functions while the page lasts; `owners` says when whose files are whose
+ * has changed.
+ */
+export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
+  chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null; owners: string;
+  owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
+}) {
+  const { messages, divider, shown, rowOf, poseOf } = rows;
+  const here = (key: string | undefined) => key !== undefined && chat.agents.some((a) => a.session.key === key);
+  return (
+    <>
+      {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
+      {messages.length === 0 && chat.outbox.length === 0 && (
+        <div className={css.chatEmpty}>
+          <p>在这里发消息，这个对话里的 agent 会在这里回复。</p>
+        </div>
+      )}
+      {messages.map((m) => {
+        const line = m.seq === divider ? <div key={`new-${m.seq}`} className={css.chatUnreadLine} data-unread-line role="separator"><span>以下是新消息</span></div> : null;
+        const { enter, emitted } = rowOf(m);
+        return [line, (
+          <MessageRow key={m.seq} message={m} enter={enter} emitted={emitted}
+            agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory} />
+        )];
+      })}
+      {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} owner={owner} />)}
+      {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
+      {shown.map(({ agent, leaving }) => (
+        <Activity key={agent.key} agent={agent} leaving={leaving} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
+      ))}
+    </>
+  );
+}
+
+/** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
+function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; locked: boolean; owner: (file: Attachment) => string | null }) {
+  const sending = useChatSend();
+  return (
+    <div className={`${conversationCss.msg} ${chatCss2.msgMine}`} data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
+      <Quotes quotes={o.quotes} />
+      {o.text && <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{o.text}</div></div>}
+      <Files owner={owner} files={o.attachments} />
+      {o.state === "failed"
+        // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
+        ? <div className={css.msgUnsent}>
+            <Tip label={o.error ? `没发出去：${o.error}` : "没发出去"}>
+              <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />未发送</span>
+            </Tip>
+            <button type="button" className={css.msgUnsentBtn} disabled={locked} onClick={() => void (to !== null && sending.retry(to, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
+            <button type="button" className={css.msgUnsentBtn} onClick={() => void (to !== null && sending.discard(to, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
+          </div>
+        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
+    </div>
+  );
+}
+
+/**
+ * Selecting words inside one message of the list offers to quote them (`onQuote`), in a small button over the
+ * selection. Answers what the list takes to watch the selection, and the button.
+ */
+export function useSelectionQuote(list: RefObject<HTMLElement | null>, onQuote: (quote: Omit<Quote, "comment">) => void) {
+  const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number } | null>(null);
+  const pick = () => {
+    const selection = window.getSelection();
+    const text = selection?.toString().trim();
+    if (!selection || !text || selection.rangeCount === 0) return setPicked(null);
+    const range = selection.getRangeAt(0);
+    const node = range.commonAncestorContainer;
+    const from = (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[data-author]");
+    if (!from || !list.current?.contains(from)) return setPicked(null);
+    const rect = range.getBoundingClientRect();
+    const role = from.dataset.role === "agent" ? "agent" as const : "person" as const;
+    setPicked({ quote: { author: from.dataset.author!, text, ...(from.dataset.ts ? { ts: from.dataset.ts } : {}), role }, x: rect.left + rect.width / 2, y: rect.top });
+  };
+  return {
+    listProps: { onMouseUp: () => { setTimeout(pick, 0); }, onScroll: () => setPicked(null) },
+    pop: picked && (
+      <button type="button" className={css.quotePop} style={{ left: picked.x, top: picked.y }}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => { onQuote(picked.quote); setPicked(null); window.getSelection()?.removeAllRanges(); }}>
+        <QuoteIcon size={12} strokeWidth={2.2} />引用
+      </button>
+    ),
+  };
+}
+
+/** A click on a link to an agent's execution history in the list (`?history=<session>&entry=<n>`): which, or null. */
+export function historyLinkClicked(e: React.MouseEvent): { key: string; entry: number } | null {
+  // A chat going on with a session from a terminal starts with a note linking to it, where what was said before is.
+  const anchor = (e.target as Element).closest?.("a[href]") as HTMLAnchorElement | null;
+  return anchor ? historyLink(anchor.href) : null;
 }
 
 /** The session and entry a link to an agent's execution history names (`?history=<session>&entry=<n>`), or null when it
@@ -408,7 +451,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
       <MineMessage data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
         <Quotes quotes={m.quotes} />
         <MineBubble text={m.text} />
-        <Files owner={owner} files={m.attachments} look={look} />
+        <Files owner={owner} files={m.attachments} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting
           ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
@@ -439,8 +482,8 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} />
       {m.authorKind === "person"
-        ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={owner} files={m.attachments} look={look} /></>
-        : <ProseWithFiles owner={owner} text={m.text} files={m.attachments} look={look} className={conversationCss.markdown} />}
+        ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={owner} files={m.attachments} /></>
+        : <ProseWithFiles owner={owner} text={m.text} files={m.attachments} />}
     </OthersMessage>
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && sameMessage(a.message, b.message));
@@ -504,16 +547,17 @@ function MessageAvatar({ message, name }: { message: ChatMessage; name: string }
  */
 function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
   if (!quotes?.length) return null;
-  const jump = (ts: string | undefined, text: string) => {
-    const target = ts ? document.querySelector<HTMLElement>(`.${sessionCss.chatList} [data-ts="${ts}"]`) : null;
-    if (!target) return;
+  // In the list the card is in: each screen's (and the phone's pages under the one on top) has its own.
+  const jump = (from: Element, ts: string, text: string) => {
+    const pane = from.closest<HTMLElement>(`.${css.chatMessages}`);
+    const target = pane?.querySelector<HTMLElement>(`[data-ts="${CSS.escape(ts)}"]`);
+    if (!pane || !target) return;
     // A reader's move: the pane lets it take the position.
-    target.closest(`.${sessionCss.chatList}`)?.dispatchEvent(new WheelEvent("wheel"));
+    pane.dispatchEvent(new WheelEvent("wheel"));
     const range = findText(target, text);
     if (range && "highlights" in CSS) {
       const rect = range.getBoundingClientRect();
-      const pane = target.closest<HTMLElement>(`.${sessionCss.chatList}`);
-      if (pane) pane.scrollTop += rect.top + rect.height / 2 - (pane.getBoundingClientRect().top + pane.clientHeight / 2);
+      pane.scrollTop += rect.top + rect.height / 2 - (pane.getBoundingClientRect().top + pane.clientHeight / 2);
       flashRange(range);
       return;
     }
@@ -524,18 +568,18 @@ function Quotes({ quotes }: { quotes: Quote[] | undefined }) {
   };
   return (
     <div className={css.quoteCards}>
-      {quotes.map((q, i) => <QuoteCard key={i} quote={q} onJump={q.ts ? () => jump(q.ts, q.text) : undefined} />)}
+      {quotes.map((q, i) => <QuoteCard key={i} quote={q} onJump={q.ts ? (from) => jump(from, q.ts!, q.text) : undefined} />)}
     </div>
   );
 }
 
 /** One quote: the passage with whose it is, and the comment. Also the composer's pending quote, with an editable comment. */
-function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?: (() => void) | undefined; comment?: ReactNode; onRemove?: () => void }) {
+function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?: ((from: Element) => void) | undefined; comment?: ReactNode; onRemove?: () => void }) {
   // A mark on a previewed page (annotate/Marks.tsx): its pin's number and what it is; where it is is for the agent.
   const pin = quote.role === "page" ? /(\d+)$/.exec(quote.author)?.[1] : undefined;
   return (
     <div className={css.quoteCard}>
-      <Tip label={onJump ? "跳到原消息" : pin ? quote.text : undefined}><button type="button" className={css.quoteCardSource} onClick={onJump} disabled={!onJump}>
+      <Tip label={onJump ? "跳到原消息" : pin ? quote.text : undefined}><button type="button" className={css.quoteCardSource} onClick={onJump ? (e) => onJump(e.currentTarget) : undefined} disabled={!onJump}>
         {pin
           ? <span className={css.quoteCardText}><span className={css.quoteCardPin}>{pin}</span>{quote.text.split("\n")[0]}</span>
           : <span className={css.quoteCardText}><QuoteIcon size={11} strokeWidth={2.4} aria-hidden="true" /><span className={css.quoteCardWho}>{quote.author}：</span>{quote.text}</span>}
@@ -548,45 +592,30 @@ function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?
 
 // ── files ───────────────────────────────────────────────────────────────
 
-/** How a screen draws a message's files (this page's `look`; the phone's, mobile/Chat.tsx): what differs is only the look. */
-export interface FileLook {
-  /** The list of a message's files. */
-  files: string;
-  /** An image's button, and the box it takes before it loads. */
-  image: string; box(file: Attachment): CSSProperties;
-  /** What an image shows until it loads; without it, its button is disabled until then. */
-  wait?: string;
-  /** A file's button, around its card. */
-  open: string; card(file: Attachment): ReactNode;
-}
-
 /** An agent's Markdown with its files: those its text names shown there, the rest below it. */
-export function ProseWithFiles({ owner, text, files, look, className, prose, markdown }: {
-  owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined; look: FileLook;
-  /** Around the Markdown; `prose`, what else it holds (a long-press on the phone); `markdown`, a frame of its own inside. */
-  className: string; prose?: React.HTMLAttributes<HTMLDivElement> & Record<`data-${string}`, unknown>; markdown?: string;
-}) {
+function ProseWithFiles({ owner, text, files }: { owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined }) {
   const { placed, rest } = useMemo(() => placeFiles(text, files), [text, files]);
-  const words = <Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <FileItem sessionKey={owner(f)} file={f} look={look} />}>{text}</Prose>;
   return (
     <>
-      <div className={className} {...prose}>{markdown ? <div className={markdown}>{words}</div> : words}</div>
-      <Files owner={owner} files={rest} look={look} />
+      <div className={conversationCss.markdown}>
+        <Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <FileItem sessionKey={owner(f)} file={f} />}>{text}</Prose>
+      </div>
+      <Files owner={owner} files={rest} />
     </>
   );
 }
 
 /** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */
-export function Files({ owner, files, look }: { owner: (file: Attachment) => string | null; files: Attachment[] | undefined; look: FileLook }) {
+function Files({ owner, files }: { owner: (file: Attachment) => string | null; files: Attachment[] | undefined }) {
   if (!files?.length) return null;
-  return <div className={look.files}>{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} look={look} />)}</div>;
+  return <div className={css.msgFiles}>{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} />)}</div>;
 }
 
 /** Images already brushed in on this page (session key and path): shown again, they just show. */
 const revealed = new Set<string>();
 
 /** Images and video stills load near the screen; other files are a card. Either opens in a preview. */
-function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file: Attachment; look: FileLook }) {
+function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
   const image = isImage(file.name);
   const video = kindOf(file.name).kind === "video";
   const [videoFailed, setVideoFailed] = useState(false);
@@ -621,8 +650,8 @@ function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file:
     return (
       <>
         <Tip label={file.path}><button ref={box} type="button" className={look.image} onClick={() => url && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
-          disabled={look.wait === undefined && !url} data-loaded={loaded ?? undefined}>
-          {look.wait !== undefined && loaded !== "instant" && <span className={look.wait} aria-hidden="true"><i /><i /><i /></span>}
+          data-loaded={loaded ?? undefined}>
+          {loaded !== "instant" && <span className={look.wait} aria-hidden="true"><i /><i /><i /></span>}
           {url && <img src={url} alt={file.name} onLoad={shown} />}
         </button></Tip>
         {preview}
@@ -638,7 +667,8 @@ function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file:
   );
 }
 
-const look: FileLook = { files: css.msgFiles, image: css.msgImage, wait: css.msgImageWait, box: (f) => imageBox(f), open: css.fileCardOpen, card: (f) => <FileCard file={f} /> };
+/** How the chat draws a file: an image's button, the box it takes before it loads and what shows until then; a file's card and its button. */
+const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment) => imageBox(f), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
 
 /**
  * The box an image takes in the chat, known before it loads: its own
@@ -706,7 +736,7 @@ export interface ComposerProps {
 export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = "发消息", locked = false, roomy = false, draftKey, carry }: ComposerProps) {
   const api = useApi();
   const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file) => api.uploadFile(file), quotes: [quotes, setQuotes] });
-  const { text, setText, files, add, uploading, starting } = draft;
+  const { text, files, add } = draft;
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -717,6 +747,103 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     warmed.current = Date.now();
     void api.warm(sessionKey).catch(() => {});
   };
+  const send = async () => {
+    const to = await sendDraft(draft, thread, ensureChat, onSending);
+    if (to !== null) onSent?.(to);
+  };
+  // Switching to a chat puts the cursor in its composer (not on touch screens, where it would raise the keyboard),
+  // before it is first drawn: it never shows unfocused first.
+  useLayoutEffect(() => {
+    if (window.matchMedia("(pointer: fine)").matches) input.current?.focus();
+  }, [thread]);
+  // Space with nothing that takes keys focused (the cursor lost to a click on the messages, a closed menu…) puts it
+  // back in the composer, rather than scrolling the page.
+  useShortcut("composer.focus", () => {
+    const el = input.current;
+    if (!el || el.disabled || !el.getClientRects().length) return false;
+    el.focus();
+  });
+  useShortcut("composer.file", locked ? null : () => { picker.current?.click(); });
+  const ready = draft.ready && !locked;
+  const submit = () => {
+    if (ready) void send();
+  };
+  const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className: css.composerText, onType: warm, onSubmit: submit });
+  // Capsule ⇄ box, in one motion (morph.ts): how it shows is read in the render that changes it (the page still shows
+  // what was), and it goes from there to its new shape once that is laid out. Laid out for another page (a new chat's
+  // roomy box ⇄ a chat's foot), the dock moves it (dock.tsx), not this; nor does this cut into that move.
+  const multiline = roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0;
+  const box = useRef<HTMLFormElement>(null);
+  // What it is laid out by: any change of it may change its height (a line more or less, capsule ⇄ box, files).
+  const laidOut = `${multiline}|${text}|${files.length}|${quotes.length}`;
+  const shown = useRef({ laidOut, roomy });
+  const from = useRef<Shape | null>(null);
+  if (box.current && shown.current.laidOut !== laidOut && !from.current) from.current = shapeOf(box.current);
+  useLayoutEffect(() => {
+    const el = box.current, was = from.current;
+    const paged = shown.current.roomy !== roomy;
+    from.current = null;
+    shown.current = { laidOut, roomy };
+    if (!el || !was || paged || movingBy(el) === "page" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    stop(el);
+    const height = el.getBoundingClientRect().height;
+    // Its size unchanged (a letter more on the same line), nothing moves.
+    if (Math.abs(height - was.rect.height) < 0.5 && was.corner === getComputedStyle(el).getPropertyValue("corner-shape")) return;
+    morph(el, "text", was, [{ height: `${was.rect.height}px` }, { height: `${height}px` }], { duration: 260, easing: easeOut() });
+  }, [laidOut, roomy]);
+  return (
+    <div className={cloudCss.composerWrap}>
+      {menu}
+      <form ref={box} className={`${composerCss.composerBox} ${refCss.refHost}`} data-multiline={multiline || undefined} data-dragging={dragging || undefined}
+        onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
+        // Locked (its station offline), no file is taken in.
+        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); if (!locked) add(e.dataTransfer.files); } }}>
+        <ComposerExtras draft={draft} focusQuote={focusQuote} onFocused={onFocused} onDone={() => input.current?.focus()} />
+        {field}
+        <div className={css.composerToolbar}>
+          <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
+          <Tip label="发送文件" shortcut="composer.file">
+            <button type="button" className={css.attachBtn} aria-label="发送文件" disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
+              <Plus size={18} />
+            </button>
+          </Tip>
+          {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
+          <Tip label={draft.uploading ? "文件还在上传" : "发送"}>
+            <button type="submit" className={css.sendBtn} disabled={!ready} aria-label="发送" aria-busy={draft.starting || undefined}>
+              {draft.starting ? <span className={waitingCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
+            </button>
+          </Tip>
+        </div>
+      </form>
+      {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
+    </div>
+  );
+}
+
+/**
+ * Sends what a draft holds to a chat (`to`: its thread, or the core's key of one made here), as both screens' composers
+ * do; with none yet (a new chat, or an agent's first message), `ensureChat` makes it first. Answers where it went, or
+ * null when there was no chat to send into (the draft is back, and says why).
+ */
+export function sendDraft(draft: Draft, to: ChatTo | null, ensureChat: (() => Promise<{ thread: ChatTo }>) | undefined, onSending?: (text: string | null) => void): Promise<ChatTo | null> {
+  return draft.send(async () => (to !== null ? to : (await ensureChat!()).thread), { first: to === null, ...(onSending ? { onSending } : {}) });
+}
+
+/**
+ * The composer's text box, as both screens' composers have it (this page's Composer; the phone's capsule,
+ * mobile/ChatHost.tsx), with `className` its look: it grows with the text up to `lines`, then scrolls, the lines it cuts
+ * fading at its edges. `@` and a few letters offer the station's other chats, the one picked going in as a link, shown
+ * as a chip; files pasted in go with the message; Enter sends (not with `enterSends` off: a touch keyboard's Enter
+ * starts a line); with nothing typed, ↑ / ↓ go to the chat above or below. What a preview's marks offer the draft
+ * `draftKey` comes in. Answers the box and the menu of chats (put over the composer), for the composer to place.
+ */
+export function useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className, lines = 3, enterSends = true, onType, onSubmit }: {
+  draft: Draft; input: RefObject<HTMLTextAreaElement | null>; draftKey: string | undefined; sessionKey: string | null; locked: boolean;
+  placeholder: string; className: string; lines?: number; enterSends?: boolean; onType(): void; onSubmit(): void;
+}): { menu: ReactNode; field: ReactNode } {
+  const { text, setText, add } = draft;
   // `@` and a few letters: a menu of the station's other chats, the one chosen put in as a link (ChatRef.tsx).
   const [reference, setReference] = useState<{ start: number; query: string } | null>(null);
   const [active, setActive] = useState(0);
@@ -755,35 +882,12 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   // A preview's marks beside the chat: their screenshot and a quote each, to say more about before sending.
   useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added }) => {
     if (offered.length) add(offered);
-    if (added.length) setQuotes((all) => [...all, ...added]);
+    if (added.length) draft.setQuotes((all) => [...all, ...added]);
     input.current?.focus();
   });
-  const quoteInputs = useRef(new Map<string, HTMLInputElement>());
-  useEffect(() => {
-    if (!focusQuote) return;
-    quoteInputs.current.get(focusQuote)?.focus();
-    onFocused();
-  }, [focusQuote]);
-  const send = async () => {
-    const to = await draft.send(async () => (thread !== null ? thread : (await ensureChat!()).thread), { first: thread === null, ...(onSending ? { onSending } : {}) });
-    if (to !== null) onSent?.(to);
-  };
-  // Switching to a chat puts the cursor in its composer (not on touch screens, where it would raise the keyboard),
-  // before it is first drawn: it never shows unfocused first.
-  useLayoutEffect(() => {
-    if (window.matchMedia("(pointer: fine)").matches) input.current?.focus();
-  }, [thread]);
-  // Space with nothing that takes keys focused (the cursor lost to a click on the messages, a closed menu…) puts it
-  // back in the composer, rather than scrolling the page.
-  useShortcut("composer.focus", () => {
-    const el = input.current;
-    if (!el || el.disabled || !el.getClientRects().length) return false;
-    el.focus();
-  });
-  useShortcut("composer.file", locked ? null : () => { picker.current?.click(); });
-  // Grow with the text up to three lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
+  // Grow with the text up to its lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
   // the text (or the placeholder), so it is measured again then; below the limit it never scrolls. Sized before it is
-  // drawn (and before the composer's change of shape below reads where things end up).
+  // drawn (and before the composer's change of shape reads where things end up).
   useLayoutEffect(() => {
     const el = input.current;
     if (!el) return;
@@ -798,7 +902,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     el.after(probe);
     const fit = () => {
       const style = getComputedStyle(el);
-      const limit = 3 * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      const limit = lines * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
       probe.style.width = `${el.clientWidth}px`;
       probe.placeholder = el.placeholder;
       probe.value = el.value;
@@ -834,119 +938,91 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     const scrolled = () => { edges(); over(); };
     el.addEventListener("scroll", scrolled);
     return () => { resize.disconnect(); el.removeEventListener("scroll", scrolled); probe.remove(); };
-  }, [text]);
-  const ready = draft.ready && !locked;
-  // Capsule ⇄ box, in one motion (morph.ts): how it shows is read in the render that changes it (the page still shows
-  // what was), and it goes from there to its new shape once that is laid out. Laid out for another page (a new chat's
-  // roomy box ⇄ a chat's foot), the dock moves it (dock.tsx), not this; nor does this cut into that move.
-  const multiline = roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0;
-  const box = useRef<HTMLFormElement>(null);
-  // What it is laid out by: any change of it may change its height (a line more or less, capsule ⇄ box, files).
-  const laidOut = `${multiline}|${text}|${files.length}|${quotes.length}`;
-  const shown = useRef({ laidOut, roomy });
-  const from = useRef<Shape | null>(null);
-  if (box.current && shown.current.laidOut !== laidOut && !from.current) from.current = shapeOf(box.current);
-  useLayoutEffect(() => {
-    const el = box.current, was = from.current;
-    const paged = shown.current.roomy !== roomy;
-    from.current = null;
-    shown.current = { laidOut, roomy };
-    if (!el || !was || paged || movingBy(el) === "page" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    stop(el);
-    const height = el.getBoundingClientRect().height;
-    // Its size unchanged (a letter more on the same line), nothing moves.
-    if (Math.abs(height - was.rect.height) < 0.5 && was.corner === getComputedStyle(el).getPropertyValue("corner-shape")) return;
-    morph(el, "text", was, [{ height: `${was.rect.height}px` }, { height: `${height}px` }], { duration: 260, easing: easeOut() });
-  }, [laidOut, roomy]);
-  const submit = () => {
-    if (ready) void send();
-  };
+  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
+  const menu = reference && !locked && (
+    <div className={refCss.refAnchor}>
+      <ChatRefMenu query={reference.query} here={sessionKey} active={active} onPick={pickReference} found={(items) => { refItems.current = items; }} />
+    </div>
+  );
+  const field = (
+    <>
+      {marked && <RefMirror text={text} className={className} mirror={mirror} />}
+      <textarea ref={input} className={`${className}${marked ? ` ${refCss.refTextSeeThrough}` : ""}`} rows={1} value={text} placeholder={placeholder} aria-label="消息"
+        onChange={(e) => { setText(e.target.value); onType(); lookForReference(e.target); }}
+        onSelect={(e) => lookForReference(e.currentTarget)}
+        onBlur={() => setReference(null)}
+        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); } }}
+        onKeyDown={(e) => {
+          if (reference && !e.nativeEvent.isComposing) {
+            const n = refItems.current.length;
+            if (e.key === "Escape") { e.preventDefault(); closedAt.current = reference.start; setReference(null); return; }
+            if (n && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); setActive((i) => (i + (e.key === "ArrowDown" ? 1 : n - 1)) % n); return; }
+            if (n && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey) { e.preventDefault(); pickReference(refItems.current[Math.min(active, n - 1)]!.ref); return; }
+          }
+          // A reference goes whole.
+          const caret = e.currentTarget.selectionStart;
+          const mark = e.key === "Backspace" && caret === e.currentTarget.selectionEnd ? markBefore(text, caret) : null;
+          if (mark !== null) {
+            e.preventDefault();
+            caretAt.current = mark;
+            setText(text.slice(0, mark) + text.slice(caret));
+            return;
+          }
+          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && enterSends) { e.preventDefault(); onSubmit(); return; }
+          // Nothing typed: ↑ / ↓ go to the chat above or below, as the sidebar lists them now.
+          if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !text && !e.nativeEvent.isComposing && !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+            if (goToNeighbour(e.key === "ArrowUp" ? -1 : 1)) e.preventDefault();
+          }
+        }} />
+    </>
+  );
+  return { menu, field };
+}
+
+/**
+ * What waits to go with the message, as both screens' composers show it: the quotes, each with a line for a comment
+ * (the one just added, `focusQuote`, takes the focus; Enter in it goes back to the text, `onDone`), then the files, an
+ * image as its picture.
+ */
+export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft: Draft; focusQuote: string | null; onFocused(): void; onDone(): void }) {
+  const { quotes, setQuotes, files } = draft;
+  const quoteInputs = useRef(new Map<string, HTMLInputElement>());
+  useEffect(() => {
+    if (!focusQuote) return;
+    quoteInputs.current.get(focusQuote)?.focus();
+    onFocused();
+  }, [focusQuote]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className={cloudCss.composerWrap}>
-      {reference && !locked && (
-        <div className={refCss.refAnchor}>
-          <ChatRefMenu query={reference.query} here={sessionKey} active={active} onPick={pickReference} found={(items) => { refItems.current = items; }} />
+    <>
+      {quotes.length > 0 && (
+        <div className={css.composerQuotes}>
+          {quotes.map((q) => (
+            <div key={q.id} className={css.composerQuote} onClick={(e) => e.stopPropagation()}>
+              <QuoteCard quote={q} onRemove={() => setQuotes((all) => all.filter((x) => x.id !== q.id))} comment={
+                <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
+                  className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder="对这段说点什么（可以不写）" aria-label={`对 ${q.author} 这段的批注`}
+                  onChange={(e) => { const v = e.target.value; setQuotes((all) => all.map((x) => (x.id === q.id ? { ...x, comment: v } : x))); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); onDone(); } }} />
+              } />
+            </div>
+          ))}
         </div>
       )}
-      <form ref={box} className={`${composerCss.composerBox} ${refCss.refHost}`} data-multiline={multiline || undefined} data-dragging={dragging || undefined}
-        onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
-        // Locked (its station offline), no file is taken in.
-        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); if (!locked) add(e.dataTransfer.files); } }}>
-        {quotes.length > 0 && (
-          <div className={css.composerQuotes}>
-            {quotes.map((q) => (
-              <div key={q.id} className={css.composerQuote} onClick={(e) => e.stopPropagation()}>
-                <QuoteCard quote={q} onRemove={() => setQuotes((all) => all.filter((x) => x.id !== q.id))} comment={
-                  <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
-                    className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder="对这段说点什么（可以不写）" aria-label={`对 ${q.author} 这段的批注`}
-                    onChange={(e) => { const v = e.target.value; setQuotes((all) => all.map((x) => (x.id === q.id ? { ...x, comment: v } : x))); }}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); input.current?.focus(); } }} />
-                } />
-              </div>
-            ))}
-          </div>
-        )}
-        {files.length > 0 && (
-          <div className={css.composerFiles}>
-            {files.map((f) => {
-              const remove = () => draft.remove(f.id);
-              return f.preview ? (
-                <Tip key={f.id} label={f.error ?? f.name}><span className={css.composerThumb} data-error={f.error ? true : undefined}>
-                  <img src={f.preview} alt={f.name} />
-                  {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
-                  <button type="button" className={css.composerThumbRemove} aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><Close size={11} /></button>
-                </span></Tip>
-              ) : <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={remove} />;
-            })}
-          </div>
-        )}
-        {marked && <RefMirror text={text} className={css.composerText} mirror={mirror} />}
-        <textarea ref={input} className={`${css.composerText}${marked ? ` ${refCss.refTextSeeThrough}` : ""}`} rows={1} value={text} placeholder={placeholder} aria-label="消息"
-          onChange={(e) => { setText(e.target.value); warm(); lookForReference(e.target); }}
-          onSelect={(e) => lookForReference(e.currentTarget)}
-          onBlur={() => setReference(null)}
-          onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); } }}
-          onKeyDown={(e) => {
-            if (reference && !e.nativeEvent.isComposing) {
-              const n = refItems.current.length;
-              if (e.key === "Escape") { e.preventDefault(); closedAt.current = reference.start; setReference(null); return; }
-              if (n && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); setActive((i) => (i + (e.key === "ArrowDown" ? 1 : n - 1)) % n); return; }
-              if (n && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey) { e.preventDefault(); pickReference(refItems.current[Math.min(active, n - 1)]!.ref); return; }
-            }
-            // A reference goes whole.
-            const caret = e.currentTarget.selectionStart;
-            const mark = e.key === "Backspace" && caret === e.currentTarget.selectionEnd ? markBefore(text, caret) : null;
-            if (mark !== null) {
-              e.preventDefault();
-              caretAt.current = mark;
-              setText(text.slice(0, mark) + text.slice(caret));
-              return;
-            }
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); return; }
-            // Nothing typed: ↑ / ↓ go to the chat above or below, as the sidebar lists them now.
-            if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !text && !e.nativeEvent.isComposing && !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
-              if (goToNeighbour(e.key === "ArrowUp" ? -1 : 1)) e.preventDefault();
-            }
-          }} />
-        <div className={css.composerToolbar}>
-          <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
-          <Tip label="发送文件" shortcut="composer.file">
-            <button type="button" className={css.attachBtn} aria-label="发送文件" disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
-              <Plus size={18} />
-            </button>
-          </Tip>
-          {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
-          <Tip label={uploading ? "文件还在上传" : "发送"}>
-            <button type="submit" className={css.sendBtn} disabled={!ready} aria-label="发送" aria-busy={starting || undefined}>
-              {starting ? <span className={waitingCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
-            </button>
-          </Tip>
+      {files.length > 0 && (
+        <div className={css.composerFiles}>
+          {files.map((f) => {
+            const remove = () => draft.remove(f.id);
+            return f.preview ? (
+              <Tip key={f.id} label={f.error ?? f.name}><span className={css.composerThumb} data-error={f.error ? true : undefined}>
+                <img src={f.preview} alt={f.name} />
+                {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
+                <button type="button" className={css.composerThumbRemove} aria-label={`移除 ${f.name}`} onClick={(e) => { e.stopPropagation(); remove(); }}><Close size={11} /></button>
+              </span></Tip>
+            ) : <FileCard key={f.id} file={f.done ?? f} pending={!f.done && !f.error} error={f.error} onRemove={remove} />;
+          })}
         </div>
-      </form>
-      {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
-    </div>
+      )}
+    </>
   );
 }
 
@@ -1123,17 +1199,13 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
  * long its turn has run. No name: the avatar says whose. What it does changes by crossfading, and each thing stays a
  * moment, so a passing 请求中 does not flicker by. The line opens its history.
  */
-export function Activity({ agent, leaving, pose, onOpen, mark, className }: {
-  agent: AgentAtWork; leaving: boolean; pose: { folded: boolean; away: boolean }; onOpen(): void;
-  /** Its avatar, drawn as the agent's messages draw theirs (a message comes out of it onto theirs); the pane's class. */
-  mark?: ReactNode; className?: string;
-}) {
+function Activity({ agent, leaving, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
   const wait = agent.wait;
   const now = useSteady(wait ? { key: "wait", text: "等待中" } : agent.activity?.now ?? { key: "busy", text: "处理中" });
   return (
-    <div className={`${conversationCss.msg} ${css.agentActivity}${className ? ` ${className}` : ""}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
+    <div className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
       <Tip label="打开执行历史"><button type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
-        <span className={css.activityAvatar} aria-hidden="true">{mark ?? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span>}</span>
+        <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>
         <span className={css.activityTail}>
           <span className={css.activityNow}>
             {now.previous && <span key={`was-${now.n - 1}`} className={css.activityNowText} data-out="">{now.previous.text}</span>}

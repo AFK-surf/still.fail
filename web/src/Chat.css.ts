@@ -10,6 +10,8 @@ import { msgAvatar, msgMine, msgWaiting } from "./styles/chat.css.ts";
 import { onboardingCard } from "./cloud/settings.css.ts";
 
 export const msgName = style({ fontWeight: "600" });
+/** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */
+export const chatMessages = style({});
 export const chatToBottom = style({
   position: "absolute", right: "24px", bottom: "12px", zIndex: "5", display: "grid", placeItems: "center",
   width: "34px", height: "34px", borderRadius: "50%", border: `1px solid ${vars.line}`, background: vars.canvas,
@@ -354,7 +356,7 @@ export const activityNowText = style({
 export const activityElapsed = style({ flex: "none", color: vars.subtle, fontVariantNumeric: "tabular-nums" });
 export const avatarFlying = style({
   selectors: {
-    [`${chatList} > &`]: { position: "absolute", zIndex: "2", maxWidth: "none", margin: "0", pointerEvents: "none" },
+    [`${chatMessages} > &`]: { position: "absolute", zIndex: "2", maxWidth: "none", margin: "0", pointerEvents: "none" },
   },
 });
 export const composerChoices = style({
@@ -485,6 +487,15 @@ globalStyle(`${msgRow} > ${msgAvatar}`, {
   },
 });
 globalStyle(`${msgRow} > ${msgAvatar}`, { marginTop: "3px" });
+/**
+ * A list whose messages have their avatar and name in one line over what they say, in line with it, nothing out in a
+ * margin (the phone's): the avatar lies at the head's start, and what is said unrolls from it.
+ */
+export const inlineHeads = style({});
+globalStyle(`${inlineHeads} ${msgRow}`, { gridTemplateColumns: "minmax(0, 1fr)", columnGap: "0", position: "relative" });
+globalStyle(`${inlineHeads} ${msgRow} > ${msgAvatar}`, { position: "absolute", left: "0", top: "3px", margin: "0" });
+globalStyle(`${inlineHeads} ${msgRow} > ${msgMain} > ${msgHead}`, { paddingLeft: "25px" });
+globalStyle(`${inlineHeads} ${msgRow}[data-emitting] > ${msgMain}`, { transformOrigin: "9px 12px" });
 /** Here rather than with its class: it comes after .send-btn .spinner, and wins over it. */
 globalStyle(`${msgWaiting} ${spinner}`, { width: "10px", height: "10px", borderWidth: "1.5px" });
 globalStyle(`${fileCardOpen} ${fileCard}`, { transition: `background ${vars.dur} ${vars.easeOut}` });

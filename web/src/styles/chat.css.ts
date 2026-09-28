@@ -6,8 +6,11 @@ import { avatar } from "../ui.css.ts";
 import { quotaChips } from "../components.css.ts";
 import { runCardRow } from "../pages/Connect.css.ts";
 
-/** Holds the space of whatever left the bottom (see scroll.ts); the negative margin takes back its gap. */
-export const chatFloor = style({ flex: "none", marginTop: "-28px", padding: "0" });
+/**
+ * Holds the space of whatever left the bottom (see scroll.ts); the negative margin takes back its gap (the list's
+ * `--list-gap`, when it is not the wide screen's 28px).
+ */
+export const chatFloor = style({ flex: "none", marginTop: "calc(-1 * var(--list-gap, 28px))", padding: "0" });
 /** A message on its way says so only if it takes a moment. */
 export const msgSending = style({ animation: `${msgSendingShowKeyframes} 0s 0.8s both` });
 export const msgMine = style({ display: "grid", justifyItems: "end", gap: "4px" });

@@ -10,6 +10,7 @@ import type { Job } from "../core/shapes.ts";
 import { StationPreview } from "../Preview.tsx";
 import { useStation } from "../station.tsx";
 import { useApp } from "./app.tsx";
+import { draftKeyOf } from "./ChatHost.tsx";
 import { NavBar } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Preview.css.ts";
@@ -38,7 +39,7 @@ export function PreviewScreen() {
       {job && !up && <p className={homeCss.mNote}>「{job.name}」已经停了。</p>}
       {job && up && (
         <StationPreview station={station.address} port={job.port!} name={job.name} service={service} alone
-          restarting={job.state === "exited" ? { restarts: job.restarts ?? 0 } : null} />
+          restarting={job.state === "exited" ? { restarts: job.restarts ?? 0 } : null} draftKey={draftKeyOf(station.id, chat)} />
       )}
     </div>
   );

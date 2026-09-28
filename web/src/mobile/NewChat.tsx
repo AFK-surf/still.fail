@@ -3,10 +3,10 @@
 // message (or file) makes the session on that station; then the page becomes the chat.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { stationApi, useStationCall, useStations, type ModelOption, type RuntimeKind, type StationView } from "../api.ts";
-import { useCall } from "../core/react.ts";
 import { RUNTIME_LABEL } from "../format.ts";
 import { Server } from "../icons.tsx";
-import { toMadeChat } from "../Chat.tsx";
+import { sendDraft, toMadeChat } from "../Chat.tsx";
+import { keepChoice, keepStation, lastChoice, lastStation, useEnsureChat, type Choice } from "../NewChat.tsx";
 import { optionOf } from "../ModelTriple.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { useNavigate } from "react-router";
@@ -23,24 +23,15 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 
-/** What the new chat runs on; kept per station for next time. */
-interface Choice { runtime: string; model: string; effort: string }
-const KEY = "ember.m.newChat";
-function lastChoice(station: string): Choice | null {
-  try { return (JSON.parse(localStorage.getItem(`${KEY}/${station}`) ?? "null") as Choice | null); } catch { return null; }
-}
-function keepChoice(station: string, c: Choice) {
-  localStorage.setItem(`${KEY}/${station}`, JSON.stringify(c));
-  localStorage.setItem(`${KEY}.last`, station);
-}
-
 export function NewChatScreen() {
   const app = useApp();
   const stations = useStations(app.entry.id);
   const all = stations.value;
   const online = (all ?? []).filter((s) => s.online);
-  const [picked, setPicked] = useState<string | null>(() => localStorage.getItem(`${KEY}.last`));
-  const view = online.find((s) => s.station === picked) ?? online[0];
+  // The station last started on (or picked) in this workspace, on either screen (../NewChat.tsx keeps it).
+  const [picked, setPicked] = useState(() => lastStation(app.entry.id));
+  const onStation = (id: string) => { setPicked(id); keepStation(app.entry.id, id); };
+  const view = online.find((s) => s.id === picked) ?? online[0];
   return (
     <div className={`${pagesCss.mScreen} ${css.mNewchatScreen}`}>
       <NavBar back="取消" onBack={app.pop} title="新对话" />
@@ -54,7 +45,7 @@ export function NewChatScreen() {
             </div>
           )
         )
-        : <NewChatOn key={view.station} view={view} stations={online} onStation={setPicked} />}
+        : <NewChatOn key={view.station} view={view} stations={online} onStation={onStation} />}
     </div>
   );
 }
@@ -63,49 +54,41 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
   const app = useApp();
   // The page's composer is its host's (ChatHost.tsx): kept as this new chat becomes its chat.
   const { draft, use } = useHost();
-  const call = useCall();
   const stationCall = useStationCall(view.station);
   const api = useMemo(() => stationApi(stationCall), [stationCall]);
-  const [choice, setChoice] = useState<Choice | null>(() => lastChoice(view.station));
+  // What it runs on, as the wide screen keeps it (../NewChat.tsx: per station, the same on both).
+  const [choice, setChoice] = useState<Choice>(() => ({ runtime: "", model: "", effort: "", ...lastChoice(view.id) }));
   // The model first, from what the station's profiles have enabled; the runtime only when it runs on more than one. A
   // remembered model or runtime no longer there gives way to the first that is.
-  const entry = optionOf(view.models, choice?.model) ?? view.models[0];
+  const entry = optionOf(view.models, choice.model) ?? view.models[0];
   const model = entry?.model;
-  const runtime = entry?.runtimes.find((r) => r === choice?.runtime) ?? entry?.runtimes[0];
+  const runtime = entry?.runtimes.find((r) => r === choice.runtime) ?? entry?.runtimes[0];
   const efforts = runtime ? entry?.efforts[runtime] ?? [] : [];
-  const effort = choice?.effort && efforts.includes(choice.effort) ? choice.effort : "";
-  const pick = (next: Choice) => { setChoice(next); keepChoice(view.station, next); };
+  const effort = choice.effort && efforts.includes(choice.effort) ? choice.effort : "";
+  const pick = (next: Partial<Choice>) => { const c = { ...choice, ...next }; setChoice(c); keepChoice(view.id, c); };
   // The model list is what a profile's check found; profiles not checked since the station started are checked now, once.
   const profiles = view.overview?.profiles ?? [];
   const checked = useRef(new Set<string>());
   useEffect(() => {
     for (const p of profiles) if (!p.check && !checked.current.has(p.id)) { checked.current.add(p.id); api.checkProfile(p.id).catch(() => {}); }
   }, [profiles, api]);
-  // The core has the chat at once (its page, its row, what is sent waiting in it); the station makes it behind it.
-  const made = useRef<Promise<string> | null>(null);
   const navigate = useNavigate();
   const problem = !view.overview ? `正在读取 ${view.name} 的 Profile…`
     : profiles.length === 0 ? null
     : view.models.length === 0 ? "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。" : null;
-  // The first message makes the chat and the page becomes it, the message already there; what follows goes in after it.
+  // The first message makes the chat as the wide screen's does (../NewChat.tsx's useEnsureChat, then ../Chat.tsx's
+  // sendDraft: the message waits in its outbox, its quotes and files with it), and the page becomes it; what follows
+  // goes in after it. The chat is started on this station: the next new chat starts here too.
+  const ensureChat = useEnsureChat(view.station, entry, runtime, { effort, ...(choice.profile ? { profile: choice.profile } : {}) }, () => onStation(view.id));
+  const opened = useRef(false);
   const send = (draft: Draft) => {
     if (!model || !runtime) return draft.setError("先在 Profile 里启用模型");
-    const { text, files } = draft.take();
-    const first = !made.current;
-    made.current ??= (call("chat.create", { station: view.station, runtime, model, ...(effort ? { effort } : {}) }) as Promise<{ key: string }>).then((m) => m.key);
-    made.current.then(
-      (key) => {
-        void call("chat.send", { station: view.station, session: key, text, attachments: files.flatMap((f) => (f.done ? [f.done] : [])), quotes: [] }).catch(() => {});
-        // The new item's page (its address from now on, until its station's key takes over: ChatScreen).
-        if (first) toMadeChat(() => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(key)}`, { replace: true }));
-      },
-      // No chat to send into: what was sent comes back to the composer.
-      (error: unknown) => {
-        made.current = null;
-        draft.setText(text);
-        draft.setError(error instanceof Error ? error.message : String(error));
-      },
-    );
+    void sendDraft(draft, null, ensureChat).then((to) => {
+      if (to === null || opened.current) return;
+      opened.current = true;
+      // The new item's page (its address from now on, until its station's key takes over: ChatScreen).
+      toMadeChat(() => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(String(to))}`, { replace: true }));
+    });
   };
   useLayoutEffect(() => use({ station: view.station, placeholder: "做任何事", offline: false, send }));
   return (
@@ -132,10 +115,10 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
           ) : (
             <>
               <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={entry.name}
-                onClick={() => pickModel(app, view, model, (m) => { const rt = m.runtimes.find((r) => r === runtime) ?? m.runtimes[0]!; pick({ runtime: rt, model: m.model, effort: rt !== runtime ? "" : effort }); })} />
+                onClick={() => pickModel(app, view, model, (m) => { const rt = m.runtimes.find((r) => r === runtime) ?? m.runtimes[0]!; pick({ runtime: rt as RuntimeKind, model: m.model, effort: rt !== runtime ? "" : effort }); })} />
               {/* The runtime only when the model runs on more than one. */}
               {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={13} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
-                onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt, model, effort: "" }))} />}
+                onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind, model, effort: "" }))} />}
               <Chooser label={effort || "默认深度"} onClick={() => pickEffort(app, efforts, effort, (e) => pick({ runtime, model, effort: e }))} />
             </>
           )}

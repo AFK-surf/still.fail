@@ -1,11 +1,10 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { spinKeyframes } from "../styles/keyframes.css.ts";
 import { m } from "./styles/root.css.ts";
 import { mForm } from "./styles/sheets.css.ts";
 import { mMessages } from "./styles/chat.css.ts";
 import { mRunLabel } from "./styles/history.css.ts";
 import { mReaderBar, mSheetHead } from "./app.css.ts";
-import { mAgentHead, mAttach, mChatBar, mChatBarTitle, mDraftQuoteSource, mFileText, mInfoAgent, mJobHead, mQuoteSource, mUnreadLine } from "./Chat.css.ts";
+import { mAttach, mChatBar, mChatBarTitle, mInfoAgent, mJobHead } from "./Chat.css.ts";
 import { mSteps } from "./styles/settings.css.ts";
 import { mHomeBar, mHomeWorkspace } from "./Home.css.ts";
 
@@ -32,10 +31,6 @@ export const mAvatar = style({
   display: "inline-grid", placeItems: "center", flex: "none", borderRadius: "50%", overflow: "hidden", color: "#fff",
   fontWeight: "600", lineHeight: "1",
 });
-export const mPeople = style({ display: "inline-flex", alignItems: "center", flex: "none" });
-export const mPeopleOne = style({
-  position: "relative", display: "inline-grid", placeItems: "center", borderRadius: "50%",
-});
 export const mRing = style({
   display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "4px", flex: "none",
 });
@@ -43,11 +38,8 @@ export const mRingDisc = style({ position: "relative", display: "grid", placeIte
 export const mRingLabel = style({ fontSize: "12px", color: "var(--m-muted)" });
 export const mQuotaRing = style({ position: "relative", display: "inline-grid", placeItems: "center", flex: "none" });
 export const mQuotaRings = style({ display: "inline-flex", alignItems: "center", gap: "6px", flex: "none" });
-export const mSpinner = style({
-  display: "inline-block", flex: "none", boxSizing: "border-box", borderRadius: "50%",
-  border: "1.5px solid transparent", borderTopColor: "var(--m-subtle)", borderRightColor: "var(--m-subtle)",
-  animation: `${spinKeyframes} .8s linear infinite`,
-});
+/** Laid out as a box wherever it is put (its look is the wide screen's spinner). */
+export const mSpinner = style({ display: "inline-block", flex: "none", boxSizing: "border-box" });
 /** A segmented choice: a track that tints what it sits on, and a thumb that slides to the chosen option. */
 export const mSeg = style({
   position: "relative", boxSizing: "border-box", overflow: "hidden",
@@ -184,29 +176,6 @@ globalStyle(`${mChatBarTitle} b`, {
 });
 /** Here rather than with its class: it comes after .m-loading, and wins over it. */
 globalStyle(`${mMessages} > *`, { flex: "none" });
-/** Here rather than with its class: it comes after .m-large-title span, and wins over it. */
-globalStyle(`${mUnreadLine} span`, { fontSize: "12px", color: "var(--m-blue)" });
-/** Here rather than with its class: it comes after .m-navbar-title b, and wins over it. */
-globalStyle(`${mAgentHead} b`, {
-  fontSize: "13px", fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-});
-/** Here rather than with its class: it comes after .m-info-agent span, and wins over it. */
-globalStyle(`${mQuoteSource} > span`, {
-  display: "-webkit-box", WebkitLineClamp: "3", WebkitBoxOrient: "vertical", overflow: "hidden",
-});
-/** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
-globalStyle(`${mQuoteSource} b`, { color: "var(--m-ink)", fontWeight: "500" });
-/** Here rather than with its class: it comes after .m-pick-text > span, and wins over it. */
-globalStyle(`${mFileText} > span`, {
-  fontSize: "13px", color: "var(--m-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-});
-/** Here rather than with its class: it comes after .m-info-agent span, and wins over it. */
-globalStyle(`${mDraftQuoteSource} > span`, {
-  flex: "1", minWidth: "0", display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical",
-  overflow: "hidden",
-});
-/** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
-globalStyle(`${mDraftQuoteSource} b`, { color: "var(--m-ink)", fontWeight: "500" });
 /** Here rather than with its class: it comes after .m-pick-text > span, and wins over it. */
 globalStyle(`${mAttach} span`, { fontSize: "13px" });
 globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar})`, { WebkitAppRegion: "drag" });

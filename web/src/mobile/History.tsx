@@ -18,6 +18,8 @@ import * as css from "./History.css.ts";
 import { ToolCall, ToolResult } from "../ToolStep.tsx";
 import * as toolCss from "../ToolStep.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
+import * as rootCss from "./styles/root.css.ts";
+import * as conversationCss from "../styles/conversation.css.ts";
 import * as historyCss from "./styles/history.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -168,7 +170,7 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
         <Message icon={Send}
           label={<>发送到 {body.content.place ? <PlaceMark station={station} chat={chat} place={body.content.place} /> : <span className={css.mHPlace}><SlackMark size={12} /><b> Slack</b></span>}
             {body.content.block && <Pill text="Block" tone="blue" />}{body.content.failed && <Pill text="发送失败" tone="red" />}</>}
-          text={body.content.text} full={<div className={chatCss.mMarkdown}><Prose>{body.content.text}</Prose></div>} />
+          text={body.content.text} full={<div className={`${rootCss.wide} ${conversationCss.markdown}`}><Prose>{body.content.text}</Prose></div>} />
       );
     case "mark":
       return (
@@ -180,7 +182,7 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
     case "text":
       return (
         <div className={body.content.subagent ? css.mHSub : undefined}>
-          <Brief text={body.content.text} open={() => app.reader({ label: <span className={partsCss.mMuted}>{agent.session.agentText} 写道</span>, content: <div className={chatCss.mMarkdown}><Prose>{body.content.text}</Prose></div> })} />
+          <Brief text={body.content.text} open={() => app.reader({ label: <span className={partsCss.mMuted}>{agent.session.agentText} 写道</span>, content: <div className={`${rootCss.wide} ${conversationCss.markdown}`}><Prose>{body.content.text}</Prose></div> })} />
         </div>
       );
     case "group":

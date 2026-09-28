@@ -6,7 +6,7 @@ import { mPill } from "./styles/history.css.ts";
 import { mNewNone } from "./styles/new-chat.css.ts";
 import { mStationOffline } from "./Stations.css.ts";
 import { mMe } from "./Me.css.ts";
-import { mBarAgent, mChatBack, mDraftQuoteSource, mDraftThumb, mFileRemove, mJob, mJobBody, mPlus, mSend } from "./Chat.css.ts";
+import { mBarAgent, mChatBack, mJob, mJobBody, mPlus, mSend } from "./Chat.css.ts";
 import { mInfoRow } from "./styles/lists.css.ts";
 import { mListRow, mPickRow } from "./parts.css.ts";
 
@@ -173,14 +173,14 @@ globalStyle(`${mNewNone} b`, { fontSize: "17px", fontWeight: "600" });
 globalStyle(`${mStationOffline} span`, { fontSize: "13px", color: "var(--m-muted)" });
 /** Here rather than with its class: it comes after .m-h-label b, and wins over it. */
 globalStyle(`${mMe} b`, { display: "block", fontSize: "16px", fontWeight: "700" });
-globalStyle(`${m} :is(${mNavButton}, ${mPlus}, ${mSend}, ${mChatBack}, ${mHAct}, ${mBarAgent}, ${mFileRemove}, ${mDraftQuoteSource} button, ${mDraftThumb} button)`, {
+globalStyle(`${m} :is(${mNavButton}, ${mPlus}, ${mSend}, ${mChatBack}, ${mHAct}, ${mBarAgent})`, {
   "@media": {
     "(pointer: coarse)": {
       position: "relative",
     },
   },
 });
-globalStyle(`${m} :is(${mNavButton}, ${mPlus}, ${mSend}, ${mChatBack}, ${mHAct}, ${mBarAgent}, ${mFileRemove}, ${mDraftQuoteSource} button, ${mDraftThumb} button)::after`, {
+globalStyle(`${m} :is(${mNavButton}, ${mPlus}, ${mSend}, ${mChatBack}, ${mHAct}, ${mBarAgent})::after`, {
   "@media": {
     "(pointer: coarse)": {
       content: "\"\"", position: "absolute", inset: "min(-6px, calc((100% - 44px) / 2))",

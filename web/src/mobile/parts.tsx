@@ -2,11 +2,12 @@
 // state badge, people's avatars, rings, segmented choices, navigation bars and list cards. Sizes are Android's, a dp
 // or an sp a pixel here.
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import type { Badge as BadgeKind, Maker, Person, Quota, RuntimeKind } from "../api.ts";
+import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
 import { Check, ChevronLeft, type IconProps } from "../icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
 import { SlackLogo } from "../ui.tsx";
 import * as css from "./parts.css.ts";
+import * as waitingCss from "../styles/waiting.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -92,19 +93,6 @@ export function Avatar({ id, name, size, picture }: { id: string; name: string; 
       {picture && !failed
         ? <img src={picture} alt={name} referrerPolicy="no-referrer" onError={() => setFailed(true)} />
         : initial(name)}
-    </span>
-  );
-}
-
-/** People overlapping a little, each ringed in the page's colour. */
-export function PeopleStack({ people, size = 18, ring = "var(--m-bg)" }: { people: Person[]; size?: number; ring?: string }) {
-  return (
-    <span className={css.mPeople}>
-      {people.map((p, i) => (
-        <span key={p.id} className={css.mPeopleOne} style={{ width: size + 3, height: size + 3, marginLeft: i ? -5 : 0, zIndex: people.length - i, background: ring }}>
-          <Avatar id={p.id} name={p.shown.display} size={size} picture={p.shown.picture} />
-        </span>
-      ))}
     </span>
   );
 }
@@ -221,8 +209,9 @@ export function Seg({ options, selected, onSelect, height = 30, fill = false, ra
   );
 }
 
+/** The wide screen's spinner (../styles/waiting.css.ts), at a size; `color`, its turning part's (on a dark ground). */
 export function Spinner({ size, color }: { size: number; color?: string }) {
-  return <span className={css.mSpinner} style={{ width: size, height: size, ...(color ? { borderTopColor: color, borderRightColor: color } : {}) }} aria-hidden="true" />;
+  return <span className={`${waitingCss.spinner} ${css.mSpinner}`} style={{ width: size, height: size, borderWidth: size < 14 ? 1.5 : 2, ...(color ? { borderTopColor: color } : {}) }} aria-hidden="true" />;
 }
 
 // ── navigation ─────────────────────────────────────────────────────────

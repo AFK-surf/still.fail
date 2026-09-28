@@ -19,5 +19,5 @@ export const mComposerCapsule = style({
   viewTransitionName: "composer", display: "flex", flexDirection: "column", gap: "8px", padding: "8px",
   borderRadius: "26px",
 });
-export const mComposerOffline = style({ padding: "2px 8px", fontSize: "13px", color: "var(--m-muted)" });
-export const mComposerError = style({ padding: "0 6px", fontSize: "12px" });
+export const mComposerOffline = style({ margin: "0", padding: "2px 8px", fontSize: "13px", color: "var(--m-muted)" });
+export const mComposerError = style({ margin: "0", padding: "0 6px", fontSize: "12px" });

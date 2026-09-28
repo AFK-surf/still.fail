@@ -1,6 +1,4 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { mMine } from "./styles/chat.css.ts";
-import { mDraftQuoteSource, mQuoteSource, mUnsent } from "./Chat.css.ts";
 
 export const mDot = style({
   width: "7px", height: "7px", borderRadius: "50%", background: "var(--m-accent)", flex: "none",
@@ -131,10 +129,3 @@ export const mLastText = style({
 });
 globalStyle(`${mHomeWorkspace} svg`, { flex: "none", color: "var(--m-muted)" });
 globalStyle(`${mEmpty} p`, { fontSize: "14px", color: "var(--m-muted)" });
-/** A message that did not go: faded, a short note (a tap says why), and what to do about it. */
-/** Here rather than with its class: it comes after .m-chat-row[data-offline] .m-row-picture, and wins over it. */
-globalStyle(`${mMine}[data-unsent] > :not(${mUnsent})`, { opacity: "0.55" });
-/** Here rather than with its class: it comes after .m-home-workspace svg, and wins over it. */
-globalStyle(`${mQuoteSource} svg`, { flex: "none", marginTop: "3px", color: "var(--m-accent-ink)" });
-/** Here rather than with its class: it comes after .m-home-workspace svg, and wins over it. */
-globalStyle(`${mDraftQuoteSource} svg`, { flex: "none", color: "var(--m-accent-ink)" });

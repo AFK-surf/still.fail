@@ -1,7 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { mRiseKeyframes } from "../../styles/keyframes.css.ts";
 import { vars } from "../../styles/tokens.css.ts";
-import { fileLink } from "../../Prose.css.ts";
 
 /**
  * The narrow screen, as the Android app draws it (apps/android/…/ui/Theme.kt, Glass.kt, Parts.kt, Sheet.kt and the
@@ -92,11 +91,19 @@ export const m = style({
     },
   },
 });
-globalStyle(`${m} button`, { font: "inherit", color: "inherit", WebkitTapHighlightColor: "transparent" });
-/** A link to a file within a message's text keeps its colour: the reset above is for the phone's own buttons. */
-globalStyle(`${m} ${fileLink}`, { color: vars.blue });
-globalStyle(`${m} p`, { margin: "0" });
-globalStyle(`${m} [data-enter]`, { animation: `${mRiseKeyframes} 320ms var(--m-standard) both` });
+/**
+ * Where the phone draws what the wide screen draws, with the wide screen's own parts (a chat's messages, its composer):
+ * the wide screen's styles hold there, the phone's resets below do not reach in, and its type is a size up for the
+ * narrow screen.
+ */
+export const wide = style({
+  color: vars.text, fontSize: vars.textBody, lineHeight: "1.55",
+  vars: { [vars.textXs]: "13px", [vars.textSm]: "15px", [vars.textBody]: "15px" },
+});
+globalStyle(`${m} button:not(${wide} *)`, { font: "inherit", color: "inherit" });
+globalStyle(`${m} button`, { WebkitTapHighlightColor: "transparent" });
+globalStyle(`${m} p:not(${wide} *)`, { margin: "0" });
+globalStyle(`${m} [data-enter]:not(${wide} *)`, { animation: `${mRiseKeyframes} 320ms var(--m-standard) both` });
 globalStyle(`${m} [data-enter]`, {
   "@media": {
     "(prefers-reduced-motion: reduce)": {

@@ -55,7 +55,7 @@ globalStyle(`${markdown} pre code`, { fontFamily: vars.fontMono });
  */
 /** Here rather than with its class: it comes after .markdown > :first-child, and wins over it. */
 globalStyle(`${msg}[data-held]`, {
-  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: "0fr", marginTop: "-28px",
+  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: "0fr", marginTop: "calc(-1 * var(--list-gap, 28px))",
   overflow: "hidden",
 });
 /** Inline code as Zork has it: no box, the code face in its own colour. */
