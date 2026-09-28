@@ -27,6 +27,7 @@ import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAct
 import { Avatar } from "./gate.tsx";
 import { Illustration, PageBrand, SidebarBrand } from "../brand.tsx";
 import { identify, track } from "../telemetry.ts";
+import * as nav from "../Sidebar.css.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
@@ -68,7 +69,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
     <PeopleContext.Provider value={people}>
       <div className="shell" data-detail={detail}>
         {settings
-          ? <nav className="sidebar" aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className="brand brand-compact"><SidebarBrand /></div><SettingsNav entry={entry} /><div className="nav-foot"><WorkspaceSwitcher current={entry} /></div></nav>
+          ? <nav className={nav.sidebar} aria-label="设置"><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WorkspaceSwitcher current={entry} /></div></nav>
           : <WorkspaceSidebar entry={entry} />}
         <main className="main">
           <ComposerDock>
@@ -125,7 +126,7 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
   return (
     <div className="onboarding">
       <header className="onboarding-bar">
-        <div className="brand brand-compact"><PageBrand /></div>
+        <div className={`${nav.brand} ${nav.brandCompact}`}><PageBrand /></div>
         <div className="onboarding-account"><WorkspaceSwitcher current={entry} /></div>
       </header>
       <main className="onboarding-main">
@@ -161,13 +162,13 @@ function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | und
 
 function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
-    <nav className="sidebar" aria-label="导航">
+    <nav className={nav.sidebar} aria-label="导航">
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
-      <div className="brand brand-compact"><SidebarBrand /></div>
+      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
       <ChatList scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} />
-      <div className="nav-foot">
+      <div className={nav.navFoot}>
         <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
-        <div className="nav-foot-row">
+        <div className={nav.navFootRow}>
           <WorkspaceSwitcher current={entry} />
           <Tip label="设置" side="top"><NavLink className="icon-btn" to={`/w/${entry.id}/settings`} aria-label="设置"><Settings {...ICON} /></NavLink></Tip>
         </div>

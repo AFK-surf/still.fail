@@ -11,21 +11,11 @@
 .muted { color: var(--muted); }
 .mono { font-family: var(--font-mono); }
 
-/* ── sidebar ───────────────────────────────────────────────────────── */
+/* ── sidebar: Sidebar.css.ts ───────────────────────────────────────── */
 
-.sidebar { background: var(--sidebar); display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
-/* The sidebar is for going places, not for copying: nothing in it is selected (its fields still are) or dragged off. */
-.sidebar { -webkit-user-select: none; user-select: none; }
-.sidebar :is(input, textarea) { -webkit-user-select: text; user-select: text; }
-.sidebar :is(a, img, svg) { -webkit-user-drag: none; }
-/* The buddy's drawing starts a little inside the lockup: 16 px puts it on the rows' icons below. */
-.brand { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px; }
 .brand-lockup { display: block; }
-/* 云端侧边栏：lockup 在 workspace 切换器上方 */
-.brand-compact { height: 48px; padding: 0 16px; }
-/* The desktop app has no title bar: the top row holds the window's buttons (apps/desktop/src/main.ts puts them in it),
-   the buddy beside them, and drags the window; so does each page's bar, all but what is pressed in it. */
-[data-desktop] :is(.brand, .brand-compact) { height: 44px; padding-left: 86px; -webkit-app-region: drag; }
+/* The desktop app has no title bar: each page's bar drags the window, all but what is pressed in it (the sidebar's top
+   row does too: Sidebar.css.ts). */
 [data-desktop] .page-bar { -webkit-app-region: drag; }
 [data-desktop] .page-bar :is(a, button, input, select, textarea, [role="button"], [tabindex]) { -webkit-app-region: no-drag; }
 /* <picture> 只为挑 -dark 版本，不参与布局 */
@@ -33,81 +23,9 @@
 /* Browsers show <source> as an empty inline box; in a flex row with a gap it would push the image aside. */
 .brand-pic source { display: none; }
 .illus { display: block; max-width: 100%; height: auto; }
-.nav-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 12px; }
-/* 全部 and 我参与的 side by side on one track; the switch slides it, as its thumb slides. */
-.nav-slider { flex: 1; min-height: 0; overflow: hidden; display: flex; }
-.nav-track { flex: none; width: 200%; display: flex; transition: transform 240ms var(--ease-out); }
-.nav-track[data-mine] { transform: translateX(-50%); }
-/* Each pane sized by the track alone: otherwise the track's height is its tallest pane's content, and any change in a
-   row (the time shown on hover) lays out every row of both lists again, a frame dropped per row passed while scrolling. */
-.nav-track > .nav-scroll { flex: none; width: 50%; contain: strict; }
-/* While the list scrolls, rows passing under the pointer do not light up (each would repaint the list). */
-.nav-scroll[data-scrolling] .nav-row { pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .nav-track { transition: none; } }
-.nav-foot { padding: 8px; border-top: 1px solid var(--line); }
-.nav-foot-row { display: flex; align-items: center; gap: 4px; }
-.nav-foot-row .account-trigger { flex: 1; min-width: 0; }
-.nav-foot-row > .icon-btn, .nav-foot-row > * > .icon-btn { flex: none; }
-.nav-heading { display: flex; align-items: center; justify-content: space-between; margin: 14px 8px 4px; font-size: var(--text-xs); color: var(--muted); }
-.nav-heading-action { height: 28px; margin-top: 10px; margin-right: 2px; }
-.nav-heading-action .icon-btn { width: 26px; height: 26px; border-radius: calc(8px * var(--corner-scale)); corner-shape: var(--corner-shape); }
-.nav-connects { flex: none; max-height: 40%; overflow-y: auto; padding: 0 8px 8px; border-top: 1px solid var(--line); }
 .kind-icon { display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; color: var(--muted); }
 .kind-mark { color: var(--text); }
-.nav-empty { margin: 16px 10px; font-size: var(--text-sm); color: var(--muted); }
-.nav-row {
-  display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 10px; border-radius: var(--r-nav);
-  font-size: var(--text-sm); color: var(--text); transition: background var(--dur) var(--ease-out); corner-shape: var(--corner-shape); }
-.nav-row:hover { background: var(--hover); }
-.nav-row[aria-current="page"] { background: var(--selected); }
-.nav-row svg { color: var(--muted); flex: none; }
-.nav-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-note { margin-left: auto; font-size: var(--text-xs); color: var(--muted); }
-.nav-session { align-items: flex-start; padding-top: 7px; padding-bottom: 7px; }
-/* A chat's picture: its agent's mark, or two of its agents' overlapping, its state at the corner. */
-.row-picture { position: relative; flex: none; width: 30px; height: 30px; margin-top: 4px; }
-.row-agent { position: absolute; display: grid; place-items: center; }
-.row-picture[data-count="1"] .row-agent { inset: 0; }
-.row-picture[data-count="2"] .row-agent { width: 16px; height: 16px; }
-.row-picture[data-count="2"] .row-agent:first-child { left: 0; top: 0; }
-.row-picture[data-count="2"] .row-agent:last-child { right: 0; bottom: 0; }
-.row-picture[data-badge]::after { content: ""; position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--sidebar); }
-.row-picture[data-badge="block"]::after { background: var(--accent); }
-.row-picture[data-badge="run"]::after { background: var(--sidebar); box-shadow: inset 0 0 0 1.5px var(--accent); }
-.row-picture[data-badge="failed"]::after { background: var(--red); }
-.nav-session[data-offline] .row-picture { opacity: .5; }
-/* A station's link coming back: a small turning ring where the row's mark goes. */
-.row-spinner { width: 11px; height: 11px; border-width: 1.5px; }
-/* Under the list: the stations not working, which or how many; to the stations. */
-/* Stations not working: a row at the top of the sidebar's foot, over the account; its dot says the worst of it. */
-.station-trouble { margin-bottom: 4px; color: var(--text); }
-.station-trouble[data-state="error"] { color: var(--red); }
-.station-trouble-mark { width: 16px; flex: none; display: grid; place-items: center; }
-.station-trouble-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.station-trouble-go { flex: none; color: var(--muted); }
-.nav-session-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
-.nav-session-head { display: flex; align-items: center; gap: 6px; min-width: 0; height: 20px; line-height: 20px; }
-.nav-session-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nav-session-meta { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; overflow: hidden; }
-/* Every row is two lines high, message or not, so a row that gains its first message does not grow. */
-.nav-session-meta { height: 18px; line-height: 18px; }
-/* The connect icon and the state dot share one right-hand column, centred on each other. */
-.nav-session-head .session-kind, .nav-session-meta .state-dot-slot { width: 14px; flex: none; display: inline-grid; place-items: center; }
-.nav-time { margin-left: auto; flex: none; color: var(--subtle); font-variant-numeric: tabular-nums; }
-.nav-session[data-unread] .nav-session-title { font-weight: 600; color: var(--text); }
-/* Unread: a blue dot in the row's left margin, beside the title, taking no room from it. */
-.nav-session { position: relative; }
-.unread-dot { position: absolute; left: 2px; top: 14px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
-/* Archiving a chat: a button at the row's top right while it is pointed at, the title making room for it. */
-.nav-session-wrap { position: relative; }
-.row-archive { position: absolute; top: 7px; right: 6px; width: 24px; height: 24px; opacity: 0; pointer-events: none; }
-.nav-session-wrap:hover .row-archive, .row-archive:focus-visible { opacity: 1; pointer-events: auto; }
-.nav-session-wrap:hover .nav-session-head { padding-right: 24px; }
-/* Pointing at the button is still pointing at the row. */
-.nav-session-wrap:hover .nav-session:not([aria-current="page"]) { background: var(--hover); }
-.nav-session-wrap + .nav-session-wrap { margin-top: 2px; }
-.nav-archive { margin-top: 8px; color: var(--muted); }
-.nav-session-last { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--muted); }
 /* Centred on the line: aligned by baseline, the letter inside a small avatar would pull it down. */
 /* An agent: its model's maker on a tile; where it stands is a badge at the corner, as on the phone. Nothing blinks. */
 .agent-mark { --ring: var(--canvas); position: relative; display: inline-grid; place-items: center; flex: none; width: var(--mark); height: var(--mark); border-radius: calc(var(--mark) * .3 * var(--corner-scale)); background: var(--neutral-bg); corner-shape: var(--corner-shape); }
@@ -470,8 +388,6 @@
 }
 @media (max-width: 700px) {
   .shell { grid-template-columns: 1fr; }
-  .sidebar { border-right: 0; }
-  .shell[data-detail="true"] .sidebar { display: none; }
   .shell:not([data-detail="true"]) .main { display: none; }
   .mobile-back { display: inline-flex; margin-bottom: 12px; }
   .page-bar { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; }
@@ -601,7 +517,6 @@
 .steps li { min-width: 0; }
 .steps .command { width: 100%; min-width: 0; }
 .dialog .command code { min-width: 0; }
-.nav-error { color: var(--red); }
 .station-group + .station-group { margin-top: 2px; }
 .station-heading { display: inline-flex; align-items: center; gap: 6px; }
 .menu-account { display: flex; align-items: center; gap: 6px; }
@@ -674,8 +589,6 @@
 .composer-wrap { flex: none; }
 .composer-bare { border-top: 1px solid var(--line); background: var(--canvas); }
 .chat .composer { border-top: 1px solid var(--line); }
-/* Adjacent sidebar items never touch, so a selected or hovered row stays distinct. */
-.nav-row + .nav-row { margin-top: 2px; }
 
 /* Section titles and their actions share a centre line. */
 .section-head { align-items: center; }
@@ -687,14 +600,6 @@
 .menu-invite-btn { height: 28px; padding: 0 12px; outline: none; }
 .menu-invite-btn[data-highlighted] { filter: brightness(0.95); }
 .invite-card { width: min(460px, 90vw); text-align: left; }
-.session-kind { display: inline-grid; flex: none; }
-.session-kind .kind-icon { width: 14px; height: 14px; }
-/* The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks. */
-.session-kind .kind-mark { margin: -1px; }
-.nav-session-meta .nav-time { margin-left: auto; flex: none; }
-/* When is rarely what one looks for in the list: it shows on hover (and keyboard focus), giving its room to the message otherwise. */
-.nav-session .nav-time { display: none; }
-.nav-session-wrap:hover .nav-time, .nav-session:focus-visible .nav-time { display: inline; }
 
 /* ── waiting ─────────────────────────────────────────────────────────── */
 /* Loading says so only when it takes a while: a page that is there in a moment (from the device) shows nothing before it. */
@@ -1051,7 +956,7 @@
 .history-details .detail-row dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Draggable column widths: the sidebar and the session's tab set. */
-@media (min-width: 701px) { .shell { grid-template-columns: var(--sidebar-w, 240px) minmax(0, 1fr); } .sidebar { position: relative; } }
+@media (min-width: 701px) { .shell { grid-template-columns: var(--sidebar-w, 240px) minmax(0, 1fr); } }
 @media (min-width: 1101px) {
   /* The chat keeps 360px however wide the tab set is dragged: the tab set gives way first. */
   .session-page[data-panel="true"] { grid-template-columns: minmax(360px, 1fr) minmax(0, var(--panel-w, max(360px, 38%))); }
@@ -1259,7 +1164,6 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 /* Easier to catch than it looks: a wider invisible edge around it. */
 .floating-thumb::before { content: ""; position: absolute; inset: -3px; }
 .floating-thumb:hover, .floating-thumb[data-drag] { background: color-mix(in oklch, var(--text) 45%, transparent); }
-}
 
 /* Streaming without jumps: a live reply is a five-line window onto its end; thinking is one line. */
 .live-tail { display: flex; flex-direction: column; justify-content: flex-end; max-height: calc(5lh + 2px); overflow: hidden; font-size: var(--text-sm); line-height: 1.65; }
@@ -1493,8 +1397,6 @@ button.msg-image { padding: 0; border: 0; background: none; cursor: zoom-in; }
 }
 @media (max-width: 700px) {
   .shell { grid-template-columns: 1fr; }
-  .sidebar { border-right: 0; }
-  .shell[data-detail="true"] .sidebar { display: none; }
   .shell:not([data-detail="true"]) .main { display: none; }
   .mobile-back { display: inline-flex; margin-bottom: 12px; }
   .page-bar { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; }
@@ -1624,7 +1526,6 @@ button.msg-image { padding: 0; border: 0; background: none; cursor: zoom-in; }
 .steps li { min-width: 0; }
 .steps .command { width: 100%; min-width: 0; }
 .dialog .command code { min-width: 0; }
-.nav-error { color: var(--red); }
 .station-group + .station-group { margin-top: 2px; }
 .station-heading { display: inline-flex; align-items: center; gap: 6px; }
 .menu-account { display: flex; align-items: center; gap: 6px; }
@@ -1697,8 +1598,6 @@ button.msg-image { padding: 0; border: 0; background: none; cursor: zoom-in; }
 .composer-wrap { flex: none; }
 .composer-bare { border-top: 1px solid var(--line); background: var(--canvas); }
 .chat .composer { border-top: 1px solid var(--line); }
-/* Adjacent sidebar items never touch, so a selected or hovered row stays distinct. */
-.nav-row + .nav-row { margin-top: 2px; }
 
 /* Section titles and their actions share a centre line. */
 .section-head { align-items: center; }
@@ -1710,14 +1609,6 @@ button.msg-image { padding: 0; border: 0; background: none; cursor: zoom-in; }
 .menu-invite-btn { height: 28px; padding: 0 12px; outline: none; }
 .menu-invite-btn[data-highlighted] { filter: brightness(0.95); }
 .invite-card { width: min(460px, 90vw); text-align: left; }
-.session-kind { display: inline-grid; flex: none; }
-.session-kind .kind-icon { width: 14px; height: 14px; }
-/* The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks. */
-.session-kind .kind-mark { margin: -1px; }
-.nav-session-meta .nav-time { margin-left: auto; flex: none; }
-/* When is rarely what one looks for in the list: it shows on hover (and keyboard focus), giving its room to the message otherwise. */
-.nav-session .nav-time { display: none; }
-.nav-session-wrap:hover .nav-time, .nav-session:focus-visible .nav-time { display: inline; }
 
 /* ── waiting ─────────────────────────────────────────────────────────── */
 /* Loading says so only when it takes a while: a page that is there in a moment (from the device) shows nothing before it. */
@@ -2074,7 +1965,7 @@ button.msg-image { padding: 0; border: 0; background: none; cursor: zoom-in; }
 .history-details .detail-row dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Draggable column widths: the sidebar and the session's tab set. */
-@media (min-width: 701px) { .shell { grid-template-columns: var(--sidebar-w, 240px) minmax(0, 1fr); } .sidebar { position: relative; } }
+@media (min-width: 701px) { .shell { grid-template-columns: var(--sidebar-w, 240px) minmax(0, 1fr); } }
 @media (min-width: 1101px) {
   /* The chat keeps 360px however wide the tab set is dragged: the tab set gives way first. */
   .session-page[data-panel="true"] { grid-template-columns: minmax(360px, 1fr) minmax(0, var(--panel-w, max(360px, 38%))); }
@@ -2282,7 +2173,6 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 /* Easier to catch than it looks: a wider invisible edge around it. */
 .floating-thumb::before { content: ""; position: absolute; inset: -3px; }
 .floating-thumb:hover, .floating-thumb[data-drag] { background: color-mix(in oklch, var(--text) 45%, transparent); }
-}
 
 /* Streaming without jumps: a live reply is a five-line window onto its end; thinking is one line. */
 .live-tail { display: flex; flex-direction: column; justify-content: flex-end; max-height: calc(5lh + 2px); overflow: hidden; font-size: var(--text-sm); line-height: 1.65; }
@@ -2401,8 +2291,6 @@ button.msg-image .msg-image-wait { width: 100%; height: 100%; }
 .chooser-group { display: flex; align-items: center; gap: 6px; }
 .chooser-item { display: flex; align-items: center; gap: 6px; }
 .chooser-check { width: 14px; display: inline-grid; place-items: center; flex: none; }
-.nav-new { display: flex; align-items: center; gap: 4px; padding: 6px 8px 2px; }
-.nav-new > .nav-row { flex: 1; min-width: 0; }
 
 /* A profile's model pool: a checklist of what it may be used for. */
 .model-pool { display: grid; gap: 8px; }
@@ -2631,9 +2519,6 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 @media (min-width: 701px) {
   [data-sidebar-moving] .shell { transition: grid-template-columns 380ms var(--ease-out); }
   [data-sidebar="closed"] .shell { grid-template-columns: 0px minmax(0, 1fr); }
-  [data-sidebar="closed"] .sidebar { overflow: hidden; border-right-color: transparent; }
-  /* Closing or opening, its contents keep their width and are cut, not laid out anew at every step. */
-  .sidebar > :not(.resize-handle) { min-width: calc(var(--sidebar-w, 240px) - 1px); }
   [data-sidebar="closed"] .page-bar { padding-left: 52px; }
   [data-desktop][data-sidebar="closed"] .page-bar { padding-left: 124px; }
 }
@@ -2674,9 +2559,6 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .msg-waiting-late { animation: msg-waiting-in 0s linear 1s both; }
 @keyframes msg-waiting-in { from { visibility: hidden; } to { visibility: visible; } }
 
-/* A chat whose station is offline: greyed, its mark saying so (the core marks the row). */
-.nav-session[data-offline] .nav-session-title, .nav-session[data-offline] .nav-session-meta { opacity: .5; }
-.nav-session[data-offline] .session-kind { color: var(--subtle); }
 
 /* A workspace with no station (cloud/workspace.tsx's Onboarding): one page, adding the first. */
 .onboarding { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: auto; background: var(--canvas); }
