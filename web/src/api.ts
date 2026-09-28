@@ -312,10 +312,12 @@ export type Api = ReturnType<typeof stationApi>;
 /**
  * A chat's calls, by its thread (or, for a chat made here, the key the core gave it: `chat.create`). Sending: the
  * message shows at once from the core's outbox; a failed one can be sent again or dropped. `older` loads the page before the messages shown; `read` records how far the viewer has read.
+ * The station is the one in context, or `address` (a page outside its StationContext, the phone's ChatHost).
  */
-export function useChatSend() {
+export function useChatSend(address?: string) {
   const call = useCall();
-  const station = useStation().address;
+  const inContext = useStation().address;
+  const station = address ?? inContext;
   return useMemo(() => ({
     send: (to: ChatTo, text: string, attachments: Attachment[], quotes: Quote[]) => call("chat.send", { station, ...chatTo(to), text, attachments, quotes }),
     retry: (to: ChatTo, id: string) => call("chat.retry", { station, ...chatTo(to), id }),

@@ -75,9 +75,11 @@ const kept = new Map<string, { text: string; files: Pending[]; quotes: DraftQuot
 
 let nextId = 1;
 
-export function useDraft({ key, carry, upload, quotes: held }: {
+export function useDraft({ key, station, carry, upload, quotes: held }: {
   /** Whose draft it is. With none (a new chat, before it is made), what is written goes on into the first key it gets. */
   key: string | undefined;
+  /** The address of the station its chat is on, when the draft lives outside that station's context (the phone's host). */
+  station?: string | undefined;
   /** A key whose draft goes on from what is written now, instead of its own (a new chat becoming its chat). */
   carry?: MutableRefObject<string | null>;
   /** Sends a file to the station. */
@@ -85,7 +87,7 @@ export function useDraft({ key, carry, upload, quotes: held }: {
   /** The quotes, where the page holds them (it offers them from its messages): otherwise the draft does. */
   quotes?: [DraftQuote[], Update<DraftQuote[]>];
 }): Draft {
-  const chat = useChatSend();
+  const chat = useChatSend(station);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Pending[]>([]);
   const [ownQuotes, setOwnQuotes] = useState<DraftQuote[]>([]);

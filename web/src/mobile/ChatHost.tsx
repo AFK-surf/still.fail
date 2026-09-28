@@ -46,7 +46,9 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   // Each chat keeps what is written to it; a new chat's goes on into the chat it makes. Files go to the station the
   // page writes to (its composer says which).
   const upload = useRef<(file: File) => Promise<Attachment>>(() => Promise.reject(new Error("没有 station")));
-  const shared = useDraft({ key: chat === undefined ? undefined : `${id}:${openedAs(chat)}`, upload: (file) => upload.current(file) });
+  const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
+  // The host is outside the chat's StationContext: its messages go to the chat's station by its address, not the context's.
+  const shared = useDraft({ key: chat === undefined ? undefined : `${id}:${openedAs(chat)}`, station: station?.address, upload: (file) => upload.current(file) });
   const [focus, setFocus] = useState(0);
   const draft: Draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
   const now = useRef(draft);
@@ -60,7 +62,6 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
     setShown((was) => (was && was.station === spec.station && was.placeholder === spec.placeholder && was.offline === spec.offline && was.archived === spec.archived ? was
       : { station: spec.station, placeholder: spec.placeholder, offline: spec.offline, ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
   };
-  const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
   const body = id === undefined ? <NewChatScreen />
     : !stations ? <Loading text="正在读取…" />
     : !station ? <Loading text="这个 workspace 里没有这台 station。" />
