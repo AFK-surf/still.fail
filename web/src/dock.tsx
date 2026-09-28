@@ -3,9 +3,12 @@
 // becoming its chat, one chat to the next) moves it without making it again. What is typed, the focus, a composition
 // under way all stay. What is typed is kept by chat (its `draftKey`): each chat has its own, and a new chat's goes on
 // into the chat it makes.
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useNavigate } from "react-router";
 import { Composer, type ComposerProps } from "./Chat.tsx";
 import { StationContext, type Station } from "./station.tsx";
+import { pageChanging, transitionTo } from "./ui.tsx";
+import * as sessionCss from "./styles/session.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
 import * as css from "./dock.css.ts";
 
@@ -122,6 +125,14 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     if (b) was.current = { rect: b.getBoundingClientRect(), radius: parseFloat(getComputedStyle(b).borderTopLeftRadius) };
   };
   const variant = useRef(spec?.variant);
+  // Laid out for another page, its new height is taken at once, not when the observer tells of it: a new chat becoming
+  // its chat takes its picture of the page in the same moment, and the place would still be the new chat's height (the
+  // box moved down to where it would stop, then jumped). Taken before the box starts from its old size, and kept while
+  // it moves: its place followed the sizes it goes through, and moved it (it stood 28px up at the start).
+  const moving = useRef(false);
+  useLayoutEffect(() => {
+    if (box.current) setHeight(box.current.offsetHeight);
+  }, [spec?.variant]);
   useLayoutEffect(() => {
     const before = variant.current;
     variant.current = spec?.variant;
@@ -130,18 +141,41 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     const wrap = b?.parentElement;
     if (!before || !spec || before === spec.variant || !from || !b || !wrap) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    put();
-    const to = b.getBoundingClientRect();
-    const radius = parseFloat(getComputedStyle(b).borderTopLeftRadius);
-    // Laid out from the wrap's left edge while it moves (its auto margins would move it as its width changes).
-    const left = wrap.getBoundingClientRect().left + parseFloat(getComputedStyle(wrap).paddingLeft);
-    const ease = getComputedStyle(document.documentElement).getPropertyValue("--ease-out").trim() || "ease-out";
-    b.animate([
-      { marginLeft: "0px", transform: `translate(${from.rect.left - left}px, ${from.rect.top - to.top}px)`, width: `${from.rect.width}px`,
-        height: `${from.rect.height}px`, borderRadius: `${Math.min(from.radius, from.rect.height / 2)}px` },
-      { marginLeft: "0px", transform: `translate(${to.left - left}px, 0px)`, width: `${to.width}px`, height: `${to.height}px`,
-        borderRadius: `${Math.min(radius, to.height / 2)}px` },
-    ], { duration: 340, easing: ease });
+    // From where it was to where its place is now (read without the move under way).
+    const animate = (running?: Animation) => {
+      running?.cancel();
+      put();
+      const to = b.getBoundingClientRect();
+      const radius = parseFloat(getComputedStyle(b).borderTopLeftRadius);
+      // Laid out from the wrap's left edge while it moves (its auto margins would move it as its width changes).
+      const left = wrap.getBoundingClientRect().left + parseFloat(getComputedStyle(wrap).paddingLeft);
+      const ease = getComputedStyle(document.documentElement).getPropertyValue("--ease-out").trim() || "ease-out";
+      const move = b.animate([
+        { marginLeft: "0px", transform: `translate(${from.rect.left - left}px, ${from.rect.top - to.top}px)`, width: `${from.rect.width}px`,
+          height: `${from.rect.height}px`, borderRadius: `${Math.min(from.radius, from.rect.height / 2)}px` },
+        { marginLeft: "0px", transform: `translate(${to.left - left}px, 0px)`, width: `${to.width}px`, height: `${to.height}px`,
+          borderRadius: `${Math.min(radius, to.height / 2)}px` },
+      ], { duration: 340, easing: ease });
+      moving.current = true;
+      void move.finished.then(() => {
+        moving.current = false;
+        if (box.current) setHeight(box.current.offsetHeight);
+      }, () => {});
+      return move;
+    };
+    let move = animate();
+    // In a page change it waits where it starts until the change moves, and starts from where its place is by then:
+    // the next page may be waited for, and put its place elsewhere (a chat's, read, is not where it was while read).
+    const changing = pageChanging();
+    if (changing) {
+      move.pause();
+      changing.settle.push(() => {
+        if (variant.current !== spec.variant || !b.isConnected) return;
+        move = animate(move);
+        move.pause();
+      });
+      void changing.moving.then(() => move.play());
+    }
   }, [spec?.variant]); // eslint-disable-line react-hooks/exhaustive-deps
   // Its height, for its place to keep: watched once it is there (the first page to hold a place makes it).
   const made = spec !== null;
@@ -149,16 +183,10 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     const el = box.current;
     if (!made || !el) return;
     setHeight(el.offsetHeight);
-    const resize = new ResizeObserver(() => setHeight(el.offsetHeight));
+    const resize = new ResizeObserver(() => { if (!moving.current) setHeight(el.offsetHeight); });
     resize.observe(el);
     return () => resize.disconnect();
   }, [made]);
-  // Laid out for another page, its new height is taken at once, not when the observer tells of it: a new chat becoming
-  // its chat takes its picture of the page in the same moment, and the place would still be the new chat's height (the
-  // box moved down to where it would stop, then jumped).
-  useLayoutEffect(() => {
-    if (box.current) setHeight(box.current.offsetHeight);
-  }, [spec?.variant]);
   // The frame its layout changes with the page (a chat's foot, a new chat's roomy box) it changes at once: eased, its
   // corners showed as a jump (its styles ease them as it grows while typed in).
   const [settled, setSettled] = useState(spec?.variant);
@@ -202,4 +230,21 @@ export function useComposerHeight(): number {
 export function useCarryDraft(): (key: string) => void {
   const dock = useContext(DockContext);
   return (key) => dock?.carryTo(key);
+}
+
+/**
+ * A link's click between a new chat and a chat (the sidebar's): the composer moves between their places as when a new
+ * chat's first message is sent, and the rest crossfades. A chat's page is waited for (a little) until it shows its
+ * messages: coming in as the composer moved, they took its frames, and showed at once. Plain clicks between chats, or
+ * with a key held, are left to the link.
+ */
+export function useComposerMove(): (event: MouseEvent<HTMLAnchorElement>, to: string, next: "new" | "chat") => void {
+  const navigate = useNavigate();
+  return (event, to, next) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const dock = document.querySelector<HTMLElement>(`.${css.composerDock}:not([hidden])`);
+    if (!dock || dock.dataset.variant === next) return;
+    event.preventDefault();
+    void transitionTo(() => navigate(to), next === "chat" ? () => document.querySelector(`.${sessionCss.chatList}`) !== null : undefined, false, 400);
+  };
 }

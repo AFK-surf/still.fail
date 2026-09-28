@@ -8,6 +8,7 @@ import { useToast } from "./toast.tsx";
 import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, StatusDot, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
+import { useComposerMove } from "./dock.tsx";
 import { ChatMark } from "./ChatMark.tsx";
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { archiveKey, PendingArchives } from "./pendingArchives.ts";
@@ -65,6 +66,7 @@ const ArchivesContext = createContext<PendingArchives | null>(null);
 export function ChatList({ scope, newChat, stationsPage, archive }: { scope: string; newChat: string; stationsPage: string; archive: string }) {
   const [onlyMine] = useOnlyMine();
   const [pending] = useState(() => new PendingArchives());
+  const move = useComposerMove();
   // Both lists are followed at once, side by side: switching slides from one to the other with nothing to wait for.
   const all = useChats(scope, false);
   const mine = useChats(scope, true);
@@ -76,7 +78,7 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
   return (
     <ArchivesContext.Provider value={pending}>
       <div className={nav.navNew}>
-        <NavLink className={nav.navRow} to={newChat}><Compose {...ICON} />新建对话</NavLink>
+        <NavLink className={nav.navRow} to={newChat} onClick={(e) => move(e, newChat, "new")}><Compose {...ICON} />新建对话</NavLink>
         {/* The filter, and the archive under it: nothing to narrow or look back on with no station at all. */}
         {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter label="会话" mine="我参与的" compact archive={archive} />}
       </div>
@@ -167,9 +169,10 @@ function useScrolling() {
 function ChatRow({ item }: { item: ChatItem }) {
   const { connect } = item;
   const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
+  const move = useComposerMove();
   return (
     <div className={nav.navSessionWrap}>
-    <NavLink className={`${nav.navRow} ${nav.navSession}`} to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={chatClicked}
+    <NavLink className={`${nav.navRow} ${nav.navSession}`} to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={(e) => { chatClicked(); move(e, to, "chat"); }}
       // Pressing a chat does not take the focus from the composer: it stays there, focused, into the next chat.
       onMouseDown={(e) => e.preventDefault()}>
       <AgentsPicture item={item} />
