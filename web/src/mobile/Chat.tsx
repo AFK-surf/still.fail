@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, 
 import { useLocation, useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
 import { useHost, type HostComposer } from "./ChatHost.tsx";
-import { FileLink, FilePreview, fileSize, isImage, useFileUrl, useNear } from "../FilePreview.tsx";
+import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, useFileUrl, useNear } from "../FilePreview.tsx";
 import { Activity, useAwayFromBottom, useEmissions, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
 import { placeFiles, Prose } from "../Prose.tsx";
@@ -141,6 +141,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
   const shown = useLinger(atWork, emissions.keeps);
   emissions.take(messages, firstSeq.current, new Set(shown.map((s) => s.agent.key)));
   const agentOf = (key: string | undefined) => view.agents.find((a) => a.session.key === key);
+  const images = () => chatImages([...messages, ...view.outbox.map((o) => ({ authorKind: "person", ...o }))], (f) => ownerOf(here, f));
   // Words selected with a mouse inside one message offer to quote them.
   const [picked, setPicked] = useState<{ quote: Omit<Quote, "comment">; x: number; y: number } | null>(null);
   // ember's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
@@ -165,6 +166,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
+      <Gallery.Provider value={images}>
       <div className={chatCss.mMessages} ref={list} onClick={onLink} onMouseUp={() => setTimeout(() => setPicked(selectedQuote(list.current)), 0)} onScroll={() => setPicked(null)}>
         {view.more && <div className={css.mOlder}><Spinner size={16} /></div>}
         {messages.length === 0 && view.outbox.length === 0 && <p className={css.mChatEmpty}>在这里发消息，这个对话里的 agent 会在这里回复。</p>}
@@ -188,6 +190,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
         ))}
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
+      </Gallery.Provider>
       {/* Over the send button, in line with it; it comes up growing and goes the way it came. */}
       <button type="button" className={`${css.mJump} ${pagesCss.mFloating}`} data-shown={away || undefined} aria-label="跳到最新"
         onClick={() => list.current?.dispatchEvent(new Event("to-bottom"))}><ArrowDown size={18} /></button>

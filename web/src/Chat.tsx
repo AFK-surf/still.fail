@@ -10,7 +10,7 @@ import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
-import { FileLink, FilePreview, fileSize, isImage, useFileUrl, useNear } from "./FilePreview.tsx";
+import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, useFileUrl, useNear } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { track } from "./telemetry.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -87,9 +87,10 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const ownerOf = (file: Attachment) => agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.key ?? keeper;
   // The messages are kept as they are while nothing they show changes (MessageRow): what they are handed stays the same
   // function, the latest one behind it, and `owners` says when whose files are whose has changed.
-  const latest = useRef({ ownerOf, onOpenHistory });
-  latest.current = { ownerOf, onOpenHistory };
-  const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key) }));
+  const images = () => chatImages([...messages, ...outbox.map((o) => ({ authorKind: "person", ...o }))], ownerOf);
+  const latest = useRef({ ownerOf, onOpenHistory, images });
+  latest.current = { ownerOf, onOpenHistory, images };
+  const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key), images: () => latest.current.images() }));
   const owners = `${keeper ?? ""} ${agents.map((a) => `${a.key}=${a.session.workspace}`).join(" ")}`;
 
   // Selecting text inside one message offers to quote it.
@@ -116,6 +117,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           <ArrowDown size={16} strokeWidth={2} />
         </button>
       )}
+      <Gallery.Provider value={stable.images}>
       <div className={sessionCss.chatList} ref={list} onMouseUp={() => setTimeout(onSelect, 0)} onScroll={() => setPicked(null)}>
         {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
         {messages.length === 0 && (
@@ -157,6 +159,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
         ))}
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
+      </Gallery.Provider>
       </div>
       {picked && (
         <button type="button" className={css.quotePop} style={{ left: picked.at.x, top: picked.at.y }}

@@ -3,10 +3,10 @@
 // highlighted, Markdown rendered, CSV as a table, HTML in a sandbox. Anything
 // else says it cannot be shown and offers the download.
 import { Dialog as RDialog } from "radix-ui";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useApi, type Api, type Attachment } from "./api.ts";
-import { Close, Download, Minus, Plus } from "./icons.tsx";
-import { Prose } from "./Prose.tsx";
+import { ChevronLeft, ChevronRight, Close, Download, Minus, Plus } from "./icons.tsx";
+import { placeFiles, Prose } from "./Prose.tsx";
 import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
 import { Segmented } from "./ui.tsx";
@@ -145,6 +145,26 @@ export function useNear(ref: RefObject<HTMLElement | null>, watch: boolean): boo
 
 // ── the viewer ─────────────────────────────────────────────────────────
 
+/** A file and the session that keeps it. */
+export interface Shown { sessionKey: string; file: Attachment }
+
+/**
+ * The images of the chat a preview is opened from, in the order it shows them (read when needed, so the messages
+ * need not be drawn again as it grows): an image opened steps to the one before or after (arrows, ← →, a swipe).
+ */
+export const Gallery = createContext<(() => Shown[]) | null>(null);
+
+/** A chat's images for its Gallery, as its messages show them: an agent's named in its text first, then those below it. */
+export function chatImages(messages: { authorKind?: string; text: string; attachments?: Attachment[] | undefined }[], owner: (file: Attachment) => string | null): Shown[] {
+  return messages.flatMap((m) => {
+    const { placed, rest } = m.authorKind === "person" ? { placed: new Map<string, Attachment>(), rest: m.attachments ?? [] } : placeFiles(m.text, m.attachments);
+    return [...placed.values(), ...rest].flatMap((file) => {
+      const sessionKey = isImage(file.name) ? owner(file) : null;
+      return sessionKey === null ? [] : [{ sessionKey, file }];
+    });
+  });
+}
+
 /** A file over the whole window, a bar with its name and tools on top; Esc closes it. */
 export function FilePreview({ open, onClose, sessionKey, file }: { open: boolean; onClose(): void; sessionKey: string; file: Attachment }) {
   return (
@@ -168,7 +188,31 @@ export function FileLink({ sessionKey, file, children }: { sessionKey: string | 
   );
 }
 
-function Viewer({ onClose, sessionKey, file }: { onClose(): void; sessionKey: string; file: Attachment }) {
+function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; file: Attachment }) {
+  const [{ sessionKey, file }, setShown] = useState<Shown>(opened);
+  const gallery = useContext(Gallery);
+  const images = isImage(file.name) ? gallery?.() ?? [] : [];
+  const at = images.findIndex((i) => i.file.path === file.path);
+  const before = at > 0 ? images[at - 1] : undefined;
+  const after = at >= 0 ? images[at + 1] : undefined;
+  const api = useApi();
+  const station = useStation();
+  const step = useCallback((to: Shown | undefined) => { if (to) setShown(to); }, []);
+  // The neighbours are fetched ahead, so a step shows the next one at once.
+  useEffect(() => {
+    for (const n of [before, after]) if (n) fetchFile(api, station.address, n.sessionKey, n.file).catch(() => {});
+  }, [api, station.address, before?.file.path, after?.file.path]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (e.key === "ArrowLeft" && before) step(before);
+      else if (e.key === "ArrowRight" && after) step(after);
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [before, after, step]);
   const loaded = useFile(sessionKey, file, true);
   const known = kindOf(file.name);
   const [sniffed, setSniffed] = useState<PreviewKind | "binary" | null>(null);
@@ -187,7 +231,7 @@ function Viewer({ onClose, sessionKey, file }: { onClose(): void; sessionKey: st
   else {
     const { url, blob } = loaded;
     switch (kind) {
-      case "image": body = <ImageViewer url={url} file={file} setControls={setControls} />; break;
+      case "image": body = <ImageViewer key={file.path} url={url} file={file} setControls={setControls} onSwipe={(d) => step(d < 0 ? before : after)} />; break;
       case "video": body = <video className={css2.fpVideo} src={url} controls autoPlay playsInline />; break;
       case "audio": body = <div className={css2.fpAudio}><span className={css2.fpAudioName}>{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
@@ -203,13 +247,19 @@ function Viewer({ onClose, sessionKey, file }: { onClose(): void; sessionKey: st
       <header className={css2.fpHead}>
         <div className={css2.fpTitle}>
           <RDialog.Title className={css2.fpName} title={file.path}>{file.name}</RDialog.Title>
-          <span className={css2.fpMeta}>{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${KIND_LABEL[kind as PreviewKind]}` : ""}</span>
+          <span className={css2.fpMeta}>{images.length > 1 && at >= 0 ? `${at + 1} / ${images.length} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${KIND_LABEL[kind as PreviewKind]}` : ""}</span>
         </div>
         <div className={css2.fpTools}>{controls}</div>
         {loaded.state === "ready" && <a className={pagesCss.iconBtn} href={loaded.url} download={file.name} title="下载" aria-label="下载"><Download size={18} /></a>}
         <RDialog.Close className={pagesCss.iconBtn} aria-label="关闭" title="关闭（Esc）"><Close size={18} /></RDialog.Close>
       </header>
-      <div className={css2.fpBody}>{body}</div>
+      <div className={css2.fpBody}>
+        {body}
+        {images.length > 1 && at >= 0 && <>
+          <button type="button" className={css2.fpStep} data-side="before" aria-label="上一张" title="上一张（←）" disabled={!before} onClick={() => step(before)}><ChevronLeft size={22} /></button>
+          <button type="button" className={css2.fpStep} data-side="after" aria-label="下一张" title="下一张（→）" disabled={!after} onClick={() => step(after)}><ChevronRight size={22} /></button>
+        </>}
+      </div>
     </RDialog.Content>
   );
 }
@@ -237,9 +287,9 @@ const MAX_SCALE = 16;
 /**
  * An image fitted to the window, to zoom (wheel, pinch, double-click, the
  * bar's buttons, + − 0) around the pointer and drag about when larger than
- * the window.
+ * the window. Fitted, a sideways swipe steps to the image before or after.
  */
-function ImageViewer({ url, file, setControls }: { url: string; file: Attachment; setControls(c: ReactNode): void }) {
+function ImageViewer({ url, file, setControls, onSwipe }: { url: string; file: Attachment; setControls(c: ReactNode): void; onSwipe(direction: -1 | 1): void }) {
   const stage = useRef<HTMLDivElement>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(file.width && file.height ? { w: file.width, h: file.height } : null);
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
@@ -343,8 +393,15 @@ function ImageViewer({ url, file, setControls }: { url: string; file: Attachment
     setView(clamp({ scale, x: sx - (sx - g.view.x) * k + (x - g.x), y: sy - (sy - g.view.y) * k + (y - g.y) }));
   };
   const onPointerUp = (e: React.PointerEvent) => {
+    const g = gesture.current;
+    const single = pointers.current.size === 1 && g && g.distance === 0;
     pointers.current.delete(e.pointerId);
     start();
+    // A swipe: one finger, mostly sideways, on an image not zoomed in (zoomed in, a drag pans).
+    if (single && e.type === "pointerup" && g.view.scale <= fit * 1.01) {
+      const dx = e.clientX - g.x, dy = e.clientY - g.y;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) onSwipe(dx > 0 ? -1 : 1);
+    }
   };
   const onDoubleClick = (e: React.MouseEvent) => {
     const v = viewRef.current;

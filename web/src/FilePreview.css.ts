@@ -78,6 +78,23 @@ export const fpBody = style({
     [`${fp}[data-kind="video"] &`]: { background: "#000" },
   },
 });
+globalStyle(`${fpBody} > *`, { gridArea: "1 / 1" });
+/** Over the image's sides, in the middle: to the one before and after. */
+export const fpStep = style({
+  gridArea: "1 / 1", alignSelf: "center", zIndex: "1", display: "grid", placeItems: "center", width: "40px", height: "40px",
+  margin: "0 16px", border: "0", borderRadius: "50%", padding: "0", cursor: "pointer",
+  background: `color-mix(in oklch, ${vars.canvas} 80%, transparent)`, color: vars.text, backdropFilter: "blur(12px)",
+  boxShadow: "0 1px 3px rgba(0, 0, 0, .10)", transition: `opacity ${vars.dur} ${vars.easeOut}, background ${vars.dur} ${vars.easeOut}`,
+  selectors: {
+    "&[data-side=before]": { justifySelf: "start" },
+    "&[data-side=after]": { justifySelf: "end" },
+    "&:hover:not(:disabled)": { background: vars.canvas },
+    "&:disabled": { opacity: "0", pointerEvents: "none" },
+  },
+  "@media": {
+    "(max-width: 640px)": { width: "36px", height: "36px", margin: "0 8px" },
+  },
+});
 export const fpStage = style({
   position: "relative", width: "100%", height: "100%", overflow: "hidden", touchAction: "none", cursor: "zoom-in",
   userSelect: "none",
