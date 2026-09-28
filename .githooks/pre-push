@@ -1,5 +1,6 @@
 #!/bin/sh
-# What each pushed ref carries that its remote does not have yet (scripts/check.sh). Deleting a ref checks nothing.
+# The quick check (scripts/check.sh) on what each pushed ref carries that its remote does not have yet. Deleting a
+# ref checks nothing.
 root=$(git rev-parse --show-toplevel)
 zero=0000000000000000000000000000000000000000
 status=0

@@ -1,12 +1,14 @@
 #!/bin/sh
-# The checks for what changed, run where the change is made (.githooks: pre-commit and pre-push), so CI does not
-# have to: whoever commits or pushes runs them. main's deploy (.github/workflows/main.yml) runs again only what a
-# machine here could not (no Rust, no Android SDK).
+# The checks for what changed. Two kinds:
+#   quick: what a commit or push touches, in seconds (icons, TypeScript); the git hooks (.githooks) run it, on
+#          whoever commits or pushes, so merging stays quick.
+#   full:  that, the tests, cloud's tests, the web against the real wasm core, the clients' shapes, Rust and
+#          Android: minutes. Run before a deploy (~/bin/ember-deploy on studio runs it on what the deploy carries).
 #
-#   sh scripts/check.sh commit        what is staged: icons, and the TypeScript of the parts it touches (seconds)
-#   sh scripts/check.sh push <range>  what a push carries (e.g. origin/main..HEAD): typechecks, tests, cloud's tests,
-#                                     and Rust, the clients' shapes and Android where their toolchains are here
-#   sh scripts/check.sh all           everything, as if every file changed
+#   sh scripts/check.sh commit        quick, on what is staged (pre-commit)
+#   sh scripts/check.sh push <range>  quick, on what a push carries (pre-push), e.g. origin/main..HEAD
+#   sh scripts/check.sh full <range>  full, on what the range changed
+#   sh scripts/check.sh all           full, as if every file changed
 #
 # EMBER_SKIP_CHECKS=1 skips it all (git's --no-verify does too); say why when you do.
 set -eu
@@ -15,17 +17,18 @@ cd "$(dirname "$0")/.."
 export PATH="$HOME/.cargo/bin:$PATH"
 
 mode=${1:-commit}
+full=0
 case "$mode" in
   commit) changed=$(git diff --cached --name-only --diff-filter=ACMRD) ;;
   push) changed=$(git diff --name-only "${2:?push needs a range}") ;;
-  all) changed=$(git ls-files) ;;
-  *) echo "usage: sh scripts/check.sh commit | push <range> | all" >&2; exit 2 ;;
+  full) full=1; changed=$(git diff --name-only "${2:?full needs a range}") ;;
+  all) full=1; changed=$(git ls-files) ;;
+  *) echo "usage: sh scripts/check.sh commit | push <range> | full <range> | all" >&2; exit 2 ;;
 esac
 [ -n "$changed" ] || exit 0
 touches() { printf '%s\n' "$changed" | grep -qE "$1"; }
 
 failed=""
-left=""
 step() {
   name=$1; shift
   printf '· %s … ' "$name"
@@ -33,7 +36,8 @@ step() {
   if "$@" > "$log" 2>&1; then echo ok; else echo FAILED; tail -40 "$log" | sed 's/^/    /'; failed="$failed $name"; fi
   rm -f "$log"
 }
-later() { left="$left $1"; }
+# What this machine has no toolchain for: fine for the quick check, a failure in the full one.
+later() { if [ $full = 1 ]; then failed="$failed $1(no toolchain)"; fi; }
 has() { command -v "$1" > /dev/null 2>&1; }
 
 # node_modules where a fresh worktree has none (pnpm links from its store: quick).
@@ -86,7 +90,7 @@ if touches "$ts_cloud"; then
 fi
 if touches "$ts_desktop"; then deps apps/desktop; step "typecheck: desktop" sh -c 'cd apps/desktop && pnpm run typecheck'; fi
 
-if [ "$mode" != commit ]; then
+if [ $full = 1 ]; then
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
   if touches '^(test|client|web/src/core)/|^package\.json$'; then
     if [ -f web/src/core/pkg/.stand-in ] || [ ! -f web/src/core/pkg/built.js ]; then later "tests (need the wasm core)"; else step "tests" pnpm test; fi
@@ -109,9 +113,8 @@ if [ "$mode" != commit ]; then
   fi
 fi
 
-[ -n "$left" ] && echo "not checked here (no toolchain), left to main's deploy:$left"
 if [ -n "$failed" ]; then
   echo "failed:$failed"
-  echo "(fix it; or, knowing why, skip once with git's --no-verify)"
+  [ $full = 0 ] && echo "(fix it; or, knowing why, skip once with git's --no-verify)"
   exit 1
 fi
