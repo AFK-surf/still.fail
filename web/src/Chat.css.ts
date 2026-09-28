@@ -157,16 +157,24 @@ export const msgRow = style({
   },
   "@media": {
     "(max-width: 700px)": {
-      columnGap: "10px",
-      vars: { "--avatar-column": "18px" },
+      // The 18px avatar reaches 3px past its 15px column into the list's 16px padding: 13px from the edge, 13px to the name.
+      columnGap: "13px",
+      vars: { "--avatar-column": "15px" },
     },
   },
 });
 export const msgMain = style({
   minWidth: "0", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "4px",
   selectors: {
-    // What it says sits 28px right of its avatar (out in the margin or in a column): it still unrolls from the avatar.
-    [`${msgRow}[data-emitting] > &`]: { transformOrigin: "-19px 12px" },
+    // What it says unrolls from its avatar's middle, 9px + the gap to its left.
+    [`${msgRow}[data-emitting] > &`]: { transformOrigin: "-16px 12px" },
+  },
+  "@media": {
+    "(max-width: 700px)": {
+      selectors: {
+        [`${msgRow}[data-emitting] > &`]: { transformOrigin: "-22px 12px" },
+      },
+    },
   },
 });
 export const msgAvatarAgent = style({ background: vars.neutralBg });
@@ -233,13 +241,13 @@ export const quotePop = style({
 });
 export const activityLine = style({
   selectors: {
-    [`${chatList} &`]: { marginLeft: "-32px" },
+    [`${chatList} &`]: { marginLeft: "-29px" },
     "&:hover": { color: vars.text },
   },
   "@media": {
     "(max-width: 700px)": {
       selectors: {
-        [`${chatList} &`]: { marginLeft: "-4px" },
+        [`${chatList} &`]: { marginLeft: "-7px" },
       },
     },
   },
@@ -416,11 +424,12 @@ globalStyle(`${fileCard} svg`, { flex: "none", color: vars.muted });
 globalStyle(`${msgImage} img`, { display: "block", maxWidth: "100%", maxHeight: "300px", width: "auto", height: "auto" });
 globalStyle(`${msgAvatarAgent} img`, { width: "14px", height: "14px" });
 globalStyle(`${msgAvatarAgent} img`, { width: "12px", height: "12px" });
-globalStyle(`${msgRow} > ${msgAvatar}`, { marginLeft: "-28px" });
+/** Out in the list's 32px padding, as far from its edge as from the name: 7px + 18px + 7px. */
+globalStyle(`${msgRow} > ${msgAvatar}`, { marginLeft: "-25px" });
 globalStyle(`${msgRow} > ${msgAvatar}`, {
   "@media": {
     "(max-width: 700px)": {
-      marginLeft: "0",
+      marginLeft: "-3px",
     },
   },
 });
