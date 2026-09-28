@@ -50,3 +50,28 @@ test("one failed archive restores only that row while other archives remain hidd
   pending.reconcile(new Set([a]));
   assert.deepEqual([...pending.getSnapshot()], [a]);
 });
+
+test("a chat restored by new activity is not hidden forever when no snapshot ever omitted it", async () => {
+  const pending = new PendingArchives();
+  pending.reconcile(new Set(["a", "b"]));
+  pending.begin("a");
+  pending.begin("b");
+  pending.finish("a");
+  // New activity brought a back before the coalesced post-write snapshot arrived.
+  pending.reconcile(new Set(["a", "b"]));
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  assert.equal(pending.getSnapshot().has("a"), false);
+  assert.equal(pending.getSnapshot().has("b"), true);
+});
+
+test("a settled archive's timer cannot remove a later retry's pending state", async () => {
+  const pending = new PendingArchives();
+  pending.reconcile(new Set(["a"]));
+  pending.begin("a");
+  pending.finish("a");
+  pending.reconcile(new Set());
+  pending.reconcile(new Set(["a"]));
+  pending.begin("a");
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  assert.equal(pending.getSnapshot().has("a"), true);
+});
