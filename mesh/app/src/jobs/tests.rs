@@ -70,10 +70,17 @@ async fn a_job_tells_its_agent_on_the_way_through_its_token() {
     r.jobs.notified(&job.token, "  half way  ").unwrap();
     assert_eq!(r.said(), [format!("Job \"long\" ({}) says: half way", job.id)]);
     assert!(r.jobs.notified("wrong", "x").is_err());
+    // What it said is kept for the pages, newest first, with the job as they get it.
+    r.jobs.notified(&job.token, "nearly there").unwrap();
+    let notices: Vec<String> = r.store.job_notices(&job.id, 10).unwrap().into_iter().map(|n| n.text).collect();
+    assert_eq!(notices, ["nearly there", "half way"]);
+    let shown = shown(&r.store, &r.store.get_job(&job.id).unwrap().unwrap());
+    assert_eq!(shown["notices"][0]["text"], "nearly there");
+    assert!(shown.get("token").is_none());
     let stopped = r.jobs.stop(&job.id).await.unwrap();
     assert_eq!(stopped.state, "stopped");
     tokio::time::sleep(Duration::from_millis(200)).await;
-    assert_eq!(r.said().len(), 1, "a stop asked for is no news");
+    assert_eq!(r.said().len(), 2, "a stop asked for is no news");
 }
 
 #[tokio::test]

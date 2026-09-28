@@ -279,7 +279,7 @@ impl AdminApi {
             })
             .collect();
         // Its background jobs and web services (jobs.rs), newest first.
-        let jobs = self.deps.store.list_jobs(Some(key))?;
+        let jobs: Vec<Value> = self.deps.store.list_jobs(Some(key))?.iter().map(|j| crate::jobs::shown(&self.deps.store, j)).collect();
         Ok(json!({ "session": self.summary(key)?, "threads": self.threads(viewer, Some(key))?, "turns": turns, "jobs": jobs }))
     }
 

@@ -373,6 +373,16 @@ pub struct JobRow {
     pub log: String,
 }
 
+/// How many of a job's notices are kept.
+const JOB_NOTICES: i64 = 50;
+
+/// Something a job said, and when.
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct JobNotice {
+    pub at: i64,
+    pub text: String,
+}
+
 fn job_row(r: &rusqlite::Row) -> rusqlite::Result<JobRow> {
     Ok(JobRow {
         id: r.get("id")?,
@@ -538,6 +548,12 @@ CREATE TABLE IF NOT EXISTS jobs (
   log TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS jobs_by_session ON jobs (session_key);
+CREATE TABLE IF NOT EXISTS job_notices (
+  job_id TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  text TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS job_notices_by_job ON job_notices (job_id, at);
 CREATE TABLE IF NOT EXISTS identities (
   viewer TEXT NOT NULL,
   slack_user TEXT NOT NULL,
@@ -902,6 +918,7 @@ impl Store {
             tx.execute("DELETE FROM deliveries WHERE session = ?", [key])?;
             tx.execute("DELETE FROM turns WHERE session_key = ?", [key])?;
             tx.execute("DELETE FROM bindings WHERE session_key = ?", [key])?;
+            tx.execute("DELETE FROM job_notices WHERE job_id IN (SELECT id FROM jobs WHERE session_key = ?)", [key])?;
             tx.execute("DELETE FROM jobs WHERE session_key = ?", [key])?;
             tx.execute("DELETE FROM sessions WHERE key = ?", [key])?;
             let mut kept = Vec::new();
@@ -1583,6 +1600,31 @@ impl Store {
         self.with(|i, _| {
             let mut stmt = i.db.prepare("SELECT * FROM jobs WHERE ?1 IS NULL OR session_key = ?1 ORDER BY started_at DESC")?;
             let rows = stmt.query_map([session], job_row)?;
+            Ok(rows.collect::<rusqlite::Result<_>>()?)
+        })
+    }
+
+    /// What a job said (`ember-job notify`), kept for the pages: a job's latest words are how people see what it is up to.
+    pub fn add_job_notice(&self, id: &str, text: &str) -> Result<()> {
+        self.with(|i, changes| {
+            i.db.execute("INSERT INTO job_notices (job_id, at, text) VALUES (?, ?, ?)", params![id, now_ms(), text])?;
+            // A job keeps its latest words only.
+            i.db.execute(
+                "DELETE FROM job_notices WHERE job_id = ?1 AND rowid NOT IN (SELECT rowid FROM job_notices WHERE job_id = ?1 ORDER BY at DESC, rowid DESC LIMIT ?2)",
+                params![id, JOB_NOTICES],
+            )?;
+            if let Some(session) = i.db.query_row("SELECT session_key FROM jobs WHERE id = ?", [id], |r| r.get::<_, String>(0)).optional()? {
+                changes.push(StoreChange::Session(session));
+            }
+            Ok(())
+        })
+    }
+
+    /// A job's notices, newest first (at most `limit`).
+    pub fn job_notices(&self, id: &str, limit: usize) -> Result<Vec<JobNotice>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare("SELECT at, text FROM job_notices WHERE job_id = ? ORDER BY at DESC, rowid DESC LIMIT ?")?;
+            let rows = stmt.query_map(params![id, limit as i64], |r| Ok(JobNotice { at: r.get(0)?, text: r.get(1)? }))?;
             Ok(rows.collect::<rusqlite::Result<_>>()?)
         })
     }
