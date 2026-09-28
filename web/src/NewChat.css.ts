@@ -18,6 +18,9 @@ export const newChat = style({
 export const newChatInner = style({
   width: "100%", maxWidth: "720px", display: "grid", gap: "10px", justifyItems: "center", textAlign: "center",
 });
+/** Where the offer of the machine's sessions hangs, under the status line: it takes no room (NewChat.tsx). */
+export const newChatOffer = style({ position: "relative", height: "0", width: "100%" });
+globalStyle(`${newChatOffer} > *`, { position: "absolute", top: "0", left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" });
 export const newChatTitle = style({ margin: "0", fontSize: vars.textLg, fontWeight: "600" });
 export const newChatStatus = style({});
 export const newChatHeld = style({ border: `1px solid ${vars.line}` });
