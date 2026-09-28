@@ -3,6 +3,7 @@
 //! in place of the Node part once it does all of it (docs/station-rust.md).
 
 pub mod access;
+pub mod admin;
 pub mod agent_home;
 pub mod chat;
 pub mod config;

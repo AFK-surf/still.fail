@@ -160,6 +160,8 @@ pub struct Asked {
     /// After /admin/api.
     pub path: String,
     pub query: Vec<(String, String)>,
+    /// The query as asked: "?…", or empty.
+    pub search: String,
     pub headers: Vec<(String, String)>,
 }
 
@@ -318,6 +320,7 @@ impl AdminApi {
         let asked = Asked {
             method: parts.method.as_str().to_string(),
             query: query_pairs(parts.uri.query().unwrap_or("")),
+            search: parts.uri.query().map(|q| format!("?{q}")).unwrap_or_default(),
             headers: parts.headers.iter().map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string())).collect(),
             path,
         };
@@ -420,8 +423,8 @@ impl AdminApi {
                 files::sweep_staged(&dir).await;
                 return ok(serde_json::to_value(files::save_upload(body, &dir, asked.param("name").unwrap_or("file")).await?)?);
             }
-            ("POST", "/profiles/machine") => return ok(self.new_machine_profile(&read_json(body).await?, viewer).await?),
-            ("POST", "/profiles") => return ok(self.new_keyed_profile(&read_json(body).await?, viewer).await?),
+            ("POST", "/profiles/machine") => return ok(me.new_machine_profile(&read_json(body).await?, viewer).await?),
+            ("POST", "/profiles") => return ok(me.new_keyed_profile(&read_json(body).await?, viewer).await?),
             ("POST", "/logins") => return ok(self.new_login(&read_json(body).await?, viewer)?),
             ("POST", "/slack/verify") => return ok(self.verify_slack(&read_json(body).await?).await),
             ("POST", "/dev/inject") if self.deps.dev && matches!(viewer, Viewer::Local) => {
@@ -440,6 +443,7 @@ impl AdminApi {
                 return ok(json!({ "ok": true }));
             }
             ("POST", "/slack/config-tokens") => return ok(self.add_config_token(&read_json(body).await?, viewer).await?),
+            ("GET", "/slack/people") => return ok(self.slack_people().await),
             ("GET", "/slack/create-app-url") => {
                 let name = asked.param("name").map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| http_error(400, "name is required"))?;
                 return ok(json!({ "url": crate::chat::slack_apps::create_app_url(name) }));
@@ -590,7 +594,7 @@ impl AdminApi {
                 return ok(overview);
             }
             (Some("profiles"), Some(id), None, "DELETE") => return ok(self.delete_profile(id, viewer)?),
-            (Some("profiles"), Some(id), Some("check"), "POST") => return ok(serde_json::to_value(self.check(id).await?)?),
+            (Some("profiles"), Some(id), Some("check"), "POST") => return ok(serde_json::to_value(me.check(id).await?)?),
             (Some("profiles"), Some(id), Some("quota"), "POST") => return ok(serde_json::to_value(self.refresh_quota(id).await?)?),
             (Some("profiles"), Some(id), Some("login"), _) => {
                 let config = self.config();
