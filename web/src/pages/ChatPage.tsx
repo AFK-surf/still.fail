@@ -121,6 +121,31 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     setSearch((now) => { now.delete("preview"); return now; }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
+  // ember's own links (/o/<workspace>/<station>/<session>, as agents post them): one of this chat's agents' web services
+  // opens beside the chat; another session of the workspace opens here, in the page, not through the desktop app.
+  const opens = useRef({ agents, openTab });
+  opens.current = { agents, openTab };
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const url = new URL(anchor.href, location.href);
+      const item = /^\/o\/([^/]+)\/([^/]+)\/([^/]+)\/?$/.exec(url.pathname);
+      if (!item) return;
+      const session = decodeURIComponent(item[3]!);
+      const port = url.searchParams.get("preview");
+      if (port && /^\d{1,5}$/.test(port) && opens.current.agents.some((a) => a.session.key === session)) {
+        event.preventDefault();
+        opens.current.openTab(`preview:${port}`);
+      } else if (url.origin === location.origin) {
+        event.preventDefault();
+        navigate(`/w/${item[1]}/s/${item[2]}/chats/${encodeURIComponent(session)}${url.search}`);
+      }
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [navigate]);
   const openHistory = (key: string, entry?: number) => {
     if (entry === undefined) return toggleHistory(key);
     openTab(key);
