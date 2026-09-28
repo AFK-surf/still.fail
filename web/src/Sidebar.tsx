@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronRight, Compose, Key, Monitor, Plug, Settings, Unplug } from "./icons.tsx";
+import { ArrowLeft, Brain, ChevronRight, Compose, Key, Monitor, Plug, Settings, Unplug } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
@@ -39,6 +39,7 @@ function SettingsNav() {
       <div className="nav-heading">设置</div>
       <NavLink className="nav-row" to={link("/settings/connects")} aria-current={connectOpen ? "page" : undefined}><Plug {...ICON} />连接</NavLink>
       <NavLink className="nav-row" to={link("/settings/accounts")}><Key {...ICON} />Profile</NavLink>
+      <NavLink className="nav-row" to={link("/settings/memory")}><Brain {...ICON} />记忆</NavLink>
       <NavLink className="nav-row" to={link("/settings/device")}><Monitor {...ICON} />设备</NavLink>
     </div>
   );

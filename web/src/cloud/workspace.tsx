@@ -15,7 +15,7 @@ import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble } from "../Sidebar.tsx";
-import { AccountSettings, ConnectsSettings, FirstStation, GeneralSettings, LeaveSettings, MembersSettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
+import { AccountSettings, ConnectsSettings, FirstStation, GeneralSettings, LeaveSettings, MembersSettings, MemorySettings, RuntimeSettings, SettingsNav, StationsSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
@@ -80,6 +80,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
+            <Route path="settings/memory" element={<MemorySettings entry={entry} />} />
             <Route path="settings/leave" element={<LeaveSettings entry={entry} />} />
             <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
