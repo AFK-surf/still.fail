@@ -237,8 +237,7 @@ function ArchiveButton({ item, to }: { item: ChatItem; to: string }) {
 
 /**
  * Who is in a chat, as its row's picture: its agent's mark, or two of its agents' overlapping (more are in the chat
- * itself), with the chat's state at the corner. A chat with no agent yet shows ember's. Anthropic's A\\ is a short, thin
- * mark, so it is drawn larger than the others.
+ * itself), with the chat's state at the corner. A chat with no agent yet shows ember's.
  */
 function AgentsPicture({ item }: { item: ChatItem }) {
   const agents = item.agents.slice(0, 2);
@@ -246,7 +245,7 @@ function AgentsPicture({ item }: { item: ChatItem }) {
     <span className={nav.rowPicture} data-count={agents.length || 1} title={item.agents.map((a) => a.agentText).join("、") || undefined}>
       {agents.length === 0
         ? <span className={nav.rowAgent} aria-hidden="true"><Mark size={20} /></span>
-        : agents.map((a) => <span key={a.key} className={nav.rowAgent} aria-hidden="true"><ModelLogo maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 14 : a.maker?.id === "anthropic" ? 26 : 22} /></span>)}
+        : agents.map((a) => <span key={a.key} className={nav.rowAgent} aria-hidden="true"><ModelLogo maker={a.maker} runtime={a.runtime} size={agents.length > 1 ? 14 : 26} /></span>)}
       <ChatMark item={item} />
     </span>
   );
