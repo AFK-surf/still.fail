@@ -162,7 +162,6 @@ globalStyle("h1, h2, h3", { textWrap: "balance", wordBreak: "keep-all", overflow
 globalStyle("button, input, select, textarea", { font: "inherit", color: "inherit" });
 globalStyle("a", { color: "inherit", textDecoration: "none" });
 globalStyle("code, pre", { fontFamily: vars.fontMono });
-globalStyle(":focus-visible", { outline: `2px solid ${vars.fieldFocus}`, outlineOffset: "2px" });
 globalStyle("[hidden]", { display: "none !important" });
 globalStyle("*, *::before, *::after", {
   "@media": {
