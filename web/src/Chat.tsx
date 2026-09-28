@@ -2,6 +2,7 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
+import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, type Activity as ActivityView, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
@@ -49,6 +50,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   const composerHeight = useComposerHeight();
   const floor = useRef<HTMLDivElement>(null);
   const sending = useChatSend();
+  const api = useApi();
   const { thread, outbox } = chat;
   const id = thread?.id ?? null;
   const [quotes, setQuotes] = useState<DraftQuote[]>([]);
@@ -131,7 +133,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
                   <Tip label={o.error ? `没发出去：${o.error}` : "没发出去"}>
                     <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />未发送</span>
                   </Tip>
-                  <button type="button" className={css.msgUnsentBtn} onClick={() => void (id !== null && sending.retry(id, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
+                  <button type="button" className={css.msgUnsentBtn} disabled={chat.offline || !!chat.archived} onClick={() => void (id !== null && sending.retry(id, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
                   <button type="button" className={css.msgUnsentBtn} onClick={() => void (id !== null && sending.discard(id, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
                 </div>
               : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
@@ -152,10 +154,11 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           <QuoteIcon size={12} strokeWidth={2.2} />引用
         </button>
       )}
+      {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? `「${station.name}」` : "这台 station "}离线了：这里是之前读到的内容，暂时不能发消息。</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={id} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={() => setFocusQuote(null)}
-        locked={chat.offline} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
+        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? "还原对话后才能发送" : "发消息"} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
 }
@@ -663,7 +666,7 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   // Typing starts the session's runtime, so a cold start overlaps the writing.
   const warmed = useRef(0);
   const warm = () => {
-    if (!sessionKey || Date.now() - warmed.current < 60_000) return;
+    if (locked || !sessionKey || Date.now() - warmed.current < 60_000) return;
     warmed.current = Date.now();
     void api.warm(sessionKey).catch(() => {});
   };

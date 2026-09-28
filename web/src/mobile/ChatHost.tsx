@@ -2,6 +2,7 @@
 // at its foot is one, kept, with what is typed, the focus and a composition under way, as a new chat becomes its chat
 // (the shell keeps a page that is replaced by another, app.tsx). What the composer writes to is the page's: it says so
 // (`useHost().use`), and the composer asks it when a message goes.
+import { ArchiveNotice } from "../ArchiveNotice.tsx";
 import { createContext, useContext, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
@@ -22,6 +23,8 @@ export interface HostComposer {
   placeholder: string;
   /** Nothing can be sent (its station offline), and it says why. */
   offline: boolean;
+  archived?: boolean;
+  restore?(): Promise<unknown>;
   /** Sends what the draft holds now (given at the moment it is sent: never a draft from an earlier render). */
   send(draft: Draft): void;
   /** Typing (a chat's agent is warmed). */
@@ -51,11 +54,11 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const root = useRef<HTMLDivElement>(null);
   // The callbacks as the page last gave them; what it shows, as state (changing only when it does).
   const latest = useRef<HostComposer | null>(null);
-  const [shown, setShown] = useState<Pick<HostComposer, "station" | "placeholder" | "offline"> | null>(null);
+  const [shown, setShown] = useState<Pick<HostComposer, "station" | "placeholder" | "offline" | "archived"> | null>(null);
   const use = (spec: HostComposer) => {
     latest.current = spec;
-    setShown((was) => (was && was.station === spec.station && was.placeholder === spec.placeholder && was.offline === spec.offline ? was
-      : { station: spec.station, placeholder: spec.placeholder, offline: spec.offline }));
+    setShown((was) => (was && was.station === spec.station && was.placeholder === spec.placeholder && was.offline === spec.offline && was.archived === spec.archived ? was
+      : { station: spec.station, placeholder: spec.placeholder, offline: spec.offline, ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
   };
   const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
   const body = id === undefined ? <NewChatScreen />
@@ -75,13 +78,14 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
 
 /** The composer: a floating capsule at the page's foot, with the files and quotes going with the message. */
 function Composer({ shown, latest, draft, now, root, upload: uploader }: {
-  shown: Pick<HostComposer, "station" | "placeholder" | "offline">; latest: RefObject<HostComposer | null>; draft: Draft; now: RefObject<Draft>;
+  shown: Pick<HostComposer, "station" | "placeholder" | "offline" | "archived">; latest: RefObject<HostComposer | null>; draft: Draft; now: RefObject<Draft>;
   root: RefObject<HTMLDivElement | null>; upload: RefObject<(file: File) => Promise<Attachment>>;
 }) {
   const app = useApp();
   const call = useStationCall(shown.station);
   uploader.current = (file) => call.upload(file);
   const upload = draft.add;
+  const locked = shown.offline || !!shown.archived;
   const capsule = useRef<HTMLDivElement>(null);
   // What is above keeps its end clear of the capsule, whatever its height.
   useLayoutEffect(() => {
@@ -98,12 +102,13 @@ function Composer({ shown, latest, draft, now, root, upload: uploader }: {
     <div className={`${css.mComposer} ${css.mHostComposer}`} ref={capsule}>
       {/* Files pasted or dropped in go with the message, as ＋ adds them; offline, nothing goes to the station. */}
       <div className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
-        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!shown.offline) upload(e.clipboardData.files); } }}
-        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !shown.offline) e.preventDefault(); }}
-        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!shown.offline) upload(e.dataTransfer.files); } }}>
+        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) upload(e.clipboardData.files); } }}
+        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) e.preventDefault(); }}
+        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!locked) upload(e.dataTransfer.files); } }}>
+        {shown.archived && <ArchiveNotice className={css.mComposerOffline} offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}
         {shown.offline && <p className={css.mComposerOffline}>这台 station 离线了：这里是之前读到的内容，暂时不能发消息。</p>}
         <DraftExtras draft={draft} />
-        <ComposerBar draft={draft} placeholder={shown.placeholder} locked={shown.offline}
+        <ComposerBar draft={draft} placeholder={shown.placeholder} locked={locked}
           onPlus={() => openAttach(app, upload)} onType={() => latest.current?.type?.()} onSend={() => latest.current?.send(now.current)} />
         {draft.error && <p className={`${partsCss.mError} ${css.mComposerError}`}>{draft.error}</p>}
       </div>

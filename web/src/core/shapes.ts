@@ -665,6 +665,8 @@ export interface Link {
 
 /** An item's page: its chat (with the viewer's read position), or its agent before it has one. */
 export interface ChatView {
+	/** Archived chats must be restored before composing another message. */
+	archived?: boolean;
 	me: Me;
 	thread?: ChatThread;
 	title: string;
