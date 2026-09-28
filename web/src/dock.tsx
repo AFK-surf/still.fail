@@ -76,6 +76,12 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     resize.observe(el);
     return () => resize.disconnect();
   }, [made]);
+  // Laid out for another page, its new height is taken at once, not when the observer tells of it: a new chat becoming
+  // its chat takes its picture of the page in the same moment, and the place would still be the new chat's height (the
+  // box moved down to where it would stop, then jumped).
+  useLayoutEffect(() => {
+    if (box.current) setHeight(box.current.offsetHeight);
+  }, [spec?.variant]);
   // The frame its layout changes with the page (a chat's foot, a new chat's roomy box) it changes at once: eased, its
   // corners showed as a jump (app.css eases them as it grows while typed in).
   const [settled, setSettled] = useState(spec?.variant);
