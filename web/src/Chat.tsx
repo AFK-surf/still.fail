@@ -708,6 +708,22 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
   useLayoutEffect(() => {
     if (window.matchMedia("(pointer: fine)").matches) input.current?.focus();
   }, [thread]);
+  // Space with nothing that takes keys focused (the cursor lost to a click on the messages, a closed menu…) puts it
+  // back in the composer, rather than scrolling the page.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== " " || e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const at = e.target instanceof Element ? e.target : null;
+      if (at?.closest("input, textarea, select, button, a[href], summary, [contenteditable]:not([contenteditable='false']), [role='button'], [role='link'], [role='menuitem'], [role='tab'], [role='option'], [role='checkbox'], [role='radio'], [role='switch'], [role='slider'], [role='textbox'], [role='combobox']")) return;
+      if (document.querySelector("[role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']")) return;
+      const el = input.current;
+      if (!el || el.disabled || !el.getClientRects().length) return;
+      e.preventDefault();
+      el.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   // Grow with the text up to three lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
   // the text (or the placeholder), so it is measured again then; below the limit it never scrolls.
   useEffect(() => {
