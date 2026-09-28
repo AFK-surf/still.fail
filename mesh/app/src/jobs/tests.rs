@@ -84,6 +84,15 @@ async fn a_job_tells_its_agent_on_the_way_through_its_token() {
 }
 
 #[tokio::test]
+async fn a_job_stopped_from_the_pages_tells_its_agent_who_did() {
+    let r = rig();
+    let job = r.jobs.start("s1", "watch", "sleep 5", &r.work, None).unwrap();
+    let stopped = r.jobs.stop_for(&job.id, "ann@example.com").await.unwrap();
+    assert_eq!(stopped.state, "stopped");
+    assert_eq!(r.said(), [format!("Job \"watch\" ({}) was stopped by ann@example.com from ember's page.", job.id)]);
+}
+
+#[tokio::test]
 async fn a_service_is_kept_up_and_stays_down_once_stopped() {
     let r = rig();
     let job = r.jobs.start("s1", "web", "echo up on $PORT; exit 1", &r.work, Some(4999)).unwrap();
