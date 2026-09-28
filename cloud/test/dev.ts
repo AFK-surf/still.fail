@@ -15,6 +15,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { connect } from "node:net";
 import { extname, join, normalize } from "node:path";
 import { Response as MFResponse } from "miniflare";
+import { releaseType } from "../src/install.ts";
 import { harness } from "./harness.ts";
 
 const port = Number(process.env.PORT ?? 8787);
@@ -50,11 +51,12 @@ for (const name of ["studio", "mac-mini"]) {
 
 async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", base);
-  // Station releases as scripts/release.sh leaves them with RELEASE_DIR=dist/releases (the Worker's bucket is not here).
-  const release = /^\/releases\/(ember-station-[a-z0-9-]+\.tar\.gz)$/.exec(url.pathname)?.[1];
-  if (release) {
+  // Releases as scripts/release.sh leaves them with RELEASE_DIR=dist/releases (the Worker's bucket is not here).
+  const release = /^\/releases\/(.+)$/.exec(url.pathname)?.[1];
+  const type = release ? releaseType(release) : null;
+  if (release && type) {
     try {
-      return void res.writeHead(200, { "content-type": "application/gzip" }).end(await readFile(join(dist, "releases", release)));
+      return void res.writeHead(200, { "content-type": type }).end(await readFile(join(dist, "releases", release)));
     } catch {
       return void res.writeHead(404).end("no such release in dist/releases");
     }

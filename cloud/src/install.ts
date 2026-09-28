@@ -15,6 +15,23 @@ export function installScript(origin: string): string {
 /** A release's file, as the bucket keeps it: ember-station-<platform>.tar.gz. */
 export const RELEASE_FILE = /^ember-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
 
+/**
+ * The apps' builds, as scripts/release.sh puts them beside the station's: what each app's updater reads for the
+ * latest (the desktop app's electron-updater, the Android app's Updates.kt), and the files it names.
+ */
+const APP_FILES: [RegExp, string][] = [
+  [/^desktop\/latest-mac\.yml$/, "text/yaml; charset=utf-8"],
+  [/^desktop\/ember-[0-9.]+-arm64-mac\.zip$/, "application/zip"],
+  [/^android\/latest\.json$/, "application/json"],
+  [/^android\/ember-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+];
+
+/** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
+export function releaseType(file: string): string | null {
+  if (RELEASE_FILE.test(file)) return "application/gzip";
+  return APP_FILES.find(([name]) => name.test(file))?.[1] ?? null;
+}
+
 // A variable is always braced where words follow it ("\${app}（…）"): sh may take the first byte of a non-ASCII
 // character for part of its name, and set -u stops the script there.
 const SCRIPT = `#!/bin/sh
@@ -99,7 +116,7 @@ PLIST
     launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null && { started=yes; break; }
     sleep 2
   done
-  [ -n "$started" ] || { echo "launchd 没能启动 ember station（launchctl bootstrap gui/$(id -u) $plist）" >&2; exit 1; }
+  [ -n "$started" ] || { echo "launchd 没能启动 ember station（launchctl bootstrap gui/$(id -u) \${plist}）" >&2; exit 1; }
 else
   if user_systemd; then
     mkdir -p "$unit_dir"

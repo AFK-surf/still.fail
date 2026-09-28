@@ -95,7 +95,7 @@ sealed interface Screen {
     data class NewProfile(val station: String) : Screen { override val id = "new-profile/$station" }
 }
 
-class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cloudOrigin: String) {
+class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cloudOrigin: String, val updates: Updates) {
     var stack by mutableStateOf(listOf<Screen>(Screen.Home)); private set
     /** Whether the last move went deeper, for the direction of the transition. */
     var forward by mutableStateOf(true); private set
@@ -115,6 +115,14 @@ class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cl
 
     var onlyMine by mutableStateOf(prefs.getBoolean("onlyMine", false)); private set
     fun showOnlyMine(on: Boolean) { onlyMine = on; prefs.edit().putBoolean("onlyMine", on).apply() }
+
+    /** Looks for a newer build of the app; one found is said once (updating is in 我). */
+    suspend fun checkUpdates() {
+        val found = updates.check() ?: return
+        if (prefs.getLong("updateSaid", 0) == found.versionCode) return
+        prefs.edit().putLong("updateSaid", found.versionCode).apply()
+        toast = "有新版本 ${found.versionName}，可在「我」里更新"
+    }
 
     fun flag(name: String, default: Boolean) = prefs.getBoolean(name, default)
     fun setFlag(name: String, on: Boolean) = prefs.edit().putBoolean(name, on).apply()

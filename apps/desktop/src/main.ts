@@ -4,7 +4,8 @@
 // the page is served from app://ember, the core runs natively (client/node,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through ember://auth/callback.
-import { app, BrowserWindow, ipcMain, MessageChannelMain, net, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
+import { app, BrowserWindow, ipcMain, MessageChannelMain, net, Notification, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
+import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, writeFileSync } from "node:fs";
@@ -259,6 +260,29 @@ function machineName(): string {
   }
 }
 
+// Keeping the app current: ember cloud has the latest build (scripts/release.sh desktop puts it in /releases/desktop/),
+// looked for at start and every few hours. A newer one is downloaded as the app runs and installed when it quits;
+// a notification says it is ready, and clicked it quits (the station stopped first) and opens the new one.
+const UPDATE_EVERY = 4 * 60 * 60 * 1000;
+
+function keepUpdated(): void {
+  if (!app.isPackaged) return;
+  autoUpdater.setFeedURL({ provider: "generic", url: `${CLOUD_ORIGIN}/releases/desktop` });
+  autoUpdater.logger = null;
+  autoUpdater.on("error", (error) => console.warn("updating the app failed", error.message));
+  let said: string | null = null;
+  autoUpdater.on("update-downloaded", ({ version }) => {
+    if (said === version || !Notification.isSupported()) return;
+    said = version;
+    const note = new Notification({ title: `ember ${version} 已经准备好`, body: "点这里重启完成更新；不点也会在下次退出时装好。" });
+    note.on("click", () => void stopStation().then(() => autoUpdater.quitAndInstall()));
+    note.show();
+  });
+  const check = () => void autoUpdater.checkForUpdates().catch((error: Error) => console.warn("looking for an update failed", error.message));
+  check();
+  setInterval(check, UPDATE_EVERY);
+}
+
 /** Pages outside the app open in the system browser, as a new tab would. */
 function external(url: string): void {
   if (/^https?:\/\//.test(url)) void shell.openExternal(url);
@@ -317,6 +341,15 @@ function arrived(url: string): void {
   window.focus();
 }
 
+let stationStopped = false;
+
+/** Stops the station (and its runtimes) before the app quits: after it, quitting goes ahead without waiting again. */
+async function stopStation(): Promise<void> {
+  if (stationStopped) return;
+  await station.stop().catch(() => {});
+  stationStopped = true;
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -338,16 +371,13 @@ if (!app.requestSingleInstanceLock()) {
     protocol.handle("ember-preview", preview);
     open();
     station.start();
+    keepUpdated();
   });
   // The station stops with the app, its runtimes first; the app quits once it has.
-  let stopped = false;
   app.on("before-quit", (event) => {
-    if (stopped) return;
+    if (stationStopped) return;
     event.preventDefault();
-    void station.stop().finally(() => {
-      stopped = true;
-      app.quit();
-    });
+    void stopStation().then(() => app.quit());
   });
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) open();

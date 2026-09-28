@@ -4,6 +4,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// The build's number: -PemberBuild=<n>, or the commits in the history (scripts/release.sh publishes by it). Each
+// release is higher than the one before it, so the app sees it as newer (Updates.kt) and Android installs it over.
+val emberBuild = providers.gradleProperty("emberBuild")
+    .orElse(providers.exec { commandLine("git", "rev-list", "--count", "HEAD"); isIgnoreExitValue = true }.standardOutput.asText.map { it.trim() })
+    .get().toIntOrNull() ?: 1
+
 android {
     namespace = "dev.ember.android"
     compileSdk = 36
@@ -12,8 +18,8 @@ android {
         applicationId = "dev.ember.android"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = emberBuild
+        versionName = "0.1.$emberBuild"
         ndk { abiFilters += "arm64-v8a" }
         // Where the core finds ember cloud: -PemberCloud=http://127.0.0.1:8787 for a dev cloud (adb reverse its ports).
         buildConfigField("String", "CLOUD_ORIGIN", "\"${providers.gradleProperty("emberCloud").getOrElse("https://ember.3720.org")}\"")
