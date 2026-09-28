@@ -453,6 +453,13 @@ data class ChatThread (
 	val time: Map<String, Stamp>? = null
 )
 
+/// Something a job said, and when.
+@Serializable
+data class JobNotice (
+	val at: Long,
+	val text: String
+)
+
 /// A background job an agent started (a web service when it has a port): shown by its name; the port is how the
 /// station reaches a service, not for people.
 @Serializable
@@ -464,7 +471,15 @@ data class Job (
 	val port: Long? = null,
 	val exitCode: Long? = null,
 	val startedAt: Long,
-	val endedAt: Long? = null
+	val endedAt: Long? = null,
+	/// What it runs (sh -c).
+	val command: String? = null,
+	/// How often a service was started again after it ended.
+	val restarts: Long? = null,
+	/// What it said lately (`ember-job notify`), newest first: how people see what a long-running job is up to.
+	val notices: List<JobNotice>? = null,
+	/// When its output last grew; absent when it has none.
+	val outputAt: Long? = null
 )
 
 /// An agent of a chat: its session, the connect that started it, its profile, and what it can move to.
