@@ -168,8 +168,9 @@ globalStyle(`${sessionKind} ${kindIcon}`, { width: 14, height: 14 });
 globalStyle(`${sessionKind} ${kindMark}`, { margin: -1 });
 /** Unread: a blue dot in the row's left margin, beside the title, taking no room from it. */
 export const unreadDot = style({ position: "absolute", left: 2, top: 14, width: 6, height: 6, borderRadius: "50%", background: vars.blue });
+/** Archive, beside a row while pointed at: centred on the title line (20px tall, 7px down the row). */
 export const rowArchive = style({
-  position: "absolute", top: 7, right: 6, width: 24, height: 24, opacity: 0, pointerEvents: "none",
+  position: "absolute", top: 5, right: 6, width: 24, height: 24, opacity: 0, pointerEvents: "none",
   selectors: { [`${navSessionWrap}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" } },
 });
 
