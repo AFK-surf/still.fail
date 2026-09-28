@@ -209,6 +209,11 @@ impl Hub {
     /// Accepts one message seen by a connect. Resolves once it is durably recorded (or deliberately ignored).
     pub async fn accept(&self, connect_id: &str, message: InboundMessage) -> Result<()> {
         let config = self.config();
+        // What a bot of this station posted is its agent's, recorded and handed to the thread as it was posted: Slack's
+        // copy of it, seen through another connect, is not a message of its own.
+        if self.own_bot(&config, &message.user) {
+            return Ok(());
+        }
         let connect = connect_of(&config, connect_id)?;
         let chat = self.chat(connect_id)?;
         let surface = self.surface(connect_id);
@@ -875,11 +880,12 @@ impl Hub {
         let files = if paths.is_empty() { vec![] } else { self.attach(key, &paths)? };
         let here = ThreadRef::new(&thread.thread.channel, &thread.thread.thread_ts);
         let ts = self.chat(&thread.connect)?.post(&here, &text, &files).await?;
-        self.store.insert_message(NewMessage {
+        let (n, _) = self.store.insert_message(NewMessage {
             attachments: files,
             declared: kind.map(|k| k.as_str().to_string()),
             ..NewMessage::new(thread.thread.id, &ts, AuthorKind::Agent, key, &text)
         })?;
+        self.shared(thread.thread.id, n, key, &text)?;
         if let Some(post) = self.store.posts_by(key)?.pop() {
             self.live.posted(key, post_entries(&[post]));
         }
@@ -979,7 +985,8 @@ impl Hub {
                     info!(session = key, channel, thread_ts = root, method, "session took part in a thread through slack_api");
                 }
                 if let (Some(ts), "chat.postMessage") = (result_ts, method) {
-                    self.store.insert_message(NewMessage::new(thread.id, ts, AuthorKind::Agent, key, &posted_text))?;
+                    let (n, _) = self.store.insert_message(NewMessage::new(thread.id, ts, AuthorKind::Agent, key, &posted_text))?;
+                    self.shared(thread.id, n, key, &posted_text)?;
                 }
             }
         }
@@ -989,6 +996,23 @@ impl Hub {
         } else {
             text
         })
+    }
+
+    /// A Slack user that is one of this station's connects' bots.
+    fn own_bot(&self, config: &Config, user: &str) -> bool {
+        config.connects.iter().filter_map(|c| self.chat_of(&c.id)).any(|chat| {
+            let bot = chat.bot_user_id();
+            !bot.is_empty() && bot == user
+        })
+    }
+
+    /// An agent's post reaches the other sessions of its thread, as a person's would: agents work together there.
+    fn shared(&self, thread: i64, n: i64, author: &str, text: &str) -> Result<()> {
+        let others: Vec<String> = self.store.thread_sessions(thread)?.into_iter().map(|m| m.session).filter(|s| s != author).collect();
+        if others.is_empty() {
+            return Ok(());
+        }
+        self.hand_over(thread, n, &others, text)
     }
 
     fn chat(&self, connect: &str) -> Result<Arc<dyn ChatSurface>> {

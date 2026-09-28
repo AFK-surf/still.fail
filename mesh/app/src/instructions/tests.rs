@@ -27,10 +27,14 @@ fn pending(m: MessageRow, surface: &str, channel: &str, thread_ts: &str) -> Pend
 #[test]
 fn the_texts_are_the_ts_stations_word_for_word() {
     assert_eq!(session_instructions("/w/s", "/d/repos", "/d/agent/MEMORY.md"), include_str!("session.txt"));
-    let names = HashMap::from([("U1".to_string(), "Ada".to_string())]);
+    let names = HashMap::from([("U1".to_string(), "Ada".to_string()), ("gpt-key".to_string(), "GPT (<@UGPT>)".to_string())]);
     let selves = HashMap::from([("cl".to_string(), "ember (<@UBOT>)".to_string())]);
     let inbound = format_inbound(
-        &[pending(message(2, "101.0", "U1", true, AuthorKind::Person), "slack:T1", "C1", "100.0"), pending(message(3, "102.0", "U3", false, AuthorKind::Person), "slack:T1", "C1", "100.0")],
+        &[
+            pending(message(2, "101.0", "U1", true, AuthorKind::Person), "slack:T1", "C1", "100.0"),
+            pending(message(3, "102.0", "U3", false, AuthorKind::Person), "slack:T1", "C1", "100.0"),
+            pending(message(4, "103.0", "gpt-key", false, AuthorKind::Agent), "slack:T1", "C1", "100.0"),
+        ],
         &HashSet::from([1]),
         &names,
         &selves,

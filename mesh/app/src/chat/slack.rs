@@ -30,6 +30,9 @@ pub struct SlackIdentity {
     pub bot_name: String,
     /// Its bot's picture (the app's icon), as Slack shows it; None when Slack does not say.
     pub bot_image: Option<String>,
+    /// Its app's bot id (B…), which its own messages carry besides its user; not for the pages.
+    #[serde(skip)]
+    pub bot_id: String,
 }
 
 /// Where Slack's Web API is (tests point it elsewhere).
@@ -87,6 +90,7 @@ async fn identity_of(token: &str) -> Result<SlackIdentity> {
         .find(|u| u.starts_with("https://"))
         .map(String::from);
     Ok(SlackIdentity {
+        bot_id: text(auth.get("bot_id")),
         team: text(auth.get("team")),
         team_id: text(auth.get("team_id")),
         url: text(auth.get("url")),
@@ -117,15 +121,21 @@ pub async fn verify_slack_tokens(app_token: &str, bot_token: &str) -> (Option<Sl
     (identity, errors)
 }
 
-/// A Slack event as the station takes it: a person's message, an edit, or nothing it keeps (bots, its own, deletes).
-pub fn to_event(event: &Value, bot_user_id: &str) -> Option<ChatEvent> {
+/// A Slack event as the station takes it: someone's message (a person, or another app's bot: agents work together in
+/// threads), an edit, or nothing it keeps (its own messages, deletes). `bot_id`: this app's bot id (B…).
+pub fn to_event(event: &Value, bot_user_id: &str, bot_id: &str) -> Option<ChatEvent> {
+    // A message this bot posted itself: the station records those as it posts them.
+    let own = |e: &Value| {
+        let is = |key: &str, mine: &str| !mine.is_empty() && e.get(key).and_then(Value::as_str) == Some(mine);
+        is("user", bot_user_id) || is("bot_id", bot_id)
+    };
     let text = |v: Option<&Value>| v.and_then(Value::as_str).unwrap_or("").to_string();
     let kind = event.get("type").and_then(Value::as_str).unwrap_or("");
     let subtype = event.get("subtype").and_then(Value::as_str);
     if kind == "message" && subtype == Some("message_changed") {
         let changed = event.get("message").cloned().unwrap_or(Value::Null);
         let ts = text(changed.get("ts"));
-        if ts.is_empty() || changed.get("bot_id").is_some_and(|b| !b.is_null()) {
+        if ts.is_empty() || own(&changed) {
             return None;
         }
         // A message outside any thread is the root of its own.
@@ -139,12 +149,13 @@ pub fn to_event(event: &Value, bot_user_id: &str) -> Option<ChatEvent> {
     if kind != "app_mention" && kind != "message" {
         return None;
     }
-    // Message subtypes that are still a person talking.
-    if !matches!(subtype, None | Some("file_share") | Some("thread_broadcast")) {
+    // Message subtypes that are someone talking: a person, or another app's bot.
+    if !matches!(subtype, None | Some("file_share") | Some("thread_broadcast") | Some("bot_message")) || own(event) {
         return None;
     }
-    let user = text(event.get("user"));
-    if event.get("bot_id").is_some_and(|b| !b.is_null()) || user.is_empty() || user == bot_user_id {
+    // Its bot user when Slack gives one, else its bot id.
+    let user = event.get("user").or(event.get("bot_id")).and_then(Value::as_str).unwrap_or("").to_string();
+    if user.is_empty() {
         return None;
     }
     let body = text(event.get("text"));
@@ -276,6 +287,7 @@ impl SlackSurface {
         let write = Arc::new(AsyncMutex::new(write));
         self.set_status(true, None);
         let bot = self.bot_user_id();
+        let bot_id = self.identity.lock().unwrap().as_ref().map(|i| i.bot_id.clone()).unwrap_or_default();
         while let Some(frame) = read.next().await {
             let text = match frame? {
                 Message::Text(t) => t.to_string(),
@@ -295,7 +307,7 @@ impl SlackSurface {
             }
             let event = envelope.get("payload").and_then(|p| p.get("event")).cloned().unwrap_or(Value::Null);
             let envelope_id = envelope.get("envelope_id").cloned().unwrap_or(Value::Null);
-            let chat_event = to_event(&event, &bot);
+            let chat_event = to_event(&event, &bot, &bot_id);
             let (write, handler) = (write.clone(), handler.clone());
             tokio::spawn(async move {
                 let accepted = match chat_event {
@@ -481,26 +493,31 @@ mod tests {
 
     #[test]
     fn slack_events_become_messages_and_edits_and_the_rest_is_left() {
-        let message = to_event(&json!({ "type": "message", "channel": "C1", "user": "U1", "ts": "2.1", "thread_ts": "1.1", "text": "hi <@UBOT>" }), "UBOT");
+        let message = to_event(&json!({ "type": "message", "channel": "C1", "user": "U1", "ts": "2.1", "thread_ts": "1.1", "text": "hi <@UBOT>" }), "UBOT", "BBOT");
         assert_eq!(
             message,
             Some(ChatEvent::Message(InboundMessage { channel: "C1".into(), thread_ts: "1.1".into(), ts: "2.1".into(), user: "U1".into(), text: "hi <@UBOT>".into(), addressed: true }))
         );
         // A message of its own starts its thread; a direct message is addressed.
-        let dm = to_event(&json!({ "type": "message", "channel": "D1", "channel_type": "im", "user": "U1", "ts": "3.1", "text": "hey" }), "UBOT");
+        let dm = to_event(&json!({ "type": "message", "channel": "D1", "channel_type": "im", "user": "U1", "ts": "3.1", "text": "hey" }), "UBOT", "BBOT");
         assert!(matches!(dm, Some(ChatEvent::Message(ref m)) if m.thread_ts == "3.1" && m.addressed));
-        let plain = to_event(&json!({ "type": "message", "channel": "C1", "user": "U1", "ts": "3.2", "text": "chatter" }), "UBOT");
+        let plain = to_event(&json!({ "type": "message", "channel": "C1", "user": "U1", "ts": "3.2", "text": "chatter" }), "UBOT", "BBOT");
         assert!(matches!(plain, Some(ChatEvent::Message(ref m)) if !m.addressed));
-        let edit = to_event(&json!({ "type": "message", "subtype": "message_changed", "channel": "C1", "message": { "ts": "2.1", "thread_ts": "1.1", "text": "new" } }), "UBOT");
+        let edit = to_event(&json!({ "type": "message", "subtype": "message_changed", "channel": "C1", "message": { "ts": "2.1", "thread_ts": "1.1", "text": "new" } }), "UBOT", "BBOT");
         assert_eq!(edit, Some(ChatEvent::Changed { channel: "C1".into(), thread_ts: "1.1".into(), ts: "2.1".into(), text: "new".into() }));
         for left in [
             json!({ "type": "message", "subtype": "message_deleted", "channel": "C1" }),
             json!({ "type": "message", "channel": "C1", "user": "UBOT", "ts": "1" }),
-            json!({ "type": "message", "channel": "C1", "bot_id": "B1", "user": "U2", "ts": "1" }),
             json!({ "type": "message", "subtype": "channel_join", "channel": "C1", "user": "U1", "ts": "1" }),
             json!({ "type": "reaction_added" }),
         ] {
-            assert_eq!(to_event(&left, "UBOT"), None, "{left}");
+            assert_eq!(to_event(&left, "UBOT", "BBOT"), None, "{left}");
         }
+        // Another app's bot is heard like a person (by its bot user, else its bot id); its own bot, by either, is not.
+        let other = to_event(&json!({ "type": "message", "channel": "C1", "bot_id": "B2", "user": "U2", "ts": "4.1", "text": "done" }), "UBOT", "BBOT");
+        assert!(matches!(other, Some(ChatEvent::Message(ref m)) if m.user == "U2"));
+        let bare = to_event(&json!({ "type": "message", "subtype": "bot_message", "channel": "C1", "bot_id": "B2", "ts": "4.2", "text": "hook" }), "UBOT", "BBOT");
+        assert!(matches!(bare, Some(ChatEvent::Message(ref m)) if m.user == "B2"));
+        assert_eq!(to_event(&json!({ "type": "message", "subtype": "bot_message", "channel": "C1", "bot_id": "BBOT", "ts": "4.3" }), "UBOT", "BBOT"), None);
     }
 }

@@ -13,3 +13,6 @@ Attached files:
 <message via="slack" connect="cl" you="ember (<@UBOT>)" thread="C1/100.0" from="U3" ts="102.0">
 hi "there" & you
 </message>
+<message via="slack" connect="cl" you="ember (<@UBOT>)" thread="C1/100.0" from="GPT (<@UGPT>)" bot ts="103.0">
+hi "there" & you
+</message>

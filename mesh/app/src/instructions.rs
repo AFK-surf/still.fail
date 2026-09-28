@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::store::{EMBER_SURFACE, MessageRow, PendingMessage};
+use crate::store::{AuthorKind, EMBER_SURFACE, MessageRow, PendingMessage};
 
 pub fn session_instructions(workspace: &str, repos_dir: &str, memory_path: &str) -> String {
     format!(
@@ -15,7 +15,9 @@ Who you are: you have no name of your own. ember is the system that brings you m
 Messages and where they come from:
 - Each message reaches you as <message via="slack" connect="…" you="…" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message>. `you` is what you are called where that message was said — your name there and how you are mentioned (e.g. "ds-helper (<@U123>)"); it belongs to that connect only, so answer to it there and do not take it as your name elsewhere. Web chats give none. The thread attribute says which conversation it belongs to. Messages from different threads can arrive in the same session; keep them apart and answer each where it was asked.
 - via="web" messages come from a chat on ember's own admin page (thread EMBER/…), usually an operator looking at this session. Treat them like any other conversation and answer there with chat_post.
-- Not every message is addressed to you; read it in context before acting. Other bots may be in a conversation too, each with its own session.
+- Not every message is addressed to you; read it in context before acting.
+- Other agents may take part in a conversation too, each with its own session. What they post reaches you like what people say, marked bot, from the name they go by there (with their mention in Slack). Work with them: do what is asked of you, leave or hand over what another agent is doing or better placed to do, build on what they found instead of repeating it, and mention them when you need something from them.
+- A message does not need a reply. Post when you were asked something or have something to add; an acknowledgement ("got it", "thanks", "agreed") needs none, and neither does another agent's message that does not concern you. When there is nothing to say, end the turn with chat_state "final" without posting.
 
 How you answer:
 - Nothing you write as ordinary assistant output reaches anyone. Use the ember MCP tools:
@@ -104,15 +106,20 @@ pub fn format_inbound(messages: &[PendingMessage], new_threads: &HashSet<i64>, n
         }
         // What the agent is called where this was said: it has no name of its own, only each connect's.
         let you = selves.get(&p.connect).map(|s| format!(" you=\"{}\"", escape_attr(s))).unwrap_or_default();
-        let from = match names.get(&m.author) {
-            Some(name) => format!("{name} ({})", m.author),
-            None => m.author.clone(),
+        // Another agent: by the name it goes by there (its session key says nothing), marked a bot.
+        let agent = m.author_kind == AuthorKind::Agent;
+        let from = match (names.get(&m.author), agent) {
+            (Some(name), true) => name.clone(),
+            (None, true) => "another agent".to_string(),
+            (Some(name), false) => format!("{name} ({})", m.author),
+            (None, false) => m.author.clone(),
         };
         lines.push(format!(
-            "<message via=\"{}\" connect=\"{}\"{you} thread=\"{address}\" from=\"{}\" ts=\"{}\">\n{}\n</message>",
+            "<message via=\"{}\" connect=\"{}\"{you} thread=\"{address}\" from=\"{}\"{} ts=\"{}\">\n{}\n</message>",
             via(&p.surface),
             escape_attr(&p.connect),
             escape_attr(&from),
+            if agent { " bot" } else { "" },
             m.ts,
             message_for_agent(m)
         ));

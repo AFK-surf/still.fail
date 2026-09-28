@@ -1030,3 +1030,48 @@ fn posts_show_in_the_history_as_chat_post_calls() {
     assert_eq!(entries[0].text, "{\n  \"to\": \"C1/1.1\",\n  \"text\": \"done\",\n  \"kind\": \"final\"\n}");
     assert_eq!((entries[0].at.as_deref(), entries[1].text.as_str(), entries[1].call_id.as_deref()), (Some("1970-01-01T00:00:00.000Z"), "Posted to C1/1.1.", Some("post:3:7")));
 }
+
+#[tokio::test]
+async fn agents_in_one_thread_hear_each_other_a_post_reaches_the_threads_other_sessions_marked_a_bot_and_not_its_author() {
+    let r = setup();
+    let root = say("<@UBOT> <@UGPT> work this out together");
+    r.accept(&root).await;
+    r.accept_via(&root, "gpt").await;
+    settle().await;
+    let (cl, gpt) = (session_key("cl", "C1", &root.thread_ts), session_key("gpt", "C1", &root.thread_ts));
+    r.call(&cl, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.call(&gpt, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.claude.last().complete();
+    r.codex.last().complete();
+    settle().await;
+    let before = r.claude.last().prompts().len();
+    r.call(&gpt, "chat_post", json!({ "to": format!("C1/{}", root.thread_ts), "text": "I'll take the tests; can you do the build?" })).await.unwrap();
+    settle().await;
+    let prompts = r.claude.last().prompts();
+    assert_eq!(prompts.len(), before + 1);
+    assert!(matches(prompts.last().unwrap(), &["from=\"ember (<@UGPT>)\" bot ts=\"", "\">\nI'll take the tests; can you do the build?"]), "{}", prompts.last().unwrap());
+    assert!(!r.codex.last().prompts().iter().any(|p| p.contains("I'll take the tests")), "not back to its author");
+    // Slack's copy of that post, seen through the other connect, is not a message of its own.
+    r.accept(&InboundMessage { user: "UGPT".into(), ..reply(&root, "9999.9", "I'll take the tests; can you do the build?") }).await;
+    settle().await;
+    assert_eq!(r.claude.last().prompts().len(), before + 1);
+}
+
+#[tokio::test]
+async fn in_a_chat_on_the_stations_page_with_several_agents_what_one_posts_reaches_the_others() {
+    let r = setup();
+    let one = r.hub.new_session(new_chat(RuntimeKind::Claude)).unwrap();
+    let two = r.hub.new_session(new_chat(RuntimeKind::Codex)).unwrap();
+    r.hub.add_to_thread(one.1.id, &two.0).unwrap();
+    r.hub.say(one.1.id, "local", "分一下工", vec![], vec![]).unwrap();
+    settle().await;
+    r.call(&one.0, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.call(&two.0, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.claude.last().complete();
+    r.codex.last().complete();
+    settle().await;
+    r.call(&one.0, "chat_post", json!({ "to": format!("EMBER/{}", one.1.thread_ts), "text": "我来写接口" })).await.unwrap();
+    settle().await;
+    let heard = r.codex.last().prompts().pop().unwrap();
+    assert!(matches(&heard, &["from=\"Claude Code\" bot ts=\"", "\">\n我来写接口"]), "{heard}");
+}

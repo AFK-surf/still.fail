@@ -347,7 +347,14 @@ impl SessionActor {
         let new_threads: HashSet<i64> = said.iter().map(|m| m.message.thread).filter(|t| !heard.contains(t)).collect();
         let mut names = HashMap::new();
         for m in said {
-            if m.message.author_kind != AuthorKind::Person || names.contains_key(&m.message.author) {
+            if names.contains_key(&m.message.author) {
+                continue;
+            }
+            if m.message.author_kind == AuthorKind::Agent {
+                names.insert(m.message.author.clone(), self.agent_name(deps, &m.message.author, m.message.thread));
+                continue;
+            }
+            if m.message.author_kind != AuthorKind::Person {
                 continue;
             }
             let Some(chat) = deps.chat(&m.connect) else { continue };
@@ -368,6 +375,23 @@ impl SessionActor {
             }
         }
         Ok(format_inbound(said, &new_threads, &names, &selves))
+    }
+
+    /// What another agent goes by in a thread: the bot of the connect it posts there through, with its mention (in
+    /// Slack, to call on it); in the station's own chats, its runtime and model.
+    fn agent_name(&self, deps: &Arc<dyn SessionDeps>, key: &str, thread: i64) -> String {
+        let store = deps.store();
+        let via = store.thread_sessions(thread).ok().and_then(|ms| ms.into_iter().find(|m| m.session == key)).map(|m| m.connect);
+        if let Some(chat) = via.as_deref().filter(|c| *c != crate::chat::internal::INTERNAL_CONNECT).and_then(|c| deps.chat(c)) {
+            let (name, user) = (chat.bot_name(), chat.bot_user_id());
+            if !name.is_empty() {
+                return if user.is_empty() { name } else { format!("{name} (<@{user}>)") };
+            }
+        }
+        match store.get_session(key).ok().flatten() {
+            Some(row) => format!("{}{}", if row.runtime == "claude" { "Claude Code" } else { "Codex" }, row.model.map(|m| format!(" {m}")).unwrap_or_default()),
+            None => "another agent".into(),
+        }
     }
 
     /// Starts a turn with `text`. On failure the thread is told and the error returned, so callers leave their messages
