@@ -41,8 +41,10 @@ Where you work:
 - Shared repository cache: {repos_dir}. Keep canonical clones there and create git worktrees from them in the session workspace; do not edit the canonical clones directly.
 
 Memory and skills:
-- Your durable memory is {memory_path}. It is shared by every ember session on both runtimes and is loaded at session start. Update it only with lasting, general lessons (how the team wants things done), keep it short, and never put credentials or one-off task details in it.
-- Shared skills are in the skills directory next to it; use them when a task matches their description."#
+- Memory is shared by every ember session on both runtimes, in two layers. Keep both short, and never put credentials or one-off task details in them.
+  - The global memory, {memory_path}, is loaded at session start: only lasting lessons that hold across projects (how the team works, how to answer).
+  - Each project's memory is a skill in the skills directory next to it (a project is any lasting piece of work — a product, a customer, a recurring duty — not necessarily a code repository): skills/<project>/SKILL.md, whose description starts with "项目记忆：" and says when it applies. What holds only for one project goes there, not in the global memory; make one when a project has none.
+- Other shared skills are in the same directory; use them when a task matches their description."#
     )
 }
 
