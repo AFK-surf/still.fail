@@ -1,6 +1,8 @@
 // Scrollbars that float over what scrolls and take no room from it. With a mouse the system's bars are hidden
 // (app.css) and one thin thumb per axis, drawn here, shows on the pane under the pointer and on any pane while it
 // scrolls, and can be dragged. Touch screens keep the system's own, which already float.
+// A thumb is put beside the pane it is for (in the pane's parent), so it is layered as the pane is: a menu, a popover
+// or a dialog over the pane is over its bar too.
 
 type Axis = "y" | "x";
 
@@ -41,7 +43,6 @@ export function startScrollbars(): void {
     el.className = "floating-thumb";
     el.dataset.axis = axis;
     el.addEventListener("pointerdown", (e) => drag(axis, e));
-    document.body.append(el);
     return el;
   }
 
@@ -52,6 +53,21 @@ export function startScrollbars(): void {
       if (el) resize.observe(el);
     }
     schedule();
+  }
+
+  /** Beside the pane (its parent), the page's own at the end of the body. */
+  function place(thumb: HTMLDivElement, el: Element) {
+    const host = el === document.scrollingElement || !el.parentElement ? document.body : el.parentElement;
+    if (thumb.parentElement !== host) host.append(thumb);
+  }
+
+  /** Where a thumb is put, as the viewport has it: its own origin (the viewport's, or a transformed ancestor's) aside. */
+  function put(thumb: HTMLDivElement, x: number, y: number) {
+    const [tx, ty] = (thumb.dataset.at ?? "0 0").split(" ").map(Number);
+    const r = thumb.getBoundingClientRect();
+    const ox = r.left - tx!, oy = r.top - ty!;
+    thumb.style.transform = `translate(${x - ox}px, ${y - oy}px)`;
+    thumb.dataset.at = `${x - ox} ${y - oy}`;
   }
 
   function schedule() {
@@ -77,11 +93,12 @@ export function startScrollbars(): void {
       const length = Math.max(MIN_THUMB, (size * size) / content) - INSET * 2;
       const scrolled = axis === "y" ? el.scrollTop : Math.abs(el.scrollLeft);
       const at = INSET + (scrolled / (content - size)) * (size - INSET * 2 - length);
+      place(thumb, el);
       if (axis === "y") {
-        thumb.style.transform = `translate(${left + el.clientWidth - SIZE - INSET}px, ${top + at}px)`;
+        put(thumb, left + el.clientWidth - SIZE - INSET, top + at);
         thumb.style.height = `${length}px`;
       } else {
-        thumb.style.transform = `translate(${left + at}px, ${top + el.clientHeight - SIZE - INSET}px)`;
+        put(thumb, left + at, top + el.clientHeight - SIZE - INSET);
         thumb.style.width = `${length}px`;
       }
       thumb.dataset.on = "";

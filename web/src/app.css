@@ -1246,7 +1246,8 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
    touch screens keep theirs, which float already. */
 [data-floating-scrollbars] * { scrollbar-width: none; }
 [data-floating-scrollbars] ::-webkit-scrollbar { display: none; }
-.floating-thumb { position: fixed; left: 0; top: 0; z-index: 2147483000; width: 6px; height: 6px; border-radius: 999px;
+/* No z-index: layered by where it is (beside its pane), over the pane, under what comes after it (menus, dialogs). */
+.floating-thumb { position: fixed; left: 0; top: 0; width: 6px; height: 6px; border-radius: 999px;
   background: color-mix(in oklch, var(--text) 26%, transparent); opacity: 0; pointer-events: none;
   transition: opacity 200ms var(--ease-out), background-color 120ms var(--ease-out); }
 .floating-thumb[data-on] { opacity: 1; pointer-events: auto; }
