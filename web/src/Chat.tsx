@@ -576,13 +576,15 @@ function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file:
   const url = useFileUrl(sessionKey ?? "", file, (image || video) && sessionKey !== null && near, !video);
   const [open, setOpen] = useState(false);
   const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
-  if (video && sessionKey !== null && !videoFailed) {
+  if (video && sessionKey !== null) {
     return (
       <>
         <button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} onClick={() => setOpen(true)}
-          title={file.name} aria-label={`播放 ${file.name}`} style={look.box(file)}>
-          {url && <video src={url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />}
-          <span className={css.msgVideoPlay} aria-hidden="true">▶</span>
+          title={file.name} aria-label={`${videoFailed ? "查看" : "播放"} ${file.name}`} style={look.box(file)} data-unavailable={videoFailed || undefined}>
+          {url && !videoFailed && <video src={url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />}
+          <span className={videoFailed ? css.msgVideoUnavailable : css.msgVideoPlay} aria-hidden="true">
+            {videoFailed ? <><Read size={24} /><span>暂时无法预览</span><small>{fileSize(file.size)}</small></> : "▶"}
+          </span>
           <span className={css.msgVideoName}>{file.name}</span>
         </button>
         {preview}
