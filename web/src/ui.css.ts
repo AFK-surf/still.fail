@@ -186,16 +186,16 @@ export const dialog = style({
   },
 });
 export const dialogWide = style({ width: "min(640px, calc(100vw - 32px))" });
-export const dialogAlert = style({ width: "min(420px, calc(100vw - 32px))", padding: "24px 28px", gap: "10px" });
+export const dialogAlert = style({ width: "min(420px, calc(100vw - 32px))", padding: "32px", gap: "10px" });
 export const dialogHead = style({
-  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "22px 20px 0 28px",
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "28px 24px 0 32px",
 });
 export const dialogTitle = style({});
 export const dialogBody = style({
-  display: "grid", gap: "18px", padding: "20px 28px 4px", overflowY: "auto", minHeight: "0",
+  display: "grid", gap: "18px", padding: "20px 32px 4px", overflowY: "auto", minHeight: "0",
 });
 export const dialogFoot = style({
-  display: "flex", justifyContent: "flex-end", gap: "8px", padding: "16px 28px 24px",
+  display: "flex", justifyContent: "flex-end", gap: "8px", padding: "20px 32px 32px",
   selectors: {
     [`${dialogAlert} &`]: { padding: "12px 0 0" },
   },

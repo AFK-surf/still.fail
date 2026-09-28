@@ -93,7 +93,7 @@ globalStyle(dialogTitle, {
   display: "flex", alignItems: "baseline", gap: "10px", margin: "0", fontSize: "20px", fontWeight: "650",
 });
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
-globalStyle(dialogLead, { margin: "6px 28px 0", fontSize: vars.textSm, color: vars.muted });
+globalStyle(dialogLead, { margin: "6px 32px 0", fontSize: vars.textSm, color: vars.muted });
 globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, { animation: `${buddyHopKeyframes} 380ms ${vars.easeOut}` });
 globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, {
   "@media": {
