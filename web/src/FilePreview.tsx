@@ -4,7 +4,7 @@
 // else says it cannot be shown and offers the download.
 import { Dialog as RDialog } from "radix-ui";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { useApi, type Api, type Attachment } from "./api.ts";
+import { useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
 import { ChevronLeft, ChevronRight, Close, Download, Minus, Plus } from "./icons.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { fileLink } from "./Prose.css.ts";
@@ -23,6 +23,11 @@ export function fileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/** The bars over a file (and a video's controls) fade out after the pointer has rested this long. */
+export const REST_MS = 2000;
+/** A finger has no hover to keep them: they stay longer after a tap. */
+export const TAP_REST_MS = 4000;
 
 // ── what a file is ─────────────────────────────────────────────────────
 
@@ -77,14 +82,24 @@ const storedName = (a: Attachment) => a.path.split("/").at(-1)!;
 const blobs = new Map<string, Promise<Blob>>();
 const KEEP_BLOBS = 100;
 
+// How far each whole file on its way has come, and who is watching it.
+const coming = new Map<string, { got: FileProgress | null; watchers: Set<(got: FileProgress) => void> }>();
+
+const fileId = (station: string, sessionKey: string, file: Attachment, thumb: boolean) => `${station}/${sessionKey}/${file.path}${thumb ? "#thumb" : ""}`;
+
 function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment, thumb = false): Promise<Blob> {
-  const id = `${station}/${sessionKey}/${file.path}${thumb ? "#thumb" : ""}`;
+  const id = fileId(station, sessionKey, file, thumb);
   let blob = blobs.get(id);
   if (!blob) {
     // Typed by its name, so the browser plays and shows it whatever the station called it (a thumbnail is typed by the
     // station: it may be a JPEG of a PNG).
     const { type } = kindOf(file.name);
-    blob = api.file(sessionKey, storedName(file), thumb).then((b) => (!thumb && type !== "application/octet-stream" && b.type !== type ? b.slice(0, b.size, type) : b));
+    // A whole file may be big: how far it has come is kept for whoever shows it (thumbnails are small).
+    const on = thumb ? null : { got: null as FileProgress | null, watchers: new Set<(got: FileProgress) => void>() };
+    if (on) coming.set(id, on);
+    blob = api.file(sessionKey, storedName(file), thumb, on ? (got) => { on.got = got; on.watchers.forEach((w) => w(got)); } : undefined)
+      .then((b) => (!thumb && type !== "application/octet-stream" && b.type !== type ? b.slice(0, b.size, type) : b));
+    if (on) void blob.finally(() => coming.delete(id)).catch(() => {});
     // A failure is not kept: the next look tries again.
     blob.catch(() => blobs.delete(id));
     blobs.set(id, blob);
@@ -93,7 +108,7 @@ function fetchFile(api: Api, station: string, sessionKey: string, file: Attachme
   return blob;
 }
 
-type Loaded = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; blob: Blob; url: string };
+type Loaded = { state: "loading"; got?: FileProgress | null } | { state: "error"; message: string } | { state: "ready"; blob: Blob; url: string };
 
 /** A file as a blob and its URL, fetched from the station once and kept while shown. */
 function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb = false): Loaded {
@@ -105,7 +120,14 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
     let u: string | null = null;
     let current = true;
     setLoaded({ state: "loading" });
-    fetchFile(api, station.address, sessionKey, file, thumb).then((blob) => {
+    const promise = fetchFile(api, station.address, sessionKey, file, thumb);
+    const on = coming.get(fileId(station.address, sessionKey, file, thumb));
+    const watch = (got: FileProgress) => { if (current) setLoaded((l) => (l.state === "loading" ? { state: "loading", got } : l)); };
+    if (on) {
+      on.watchers.add(watch);
+      if (on.got) watch(on.got);
+    }
+    promise.then((blob) => {
       if (!current) return;
       u = URL.createObjectURL(blob);
       setLoaded({ state: "ready", blob, url: u });
@@ -114,6 +136,7 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
     });
     return () => {
       current = false;
+      on?.watchers.delete(watch);
       if (u) URL.revokeObjectURL(u);
     };
   }, [api, station.address, sessionKey, file.path, enabled, thumb]);
@@ -216,6 +239,8 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
   }, [before, after, step]);
   const loaded = useFile(sessionKey, file, true);
   const known = kindOf(file.name);
+  // An image stands in as the chat showed it (its thumbnail, kept) while the whole of it comes.
+  const thumb = useFileUrl(sessionKey, file, known.kind === "image" && loaded.state === "loading", true);
   const [sniffed, setSniffed] = useState<PreviewKind | "binary" | null>(null);
   const [controls, setControls] = useState<ReactNode>(null);
   const blob = loaded.state === "ready" ? loaded.blob : null;
@@ -226,8 +251,35 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
     return () => { live = false; };
   }, [blob, known.kind]);
   const kind = known.kind ?? sniffed;
+  // An image on its way: its thumbnail stands in, and how far the whole of it has come shows in the bar.
+  const coming = known.kind === "image" && loaded.state === "loading" && thumb ? loaded.got : undefined;
+  // The bar is as wide as what it holds, and once open it only grows: its buttons stay where they are to be clicked.
+  const head = useRef<HTMLElement>(null);
+  const widest = useRef(0);
+  useLayoutEffect(() => {
+    const el = head.current;
+    if (!el) return;
+    const w = el.getBoundingClientRect().width;
+    if (w > widest.current) { widest.current = w; el.style.minWidth = `min(${w}px, 100% - 32px)`; }
+  });
+  // The bar floats over the file, and fades when the pointer leaves it or rests a while (not over it, not while it comes).
+  const [awake, setAwake] = useState(true);
+  const resting = useRef(0);
+  const onBar = useRef(false);
+  const tapAt = useRef<{ x: number; y: number } | null>(null);
+  const wake = useCallback((ms = REST_MS) => {
+    setAwake(true);
+    clearTimeout(resting.current);
+    resting.current = window.setTimeout(() => { if (!onBar.current) setAwake(false); }, ms);
+  }, []);
+  useEffect(() => { wake(); return () => clearTimeout(resting.current); }, [wake, file.path]);
   let body: ReactNode;
-  if (loaded.state === "loading" || (kind === null && loaded.state === "ready")) body = <div className={css2.fpNote}><span className={waitingCss.spinner} aria-hidden="true" />正在载入…</div>;
+  if (known.kind === "image" && (loaded.state === "ready" || (loaded.state === "loading" && thumb))) {
+    body = <ImageViewer key={file.path} url={loaded.state === "ready" ? loaded.url : thumb!} file={file} setControls={setControls} onSwipe={(d) => step(d < 0 ? before : after)}
+      waiting={loaded.state === "loading"} />;
+  } else if (loaded.state === "loading" || (kind === null && loaded.state === "ready")) {
+    body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <Progress got={loaded.got} size={file.size} /> : <><span className={waitingCss.spinner} aria-hidden="true" />正在载入…</>}</div>;
+  }
   else if (loaded.state === "error") body = <div className={css2.fpNote}>载入失败：{loaded.message}</div>;
   else {
     const { url, blob } = loaded;
@@ -242,16 +294,31 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
     }
   }
   return (
-    <RDialog.Content className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined}
+    <RDialog.Content className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || undefined}
+      // A mouse wakes the bars by moving; a finger has no hover, and a tap on the file shows or hides them.
+      onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
+      onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onBar.current) setAwake(false); }}
+      onPointerDown={(e) => { tapAt.current = { x: e.clientX, y: e.clientY }; }}
+      onPointerUp={(e) => {
+        const t = tapAt.current;
+        if (e.pointerType === "mouse" || !t || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 10 || (e.target as Element).closest("button, a, header")) return;
+        if (awake) { clearTimeout(resting.current); setAwake(false); } else wake(TAP_REST_MS);
+      }}
       // The page itself takes focus, not its first button: no ring on the close button for a tap or click.
       onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
-      <header className={css2.fpHead}>
+      <header ref={head} className={css2.fpHead}
+        onPointerEnter={(e) => { if (e.pointerType !== "mouse") return; onBar.current = true; clearTimeout(resting.current); setAwake(true); }}
+        onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onBar.current = false; wake(); }}>
         <div className={css2.fpTitle}>
           <Tip label={file.path}><RDialog.Title className={css2.fpName}>{file.name}</RDialog.Title></Tip>
           <span className={css2.fpMeta}>{images.length > 1 && at >= 0 ? `${at + 1} / ${images.length} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${KIND_LABEL[kind as PreviewKind]}` : ""}</span>
         </div>
-        <div className={css2.fpTools}>{controls}</div>
-        {loaded.state === "ready" && <Tip label="下载"><a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label="下载"><Download size={18} /></a></Tip>}
+        {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
+        {controls}
+        {loaded.state === "ready"
+          ? <Tip label="下载"><a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label="下载"><Download size={18} /></a></Tip>
+          // Its place kept until it comes.
+          : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Download size={18} /></span>}
         <Tip label="关闭（Esc）"><RDialog.Close className={pagesCss.iconBtn} aria-label="关闭"><Close size={18} /></RDialog.Close></Tip>
       </header>
       <div className={css2.fpBody}>
@@ -290,14 +357,28 @@ const MAX_SCALE = 16;
  * bar's buttons, + − 0) around the pointer and drag about when larger than
  * the window. Fitted, a sideways swipe steps to the image before or after.
  */
-function ImageViewer({ url, file, setControls, onSwipe }: { url: string; file: Attachment; setControls(c: ReactNode): void; onSwipe(direction: -1 | 1): void }) {
+/** `waiting`: `url` is only the thumbnail, standing in the image's place until the whole of it comes. */
+function ImageViewer({ url, file, setControls, onSwipe, waiting = false }: { url: string; file: Attachment; setControls(c: ReactNode): void; onSwipe(direction: -1 | 1): void; waiting?: boolean }) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(file.width && file.height ? { w: file.width, h: file.height } : null);
   const zoom = useZoom(natural, setControls, onSwipe);
   return (
     <div ref={zoom.stage} className={css2.fpStage} {...zoom.stageProps}>
-      <img className={css2.fpImage} src={url} alt={file.name} draggable={false}
-        onLoad={(e) => { const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
+      <img className={css2.fpImage} src={url} alt={file.name} draggable={false} data-waiting={waiting || undefined}
+        // A thumbnail's own size is not the image's: it only stands in the image's place.
+        onLoad={(e) => { const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight && (!waiting || !natural)) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
         style={zoom.place ?? { visibility: "hidden" }} />
+    </div>
+  );
+}
+
+/** How much of a file has come, out of its size (the station's, else the one sent with it); a bar that sweeps when neither is known. */
+function Progress({ got, size, inBar = false }: { got: FileProgress | null | undefined; size: number; inBar?: boolean }) {
+  const total = got?.total ?? (size > 0 ? size : null);
+  const part = got && total ? Math.min(1, got.loaded / total) : null;
+  return (
+    <div className={inBar ? css2.fpHeadProgress : css2.fpProgress} role="progressbar" aria-label="正在载入" aria-valuemin={0} aria-valuemax={100} aria-valuenow={part === null ? undefined : Math.round(part * 100)}>
+      <span className={css2.fpProgressText}>{got && total ? <>正在载入 <b>{fileSize(got.loaded)}</b> / {fileSize(total)}</> : "正在载入…"}</span>
+      <span className={css2.fpProgressTrack}><span className={css2.fpProgressBar} style={part === null ? undefined : { width: `${part * 100}%` }} data-unknown={part === null || undefined} /></span>
     </div>
   );
 }

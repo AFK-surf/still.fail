@@ -121,7 +121,7 @@ export function useTopics<T = unknown>(topics: Topic[]): TopicState<T>[] {
 }
 
 /** `call(name, params)` on the page's core. */
-export function useCall(): (name: string, params?: unknown) => Promise<unknown> {
-  return useCallback((name: string, params?: unknown) => core().call(name, params), []);
+export function useCall(): (name: string, params?: unknown, onProgress?: (value: unknown) => void) => Promise<unknown> {
+  return useCallback((name: string, params?: unknown, onProgress?: (value: unknown) => void) => core().call(name, params, onProgress), []);
 }
 

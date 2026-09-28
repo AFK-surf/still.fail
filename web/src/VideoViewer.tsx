@@ -4,7 +4,7 @@
 // to zoom into, to read a pixel's colour from, to save as a PNG.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CanvasSink, Input, WrappedCanvas } from "mediabunny";
-import { useZoom } from "./FilePreview.tsx";
+import { REST_MS, TAP_REST_MS, useZoom } from "./FilePreview.tsx";
 import { Camera, ChevronLeft, ChevronRight, Landscape, Pause, Play } from "./icons.tsx";
 import * as css from "./VideoViewer.css.ts";
 import * as fpCss from "./FilePreview.css.ts";
@@ -18,10 +18,6 @@ const KEEP_BYTES = 500e6;
 /** Without the file's own frames (a codec the browser cannot decode), a step is this long. */
 const GUESSED_STEP = 1 / 60;
 const RATES = ["0.1", "0.25", "0.5", "1"] as const;
-/** The controls fade out after the pointer has rested this long. */
-const REST_MS = 2000;
-/** A finger has no hover to keep them: they stay longer after a tap. */
-const TAP_REST_MS = 4000;
 type Rate = (typeof RATES)[number];
 
 /**

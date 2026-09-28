@@ -75,6 +75,8 @@ export type Opener = (onMessage: (data: unknown) => void, onFail: (reason: strin
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
+  /** How far the call has got, for one that says so (a file asked for with `progress`). */
+  onProgress?: ((value: unknown) => void) | undefined;
 }
 
 interface Subscription {
@@ -151,11 +153,11 @@ export class CoreClient {
     this.#connect();
   }
 
-  call(name: string, params: unknown = {}): Promise<unknown> {
+  call(name: string, params: unknown = {}, onProgress?: (value: unknown) => void): Promise<unknown> {
     if (this.#closed) return Promise.reject(new CoreError({ code: "closed", message: "连接已关闭" }));
     const id = this.#nextId++;
     return new Promise((resolve, reject) => {
-      this.#calls.set(id, { resolve, reject });
+      this.#calls.set(id, { resolve, reject, onProgress });
       this.#send({ id, call: name, params });
     });
   }
@@ -282,6 +284,11 @@ export class CoreClient {
     if (message.id === undefined) return;
     const call = this.#calls.get(message.id);
     if (call) {
+      // Values under a call's id tell how far it has got; its answer comes after them.
+      if ("value" in message && !message.error) {
+        call.onProgress?.(message.value);
+        return;
+      }
       this.#calls.delete(message.id);
       if (message.error) call.reject(new CoreError(message.error));
       else call.resolve(message.ok);

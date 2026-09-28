@@ -153,11 +153,15 @@ export interface StationCall {
   /** Puts a file on the station, in no chat yet; a message that sends it takes it into its chat. */
   upload(file: File): Promise<Attachment>;
   /** A file sent to the session, as a blob for previews; `thumb`: an image as a chat shows it (its thumbnail, where the station keeps one). */
-  file(key: string, name: string, thumb?: boolean): Promise<Blob>;
+  /** `onProgress`: bytes so far and the whole size (null when the station does not say) as a whole file comes. */
+  file(key: string, name: string, thumb?: boolean, onProgress?: (got: FileProgress) => void): Promise<Blob>;
 }
 
 /** The whole file as base64, the protocol's form for bytes. */
 /** Bytes from base64: natively where the browser can (a chat's images are megabytes; decoding them char by char held up frames). */
+/** How much of a file has come. */
+export interface FileProgress { loaded: number; total: number | null }
+
 function fromBase64(text: string): Uint8Array<ArrayBuffer> {
   const native = (Uint8Array as unknown as { fromBase64?: (s: string) => Uint8Array<ArrayBuffer> }).fromBase64;
   return native ? native(text) : Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
@@ -192,8 +196,9 @@ export function useStationCall(station: string): StationCall {
       }
       return saved;
     },
-    file: async (key, name, thumb = false) => {
-      const { type, bytes } = await call("station.file", { station, key, name, ...(thumb ? { thumb } : {}) }) as { type: string; bytes: string };
+    file: async (key, name, thumb = false, onProgress) => {
+      const { type, bytes } = await call("station.file", { station, key, name, ...(thumb ? { thumb } : {}), ...(onProgress ? { progress: true } : {}) },
+        onProgress && ((got) => onProgress(got as FileProgress))) as { type: string; bytes: string };
       return new Blob([fromBase64(bytes)], { type });
     },
   }), [call, station]);

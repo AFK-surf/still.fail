@@ -551,15 +551,47 @@ impl Stations {
         self.call(station, "POST", &path, vec![("content-type".into(), "application/octet-stream".into())], bytes).await
     }
 
-    /// GET /sessions/:key/files?name=(&thumb=1): (content type, bytes).
-    pub async fn file(&self, station: &StationAddr, key: &str, name: &str, thumb: bool) -> Result<(String, Vec<u8>)> {
+    /// GET /sessions/:key/files?name=(&thumb=1): (content type, bytes). `progress` hears the bytes so far and the
+    /// whole size (when the station gives it) as they come: now and then, not for every chunk.
+    pub async fn file(&self, station: &StationAddr, key: &str, name: &str, thumb: bool, progress: impl Fn(u64, Option<u64>)) -> Result<(String, Vec<u8>)> {
         // A station from before thumbnails answers the image itself.
         let path = format!("/sessions/{}/files?name={}{}", encode(key), encode(name), if thumb { "&thumb=1" } else { "" });
-        let (status, kind, bytes) = self.exchange(station, "GET", &path, Vec::new(), Vec::new(), false, |reply| reply.header("content-type").unwrap_or("").to_string()).await?;
-        if status != 200 {
-            return Err(CoreError::new(format!("http_{status}"), "读不到文件").with_status(status));
+        let (mut span, waiting, reply) = self.send(station, "GET", &path, Vec::new(), Vec::new(), false);
+        let result = async {
+            let mut reply = reply.await?;
+            answered(&mut span, &reply);
+            if reply.status != 200 {
+                let status = reply.status;
+                return Err(CoreError::new(format!("http_{status}"), "读不到文件").with_status(status));
+            }
+            let kind = reply.header("content-type").unwrap_or("").to_string();
+            let total = reply.header("content-length").and_then(|n| n.trim().parse::<u64>().ok());
+            // Every hundredth of it, or every 256 KB when its size is not known.
+            let step = total.map_or(256 * 1024, |t| (t / 100).max(64 * 1024));
+            progress(0, total);
+            let (mut bytes, mut told) = (Vec::with_capacity(total.unwrap_or(0).min(64 << 20) as usize), 0u64);
+            while let Some(chunk) = reply.body.next().await {
+                let chunk = chunk?;
+                match &waiting {
+                    Some(waiting) => waiting.received(chunk.len()),
+                    None => self.status.received(None, chunk.len()),
+                }
+                bytes.extend(chunk);
+                let loaded = bytes.len() as u64;
+                if loaded - told >= step {
+                    progress(loaded, total);
+                    told = loaded;
+                }
+            }
+            span.set("http.response.body.size", bytes.len());
+            Ok((kind, bytes))
         }
-        Ok((kind, bytes))
+        .await;
+        if let Err(error) = &result {
+            failed(&mut span, error);
+        }
+        span.end();
+        result
     }
 
     /// A request to a web service on the station's machine (`localhost:port`), passed through as it is: for a page
@@ -2048,8 +2080,21 @@ mod tests {
             assert_eq!(saved["name"], "a b.png");
             assert_eq!(wire.calls.borrow()[0].3, vec![1, 2, 3]);
             wire.answer("GET /admin/api/sessions/k/files?name=x", 404, json!({"error": "没有这个文件"}));
-            let e = stations.file(&remote(), "k", "x", false).await.unwrap_err();
+            let e = stations.file(&remote(), "k", "x", false, |_, _| {}).await.unwrap_err();
             assert_eq!((e.message.as_str(), e.status), ("读不到文件", Some(404)));
+        });
+    }
+
+    #[test]
+    fn tells_how_far_a_file_has_come() {
+        run(async {
+            let (_host, _sink, wire, stations) = setup();
+            let big = "x".repeat(300 * 1024);
+            wire.answer("GET /admin/api/sessions/k/files?name=big", 200, json!(big));
+            let heard = RefCell::new(Vec::new());
+            let (_, bytes) = stations.file(&remote(), "k", "big", false, |loaded, total| heard.borrow_mut().push((loaded, total))).await.unwrap();
+            // At the start, then once past 256 KB (the size not given, it comes in one chunk here).
+            assert_eq!(heard.into_inner(), vec![(0, None), (bytes.len() as u64, None)]);
         });
     }
 

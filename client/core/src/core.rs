@@ -235,8 +235,13 @@ impl Core {
                         span.set("ember.station", station_id(station).to_string());
                     }
                     let inner = self.inner.clone();
+                    // How far a call has got, for a UI that asked to hear it: values under the call's id, before its answer.
+                    let progress: Progress = {
+                        let inner = self.inner.clone();
+                        Rc::new(move |value| inner.host.emit(client, CoreMessage::Value { id, value }))
+                    };
                     self.inner.host.spawn(tracer.instrument(Some(span.context()), async move {
-                        let result = inner.execute(call).await;
+                        let result = inner.execute(call, progress).await;
                         if let Err(error) = &result {
                             span.fail();
                             span.set("error.type", error.code.clone());
@@ -391,7 +396,7 @@ fn gone() -> CoreError {
 }
 
 impl Inner {
-    async fn execute(&self, call: Call) -> Result<Value> {
+    async fn execute(&self, call: Call, progress: Progress) -> Result<Value> {
         match call {
             Call::AuthBegin { redirect_uri, return_to, device_name } => {
                 let url = self.accounts.begin_sign_in(&redirect_uri, &return_to, &device_name).await?;
@@ -468,7 +473,7 @@ impl Inner {
                 }
             }
             Call::ChatRetryIn { station, session, id } => match self.views.pending_thread(&station, &session) {
-                Some(Some(thread)) => Box::pin(self.execute(Call::ChatRetry { station, thread, id })).await,
+                Some(Some(thread)) => Box::pin(self.execute(Call::ChatRetry { station, thread, id }, progress)).await,
                 Some(None) => {
                     self.make_chat(&session);
                     Ok(Value::Null)
@@ -504,8 +509,15 @@ impl Inner {
             Call::StationUpload { station, name, bytes } => {
                 self.stations.upload(&StationAddr::parse(&station)?, &name, bytes).await
             }
-            Call::StationFile { station, key, name, thumb } => {
-                let (kind, bytes) = self.stations.file(&StationAddr::parse(&station)?, &key, &name, thumb).await?;
+            Call::StationFile { station, key, name, thumb, progress: wanted } => {
+                // `{ loaded, total }` in bytes as the file comes (total: null when the station does not say), for a UI
+                // that asked: one that did not would take the first as the answer.
+                let report = |loaded: u64, total: Option<u64>| {
+                    if wanted {
+                        progress(json!({ "loaded": loaded, "total": total }));
+                    }
+                };
+                let (kind, bytes) = self.stations.file(&StationAddr::parse(&station)?, &key, &name, thumb, report).await?;
                 Ok(json!({ "type": kind, "bytes": BASE64.encode(bytes) }))
             }
             Call::StationPreview { station, port, method, path, headers, body } => {
@@ -1056,6 +1068,9 @@ fn answer(id: RequestId, result: Result<Value>) -> CoreMessage {
 }
 
 /// A call with its params checked; binary params are already decoded.
+/// Where a call tells its UI how far it has got.
+type Progress = Rc<dyn Fn(Value)>;
+
 #[derive(Debug, PartialEq)]
 enum Call {
     /// A client could not do something with what the core gave it (a view it cannot read, say): recorded as an error
@@ -1080,7 +1095,7 @@ enum Call {
     HistoryOlder { station: String, key: String },
     ChatRead { station: String, thread: u64, seq: u64 },
     StationUpload { station: String, name: String, bytes: Vec<u8> },
-    StationFile { station: String, key: String, name: String, thumb: bool },
+    StationFile { station: String, key: String, name: String, thumb: bool, progress: bool },
     StationPreview { station: String, port: u16, method: String, path: String, headers: Vec<(String, String)>, body: Vec<u8> },
     Migrate { accounts: Option<Value>, device: Option<Vec<u8>> },
 }
@@ -1210,6 +1225,9 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         /// An image as a chat shows it: its thumbnail, where the station keeps one.
         #[serde(default)]
         thumb: bool,
+        /// Tell the UI how far it has got as it comes (a big file).
+        #[serde(default)]
+        progress: bool,
     }
     #[derive(Deserialize)]
     struct Preview {
@@ -1307,7 +1325,7 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         }
         "station.file" => {
             let p: File = read(params)?;
-            Call::StationFile { station: p.station, key: p.key, name: p.name, thumb: p.thumb }
+            Call::StationFile { station: p.station, key: p.key, name: p.name, thumb: p.thumb, progress: p.progress }
         }
         "station.preview" => {
             let p: Preview = read(params)?;
@@ -1412,11 +1430,15 @@ mod tests {
         );
         assert_eq!(
             parse_call("station.file", json!({"station": "w/s", "key": "k", "name": "a.png"})).unwrap(),
-            Call::StationFile { station: "w/s".into(), key: "k".into(), name: "a.png".into(), thumb: false }
+            Call::StationFile { station: "w/s".into(), key: "k".into(), name: "a.png".into(), thumb: false, progress: false }
         );
         assert_eq!(
             parse_call("station.file", json!({"station": "w/s", "key": "k", "name": "a.png", "thumb": true})).unwrap(),
-            Call::StationFile { station: "w/s".into(), key: "k".into(), name: "a.png".into(), thumb: true }
+            Call::StationFile { station: "w/s".into(), key: "k".into(), name: "a.png".into(), thumb: true, progress: false }
+        );
+        assert_eq!(
+            parse_call("station.file", json!({"station": "w/s", "key": "k", "name": "a.png", "progress": true})).unwrap(),
+            Call::StationFile { station: "w/s".into(), key: "k".into(), name: "a.png".into(), thumb: false, progress: true }
         );
         assert_eq!(
             parse_call("chat.send", json!({"station": "w/s", "thread": 7, "text": "hi"})).unwrap(),
