@@ -61,3 +61,7 @@ need to reach (a plain background job is enough).
   itself). If it keeps crashing, the station restarts it with growing pauses and tells you each time: read `job_log`,
   fix, restart.
 - Stop services nobody needs any more with `job_stop`.
+- How people see it: in a frame beside the chat, on an origin of its own, with requests relayed through the station
+  (each answer passed on whole). So the service must work at its own root paths (`/`, not under a prefix), and
+  WebSockets (a dev server's live reload) and streamed answers (server-sent events, long polls) do not get through:
+  turn hot reload off, and expect a page that relies on a live stream to show only what it reads.
