@@ -582,6 +582,9 @@ export function Files({ owner, files, look }: { owner: (file: Attachment) => str
   return <div className={look.files}>{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} look={look} />)}</div>;
 }
 
+/** Images already brushed in on this page (session key and path): shown again, they just show. */
+const revealed = new Set<string>();
+
 /** Images and video stills load near the screen; other files are a card. Either opens in a preview. */
 function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file: Attachment; look: FileLook }) {
   const image = isImage(file.name);
@@ -591,6 +594,14 @@ function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file:
   const near = useNear(box, image || video);
   const url = useFileUrl(sessionKey ?? "", file, (image || video) && sessionKey !== null && near, !video);
   const [open, setOpen] = useState(false);
+  // An image seen before, or that comes at once, just shows; one that takes a while is brushed in from the top.
+  const born = useRef(performance.now());
+  const [loaded, setLoaded] = useState<"instant" | "reveal" | null>(null);
+  const shown = () => {
+    const key = `${sessionKey}\n${file.path}`;
+    setLoaded(revealed.has(key) || performance.now() - born.current < 150 ? "instant" : "reveal");
+    revealed.add(key);
+  };
   const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
   if (video && sessionKey !== null) {
     return (
@@ -610,8 +621,9 @@ function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file:
     return (
       <>
         <Tip label={file.path}><button ref={box} type="button" className={look.image} onClick={() => url && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
-          disabled={look.wait === undefined && !url}>
-          {url ? <img src={url} alt={file.name} /> : look.wait !== undefined && <span className={look.wait} />}
+          disabled={look.wait === undefined && !url} data-loaded={loaded ?? undefined}>
+          {look.wait !== undefined && loaded !== "instant" && <span className={look.wait} aria-hidden="true"><i /><i /><i /></span>}
+          {url && <img src={url} alt={file.name} onLoad={shown} />}
         </button></Tip>
         {preview}
       </>

@@ -1,4 +1,4 @@
-import { globalStyle, style } from "@vanilla-extract/css";
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { enterUpKeyframes, fadeKeyframes, nowInKeyframes, nowOutKeyframes, popInKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
 import { markdown, msgHead, msgTime } from "./styles/conversation.css.ts";
@@ -212,16 +212,50 @@ export const msgImage = style({
     // Files open in a reading page over the whole window (FilePreview.tsx).
     // Images hold their place: the box is set from the size sent with them.
     "button&": {
-      padding: "0", border: "0", cursor: "zoom-in", display: "block", overflow: "hidden",
+      position: "relative", padding: "0", border: "0", cursor: "zoom-in", display: "block", overflow: "hidden",
       borderRadius: `calc(10px * ${vars.cornerScale})`, background: vars.neutralBg, cornerShape: vars.cornerShape,
     },
   },
 });
+/**
+ * What an image shows until it loads: a few blurred warm blots drifting on the grey. When the image comes it is brushed
+ * in from the top, blurred to sharp, and the blots fade out behind it.
+ */
 export const msgImageWait = style({
-  display: "block", width: "200px", height: "140px", background: vars.neutralBg,
+  position: "absolute", inset: "0", overflow: "hidden", background: vars.neutralBg, pointerEvents: "none",
+  transition: `opacity 300ms ${vars.easeOut} 800ms`,
   selectors: {
-    [`button${msgImage} &`]: { width: "100%", height: "100%" },
+    [`${msgImage}[data-loaded] &`]: { opacity: "0" },
   },
+});
+const blotDrift = [
+  keyframes({ to: { transform: "translate(35%, 25%) scale(1.15)" } }),
+  keyframes({ to: { transform: "translate(-30%, 20%) scale(.9)" } }),
+  keyframes({ to: { transform: "translate(20%, -30%) scale(1.1)" } }),
+];
+const blots = [
+  { color: "light-dark(oklch(80% .12 45), oklch(45% .1 42))", place: { left: "-15%", top: "-20%" }, time: "6s" },
+  { color: "light-dark(oklch(85% .09 75), oklch(42% .07 70))", place: { right: "-20%", top: "10%" }, time: "7s" },
+  { color: "light-dark(oklch(78% .08 20), oklch(40% .08 20))", place: { left: "15%", bottom: "-35%" }, time: "8s" },
+];
+globalStyle(`${msgImageWait} i`, {
+  position: "absolute", width: "70%", aspectRatio: "1", borderRadius: "50%", filter: "blur(28px)", opacity: ".75",
+});
+blots.forEach((b, i) => {
+  globalStyle(`${msgImageWait} i:nth-child(${i + 1})`, {
+    ...b.place, background: b.color, animation: `${blotDrift[i]} ${b.time} ease-in-out infinite alternate`,
+    "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
+  });
+});
+const msgImageRevealKeyframes = keyframes({
+  from: { maskPosition: "0 100%", filter: "blur(14px)", transform: "scale(1.04)" },
+  to: { maskPosition: "0 0", filter: "blur(0)", transform: "none" },
+});
+globalStyle(`button${msgImage} img`, { position: "relative" });
+globalStyle(`button${msgImage}:not([data-loaded]) img`, { visibility: "hidden" });
+globalStyle(`button${msgImage}[data-loaded="reveal"] img`, {
+  maskImage: "linear-gradient(to bottom, #000 40%, transparent 60%)", maskSize: "100% 250%",
+  animation: `${msgImageRevealKeyframes} 1100ms ${vars.easeOut} both`,
 });
 /** Quoting: a small button at the selection, then an editor for the comment. */
 /** Quoting, part of the composer rather than floating around it. */
