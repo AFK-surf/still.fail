@@ -1225,6 +1225,28 @@ pub struct Job {
     pub started_at: i64,
     #[typeshare(serialized_as = "Option<I54>")]
     pub ended_at: Option<i64>,
+    /// What it runs (sh -c).
+    #[serde(default)]
+    pub command: String,
+    /// How often a service was started again after it ended.
+    #[serde(default)]
+    #[typeshare(serialized_as = "I54")]
+    pub restarts: i64,
+    /// What it said lately (`ember-job notify`), newest first: how people see what a long-running job is up to.
+    #[serde(default)]
+    pub notices: Vec<JobNotice>,
+    /// When its output last grew; absent when it has none.
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub output_at: Option<i64>,
+}
+
+/// Something a job said, and when.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct JobNotice {
+    #[typeshare(serialized_as = "I54")]
+    pub at: i64,
+    pub text: String,
 }
 
 /// A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it.

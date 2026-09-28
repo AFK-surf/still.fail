@@ -25,6 +25,8 @@ const MAX_RUNNING: usize = 20;
 /// How much of a log job_log gives at most, and how many lines by default.
 const LOG_BYTES: u64 = 64 * 1024;
 const LOG_LINES: usize = 50;
+/// How many of a job's notices the pages get with it.
+const NOTICES_SHOWN: usize = 20;
 /// A service that ran this long before it ended starts again at once; one that keeps ending waits longer each time.
 const STEADY: Duration = Duration::from_secs(60);
 const MAX_PAUSE: Duration = Duration::from_secs(60);
@@ -71,6 +73,23 @@ fn random_hex(n: usize) -> String {
     let mut b = vec![0u8; n];
     let _ = getrandom::fill(&mut b);
     hex::encode(b)
+}
+
+/// A job as the pages show it: its record, what it said lately (newest first) and when its output last grew.
+pub fn shown(store: &Store, job: &JobRow) -> Value {
+    let mut v = serde_json::to_value(job).unwrap_or(Value::Null);
+    if let Some(o) = v.as_object_mut() {
+        o.insert("notices".into(), json!(store.job_notices(&job.id, NOTICES_SHOWN).unwrap_or_default()));
+        o.insert("outputAt".into(), json!(output_at(Path::new(&job.log))));
+    }
+    v
+}
+
+/// When a log last grew (ms), if it has anything in it.
+pub fn output_at(path: &Path) -> Option<i64> {
+    let meta = std::fs::metadata(path).ok().filter(|m| m.len() > 0)?;
+    let at = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
+    Some(at.as_millis() as i64)
 }
 
 /// The last `lines` lines of a log, from at most its last LOG_BYTES.
@@ -326,6 +345,7 @@ impl Jobs {
         if text.is_empty() {
             bail!("nothing to say");
         }
+        self.store.add_job_notice(&job.id, &text)?;
         self.tell(&job, format!("{} says: {text}", Self::named(&job)));
         Ok(())
     }
