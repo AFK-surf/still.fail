@@ -29,6 +29,7 @@ use crate::config::{Config, Connect, Profile, efforts, profiles_for, runtime_nam
 use crate::image_size::image_size;
 use crate::instructions::{format_history, parse_thread_address, thread_address};
 use crate::live::LiveHub;
+use crate::machine_sessions::{MachineRoots, MachineSession};
 use crate::mcp::{Run, Tool};
 use crate::pool::{PoolSignals, ProfileHealth, pick_profile, serves, usable};
 use crate::runtime::AgentDriver;
@@ -38,6 +39,9 @@ use crate::store::{
     slack_surface, write_compressed,
 };
 use crate::transcript::{TimelineEntry, iso, transcript_path};
+
+/// How many of a session's earlier messages a chat going on with it shows (Hub::continue_machine_session).
+const CARRIED: usize = 200;
 
 /// A multi-session connect's session for one thread.
 pub fn session_key(connect: &str, channel: &str, thread_ts: &str) -> String {
@@ -771,12 +775,84 @@ impl Hub {
             model: model.clone().or_else(|| profile.model.clone()),
             effort,
             workspace: workspace.to_string_lossy().into_owned(),
+            cwd: None,
+            runtime_session_id: None,
             token: new_token(),
             created_at: now,
             last_active_at: now,
         })?;
         info!(session = key, connect = INTERNAL_CONNECT, runtime, profile = profile.id, model = ?model, "session created");
         let thread = self.open_chat(&key, &options.created_by, title.as_deref())?;
+        Ok((key, thread))
+    }
+
+    /// Goes on in a chat with a session the machine's own Claude Code or Codex kept (run in a terminal). Its transcript
+    /// is copied into the shared transcripts (the original is left as it was, and can go on in the terminal on its own);
+    /// the new session resumes it, running in the directory it ran in; and what was said in it is written into the chat
+    /// for people to read (its latest CARRIED messages; the agent has all of it in its transcript). A session already
+    /// going on with it is that one's chat, brought back if archived.
+    pub fn continue_machine_session(&self, roots: &MachineRoots, found: &MachineSession, created_by: &str) -> Result<(String, ThreadRow)> {
+        let runtime = crate::config::runtime_name(found.runtime);
+        if let Some(row) = self.store.list_sessions()?.into_iter().find(|r| r.runtime == runtime && r.runtime_session_id.as_deref() == Some(found.id.as_str())) {
+            if let Some(thread) = self.store.home_chat(&row.key)? {
+                if row.archived_at.is_some() {
+                    self.archive(&row.key, false)?;
+                }
+                return Ok((row.key, thread));
+            }
+        }
+        if !Path::new(&found.cwd).is_dir() {
+            bail!("它原来的目录 {} 已经不在了", found.cwd);
+        }
+        let config = self.config();
+        let profiles: Vec<&Profile> = config.profiles.iter().filter(|p| p.runtimes.contains(&found.runtime)).collect();
+        if profiles.is_empty() {
+            bail!("没有能跑 {} 的 Profile", if found.runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" });
+        }
+        // The model it ran, where a profile has it enabled; else the one picked runs its own.
+        let kept = found.model.clone().filter(|m| profiles.iter().any(|p| p.models.contains(m)));
+        let profile = self.pick(&profiles, kept.as_deref(), false)?;
+        let model = kept.or_else(|| profile.model.clone()).or_else(|| profile.models.first().cloned());
+        crate::machine_sessions::copy_transcript(roots, found, &config.data_dir.join("transcripts").join(runtime))?;
+        let key = format!("{INTERNAL_CONNECT}:c-{}", hex::encode(random_bytes::<5>()));
+        let workspace = config.data_dir.join("sessions").join(INTERNAL_CONNECT).join(&key[INTERNAL_CONNECT.len() + 1..]).join("workspace");
+        std::fs::create_dir_all(&workspace)?;
+        std::fs::create_dir_all(config.data_dir.join("repos"))?;
+        let now = now_ms();
+        let title: Option<String> = found.title.clone().or_else(|| found.first.clone()).map(|t| t.chars().take(80).collect());
+        self.store.insert_session(&NewSession {
+            key: key.clone(),
+            connect: INTERNAL_CONNECT.into(),
+            scope: Some(SessionScope::All),
+            title: title.clone(),
+            created_by: Some(created_by.into()),
+            runtime: runtime.into(),
+            profile: profile.id.clone(),
+            profile_pinned: false,
+            model,
+            effort: None,
+            workspace: workspace.to_string_lossy().into_owned(),
+            cwd: Some(found.cwd.clone()),
+            runtime_session_id: Some(found.id.clone()),
+            token: new_token(),
+            created_at: now,
+            last_active_at: now,
+        })?;
+        info!(session = key, runtime, profile = profile.id, from = found.id, cwd = found.cwd, "session continued from the machine's own");
+        let thread = self.open_chat(&key, created_by, title.as_deref())?;
+        let said = crate::machine_sessions::conversation(found.runtime, &found.path);
+        let left = said.len().saturating_sub(CARRIED);
+        let name = if found.runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" };
+        let earlier = if left > 0 { format!("，更早的 {left} 条没有列出") } else { String::new() };
+        let note = format!("接着本机 {name} 在 {} 的会话（{}）。下面是它之前的对话{earlier}；从这里发的消息会在那个目录里接着这个会话。", found.cwd, found.id);
+        let first_at = said.get(left).and_then(|s| s.at);
+        self.store.insert_message(NewMessage { at: first_at, ..NewMessage::new(thread.id, &next_ts(), AuthorKind::Ember, "ember", &note) })?;
+        for s in &said[left..] {
+            let (kind, author) = if s.person { (AuthorKind::Person, created_by) } else { (AuthorKind::Agent, key.as_str()) };
+            self.store.insert_message(NewMessage { at: s.at, ..NewMessage::new(thread.id, &next_ts(), kind, author, &s.text) })?;
+        }
+        // Whoever brought it here has read it already.
+        self.store.set_read(created_by, thread.id, self.store.last_entry(thread.id)?)?;
         Ok((key, thread))
     }
 
@@ -1187,6 +1263,8 @@ impl Hub {
             model: connect.bind.model.clone(),
             effort: connect.bind.effort.clone(),
             workspace: workspace.to_string_lossy().into_owned(),
+            cwd: None,
+            runtime_session_id: None,
             token: new_token(),
             created_at: now,
             last_active_at: now,

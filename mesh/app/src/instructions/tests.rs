@@ -26,8 +26,15 @@ fn pending(m: MessageRow, surface: &str, channel: &str, thread_ts: &str) -> Pend
 }
 
 #[test]
+fn a_session_continued_from_a_terminal_is_told_its_project_directory_before_its_workspace() {
+    let text = session_instructions("/w/s", Some("/Users/me/app"), "/d/repos", "/d/agent/MEMORY.md");
+    assert!(text.contains("Where you work:\n- Project directory: /Users/me/app. This session began outside ember"));
+    assert!(text.contains("scratch files only.\n- Session workspace: /w/s."));
+}
+
+#[test]
 fn the_texts_are_the_ts_stations_word_for_word() {
-    assert_eq!(session_instructions("/w/s", "/d/repos", "/d/agent/MEMORY.md"), include_str!("session.txt"));
+    assert_eq!(session_instructions("/w/s", None, "/d/repos", "/d/agent/MEMORY.md"), include_str!("session.txt"));
     let names = HashMap::from([("U1".to_string(), "Ada".to_string()), ("gpt-key".to_string(), "GPT (<@UGPT>)".to_string())]);
     let selves = HashMap::from([("cl".to_string(), "ember (<@UBOT>)".to_string())]);
     let inbound = format_inbound(

@@ -32,6 +32,7 @@ use crate::connections::Connections;
 use crate::hub::{Hub, NewChat, SessionChange};
 use crate::login::LoginManager;
 use crate::machine_logins::MachineLogins;
+use crate::machine_sessions::MachineRoots;
 use crate::profiles::{ProfileCheck, ProfileQuota};
 use crate::settings::Settings;
 use crate::store::Store;
@@ -446,6 +447,42 @@ impl AdminApi {
                     created_by: viewer.id(),
                 };
                 let (key, thread) = self.deps.hub.new_session(chat).map_err(|e| http_error(400, e.to_string()))?;
+                return ok(json!({ "key": key, "thread": self.thread(thread.id, viewer)? }));
+            }
+            // Sessions this machine's own Claude Code and Codex kept (in a terminal), to go on with one in a chat.
+            ("GET", "/machine-sessions") => {
+                let roots = MachineRoots::of(&crate::machine_logins::process_env());
+                let mut found = tokio::task::spawn_blocking(move || crate::machine_sessions::list(&roots, 100)).await?;
+                let going: HashMap<(String, String), String> = self
+                    .deps
+                    .store
+                    .list_sessions()?
+                    .into_iter()
+                    .filter_map(|r| Some(((r.runtime.clone(), r.runtime_session_id.clone()?), r.key)))
+                    .collect();
+                for s in &mut found {
+                    s.session = going.get(&(crate::config::runtime_name(s.runtime).to_string(), s.id.clone())).cloned();
+                }
+                return ok(json!({ "sessions": found }));
+            }
+            ("POST", "/machine-sessions") => {
+                let input = read_json(body).await?;
+                let runtime = match input.text("runtime").as_str() {
+                    "claude" => ember_shapes::RuntimeKind::Claude,
+                    "codex" => ember_shapes::RuntimeKind::Codex,
+                    _ => return Err(http_error(400, "runtime 必须是 claude 或 codex")),
+                };
+                let id = input.text("id");
+                let roots = MachineRoots::of(&crate::machine_logins::process_env());
+                let found = {
+                    let (roots, id) = (roots.clone(), id.clone());
+                    tokio::task::spawn_blocking(move || crate::machine_sessions::find(&roots, runtime, &id)).await?
+                };
+                let found = found.ok_or_else(|| http_error(404, format!("本机没有这个会话：{id}")))?;
+                // A long transcript takes a moment to copy and read.
+                let (hub, by) = (self.deps.hub.clone(), viewer.id());
+                let (key, thread) = tokio::task::spawn_blocking(move || hub.continue_machine_session(&roots, &found, &by)).await?.map_err(|e| http_error(400, e.to_string()))?;
+                info!(session = key, from = id, by = viewer.id(), "machine session continued from the admin page");
                 return ok(json!({ "key": key, "thread": self.thread(thread.id, viewer)? }));
             }
             ("GET", "/chats") => return ok(Value::Array(self.chats(viewer, asked.param("archived") == Some("1"))?)),

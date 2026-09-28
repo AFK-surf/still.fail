@@ -79,6 +79,10 @@ pub struct SessionRow {
     pub effort: Option<String>,
     pub runtime_session_id: Option<String>,
     pub workspace: String,
+    /// Where its runtime runs when that is not the workspace: the project directory of a session begun outside ember
+    /// and continued here (Hub::continue_machine_session). The workspace stays the station's, for uploads and jobs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
     #[serde(skip)]
     pub token: String,
     /// A turn was running when this was last written; true after a crash means the turn was cut off.
@@ -112,6 +116,8 @@ pub struct NewSession {
     pub model: Option<String>,
     pub effort: Option<String>,
     pub workspace: String,
+    pub cwd: Option<String>,
+    pub runtime_session_id: Option<String>,
     pub token: String,
     pub created_at: i64,
     pub last_active_at: i64,
@@ -464,7 +470,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_active_at INTEGER NOT NULL,
   archived_at INTEGER,
   archived_by TEXT,
-  shown_at INTEGER
+  shown_at INTEGER,
+  cwd TEXT
 );
 CREATE TABLE IF NOT EXISTS threads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -611,6 +618,7 @@ fn to_session(r: &Row) -> rusqlite::Result<SessionRow> {
         effort: r.get("effort")?,
         runtime_session_id: r.get("runtime_session_id")?,
         workspace: r.get("workspace")?,
+        cwd: r.get("cwd")?,
         token: r.get("token")?,
         running: r.get::<_, i64>("running")? == 1,
         created_at: r.get("created_at")?,
@@ -645,7 +653,7 @@ fn add_archive_columns(db: &Connection) -> Result<()> {
         let mut stmt = db.prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?"))?;
         Ok(stmt.exists([column])?)
     };
-    for (column, kind) in [("archived_by", "TEXT"), ("shown_at", "INTEGER")] {
+    for (column, kind) in [("archived_by", "TEXT"), ("shown_at", "INTEGER"), ("cwd", "TEXT")] {
         if !has("sessions", column)? {
             db.execute_batch(&format!("ALTER TABLE sessions ADD COLUMN {column} {kind}"))?;
         }
@@ -872,11 +880,11 @@ impl Store {
     pub fn insert_session(&self, s: &NewSession) -> Result<()> {
         self.with(|i, changes| {
             i.db.execute(
-                "INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, token, created_at, last_active_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     s.key, s.connect, s.scope.unwrap_or(SessionScope::Thread).as_str(), s.title, s.created_by, s.runtime, s.profile,
-                    s.profile_pinned as i64, s.model, s.effort, s.workspace, s.token, s.created_at, s.last_active_at
+                    s.profile_pinned as i64, s.model, s.effort, s.workspace, s.cwd, s.runtime_session_id, s.token, s.created_at, s.last_active_at
                 ],
             )?;
             changes.push(StoreChange::Session(s.key.clone()));
@@ -1477,6 +1485,11 @@ impl Store {
     }
 
     // ── turns ─────────────────────────────────────────────────────────────
+
+    /// Whether the session has had a turn.
+    pub fn has_turns(&self, session: &str) -> Result<bool> {
+        self.with(|i, _| Ok(i.db.query_row("SELECT EXISTS (SELECT 1 FROM turns WHERE session_key = ?)", [session], |r| r.get::<_, bool>(0))?))
+    }
 
     pub fn start_turn(&self, id: &str, session: &str, kind: &str) -> Result<()> {
         self.with(|i, changes| {

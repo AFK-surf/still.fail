@@ -26,6 +26,7 @@ import * as jobsCss from "./styles/jobs.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
+import { MachineSessions } from "./MachineSessions.tsx";
 
 interface Choice { runtime: RuntimeKind | ""; model: string; effort: string; profile?: string }
 const LAST = "ember.newChat";
@@ -248,6 +249,10 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         {composer}
         {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
         <p className={css.newChatStatus}>{making ? `正在 ${station.name} 上创建会话…` : !view.overview ? `正在读取 ${station.name} 的 Profile…` : ""}</p>
+        <MachineSessions onContinued={(key) => {
+          keepTabs(`${station.address}:${key}`, { tabs: [], active: null });
+          onCreated(station.address, key);
+        }} />
       </div>
     </div>
   );

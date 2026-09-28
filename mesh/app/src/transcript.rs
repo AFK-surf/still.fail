@@ -173,7 +173,7 @@ fn claude_timeline(records: &[Value], state: &mut ReadState) -> Vec<TimelineEntr
 }
 
 /// Codex prepends context it generated itself as user messages; they are not what anyone said.
-fn injected(text: &str) -> bool {
+pub(crate) fn injected(text: &str) -> bool {
     let t = text.trim_start();
     ["environment_context", "user_instructions", "permissions", "skills_instructions", "collaboration_mode"].iter().any(|tag| {
         t.strip_prefix('<').and_then(|rest| rest.strip_prefix(tag)).is_some_and(|after| after.is_empty() || !after.chars().next().unwrap().is_alphanumeric() && after.chars().next() != Some('_'))

@@ -179,6 +179,21 @@ export function useStationCall(station: string): StationCall {
   }), [call, station]);
 }
 
+/** A session the machine's own Claude Code or Codex kept, run in a terminal. */
+export interface MachineSession {
+  runtime: RuntimeKind;
+  id: string;
+  /** The directory it ran in. */
+  cwd: string;
+  title: string | null;
+  /** What was asked first. */
+  first: string | null;
+  updatedAt: number;
+  size: number;
+  /** The station's session already going on with it. */
+  session: string | null;
+}
+
 /** The admin API of one station, by what each call does. */
 
 export function stationApi(t: StationCall) {
@@ -217,6 +232,10 @@ export function stationApi(t: StationCall) {
     warm: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/warm`),
     /** A new chat: its session and its thread, made with its first message. */
     newChat: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => request<{ key: string; thread: ChatThread }>("POST", "/sessions", input),
+    /** Sessions the machine's own Claude Code and Codex kept (in a terminal); a station from before them answers 404. */
+    machineSessions: () => request<{ sessions: MachineSession[] }>("GET", "/machine-sessions"),
+    /** A chat going on with one of them (the one already going on with it, if any). */
+    continueMachineSession: (runtime: RuntimeKind, id: string) => request<{ key: string; thread: ChatThread }>("POST", "/machine-sessions", { runtime, id }),
     file: t.file,
     uploadFile: t.upload,
     startLogin: (profile: string) => request<{ job: LoginJob }>("POST", `/profiles/${at(profile)}/login`),

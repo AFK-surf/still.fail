@@ -6,7 +6,14 @@ use std::collections::{HashMap, HashSet};
 
 use crate::store::{AuthorKind, EMBER_SURFACE, MessageRow, PendingMessage};
 
-pub fn session_instructions(workspace: &str, repos_dir: &str, memory_path: &str) -> String {
+/// `project`: the directory the runtime runs in, for a session begun outside ember (in a terminal) and continued here.
+pub fn session_instructions(workspace: &str, project: Option<&str>, repos_dir: &str, memory_path: &str) -> String {
+    let project = match project {
+        Some(dir) => format!(
+            "- Project directory: {dir}. This session began outside ember (in a terminal on this machine) and goes on here: you run in that directory and keep working on it as before. The session workspace below is for scratch files only.\n"
+        ),
+        None => String::new(),
+    };
     format!(
         r#"Messages reach you from chat conversations (Slack threads, and chats on ember's web page); you work on this machine and answer in those conversations.
 
@@ -37,7 +44,7 @@ How your text looks where it goes:
 - ember chats (EMBER/…) show standard Markdown: headings, tables and nested lists work there.
 
 Where you work:
-- Session workspace: {workspace}. Scratch files, clones and git worktrees belong here.
+{project}- Session workspace: {workspace}. Scratch files, clones and git worktrees belong here.
 - Shared repository cache: {repos_dir}. Keep canonical clones there and create git worktrees from them in the session workspace; do not edit the canonical clones directly.
 
 Memory and skills:
@@ -171,6 +178,13 @@ pub fn wait_over(seconds: u64) -> String {
 }
 
 pub const RESUME_AFTER_RESTART: &str = r#"ember restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know."#;
+
+/// The first turn in ember of a session begun in a terminal: from now on it works as ember's sessions do.
+pub fn continued_here(instructions: &str) -> String {
+    format!(
+        "This session began in a terminal and now goes on in ember: what people say comes as messages below, and nothing you write as ordinary output reaches them any more; answer with the ember tools. How ember works, from now on:\n\n<ember-instructions>\n{instructions}\n</ember-instructions>"
+    )
+}
 
 pub const RESUME_LOST: &str = r#"Your earlier conversation could not be restored. Read the relevant threads with chat_history to catch up before answering."#;
 

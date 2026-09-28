@@ -112,7 +112,11 @@ impl AgentDriver for ClaudeDriver {
         if let Some(effort) = &options.effort {
             args.extend(["--effort".into(), effort.clone()]);
         }
-        args.extend(["--append-system-prompt".into(), options.instructions.clone(), "--mcp-config".into(), mcp_config.to_string()]);
+        // None for a session continued from a terminal: its system prompt stays as it began, so its cache holds.
+        if !options.instructions.is_empty() {
+            args.extend(["--append-system-prompt".into(), options.instructions.clone()]);
+        }
+        args.extend(["--mcp-config".into(), mcp_config.to_string()]);
 
         let mut env: BTreeMap<String, String> = clean_env(&SCRUBBED);
         env.extend(expand_route(&options.profile.env(RuntimeKind::Claude), &options.route));

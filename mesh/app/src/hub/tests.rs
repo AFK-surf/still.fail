@@ -1176,3 +1176,68 @@ async fn in_a_chat_on_the_stations_page_with_several_agents_what_one_posts_reach
     let heard = r.codex.last().prompts().pop().unwrap();
     assert!(matches(&heard, &["from=\"Claude Code\" bot ts=\"", "\">\n我来写接口"]), "{heard}");
 }
+
+#[tokio::test]
+async fn a_session_the_machine_kept_goes_on_in_a_chat_run_in_its_own_directory_with_what_was_said_in_it() {
+    let r = setup();
+    let machine = tempfile::tempdir().unwrap();
+    let project = machine.path().join("app");
+    std::fs::create_dir_all(&project).unwrap();
+    std::fs::write(project.join("main.rs"), "fn main() {}").unwrap();
+    let roots = crate::machine_sessions::tests::machine(machine.path(), &project);
+    let found = crate::machine_sessions::find(&roots, RuntimeKind::Claude, "11111111-aaaa-bbbb-cccc-000000000001").unwrap();
+    let (key, thread) = r.hub.continue_machine_session(&roots, &found, "local").unwrap();
+    let row = r.session(&key);
+    assert_eq!(row.cwd.as_deref(), Some(project.to_str().unwrap()));
+    assert_eq!(row.runtime_session_id.as_deref(), Some(found.id.as_str()));
+    assert!(row.workspace.ends_with("workspace") && !row.workspace.starts_with(project.to_str().unwrap()));
+    assert_eq!(r.store.get_thread(thread.id).unwrap().unwrap().title.as_deref(), Some("Fix the build"));
+    let copy = r.config.lock().unwrap().data_dir.join("transcripts/claude").join(found.path.strip_prefix(&roots.claude).unwrap());
+    assert_eq!(std::fs::read(&copy).unwrap(), std::fs::read(&found.path).unwrap());
+    let said = r.said(thread.id);
+    let shown: Vec<(AuthorKind, &str, &str)> = said.iter().map(|m| (m.author_kind, m.author.as_str(), m.text.as_str())).collect();
+    assert!(shown[0].2.starts_with("接着本机 Claude Code 在"), "{:?}", shown[0]);
+    assert_eq!(&shown[1..], &[(AuthorKind::Person, "local", "fix   the\nbuild"), (AuthorKind::Agent, key.as_str(), "Looking.\n\nFixed."), (AuthorKind::Person, "local", "thanks")]);
+    settle().await;
+    assert_eq!(r.claude.count(), 0, "what was said before is not handed to the agent again");
+
+    r.hub.say(thread.id, "local", "and the tests", vec![], vec![]).unwrap();
+    settle().await;
+    let opened = r.claude.last();
+    assert_eq!(opened.options.resume.as_deref(), Some(found.id.as_str()));
+    assert_eq!(opened.options.cwd, project);
+    assert_eq!(opened.options.instructions, "", "its system prompt is left as it began");
+    assert_eq!(opened.prompts().len(), 1);
+    let first = &opened.prompts()[0];
+    assert!(first.starts_with("This session began in a terminal and now goes on in ember"), "{first}");
+    assert!(first.contains("<ember-instructions>") && first.contains("and the tests"));
+    assert!(first.contains(&format!("- Project directory: {}.", project.display())));
+    opened.complete();
+    settle().await;
+    r.hub.say(thread.id, "local", "one more", vec![], vec![]).unwrap();
+    settle().await;
+    let next = r.claude.last().prompts().last().cloned().unwrap();
+    assert!(!next.contains("<ember-instructions>"), "said once: {next}");
+
+    // Going on with it again is the same chat.
+    let again = crate::machine_sessions::find(&roots, RuntimeKind::Claude, &found.id).unwrap();
+    assert_eq!(r.hub.continue_machine_session(&roots, &again, "local").unwrap().0, key);
+
+    // Deleting the chat leaves the project and the machine's transcript alone.
+    r.claude.last().complete();
+    settle().await;
+    r.hub.delete_session(&key).await.unwrap();
+    assert!(project.join("main.rs").exists());
+    assert!(found.path.exists());
+}
+
+#[tokio::test]
+async fn a_session_whose_directory_is_gone_is_not_continued() {
+    let r = setup();
+    let machine = tempfile::tempdir().unwrap();
+    let roots = crate::machine_sessions::tests::machine(machine.path(), &machine.path().join("gone"));
+    let found = crate::machine_sessions::find(&roots, RuntimeKind::Codex, "22222222-aaaa-bbbb-cccc-000000000001").unwrap();
+    let error = r.hub.continue_machine_session(&roots, &found, "local").unwrap_err().to_string();
+    assert!(error.contains("已经不在了"), "{error}");
+    assert!(r.store.list_sessions().unwrap().is_empty());
+}

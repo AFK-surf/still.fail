@@ -16,6 +16,7 @@ pub mod jobs;
 pub mod live;
 pub mod login;
 pub mod machine_logins;
+pub mod machine_sessions;
 pub mod mcp;
 pub mod no_keychain;
 pub mod pool;

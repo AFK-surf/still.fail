@@ -18,7 +18,7 @@ use tracing::{error, info, warn};
 use crate::chat::status::tool_status;
 use crate::chat::{ChatSurface, ThreadRef};
 use crate::config::Profile;
-use crate::instructions::{NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, format_inbound, session_instructions, wait_over};
+use crate::instructions::{NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continued_here, format_inbound, session_instructions, wait_over};
 use crate::live::LiveHub;
 use crate::runtime::{AgentDriver, AgentSession, LiveEvent, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, uuid};
 use crate::store::{AuthorKind, EMBER_SURFACE, NewMessage, PendingMessage, Store, now_ms};
@@ -445,10 +445,22 @@ impl SessionActor {
                 live.event(&self.key, LiveEvent::Phase { phase: LivePhase::Starting });
             }
             let mut agent = self.ensure_agent(deps).await?;
+            // A session begun in a terminal and continued here: its first turn here says so, with how ember works (its
+            // system prompt is left as it began).
+            let continued = match deps.store().get_session(&self.key)? {
+                Some(row) if row.cwd.is_some() && !deps.store().has_turns(&self.key)? => Some(continued_here(
+                    &session_instructions(&row.workspace, row.cwd.as_deref(), &deps.repos_dir().to_string_lossy(), &deps.memory_path().to_string_lossy()),
+                )),
+                _ => None,
+            };
             let prompt = {
                 let mut st = self.st();
                 let lost = std::mem::take(&mut st.resume_lost);
-                if lost { format!("{RESUME_LOST}\n\n{text}") } else { text.to_string() }
+                let text = if lost { format!("{RESUME_LOST}\n\n{text}") } else { text.to_string() };
+                match continued {
+                    Some(preface) => format!("{preface}\n\n{text}"),
+                    None => text,
+                }
             };
             // The runtime may have started a turn on its own (late input became a turn); join it.
             if agent.busy() && agent.steer(&prompt).await {
@@ -502,11 +514,17 @@ impl SessionActor {
         let model = row.model.as_deref().map(|m| profile.spelling(m).unwrap_or(m).to_string());
         let base = OpenOptions {
             profile,
-            cwd: PathBuf::from(&row.workspace),
+            cwd: PathBuf::from(row.cwd.as_deref().unwrap_or(&row.workspace)),
             resume: None,
             model,
             effort: row.effort.clone(),
-            instructions: session_instructions(&row.workspace, &deps.repos_dir().to_string_lossy(), &deps.memory_path().to_string_lossy()),
+            // A session continued from a terminal keeps the system prompt it began with (its cache holds); its first turn
+            // here brings ember's instructions instead (start_turn).
+            instructions: if row.cwd.is_some() {
+                String::new()
+            } else {
+                session_instructions(&row.workspace, None, &deps.repos_dir().to_string_lossy(), &deps.memory_path().to_string_lossy())
+            },
             mcp_token: row.token.clone(),
             mcp_url: deps.mcp_url(),
             route: row.key.clone(),

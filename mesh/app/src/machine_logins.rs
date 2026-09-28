@@ -140,7 +140,7 @@ fn machine_env(env: &Env, drop: &[&str]) -> Env {
 
 const CLAUDE_DROP: [&str; 4] = ["CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"];
 
-fn home_of(env: &Env) -> PathBuf {
+pub(crate) fn home_of(env: &Env) -> PathBuf {
     env.get("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
 }
 
@@ -149,7 +149,7 @@ pub fn claude_credentials_file(env: &Env) -> PathBuf {
     home_of(env).join(".claude").join(".credentials.json")
 }
 
-fn codex_home(env: &Env) -> PathBuf {
+pub(crate) fn codex_home(env: &Env) -> PathBuf {
     env.get("CODEX_HOME").filter(|h| !h.is_empty()).map(PathBuf::from).unwrap_or_else(|| home_of(env).join(".codex"))
 }
 

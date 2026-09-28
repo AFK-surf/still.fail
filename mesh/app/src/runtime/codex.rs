@@ -315,6 +315,10 @@ impl AgentDriver for CodexDriver {
         if let Some(model) = &model {
             common["model"] = json!(model);
         }
+        // None for a thread continued from a terminal: it keeps its own, so its cache holds.
+        if options.instructions.is_empty() {
+            common.as_object_mut().map(|c| c.remove("developerInstructions"));
+        }
         let opened = match &options.resume {
             Some(thread) => {
                 common["threadId"] = json!(thread);
