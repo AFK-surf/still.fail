@@ -1,7 +1,7 @@
 //! What an agent is doing, said in the Slack thread it works for while it works: Slack's own status line under the
 //! thread (assistant.threads.setStatus), updated at most every couple of seconds and cleared when the turn ends. Where
 //! Slack will not show one (the app lacks the scope, the conversation does not take it), an 👀 on the message that
-//! started the work says the same, and goes when it is done. (src/chat/slack-status.ts)
+//! started the work says the same, and goes when it is done.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

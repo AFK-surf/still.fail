@@ -1,4 +1,4 @@
-//! This station's errors, reported to ember's PostHog project (docs/telemetry.md). (src/telemetry.ts) Off unless the
+//! This station's errors, reported to ember's PostHog project (docs/telemetry.md). Off unless the
 //! station's operator turns it on in config.json (`"telemetry": { "errors": true }`). Only errors leave: error-level
 //! log lines, each with its error's message, the station's id and the build. Never a log line's fields, which may hold
 //! what people wrote; paths under home directories lose the home, and quoted text in error messages (a JSON parser's,

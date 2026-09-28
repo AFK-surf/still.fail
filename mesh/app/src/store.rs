@@ -1,5 +1,5 @@
-//! All durable station state, in one SQLite file (the same file and schema as src/store.ts, so the switch keeps the
-//! data). Runtime transcripts stay in the runtimes' own homes; this records what the station needs to route and resume,
+//! All durable station state, in one SQLite file (the same file and schema as the Node station's, so a data directory it
+//! kept opens here as it is). Runtime transcripts stay in the runtimes' own homes; this records what the station needs to route and resume,
 //! and everything said in the threads its sessions take part in.
 //!
 //! A thread is a log of entries that are appended and never changed (docs/station-storage.md): an edit is an entry of

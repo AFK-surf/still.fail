@@ -56,7 +56,7 @@ Google OAuth（`openid email profile`），沿用 zork 的会话实现：access 
 
 连接上用 ALPN `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。
 
-station 端由 `ember-station`（Rust，iroh 1.0.3，mesh/station）负责：它运行整个 station（把 Node 部分作为子进程看护），把 mesh 上来的请求经 Unix socket 转给 Node 部分的管理 API，带上已验证的用户身份；Node 部分据此记录「谁」做了操作、在管理页对话里说了话。
+station 端由 `ember-station`（Rust，iroh 1.0.3，mesh/station）负责：它运行整个 station（mesh/app，同一个进程），把 mesh 上来的请求交给 station 的管理 API，带上已验证的用户身份；station 据此记录「谁」做了操作、在管理页对话里说了话。
 
 ## 网页版
 

@@ -6,9 +6,17 @@
 
 做法：逐块迁移，不做一次性重写。每一步结束时 station 都能完整工作、可以部署。
 
+## 现在的结构
+
+迁移已完成（第 8 步）：`ember-station`（mesh/station）一个进程运行整个 station，station 本身是 ember-app（mesh/app），在同一个进程里。它连着 ember cloud，接受 mesh 连接，在 127.0.0.1 提供本机管理页（端口被占时自动换），agent 的 MCP 端点也在它里面。发布包里只有 `bin/ember`、`dist/admin`（管理页和 posthog.json）、`mesh/target/release/ember-station` 和 `VERSION`（scripts/station-bundle.sh），不带 Node。
+
+和 Node 版的兼容：数据目录照旧（ember.db 同一套表结构和 schema 版本，config.json、登录、agent 的家目录都一样），Node 版留下的 `run/admin.sock` 和数据目录里的 `rust` 文件（当年切到 Rust 的开关）都不再读。旧的启动方式传的 `--node` 照收不误：旧版桌面端、旧的 launchd/systemd 定义启动新的 `ember-station` 也能跑。
+
+下面是迁移时的记录。
+
 ## 迁移期间的结构
 
-现在是 Node 的 station 启动 ember-mesh。第一步把主次倒过来：
+一开始是 Node 的 station 启动 ember-mesh。第一步把主次倒过来：
 
 - **Rust 进程（`ember-station`）是主进程**：由 launchd 启动。它连着 ember cloud，接受 mesh 连接，提供本机管理页，并负责启动、看护 Node 进程。
 - **Node 进程是它的子进程**：只负责还没迁走的部分。它的管理接口不再监听 TCP 端口，改为监听数据目录里的 Unix socket（`run/admin.sock`），只有 Rust 进程会连它。
@@ -43,7 +51,7 @@
 
 7. **Slack 迁到 Rust**：Socket Mode 客户端、消息收发、App 的创建和安装。Rust 没有官方 SDK，这一块要自己写。
 
-8. **去掉 Node。** 安装包里不再带 Node。
+8. **去掉 Node。** 安装包里不再带 Node。（已完成）
 
 ## 每一步的要求
 

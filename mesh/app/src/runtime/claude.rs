@@ -1,4 +1,4 @@
-//! Claude Code driver: one `claude -p` stream-json process per session. (src/runtime/claude.ts)
+//! Claude Code driver: one `claude -p` stream-json process per session.
 //!
 //! Behaviour pinned by spikes (spike/README.md):
 //! - a turn is framed by system/init … result; `result.is_error` decides success, not `subtype` (an auth failure ends

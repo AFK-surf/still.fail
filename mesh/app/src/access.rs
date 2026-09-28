@@ -3,7 +3,7 @@
 //! which cloudflared also delivers from loopback. Cloudflare's edge always adds cf-connecting-ip, and a client cannot
 //! strip it; such requests must carry a valid Cloudflare Access JWT, verified here against the team's signing keys.
 //! Without Access configured, tunneled requests are refused: a missing Access policy must not leave the admin page
-//! open. (src/admin/access.ts)
+//! open.
 
 use std::collections::HashMap;
 use std::sync::Arc;

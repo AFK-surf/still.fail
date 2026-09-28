@@ -1,12 +1,11 @@
 //! ember-station: an ember station, as launchd (or the desktop app) runs it.
 //!
-//! `run` runs the station: its Node part (src/main.ts) as a child, watched and started again when it ends (node.rs);
-//! the admin page on a loopback port for a browser here (local.rs); and, once the station is in a workspace, its way
-//! into ember cloud. It holds a presence socket to ember cloud (connected is online) while the Node part is up — which
-//! also brings what ember cloud revokes — accepts iroh connections from clients that present a member's credential
-//! signed by ember cloud (checked offline: the cloud need not be reachable), and relays each stream's request to the
-//! Node part's admin API, on its Unix socket, with the verified identity attached. `enroll` redeems a one-time token
-//! from a workspace admin, proving this station holds its iroh key.
+//! `run` runs the station: its app (ember-app) in this process; the admin page on a loopback port for a browser here
+//! (local.rs); and, once the station is in a workspace, its way into ember cloud. It holds a presence socket to ember
+//! cloud (connected is online) while the app is up — which also brings what ember cloud revokes — accepts iroh
+//! connections from clients that present a member's credential signed by ember cloud (checked offline: the cloud need
+//! not be reachable), and hands each stream's request to the app's admin API with the verified identity. `enroll`
+//! redeems a one-time token from a workspace admin, proving this station holds its iroh key.
 //!
 //! Wire format on ALPN `ember/admin/1`: the first bidirectional stream carries
 //! credentials (`{"credential": …}`, one JSON line each, answered with one JSON line; a later line
@@ -17,7 +16,6 @@
 
 mod errors;
 mod local;
-mod node;
 mod telemetry;
 
 use std::{
@@ -266,11 +264,11 @@ struct Station {
     telemetry: Arc<Telemetry>,
 }
 
-/// What `run` is given: where the data is, the app with the Node part and its interpreter, and the admin page's port.
+/// What `run` is given: where the data is, the app directory (the admin page's files in dist/admin), and the admin
+/// page's port.
 struct Run {
     data: PathBuf,
     app: PathBuf,
-    node: PathBuf,
     port: u16,
     named: bool,
     /// Ends when the process that started it does (the desktop app).
@@ -279,36 +277,29 @@ struct Run {
 
 async fn run(options: Run) -> Result<()> {
     let data = options.data;
-    let socket = data.join("run").join("admin.sock");
     std::fs::create_dir_all(data.join("run"))?;
-    // One station per data directory: a second would take the first one's socket and port away.
+    // One station per data directory: a second would take the first one's port and runtimes away.
     let _lock = lock(&data.join("run").join("station.lock"))?;
-    let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes).map_err(|e| anyhow!("{e}"))?;
-    let secret = B64.encode(bytes);
     let telemetry = Telemetry::new(traces_on(&data));
     let (ready_tx, ready) = watch::channel(false);
-    let (stop_tx, stopping) = watch::channel(false);
-    // The app in this process (ember-app) while it takes over from the Node part: EMBER_STATION_APP=rust, or a file
-    // named `rust` in the data directory (it survives `ember update`, which writes the service anew; removed to go back).
-    let in_process = std::env::var("EMBER_STATION_APP").as_deref() == Ok("rust") || data.join("rust").exists();
     // Held for as long as this runs: a dropped sender reads as "not answering" to whoever waits on `ready`.
     let ready_tx = Arc::new(ready_tx);
-    let (backend, supervised, app) = if in_process {
-        let app: Arc<std::sync::OnceLock<Arc<ember_app::server::App>>> = Arc::default();
-        let (cell, data, ui, ready_tx) = (app.clone(), data.clone(), options.app.join("dist").join("admin"), ready_tx.clone());
-        let config = std::env::var_os("EMBER_CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
-        // Its errors to ember's error tracking, while the config says so.
-        let (config_path, state_data) = (config.clone(), data.clone());
-        let _ = errors::REPORTS.set(ember_app::telemetry::ErrorReports::new(ember_app::telemetry::ErrorReportsOptions {
-            key: ember_app::telemetry::built_key(&ui),
-            enabled: Arc::new(move || {
-                std::fs::read(&config_path).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).is_some_and(|c| c["telemetry"]["errors"] == true)
-            }),
-            station: Arc::new(move || load_state(&state_data).ok().map(|s| s.station)),
-            home: None,
-        }));
-        let started = tokio::spawn(async move {
+    let backend = local::Backend::default();
+    let ui = options.app.join("dist").join("admin");
+    let config = std::env::var_os("EMBER_CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
+    // Its errors to ember's error tracking, while the config says so.
+    let (config_path, state_data) = (config.clone(), data.clone());
+    let _ = errors::REPORTS.set(ember_app::telemetry::ErrorReports::new(ember_app::telemetry::ErrorReportsOptions {
+        key: ember_app::telemetry::built_key(&ui),
+        enabled: Arc::new(move || {
+            std::fs::read(&config_path).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).is_some_and(|c| c["telemetry"]["errors"] == true)
+        }),
+        station: Arc::new(move || load_state(&state_data).ok().map(|s| s.station)),
+        home: None,
+    }));
+    {
+        let (cell, data, ready_tx) = (backend.0.clone(), data.clone(), ready_tx.clone());
+        tokio::spawn(async move {
             match ember_app::server::App::start(ember_app::server::AppOptions { data, config, ui }).await {
                 Ok(app) => {
                     let _ = cell.set(app);
@@ -320,15 +311,10 @@ async fn run(options: Run) -> Result<()> {
                 }
             }
         });
-        (local::Backend::App(app.clone()), started, Some(app))
-    } else {
-        let launch = node::Launch { node: options.node, app: options.app, data: data.clone(), socket: socket.clone(), secret: secret.clone() };
-        let supervised = tokio::spawn(node::supervise(launch, ready_tx.clone(), telemetry.clone(), stopping));
-        (local::Backend::Node { socket, secret }, supervised, None)
-    };
+    }
     let listener = local::bind(&data, options.port, options.named).await?;
     tokio::spawn(local::serve(listener, backend.clone(), ready.clone()));
-    tokio::spawn(mesh(data.clone(), backend, ready, telemetry));
+    tokio::spawn(mesh(data.clone(), backend.clone(), ready, telemetry));
     // SIGTERM (launchd, the desktop app) or ^C: the runtimes end first. So does, with --with-parent, the parent's end
     // (the desktop app's, killed): orphaned, this would hold the machine's station with no app to stop it. Run
     // otherwise (launchd, nohup), the parent may well end first.
@@ -339,18 +325,12 @@ async fn run(options: Run) -> Result<()> {
         _ = orphaned(), if options.with_parent => info!("parent ended"),
     }
     info!("stopping");
-    stop_tx.send_replace(true);
-    match app.as_ref().and_then(|a| a.get()) {
-        Some(app) => {
-            ready_tx.send_replace(false);
-            app.shutdown().await;
-            if let Some(reports) = errors::REPORTS.get() {
-                reports.shutdown().await;
-            }
-        }
-        None => {
-            let _ = supervised.await;
-        }
+    ready_tx.send_replace(false);
+    if let Some(app) = backend.0.get() {
+        app.shutdown().await;
+    }
+    if let Some(reports) = errors::REPORTS.get() {
+        reports.shutdown().await;
     }
     Ok(())
 }
@@ -502,7 +482,7 @@ async fn presence(station: Arc<Station>, key: SecretKey) {
     let mut backoff = Duration::from_secs(1);
     let mut ready = station.ready.clone();
     loop {
-        // Online only while the station answers: its Node part up.
+        // Online only while the station answers: its app up.
         let up = *ready.borrow();
         if !up {
             let _ = ready.wait_for(|up| *up).await.map(|_| ());
@@ -552,7 +532,7 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
     let mut ready = station.ready.clone();
     loop {
         tokio::select! {
-            // Its Node part went down: offline until it is back.
+            // Its app is not up: offline until it is.
             _ = async { let _ = ready.wait_for(|up| !*up).await; } => {
                 info!("station not answering; going offline at ember cloud");
                 let _ = socket.close(None).await;
@@ -863,7 +843,7 @@ async fn answer(
 }
 
 fn usage() -> ! {
-    eprintln!("usage:\n  ember-station run --app DIR [--node PATH] [--port N] [--data DIR] [--with-parent]\n  ember-station enroll <ember-cloud-origin> <token> [--data DIR]\n  ember-station id [--data DIR]\n\nrun: --app holds src/main.ts; --port the admin page's (default 4760, a free one when it is taken); --with-parent: end when the parent does.");
+    eprintln!("usage:\n  ember-station run --app DIR [--port N] [--data DIR] [--with-parent]\n  ember-station enroll <ember-cloud-origin> <token> [--data DIR]\n  ember-station id [--data DIR]\n\nrun: --app holds the admin page (dist/admin); --port the admin page's (default 4760, a free one when it is taken); --with-parent: end when the parent does.");
     std::process::exit(2);
 }
 
@@ -887,7 +867,8 @@ async fn main() -> Result<()> {
     };
     let data = PathBuf::from(take("--data").unwrap_or_else(|| format!("{}/.ember", std::env::var("HOME").unwrap_or_default())));
     let app = take("--app");
-    let node = take("--node").unwrap_or_else(|| "node".into());
+    // What the Node part ran on, from launchers written before it went (older desktop apps): taken and let be.
+    let _ = take("--node");
     let port = take("--port");
     let with_parent = args.iter().position(|a| a == "--with-parent").map(|i| args.remove(i)).is_some();
     match args.first().map(String::as_str) {
@@ -896,7 +877,7 @@ async fn main() -> Result<()> {
             let Some(app) = app else { usage() };
             let named = port.is_some();
             let port = port.map(|p| p.parse::<u16>()).transpose().context("--port")?.unwrap_or(4760);
-            let ran = run(Run { data, app: PathBuf::from(app), node: PathBuf::from(node), port, named, with_parent }).await;
+            let ran = run(Run { data, app: PathBuf::from(app), port, named, with_parent }).await;
             if let Some(held) = ran.as_ref().err().and_then(|e| e.downcast_ref::<Held>()) {
                 eprintln!("{held}");
                 std::process::exit(HELD);

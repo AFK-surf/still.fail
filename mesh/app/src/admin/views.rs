@@ -1,4 +1,4 @@
-//! What the pages read: the overview, sessions, threads, the sidebar and thread entries. (src/admin/api.ts, reads)
+//! What the pages read: the overview, sessions, threads, the sidebar and thread entries.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 

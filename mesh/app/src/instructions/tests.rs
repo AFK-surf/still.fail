@@ -1,6 +1,6 @@
-//! test/instructions.test.ts, ported; and the texts checked word for word (session.txt, inbound.txt, history.txt: made
-//! by src/instructions.ts from the same inputs, then kept here as the Rust station's own grew: session.txt's line on
-//! messages via="ember", from background jobs).
+//! The Node station's instructions tests, ported; and the texts checked word for word (session.txt, inbound.txt,
+//! history.txt: made by the Node station from the same inputs, then kept here as the Rust station's own grew:
+//! session.txt's line on messages via="ember", from background jobs).
 
 use super::*;
 use crate::store::{Attachment, AuthorKind, Quote};

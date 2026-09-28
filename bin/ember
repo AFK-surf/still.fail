@@ -1,8 +1,8 @@
 #!/bin/sh
 # ember's command line, from a clone or from an installed release (~/.ember/app, see cloud/src/install.ts).
 #   ember start [--port N]                             runs the station (the release's service does this): ember-station,
-#                                                      which runs src/main.ts and serves the admin page (4760, or a free
-#                                                      port when that is taken; --port insists on one)
+#                                                      which serves the admin page (4760, or a free port when that is
+#                                                      taken; --port insists on one)
 #   ember update                                       updates this station to ember cloud's latest release
 #   ember station enroll <ember-cloud-origin> <token>  joins a workspace in ember cloud
 #   ember station id
@@ -12,11 +12,8 @@ self=$(readlink -f "$0" 2>/dev/null || echo "$0")
 here=$(cd "$(dirname "$self")/.." && pwd)
 data=${EMBER_DATA:-$HOME/.ember}
 station=${EMBER_STATION_BIN:-$here/mesh/target/release/ember-station}
-# A release brings its own Node.
-node=node
-[ -x "$here/node/bin/node" ] && node="$here/node/bin/node"
 case "${1:-} ${2:-}" in
-  "start "*) shift; exec "$station" run --app "$here" --node "$(command -v "$node")" --data "$data" "$@" ;;
+  "start "*) shift; exec "$station" run --app "$here" --data "$data" "$@" ;;
   "update "*)
     # From the ember cloud the station is in (its installer, without a token, updates).
     origin=$(sed -n 's/.*"origin": *"\([^"]*\)".*/\1/p' "$data/mesh/cloud.json" 2>/dev/null | head -1)

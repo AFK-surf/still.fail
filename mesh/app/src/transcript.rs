@@ -1,5 +1,5 @@
 //! Reads a runtime's own session transcript into one readable timeline for the pages. Formats (pinned against real
-//! files, 2026-09): (src/transcript.ts)
+//! files, 2026-09):
 //! - claude: $CLAUDE_CONFIG_DIR/projects/<cwd>/<id>.jsonl, lines of {type: user|assistant, message: {content: string |
 //!   blocks}, isSidechain}
 //! - codex: $CODEX_HOME/sessions/**/rollout-*<id>.jsonl, lines of {type: response_item, payload: message | reasoning |

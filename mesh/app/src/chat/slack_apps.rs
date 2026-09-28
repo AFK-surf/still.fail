@@ -2,7 +2,7 @@
 //! manifest, which Slack lets a workspace member change with an app configuration token. The token lasts 12 hours; its
 //! refresh token (single use) yields the next pair, so ember keeps both and rotates as needed. Permission changes still
 //! need a person to approve them in Slack; ember hands them the link. Also the manifest a new app starts from, and the
-//! link that opens Slack's "create app" page with it filled in. (src/chat/slack-apps.ts, src/admin/slack-manifest.ts)
+//! link that opens Slack's "create app" page with it filled in.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -270,7 +270,7 @@ fn events_on(groups: &BTreeMap<String, bool>) -> Vec<String> {
         .collect()
 }
 
-// ── the manifest a new app starts from (src/admin/slack-manifest.ts) ────────
+// ── the manifest a new app starts from ────────
 
 /// Every bot scope of every permission group.
 pub fn bot_scopes() -> Vec<String> {

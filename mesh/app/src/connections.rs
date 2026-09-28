@@ -1,5 +1,5 @@
 //! Keeps one chat connection per enabled connect, following config edits: a new or re-credentialed connect is
-//! (re)connected, a removed or disabled one disconnected, the rest left alone. (src/connections.ts)
+//! (re)connected, a removed or disabled one disconnected, the rest left alone.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

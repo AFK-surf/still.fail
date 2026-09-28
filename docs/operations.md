@@ -4,8 +4,9 @@
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm build              # 构建管理页（web/ → dist/admin）；带 PostHog key 构建见 docs/telemetry.md
-node src/main.ts        # Node 24；PATH 里需要 claude 和 codex
+pnpm build                                      # 构建管理页（web/ → dist/admin）；带 PostHog key 构建见 docs/telemetry.md
+(cd mesh && cargo build --release -p ember-station)
+bin/ember start                                 # PATH 里需要 claude 和 codex
 ```
 
 数据目录默认 `~/.ember`（`EMBER_DATA` 可改），配置文件是其中的 `config.json`（`EMBER_CONFIG` 可改）。
@@ -17,7 +18,7 @@ node src/main.ts        # Node 24；PATH 里需要 claude 和 codex
 | 4750 | agent 的 MCP 端点和 `/health`。不要对外暴露。 |
 | 4760 | 管理页 `/admin`。要从外面访问时，只把 tunnel 指向这个端口。 |
 
-station 由 `ember-station`（mesh/station）运行：它在本机提供管理页（4760），并把 Node 部分（src/main.ts）作为子进程启动和看护；Node 部分的管理接口只监听数据目录里的 `run/admin.sock`。4760 被别的程序占了，管理页会改用空闲端口，实际端口写在 `~/.ember/run/ports.json`；`ember start --port N` 指定端口时，被占就报错退出。MCP 端点的 4750 同理（配置里的 `http.port` 指定时被占就报错）。
+station 由 `ember-station`（mesh/station）运行：station 本身（mesh/app）就在这个进程里，它在本机提供管理页（4760）。4760 被别的程序占了，管理页会改用空闲端口，实际端口写在 `~/.ember/run/ports.json`；`ember start --port N` 指定端口时，被占就报错退出。MCP 端点的 4750 同理（配置里的 `http.port` 指定时被占就报错）。
 
 桌面端自带同一个 station（`scripts/station-bundle.sh` 的布局，放在应用的 Resources/station），随应用启动和退出，数据同样在 `~/.ember`。本机已经有 station 在运行（装过独立的），桌面端就不再启动自己的（ember-station 发现数据目录被占，以退出码 3 结束）。本机的 station 还没加入 workspace 时，打开一个 workspace 会自动加入它（要是 owner 或管理员）；只自动加入一次，之后从 workspace 移除就不会自己再加回来。桌面端用 `--with-parent` 启动 ember-station：父进程结束时它也结束，被强行杀掉的桌面端不会留下孤儿 station（launchd 或 nohup 启动的不这样）。
 
@@ -94,7 +95,6 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
 
 ## 开发
 
-- `pnpm test`、`pnpm typecheck`（前后端都检查）。
+- station：在 mesh/ 里 `cargo test`。
+- `pnpm test`（web 的 client core）、`pnpm typecheck`。
 - `pnpm dev:web`：管理页的热更新开发服务器，API 代理到本机 4760。
-- `node scripts/admin-demo.ts`：用一份临时数据（各种状态的会话）起一个管理页。
-- `node scripts/e2e.ts`：用真实的 Claude Code 和 Codex 跑一遍端到端，需要 `~/.config/ember-spike/opencode-go.env`。

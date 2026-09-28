@@ -1,5 +1,5 @@
 //! Slack through the pages: apps made and edited with a person's configuration token, their installs, new connects
-//! from tokens, the token check, and the people of the connected Slack workspaces. (src/admin/api.ts, Slack apps)
+//! from tokens, the token check, and the people of the connected Slack workspaces.
 
 use std::collections::HashSet;
 use std::sync::Arc;

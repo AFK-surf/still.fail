@@ -1,5 +1,5 @@
 //! Runtime processes run in their own process group, recorded in the store, so the station can end everything a runtime
-//! started (tool subprocesses, dev servers) and reap groups a previous run left behind. (src/runtime/process.ts)
+//! started (tool subprocesses, dev servers) and reap groups a previous run left behind.
 
 use std::collections::BTreeMap;
 use std::path::Path;

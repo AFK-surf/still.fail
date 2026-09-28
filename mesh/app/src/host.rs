@@ -1,6 +1,6 @@
 //! What the machine a station runs on looks like: for people deciding where work goes and whether a station is
 //! struggling. Memory on macOS comes from vm_stat (what Activity Monitor counts as used: app, wired and compressed
-//! pages, not reclaimable cache); disk is the file system holding the station's data directory. (src/host.ts)
+//! pages, not reclaimable cache); disk is the file system holding the station's data directory.
 
 use std::ffi::CString;
 use std::path::Path;

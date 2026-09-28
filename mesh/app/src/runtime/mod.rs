@@ -1,5 +1,5 @@
 //! The seam between the station and a coding-agent runtime (Claude Code, Codex). Everything above this module is
-//! runtime-agnostic. (src/runtime/types.ts)
+//! runtime-agnostic.
 //!
 //! A driver opens sessions; what a session's runtime does comes back as events on the channel it was opened with, in
 //! order — the session's own task handles them — rather than as callbacks.

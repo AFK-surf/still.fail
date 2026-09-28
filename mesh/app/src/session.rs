@@ -1,5 +1,5 @@
 //! One actor per session. Every change to a session's state runs through its serial queue, so runtime events,
-//! deliveries and tool calls never interleave halfway. (src/session.ts)
+//! deliveries and tool calls never interleave halfway.
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;

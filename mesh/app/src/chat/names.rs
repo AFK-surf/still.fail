@@ -1,6 +1,6 @@
 //! What Slack calls people and channels, kept on disk so the admin API never waits on Slack for a name: a name not
 //! known yet answers None at once, is fetched in the background, and `on_learn` tells the pages to read again. Failed
-//! lookups are not retried for a while. (src/chat/names.ts)
+//! lookups are not retried for a while.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;

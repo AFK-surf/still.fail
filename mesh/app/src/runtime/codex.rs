@@ -1,4 +1,4 @@
-//! Codex driver: one shared `codex app-server` per profile, one thread per session. (src/runtime/codex.ts)
+//! Codex driver: one shared `codex app-server` per profile, one thread per session.
 //!
 //! Pinned by spikes (spike/README.md):
 //! - a thread adds <1MB to its app-server, so sessions share one process;

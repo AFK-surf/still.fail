@@ -1,5 +1,5 @@
 //! The station's errors, as its log says them, sent to ember's error tracking (ember-app's ErrorReports) while the
-//! config turns that on (`telemetry.errors`): what the Node part's log hook did (src/telemetry.ts).
+//! config turns that on (`telemetry.errors`).
 
 use std::sync::{Arc, OnceLock};
 

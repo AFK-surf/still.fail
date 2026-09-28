@@ -2,7 +2,7 @@
 name = "ember-app"
 version.workspace = true
 edition.workspace = true
-description = "ember station's own work, in Rust: its settings, store, agent runtimes, chat connects, hub and sessions, admin API and jobs (taking over from src/*.ts)"
+description = "ember station's own work, in Rust: its settings, store, agent runtimes, chat connects, hub and sessions, admin API and jobs"
 
 [dependencies]
 anyhow = "1"

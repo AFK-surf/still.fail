@@ -7,7 +7,6 @@
 //!   the machine's current access token (CLAUDE_CODE_OAUTH_TOKEN) and never refresh; when it is about to run out, the
 //!   machine's own claude is asked for a moment, which refreshes it in its own file.
 //! Only logins kept in files: one in the macOS keychain cannot be used so (the pages offer a sign-in instead).
-//! (src/machine-logins.ts)
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

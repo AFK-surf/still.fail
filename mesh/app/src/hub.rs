@@ -1,6 +1,5 @@
 //! Routes chat messages to session actors, creates sessions, and exposes the MCP tools through which agents act on
 //! their conversations. Several connects share one hub; each has its own chat connection and its own sessions.
-//! (src/hub.ts)
 //!
 //! A connect's mode decides the sessions: multi-session gives each thread its own session (started by an @mention);
 //! single-session sends every thread the connect sees into the one session bound to it, which people can switch or

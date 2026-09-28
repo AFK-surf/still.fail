@@ -1,5 +1,5 @@
 //! What the pages change: connects and profiles in the config, sign-ins that make profiles, and profiles' checks and
-//! allowances. (src/admin/api.ts, writes)
+//! allowances.
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};

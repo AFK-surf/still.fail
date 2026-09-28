@@ -1,6 +1,5 @@
 //! The configuration as a live, editable document. config.json stays the source of truth: edits are checked by
 //! parse_config, written atomically (mode 600: it holds secrets), and then announced to whoever applies them.
-//! (src/settings.ts)
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

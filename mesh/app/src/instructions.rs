@@ -1,6 +1,6 @@
 //! What the agent is told about its situation, appended to the runtime's own system prompt. Kept short: the runtime
 //! already knows how to code. Nothing here pins the session to one conversation: every message says where it came from,
-//! because a session may be bound to other conversations later. (src/instructions.ts)
+//! because a session may be bound to other conversations later.
 
 use std::collections::{HashMap, HashSet};
 

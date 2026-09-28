@@ -1,5 +1,5 @@
 //! Configuration comes from one JSON file: $EMBER_CONFIG, else <dataDir>/config.json with dataDir from $EMBER_DATA
-//! (default ~/.ember). (src/config.ts)
+//! (default ~/.ember).
 //!
 //! A connect is one way in: today a Slack app. Each connect is bound to one model (runtime + account + model) and decides
 //! how conversations map to sessions. Profiles are the runtime accounts connects draw from; connects may share them.

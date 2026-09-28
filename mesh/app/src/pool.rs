@@ -2,7 +2,7 @@
 //! qualify; of those, one whose check says it cannot sign in or was rejected, or whose allowance is used up, is passed
 //! over. Of the rest, the one with the most allowance left wins; then the one running fewer sessions; then the one
 //! picked least recently. A session keeps its profile while it is usable (its runtime's cache is that account's); its
-//! transcripts are shared by all, so when it is not, another takes it on. (src/pool.ts)
+//! transcripts are shared by all, so when it is not, another takes it on.
 
 use anyhow::{Result, bail};
 

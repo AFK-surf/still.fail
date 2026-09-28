@@ -1,5 +1,5 @@
 //! The station's MCP endpoint (streamable HTTP, JSON responses only). Every request carries the session's bearer token;
-//! tools run on behalf of that session. (src/mcp.ts) The HTTP wiring is the server's: this takes a request's method,
+//! tools run on behalf of that session. The HTTP wiring is the server's: this takes a request's method,
 //! authorization and body, and gives its status and body.
 
 use std::collections::HashMap;

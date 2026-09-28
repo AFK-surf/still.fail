@@ -1,4 +1,4 @@
-//! Slack over Socket Mode (no public endpoint needed) and the Web API. (src/chat/slack.ts)
+//! Slack over Socket Mode (no public endpoint needed) and the Web API.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};

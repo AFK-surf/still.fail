@@ -1,6 +1,6 @@
 //! How a runtime account reaches its models. A profile picks one access kind; the station derives the environment (and,
 //! for Codex, provider config overrides) from it, so nobody has to know which variables each runtime reads. "env" keeps
-//! the raw form for anything else. (src/profiles.ts)
+//! the raw form for anything else.
 
 use std::collections::BTreeMap;
 

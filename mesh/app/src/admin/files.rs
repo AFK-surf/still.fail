@@ -1,5 +1,5 @@
 //! Files through the admin API: uploads waiting for the message that sends them, a session's uploads for previews, the
-//! files a message names, and web services on the station's ports seen through /preview. (src/admin/api.ts)
+//! files a message names, and web services on the station's ports seen through /preview.
 
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, SystemTime};

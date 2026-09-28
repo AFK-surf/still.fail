@@ -3,7 +3,6 @@
 //! entries as each is written whole. What a step writes as it goes (the runtime's deltas) is not sent: a step's words
 //! come with its entry; how fast it writes is, now and then. Nothing here is stored: the steps in flight live in memory
 //! until they end, and the transcript stays the record, parsed incrementally and kept in memory while someone watches.
-//! (src/live.ts)
 
 use std::collections::HashMap;
 use std::path::PathBuf;

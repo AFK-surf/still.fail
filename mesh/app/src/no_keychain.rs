@@ -4,7 +4,6 @@
 //! keychain item is out of reach of the station's other processes. So profile processes get a `security` first on
 //! their PATH that finds nothing and stores nothing (exit 44, "not found"), and Claude Code reads and writes the file,
 //! as it does on Linux. The machine's own login is not touched: machine profiles run on a token handed to them.
-//! (src/no-keychain.ts)
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

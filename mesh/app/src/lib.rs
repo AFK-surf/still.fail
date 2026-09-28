@@ -1,6 +1,6 @@
-//! ember station's own work, in Rust. It takes over what the station's Node part (src/*.ts) does, module by module, the
-//! same data on disk (config.json, the SQLite store) and the same admin API; the station binary (../station) runs it
-//! in place of the Node part once it does all of it (docs/station-rust.md).
+//! ember station's own work, in Rust: what the station's Node part did, on the same data on disk (config.json, the
+//! SQLite store) and with the same admin API. The station binary (../station) runs it in its own process
+//! (docs/station-rust.md).
 
 pub mod access;
 pub mod admin;

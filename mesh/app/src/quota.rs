@@ -1,4 +1,4 @@
-//! How much of a profile's allowance is used, where the provider says: (src/quota.ts)
+//! How much of a profile's allowance is used, where the provider says:
 //! - OpenCode Go: GET /zen/go/v1/usage (rolling, weekly and monthly windows);
 //! - ChatGPT subscription (Codex): the app-server's account/rateLimits/read;
 //! - Claude subscription: Claude Code's OAuth usage endpoint (what /usage shows), with the token Claude Code keeps in

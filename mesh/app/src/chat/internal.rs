@@ -1,7 +1,7 @@
 //! The station's own chat: conversations on its pages. To the agent it is one more chat platform, like Slack: people's
 //! messages arrive with their source, and the agent answers with chat_post to their thread. Every chat lives in one
 //! channel, INTERNAL_CHANNEL; its thread_ts is its address. The messages themselves are the store's, like every
-//! thread's. (src/chat/internal.ts)
+//! thread's.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};

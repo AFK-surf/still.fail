@@ -1,7 +1,7 @@
 //! A web service on this machine, reached through the admin API: GET /admin/api/preview/<port>/<path> is <path> of
 //! http://localhost:<port>, passed through as it is. It is how a client shows a page an agent serves here (a dev
 //! server, a report) — its requests come over the mesh like any other admin call, so they need no port open to anyone.
-//! (src/admin/preview.ts) The HTTP wiring is the server's: this takes the request's parts and gives the answer's.
+//! The HTTP wiring is the server's: this takes the request's parts and gives the answer's.
 
 use std::pin::Pin;
 use std::sync::LazyLock;

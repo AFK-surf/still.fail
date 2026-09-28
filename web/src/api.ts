@@ -1,22 +1,59 @@
 // A station's data, through the client core (docs/client-core.md): screens
 // subscribe to the views the core puts together, writes go through
 // `station.request` and the core refreshes whatever they touch. Types come
-// straight from the server code.
+// from client/shapes (core/shapes.ts); what is only sent to a station is
+// declared here.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useCall, useTopic, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { SlackIdentity } from "../../src/chat/slack.ts";
 import type { Attachment, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, Session, Stamp, StationView, ChatThread } from "./core/shapes.ts";
-// What is sent to a station, and what its calls answer: its own declarations.
-import type * as Station from "../../src/admin/types.ts";
-import type { ConnectInput, ProfileInput } from "../../src/admin/types.ts";
-import type { AccessKind, RuntimeKind, SlackAppLinks } from "./core/shapes.ts";
-import type { SlackAppSettings, SlackGroup } from "../../src/chat/slack-apps.ts";
+import type { AccessKind, ConnectMode, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 
-export type { ConnectInput, ConnectKind, ProfileInput } from "../../src/admin/types.ts";
-export type { SlackAppSettings, SlackGroup, SlackIdentity, TopicState };
+export type { TopicState };
 export { CoreError };
+
+// ── what is sent to a station (its admin API's inputs) ──
+
+export type ConnectKind = "slack";
+
+/** POST /connects, PUT /connects/:id. Blank or missing tokens keep the stored ones. */
+export interface ConnectInput {
+  enabled?: boolean;
+  kind?: ConnectKind;
+  mode?: ConnectMode;
+  requireMention?: boolean;
+  bind?: { runtime?: RuntimeKind; model?: string; effort?: string; profile?: string | null };
+  /** `install`: an app installed through Slack's OAuth (its state), whose bot token the station has. */
+  slack?: { appToken?: string; botToken?: string; appId?: string; install?: string };
+  /** Hands the connect to someone else (an email). Owners, admins, the station itself, or the current owner. */
+  owner?: { id: string; name?: string };
+}
+
+/** PUT /profiles/:id. env: a string sets, null removes, an omitted key is kept. A blank access key keeps the stored one. */
+export interface ProfileInput {
+  name?: string;
+  runtime?: RuntimeKind;
+  access?: { kind: AccessKind; key?: string };
+  home?: string;
+  model?: string;
+  /** Replaces the enabled models. */
+  models?: string[];
+  env?: Record<string, string | null>;
+}
+
+/** The groups of scopes and events a Slack app made here asks for (mesh/app/src/chat/slack_apps.rs). */
+export type SlackGroup = "base" | "public" | "dm" | "customize" | "files" | "reactions" | "channels" | "people" | "extras";
+
+/** A Slack app as its settings form shows it. */
+export interface SlackAppSettings {
+  name: string;
+  displayName: string;
+  description: string;
+  longDescription: string;
+  backgroundColor: string;
+  groups: Record<SlackGroup, boolean>;
+}
 
 export type SlackAppView =
   | { state: "no_app"; appId: null; links: null; settings: null; groups: SlackGroup[]; error?: string }
@@ -135,12 +172,12 @@ export function stationApi(t: StationCall) {
   return {
     stop: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/stop`),
     evict: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/evict`),
-    putConnect: (id: string, input: ConnectInput) => request<Station.Overview>("PUT", `/connects/${at(id)}`, input),
-    deleteConnect: (id: string) => request<Station.Overview>("DELETE", `/connects/${at(id)}`),
+    putConnect: (id: string, input: ConnectInput) => request<Overview>("PUT", `/connects/${at(id)}`, input),
+    deleteConnect: (id: string) => request<Overview>("DELETE", `/connects/${at(id)}`),
     reconnect: (id: string) => request<{ ok: true }>("POST", `/connects/${at(id)}/reconnect`),
-    putProfile: (id: string, input: ProfileInput) => request<Station.Overview>("PUT", `/profiles/${at(id)}`, input),
-    refreshQuota: (id: string) => request<Station.ProfileQuota | null>("POST", `/profiles/${at(id)}/quota`),
-    checkProfile: (id: string) => request<Station.ProfileCheck>("POST", `/profiles/${at(id)}/check`),
+    putProfile: (id: string, input: ProfileInput) => request<Overview>("PUT", `/profiles/${at(id)}`, input),
+    refreshQuota: (id: string) => request<Quota | null>("POST", `/profiles/${at(id)}/quota`),
+    checkProfile: (id: string) => request<ProfileCheck>("POST", `/profiles/${at(id)}/check`),
     verifySlack: (input: { connect?: string; install?: string; appToken?: string; botToken?: string }) =>
       request<{ identity: SlackIdentity | null; errors: string[] }>("POST", "/slack/verify", input),
     bindSession: (connect: string, session: string | null, title?: string) =>
@@ -148,20 +185,20 @@ export function stationApi(t: StationCall) {
     /** Starts the session's runtime ahead of a message. */
     warm: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/warm`),
     /** A new chat: its session and its thread, made with its first message. */
-    newChat: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => request<{ key: string; thread: Station.ThreadView }>("POST", "/sessions", input),
+    newChat: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => request<{ key: string; thread: ChatThread }>("POST", "/sessions", input),
     file: t.file,
     uploadFile: t.upload,
-    startLogin: (profile: string) => request<{ job: Station.LoginJob }>("POST", `/profiles/${at(profile)}/login`),
-    cancelLogin: (profile: string) => request<{ job: Station.LoginJob | null }>("DELETE", `/profiles/${at(profile)}/login`),
-    loginCode: (profile: string, code: string) => request<{ job: Station.LoginJob }>("POST", `/profiles/${at(profile)}/login-code`, { code }),
+    startLogin: (profile: string) => request<{ job: LoginJob }>("POST", `/profiles/${at(profile)}/login`),
+    cancelLogin: (profile: string) => request<{ job: LoginJob | null }>("DELETE", `/profiles/${at(profile)}/login`),
+    loginCode: (profile: string, code: string) => request<{ job: LoginJob }>("POST", `/profiles/${at(profile)}/login-code`, { code }),
     /** A subscription signed in before its profile exists; the station makes the profile when it succeeds. */
-    newLogin: (runtime: RuntimeKind) => request<{ id: string; job: Station.LoginJob }>("POST", "/logins", { runtime }),
-    newLoginCode: (id: string, code: string) => request<{ job: Station.LoginJob }>("POST", `/logins/${at(id)}/code`, { code }),
+    newLogin: (runtime: RuntimeKind) => request<{ id: string; job: LoginJob }>("POST", "/logins", { runtime }),
+    newLoginCode: (id: string, code: string) => request<{ job: LoginJob }>("POST", `/logins/${at(id)}/code`, { code }),
     dropLogin: (id: string) => request<{ ok: true }>("DELETE", `/logins/${at(id)}`),
     /** A profile on the machine's own login of `runtime` (one kept in a file). */
-    useMachineLogin: (runtime: RuntimeKind) => request<{ id: string; overview: Station.Overview }>("POST", "/profiles/machine", { runtime }),
+    useMachineLogin: (runtime: RuntimeKind) => request<{ id: string; overview: Overview }>("POST", "/profiles/machine", { runtime }),
     /** A keyed profile, made only once its key is checked. */
-    addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string } }) => request<{ id: string; overview: Station.Overview }>("POST", "/profiles", input),
+    addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string } }) => request<{ id: string; overview: Overview }>("POST", "/profiles", input),
     slackApp: (connect: string) => request<SlackAppView>("GET", `/connects/${at(connect)}/slack-app`),
     putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }) =>
       request<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>("PUT", `/connects/${at(connect)}/slack-app`, input),
@@ -170,19 +207,19 @@ export function stationApi(t: StationCall) {
     /** The app is kept on the station, waiting for its connect (the overview's `slackApps`); this says which it is. */
     makeSlackApp: (input: { team: string; settings: SlackAppSettings; icon?: string }) => request<{ appId: string; iconError: string | null }>("POST", "/slack/apps", input),
     /** Drops an app made here from the waiting ones; it stays in Slack. */
-    dropSlackApp: (appId: string) => request<Station.Overview>("DELETE", `/slack/apps/${at(appId)}`),
+    dropSlackApp: (appId: string) => request<Overview>("DELETE", `/slack/apps/${at(appId)}`),
     /** Hands Slack's install code to the station that made the app. */
     slackInstalled: (code: string, state: string) => request<{ team: string | null }>("POST", "/slack/installs", { code, state }),
     /** A new Slack connect from its tokens: the station names it as its bot is named in Slack. */
-    createConnect: (input: ConnectInput) => request<{ id: string; overview: Station.Overview }>("POST", "/connects", input),
+    createConnect: (input: ConnectInput) => request<{ id: string; overview: Overview }>("POST", "/connects", input),
     /** How a session runs from its next turn on: its profile, model, effort (null: the runtime's default). */
     sessionSettings: (key: string, input: { profile?: string | null; model?: string | null; effort?: string | null }) => request<{ ok: true }>("POST", `/sessions/${at(key)}/settings`, input),
     /** Adds a Slack workspace's app configuration token; answers which workspace it is. */
-    addConfigToken: (refreshToken: string) => request<{ teamId: string; overview: Station.Overview }>("POST", "/slack/config-tokens", { refreshToken }),
-    removeConfigToken: (team: string) => request<Station.Overview>("DELETE", `/slack/config-tokens/${at(team)}`),
-    deleteProfile: (id: string) => request<Station.Overview>("DELETE", `/profiles/${at(id)}`),
+    addConfigToken: (refreshToken: string) => request<{ teamId: string; overview: Overview }>("POST", "/slack/config-tokens", { refreshToken }),
+    removeConfigToken: (team: string) => request<Overview>("DELETE", `/slack/config-tokens/${at(team)}`),
+    deleteProfile: (id: string) => request<Overview>("DELETE", `/profiles/${at(id)}`),
     /** "这是我" (bound) or "不是我" on a Slack user: the station takes them for the viewer, or no longer. */
-    slackIdentity: (user: string, bound: boolean) => request<Station.Overview>(bound ? "PUT" : "DELETE", `/me/slack/${at(user)}`),
+    slackIdentity: (user: string, bound: boolean) => request<Overview>(bound ? "PUT" : "DELETE", `/me/slack/${at(user)}`),
     createAppUrl: (name: string) => request<{ url: string }>("GET", `/slack/create-app-url?name=${encodeURIComponent(name)}`),
   };
 }

@@ -1,5 +1,5 @@
 //! What the station needs from a chat platform. Slack is the first implementation; the station's own chat (its pages'
-//! conversations) is another. (src/chat/types.ts, src/chat/mrkdwn.ts)
+//! conversations) is another.
 
 pub mod internal;
 pub mod names;

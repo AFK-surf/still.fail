@@ -25,15 +25,15 @@ ember 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分析、�
 
 - **URL**：所有事件里的 URL 都把 id 换成占位（`/w/:workspace/s/:station/chats/:thread`），去掉查询串和 `#` 之后的部分；别的域名只留域名。不开 autocapture（它会记元素里的文字），也不开热图、死点击、rage click。
 
-## station（Node）
+## station
 
-`src/telemetry.ts`，只做错误追踪，**默认关闭**。station 跑在用户自己的机器上，由它的管理者在 `config.json` 里打开：
+`mesh/app/src/telemetry.rs`，只做错误追踪，**默认关闭**。station 跑在用户自己的机器上，由它的管理者在 `config.json` 里打开：
 
 ```json
 { "telemetry": { "errors": true } }
 ```
 
-打开后（改配置立即生效，关掉也立即停）上报：未捕获的异常（未处理的 promise 拒绝也会变成它）、每一条 `log.error`。每条带 station 的 id（有 mesh 登记时）和 `release`。`log.error` 的字段一律不发（可能带着人写的东西），只发其中的 Error 和日志的那句话；错误信息和调用栈里家目录下的路径换成 `~`，错误信息里引号括起来的内容换成 `"…"`（比如 JSON.parse 会把输入引出来）。
+打开后（改配置立即生效，关掉也立即停）上报：error 级别的每一条日志。每条带 station 的 id（有 mesh 登记时）和 `release`。日志的字段一律不发（可能带着人写的东西），只发那句话和其中的错误信息；错误信息里家目录下的路径换成 `~`，引号括起来的内容换成 `"…"`（比如 JSON 解析错误会把输入引出来）。
 
 ## key 从哪来
 
@@ -51,7 +51,7 @@ ember 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分析、�
 
 When something is slow, one trace per user action shows where the time went,
 hop by hop: the client core (the web's SharedWorker or a native app), ember
-cloud, ember-mesh on the station, and the station's admin API. Spans are
+cloud, and ember-mesh on the station. Spans are
 OpenTelemetry (OTLP JSON) and end up in Axiom, dataset `ember`.
 
 ### What is traced
@@ -76,15 +76,15 @@ Inside a trace:
 - **ember cloud**: a span of each `/v1/*` call that carries a recorded
   `traceparent`.
 - **ember-mesh**: a span per request stream, from the stream accepted to the
-  answer's last byte written (an event stream's: to its head).
-- **the station's admin API**: a span per request, from arrival to the answer
-  sent (an event stream's: to its head).
+  answer's last byte written (an event stream's: to its head). The station's
+  admin API runs in the same process and has no span of its own (the Node
+  station's `ember-station` spans went with it).
 
 A request without a trace (one an event caused, a stream's later reads) is a
 trace of its own, one span per hop.
 
 Every station request carries a W3C `traceparent`; ember-mesh records its span
-under it and passes its own on to the admin API, so the hops nest. Requests to
+under it, so the hops nest. Requests to
 ember cloud carry one only inside a trace.
 
 Attributes: `http.request.method`, `url.path` (the route with ids as `:id`,
@@ -101,8 +101,8 @@ resource attribute `ember.station`.
 
 Times: the web core times with `performance.now()`, native with a monotonic
 clock (`Host::monotonic_ms`), converted to Unix nanoseconds from the wall
-clock read once when the trace started. ember-mesh and the admin API do the
-same with their own clocks, so hops on different machines are only as aligned
+clock read once when the trace started. ember-mesh does the same with its
+own clock, so hops on different machines are only as aligned
 as their clocks; durations are exact.
 
 ### Where spans go
@@ -116,8 +116,7 @@ batch), which forwards them to `https://api.axiom.co/v1/traces`:
 - a client core batches for 3 s (`EXPORT_MS`) after a span ends and sends as
   its first signed-in account (`Authorization: Bearer`); with nobody signed in
   the batch is dropped.
-- ember-mesh batches the same way, its own spans and the admin API's (ember
-  writes them to its stdin, one JSON line each), and signs each batch with the
+- ember-mesh batches the same way and signs each batch with the
   station's key: headers `x-ember-station`, `x-ember-ts` (unix seconds, within
   5 minutes) and `x-ember-signature` over
   `ember-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>`;

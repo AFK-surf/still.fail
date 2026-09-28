@@ -1,6 +1,6 @@
 //! The admin API behind /admin/api. Who asks is decided before it gets here: the station verifies people coming
 //! through ember cloud, and the local server lets this machine in and checks Cloudflare Access for the tunnel
-//! (access.rs). (src/admin/api.ts)
+//! (access.rs).
 //!
 //! Clients follow GET /events instead of asking again on a timer: every change to what the API shows is announced
 //! there (see docs/station-storage.md).
@@ -41,7 +41,7 @@ pub use events::Events;
 /// What a response carries: a whole body, or one that streams (events, files, previews).
 pub type Body = UnsyncBoxBody<Bytes, std::io::Error>;
 
-/// This station's link to ember cloud, as the pages show it. (src/mesh.ts)
+/// This station's link to ember cloud, as the pages show it.
 #[derive(serde::Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MeshStatus {

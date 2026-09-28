@@ -1,5 +1,5 @@
 //! An image's pixel size from its first bytes: PNG, GIF, JPEG and WebP, the formats pages show inline. Nothing is
-//! decoded; unknown files give None. (src/image-size.ts)
+//! decoded; unknown files give None.
 
 use std::io::Read;
 use std::path::Path;

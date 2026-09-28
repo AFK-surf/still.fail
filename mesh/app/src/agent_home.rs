@@ -1,6 +1,6 @@
 //! The shared agent home: one MEMORY.md and one skills/ directory used by every profile of both runtimes. It lives in
 //! the data dir, not the repository, since it holds team-specific memory. Each profile home links to it under the name
-//! its runtime loads automatically. (src/agent-home.ts)
+//! its runtime loads automatically.
 
 use std::path::{Path, PathBuf};
 

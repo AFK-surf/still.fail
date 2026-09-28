@@ -1,6 +1,5 @@
 //! The station's traces: the mesh's own spans (a request stream from
-//! accepted to fully answered) and the admin API's, which the Node part hands
-//! over as JSON lines on its fd 3 (node.rs). Batched, and sent at most every
+//! accepted to fully answered). Batched, and sent at most every
 //! EXPORT to ember cloud's `/v1/telemetry/traces`, signed with the station's
 //! key like the presence socket; ember cloud forwards them to Axiom. A batch
 //! that cannot be sent is dropped. Off unless the station's config turns
@@ -14,7 +13,6 @@ use std::{
 use iroh::SecretKey;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use tokio::io::AsyncBufReadExt;
 use tokio::sync::Notify;
 use tracing::{info, warn};
 
@@ -120,18 +118,6 @@ impl Telemetry {
 
     pub fn enabled(&self) -> bool {
         self.enabled
-    }
-
-    /// Takes the admin API's spans from the Node part (one JSON span per line) until it closes them.
-    pub async fn read_station_spans(self: Arc<Self>, from: impl tokio::io::AsyncRead + Unpin) {
-        let mut lines = tokio::io::BufReader::new(from).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            if let Ok(span) = serde_json::from_str::<Value>(&line)
-                && span.is_object()
-            {
-                self.record("ember-station", span);
-            }
-        }
     }
 
     /// Sends what was recorded, a batch at a time, until the process ends.

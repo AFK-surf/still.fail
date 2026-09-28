@@ -1,7 +1,7 @@
-//! GET /events: what changed, as it changes (StationEvents in src/admin/types.ts). Changes that come in a burst go out
+//! GET /events: what changed, as it changes. Changes that come in a burst go out
 //! as one event per session, one overview and one round of sidebar rows; a thread's entries go out as they are
 //! written. `host` adds host samples; `live`, sessions as they run. Quotas are asked again, host info sampled and
-//! keepalives sent only while someone follows. (src/admin/api.ts, event streams)
+//! keepalives sent only while someone follows.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};

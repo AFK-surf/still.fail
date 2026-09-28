@@ -2,7 +2,7 @@
 name = "ember-station"
 version.workspace = true
 edition.workspace = true
-description = "ember station: runs the station (its Node part as a child), serves its admin page here, and connects it to ember cloud over iroh"
+description = "ember station: runs the station (ember-app, in this process), serves its admin page here, and connects it to ember cloud over iroh"
 
 [dependencies]
 ember-app = { path = "../app" }

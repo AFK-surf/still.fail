@@ -1,5 +1,5 @@
 //! The station as one piece, as ember-station runs it in its own process: the settings, store, chat connections, hub
-//! and runtimes, the admin API and page, and the agents' MCP endpoint. (src/main.ts, src/mesh.ts)
+//! and runtimes, the admin API and page, and the agents' MCP endpoint.
 //!
 //! ember-station hands it requests: its local page's (a browser here: the viewer is this machine, or Cloudflare
 //! Access's through a tunnel) and ember cloud members' through the mesh (the viewer it verified).

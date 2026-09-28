@@ -305,8 +305,7 @@ their whole thread (deleting a session removes threads left without one):
 ### Archiving
 
 When every session of a thread is archived, its entries go to
-`<data>/archive/threads/<id>.jsonl.zst` (one entry per line, zstd — Node's own
-`zlib.zstdCompressSync`, no library) in one step with deleting their rows, and
+`<data>/archive/threads/<id>.jsonl.zst` (one entry per line, zstd) in one step with deleting their rows, and
 the thread row is marked archived (`archived_at`). Since entries never change,
 the file is the thread as it was, and clients' kept copies stay valid.
 Reading an archived thread reads the file (the same API and summaries,

@@ -6,7 +6,7 @@
 //! - Codex: `codex login --device-auth` prints a link and a one-time code; the person enters the code on that page and
 //!   the command finishes by itself.
 //!
-//! A stand-in `open` on PATH keeps the commands from opening a browser on the server. (src/login.ts)
+//! A stand-in `open` on PATH keeps the commands from opening a browser on the server.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

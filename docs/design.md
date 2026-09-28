@@ -158,7 +158,7 @@ active ──(空闲 >1 天)──► slim ──(空闲 >3 天)──► archiv
 
 ## 12. 存储
 
-- Node 24 自带的 `node:sqlite`，一个库：sessions、inbound、jobs、profiles、turns、processes。
+- SQLite，一个库：sessions、inbound、jobs、profiles、turns、processes。
 - 运行时会话记录留在运行时自己的目录，ember 只记录路径。
 
 ## 13. 可观测性
