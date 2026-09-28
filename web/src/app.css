@@ -1052,7 +1052,8 @@
 /* Draggable column widths: the sidebar and the session's tab set. */
 @media (min-width: 701px) { .shell { grid-template-columns: var(--sidebar-w, 240px) minmax(0, 1fr); } .sidebar { position: relative; } }
 @media (min-width: 1101px) {
-  .session-page[data-panel="true"] { grid-template-columns: minmax(0, 1fr) var(--panel-w, minmax(360px, 38%)); }
+  /* The chat keeps 360px however wide the tab set is dragged: the tab set gives way first. */
+  .session-page[data-panel="true"] { grid-template-columns: minmax(360px, 1fr) minmax(0, var(--panel-w, max(360px, 38%))); }
   .side-panel { position: relative; }
 }
 .resize-handle { position: absolute; top: 0; bottom: 0; width: 7px; z-index: 5; cursor: col-resize; touch-action: none; }

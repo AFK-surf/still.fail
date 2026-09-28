@@ -151,8 +151,13 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     el.addEventListener("to-bottom", toBottom);
     el.addEventListener("scroll", onScroll, { passive: true });
     for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, input, { passive: true });
+    // The pane's width changing re-wraps every message: that is taken at once, not glided after (it would lag behind
+    // the bottom while the width is dragged).
+    let laidWidth = el.clientWidth;
     const resize = new ResizeObserver((entries) => {
-      smooth = grown() && entries.some((e) => e.target !== el && isMessage(e.target));
+      const rewrapped = el.clientWidth !== laidWidth;
+      laidWidth = el.clientWidth;
+      smooth = !rewrapped && grown() && entries.some((e) => e.target !== el && isMessage(e.target));
       hold();
     });
     const watch = () => { resize.disconnect(); resize.observe(el); for (const child of el.children) resize.observe(child); };
