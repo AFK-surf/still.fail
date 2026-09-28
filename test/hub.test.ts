@@ -626,3 +626,44 @@ test("slack_api calls Slack as the session's bot; a thread it writes in becomes 
   await settle();
   assert.match(agent.prompts.at(-1) ?? "", /a reply to it/);
 });
+
+test("agents in one thread hear each other: a post reaches the thread's other sessions, marked a bot, and not its author", async () => {
+  const { claude, codex, call, accept } = setup();
+  const root = message({ text: "<@UBOT> <@UGPT> work this out together" });
+  await accept(root);
+  await accept(root, "gpt");
+  await settle();
+  await call(sessionKey("cl", "C1", root.threadTs), "chat_state", { kind: "final" });
+  await call(sessionKey("gpt", "C1", root.threadTs), "chat_state", { kind: "final" });
+  claude.last.end();
+  codex.last.end();
+  await settle();
+  const before = claude.last.prompts.length;
+  await call(sessionKey("gpt", "C1", root.threadTs), "chat_post", { to: `C1/${root.threadTs}`, text: "I'll take the tests; can you do the build?" });
+  await settle();
+  const heard = claude.last.prompts.at(-1)!;
+  assert.equal(claude.last.prompts.length, before + 1);
+  assert.match(heard, /from="ember \(<@UGPT>\)" bot ts="[\d.]+">\nI'll take the tests; can you do the build\?/);
+  assert.equal(codex.last.prompts.filter((p) => p.includes("I'll take the tests")).length, 0, "not back to its author");
+  // Slack's copy of that post, seen through the other connect, is not a message of its own.
+  await accept(message({ threadTs: root.threadTs, ts: "9999.9", user: "UGPT", addressed: false, text: "I'll take the tests; can you do the build?" }));
+  await settle();
+  assert.equal(claude.last.prompts.length, before + 1);
+});
+
+test("in a chat on the station's page with several agents, what one posts reaches the others", async () => {
+  const { claude, codex, hub, call } = setup();
+  const one = hub.newSession({ runtime: "claude", createdBy: "local" });
+  const two = hub.newSession({ runtime: "codex", createdBy: "local" });
+  hub.addToThread(one.thread.id, two.key);
+  hub.say(one.thread.id, "local", "分一下工");
+  await settle();
+  await call(one.key, "chat_state", { kind: "final" });
+  await call(two.key, "chat_state", { kind: "final" });
+  claude.last.end();
+  codex.last.end();
+  await settle();
+  await call(one.key, "chat_post", { to: `EMBER/${one.thread.threadTs}`, text: "我来写接口" });
+  await settle();
+  assert.match(codex.last.prompts.at(-1)!, /from="Claude Code" bot ts="[\d.]+">\n我来写接口/);
+});

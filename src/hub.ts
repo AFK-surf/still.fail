@@ -108,6 +108,9 @@ export class Hub {
 
   /** Accepts one message seen by a connect. Resolves once it is durably recorded (or deliberately ignored). */
   async accept(connectId: string, message: InboundMessage): Promise<void> {
+    // What a bot of this station posted is its agent's, recorded and handed to the thread as it was posted: Slack's
+    // copy of it, seen through another connect, is not a message of its own.
+    if (this.#ownBot(message.user)) return;
     const connect = this.#connect(connectId);
     const chat = this.#chat(connectId);
     const surface = this.#surface(connectId);
@@ -526,7 +529,8 @@ export class Hub {
           const thread = target(key, args.to);
           const files = paths.length ? this.#attach(key, paths) : [];
           const ts = await this.#chat(thread.connect).post(thread, text, files);
-          this.#store.insertMessage({ thread: thread.id, ts, authorKind: "agent", author: key, text, attachments: files, declared: kind ?? null });
+          const { n } = this.#store.insertMessage({ thread: thread.id, ts, authorKind: "agent", author: key, text, attachments: files, declared: kind ?? null });
+          this.#shared(thread.id, n, key, text);
           const post = this.#store.postsBy(key).at(-1);
           if (post) this.live.posted(key, postEntries([post]));
           if (kind) this.#actors.get(key)?.declare(kind);
@@ -631,12 +635,26 @@ export class Hub {
         const thread = this.#store.openThread({ surface, channel, threadTs: root, createdBy: key });
         if (this.#store.joinThread(thread.id, key, connect)) log.info("session took part in a thread through slack_api", { session: key, channel, threadTs: root, method });
         if (method === "chat.postMessage" && typeof result.ts === "string") {
-          this.#store.insertMessage({ thread: thread.id, ts: result.ts, authorKind: "agent", author: key, text: typeof params.text === "string" ? params.text : "" });
+          const text = typeof params.text === "string" ? params.text : "";
+          const { n } = this.#store.insertMessage({ thread: thread.id, ts: result.ts, authorKind: "agent", author: key, text });
+          this.#shared(thread.id, n, key, text);
         }
       }
     }
     const text = JSON.stringify(result);
     return text.length > 60_000 ? `${text.slice(0, 60_000)}… (cut at 60000 characters; ask for less, e.g. a smaller limit)` : text;
+  }
+
+  /** A Slack user that is one of this station's connects' bots. */
+  #ownBot(user: string): boolean {
+    for (const chat of this.#chats.values()) if (chat.botUserId && chat.botUserId === user) return true;
+    return false;
+  }
+
+  /** An agent's post reaches the other sessions of its thread, as a person's would: agents work together there. */
+  #shared(thread: number, n: number, author: string, text: string): void {
+    const others = this.#store.threadSessions(thread).map((m) => m.session).filter((s) => s !== author);
+    if (others.length) this.#handOver(thread, n, others, text);
   }
 
   #connect(id: string): Connect {

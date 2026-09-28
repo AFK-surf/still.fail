@@ -6,6 +6,7 @@ import type { Profile, RuntimeKind } from "./config.ts";
 import type { ChatSurface } from "./chat/types.ts";
 import { formatInbound, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, sessionInstructions } from "./instructions.ts";
 import { toolStatus } from "./chat/slack-status.ts";
+import { INTERNAL_CONNECT } from "./chat/internal.ts";
 import { log } from "./log.ts";
 import type { AgentDriver, AgentSession, LiveEvent, TurnOutcome } from "./runtime/types.ts";
 import { EMBER_SURFACE, type PendingMessage, type SessionRow, type Store, type TurnKind } from "./store.ts";
@@ -219,7 +220,12 @@ export class SessionActor {
     const newThreads = new Set(said.map((m) => m.thread).filter((t) => !heard.has(t)));
     const names = new Map<string, string>();
     for (const m of said) {
-      if (m.authorKind !== "person" || names.has(m.author)) continue;
+      if (names.has(m.author)) continue;
+      if (m.authorKind === "agent") {
+        names.set(m.author, this.#agentName(m.author, m.thread));
+        continue;
+      }
+      if (m.authorKind !== "person") continue;
       const name = await this.#deps.chat(m.connect)?.userName?.(m.author);
       if (name) names.set(m.author, name);
     }
@@ -232,6 +238,19 @@ export class SessionActor {
       if (name) selves.set(connect, mention ? `${name} (${mention})` : name);
     }
     return formatInbound(said, { newThreads, names, selves });
+  }
+
+  /**
+   * What another agent goes by in a thread: the bot of the connect it posts there through, with its mention (in Slack,
+   * to call on it); in the station's own chats, its runtime and model.
+   */
+  #agentName(key: string, thread: number): string {
+    const via = this.#deps.store.threadSessions(thread).find((m) => m.session === key)?.connect;
+    const chat = via ? this.#deps.chat(via) : undefined;
+    if (chat?.botName && via !== INTERNAL_CONNECT) return chat.botUserId ? `${chat.botName} (<@${chat.botUserId}>)` : chat.botName;
+    const row = this.#deps.store.getSession(key);
+    if (!row) return "another agent";
+    return `${row.runtime === "claude" ? "Claude Code" : "Codex"}${row.model ? ` ${row.model}` : ""}`;
   }
 
   /**

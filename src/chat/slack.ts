@@ -7,8 +7,8 @@ import type { ChatEvent, ChatMessage, ChatSurface, InboundMessage, ThreadRef } f
 import type { Attachment } from "../store.ts";
 import type { NameBook, Person } from "./names.ts";
 
-/** Message subtypes that are still a person talking. */
-const CONTENT_SUBTYPES = new Set([undefined, "file_share", "thread_broadcast"]);
+/** Message subtypes that are someone talking: a person, or another app's bot (agents work together in threads). */
+const CONTENT_SUBTYPES = new Set([undefined, "file_share", "thread_broadcast", "bot_message"]);
 
 /** Who a bot token belongs to, as Slack reports it. */
 export interface SlackIdentity {
@@ -80,6 +80,8 @@ export class SlackSurface implements ChatSurface {
   readonly #appToken: string;
   readonly #botToken: string;
   #identity: SlackIdentity | null = null;
+  /** This app's bot id (B…), which its own messages carry besides its user. */
+  #botId = "";
   readonly #names = new Map<string, Promise<{ name: string; email: string } | null>>();
   readonly #channels = new Map<string, Promise<string | null>>();
   #socket: WebSocket | undefined;
@@ -134,14 +136,25 @@ export class SlackSurface implements ChatSurface {
     for (const listener of this.#statusListeners) listener();
   }
 
+  async #authenticate(): Promise<void> {
+    const auth = await this.#api("auth.test", {}, this.#botToken);
+    this.#botId = String(auth.bot_id ?? "");
+    this.#identity = await identityOf(auth, (id) => this.#api("users.info", { user: id }, this.#botToken));
+  }
+
+  /** A message this bot posted itself (the station records those as it posts them). */
+  #own(event: Record<string, any>): boolean {
+    return (Boolean(event.user) && event.user === this.botUserId) || (Boolean(event.bot_id) && event.bot_id === this.#botId);
+  }
+
   async refreshIdentity(): Promise<void> {
-    this.#identity = await identityOf(await this.#api("auth.test", {}, this.#botToken), (id) => this.#api("users.info", { user: id }, this.#botToken));
+    await this.#authenticate();
     for (const listener of this.#statusListeners) listener();
   }
 
   async start(handler: (event: ChatEvent) => Promise<void>): Promise<void> {
-    this.#identity = await identityOf(await this.#api("auth.test", {}, this.#botToken), (id) => this.#api("users.info", { user: id }, this.#botToken));
-    log.info("slack authenticated", { botUserId: this.#identity.botUserId, team: this.#identity.team });
+    await this.#authenticate();
+    log.info("slack authenticated", { botUserId: this.botUserId, team: this.#identity?.team });
     void this.#connectLoop(handler);
   }
 
@@ -281,7 +294,7 @@ export class SlackSurface implements ChatSurface {
   #toEvent(event: Record<string, any>): ChatEvent | undefined {
     if (event.type === "message" && event.subtype === "message_changed") {
       const changed = event.message ?? {};
-      if (!changed.ts || changed.bot_id) return undefined;
+      if (!changed.ts || this.#own(changed)) return undefined;
       // A message outside any thread is the root of its own.
       return { kind: "changed", channel: String(event.channel), threadTs: String(changed.thread_ts ?? changed.ts), ts: String(changed.ts), text: String(changed.text ?? "") };
     }
@@ -293,13 +306,16 @@ export class SlackSurface implements ChatSurface {
 
   #toInbound(event: Record<string, any>): InboundMessage | undefined {
     if (event.type !== "app_mention" && event.type !== "message") return undefined;
-    if (!CONTENT_SUBTYPES.has(event.subtype) || event.bot_id || !event.user || event.user === this.botUserId) return undefined;
+    if (!CONTENT_SUBTYPES.has(event.subtype) || this.#own(event)) return undefined;
+    // A person, or another app's bot: its bot user when Slack gives one, else its bot id.
+    const user = String(event.user ?? event.bot_id ?? "");
+    if (!user) return undefined;
     const text = String(event.text ?? "");
     return {
       channel: String(event.channel),
       threadTs: String(event.thread_ts ?? event.ts),
       ts: String(event.ts),
-      user: String(event.user),
+      user,
       text,
       addressed: event.type === "app_mention" || event.channel_type === "im" || text.includes(`<@${this.botUserId}>`),
     };
