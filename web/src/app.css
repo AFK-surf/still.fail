@@ -1159,8 +1159,7 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 @supports not (scrollbar-color: auto) {
   ::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: transparent; background-clip: padding-box; }
-  :hover::-webkit-scrollbar-thumb { background-color: color-mix(in oklch, var(--text) 22%, transparent); }
+  ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: color-mix(in oklch, var(--text) 16%, transparent); background-clip: padding-box; }
   ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklch, var(--text) 38%, transparent); }
   ::-webkit-scrollbar-corner { background: transparent; }
 }
