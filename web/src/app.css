@@ -38,7 +38,11 @@
 .nav-slider { flex: 1; min-height: 0; overflow: hidden; display: flex; }
 .nav-track { flex: none; width: 200%; display: flex; transition: transform 240ms var(--ease-out); }
 .nav-track[data-mine] { transform: translateX(-50%); }
-.nav-track > .nav-scroll { flex: none; width: 50%; }
+/* Each pane sized by the track alone: otherwise the track's height is its tallest pane's content, and any change in a
+   row (the time shown on hover) lays out every row of both lists again, a frame dropped per row passed while scrolling. */
+.nav-track > .nav-scroll { flex: none; width: 50%; contain: strict; }
+/* While the list scrolls, rows passing under the pointer do not light up (each would repaint the list). */
+.nav-scroll[data-scrolling] .nav-row { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .nav-track { transition: none; } }
 .nav-foot { padding: 8px; border-top: 1px solid var(--line); }
 .nav-foot-row { display: flex; align-items: center; gap: 4px; }

@@ -7,6 +7,7 @@ import { useChats, type ChatItem } from "./api.ts";
 import { ConnectKindIcon, ICON, ModelLogo, ResizeHandle, SkeletonRows, StatusDot, Time, Tip } from "./ui.tsx";
 import { SidebarBrand, Mark } from "./brand.tsx";
 import { chatClicked } from "./telemetry.ts";
+import { useCallback } from "react";
 
 export function Sidebar() {
   const path = useLocation().pathname;
@@ -100,10 +101,11 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
   const connecting = several ? stations.filter((s) => s.state === "connecting") : [];
   const failed = several ? stations.filter((s) => s.state === "error") : [];
   const loading = !view || view.loading;
+  const scroller = useScrolling();
   // A station's link coming back is said on its rows (the core's `reconnecting`); only with no rows at all to show does
   // the list say it, in place of the rows.
   return (
-    <div className="nav-scroll" aria-hidden={hidden || undefined} inert={hidden || undefined}>
+    <div ref={scroller} className="nav-scroll" aria-hidden={hidden || undefined} inert={hidden || undefined}>
       {chats.error && !view && <p className="nav-empty nav-error">{chats.error.message}</p>}
       {days.length === 0 && !loading && failed.map((s) => <p key={s.station} className="nav-empty nav-error" title={s.message ?? undefined}>连不上「{s.name}」，正在重试…</p>)}
       {days.length === 0 && (loading || connecting.length > 0) && !chats.error && <SkeletonRows />}
@@ -120,6 +122,21 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: Ret
       ))}
     </div>
   );
+}
+
+/** Marks a scroller `data-scrolling` while it scrolls and a moment after (its rows ignore the pointer meanwhile). */
+function useScrolling() {
+  return useCallback((el: HTMLElement | null) => {
+    if (!el) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      el.dataset.scrolling = "";
+      clearTimeout(timer);
+      timer = setTimeout(() => delete el.dataset.scrolling, 150);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => { el.removeEventListener("scroll", onScroll); clearTimeout(timer); };
+  }, []);
 }
 
 /**
