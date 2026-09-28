@@ -25,10 +25,10 @@ How you answer:
   - chat_post posts a message to="CHANNEL/THREAD_TS": always the thread attribute of the message you are answering. There is no default conversation.
   - Its arguments are all here, so call it directly without looking the tool up first: to (required), text (formatted for where it goes, below), kind ("final" or "block"; omit for a progress update), files (optional).
   - In ember chats (EMBER/…) chat_post can also attach files: files=[absolute paths on this machine]. Images show inline, so send a screenshot or chart as a file rather than describing it. Slack threads take text only.
-  - chat_state records a final or block state without posting.
+  - chat_state records a final or block state without posting, or waiting (below).
   - chat_history reads earlier messages of the thread given as to="CHANNEL/THREAD_TS", your own posts included.
   - slack_api calls any Slack Web API method as your bot (read channels and threads, look people up, react, edit or delete your messages, open a direct message and post in it). It cannot write in a thread another session takes part in; a thread you write in, or a new message you post, becomes one of your conversations and its replies come to you.
-- End every turn with an explicit state. When you have answered or the work is done, post it with chat_post and kind "final". Use kind "block" only when work you were asked to do is stuck and cannot go on until a person acts (a decision only they can make, access, a missing fact the work depends on); say exactly what you need. Replying to a greeting, answering a question, asking what they want next, or offering options is "final": nothing is stuck. A chat_post with a kind already records the state; use chat_state only when your last post already said everything and carried no kind. A turn that ends without a state is sent back to you.
+- End every turn with an explicit state. When you have answered or the work is done, post it with chat_post and kind "final". Use kind "block" only when work you were asked to do is stuck and cannot go on until a person acts (a decision only they can make, access, a missing fact the work depends on); say exactly what you need. Replying to a greeting, answering a question, asking what they want next, or offering options is "final": nothing is stuck. A chat_post with a kind already records the state; use chat_state only when your last post already said everything and carried no kind. When work you started runs on after the turn and will bring you back when it ends (a background agent or command, a job), post progress if it helps, then chat_state "waiting" with seconds: your estimate of how long until it comes back; if nothing has by then, you are asked again. A turn that ends without a state is sent back to you.
 - Post progress only when it helps the people waiting: a plan change, a partial result, a blocker. No filler.
 
 How your text looks where it goes:
@@ -155,7 +155,18 @@ pub fn format_history(messages: &[MessageRow], surface: &str, address: &str, sel
 pub const NUDGE: &str = r#"Your turn ended without a final or block state, so nobody knows whether you are done.
 - If the work is done: post the result with chat_post kind "final" (or chat_state "final" if you already posted it).
 - If work you were asked to do cannot go on without a person: post what you need with kind "block". A reply that only asks what they want next is "final".
+- If work you started runs on and will bring you back when it ends: chat_state "waiting" with seconds, your estimate of how long until it does.
 - Otherwise: continue the work."#;
+
+/// The agent said it would wait this long, and nothing has brought it back.
+pub fn wait_over(seconds: u64) -> String {
+    format!(
+        r#"You said you were waiting on work you started ({seconds} seconds), and nothing has brought you back yet. Check on it.
+- If it is done: pick up its results and carry on.
+- If it is still running: chat_state "waiting" again with a new estimate.
+- If it has stopped or is stuck: say so in the thread, and fix or restart it if you can."#
+    )
+}
 
 pub const RESUME_AFTER_RESTART: &str = r#"ember restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know."#;
 

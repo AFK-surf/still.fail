@@ -426,6 +426,49 @@ async fn a_turn_ending_without_final_or_block_is_nudged_then_reported_after_max_
     assert!(r.chat.last_text().contains("没有给出明确结果"));
 }
 
+#[tokio::test(start_paused = true)]
+async fn a_turn_ending_waiting_is_not_nudged_nor_evicted_and_is_asked_again_when_the_wait_is_over() {
+    let r = setup_with(Setup { max_warm_claude: Some(0), warm_minutes: Some(0.0), ..Setup::default() });
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    let said = r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 1 })).await.unwrap();
+    assert!(said.contains("in 10 seconds"), "at least 10: {said}");
+    r.claude.last().complete();
+    settle().await;
+    assert_eq!(r.claude.last().prompts().len(), 1, "not nudged");
+    assert!(!r.claude.last().disposed(), "its background work may run in its process");
+    assert!(r.chat.texts().is_empty());
+    tokio::time::sleep(Duration::from_secs(11)).await;
+    settle().await;
+    let prompts = r.claude.last().prompts();
+    assert_eq!(prompts.len(), 2);
+    assert!(prompts[1].contains("waiting on work you started (10 seconds)"), "{}", prompts[1]);
+    assert_eq!(r.store.list_turns(&key).unwrap().iter().filter_map(|t| t.summary.declared.clone()).collect::<Vec<_>>(), ["waiting"]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_turn_that_starts_before_the_wait_is_over_ends_it() {
+    let r = setup();
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    r.call(&key, "chat_state", json!({ "kind": "waiting", "seconds": 60 })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    r.accept(&reply(&m, "9999.1", "any news?")).await;
+    settle().await;
+    r.call(&key, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.claude.last().complete();
+    tokio::time::sleep(Duration::from_secs(120)).await;
+    settle().await;
+    assert_eq!(r.claude.last().prompts().len(), 2, "no word when the old wait's time comes");
+    let refused = r.call(&key, "chat_state", json!({ "kind": "waiting" })).await.unwrap_err();
+    assert!(refused.to_string().contains("seconds is required"), "{refused}");
+}
+
 #[tokio::test]
 async fn chat_post_with_kind_final_posts_and_settles_the_turn_without_a_nudge() {
     let r = setup();

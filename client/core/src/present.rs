@@ -8,8 +8,9 @@ use serde_json::{Value, json};
 use crate::format;
 use crate::protocol::Topic;
 
-/// Where a session stands: running, queued, final, block, failed, aborted, unexpected (a turn that ended without
-/// saying final or block, or was left open by a crash), or idle.
+/// Where a session stands: running (also while it waits on work it started, which brings it back), queued, final,
+/// block, failed, aborted, unexpected (a turn that ended without saying final or block, or was left open by a crash),
+/// or idle.
 pub fn session_status(s: &Value) -> &'static str {
     if s.get("process").and_then(Value::as_str) == Some("running") {
         return "running";
@@ -21,6 +22,7 @@ pub fn session_status(s: &Value) -> &'static str {
     match turn.get("declared").and_then(Value::as_str) {
         Some("final") => return "final",
         Some("block") => return "block",
+        Some("waiting") => return "running",
         _ => {}
     }
     match turn.get("outcome").and_then(Value::as_str) {
@@ -413,6 +415,7 @@ mod tests {
         assert_eq!(session_status(&json!({"process": "running"})), "running");
         assert_eq!(session_status(&json!({"process": "warm", "pending": 1})), "queued");
         assert_eq!(session_status(&json!({"lastTurn": {"declared": "block", "outcome": "completed"}})), "block");
+        assert_eq!(session_status(&json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed"}})), "running");
         assert_eq!(session_status(&json!({"lastTurn": {"outcome": "completed"}})), "unexpected");
         assert_eq!(session_status(&json!({})), "idle");
     }

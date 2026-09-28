@@ -816,18 +816,30 @@ impl Hub {
             },
             Tool {
                 name: "chat_state".into(),
-                description: "Record that this turn ends as final (work done) or block (waiting on a person) without posting another message.".into(),
+                description: "Record that this turn ends as final (work done), block (waiting on a person) or waiting (work you started runs on and will bring you back) without posting another message.".into(),
                 input_schema: json!({
                     "type": "object",
-                    "properties": { "kind": { "type": "string", "enum": ["final", "block"] } },
+                    "properties": {
+                        "kind": { "type": "string", "enum": ["final", "block", "waiting"] },
+                        "seconds": { "type": "integer", "minimum": MIN_WAIT_SECONDS, "maximum": MAX_WAIT_SECONDS, "description": "For waiting: your estimate of how long until the work brings you back. If nothing has by then, you are asked again." },
+                    },
                     "required": ["kind"],
                     "additionalProperties": false,
                 }),
                 run: run(|hub, key, args| {
                     Box::pin(async move {
-                        let kind = state_arg(args.get("kind"))?.ok_or_else(|| anyhow!("kind is required"))?;
+                        let kind = match args.get("kind") {
+                            Some(Value::String(s)) if s == "waiting" => {
+                                let seconds = args.get("seconds").and_then(js_number).ok_or_else(|| anyhow!("seconds is required for waiting: how long until the work brings you back"))?;
+                                DeclaredState::Waiting((seconds.max(0.0) as u64).clamp(MIN_WAIT_SECONDS, MAX_WAIT_SECONDS))
+                            }
+                            kind => state_arg(kind)?.ok_or_else(|| anyhow!("kind is required"))?,
+                        };
                         hub.declare(&key, kind);
-                        Ok(format!("Recorded state {}.", kind.as_str()))
+                        Ok(match kind {
+                            DeclaredState::Waiting(seconds) => format!("Recorded state waiting: you are asked again in {seconds} seconds unless something brings you back first."),
+                            _ => format!("Recorded state {}.", kind.as_str()),
+                        })
                     })
                 }),
             },
@@ -1164,6 +1176,10 @@ fn js_number(value: &Value) -> Option<f64> {
         _ => None,
     }
 }
+
+/// How long an agent may say it waits (chat_state "waiting").
+const MIN_WAIT_SECONDS: u64 = 10;
+const MAX_WAIT_SECONDS: u64 = 3600;
 
 fn state_arg(value: Option<&Value>) -> Result<Option<DeclaredState>> {
     match value {

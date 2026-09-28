@@ -18,7 +18,7 @@ use tracing::{error, info, warn};
 use crate::chat::status::tool_status;
 use crate::chat::{ChatSurface, ThreadRef};
 use crate::config::Profile;
-use crate::instructions::{NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, format_inbound, session_instructions};
+use crate::instructions::{NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, format_inbound, session_instructions, wait_over};
 use crate::live::LiveHub;
 use crate::runtime::{AgentDriver, AgentSession, LiveEvent, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, uuid};
 use crate::store::{AuthorKind, EMBER_SURFACE, NewMessage, PendingMessage, Store, now_ms};
@@ -27,6 +27,9 @@ use crate::store::{AuthorKind, EMBER_SURFACE, NewMessage, PendingMessage, Store,
 pub enum DeclaredState {
     Final,
     Block,
+    /// The work goes on after the turn (a background agent or command of the runtime's) and will bring the agent back
+    /// on its own; if nothing has by then, the agent is asked again after this many seconds.
+    Waiting(u64),
 }
 
 impl DeclaredState {
@@ -34,6 +37,7 @@ impl DeclaredState {
         match self {
             DeclaredState::Final => "final",
             DeclaredState::Block => "block",
+            DeclaredState::Waiting(_) => "waiting",
         }
     }
 }
@@ -84,6 +88,10 @@ struct State {
     tools: Vec<(String, String)>,
     /// The station's words for the agent outside any conversation (a job's notices), not yet given to it.
     notices: Vec<String>,
+    /// The agent said it is waiting on work that brings it back: the wait's number, until a turn starts. Its process is
+    /// kept meanwhile (the work may run inside it).
+    waiting: Option<u64>,
+    waits: u64,
 }
 
 type Task = Box<dyn FnOnce(Arc<SessionActor>) -> BoxFuture<'static, Result<()>> + Send>;
@@ -173,7 +181,7 @@ impl SessionActor {
     pub fn idle_ms(&self, now: i64) -> Option<i64> {
         let st = self.st();
         match &st.agent {
-            Some((_, a)) if !a.busy() && st.turn.is_none() => Some(now - st.idle_since),
+            Some((_, a)) if !a.busy() && st.turn.is_none() && st.waiting.is_none() => Some(now - st.idle_since),
             _ => None,
         }
     }
@@ -244,7 +252,7 @@ impl SessionActor {
             let agent = {
                 let mut st = a.st();
                 match &st.agent {
-                    Some((_, agent)) if !agent.busy() && st.turn.is_none() => st.agent.take().map(|(_, agent)| agent),
+                    Some((_, agent)) if !agent.busy() && st.turn.is_none() && st.waiting.is_none() => st.agent.take().map(|(_, agent)| agent),
                     _ => None,
                 }
             };
@@ -472,7 +480,11 @@ impl SessionActor {
 
     fn begin_turn(&self, deps: &Arc<dyn SessionDeps>, kind: &str) -> Result<()> {
         let id = uuid();
-        self.st().turn = Some(Turn { id: id.clone(), declared: None });
+        {
+            let mut st = self.st();
+            st.turn = Some(Turn { id: id.clone(), declared: None });
+            st.waiting = None;
+        }
         let store = deps.store();
         store.start_turn(&id, &self.key, kind)?;
         store.set_running(&self.key, true)
@@ -609,8 +621,15 @@ impl SessionActor {
         if !self.st().notices.is_empty() {
             return self.give_notices().await;
         }
+        let declared = turn.as_ref().and_then(|t| t.declared);
+        if let (TurnOutcome::Completed, Some(DeclaredState::Waiting(seconds))) = (&outcome, declared) {
+            self.st().nudges = 0;
+            self.wait(seconds);
+            deps.idle(&self.key);
+            return Ok(());
+        }
         deps.idle(&self.key);
-        if outcome != TurnOutcome::Completed || turn.as_ref().is_some_and(|t| t.declared.is_some()) {
+        if outcome != TurnOutcome::Completed || declared.is_some() {
             self.st().nudges = 0;
             return Ok(());
         }
@@ -634,6 +653,29 @@ impl SessionActor {
                 Ok(())
             }
         }
+    }
+
+    /// Asks the agent again after `seconds`, unless a turn has started by then (what it waited on brought it back, or
+    /// someone wrote).
+    fn wait(self: &Arc<Self>, seconds: u64) {
+        let wait = {
+            let mut st = self.st();
+            st.waits += 1;
+            st.waiting = Some(st.waits);
+            st.waits
+        };
+        let me = Arc::downgrade(self);
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(seconds)).await;
+            let Some(actor) = me.upgrade() else { return };
+            let _ = actor.enqueue(move |a| async move {
+                if a.st().waiting.take_if(|w| *w == wait).is_none() {
+                    return Ok(());
+                }
+                info!(session = a.key, seconds, "the wait is over without word; asking again");
+                a.start_turn(&a.deps()?, "nudge", &wait_over(seconds)).await
+            });
+        });
     }
 
     /// The station's own words (not the agent's) go to the thread people spoke in last, and are recorded there.
