@@ -119,9 +119,9 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
   return loaded;
 }
 
-/** An image as a chat shows it (its thumbnail, where the station keeps one) as a blob URL, fetched once and kept while shown. */
-export function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean): string | null {
-  const loaded = useFile(sessionKey, file, enabled, true);
+/** A chat attachment as a blob URL. Images use thumbnails; video stills need the original file. */
+export function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean, thumb = true): string | null {
+  const loaded = useFile(sessionKey, file, enabled, thumb);
   return loaded.state === "ready" ? loaded.url : null;
 }
 

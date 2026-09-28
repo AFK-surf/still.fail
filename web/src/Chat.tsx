@@ -11,7 +11,7 @@ import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
-import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, useFileUrl, useNear } from "./FilePreview.tsx";
+import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileUrl, useNear } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { useDraft, type DraftQuote } from "./draft.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -566,14 +566,29 @@ export function Files({ owner, files, look }: { owner: (file: Attachment) => str
   return <div className={look.files}>{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} look={look} />)}</div>;
 }
 
-/** Images show themselves at their own proportions, fetched as they come near the screen; other files are a card. Either opens in a preview. */
+/** Images and video stills load near the screen; other files are a card. Either opens in a preview. */
 function FileItem({ sessionKey, file, look }: { sessionKey: string | null; file: Attachment; look: FileLook }) {
   const image = isImage(file.name);
+  const video = kindOf(file.name).kind === "video";
+  const [videoFailed, setVideoFailed] = useState(false);
   const box = useRef<HTMLButtonElement>(null);
-  const near = useNear(box, image);
-  const url = useFileUrl(sessionKey ?? "", file, image && sessionKey !== null && near);
+  const near = useNear(box, image || video);
+  const url = useFileUrl(sessionKey ?? "", file, (image || video) && sessionKey !== null && near, !video);
   const [open, setOpen] = useState(false);
   const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
+  if (video && sessionKey !== null && !videoFailed) {
+    return (
+      <>
+        <button ref={box} type="button" className={`${look.image} ${css.msgVideo}`} onClick={() => setOpen(true)}
+          title={file.name} aria-label={`播放 ${file.name}`} style={look.box(file)}>
+          {url && <video src={url} muted playsInline preload="auto" aria-hidden="true" onError={() => setVideoFailed(true)} />}
+          <span className={css.msgVideoPlay} aria-hidden="true">▶</span>
+          <span className={css.msgVideoName}>{file.name}</span>
+        </button>
+        {preview}
+      </>
+    );
+  }
   if (image) {
     return (
       <>
