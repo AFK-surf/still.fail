@@ -5,9 +5,10 @@
 import { Dialog as RDialog } from "radix-ui";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useApi, type Api, type Attachment } from "./api.ts";
-import { Close, Download } from "./icons.tsx";
+import { Close, Download, Minus, Plus } from "./icons.tsx";
 import { Prose } from "./Prose.tsx";
 import { useStation } from "./station.tsx";
+import { Segmented } from "./ui.tsx";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
 export function fileSize(bytes: number): string {
@@ -119,12 +120,11 @@ export function useFileUrl(sessionKey: string, file: Attachment, enabled: boolea
 
 // ── the viewer ─────────────────────────────────────────────────────────
 
-/** A file over a dimmed page; Esc or a click outside closes it. */
+/** A file over the whole window, a bar with its name and tools on top; Esc closes it. */
 export function FilePreview({ open, onClose, sessionKey, file }: { open: boolean; onClose(): void; sessionKey: string; file: Attachment }) {
   return (
     <RDialog.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <RDialog.Portal>
-        <RDialog.Overlay className="lightbox-overlay" />
         {open && <Viewer onClose={onClose} sessionKey={sessionKey} file={file} />}
       </RDialog.Portal>
     </RDialog.Root>
@@ -151,26 +151,39 @@ function Viewer({ onClose, sessionKey, file }: { onClose(): void; sessionKey: st
     const { url, blob } = loaded;
     switch (kind) {
       case "image": body = <ImageViewer url={url} file={file} setControls={setControls} />; break;
-      case "video": body = <video className="fp-video" src={url} controls autoPlay playsInline />; break;
+      case "video": body = <VideoPlayer url={url} />; break;
       case "audio": body = <div className="fp-audio"><span className="fp-audio-name">{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
         body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} />; break;
-      default: body = <div className="fp-note">这种文件没法在这里预览，下载后查看。<a className="lightbox-action" href={url} download={file.name}><Download size={14} />下载</a></div>;
+      default: body = <div className="fp-note">这种文件没法在这里预览<a className="btn" href={url} download={file.name}><Download size={16} />下载</a></div>;
     }
   }
   return (
-    <RDialog.Content className="lightbox" data-kind={kind ?? undefined} aria-describedby={undefined} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <RDialog.Title className="sr-only">{file.name}</RDialog.Title>
-      <div className="lightbox-body" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>{body}</div>
-      <div className="lightbox-bar">
-        <span className="lightbox-name" title={file.path}>{file.name}</span>
-        <span className="lightbox-size">{fileSize(file.size)}</span>
-        {controls}
-        {loaded.state === "ready" && <a className="lightbox-action" href={loaded.url} download={file.name}><Download size={14} />下载</a>}
-        <RDialog.Close className="lightbox-action" aria-label="关闭"><Close size={14} /></RDialog.Close>
-      </div>
+    <RDialog.Content className="fp" data-kind={kind ?? undefined} aria-describedby={undefined}
+      // The page itself takes focus, not its first button: no ring on the close button for a tap or click.
+      onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
+      <header className="fp-head">
+        <div className="fp-title">
+          <RDialog.Title className="fp-name" title={file.path}>{file.name}</RDialog.Title>
+          <span className="fp-meta">{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${KIND_LABEL[kind as PreviewKind]}` : ""}</span>
+        </div>
+        <div className="fp-tools">{controls}</div>
+        {loaded.state === "ready" && <a className="icon-btn" href={loaded.url} download={file.name} title="下载" aria-label="下载"><Download size={18} /></a>}
+        <RDialog.Close className="icon-btn" aria-label="关闭" title="关闭（Esc）"><Close size={18} /></RDialog.Close>
+      </header>
+      <div className="fp-body">{body}</div>
     </RDialog.Content>
+  );
+}
+
+/** A video as large as the window takes it, at its own proportions (known once its first frame's size is). */
+function VideoPlayer({ url }: { url: string }) {
+  const [ratio, setRatio] = useState<number | null>(null);
+  return (
+    <video className="fp-video" src={url} controls autoPlay playsInline
+      onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth && v.videoHeight) setRatio(v.videoWidth / v.videoHeight); }}
+      style={ratio ? { aspectRatio: String(ratio), width: `min(100% - var(--fp-gap) * 2, (100dvh - var(--fp-head) - var(--fp-gap) * 2) * ${ratio})` } : { visibility: "hidden" }} />
   );
 }
 
@@ -186,6 +199,8 @@ async function looksLikeText(blob: Blob): Promise<boolean> {
     return false;
   }
 }
+
+const KIND_LABEL: Partial<Record<PreviewKind, string>> = { image: "图片", video: "视频", audio: "音频", pdf: "PDF", markdown: "Markdown", csv: "表格", html: "网页", code: "代码", text: "文本" };
 
 // ── images: zoom and pan ───────────────────────────────────────────────
 
@@ -215,7 +230,9 @@ function ImageViewer({ url, file, setControls }: { url: string; file: Attachment
     return () => observer.disconnect();
   }, []);
 
-  const fit = natural && box ? Math.min(1, box.w / natural.w, box.h / natural.h) : 1;
+  // Fitted, it keeps a margin from the window's edges.
+  const MARGIN = box && box.w < 640 ? 12 : 32;
+  const fit = natural && box ? Math.min(1, (box.w - 2 * MARGIN) / natural.w, (box.h - 2 * MARGIN) / natural.h) : 1;
   const minScale = Math.min(fit, 1) / 2;
 
   /** Keeps a larger-than-window image covering the window, a smaller one centred. */
@@ -327,11 +344,11 @@ function ImageViewer({ url, file, setControls }: { url: string; file: Attachment
   const scale = view?.scale ?? fit;
   useEffect(() => {
     setControls(
-      <span className="lightbox-zoom">
-        <button type="button" className="lightbox-action" aria-label="缩小" disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}>−</button>
-        <button type="button" className="lightbox-action lightbox-percent" title="适应窗口" onClick={reset}>{Math.round(scale * 100)}%</button>
-        <button type="button" className="lightbox-action" aria-label="放大" disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}>+</button>
-        <button type="button" className="lightbox-action" title="原始大小" onClick={() => zoomTo(1)}>1:1</button>
+      <span className="fp-zoom">
+        <button type="button" className="icon-btn" aria-label="缩小" title="缩小（-）" disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button>
+        <button type="button" className="fp-tool-text fp-percent" title="适应窗口（0）" onClick={reset}>{Math.round(scale * 100)}%</button>
+        <button type="button" className="icon-btn" aria-label="放大" title="放大（+）" disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button>
+        <button type="button" className="fp-tool-text" title="原始大小（1）" onClick={() => zoomTo(1)}>1:1</button>
       </span>,
     );
   }, [scale, minScale, zoomTo, reset, setControls]);
@@ -448,10 +465,8 @@ function TextViewer({ blob, kind, language, name, setControls }: { blob: Blob; k
   useEffect(() => {
     if (!rendered) return;
     setControls(
-      <span className="lightbox-zoom" role="group" aria-label="显示方式">
-        <button type="button" className="lightbox-action" aria-pressed={!source} onClick={() => setSource(false)}>预览</button>
-        <button type="button" className="lightbox-action" aria-pressed={source} onClick={() => setSource(true)}>源码</button>
-      </span>,
+      <Segmented label="显示方式" value={source ? "source" : "view"} onChange={(v) => setSource(v === "source")}
+        options={[{ value: "view", label: "预览" }, { value: "source", label: "源码" }]} />,
     );
     return () => setControls(null);
   }, [rendered, source, setControls]);

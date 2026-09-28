@@ -145,6 +145,10 @@ export function LogOut(props: IconProps) {
   return <Svg {...props}><path d="M11 3.5H8Q4 3.5 4 7.5V16.5Q4 20.5 8 20.5H11 M10 12H20.5 M16 7.5L20.5 12L16 16.5" /></Svg>;
 }
 
+export function Minus(props: IconProps) {
+  return <Svg {...props}><path d="M4.5 12H19.5" /></Svg>;
+}
+
 export function Monitor(props: IconProps) {
   return <Svg {...props}><path d="M8 3.5H16Q20.5 3.5 20.5 8V12Q20.5 16 16 16H8Q3.5 16 3.5 12V8Q3.5 3.5 8 3.5Z M12 16V20.5 M8 20.5H16" /></Svg>;
 }
@@ -308,6 +312,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "key": Key,
   "log-in": LogIn,
   "log-out": LogOut,
+  "minus": Minus,
   "monitor": Monitor,
   "more": More,
   "other": Other,
