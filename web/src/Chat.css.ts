@@ -466,3 +466,30 @@ globalStyle(`${quoteCard}:not(:has(${quoteCardComment})) ${quoteCardSource}`, { 
 globalStyle(`${tokenStart} > p`, { margin: "0 0 8px", fontSize: vars.textSm });
 /** Here rather than with its class: it comes after .token-start > p, and wins over it. */
 globalStyle(`${onboardingCard} p`, { margin: "0", fontSize: vars.textSm });
+
+/** Video stills share each screen's attachment sizing, with an explicit play affordance. */
+export const msgVideo = style({
+  position: "relative", maxWidth: "100%",
+  selectors: {
+    "button&": { cursor: "pointer", background: "#000", color: "#fff" },
+    'button&[data-unavailable]': { background: vars.neutralBg, color: vars.muted, boxShadow: `inset 0 0 0 1px ${vars.line}` },
+  },
+});
+globalStyle(`${msgVideo} video`, { width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" });
+export const msgVideoPlay = style({
+  position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+  width: "40px", height: "40px", display: "grid", placeItems: "center", borderRadius: "50%",
+  background: "rgba(0, 0, 0, 0.65)", fontSize: "20px", pointerEvents: "none",
+});
+export const msgVideoName = style({
+  position: "absolute", bottom: "0", left: "0", right: "0", padding: "6px 8px",
+  background: "rgba(0, 0, 0, 0.65)", fontSize: "12px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+
+export const msgVideoUnavailable = style({
+  position: "absolute", inset: "0 0 30px", display: "flex", flexDirection: "column",
+  alignItems: "center", justifyContent: "center", gap: "8px", fontSize: "13px",
+});
+globalStyle(`${msgVideo}[data-unavailable] .${msgVideoName}`, {
+  background: "transparent", color: vars.text, textAlign: "center", padding: "8px 12px",
+});
