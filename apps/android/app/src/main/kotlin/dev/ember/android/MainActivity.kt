@@ -73,7 +73,8 @@ class MainActivity : ComponentActivity() {
 
     /**
      * ember cloud's sign-in comes back as ember://auth/callback?…, which the core finishes; an item's link
-     * (https://ember.3720.org/o/<workspace>/<station>/<session>) opens that item.
+     * (https://ember.3720.org/o/<workspace>/<station>/<session>) opens that item; a service's link (`?service=<job>`, from
+     * Slack) has the service over it.
      */
     private fun handle(intent: Intent?) {
         val uri = intent?.data ?: return
@@ -81,7 +82,7 @@ class MainActivity : ComponentActivity() {
         val parts = uri.pathSegments
         if (uri.scheme == "https" && parts.size == 4 && parts[0] == "o") {
             setIntent(Intent())
-            app.openItem(parts[1], parts[2], parts[3])
+            app.openItem(parts[1], parts[2], parts[3], uri.getQueryParameter("service")?.takeIf { it.isNotEmpty() })
             return
         }
         if (uri.scheme != "ember" || uri.host != "auth") return

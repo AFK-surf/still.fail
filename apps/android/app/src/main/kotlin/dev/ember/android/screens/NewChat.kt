@@ -93,8 +93,15 @@ fun NewChatScreen(scope: String) {
             all == null -> Loading(stations.error?.message ?: "正在读取 station…")
             online.isEmpty() -> Column(Modifier.fillMaxSize().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
                 Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 240.dp)
-                Text("没有在线的 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text("在一台机器上打开 ember，它就会连上这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+                if (all.isEmpty()) {
+                    // No station at all: the first step is adding one, on the stations page.
+                    Text("还没有 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                    Text("station 是一台运行 ember 的机器：agent 在那里干活。在要用的机器上执行一条命令，它就会加入这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+                    Button("添加 station", primary = true) { app.replace(Screen.Stations) }
+                } else {
+                    Text("没有在线的 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                    Text("在一台机器上打开 ember，它就会连上这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+                }
             }
             else -> {
                 val remembered = app.strings("newChat.last").firstOrNull()
@@ -147,6 +154,26 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
     }
     val launchers = AttachLaunchers { app.upload(draft, view.station, it, scope) }
     val haze = remember { HazeState() }
+    // Nothing to run a chat with yet: its first step is the page (the composer comes once it can send).
+    val blocked = if (view.overview != null && made == null) (if (profiles.isEmpty()) "profile" else if (view.models.isEmpty()) "models" else null) else null
+    if (blocked != null) {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 200.dp)
+            Text(if (blocked == "profile") "给 ${view.name} 添加一个 Profile" else "勾选要用的模型", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
+            Text(
+                if (blocked == "profile") "agent 用它来跑模型：一份订阅（Claude、ChatGPT），或者一个模型服务的 key。" else "${view.name} 的 Profile 还没有启用模型，勾选之后就能开始对话。",
+                fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center,
+            )
+            if (blocked == "profile") Button("添加 Profile", primary = true) { app.push(Screen.NewProfile(view.station)) }
+            else Button("去勾选模型", primary = true) { app.push(Screen.Station(view.station)) }
+            if (stations.size > 1) Text("换一台 station", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { pickStation(app, stations, view.station, onStation) })
+            if (blocked == "profile") view.overview?.let { o -> Column(Modifier.fillMaxWidth().padding(top = 6.dp)) { MachineLoginOffers(view.station, o, inset = 0.dp) } }
+        }
+        return
+    }
     Column(Modifier.weight(1f).hazeSource(haze).verticalScroll(rememberScrollState())) {
         Column(Modifier.fillMaxWidth().padding(start = 30.dp, end = 30.dp, top = 30.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 230.dp)
@@ -154,7 +181,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(view: Stati
             Text("说要做什么。它会在 ${view.name} 上用选好的模型开一个新会话。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
             val problem = when {
                 view.overview == null -> "正在读取 ${view.name} 的 Profile…"
-                profiles.isEmpty() -> "这台 station 还没有 Profile，先在电脑上到 设置 → Profile 里加一个。"
+                profiles.isEmpty() -> "这台 station 还没有 Profile，先添加一个。"
                 view.models.isEmpty() -> "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。"
                 else -> null
             }

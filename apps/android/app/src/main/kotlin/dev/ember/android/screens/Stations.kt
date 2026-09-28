@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import dev.ember.android.LocalApp
 import dev.ember.android.R
 import dev.ember.android.Screen
+import dev.ember.android.data.ACCESS_LABEL
 import dev.ember.android.data.Profile
 import dev.ember.android.ui.QuotaRings
 import dev.ember.android.data.available
@@ -101,6 +102,8 @@ fun StationsScreen(current: WorkspaceEntry) {
         LargeTitle(if (list != null) "${ws.name} · ${list.count { it.online }}/${list.size} 在线" else ws.name, "Station")
         if (list == null) {
             Text(stations.error?.message ?: "正在读取 station…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
+        } else if (list.isEmpty()) {
+            FirstStation(current)
         } else {
             list.forEach { s ->
                 Card(onClick = { app.push(Screen.Station(s.station)) }) {
@@ -126,7 +129,7 @@ fun StationsScreen(current: WorkspaceEntry) {
                 }
             }
         }
-        if (list != null && isManager(current)) ListCard {
+        if (!list.isNullOrEmpty() && isManager(current)) ListCard {
             ListRow(onClick = { openAddStation(app, current, list.map { it.id }) }) { Text("＋ 添加 station", fontSize = 15.sp, color = C.accent) }
         }
         Spacer(Modifier.height(30.dp))
@@ -170,7 +173,11 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                     overview.profiles.forEach { ProfileRow(address, it) }
                     if (s.online) ListRow(onClick = { app.push(Screen.NewProfile(address)) }) { Text("＋ 添加 Profile", fontSize = 15.sp, color = C.accent) }
                 }
+                // The machine's own logins not used yet: each one offered as the first ones were.
+                if (s.online) MachineLoginOffers(address, overview)
                 SectionHeader("连接", start = 24.dp)
+                // A connect runs a profile's model: with none, the first step is a profile.
+                if (overview.connects.isEmpty() && overview.profiles.isEmpty()) Text("连接要用 Profile 来跑模型。先添加一个 Profile，再来加连接。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp))
                 ListCard {
                     overview.connects.forEach { c -> ConnectRow(address, c) }
                     ListRow {
@@ -178,8 +185,11 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                         Text("ember 对话", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                         Text("内置", fontSize = 13.sp, color = C.muted)
                     }
-                    if (s.online) ListRow(onClick = { app.push(Screen.NewConnect(address)) }) { Text("＋ 添加连接", fontSize = 15.sp, color = C.accent) }
+                    if (s.online && overview.profiles.isNotEmpty()) ListRow(onClick = { openNewConnect(app, address) }) { Text("＋ 添加连接", fontSize = 15.sp, color = C.accent) }
+                    else if (s.online) ListRow(onClick = { app.push(Screen.NewProfile(address)) }) { Text("去添加 Profile", fontSize = 15.sp, color = C.accent) }
                 }
+                // Slack apps made here and not connected yet: to be finished any time.
+                WaitingApps(address, overview, s.online)
             }
             Spacer(Modifier.height(30.dp))
         }
@@ -188,14 +198,21 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
 
 
 
-/** A profile on its station's page: its allowance and how many of its models are enabled; its page picks them. */
+/**
+ * A profile on its station's page: a dot for its state before its name, then its state in words, what it is and how
+ * many of its models are enabled; its allowance. Its page picks the models.
+ */
 @Composable
 private fun ProfileRow(station: String, p: Profile) {
     val app = LocalApp.current
     ListRow(onClick = { app.push(Screen.Profile(station, p.id)) }) {
         Column(Modifier.weight(1f)) {
-            Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(p.modelsText, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                StateDot(toneColor(p.checkTone))
+                Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(listOf(p.checkText, if (p.machine == true) "本机登录" else ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
+                fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         QuotaRings(p.quota)
         IconIn(Icons.ChevronRight, 14.dp, C.subtle)

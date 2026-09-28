@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -52,8 +53,11 @@ import dev.ember.android.Screen
 import dev.ember.android.data.ACCESS_LABEL
 import dev.ember.android.data.KEYED
 import dev.ember.android.data.LoginJob
+import dev.ember.android.data.MachineLogin
+import dev.ember.android.data.Overview
 import dev.ember.android.data.PROFILE_CHOICES
 import dev.ember.android.data.Profile
+import dev.ember.android.data.Quota
 import dev.ember.android.data.StationView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceEntry
@@ -69,6 +73,7 @@ import dev.ember.android.ui.NavBar
 import dev.ember.android.ui.NavButton
 import dev.ember.android.ui.ProviderMark
 import dev.ember.android.ui.QuotaRing
+import dev.ember.android.ui.QuotaRings
 import dev.ember.android.ui.SectionHeader
 import dev.ember.android.ui.SheetGrab
 import dev.ember.android.ui.SheetHead
@@ -89,7 +94,17 @@ private val SIGNING_IN = setOf("starting", "needs_code", "needs_approval", "veri
 
 /** A check's tone as a colour (the core's: accent | green | blue | red | neutral). */
 @Composable
-private fun toneColor(tone: String): Color = when (tone) { "green" -> C.green; "red" -> C.red; "blue" -> C.blue; "accent" -> C.accent; else -> C.muted }
+internal fun toneColor(tone: String): Color = when (tone) { "green" -> C.green; "red" -> C.red; "blue" -> C.blue; "accent" -> C.accent; else -> C.muted }
+
+/** A state as the pages say it: a small dot in its colour, then its words. */
+@Composable
+internal fun StateDot(color: Color, size: androidx.compose.ui.unit.Dp = 7.dp) = Box(Modifier.size(size).clip(CircleShape).background(color))
+
+/** Why an allowance could not be read (an account its provider refuses, a sign-in gone stale), in the provider's words. */
+internal fun quotaTrouble(quota: Quota?): String? = quota?.takeIf { it.state == "blocked" || it.state == "unavailable" }?.detail?.ifBlank { null }
+
+/** The runtime a machine login is of, by name. */
+private val MACHINE_RUNTIME = mapOf("claude" to "Claude Code", "codex" to "Codex")
 
 @Composable
 fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
@@ -107,7 +122,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
     val users = p.usedBy.mapNotNull { u -> s.overview?.connects?.firstOrNull { it.id == u } }
     val kind = p.access.kind
     Column(Modifier.fillMaxSize()) {
-        NavBar(s.name, app::pop, p.name, sub = { Text(ACCESS_LABEL[kind] ?: kind, fontSize = 11.sp, color = C.muted) },
+        NavBar(s.name, app::pop, p.name, sub = { Text(if (p.machine == true) "本机登录" else ACCESS_LABEL[kind] ?: kind, fontSize = 11.sp, color = C.muted) },
             trailing = { NavButton(Icons.More, { openProfileMenu(app, address, p) }) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             Card {
@@ -115,8 +130,12 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     ProviderMark(p.runtime, kind, 26.dp)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         val tone = toneColor(p.checkTone)
-                        Text(p.checkText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = tone,
-                            modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(tone.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            StateDot(tone)
+                            Text(p.checkText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = tone)
+                        }
+                        // An account its provider refuses (or whose allowance cannot be read): why, as the provider said it.
+                        quotaTrouble(p.quota)?.let { Text(it, fontSize = 13.sp, color = if (p.quota?.state == "blocked") C.red else C.muted) }
                         Text(
                             (p.check?.detail?.replace(Regex("^可用[，,]\\s*"), "") ?: "还没检查过") + (p.check?.time?.get("checkedAt")?.let { " · ${it.ago}检查" } ?: ""),
                             fontSize = 13.sp, color = C.muted,
@@ -124,7 +143,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     }
                 }
             }
-            if (kind == "subscription") SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
+            if (kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             QuotaSection(p)
             ModelsSection(p) { models -> save(buildJsonObject { putJsonArray("models") { models.forEach { add(JsonPrimitive(it)) } } }, "已保存") }
             SectionHeader("使用它的连接", start = 24.dp)
@@ -138,7 +157,15 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     }
                 }
             }
-            if (kind in KEYED) {
+            if (p.machine == true) {
+                // On the machine's own login: whose it is is changed on that machine, not here.
+                val runtime = MACHINE_RUNTIME[p.runtime] ?: p.runtime
+                SectionHeader("账号", start = 24.dp)
+                Card {
+                    Text("${s.name} 上 $runtime 的登录", fontSize = 15.sp, color = C.ink)
+                    Text("要换号、重新登录或登出，在这台机器的 $runtime 里做，这个 Profile 跟着它变；不想用了就停用（右上角菜单）。", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
+                }
+            } else if (kind in KEYED) {
                 val name = if (kind == "opencode-go") "OpenCode Go key" else "API key"
                 SectionHeader("账号", start = 24.dp)
                 ListCard {
@@ -183,11 +210,16 @@ private fun openProfileMenu(app: AppState, station: String, p: Profile) {
         SheetGrab()
         SheetHead(p.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow("改名") { ask(app, "Profile 的名字", p.name, "名字", "保存") { name -> api.putProfile(p.id, buildJsonObject { put("name", name) }); app.toast = "已改名" } }
+            if (p.machine != true) PickRow("改名") { ask(app, "Profile 的名字", p.name, "名字", "保存") { name -> api.putProfile(p.id, buildJsonObject { put("name", name) }); app.toast = "已改名" } }
             PickRow("重新检查") { run("已检查") { api.checkProfile(p.id) } }
             PickRow("刷新额度") { run("已刷新额度") { api.refreshQuota(p.id) } }
-            PickRow(if (p.usedBy.isNotEmpty()) "删除 Profile（还有连接在用）" else "删除 Profile", color = C.red, enabled = p.usedBy.isEmpty()) {
-                confirm(app, "删除「${p.name}」？", "只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。", "删除 Profile", danger = true) {
+            // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
+            val machine = p.machine == true
+            PickRow((if (machine) "停用" else "删除 Profile") + if (p.usedBy.isNotEmpty()) "（还有连接在用）" else "", color = C.red, enabled = p.usedBy.isEmpty()) {
+                if (machine) confirm(app, "停用「${p.name}」？", "ember 不再用这台机器上 ${MACHINE_RUNTIME[p.runtime] ?: p.runtime} 的登录；这台机器上的登录不受影响，之后可以再用。", "停用", danger = true) {
+                    api.deleteProfile(p.id); app.toast = "已停用"; app.pop()
+                }
+                else confirm(app, "删除「${p.name}」？", "只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。", "删除 Profile", danger = true) {
                     api.deleteProfile(p.id); app.toast = "已删除 Profile"; app.pop()
                 }
             }
@@ -430,6 +462,8 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                     Button("重新开始", primary = false) { scope.launch { try { api.dropLogin(l) } catch (_: CoreException) {} }; login = null }
                 } else LoginSteps(job, provider) { code -> api.newLoginCode(l, code) }
             } else {
+                // The machine's own logins not used yet: a profile on one needs no sign-in.
+                s?.overview?.let { o -> MachineLoginOffers(address, o, inset = 0.dp) { rt -> choice = PROFILE_CHOICES.indexOfFirst { it.kind == "subscription" && it.runtime == rt }.coerceAtLeast(0) } }
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
                     PROFILE_CHOICES.forEachIndexed { i, c ->
                         PickRow(c.title, c.description, checked = choice == i, leading = { ProviderMark(c.runtime ?: "claude", c.kind, 18.dp) }) { choice = i }
@@ -449,6 +483,66 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The accounts this station machine's own Claude Code and Codex are signed in with and no profile uses yet (the station
+ * reads them), each with its plan beside its runtime, its state and allowance: one kept in a file is used as it is (a
+ * profile on the machine's login, no sign-in); one only in the keychain is signed in again for ember; a refused one is
+ * only said so. `inset`: the list's side margin (none inside a padded page). On the new-profile page (`onLogin`) the
+ * profile made takes its place, and signing in again picks that runtime's subscription there.
+ */
+@Composable
+fun MachineLoginOffers(station: String, overview: Overview, inset: androidx.compose.ui.unit.Dp = 12.dp, onLogin: ((String) -> Unit)? = null) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf<String?>(null) }
+    val taken = overview.profiles.filter { it.machine == true }.map { it.runtime }.toSet()
+    val offers = overview.machineLogins.orEmpty().filter { it.loggedIn && it.plan != null && it.runtime !in taken }
+    if (offers.isEmpty()) return
+    Text("这台机器上已经登录了", fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = inset + 12.dp, end = inset + 12.dp, top = 8.dp, bottom = 4.dp))
+    Column(Modifier.padding(horizontal = inset).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.surface)) {
+        offers.forEach { l -> MachineLoginRow(l, busy == l.runtime) {
+            if (l.usable == true) {
+                busy = l.runtime
+                scope.launch {
+                    try {
+                        val id = app.api(station).useMachineLogin(l.runtime)
+                        app.toast = "已添加 Profile，用的是这台机器的登录"
+                        if (onLogin != null) app.replace(Screen.Profile(station, id)) else app.push(Screen.Profile(station, id))
+                    } catch (e: CoreException) { app.toast = e.message } finally { busy = null }
+                }
+            } else if (onLogin != null) onLogin(l.runtime) else app.push(Screen.NewProfile(station))
+        } }
+    }
+}
+
+/** A machine login as a profile could be made with it: its runtime and plan, a dot and its state, who, its allowance; and what to do. */
+@Composable
+private fun MachineLoginRow(l: MachineLogin, busy: Boolean, onUse: () -> Unit) {
+    val blocked = l.quota?.state == "blocked"
+    val plan = l.plan?.replaceFirstChar { it.uppercase() }
+    ListRow {
+        ProviderMark(l.runtime, "subscription", 18.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(MACHINE_RUNTIME[l.runtime] ?: l.runtime, fontSize = 15.sp, color = C.ink, maxLines = 1)
+                plan?.let { Text(it, fontSize = 13.sp, color = C.muted, maxLines = 1) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                StateDot(if (blocked) C.red else C.green, 6.dp)
+                Text(if (blocked) "被停用" else "本机已登录", fontSize = 12.sp, color = if (blocked) C.red else C.muted)
+                Text("· ${l.email ?: "已登录"}", fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            quotaTrouble(l.quota)?.let { Text(it, fontSize = 12.sp, color = if (blocked) C.red else C.muted) }
+        }
+        QuotaRings(l.quota)
+        // A refused account is said so, with nothing to do with it here.
+        if (!blocked) {
+            if (busy) Spinner(14.dp)
+            else Text(if (l.usable == true) "用这个账号" else "登录", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(onClick = onUse))
         }
     }
 }

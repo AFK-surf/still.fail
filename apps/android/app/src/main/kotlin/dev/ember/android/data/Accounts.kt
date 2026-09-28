@@ -2,6 +2,7 @@
 // workspaces each account reaches (web/src/cloud/accounts.ts, web/src/cloud/api.ts).
 package dev.ember.android.data
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
@@ -38,16 +39,26 @@ val ROLE_HINT = mapOf("owner" to "管理一切，包括成员角色和删除 wor
 /** An invitation not accepted yet; `time` has its expiry in words (the core's). */
 @Serializable data class Invitation(val id: String, val role: String = "member", val email: String? = null, val time: Map<String, Stamp>? = null)
 
+/** An email added to a workspace whose account has not signed in yet: a member from its first sign-in on (cloud/src/types.ts → AddedView). */
+@Serializable data class Added(val email: String, val role: String = "member", @SerialName("added_by") val addedBy: String = "")
+
 /**
  * The `workspace` topic: the viewer's role in it, its members (to name people by their email, and to manage them), its
- * stations' names, and the invitations not accepted yet.
+ * stations' names, the emails added but not signed in yet, and the invitations not accepted yet.
  */
 @Serializable data class WorkspaceView(
     val id: String, val name: String = "", val role: String = "member", val members: List<Member> = emptyList(),
     val stations: List<WorkspaceStation> = emptyList(), val invitations: List<Invitation> = emptyList(),
+    val added: List<Added> = emptyList(),
 ) {
     val manager get() = role == "owner" || role == "admin"
 }
 
 /** Where an account is signed in to ember (the `loginSessions` topic); `time` has when, in words. */
 @Serializable data class LoginSession(val id: String, val name: String = "", val current: Boolean = false, val time: Map<String, Stamp>? = null)
+
+/** What adding people by email came to: who joined at once, who joins at their first sign-in, who was in already. */
+class AddedMembers(val joined: List<String>, val added: List<String>, val already: List<String>)
+
+/** A person of a Slack workspace a station's connects are in, by their email there (GET /slack/people). */
+@Serializable data class SlackPerson(val email: String, val name: String = "", val image: String? = null, val guest: Boolean = false, val team: String? = null)

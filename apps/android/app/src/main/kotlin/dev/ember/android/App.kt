@@ -28,6 +28,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,8 +84,8 @@ sealed interface Screen {
     /** A profile's models, to pick which may be used. */
     data class Profile(val address: String, val profile: String) : Screen { override val id = "profile/$address/$profile" }
     data object Me : Screen { override val id = "me" }
-    /** A web service on a station's machine, full screen. */
-    data class Preview(val station: String, val port: Int) : Screen { override val id = "preview/$station/$port" }
+    /** A web service an agent started, full screen: by its job (people know it by its name, never its port). */
+    data class Preview(val station: String, val job: String) : Screen { override val id = "preview/$station/$job" }
     /** The workspace itself: its name, its people, leaving it. */
     data object Workspace : Screen { override val id = "workspace" }
     /** A connect of a station; how it runs; a new one on a station. */
@@ -122,11 +126,44 @@ class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cl
     /** The top page gives way to another (a new chat becomes the chat it made). */
     fun replace(screen: Screen) { sheet = null; forward = true; stack = stack.dropLast(1) + screen }
     fun home() { sheet = null; forward = false; stack = listOf(Screen.Home) }
-    /** An item's link from outside: its workspace, and its page over the list (back goes to the list). */
-    fun openItem(workspace: String, station: String, session: String) {
+    /**
+     * An item's link from outside: its workspace, and its page over the list (back goes to the list); a service's link
+     * (`?service=<job>`) has the service over its chat.
+     */
+    fun openItem(workspace: String, station: String, session: String, service: String? = null) {
         pickWorkspace(workspace)
         sheet = null; menu = null; forward = true
-        stack = listOf(Screen.Home, Screen.Chat("$workspace/$station", ChatOf.Session(session)))
+        val address = "$workspace/$station"
+        stack = listOf(Screen.Home, Screen.Chat(address, ChatOf.Session(session))) + listOfNotNull(service?.let { Screen.Preview(address, it) })
+    }
+
+    /** The agents of each chat page (by its id) as last shown: whether a link names one of them. */
+    val chatAgents = HashMap<String, Set<String>>()
+
+    /**
+     * ember's own links in a chat (cloud origin /o/<workspace>/<station>/<session>, as agents post them) open here, as
+     * pages over the one they are on: a web service of one of this chat's agents (`?service=<job>`) over the chat,
+     * another session as its chat (and its service over that). Answers false for any other link (the system opens it).
+     */
+    fun openLink(url: String): Boolean {
+        val uri = android.net.Uri.parse(url)
+        val origin = android.net.Uri.parse(cloudOrigin)
+        val parts = uri.pathSegments
+        if (uri.scheme != origin.scheme || uri.host != origin.host || uri.port != origin.port || parts.size != 4 || parts[0] != "o") return false
+        val (ws, station, session) = Triple(parts[1], parts[2], parts[3])
+        val service = uri.getQueryParameter("service")?.takeIf { it.isNotEmpty() }
+        val address = "$ws/$station"
+        val top = stack.last()
+        val here = top is Screen.Chat && top.station == address && ((top.of as? ChatOf.Session)?.key == session || chatAgents[top.id]?.contains(session) == true)
+        when {
+            here -> if (service != null) push(Screen.Preview(address, service))
+            ws != workspace -> openItem(ws, station, session, service)
+            else -> {
+                sheet = null; menu = null; forward = true
+                stack = stack + Screen.Chat(address, ChatOf.Session(session)) + listOfNotNull(service?.let { Screen.Preview(address, it) })
+            }
+        }
+        return true
     }
 
     fun api(station: String) = StationApi(core, station)
@@ -147,7 +184,10 @@ private val Ease = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 fun EmberApp(app: AppState) {
     val accounts by rememberTopic<List<Account>>(app.core, Topics.accounts)
     val workspaces by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
-    Box(Modifier.fillMaxSize().background(C.bg)) {
+    // Links in what agents write go through here: ember's own open in the app (AppState.openLink), the rest as before.
+    val system = LocalUriHandler.current
+    val links = remember(system) { object : UriHandler { override fun openUri(uri: String) { if (!app.openLink(uri)) system.openUri(uri) } } }
+    CompositionLocalProvider(LocalUriHandler provides links) { Box(Modifier.fillMaxSize().background(C.bg)) {
         val signedIn = accounts.value
         Box(Modifier.fillMaxSize().hazeSource(app.haze).background(C.bg)) { when {
             signedIn == null -> Splash(accounts.error?.message, now = accounts.error != null)
@@ -177,7 +217,7 @@ fun EmberApp(app: AppState) {
         ReaderHost(app)
         MenuHost(app)
         ToastHost(app)
-    }
+    } }
 }
 
 @Composable
@@ -201,7 +241,7 @@ private fun Pages(app: AppState, current: dev.ember.android.data.WorkspaceEntry)
                     is Screen.RunSettings -> dev.ember.android.screens.RunSettingsScreen(screen.station, screen.of, screen.key)
                     Screen.Me -> MeScreen(current)
                     Screen.Workspace -> dev.ember.android.screens.WorkspaceScreen(current)
-                    is Screen.Preview -> dev.ember.android.screens.PreviewScreen(screen.station, screen.port)
+                    is Screen.Preview -> dev.ember.android.screens.PreviewScreen(screen.station, screen.job)
                     is Screen.Connect -> dev.ember.android.screens.ConnectScreen(screen.station, screen.connect)
                     is Screen.ConnectRun -> dev.ember.android.screens.ConnectRunScreen(screen.station, screen.connect)
                     is Screen.NewConnect -> dev.ember.android.screens.NewConnectScreen(screen.station)

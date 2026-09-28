@@ -40,10 +40,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ember.android.AppState
 import dev.ember.android.LocalApp
+import dev.ember.android.R
 import dev.ember.android.Screen
 import dev.ember.android.data.Cloud
 import dev.ember.android.data.Enrollment
@@ -51,6 +53,7 @@ import dev.ember.android.data.LoginSession
 import dev.ember.android.data.Member
 import dev.ember.android.data.ROLE_HINT
 import dev.ember.android.data.ROLE_LABEL
+import dev.ember.android.data.SlackPerson
 import dev.ember.android.data.StationView
 import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceEntry
@@ -59,6 +62,7 @@ import dev.ember.android.data.rememberTopic
 import dev.ember.android.ui.Avatar
 import dev.ember.android.ui.C
 import dev.ember.android.ui.IconIn
+import dev.ember.android.ui.Illustration
 import dev.ember.android.ui.Icons
 import dev.ember.android.ui.LargeTitle
 import dev.ember.android.ui.ListCard
@@ -160,7 +164,25 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
         SectionHeader("成员 · ${view.members.size} 人", start = 24.dp)
         ListCard {
             view.members.forEach { m -> MemberRow(view, m, me.sub, cloud) }
-            if (view.manager) ListRow(onClick = { app.sheet = SheetSpec(0.62f) { InviteSheet(view, cloud) } }) { Text("＋ 邀请成员", fontSize = 15.sp, color = C.accent) }
+            if (view.manager) ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { AddSheet(current, view, cloud) } }) { Text("＋ 添加成员", fontSize = 15.sp, color = C.accent) }
+        }
+        // Emails added whose accounts have not signed in yet: members from their first sign-in, or taken off before it.
+        if (view.manager && view.added.isNotEmpty()) {
+            SectionHeader("还没登录过", "${view.added.size} 人", start = 24.dp)
+            ListCard {
+                view.added.forEach { a ->
+                    ListRow {
+                        Column(Modifier.weight(1f)) {
+                            Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1)
+                            Text("${ROLE_LABEL[a.role] ?: a.role} · 第一次登录时自动加入", fontSize = 13.sp, color = C.muted)
+                        }
+                        val scope = rememberCoroutineScope()
+                        Text("移除", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable {
+                            scope.launch { try { cloud.removeAdded(view.id, a.email); app.toast = "已移除" } catch (e: CoreException) { app.toast = e.message } }
+                        })
+                    }
+                }
+            }
         }
         if (view.manager && view.invitations.isNotEmpty()) {
             SectionHeader("未接受的邀请", "${view.invitations.size} 个", start = 24.dp)
@@ -238,36 +260,105 @@ private fun ColumnScope.MemberSheet(view: WorkspaceView, m: Member, cloud: Cloud
     }
 }
 
+/** The emails in what was typed or pasted: separated by commas, spaces, semicolons or lines; "Name <a@b.c>" too (web/src/cloud/adding.ts). */
+private fun parseEmails(text: String): List<String> =
+    Regex("""[^\s<>,;"'()]+@[^\s<>,;"'()]+\.[^\s<>,;"'()]+""").findAll(text).map { it.value.lowercase() }.distinct().toList()
+
+/**
+ * Adding people by email, no invitation to accept: members at once when they have signed in to ember before, from their
+ * first sign-in otherwise. Typed or pasted, or picked from the people of the Slack workspaces the online stations are in
+ * (each station reads its own Slack).
+ */
 @Composable
-private fun ColumnScope.InviteSheet(view: WorkspaceView, cloud: Cloud) {
+private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, cloud: Cloud) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    var email by remember { mutableStateOf("") }
+    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
+    val online = stations.value.orEmpty().filter { it.online }
+    var text by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("member") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var done by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf<String?>(null) }
+    var people by remember { mutableStateOf<List<SlackPerson>?>(null) }
+    var problems by remember { mutableStateOf<List<String>>(emptyList()) }
+    var reading by remember { mutableStateOf(false) }
+    var picked by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val inside = (view.members.map { it.email.lowercase() } + view.added.map { it.email.lowercase() }).toSet()
+    val emails = (parseEmails(text) + picked).distinct().filter { it !in inside }
     val roles = if (view.role == "owner") listOf("member", "admin", "owner") else listOf("member", "admin")
-    val valid = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(email.trim())
+    val fromSlack = {
+        reading = true
+        scope.launch {
+            val seen = LinkedHashMap<String, SlackPerson>()
+            val found = mutableListOf<String>()
+            for (s in online) {
+                try {
+                    val (list, errors) = app.api(s.station).slackPeople()
+                    list.forEach { p -> if (p.email !in seen) seen[p.email] = p }
+                    found += errors
+                } catch (e: CoreException) { found += e.message }
+            }
+            val all = seen.values.sortedWith(compareBy<SlackPerson> { it.guest }.thenBy { it.name })
+            people = all; problems = found
+            // Once read, the workspace's own Slack people are picked; guests are left to choose.
+            picked = all.filter { !it.guest && it.email !in inside }.map { it.email }.toSet()
+            reading = false
+        }
+        Unit
+    }
     SheetGrab()
-    SheetHead("邀请成员")
+    SheetHead("添加成员")
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (done) {
-            Text("已邀请 ${email.trim()}。对方用这个邮箱登录 ember 就能看到邀请并加入。", fontSize = 14.sp, color = C.ink)
+        val result = done
+        if (result != null) {
+            Text(result, fontSize = 14.sp, color = C.ink)
             Row(Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.End) { Button("完成", primary = true) { app.sheet = null } }
             return@Column
         }
-        Text("对方用这个邮箱登录 ember，就会看到加入「${view.name}」的邀请。邀请 7 天内有效。", fontSize = 14.sp, color = C.muted)
+        Text("直接加进「${view.name}」，不用对方接受：登录过 ember 的人马上加入，其他人第一次用这个邮箱登录时自动加入。", fontSize = 14.sp, color = C.muted)
         Text("邮箱", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Field(email, { email = it }, "name@example.com")
+        Field(text, { text = it }, "name@example.com，可以粘贴多个", lines = 3)
+        val list = people
+        if (online.isNotEmpty()) {
+            if (list == null) Row { Button("从 Slack 里选人", primary = false, busy = reading) { fromSlack() } }
+            else {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Slack 里 ${list.size} 人，选中 ${picked.count { it !in inside }} 人", fontSize = 13.sp, color = C.muted, modifier = Modifier.weight(1f))
+                    Text("全选", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { picked = list.map { it.email }.filter { it !in inside }.toSet() })
+                    Text("全不选", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { picked = emptySet() })
+                }
+                Column {
+                    list.forEach { p ->
+                        val there = p.email in inside
+                        PickRow(p.name.ifEmpty { p.email }, listOfNotNull(p.email, if (there) "已在" else if (p.guest) "访客" else null).joinToString(" · "),
+                            checked = there || p.email in picked, enabled = !there, leading = { Avatar(p.email, p.name.ifEmpty { p.email }, 28.dp, picture = p.image) }) {
+                            picked = if (p.email in picked) picked - p.email else picked + p.email
+                        }
+                    }
+                }
+                if (problems.isNotEmpty()) Text(problems.joinToString("；"), fontSize = 13.sp, color = C.red)
+            }
+        }
         Text("角色", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        roles.forEach { r -> PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = role == r) { role = r } }
+        Column {
+            roles.forEach { r -> PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = role == r) { role = r } }
+        }
         error?.let { Text(it, fontSize = 13.sp, color = C.red) }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button("取消", primary = false) { app.sheet = null }
-            Button("邀请", primary = true, busy = busy, enabled = valid) {
+            Button(if (emails.size > 1) "添加 ${emails.size} 人" else "添加", primary = true, busy = busy, enabled = emails.isNotEmpty()) {
                 busy = true; error = null
-                scope.launch { try { cloud.invite(view.id, role, email.trim()); done = true } catch (e: CoreException) { error = e.message } finally { busy = false } }
+                scope.launch {
+                    try {
+                        val r = cloud.addMembers(view.id, role, emails)
+                        done = listOf(
+                            if (r.joined.isNotEmpty()) "${r.joined.size} 人已经加入" else "",
+                            if (r.added.isNotEmpty()) "${r.added.size} 人第一次登录 ember 时自动加入" else "",
+                            if (r.already.isNotEmpty()) "${r.already.size} 人本来就在" else "",
+                        ).filter { it.isNotEmpty() }.joinToString("，") + "。"
+                    } catch (e: CoreException) { error = e.message } finally { busy = false }
+                }
             }
         }
     }
@@ -314,47 +405,93 @@ fun isManager(current: WorkspaceEntry): Boolean {
 /** Adding a station: a name, then the command to run on that machine (which installs ember and joins it); the sheet waits for it to join. */
 fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>) {
     app.sheet = SheetSpec(0.72f, draggable = true) {
-        val scope = rememberCoroutineScope()
-        val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
-        var name by remember { mutableStateOf("") }
-        var made by remember { mutableStateOf<Enrollment?>(null) }
-        var busy by remember { mutableStateOf(false) }
-        var error by remember { mutableStateOf<String?>(null) }
-        val joined = made?.let { stations.value?.firstOrNull { it.id !in known } }
         SheetGrab()
         SheetHead("添加 station")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val enrollment = made
-            when {
-                enrollment == null -> {
-                    Text("station 是一台运行 ember 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 ember 并加入。", fontSize = 14.sp, color = C.muted)
-                    Text("名字", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                    Field(name, { name = it }, "比如机器名：studio、mac-mini")
-                    error?.let { Text(it, fontSize = 13.sp, color = C.red) }
-                    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                        Button("取消", primary = false) { app.sheet = null }
-                        Button("生成命令", primary = true, busy = busy, enabled = name.isNotBlank()) {
-                            busy = true; error = null
-                            scope.launch { try { made = Cloud(app.core, current.account.sub).enroll(current.workspace.id, name.trim()) } catch (e: CoreException) { error = e.message } finally { busy = false } }
-                        }
-                    }
-                }
-                joined != null -> {
-                    Text("「${joined.name}」已加入，现在可以打开它了。", fontSize = 14.sp, color = C.ink)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("完成", primary = true) { app.sheet = null } }
-                }
-                else -> {
-                    Text("在要当 station 的机器（macOS，Apple 芯片）上打开「终端」，执行：", fontSize = 14.sp, color = C.ink)
-                    CommandBox(enrollment.install)
-                    Text("它会装好 ember、加入这个 workspace，并在后台一直运行（开机自动启动）。之后在电脑上的「设置 → Profile」里登录 Claude Code 或 Codex 的账号。", fontSize = 12.sp, color = C.muted)
-                    Text("这台机器上已经有 ember 了", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                    Text("在 ember 的目录里执行下面这行，然后重启 ember：", fontSize = 12.sp, color = C.muted)
-                    CommandBox("bin/${enrollment.command}")
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Spinner(10.dp); Text("等待 station 加入… 命令 1 小时内有效，只能用一次。", fontSize = 12.sp, color = C.muted)
+            Text("station 是一台运行 ember 的机器。给它起个名字，然后在那台机器的终端里执行生成的一行命令，它会装好 ember 并加入。", fontSize = 14.sp, color = C.muted)
+            AddStationSteps(current, known, onCancel = { app.sheet = null }) { app.sheet = null }
+        }
+    }
+}
+
+/**
+ * A station's name, then the one command that installs ember on that machine and joins it (one with ember already
+ * too), copied from here, and the wait for it; `onJoined` once it has. `onCancel`: a way out beside the first step.
+ */
+@Composable
+private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, onCancel: (() -> Unit)? = null, onJoined: () -> Unit) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
+    var name by remember { mutableStateOf("") }
+    var made by remember { mutableStateOf<Enrollment?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val joined = made?.let { stations.value?.firstOrNull { it.id !in known } }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val enrollment = made
+        when {
+            enrollment == null -> {
+                Text("给这台机器起个名字", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Field(name, { name = it }, "比如机器名：studio、mac-mini")
+                error?.let { Text(it, fontSize = 13.sp, color = C.red) }
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    if (onCancel != null) Button("取消", primary = false) { onCancel() }
+                    Button("生成命令", primary = true, busy = busy, enabled = name.isNotBlank()) {
+                        busy = true; error = null
+                        scope.launch { try { made = Cloud(app.core, current.account.sub).enroll(current.workspace.id, name.trim()) } catch (e: CoreException) { error = e.message } finally { busy = false } }
                     }
                 }
             }
+            joined != null -> {
+                Text("「${joined.name}」已加入，现在可以打开它了。", fontSize = 14.sp, color = C.ink)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("完成", primary = true) { onJoined() } }
+            }
+            else -> {
+                Text("在那台机器上打开「终端」，执行：", fontSize = 14.sp, color = C.ink)
+                CommandBox(enrollment.install)
+                Text("macOS（Apple 芯片）和 Linux 都行；装过 ember 的机器也用这条命令。它会装好 ember、加入这个 workspace，并在后台一直运行（开机自动启动）。", fontSize = 12.sp, color = C.muted)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Spinner(10.dp)
+                    Column {
+                        Text("等待这台机器加入", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                        Text("执行命令后会自动继续 · 命令 1 小时内有效", fontSize = 12.sp, color = C.muted)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A workspace with no station: what a station is and adding the first one, in the page (web/src/cloud/workspace.tsx →
+ * Onboarding, settings.tsx → FirstStation); its people and settings stay at hand. Its pages come once a station has joined.
+ */
+@Composable
+fun FirstStation(current: WorkspaceEntry) {
+    val app = LocalApp.current
+    val topic by rememberTopic<WorkspaceView>(app.core, Topics.workspace(current.workspace.id))
+    val view = topic.value
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
+            Text("添加第一台 station", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
+            Text(
+                "station 是一台运行 ember 的机器：agent 在那里干活，连接、会话和模型账号也都在那台机器上。在要用的机器上执行一条命令，它就会加入「${current.workspace.name}」。",
+                fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center,
+            )
+        }
+        when {
+            view == null -> Text(topic.error?.message ?: "正在读取 workspace…", fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            !view.manager -> Text("这个 workspace 还没有 station，等管理员添加。", fontSize = 14.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            else -> AddStationSteps(current, emptyList()) {}
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+            if (view?.manager == true) {
+                Text("邀请成员", fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.Workspace) })
+                Text("·", fontSize = 13.sp, color = C.subtle)
+            }
+            Text("workspace 设置", fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.Workspace) })
         }
     }
 }

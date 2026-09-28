@@ -57,7 +57,7 @@ import dev.ember.android.data.ConnectItem
 import dev.ember.android.data.ConnectsView
 import dev.ember.android.data.MODE_LABEL
 import dev.ember.android.data.MODE_TEXT
-import dev.ember.android.data.MadeApp
+import dev.ember.android.data.MadeSlackApp
 import dev.ember.android.data.ModelOption
 import dev.ember.android.data.Overview
 import dev.ember.android.data.RUNTIME_LABEL
@@ -67,6 +67,7 @@ import dev.ember.android.data.Topics
 import dev.ember.android.data.WorkspaceEntry
 import dev.ember.android.data.WorkspaceView
 import dev.ember.android.data.rememberTopic
+import dev.ember.android.ui.Avatar
 import dev.ember.android.ui.C
 import dev.ember.android.ui.IconIn
 import dev.ember.android.ui.Icons
@@ -102,12 +103,20 @@ fun PresenceDot(state: String) {
     })
 }
 
-/** A connect in its station's list: its mark and name, how it runs, and its presence. */
+/** A connect as its people see it in Slack: its bot's picture; Slack's mark until Slack has said what that is. */
+@Composable
+fun ConnectAvatar(c: Connect, size: androidx.compose.ui.unit.Dp) {
+    val image = c.botImage
+    if (image != null) Avatar(c.id, c.name, size, picture = image)
+    else Box(Modifier.size(size), contentAlignment = Alignment.Center) { SlackMark(size * 0.55f) }
+}
+
+/** A connect in its station's list: its bot's picture and name, how it runs, and its presence. */
 @Composable
 fun ConnectRow(station: String, c: Connect) {
     val app = LocalApp.current
     ListRow(onClick = { app.push(Screen.Connect(station, c.id)) }) {
-        SlackMark(16.dp)
+        ConnectAvatar(c, 30.dp)
         Column(Modifier.weight(1f)) {
             Text(c.name + (c.team?.let { " · $it" } ?: ""), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(listOfNotNull(c.modeText, c.runtimeText, c.bind.model).joinToString(" · "), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -137,6 +146,16 @@ fun ConnectScreen(station: String, id: String) {
         NavBar("连接", app::pop, connect.name, sub = { PresenceDot(connect.presence); Text(connect.statusText, fontSize = 11.sp, color = C.muted) },
             trailing = { NavButton(Icons.More, { openConnectMenu(app, station, connect) }) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
+            // Who it is in Slack: its bot's picture, its Slack workspace, whose it is.
+            dev.ember.android.ui.Card {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ConnectAvatar(connect, 44.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(connect.team ?: "Slack", fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(item.stationName + (connect.createdBy?.let { " · 所属 ${it.shown?.display ?: it.name}" } ?: ""), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
             if (c.state == "no_tokens" || c.state == "error" || (c.state == "reconnecting" && c.lastError != null)) Callout {
                 if (c.state == "no_tokens") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("这个连接还没接上 Slack。", fontSize = 13.sp, color = C.ink)
@@ -353,11 +372,34 @@ private fun ColumnScope.SessionSheet(station: String, item: ConnectItem) {
 
 // ── tokens ─────────────────────────────────────────────────────────────
 
-/** The two tokens and who they were verified as (null until verified, and after any edit). */
+/**
+ * The two tokens and who they were verified as (null until verified, and after any edit); checked by the button that
+ * goes on (web/src/slack.tsx → useTokenCheck), whose failures are said under them.
+ */
 private class Tokens {
     var app by mutableStateOf("")
     var bot by mutableStateOf("")
     var verified by mutableStateOf<SlackIdentity?>(null)
+    var errors by mutableStateOf<List<String>>(emptyList())
+    var checking by mutableStateOf(false)
+
+    /** Whether there is anything to check: a token typed, or (a connect's own) the ones saved. */
+    fun ready(install: String?, connect: String?) = app.isNotEmpty() || (install == null && bot.isNotEmpty()) || connect != null
+
+    /** Checks them (once: a verified pair is not checked again), then `go` when Slack takes them. */
+    fun then(scope: kotlinx.coroutines.CoroutineScope, api: dev.ember.android.data.StationApi, connect: String? = null, install: String? = null, go: suspend () -> Unit) {
+        if (verified != null) { scope.launch { go() }; return }
+        checking = true; errors = emptyList()
+        scope.launch {
+            val ok = try {
+                val (identity, found) = api.verifySlack(connect, install, app, bot)
+                errors = found
+                if (found.isEmpty()) verified = identity
+                found.isEmpty()
+            } catch (e: CoreException) { errors = listOf(e.message); false } finally { checking = false }
+            if (ok) go()
+        }
+    }
 }
 
 /** Replaces a connect's Slack tokens (either one; the other kept), verified before they are saved. */
@@ -369,13 +411,13 @@ private fun openTokens(app: AppState, station: String, connect: Connect) {
         SheetGrab()
         SheetHead("Slack token")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("只换其中一个也可以，另一个留空会沿用已保存的。保存前先验证。", fontSize = 12.sp, color = C.muted)
-            TokenFields(station, tokens, connect = connect.id, masked = connect.slack.appToken to connect.slack.botToken)
+            Text("只换其中一个也可以，另一个留空会沿用已保存的。", fontSize = 12.sp, color = C.muted)
+            TokenFields(tokens, masked = connect.slack.appToken to connect.slack.botToken)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button("取消", primary = false) { app.sheet = null }
-                Button("保存并连接", primary = true, busy = busy, enabled = tokens.verified != null) {
-                    busy = true
-                    scope.launch {
+                Button("保存并连接", primary = true, busy = busy || tokens.checking, enabled = tokens.ready(null, connect.id)) {
+                    tokens.then(scope, app.api(station), connect = connect.id) {
+                        busy = true
                         try { app.api(station).putConnect(connect.id, buildJsonObject { putJsonObject("slack") { put("appToken", tokens.app); put("botToken", tokens.bot) } }); app.toast = "已保存 token，正在连接"; app.sheet = null }
                         catch (e: CoreException) { app.toast = e.message } finally { busy = false }
                     }
@@ -396,35 +438,21 @@ internal fun SecretField(value: String, onChange: (String) -> Unit, placeholder:
 }
 
 /**
- * The two tokens with a verify step. For an existing connect a blank field keeps the stored token. An app installed
- * through Slack's OAuth (`install`) has its bot token on the station already: only the app-level token is asked for.
+ * The two tokens, checked by the button that goes on (`Tokens.then`), whose failures are said under them. For an
+ * existing connect a blank field keeps the stored token. An app installed through Slack's OAuth (`install`) has its bot
+ * token on the station already: only the app-level token is asked for.
  */
 @Composable
-private fun TokenFields(station: String, tokens: Tokens, connect: String? = null, masked: Pair<String, String>? = null, install: String? = null) {
-    val app = LocalApp.current
-    val scope = rememberCoroutineScope()
-    var errors by remember { mutableStateOf<List<String>>(emptyList()) }
-    var busy by remember { mutableStateOf(false) }
+private fun TokenFields(tokens: Tokens, masked: Pair<String, String>? = null, install: String? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("App-Level Token", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        SecretField(tokens.app, { tokens.app = it; tokens.verified = null; errors = emptyList() }, masked?.first?.ifEmpty { null }?.let { "已保存 $it，留空不变" } ?: "xapp-…")
+        SecretField(tokens.app, { tokens.app = it; tokens.verified = null; tokens.errors = emptyList() }, masked?.first?.ifEmpty { null }?.let { "已保存 $it，留空不变" } ?: "xapp-…")
         if (install == null) {
             Text("Bot Token", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-            SecretField(tokens.bot, { tokens.bot = it; tokens.verified = null; errors = emptyList() }, masked?.second?.ifEmpty { null }?.let { "已保存 $it，留空不变" } ?: "xoxb-…")
+            SecretField(tokens.bot, { tokens.bot = it; tokens.verified = null; tokens.errors = emptyList() }, masked?.second?.ifEmpty { null }?.let { "已保存 $it，留空不变" } ?: "xoxb-…")
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button("验证 token", primary = false, busy = busy, enabled = tokens.app.isNotEmpty() || tokens.bot.isNotEmpty() || connect != null) {
-                busy = true
-                scope.launch {
-                    try {
-                        val (identity, found) = app.api(station).verifySlack(connect, install, tokens.app, tokens.bot)
-                        errors = found; tokens.verified = if (found.isEmpty()) identity else null
-                    } catch (e: CoreException) { errors = listOf(e.message) } finally { busy = false }
-                }
-            }
-            tokens.verified?.let { Text("连接到「${it.team}」，bot 是 @${it.botName}", fontSize = 12.sp, color = C.green, modifier = Modifier.weight(1f)) }
-        }
-        errors.forEach { Text(it, fontSize = 13.sp, color = C.red) }
+        tokens.verified?.let { Text("连接到「${it.team}」，bot 是 @${it.botName}", fontSize = 12.sp, color = C.green) }
+        tokens.errors.forEach { Text(it, fontSize = 13.sp, color = C.red) }
     }
 }
 
@@ -504,11 +532,15 @@ fun NewConnectScreen(station: String) {
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(station.substringBefore('/')))
     val teams = overview.value?.slackTeams.orEmpty()
     val models = stations.value?.firstOrNull { it.station == station }?.models.orEmpty()
-    var step by remember { mutableStateOf("team") }
+    // An app made before and still waiting on the station, picked up where it was left (installing it).
+    val resume = remember { app.strings(RESUME + station).firstOrNull().also { app.setStrings(RESUME + station, emptyList()) } }
+    var step by remember { mutableStateOf(if (resume != null) "install" else "team") }
     var team by remember { mutableStateOf<String?>(null) }
     var name by remember { mutableStateOf("ember") }
     var description by remember { mutableStateOf("Coding agent in your threads (ember)") }
-    var made by remember { mutableStateOf<MadeApp?>(null) }
+    // The app made, as the station keeps it (it outlives this page until a connect takes it; a station yet to update has none).
+    var madeId by remember { mutableStateOf(resume) }
+    val made = madeId?.let { id -> overview.value?.slackApps?.firstOrNull { it.appId == id } }
     val tokens = remember { Tokens() }
     var config by remember { mutableStateOf("") }
     var model by remember { mutableStateOf<ModelOption?>(null) }
@@ -520,15 +552,20 @@ fun NewConnectScreen(station: String) {
     val chosen = teams.firstOrNull { it.teamId == team } ?: teams.singleOrNull()
     val entry = model ?: models.firstOrNull()
     val rt = entry?.runtimes?.firstOrNull { it == runtime } ?: entry?.runtimes?.firstOrNull() ?: "claude"
-    val order = if (step == "manual" || (step == "bind" && made == null)) listOf("manual", "bind") else listOf("team", "app", "install", "bind")
+    val order = if (step == "manual" || (step == "bind" && madeId == null)) listOf("manual", "bind") else listOf("team", "app", "install", "bind")
     val titles = mapOf("team" to "选 Slack 工作区", "token" to "加配置 token", "app" to "配置 app", "install" to "安装", "manual" to "连接 Slack", "bind" to "绑定模型")
     val run = { work: suspend () -> Unit -> busy = true; error = null; scope.launch { try { work() } catch (e: CoreException) { error = e.message } finally { busy = false } }; Unit }
-    val back = { when (step) { "team" -> app.pop(); "token", "app", "manual" -> step = "team"; "install" -> step = "app"; else -> step = if (made != null) "install" else "manual" } }
+    val back = { when (step) { "team" -> app.pop(); "token", "app", "manual" -> step = "team"; "install" -> if (resume != null) app.pop() else step = "app"; else -> step = if (madeId != null) "install" else "manual" } }
     androidx.activity.compose.BackHandler(enabled = step != "team") { back() }
     val open = { url: String -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     Column(Modifier.fillMaxSize()) {
         NavBar(if (step == "team") "取消" else "上一步", back, "添加连接", sub = { Text("${titles[step]} · ${(order.indexOf(step) + 1).coerceAtLeast(1)} / ${order.size}", fontSize = 11.sp, color = C.muted) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // A connect runs a profile's model: with none on this station, that comes first.
+            if (step == "team" && overview.value?.profiles?.isEmpty() == true) {
+                Text("连接要用 Profile 来跑模型。先添加一个 Profile，再来加连接。", fontSize = 14.sp, color = C.warn)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("去添加 Profile", primary = false) { app.replace(Screen.NewProfile(station)) } }
+            }
             when (step) {
                 "team" -> if (teams.isEmpty()) {
                     Text("有了 Slack 的配置 token，ember 替你在 Slack 建好 app：名字、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。", fontSize = 14.sp, color = C.muted)
@@ -565,20 +602,24 @@ fun NewConnectScreen(station: String) {
                     Text("头像、颜色和权限用默认的；建好以后可以在电脑上改。", fontSize = 12.sp, color = C.muted)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         Button("创建 app", primary = true, busy = busy, enabled = name.isNotBlank() && chosen != null) {
-                            run { made = api.makeSlackApp(chosen!!.teamId, name.trim(), description.trim()); step = "install" }
+                            run { madeId = api.makeSlackApp(chosen!!.teamId, name.trim(), description.trim()); tokens.verified = null; step = "install" }
                         }
                     }
                 }
-                "install" -> made?.let { m ->
-                    val installed = overview.value?.slackInstalls?.firstOrNull { it.state == m.state }
+                "install" -> if (made == null) Text(if (overview.value == null) "正在读取…" else "正在读取 app…", fontSize = 13.sp, color = C.muted) else {
+                    val m = made
+                    val install = m.install
                     Steps(listOf(
-                        (if (m.install != null) (if (installed?.installed == true) "已装进「${installed.team ?: "工作区"}」。" else "app 已经建好。安装到工作区：在 Slack 里点「允许」，bot token 会自动交给 station。")
-                        else "app 已经建好。安装到工作区，然后在 OAuth 页复制 Bot User OAuth Token（xoxb- 开头）。") to (if (installed?.installed == true) null else ({ open(m.install ?: m.installLink) })),
-                        "在 Socket Mode 页生成 App-Level Token 并复制（xapp- 开头，权限已经选好）。" to { open(m.appTokenLink) },
-                        (if (m.install != null) "把 App-Level Token 填在下面。" else "把两个 token 填在下面。") to null,
+                        (if (install != null) (if (m.installed) "已装进「${m.installedTeam ?: m.team ?: "工作区"}」。" else "app 已经建好。安装到工作区：在 Slack 里点「允许」，bot token 会自动交给 station。")
+                        else "app 已经建好。安装到工作区，然后在 OAuth 页复制 Bot User OAuth Token（xoxb- 开头）。") to (if (m.installed) null else ({ open(install ?: m.links.install) })),
+                        "在 Socket Mode 页生成 App-Level Token 并复制（xapp- 开头，权限已经选好）。" to { open(m.links.appToken) },
+                        (if (install != null) "把 App-Level Token 填在下面。" else "把两个 token 填在下面。") to null,
                     ))
-                    TokenFields(station, tokens, install = m.state)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("下一步", primary = true, enabled = tokens.verified != null) { step = "bind" } }
+                    if (install == null) Text("OAuth 页", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(m.links.oauth) })
+                    TokenFields(tokens, install = m.state)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Button("下一步", primary = true, busy = tokens.checking, enabled = tokens.ready(m.state, null)) { tokens.then(scope, api, install = m.state) { step = "bind" } }
+                    }
                 }
                 "manual" -> {
                     Steps(listOf(
@@ -587,8 +628,10 @@ fun NewConnectScreen(station: String) {
                         "在 Install App 页安装到工作区，复制 Bot User OAuth Token。" to null,
                         "把两个 token 填在下面。" to null,
                     ))
-                    TokenFields(station, tokens)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("下一步", primary = true, enabled = tokens.verified != null) { step = "bind" } }
+                    TokenFields(tokens)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Button("下一步", primary = true, busy = tokens.checking, enabled = tokens.ready(null, null)) { tokens.then(scope, api) { step = "bind" } }
+                    }
                 }
                 else -> {
                     GroupLabel("模型")
@@ -611,7 +654,8 @@ fun NewConnectScreen(station: String) {
                                     putJsonObject("bind") { put("runtime", rt); put("model", entry?.model ?: ""); put("effort", ""); put("profile", null as String?) }
                                     putJsonObject("slack") {
                                         put("appToken", tokens.app)
-                                        if (m?.state != null) put("install", m.state) else { put("botToken", tokens.bot); if (m != null) put("appId", m.appId) }
+                                        val state = m?.state
+                                        if (state != null) put("install", state) else { put("botToken", tokens.bot); madeId?.let { put("appId", it) } }
                                     }
                                 })
                                 app.toast = "已添加连接，正在连接 Slack"
@@ -622,6 +666,59 @@ fun NewConnectScreen(station: String) {
                 }
             }
             error?.let { Text(it, fontSize = 13.sp, color = C.red) }
+        }
+    }
+}
+
+private const val RESUME = "newConnect.resume/"
+
+/** The new-connect page, from the start or (`resume`) going on with a Slack app made before; a screen carries only its station. */
+fun openNewConnect(app: AppState, station: String, resume: String? = null) {
+    app.setStrings(RESUME + station, listOfNotNull(resume))
+    app.push(Screen.NewConnect(station))
+}
+
+/**
+ * The Slack apps made on a station that no connect has taken yet (the viewer's): where each stands (to install, or only
+ * its app-level token left), going on from there while the station is online, or dropping it (it stays in Slack).
+ */
+@Composable
+fun WaitingApps(station: String, overview: Overview, online: Boolean) {
+    val app = LocalApp.current
+    val waiting = overview.slackApps.orEmpty()
+    if (waiting.isEmpty()) return
+    SectionHeader("还没连上的 Slack app", start = 24.dp)
+    ListCard {
+        waiting.forEach { a -> WaitingApp(app, station, a, online) }
+    }
+}
+
+@Composable
+private fun WaitingApp(app: AppState, station: String, a: MadeSlackApp, online: Boolean) {
+    val where = if (a.installed) "已装进「${a.installedTeam ?: a.team ?: "工作区"}」，还差 App-Level Token" else if (a.install != null) "还没安装到工作区" else "还差 token"
+    ListRow(onClick = if (online) ({ openWaitingMenu(app, station, a) }) else null) {
+        Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) { SlackMark(16.dp) }
+        Column(Modifier.weight(1f)) {
+            Text(a.name + (a.team?.let { " · $it" } ?: ""), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(where, fontSize = 13.sp, color = C.muted, maxLines = 2)
+        }
+        if (online) Text("继续", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openNewConnect(app, station, a.appId) })
+        else Text("station 离线", fontSize = 12.sp, color = C.muted)
+    }
+}
+
+/** Going on with a waiting app, or dropping it from ember (it stays in Slack). */
+private fun openWaitingMenu(app: AppState, station: String, a: MadeSlackApp) {
+    app.sheet = SheetSpec(0.36f) {
+        SheetGrab()
+        SheetHead(a.name)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            PickRow("继续连接") { openNewConnect(app, station, a.appId) }
+            PickRow("从这里移除", color = C.red) {
+                confirm(app, "移除「${a.name}」？", "只从 ember 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。", "移除", danger = true) {
+                    app.api(station).dropSlackApp(a.appId); app.toast = "已移除"
+                }
+            }
         }
     }
 }

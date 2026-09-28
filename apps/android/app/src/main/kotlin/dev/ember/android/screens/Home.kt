@@ -115,8 +115,8 @@ fun HomeScreen(current: WorkspaceEntry) {
     Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze)) {
             val width = constraints.maxWidth
-            ChatPane(all, false, allList, padding, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
-            ChatPane(mine, true, mineList, padding, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
+            ChatPane(current, all, false, allList, padding, Modifier.width(maxWidth).offset { IntOffset((-shift * width).roundToInt(), 0) })
+            ChatPane(current, mine, true, mineList, padding, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
         }
         Row(
             Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.glass(haze)
@@ -144,7 +144,7 @@ fun HomeScreen(current: WorkspaceEntry) {
 
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
 @Composable
-private fun ChatPane(chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListState, padding: PaddingValues, modifier: Modifier) {
+private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListState, padding: PaddingValues, modifier: Modifier) {
     val view = chats.value
     LazyColumn(modifier.fillMaxHeight(), state = list, contentPadding = padding) {
         if (view == null) {
@@ -156,7 +156,7 @@ private fun ChatPane(chats: Topic<ChatsView>, onlyMine: Boolean, list: LazyListS
             // A station's link coming back is said on its rows; only with no rows to show does the list say it.
             if (view.days.isEmpty() && (view.loading || connecting.isNotEmpty())) item(key = "loading") { Note("正在读取会话…") }
             if (view.days.isEmpty() && !view.loading) failed.forEach { s -> item(key = "e/${s.station}") { Note("连不上「${s.name}」，正在重试…", error = true) } }
-            if (view.days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(view, onlyMine) }
+            if (view.days.isEmpty() && !view.loading && failed.isEmpty() && connecting.isEmpty()) item(key = "empty") { Empty(current, view, onlyMine) }
             for (day in view.days) {
                 item(key = "h/${day.daysAgo}") { SectionHeader(day.label) }
                 items(day.items, key = { "${it.station}/${it.id}" }) { ChatRow(it, view) }
@@ -170,21 +170,16 @@ private fun Note(text: String, error: Boolean = false) =
     Text(text, color = if (error) C.red else C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
 
 @Composable
-private fun Empty(view: ChatsView, onlyMine: Boolean) {
+private fun Empty(current: WorkspaceEntry, view: ChatsView, onlyMine: Boolean) {
     val app = LocalApp.current
+    // No station yet: nothing else works, so adding the first one is the page.
+    if (view.stations.isEmpty() && !onlyMine) return FirstStation(current)
     Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val any = view.stations.isNotEmpty()
-        Illustration(if (any) R.drawable.illus_new_chat else R.drawable.illus_station_offline, if (any) R.drawable.illus_new_chat_dark else R.drawable.illus_station_offline_dark, 240.dp)
-        when {
-            onlyMine -> Text("没有你参与的会话。", fontSize = 14.sp, color = C.muted)
-            any -> {
-                Text("还没有会话。在 Slack 里 @ ${if (view.stations.size > 1) "它们" else "它"}，或者", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
-                Text("新建对话", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.NewChat) })
-            }
-            else -> {
-                Text("还没有 station。", fontSize = 14.sp, color = C.muted)
-                Text("看看 Station", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.Stations) })
-            }
+        Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 240.dp)
+        if (onlyMine) Text("没有你参与的会话。", fontSize = 14.sp, color = C.muted)
+        else {
+            Text("还没有会话。在 Slack 里 @ ${if (view.stations.size > 1) "它们" else "它"}，或者", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+            Text("新建对话", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.NewChat) })
         }
     }
 }

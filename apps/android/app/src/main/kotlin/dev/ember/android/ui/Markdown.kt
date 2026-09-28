@@ -210,6 +210,7 @@ private fun inline(node: Node): AnnotatedString {
                 is Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { n.children().forEach(::walk) }
                 is StrongEmphasis -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { n.children().forEach(::walk) }
                 is Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { n.children().forEach(::walk) }
+                // Opened through LocalUriHandler: ember's own links in the app (App.kt → AppState.openLink), the rest by the system.
                 is Link -> withLink(LinkAnnotation.Url(n.destination, link)) { n.children().forEach(::walk) }
                 is Image -> n.children().forEach(::walk)
                 is SoftLineBreak -> append(' ')

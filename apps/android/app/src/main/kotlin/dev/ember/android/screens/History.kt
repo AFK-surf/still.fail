@@ -316,12 +316,24 @@ private fun Message(icon: androidx.compose.ui.graphics.vector.ImageVector, label
 private fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
     Text(text, fontSize = 11.sp, color = color, modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp))
 
-/** A place, as the core names it: its platform's mark and its name; a chat on ember's page leads to it. */
+/**
+ * A place, as the core names it: its platform's mark and its name; a chat on ember's page leads to it, a Slack thread
+ * opens in Slack (its link, while a connect is signed in to its workspace).
+ */
 @Composable
 private fun Place(station: String, of: ChatOf, place: dev.ember.android.data.Place) {
     val app = LocalApp.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     // An ember chat is its agent's item: opened by the session it is bound to.
-    val open = place.session?.let { key -> { if (of != ChatOf.Session(key)) app.push(Screen.Chat(station, ChatOf.Session(key))) else app.sheet = null } }
+    val chat = place.session?.let { key -> { if (of != ChatOf.Session(key)) app.push(Screen.Chat(station, ChatOf.Session(key))) else app.sheet = null } }
+    // A Slack thread by its link: the Slack app takes it when installed, the browser otherwise.
+    val slack = place.url?.takeIf { place.surface == "slack" }?.let { url ->
+        {
+            try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+            catch (_: android.content.ActivityNotFoundException) { app.toast = "打不开这个链接" }
+        }
+    }
+    val open = chat ?: slack
     Row(
         Modifier.clip(RoundedCornerShape(4.dp)).let { if (open != null) it.clickable(onClick = open) else it },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),

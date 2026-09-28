@@ -172,15 +172,15 @@ internal fun Button(label: String, primary: Boolean, busy: Boolean = false, enab
     }
 }
 
-/** A line to type in, on a soft frame. */
+/** A line to type in, on a soft frame; `lines` above one: a few lines, of any length (a pasted list). */
 @Composable
-internal fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier) {
+internal fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier, lines: Int = 1) {
     Box(
         modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.surface).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) FontFamily.Monospace else null)
         BasicTextField(
-            value, { onChange(it.take(if (mono) 32 else 80)) }, singleLine = true, cursorBrush = SolidColor(C.accent),
+            value, { onChange(if (lines > 1) it else it.take(if (mono) 32 else 80)) }, singleLine = lines == 1, minLines = lines, cursorBrush = SolidColor(C.accent),
             textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = if (mono) FontFamily.Monospace else null), modifier = Modifier.fillMaxWidth(),
         )
     }

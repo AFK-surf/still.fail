@@ -223,6 +223,8 @@ fun ChatScreen(station: String, of: ChatOf) {
     val agents = view.agents.map { a ->
         key(a.session.key) { AgentHere(a, rememberTopic<Live>(app.core, Topics.live(station, a.session.key)).value.value) }
     }
+    // Who is in this chat, for the links in it: one naming an agent here opens over this page (AppState.openLink).
+    SideEffect { app.chatAgents[Screen.Chat(station, of).id] = view.agents.map { it.session.key }.toSet() }
     val draft = remember { Draft() }
     // The messages run under the bar and the composer, which are frosted glass over them.
     val haze = remember { HazeState() }
@@ -237,12 +239,22 @@ fun ChatScreen(station: String, of: ChatOf) {
     }
 }
 
-/** The chat's bar: its title from the left, then its people, then its agents' marks (each opens its history); "…" is the chat's own page. */
+/**
+ * The chat's bar: its title from the left, then its people, then its agents' marks (each opens its history); its
+ * services and jobs (with a dot when one died lately or a service restarts), and "…", the chat's own page.
+ */
 @Composable
 private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<AgentHere>, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val thread = view.thread
-    BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }, modifier = modifier) {
+    val jobs = jobsOf(view)
+    val alarm = alarmOf(jobs, rememberNow(30_000))
+    BarFrame(view.title, more = thread != null, onMore = { if (thread != null) openChatInfo(app, station, of, thread) }, modifier = modifier, trailing = {
+        if (jobs.isNotEmpty()) Box {
+            NavButton(Icons.Web, { openJobs(app, station, of) })
+            if (alarm != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 5.dp).size(7.dp).clip(CircleShape).background(if (alarm == Tone.Fail) C.red else C.warn))
+        }
+    }) {
         if (view.people.isNotEmpty()) PeopleStack(view.people.take(5), 16.dp)
         agents.forEach { a ->
             // Not clipped: the state's dot sits over the mark's corner, partly outside it.
@@ -251,9 +263,9 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
     }
 }
 
-/** The bar's frame, the same while the chat loads and once it has: back, the title, what follows it, and "…". */
+/** The bar's frame, the same while the chat loads and once it has: back, the title, what follows it, what is at its end, and "…". */
 @Composable
-private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, modifier: Modifier = Modifier.background(C.bg), after: @Composable RowScope.() -> Unit) {
+private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, modifier: Modifier = Modifier.background(C.bg), trailing: @Composable () -> Unit = {}, after: @Composable RowScope.() -> Unit) {
     val app = LocalApp.current
     Column(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -262,6 +274,7 @@ private fun BarFrame(title: String, more: Boolean, onMore: () -> Unit = {}, modi
                 Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 after()
             }
+            trailing()
             if (more) NavButton(Icons.More, onMore)
         }
     }
@@ -636,18 +649,25 @@ private fun Out(ctx: Here, o: Outgoing) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val thread = ctx.view.thread
+    val failed = o.state == "failed"
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        o.quotes.forEach { QuoteCard(it, null) }
-        if (o.text.isNotEmpty()) Bubble(o.text, Modifier, Color.Transparent)
-        Files(ctx, o.attachments)
-        if (o.state == "failed") Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("发送失败" + (o.error?.let { "：$it" } ?: ""), fontSize = 11.sp, color = C.red, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            Text("重试", fontSize = 12.sp, color = C.accent, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable {
+        // Not sent: what was written faded.
+        Column(Modifier.fillMaxWidth().alpha(if (failed) 0.55f else 1f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            o.quotes.forEach { QuoteCard(it, null) }
+            if (o.text.isNotEmpty()) Bubble(o.text, Modifier, Color.Transparent)
+            Files(ctx, o.attachments)
+        }
+        // Said briefly (a tap says why); sending it again or dropping it right beside.
+        if (failed) Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("未发送", fontSize = 12.sp, color = C.red, modifier = Modifier.padding(end = 6.dp).clickable {
+                app.toast = o.error?.let { "没发出去：$it" } ?: "没发出去"
+            })
+            Text("重试", fontSize = 12.sp, color = C.muted, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {
                 if (thread != null) scope.launch { try { app.api(ctx.station).retry(thread.id, o.id) } catch (_: CoreException) {} }
-            })
-            Text("删除", fontSize = 12.sp, color = C.muted, modifier = Modifier.clickable {
+            }.padding(horizontal = 8.dp, vertical = 4.dp))
+            Text("删除", fontSize = 12.sp, color = C.muted, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {
                 if (thread != null) scope.launch { try { app.api(ctx.station).discard(thread.id, o.id) } catch (_: CoreException) {} }
-            })
+            }.padding(horizontal = 8.dp, vertical = 4.dp))
         } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Spinner(10.dp); Text("正在发送", fontSize = 11.sp, color = C.subtle)
         }
@@ -1081,7 +1101,10 @@ private fun Composer(station: String, of: ChatOf, view: ChatView, agents: List<A
 
 // ── the chat's own page ────────────────────────────────────────────────
 
-/** The chat itself: where it came from, who started it and takes part, its agents (each leads to its history). */
+/**
+ * The chat itself: where it came from, who started it and takes part, its agents' web services (each opens its page)
+ * and background jobs (each opens its sheet), its agents (each leads to its history).
+ */
 fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread) {
     app.sheet = SheetSpec(0.72f, draggable = true) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
@@ -1096,20 +1119,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
                 Detail("创建", (view?.thread ?: thread).time?.get("createdAt")?.ago ?: "")
                 (view?.thread ?: thread).lastMessage?.let { Detail("最近消息", it.time?.get("createdAt")?.ago ?: "") }
             }
-            GroupLabel("这台机器上的网页")
-            InfoList {
-                InfoRow(onClick = {
-                    ask(app, "预览这台机器上的网页", "", "端口，例如 3000", "打开") { port ->
-                        val n = port.toIntOrNull()
-                        if (n == null || n !in 1..65535) throw CoreException("invalid_port", "端口是 1 到 65535 之间的数字", null)
-                        app.push(Screen.Preview(station, n))
-                    }
-                }) {
-                    IconIn(Icons.Web, 16.dp)
-                    Text("预览网页", fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
-                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
-                }
-            }
+            view?.let { JobGroups(app, station, of, jobsOf(it)) }
             view?.slackUrl?.let { url ->
                 GroupLabel("在 Slack 里")
                 val context = LocalContext.current

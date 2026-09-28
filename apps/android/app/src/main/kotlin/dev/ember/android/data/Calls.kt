@@ -73,20 +73,25 @@ class StationApi(private val core: EmberCore, val station: String) {
     /** A Slack workspace's app configuration token (its refresh token); answers which workspace. */
     suspend fun addConfigToken(refreshToken: String): String =
         request("POST", "/slack/config-tokens", buildJsonObject { put("refreshToken", refreshToken) }).jsonObject["teamId"]!!.jsonPrimitive.content
-    /** Makes a Slack app with ember's manifest in the workspace of `team`: its name and description, the rest as a new app's. */
-    suspend fun makeSlackApp(team: String, name: String, description: String): MadeApp {
-        val r = request("POST", "/slack/apps", buildJsonObject {
+    /**
+     * Makes a Slack app with ember's manifest in the workspace of `team`: its name and description, the rest as a new
+     * app's. The station keeps it, waiting for its connect (the overview's `slackApps`); answers its app id.
+     */
+    suspend fun makeSlackApp(team: String, name: String, description: String): String =
+        request("POST", "/slack/apps", buildJsonObject {
             put("team", team)
             put("settings", buildJsonObject {
                 put("name", name); put("displayName", name); put("description", description); put("longDescription", ""); put("backgroundColor", "#F3E3D3")
                 put("groups", buildJsonObject { SLACK_GROUPS.forEach { put(it, true) } })
             })
-        }).jsonObject
-        val links = r["links"]!!.jsonObject
-        return MadeApp(
-            r["appId"]!!.jsonPrimitive.content, r["install"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content, r["state"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            links["install"]!!.jsonPrimitive.content, links["oauth"]!!.jsonPrimitive.content, links["appToken"]!!.jsonPrimitive.content,
-        )
+        }).jsonObject["appId"]!!.jsonPrimitive.content
+    /** Drops an app made here from the waiting ones; it stays in Slack. */
+    suspend fun dropSlackApp(appId: String) { request("DELETE", "/slack/apps/${at(appId)}") }
+    /** The people of the Slack workspaces this station's connects are in, once each by email, and what could not be read. */
+    suspend fun slackPeople(): Pair<List<SlackPerson>, List<String>> {
+        val r = request("GET", "/slack/people").jsonObject
+        val people = r["people"]?.takeIf { it !is JsonNull }?.let { decode(ListSerializer(SlackPerson.serializer()), it) } ?: emptyList()
+        return people to (r["errors"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList())
     }
     /** Where to make a Slack app by hand from ember's manifest. */
     suspend fun createAppUrl(name: String): String =
@@ -112,6 +117,9 @@ class StationApi(private val core: EmberCore, val station: String) {
         if (runtime != null) put("runtime", runtime)
         put("access", buildJsonObject { put("kind", kind); if (key != null) put("key", key) })
     }).jsonObject["id"]!!.jsonPrimitive.content
+    /** A profile on the machine's own login of `runtime` (one kept in a file); answers its id. */
+    suspend fun useMachineLogin(runtime: String): String =
+        request("POST", "/profiles/machine", buildJsonObject { put("runtime", runtime) }).jsonObject["id"]!!.jsonPrimitive.content
 
     /** Starts the session's runtime ahead of a message. */
     suspend fun warm(key: String) { request("POST", "/sessions/${at(key)}/warm") }
@@ -165,7 +173,22 @@ class StationApi(private val core: EmberCore, val station: String) {
         val answer = core.call("station.file", buildJsonObject { put("station", station); put("key", key); put("name", name) }).jsonObject
         return Base64.decode(answer["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT)
     }
+
+    // ── background jobs and web services (web/src/Jobs.tsx) ──
+
+    /** A background job (a web service's page finds its port by it). */
+    suspend fun job(id: String): Job = decode(Job.serializer(), request("GET", "/jobs/${at(id)}"))
+    /** A job's last `lines` lines of output, and when it last grew. */
+    suspend fun jobLog(id: String, lines: Int): JobLog {
+        val r = request("GET", "/jobs/${at(id)}/log?lines=$lines").jsonObject
+        return JobLog(id, r["text"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content ?: "", r["outputAt"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong())
+    }
+    /** Stops a job from the app (its agent is told who did). */
+    suspend fun stopJob(id: String) { request("POST", "/jobs/${at(id)}/stop") }
 }
+
+/** A job's output as last read: whose, its last lines, when it last grew. */
+class JobLog(val job: String, val text: String, val outputAt: Long?)
 
 object Auth {
     const val REDIRECT = "ember://auth/callback"
@@ -207,7 +230,14 @@ class Cloud(private val core: EmberCore, private val account: String) {
     /** Leaving a workspace is removing oneself. */
     suspend fun removeMember(workspace: String, member: String) { call("DELETE", "${ws(workspace)}/members/${at(member)}") }
     suspend fun setRole(workspace: String, member: String, role: String) { call("PATCH", "${ws(workspace)}/members/${at(member)}", buildJsonObject { put("role", role) }) }
-    suspend fun invite(workspace: String, role: String, email: String) { call("POST", "${ws(workspace)}/invitations", buildJsonObject { put("role", role); put("email", email) }) }
+    /** Adds people by email: members at once, or from their first sign-in; no invitation to accept. */
+    suspend fun addMembers(workspace: String, role: String, emails: List<String>): AddedMembers {
+        val r = call("POST", "${ws(workspace)}/members", buildJsonObject { put("role", role); putJsonArray("emails") { emails.forEach { add(JsonPrimitive(it)) } } }).jsonObject
+        val list = { key: String -> r[key]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList() }
+        return AddedMembers(list("joined"), list("added"), list("already"))
+    }
+    /** An email added and not signed in yet, taken off. */
+    suspend fun removeAdded(workspace: String, email: String) { call("DELETE", "${ws(workspace)}/added/${at(email)}") }
     suspend fun revokeInvitation(workspace: String, invitation: String) { call("DELETE", "${ws(workspace)}/invitations/${at(invitation)}") }
     /** A one-time token for a machine to join as a station: the installer's command, and the command for a machine that has ember. */
     suspend fun enroll(workspace: String, name: String): Enrollment =
@@ -222,9 +252,6 @@ class Cloud(private val core: EmberCore, private val account: String) {
 }
 
 class Enrollment(val install: String, val command: String)
-
-/** A Slack app ember made: installed through Slack's OAuth (`install`, its `state`), or by its links by hand. */
-class MadeApp(val appId: String, val install: String?, val state: String?, val installLink: String, val oauthLink: String, val appTokenLink: String)
 
 /** The permission groups a new Slack app is made with (web/src/pages/SlackApp.tsx → GROUPS), all on. */
 private val SLACK_GROUPS = listOf("base", "public", "dm", "customize", "files", "reactions", "channels", "people", "extras")
