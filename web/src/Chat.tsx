@@ -3,7 +3,7 @@
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, type Activity as ActivityView, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
@@ -85,6 +85,12 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = agents[0]?.key ?? null;
   const ownerOf = (file: Attachment) => agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.key ?? keeper;
+  // The messages are kept as they are while nothing they show changes (MessageRow): what they are handed stays the same
+  // function, the latest one behind it, and `owners` says when whose files are whose has changed.
+  const latest = useRef({ ownerOf, onOpenHistory });
+  latest.current = { ownerOf, onOpenHistory };
+  const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key) }));
+  const owners = `${keeper ?? ""} ${agents.map((a) => `${a.key}=${a.session.workspace}`).join(" ")}`;
 
   // Selecting text inside one message offers to quote it.
   const onSelect = () => {
@@ -122,51 +128,10 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           const mine = mineOf(m);
           const enter = fresh && !(mine && sentHere.current.has(m.text)) ? true : undefined;
           const line = m.seq === divider ? <div key={`new-${m.seq}`} className={css.chatUnreadLine} data-unread-line role="separator"><span>以下是新消息</span></div> : null;
-          if (mine) {
-            return [line, (
-              <div key={m.seq} className={`${conversationCss.msg} ${chatCss2.msgMine}`} data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
-                <Quotes quotes={m.quotes} />
-                {m.text && <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{m.text}</div></div>}
-                <Files owner={ownerOf} files={m.attachments} />
-                {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
-                {m.waiting
-                  ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
-                  : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}
-              </div>
-            )];
-          }
-          // What ember itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-          if (m.system) {
-            return [line, (
-              <div key={m.seq} className={`${conversationCss.msg} ${css.msgSystem}`} data-ts={m.ts} data-role="system" data-enter={enter} role="note">
-                <div className={css.msgSystemBox}>
-                  <Mark size={14} />
-                  <div className={conversationCss.markdown}><Prose>{m.text}</Prose></div>
-                  <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />
-                </div>
-              </div>
-            )];
-          }
-          const agent = m.by.agent ? agentOf(m.by.agent) : undefined;
-          const who = m.by.name;
-          const emitted = emissions.stateOf(m.seq);
+          const told = !mine && !m.system;
           return [line, (
-            <div key={m.seq} className={`${conversationCss.msg} ${css.msgRow}`} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
-              data-enter={emissions.emits(m.seq) ? undefined : enter} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}>
-              <MessageAvatar message={m} name={who} />
-              <div className={css.msgMain}>
-                <div className={conversationCss.msgHead}>
-                  {agent
-                    ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent.key)} title="打开或关闭执行历史">{who}</button>
-                    : <span className={css.msgName}>{who}</span>}
-                  <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />
-                </div>
-                <Quotes quotes={m.quotes} />
-                {m.authorKind === "person"
-                  ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={ownerOf} files={m.attachments} /></>
-                  : <ProseWithFiles owner={ownerOf} text={m.text} files={m.attachments} />}
-              </div>
-            </div>
+            <MessageRow key={m.seq} message={m} enter={told && emissions.emits(m.seq) ? undefined : enter} emitted={told ? emissions.stateOf(m.seq) : null}
+              agentHere={m.by.agent ? agentOf(m.by.agent) !== undefined : false} owners={owners} owner={stable.owner} onOpenHistory={stable.open} />
           )];
         })}
         {outbox.map((o) => (
@@ -366,6 +331,65 @@ export function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView
     };
   }, [floor, newest, known]);
 }
+
+/**
+ * One message of the chat. It is drawn again only when something it shows changes: an agent at work makes the chat
+ * draw again many times a second (its activity), and every message's Markdown would be laid out anew each time.
+ */
+const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentHere, owner, onOpenHistory }: {
+  message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; agentHere: boolean;
+  /** Whose files are whose, in a word: when it changes, the files are drawn again. */
+  owners: string;
+  owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
+}) {
+  if (m.mine) {
+    return (
+      <div className={`${conversationCss.msg} ${chatCss2.msgMine}`} data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
+        <Quotes quotes={m.quotes} />
+        {m.text && <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{m.text}</div></div>}
+        <Files owner={owner} files={m.attachments} />
+        {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
+        {m.waiting
+          ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
+          : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}
+      </div>
+    );
+  }
+  // What ember itself says (a limit hit, a failure): a notice across the chat, not someone's message.
+  if (m.system) {
+    return (
+      <div className={`${conversationCss.msg} ${css.msgSystem}`} data-ts={m.ts} data-role="system" data-enter={enter} role="note">
+        <div className={css.msgSystemBox}>
+          <Mark size={14} />
+          <div className={conversationCss.markdown}><Prose>{m.text}</Prose></div>
+          <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />
+        </div>
+      </div>
+    );
+  }
+  const who = m.by.name;
+  const agent = agentHere ? m.by.agent : undefined;
+  return (
+    <div className={`${conversationCss.msg} ${css.msgRow}`} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
+      data-enter={enter} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}>
+      <MessageAvatar message={m} name={who} />
+      <div className={css.msgMain}>
+        <div className={conversationCss.msgHead}>
+          {agent
+            ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)} title="打开或关闭执行历史">{who}</button>
+            : <span className={css.msgName}>{who}</span>}
+          <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />
+        </div>
+        <Quotes quotes={m.quotes} />
+        {m.authorKind === "person"
+          ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={owner} files={m.attachments} /></>
+          : <ProseWithFiles owner={owner} text={m.text} files={m.attachments} />}
+      </div>
+    </div>
+  );
+}, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners
+  // The core hands the chat over anew as it changes: a message is the same one if all it holds is (its times in words too).
+  && (a.message === b.message || JSON.stringify(a.message) === JSON.stringify(b.message)));
 
 function MessageAvatar({ message, name }: { message: ChatMessage; name: string }) {
   if (message.authorKind === "agent") return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}>{message.by.runtime ? <ModelLogo maker={message.by.maker} runtime={message.by.runtime} size={12} /> : <Mark size={12} />}</span>;
