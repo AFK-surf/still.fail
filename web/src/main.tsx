@@ -1,4 +1,5 @@
 import { applyAppearance } from "./theme.ts";
+import { startScrollbars } from "./scrollbars.ts";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
@@ -9,6 +10,7 @@ import "./theme.css";
 import "./app.css";
 
 applyAppearance();
+startScrollbars();
 const root = createRoot(document.getElementById("app")!);
 
 // Built twice: served by a station at /admin (talks to it directly), and as

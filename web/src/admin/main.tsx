@@ -3,6 +3,7 @@
 // signing in here signs in nowhere else. Sign-in goes through ember cloud like
 // the web app's and comes back to this host's /auth/callback.
 import { applyAppearance } from "../theme.ts";
+import { startScrollbars } from "../scrollbars.ts";
 import { Tooltip } from "radix-ui";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -56,4 +57,5 @@ function NoPermission() {
 }
 
 applyAppearance();
+startScrollbars();
 createRoot(document.getElementById("app")!).render(<StrictMode><AdminApp /></StrictMode>);

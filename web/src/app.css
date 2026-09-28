@@ -1231,17 +1231,17 @@ button.chat-typing { border: 0; background: none; padding: 0; font: inherit; cur
 .h-phase[data-phase="responding"] { color: var(--text); }
 .h-phase-time { font-variant-numeric: tabular-nums; color: var(--subtle); }
 
-/* Scrollbars: thin, a rounded faint thumb on a clear track, always there. Chrome and Safari draw them from
-   ::-webkit-scrollbar, which makes classic bars; the standard scrollbar-color would keep macOS's overlay bars (seen
-   only while scrolling) and, set on them, had Chrome reset the cursor as the mouse moved (it flickered). So the
-   standard properties are for Firefox alone. */
-::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: color-mix(in oklch, var(--text) 18%, transparent); background-clip: padding-box; }
-::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklch, var(--text) 38%, transparent); }
-::-webkit-scrollbar-corner { background: transparent; }
-@supports (-moz-appearance: none) {
-  * { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--text) 18%, transparent) transparent; }
+/* Scrollbars float over what scrolls and take no room (scrollbars.ts draws them): with a mouse the system's are hidden;
+   touch screens keep theirs, which float already. */
+[data-floating-scrollbars] * { scrollbar-width: none; }
+[data-floating-scrollbars] ::-webkit-scrollbar { display: none; }
+.floating-thumb { position: fixed; left: 0; top: 0; z-index: 2147483000; width: 6px; height: 6px; border-radius: 999px;
+  background: color-mix(in oklch, var(--text) 26%, transparent); opacity: 0; pointer-events: none;
+  transition: opacity 200ms var(--ease-out), background-color 120ms var(--ease-out); }
+.floating-thumb[data-on] { opacity: 1; pointer-events: auto; }
+/* Easier to catch than it looks: a wider invisible edge around it. */
+.floating-thumb::before { content: ""; position: absolute; inset: -3px; }
+.floating-thumb:hover, .floating-thumb[data-drag] { background: color-mix(in oklch, var(--text) 45%, transparent); }
 }
 
 /* Streaming without jumps: a live reply is a five-line window onto its end; thinking is one line. */
