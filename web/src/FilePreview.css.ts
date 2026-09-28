@@ -74,8 +74,6 @@ export const fpBody = style({
   selectors: {
     [`${fp}[data-kind="image"] &`]: { background: `color-mix(in oklch, ${vars.text} 5%, ${vars.canvas})` },
     [`${fp}[data-kind="pdf"] &`]: { background: `color-mix(in oklch, ${vars.text} 5%, ${vars.canvas})` },
-    // A video fills the page edge to edge, as a player: black round it where its proportions leave room.
-    [`${fp}[data-kind="video"] &`]: { background: "#000" },
   },
 });
 globalStyle(`${fpBody} > *`, { gridArea: "1 / 1" });
@@ -108,7 +106,6 @@ export const fpImage = style({
   position: "absolute", left: "50%", top: "50%", maxWidth: "none", transformOrigin: "center",
   boxShadow: "0 1px 3px rgba(0, 0, 0, .08), 0 8px 28px rgba(0, 0, 0, .10)", WebkitUserDrag: "none",
 });
-export const fpVideo = style({ display: "block", width: "100%", height: "100%", objectFit: "contain" });
 export const fpAudio = style({ display: "grid", gap: "14px", justifyItems: "center", width: "min(100% - 48px, 480px)" });
 export const fpAudioName = style({
   maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textSm,

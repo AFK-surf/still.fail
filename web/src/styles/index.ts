@@ -41,6 +41,7 @@ import "../Prose.css.ts";
 import "../ToolStep.css.ts";
 import "../scrollbars.css.ts";
 import "../FilePreview.css.ts";
+import "../VideoViewer.css.ts";
 import "../dock.css.ts";
 import "../ProfileCard.css.ts";
 import "../Memory.css.ts";

@@ -137,6 +137,10 @@ export function Key(props: IconProps) {
   return <Svg {...props}><circle cx="15.5" cy="8.5" r="5" /><path d="M12 12L3.5 20.5 M5 19L7 21 M8 16L10 18" /></Svg>;
 }
 
+export function Landscape(props: IconProps) {
+  return <Svg {...props}><path d="M6 9H18Q21 9 21 12V16Q21 19 18 19H6Q3 19 3 16V12Q3 9 6 9Z M8 5.5Q12 3 16.5 5.2 M14.8 3.4L16.5 5.2L14.3 6.4" /></Svg>;
+}
+
 export function LogIn(props: IconProps) {
   return <Svg {...props}><path d="M13 3.5H16Q20 3.5 20 7.5V16.5Q20 20.5 16 20.5H13 M3.5 12H14.5 M10 7.5L14.5 12L10 16.5" /></Svg>;
 }
@@ -169,8 +173,16 @@ export function PanelOpen(props: IconProps) {
   return <Svg {...props}><path d="M8 4H16Q20.5 4 20.5 8.5V15.5Q20.5 20 16 20H8Q3.5 20 3.5 15.5V8.5Q3.5 4 8 4Z M14.5 4.5V19.5 M6.5 12H11.5 M9 9L12 12L9 15" /></Svg>;
 }
 
+export function Pause(props: IconProps) {
+  return <Svg {...props}><path d="M7 5V19 M17 5V19" /></Svg>;
+}
+
 export function Photo(props: IconProps) {
   return <Svg {...props}><path d="M8 3.5H16Q20.5 3.5 20.5 8V16Q20.5 20.5 16 20.5H8Q3.5 20.5 3.5 16V8Q3.5 3.5 8 3.5Z M4 17L9 11.5L14 16.5L17 13.5L20.5 17" /><circle cx="15.5" cy="8" r="1.2" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function Play(props: IconProps) {
+  return <Svg {...props}><path d="M7 5.8Q7 4.3 8.3 5L18.4 11Q19.6 12 18.4 13L8.3 19Q7 19.7 7 18.2Z" /></Svg>;
 }
 
 export function Plug(props: IconProps) {
@@ -310,6 +322,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "image-upload": ImageUpload,
   "info": Info,
   "key": Key,
+  "landscape": Landscape,
   "log-in": LogIn,
   "log-out": LogOut,
   "minus": Minus,
@@ -318,7 +331,9 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "other": Other,
   "panel-close": PanelClose,
   "panel-open": PanelOpen,
+  "pause": Pause,
   "photo": Photo,
+  "play": Play,
   "plug": Plug,
   "plus": Plus,
   "power": Power,

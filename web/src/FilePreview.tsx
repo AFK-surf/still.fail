@@ -10,6 +10,7 @@ import { placeFiles, Prose } from "./Prose.tsx";
 import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
 import { Segmented } from "./ui.tsx";
+import { VideoViewer } from "./VideoViewer.tsx";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -232,7 +233,7 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
     const { url, blob } = loaded;
     switch (kind) {
       case "image": body = <ImageViewer key={file.path} url={url} file={file} setControls={setControls} onSwipe={(d) => step(d < 0 ? before : after)} />; break;
-      case "video": body = <video className={css2.fpVideo} src={url} controls autoPlay playsInline />; break;
+      case "video": body = <VideoViewer key={file.path} url={url} blob={blob} name={file.name} />; break;
       case "audio": body = <div className={css2.fpAudio}><span className={css2.fpAudioName}>{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
@@ -290,8 +291,24 @@ const MAX_SCALE = 16;
  * the window. Fitted, a sideways swipe steps to the image before or after.
  */
 function ImageViewer({ url, file, setControls, onSwipe }: { url: string; file: Attachment; setControls(c: ReactNode): void; onSwipe(direction: -1 | 1): void }) {
-  const stage = useRef<HTMLDivElement>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(file.width && file.height ? { w: file.width, h: file.height } : null);
+  const zoom = useZoom(natural, setControls, onSwipe);
+  return (
+    <div ref={zoom.stage} className={css2.fpStage} {...zoom.stageProps}>
+      <img className={css2.fpImage} src={url} alt={file.name} draggable={false}
+        onLoad={(e) => { const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
+        style={zoom.place ?? { visibility: "hidden" }} />
+    </div>
+  );
+}
+
+/**
+ * Zooming and panning a picture of `natural` size in a stage (an image, a video's frames): fitted to the window, to
+ * zoom (wheel, pinch, double-click, the bar's buttons, + − 0 1) around the pointer and drag about when larger than the
+ * window. Fitted, a sideways swipe calls `onSwipe`. `place` positions the picture (absolutely, in the stage's centre).
+ */
+export function useZoom(natural: { w: number; h: number } | null, setControls: (c: ReactNode) => void, onSwipe?: (direction: -1 | 1) => void) {
+  const stage = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   const [view, setView] = useState<View | null>(null);
   const viewRef = useRef<View | null>(null);
@@ -398,7 +415,7 @@ function ImageViewer({ url, file, setControls, onSwipe }: { url: string; file: A
     pointers.current.delete(e.pointerId);
     start();
     // A swipe: one finger, mostly sideways, on an image not zoomed in (zoomed in, a drag pans).
-    if (single && e.type === "pointerup" && g.view.scale <= fit * 1.01) {
+    if (single && onSwipe && e.type === "pointerup" && g.view.scale <= fit * 1.01) {
       const dx = e.clientX - g.x, dy = e.clientY - g.y;
       if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) onSwipe(dx > 0 ? -1 : 1);
     }
@@ -439,14 +456,14 @@ function ImageViewer({ url, file, setControls, onSwipe }: { url: string; file: A
   useEffect(() => () => setControls(null), [setControls]);
 
   const larger = !!natural && !!box && !!view && (natural.w * view.scale > box.w + 1 || natural.h * view.scale > box.h + 1);
-  return (
-    <div ref={stage} className={css2.fpStage} data-pan={larger || undefined} data-zoomed={(view && view.scale > fit * 1.01) || undefined}
-      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onDoubleClick={onDoubleClick}>
-      <img className={css2.fpImage} src={url} alt={file.name} draggable={false}
-        onLoad={(e) => { const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
-        style={natural && view ? { width: natural.w, height: natural.h, transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.scale})` } : { visibility: "hidden" }} />
-    </div>
-  );
+  return {
+    stage, scale,
+    stageProps: {
+      "data-pan": larger || undefined, "data-zoomed": (view && view.scale > fit * 1.01) || undefined,
+      onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onDoubleClick,
+    },
+    place: natural && view ? { width: natural.w, height: natural.h, transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.scale})` } : null,
+  };
 }
 
 // ── PDFs ───────────────────────────────────────────────────────────────
