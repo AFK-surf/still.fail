@@ -142,7 +142,7 @@ fn rollout_of(path: &Path, id: &str) -> bool {
 }
 
 /// Something said in a session: by the person (else by its agent), its words, when.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct Said {
     pub person: bool,
     pub text: String,
@@ -332,6 +332,22 @@ fn codex_said(r: &Value) -> Vec<(bool, String)> {
         return vec![];
     }
     vec![(person, text.trim().to_string())]
+}
+
+/// What a person typed in a Codex user message's parts: none of the context it adds, each part on its own.
+pub(crate) fn typed_parts(content: &Value) -> String {
+    if let Some(text) = content.as_str() {
+        return text.to_string();
+    }
+    let parts: Vec<&str> = content
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|b| b.get("text").and_then(Value::as_str))
+        .filter_map(typed)
+        .filter(|t| !t.trim().is_empty() && !injected(t) && !wrapped(t))
+        .collect();
+    parts.join("\n")
 }
 
 /// What the person typed in a part of a Codex user message: none of the instructions it adds, and of the context an

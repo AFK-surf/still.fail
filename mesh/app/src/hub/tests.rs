@@ -1195,9 +1195,15 @@ async fn a_session_the_machine_kept_goes_on_in_a_chat_run_in_its_own_directory_w
     let copy = r.config.lock().unwrap().data_dir.join("transcripts/claude").join(found.path.strip_prefix(&roots.claude).unwrap());
     assert_eq!(std::fs::read(&copy).unwrap(), std::fs::read(&found.path).unwrap());
     let said = r.said(thread.id);
-    let shown: Vec<(AuthorKind, &str, &str)> = said.iter().map(|m| (m.author_kind, m.author.as_str(), m.text.as_str())).collect();
-    assert!(shown[0].2.starts_with("接着本机 Claude Code 在"), "{:?}", shown[0]);
-    assert_eq!(&shown[1..], &[(AuthorKind::Person, "local", "fix   the\nbuild"), (AuthorKind::Agent, key.as_str(), "Looking.\n\nFixed."), (AuthorKind::Person, "local", "thanks")]);
+    // Only a note of where it came from, linking to what was said before: nothing of it is copied into the chat.
+    assert_eq!(said.len(), 1);
+    assert_eq!(said[0].author_kind, AuthorKind::Ember);
+    assert!(said[0].text.starts_with("接着本机 Claude Code 在"), "{}", said[0].text);
+    // At its history's last entry as it came: the transcript's timeline (user, assistant, tool call and result, …).
+    let mut tail = crate::transcript::TranscriptTail::new(RuntimeKind::Claude, found.path.clone());
+    tail.read();
+    let last = tail.entries.len() - 1;
+    assert!(said[0].text.ends_with(&format!("[查看之前的对话](?history={key}&entry={last})")), "{}", said[0].text);
     settle().await;
     assert_eq!(r.claude.count(), 0, "what was said before is not handed to the agent again");
 

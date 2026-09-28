@@ -543,6 +543,25 @@ impl AdminApi {
         }
 
         match (resource, id, action, method) {
+            // One of the machine's sessions, to look at before going on with it: what was said, the latest `limit`.
+            (Some("machine-sessions"), Some(runtime), Some(session), "GET") => {
+                let runtime = crate::config::runtime_named(runtime).ok_or_else(|| http_error(404, format!("no runtime {runtime}")))?;
+                let limit = asked.param("limit").and_then(|l| l.parse::<usize>().ok()).unwrap_or(200).clamp(1, 1000);
+                let roots = MachineRoots::of(&crate::machine_logins::process_env());
+                let id = session.to_string();
+                let (found, said) = tokio::task::spawn_blocking(move || {
+                    let found = crate::machine_sessions::find(&roots, runtime, &id)?;
+                    let said = crate::machine_sessions::conversation(runtime, &found.path);
+                    Some((found, said))
+                })
+                .await?
+                .ok_or_else(|| http_error(404, format!("本机没有这个会话：{session}")))?;
+                let mut found = found;
+                let name = crate::config::runtime_name(runtime);
+                found.session = self.deps.store.list_sessions()?.into_iter().find(|r| r.runtime == name && r.runtime_session_id.as_deref() == Some(found.id.as_str())).map(|r| r.key);
+                let total = said.len();
+                return ok(json!({ "session": found, "total": total, "said": &said[total.saturating_sub(limit)..] }));
+            }
             (Some("sessions"), Some(key), None, "GET") => return ok(self.session(key, viewer)?),
             // A background job's last output, for the pages (`lines`, default 200).
             (Some("jobs"), Some(id), Some("log"), "GET") => {

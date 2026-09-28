@@ -251,7 +251,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         <p className={css.newChatStatus}>{making ? `正在 ${station.name} 上创建会话…` : !view.overview ? `正在读取 ${station.name} 的 Profile…` : ""}</p>
         {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}
         <div className={css.newChatOffer}>
-          <MachineSessions onContinued={(key) => {
+          <MachineSessions models={view.models} onContinued={(key) => {
             keepTabs(`${station.address}:${key}`, { tabs: [], active: null });
             onCreated(station.address, key);
           }} />

@@ -24,3 +24,9 @@ export const main = style({ display: "grid", gap: 2, minWidth: 0 });
 export const title = style({ ...ellipsis, fontSize: vars.textBody, fontWeight: 500 });
 export const meta = style({ ...ellipsis, fontSize: vars.textXs, color: vars.muted });
 export const already = style({ fontSize: vars.textXs, color: vars.muted, whiteSpace: "nowrap" });
+
+/** A session looked at before going on with it, its messages spaced as a chat's (session.css.ts chatList). */
+// A chat hangs agents' avatars 28px out in its margin (Chat.css.ts msgRow): the preview keeps that room inside the dialog.
+export const preview = style({ display: "flex", flexDirection: "column", gap: 28, padding: "0 0 12px 28px" });
+export const previewWait = style({ display: "flex", alignItems: "center", gap: 8, minHeight: 120, justifyContent: "center", color: vars.muted, fontSize: vars.textSm });
+export const previewMore = style({ margin: 0, textAlign: "center", color: vars.muted, fontSize: vars.textXs });

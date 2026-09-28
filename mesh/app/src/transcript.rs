@@ -197,7 +197,10 @@ fn codex_timeline(records: &[Value], state: &mut ReadState) -> Vec<TimelineEntry
                 if role != "user" && role != "assistant" {
                     continue;
                 }
-                let text = to_text(p.get("content").unwrap_or(&Value::Null));
+                let content = p.get("content").unwrap_or(&Value::Null);
+                // A person's: what they typed, without the context Codex adds as parts of their own (a session begun in a
+                // terminal has it; see machine_sessions).
+                let text = if role == "user" { crate::machine_sessions::typed_parts(content) } else { to_text(content) };
                 if role == "user" && injected(&text) {
                     continue;
                 }

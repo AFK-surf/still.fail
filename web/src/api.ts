@@ -194,11 +194,16 @@ export interface MachineSession {
   title: string | null;
   /** What was asked first. */
   first: string | null;
+  /** The model it last ran (a station from before this does not say). */
+  model?: string | null;
   updatedAt: number;
   size: number;
   /** The station's session already going on with it. */
   session: string | null;
 }
+
+/** Something said in one of the machine's sessions: by the person, else by its agent; when, in ms. */
+export interface MachineSaid { person: boolean; text: string; at: number | null }
 
 /** The admin API of one station, by what each call does. */
 
@@ -240,6 +245,9 @@ export function stationApi(t: StationCall) {
     newChat: (input: { runtime: RuntimeKind; profile?: string; model?: string; effort?: string }) => request<{ key: string; thread: ChatThread }>("POST", "/sessions", input),
     /** Sessions the machine's own Claude Code and Codex kept (in a terminal); a station from before them answers 404. */
     machineSessions: () => request<{ sessions: MachineSession[] }>("GET", "/machine-sessions"),
+    /** One of them to look at first: what was said in it, the latest `limit` of `total`. */
+    machineSession: (runtime: RuntimeKind, id: string, limit = 200) =>
+      request<{ session: MachineSession; total: number; said: MachineSaid[] }>("GET", `/machine-sessions/${at(runtime)}/${at(id)}?limit=${limit}`),
     /** A chat going on with one of them (the one already going on with it, if any). */
     continueMachineSession: (runtime: RuntimeKind, id: string) => request<{ key: string; thread: ChatThread }>("POST", "/machine-sessions", { runtime, id }),
     file: t.file,

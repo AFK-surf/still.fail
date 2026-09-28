@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
-import { useApi, useChatSend, type Activity as ActivityView, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
+import { useApi, useChatSend, type Activity as ActivityView, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
@@ -118,7 +118,15 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
         </button>
       )}
       <Gallery.Provider value={stable.images}>
-      <div className={sessionCss.chatList} ref={list} onMouseUp={() => setTimeout(onSelect, 0)} onScroll={() => setPicked(null)}>
+      <div className={sessionCss.chatList} ref={list} onMouseUp={() => setTimeout(onSelect, 0)} onScroll={() => setPicked(null)}
+        onClick={(e) => {
+          // `?history=<session>&entry=<n>`: that agent's execution history (a chat going on with a session from a terminal starts
+          // with a note linking to it, where what was said before is).
+          const anchor = (e.target as Element).closest?.("a[href]") as HTMLAnchorElement | null;
+          const to = anchor ? historyLink(anchor.href) : null;
+          // At the entry it names (else its start); opened, not toggled.
+          if (to) { e.preventDefault(); onOpenHistory(to.key, to.entry); }
+        }}>
         {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
         {messages.length === 0 && (
           <div className={css.chatEmpty}>
@@ -174,6 +182,16 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
         locked={chat.offline} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
     </section>
   );
+}
+
+/** The session and entry a link to an agent's execution history names (`?history=<session>&entry=<n>`), or null when it
+ * is not one. */
+export function historyLink(href: string): { key: string; entry: number } | null {
+  let url: URL;
+  try { url = new URL(href, location.href); } catch { return null; }
+  const key = url.searchParams.get("history");
+  const entry = Number(url.searchParams.get("entry") ?? 0);
+  return key ? { key, entry: Number.isInteger(entry) && entry >= 0 ? entry : 0 } : null;
 }
 
 /**
@@ -347,15 +365,15 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
 }) {
   if (m.mine) {
     return (
-      <div className={`${conversationCss.msg} ${chatCss2.msgMine}`} data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
+      <MineMessage data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
         <Quotes quotes={m.quotes} />
-        {m.text && <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{m.text}</div></div>}
+        <MineBubble text={m.text} />
         <Files owner={owner} files={m.attachments} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting
           ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
           : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}
-      </div>
+      </MineMessage>
     );
   }
   // What ember itself says (a limit hit, a failure): a notice across the chat, not someone's message.
@@ -373,29 +391,67 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
   const who = m.by.name;
   const agent = agentHere ? m.by.agent : undefined;
   return (
-    <div className={`${conversationCss.msg} ${css.msgRow}`} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
-      data-enter={enter} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}>
-      <MessageAvatar message={m} name={who} />
-      <div className={css.msgMain}>
-        <div className={conversationCss.msgHead}>
-          {agent
-            ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)} title="打开或关闭执行历史">{who}</button>
-            : <span className={css.msgName}>{who}</span>}
-          <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />
-        </div>
-        <Quotes quotes={m.quotes} />
-        {m.authorKind === "person"
-          ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={owner} files={m.attachments} /></>
-          : <ProseWithFiles owner={owner} text={m.text} files={m.attachments} />}
-      </div>
-    </div>
+    <OthersMessage data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
+      data-enter={enter} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
+      avatar={<MessageAvatar message={m} name={who} />} time={m.time?.createdAt}
+      name={agent
+        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)} title="打开或关闭执行历史">{who}</button>
+        : <span className={css.msgName}>{who}</span>}>
+      <Quotes quotes={m.quotes} />
+      {m.authorKind === "person"
+        ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={owner} files={m.attachments} /></>
+        : <ProseWithFiles owner={owner} text={m.text} files={m.attachments} />}
+    </OthersMessage>
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners
   // The core hands the chat over anew as it changes: a message is the same one if all it holds is (its times in words too).
   && (a.message === b.message || JSON.stringify(a.message) === JSON.stringify(b.message)));
 
+type Data = { [key: `data-${string}`]: string | number | boolean | undefined };
+
+/** A viewer's own message as a chat draws it (on the right); its bubble is MineBubble. Also where else messages are shown so. */
+export function MineMessage({ children, ...data }: Data & { children: ReactNode }) {
+  return <div className={`${conversationCss.msg} ${chatCss2.msgMine}`} {...data}>{children}</div>;
+}
+
+/** The words of a viewer's own message, in their bubble. */
+export function MineBubble({ text }: { text: string }) {
+  return text ? <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{text}</div></div> : null;
+}
+
+/** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says. */
+export function OthersMessage({ avatar, name, time, children, ...data }: Data & { avatar: ReactNode; name: ReactNode; time: Stamp | undefined; children: ReactNode }) {
+  return (
+    <div className={`${conversationCss.msg} ${css.msgRow}`} {...data}>
+      {avatar}
+      <div className={css.msgMain}>
+        <div className={conversationCss.msgHead}>
+          {name}
+          <Time className={conversationCss.msgTime} stamp={time} />
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** An agent's picture in a chat: its model's maker, in the agents' ground. */
+export function AgentAvatar({ maker, runtime }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined }) {
+  return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}>{runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}</span>;
+}
+
+/** An agent's words as a chat draws them (Markdown). */
+export function AgentWords({ text }: { text: string }) {
+  return <div className={conversationCss.markdown}><Prose>{text}</Prose></div>;
+}
+
+/** An agent's name over its message. */
+export function MessageName({ children }: { children: ReactNode }) {
+  return <span className={css.msgName}>{children}</span>;
+}
+
 function MessageAvatar({ message, name }: { message: ChatMessage; name: string }) {
-  if (message.authorKind === "agent") return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}>{message.by.runtime ? <ModelLogo maker={message.by.maker} runtime={message.by.runtime} size={12} /> : <Mark size={12} />}</span>;
+  if (message.authorKind === "agent") return <AgentAvatar maker={message.by.maker} runtime={message.by.runtime} />;
   if (message.authorKind === "ember") return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><Mark size={12} /></span>;
   const picture = message.by.picture;
   return picture

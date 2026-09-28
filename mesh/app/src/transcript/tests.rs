@@ -49,7 +49,7 @@ fn codex_rollouts_become_a_timeline_without_injected_context() {
         json!({ "type": "session_meta", "payload": {} }),
         json!({ "type": "response_item", "payload": { "type": "message", "role": "developer", "content": [{ "type": "input_text", "text": "rules" }] } }),
         json!({ "type": "response_item", "payload": { "type": "message", "role": "user", "content": [{ "type": "input_text", "text": "<environment_context>…" }] } }),
-        json!({ "type": "response_item", "timestamp": "t2", "payload": { "type": "message", "role": "user", "content": [{ "type": "input_text", "text": "count files" }] } }),
+        json!({ "type": "response_item", "timestamp": "t2", "payload": { "type": "message", "role": "user", "content": [{ "type": "input_text", "text": "# AGENTS.md instructions\n\n<INSTRUCTIONS>…</INSTRUCTIONS>" }, { "type": "input_text", "text": "<recommended_plugins>…</recommended_plugins>" }, { "type": "input_text", "text": "count files" }] } }),
         json!({ "type": "response_item", "payload": { "type": "reasoning", "summary": [], "content": [{ "type": "reasoning_text", "text": "easy" }] } }),
         json!({ "type": "response_item", "payload": { "type": "function_call", "name": "exec_command", "call_id": "c1", "arguments": "{\"cmd\":\"ls\"}" } }),
         json!({ "type": "response_item", "payload": { "type": "function_call_output", "call_id": "c1", "output": "Process exited with code 2\nOutput:\nnope" } }),
@@ -61,7 +61,7 @@ fn codex_rollouts_become_a_timeline_without_injected_context() {
         plain,
         vec![("user", None, None), ("thinking", None, None), ("tool_call", Some("exec_command"), None), ("tool_result", None, Some(false)), ("assistant", None, None)]
     );
-    assert_eq!(timeline[0].at.as_deref(), Some("t2"));
+    assert_eq!((timeline[0].at.as_deref(), timeline[0].text.as_str()), (Some("t2"), "count files"));
     assert_eq!((timeline[2].call_id.as_deref(), timeline[3].call_id.as_deref()), (Some("c1"), Some("c1")));
 }
 

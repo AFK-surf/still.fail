@@ -40,9 +40,6 @@ use crate::store::{
 };
 use crate::transcript::{TimelineEntry, iso, transcript_path};
 
-/// How many of a session's earlier messages a chat going on with it shows (Hub::continue_machine_session).
-const CARRIED: usize = 200;
-
 /// A multi-session connect's session for one thread.
 pub fn session_key(connect: &str, channel: &str, thread_ts: &str) -> String {
     format!("{connect}:{channel}:{thread_ts}")
@@ -788,8 +785,8 @@ impl Hub {
 
     /// Goes on in a chat with a session the machine's own Claude Code or Codex kept (run in a terminal). Its transcript
     /// is copied into the shared transcripts (the original is left as it was, and can go on in the terminal on its own);
-    /// the new session resumes it, running in the directory it ran in; and what was said in it is written into the chat
-    /// for people to read (its latest CARRIED messages; the agent has all of it in its transcript). A session already
+    /// the new session resumes it, running in the directory it ran in. The chat starts with a note of where it came from,
+    /// linking to the session's execution history, which shows what was said before (it is not copied into the chat). A session already
     /// going on with it is that one's chat, brought back if archived.
     pub fn continue_machine_session(&self, roots: &MachineRoots, found: &MachineSession, created_by: &str) -> Result<(String, ThreadRow)> {
         let runtime = crate::config::runtime_name(found.runtime);
@@ -813,7 +810,13 @@ impl Hub {
         let kept = found.model.clone().filter(|m| profiles.iter().any(|p| p.models.contains(m)));
         let profile = self.pick(&profiles, kept.as_deref(), false)?;
         let model = kept.or_else(|| profile.model.clone()).or_else(|| profile.models.first().cloned());
-        crate::machine_sessions::copy_transcript(roots, found, &config.data_dir.join("transcripts").join(runtime))?;
+        let copy = crate::machine_sessions::copy_transcript(roots, found, &config.data_dir.join("transcripts").join(runtime))?;
+        // Where its execution history is when it comes here: its last entry, read as the history reads it (from the file
+        // the profile's home finds).
+        let read = transcript_path(found.runtime, &profile.home, &found.id).unwrap_or(copy);
+        let mut tail = crate::transcript::TranscriptTail::new(found.runtime, read);
+        tail.read();
+        let last = tail.entries.len().checked_sub(1);
         let key = format!("{INTERNAL_CONNECT}:c-{}", hex::encode(random_bytes::<5>()));
         let workspace = config.data_dir.join("sessions").join(INTERNAL_CONNECT).join(&key[INTERNAL_CONNECT.len() + 1..]).join("workspace");
         std::fs::create_dir_all(&workspace)?;
@@ -840,18 +843,15 @@ impl Hub {
         })?;
         info!(session = key, runtime, profile = profile.id, from = found.id, cwd = found.cwd, "session continued from the machine's own");
         let thread = self.open_chat(&key, created_by, title.as_deref())?;
-        let said = crate::machine_sessions::conversation(found.runtime, &found.path);
-        let left = said.len().saturating_sub(CARRIED);
+        // What was said before stays in its transcript: the note links to the session's execution history, which shows it,
+        // at where it was when it came here (the pages open `?history=<session>&entry=<n>` links there).
+        let at = last.map(|n| format!("&entry={n}")).unwrap_or_default();
         let name = if found.runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" };
-        let earlier = if left > 0 { format!("，更早的 {left} 条没有列出") } else { String::new() };
-        let note = format!("接着本机 {name} 在 {} 的会话（{}）。下面是它之前的对话{earlier}；从这里发的消息会在那个目录里接着这个会话。", found.cwd, found.id);
-        let first_at = said.get(left).and_then(|s| s.at);
-        self.store.insert_message(NewMessage { at: first_at, ..NewMessage::new(thread.id, &next_ts(), AuthorKind::Ember, "ember", &note) })?;
-        for s in &said[left..] {
-            let (kind, author) = if s.person { (AuthorKind::Person, created_by) } else { (AuthorKind::Agent, key.as_str()) };
-            self.store.insert_message(NewMessage { at: s.at, ..NewMessage::new(thread.id, &next_ts(), kind, author, &s.text) })?;
-        }
-        // Whoever brought it here has read it already.
+        let note = format!(
+            "接着本机 {name} 在 {} 的会话，从这里发的消息会在那个目录里接着它。[查看之前的对话](?history={key}{at})",
+            found.cwd
+        );
+        self.store.insert_message(NewMessage::new(thread.id, &next_ts(), AuthorKind::Ember, "ember", &note))?;
         self.store.set_read(created_by, thread.id, self.store.last_entry(thread.id)?)?;
         Ok((key, thread))
     }
