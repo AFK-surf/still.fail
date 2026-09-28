@@ -615,12 +615,20 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
       el.style.height = "auto";
       el.style.height = `${Math.min(el.scrollHeight, limit)}px`;
       el.style.overflowY = el.scrollHeight > limit + 1 ? "auto" : "hidden";
+      edges();
+    };
+    // Scrolling, the lines it cuts fade out at its edges (app.css) rather than stop at a hard line.
+    const edges = () => {
+      const over = el.scrollHeight > el.clientHeight + 1;
+      el.toggleAttribute("data-more-above", over && el.scrollTop > 1);
+      el.toggleAttribute("data-more-below", over && el.scrollTop + el.clientHeight < el.scrollHeight - 1);
     };
     fit();
     let width = el.clientWidth;
     const resize = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; fit(); } });
     resize.observe(el);
-    return () => resize.disconnect();
+    el.addEventListener("scroll", edges);
+    return () => { resize.disconnect(); el.removeEventListener("scroll", edges); };
   }, [text]);
   const uploading = files.some((f) => !f.done && !f.error);
   const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !starting && !locked;

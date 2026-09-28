@@ -2698,3 +2698,12 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 .composer-dock[data-variant="chat"] .send-btn:not(:disabled) { background: var(--text); color: var(--canvas); }
 .composer-dock[data-variant="chat"] .send-btn:disabled { background: var(--line); color: var(--canvas); }
 .composer-dock[data-variant="chat"] .composer-box[data-dragging] { background: color-mix(in oklch, var(--field-focus) 8%, color-mix(in oklch, var(--canvas) 45%, transparent)); }
+
+/* A draft past its three lines scrolls: what is cut above or below fades out over a line's height, not at a hard edge. */
+.composer-text { --more-above: 0px; --more-below: 0px; }
+.composer-text[data-more-above] { --more-above: 18px; }
+.composer-text[data-more-below] { --more-below: 18px; }
+.composer-text[data-more-above], .composer-text[data-more-below] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent);
+}
