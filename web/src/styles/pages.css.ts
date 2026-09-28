@@ -19,7 +19,7 @@ export const identityName = style({
   display: "flex", alignItems: "center", gap: "4px", margin: "0", fontSize: vars.textLg, fontWeight: "650",
 });
 export const iconBtn = style({
-  display: "inline-grid", placeItems: "center", width: "32px", height: "32px", border: "0",
+  display: "inline-grid", placeItems: "center", width: "32px", height: "32px", padding: "0", border: "0",
   borderRadius: `calc(12px * ${vars.cornerScale})`, background: "transparent", color: vars.muted, cursor: "pointer",
   flex: "none", transition: `background ${vars.dur} ${vars.easeOut}, color ${vars.dur} ${vars.easeOut}`,
   cornerShape: vars.cornerShape,

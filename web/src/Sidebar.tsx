@@ -225,7 +225,7 @@ function ArchiveButton({ item, to }: { item: ChatItem; to: string }) {
   return (
     <Tip label="归档" side="right">
       <button type="button" className={`${pagesCss.iconBtn} ${nav.rowArchive}`} aria-label={`归档「${item.title}」`} onMouseDown={(e) => e.preventDefault()} onClick={() => void archive()}>
-        <Archive size={15} />
+        <Archive size={16} />
       </button>
     </Tip>
   );
