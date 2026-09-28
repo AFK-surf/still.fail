@@ -14,6 +14,7 @@ import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice as Prof
 import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
+import { keepTabs } from "./chatTabs.ts";
 
 interface Choice { runtime: RuntimeKind | ""; model: string; effort: string; profile?: string }
 const LAST = "ember.newChat";
@@ -166,6 +167,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
       left.current = true;
       // What is being typed goes on in the chat, in the same composer.
       carry(`${station.address}:${madeKey}`);
+      // Made here, the chat opens without its agent's history beside: it is opened from the agent when wanted.
+      keepTabs(`${station.address}:${madeKey}`, { tabs: [], active: null });
       onCreated(station.address, madeKey);
     };
     const shown = madeChat ? madeChat.messages.filter((m) => m.mine).length + madeChat.outbox.length : 0;
@@ -174,10 +177,9 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
     return () => clearTimeout(late);
   }, [leaving, madeKey, madeChat, sent.length]);
   if (sent.length) {
-    // Laid out as the chat's page (its bar, its list, its composer, its agent's history beside), so it gives way to it
-    // without a move.
+    // Laid out as the chat's page (its bar, its list, its composer), so it gives way to it without a move.
     return (
-      <div className="session-page" data-panel>
+      <div className="session-page">
         <div className="session-main">
           <header className="page-bar"><div className="page-bar-title"><h1>{sent[0]}</h1></div></header>
           <section className="chat" aria-label="对话">
@@ -194,7 +196,6 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
             {composer}
           </section>
         </div>
-        <div className="side-panel" aria-hidden="true" />
       </div>
     );
   }

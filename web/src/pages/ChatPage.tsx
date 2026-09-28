@@ -9,6 +9,7 @@ import { Popover, Tabs } from "radix-ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router";
 import { lastChat } from "../lastChat.ts";
+import { keepTabs, keptTabs } from "../chatTabs.ts";
 import type { Job } from "../core/shapes.ts";
 import { useAction, useApi, useChat, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
@@ -46,30 +47,6 @@ function useChatOpened(chat: ChatView | undefined): void {
   }, [chat, opening]);
 }
 
-/** Which history tabs each chat has open, and which one is in front: each chat keeps its own (the latest 200 chats). */
-const TABS = "ember.chatTabs";
-type Kept = { tabs: string[]; active: string | null };
-function keptTabs(chat: string): Kept | undefined {
-  try {
-    return (JSON.parse(localStorage.getItem(TABS) ?? "{}") as Record<string, Kept>)[chat];
-  } catch {
-    return undefined;
-  }
-}
-function keepTabs(chat: string, kept: Kept): void {
-  let all: Record<string, Kept> = {};
-  try {
-    all = JSON.parse(localStorage.getItem(TABS) ?? "{}") as Record<string, Kept>;
-  } catch {
-    // start over
-  }
-  delete all[chat];
-  all[chat] = kept;
-  const keys = Object.keys(all);
-  for (const key of keys.slice(0, Math.max(0, keys.length - 200))) delete all[key];
-  localStorage.setItem(TABS, JSON.stringify(all));
-}
-
 function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const station = useStation();
   const link = useLink();
@@ -81,7 +58,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const lives = useLives(station.address, agents.map((a) => a.session.key));
   // One history tab per agent, by session key; each can be closed, and with none open the panel goes away.
   // Each chat keeps its own tabs. One not opened before shows the history of the session it is bound to (the agent
-  // it was made for, or the agent itself when it has no chat yet); a chat bound to no session opens none.
+  // it was made for, or the agent itself when it has no chat yet); a chat bound to no session opens none, nor one made
+  // here (a new chat keeps none open for it).
   const chatKey = `${station.address}:${"thread" in of ? of.thread : of.session}`;
   const [kept] = useState(() => keptTabs(chatKey));
   const [chosen, setTabs] = useState<string[] | null>(() => kept?.tabs ?? null);
