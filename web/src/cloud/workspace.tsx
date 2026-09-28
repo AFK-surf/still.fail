@@ -2,7 +2,7 @@
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
-import { Check, ChevronsUpDown, LogOut, Plus, Settings, UserPlus } from "../icons.tsx";
+import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
 import { NewChat } from "../NewChat.tsx";
 import { lastChat, useRememberChat } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
@@ -22,7 +22,7 @@ import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
 import { toMadeChat } from "../Chat.tsx";
 import { ComposerDock } from "../dock.tsx";
-import { signIn, signOut, useAccounts, type Account } from "./accounts.ts";
+import { signIn, useAccounts, type Account } from "./accounts.ts";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
 import { Avatar } from "./gate.tsx";
 import { Illustration, PageBrand, SidebarBrand } from "../brand.tsx";
@@ -240,18 +240,6 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
             <DropdownMenu.Separator className="menu-sep" />
             <DropdownMenu.Item className="menu-item" onSelect={() => setCreating(true)}><Plus {...ICON} />新建 workspace</DropdownMenu.Item>
             <DropdownMenu.Item className="menu-item" onSelect={() => void signIn()}><UserPlus {...ICON} />添加另一个账号</DropdownMenu.Item>
-            <DropdownMenu.Sub>
-              <DropdownMenu.SubTrigger className="menu-item"><LogOut {...ICON} />退出账号</DropdownMenu.SubTrigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.SubContent className="popover menu-list" sideOffset={6}>
-                  {list.map((a) => (
-                    <DropdownMenu.Item key={a.sub} className="menu-item" data-danger onSelect={() => void signOut(a.sub).then(() => { toast(`已退出 ${a.email}`); navigate("/"); })}>
-                      {a.email}
-                    </DropdownMenu.Item>
-                  ))}
-                </DropdownMenu.SubContent>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Sub>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>

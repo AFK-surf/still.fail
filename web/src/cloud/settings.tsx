@@ -75,6 +75,8 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
   // Where the account is signed in: a topic of the core, read again after a revoke.
   const devices = useTopic<LoginSession[]>({ topic: "loginSessions", account: account.sub });
   const revoke = useAction((id: string) => cloud.revokeLoginSession(account.sub, id), () => toast("已让那台设备退出"));
+  const navigate = useNavigate();
+  const [signingOut, setSigningOut] = useState(false);
   return (
     <div className="page page-narrow">
       <MobileBack to={`/w/${entry.id}/settings`} label="设置" />
@@ -103,6 +105,14 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
           </ul>
         )}
       </Section>
+      <Section title="退出登录">
+        <div className="card card-row">
+          <div className="card-row-text"><strong>在这个浏览器上退出 {account.email}</strong><span className="muted">它所在的 workspace 会从这里消失；其他已登录的账号不受影响。</span></div>
+          <Button icon={LogOut} onClick={() => setSigningOut(true)}>退出账号</Button>
+        </div>
+      </Section>
+      <Confirm open={signingOut} onClose={() => setSigningOut(false)} onConfirm={() => void signOut(account.sub).then(() => { toast(`已退出 ${account.email}`); navigate("/"); })}
+        title={`退出 ${account.email}？`} action="退出账号" description="这个浏览器上不再使用这个账号；它所在的 workspace 也会从这里消失。其他已登录的账号不受影响。" />
     </div>
   );
 }
