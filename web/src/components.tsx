@@ -1,10 +1,11 @@
 // Small pieces the station client and ember cloud share.
 import { useAppearance } from "./theme.ts";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import type { Host, Level, PersonShown, Quota } from "./api.ts";
 import { useOnlyMine } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
-import { Check, Filter } from "./icons.tsx";
+import { Archive, Check, Filter } from "./icons.tsx";
+import { useNavigate } from "react-router";
 import { DropdownMenu } from "radix-ui";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -14,10 +15,14 @@ import * as shellCss from "./styles/shell.css.ts";
 
 /**
  * A filter: 全部 or only the viewer's (我参与的 for chats, 我创建的 for connects), from a menu. `compact`: a filter
- * button alone, marked while it filters; else the filter's name beside it.
+ * button alone, marked while it filters; else the filter's name beside it. `archive`: the archive's page, the menu's
+ * last item under a line.
  */
-export function MineFilter({ label = "筛选", mine = "我创建的", compact }: { label?: string; mine?: string; compact?: boolean }) {
+export function MineFilter({ label = "筛选", mine = "我创建的", compact, archive }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined }) {
   const [onlyMine, setOnlyMine] = useOnlyMine();
+  const navigate = useNavigate();
+  // Gone to the archive, the focus is not brought back to the button (it would be ringed there, over the page left).
+  const leaving = useRef(false);
   const item = (value: boolean, text: string) => (
     <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => setOnlyMine(value)}>
       <span className={chatCss.chooserCheck}>{onlyMine === value && <Check size={13} />}</span>{text}
@@ -29,9 +34,16 @@ export function MineFilter({ label = "筛选", mine = "我创建的", compact }:
         <Filter size={15} strokeWidth={1.8} />{!compact && <span>{onlyMine ? mine : "全部"}</span>}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}>
+        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
+          onCloseAutoFocus={(e) => { if (leaving.current) { leaving.current = false; e.preventDefault(); } }}>
           {item(false, `全部${label}`)}
           {item(true, mine)}
+          {archive && <>
+            <DropdownMenu.Separator className={controlsCss.menuSep} />
+            <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => { leaving.current = true; navigate(archive); }}>
+              <span className={chatCss.chooserCheck}><Archive size={13} /></span>已归档
+            </DropdownMenu.Item>
+          </>}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

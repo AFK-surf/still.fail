@@ -57,7 +57,7 @@ function SettingsNav() {
 /**
  * The chats of a scope (a workspace, or this station), newest first and
  * grouped by day, as the core's `chats` view has them; optionally only the
- * ones the viewer started, with `newChat` above them and the way to the `archive` under them. With no station its empty
+ * ones the viewer started, with `newChat` above them and the way to the `archive` in the filter's menu beside it. With no station its empty
  * state leads to `stationsPage` (the page itself, where stations are added: nothing is appended to it).
  */
 const ArchivesContext = createContext<PendingArchives | null>(null);
@@ -77,13 +77,13 @@ export function ChatList({ scope, newChat, stationsPage, archive }: { scope: str
     <ArchivesContext.Provider value={pending}>
       <div className={nav.navNew}>
         <NavLink className={nav.navRow} to={newChat}><Compose {...ICON} />新建对话</NavLink>
-        {/* Nothing to narrow while there is no chat at all. */}
-        {!(all.value && !all.value.loading && all.value.days.length === 0) && <MineFilter label="会话" mine="我参与的" compact />}
+        {/* The filter, and the archive under it: nothing to narrow or look back on with no station at all. */}
+        {!(all.value && !all.value.loading && all.value.stations.length === 0) && <MineFilter label="会话" mine="我参与的" compact archive={archive} />}
       </div>
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-mine={onlyMine || undefined}>
-          <ChatPane chats={all} scope={scope} onlyMine={false} stationsPage={stationsPage} archive={archive} hidden={onlyMine} />
-          <ChatPane chats={mine} scope={scope} onlyMine stationsPage={stationsPage} archive={archive} hidden={!onlyMine} />
+          <ChatPane chats={all} scope={scope} onlyMine={false} stationsPage={stationsPage} hidden={onlyMine} />
+          <ChatPane chats={mine} scope={scope} onlyMine stationsPage={stationsPage} hidden={!onlyMine} />
         </div>
       </div>
     </ArchivesContext.Provider>
@@ -110,7 +110,7 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
 }
 
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
-function ChatPane({ chats, scope, onlyMine, stationsPage, archive, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; stationsPage: string; archive: string; hidden: boolean }) {
+function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; stationsPage: string; hidden: boolean }) {
   const pending = useContext(ArchivesContext)!;
   const archived = useSyncExternalStore(pending.subscribe, pending.getSnapshot);
   const view = chats.value;
@@ -140,8 +140,6 @@ function ChatPane({ chats, scope, onlyMine, stationsPage, archive, hidden }: { c
           {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} />)}
         </section>
       ))}
-      {/* Under the list, whatever it holds: chats archived by hand or for idling are there. */}
-      {view && !loading && stations.length > 0 && <NavLink className={`${nav.navRow} ${nav.navArchive}`} to={archive}><Archive {...ICON} />已归档</NavLink>}
     </div>
   );
 }

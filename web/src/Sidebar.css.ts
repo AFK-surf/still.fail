@@ -82,7 +82,6 @@ export const navText = style(ellipsis);
 /** 新建对话, with the filter beside it. */
 export const navNew = style({ display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 2px" });
 globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
-export const navArchive = style({ marginTop: 8, color: vars.muted });
 
 // ── a chat's row ──
 
