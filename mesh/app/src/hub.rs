@@ -862,7 +862,7 @@ impl Hub {
                         "to": to.clone(),
                         "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written)." },
                         "kind": { "type": "string", "enum": ["final", "block"], "description": "Omit for a progress update." },
-                        "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (ember chat only; images show inline). Up to 10, 50 MB each." },
+                        "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (ember chat only; images show inline). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
                     },
                     "required": ["to"],
                     "additionalProperties": false,

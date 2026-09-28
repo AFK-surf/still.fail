@@ -3,14 +3,14 @@
 // or name. Your messages sit right in a bubble; everyone else gets a face, a name and the time over their words.
 // Long-press quotes or copies a message; ＋ adds files. The list's behaviour (following its end, older pages, what is
 // read, the unread line, where it was left, messages coming out of an agent's avatar) is the desktop's (../Chat.tsx).
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
 import { useHost, type HostComposer } from "./ChatHost.tsx";
-import { FilePreview, fileSize, isImage, useFileUrl } from "../FilePreview.tsx";
+import { FileLink, FilePreview, fileSize, isImage, useFileUrl } from "../FilePreview.tsx";
 import { Activity, useAwayFromBottom, useEmissions, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
-import { Prose } from "../Prose.tsx";
+import { placeFiles, Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
 import { stationBase, useStation } from "../station.tsx";
 import { ask } from "./sheets.tsx";
@@ -253,6 +253,7 @@ function Said({ m, agent, here, draft, list }: { m: ChatMessage; agent: ChatAgen
     list.current!.scrollTop += target.getBoundingClientRect().top - list.current!.getBoundingClientRect().top - 80;
   };
   const who = m.by.name;
+  const { placed, rest } = useMemo(() => placeFiles(m.text, m.attachments), [m.text, m.attachments]);
   const hold = useHold(m.text, m.mine ? "你" : who, m.ts, m.authorKind === "agent" ? "agent" : "person", draft);
   // What ember itself says: a notice across the chat, apart from people's and agents' messages.
   if (m.system) {
@@ -288,9 +289,9 @@ function Said({ m, agent, here, draft, list }: { m: ChatMessage; agent: ChatAgen
       </div>
       {m.quotes.map((q, i) => <QuoteCard key={i} q={q} onJump={jump} />)}
       <div className="m-said-body" data-pressed={hold.pressed || undefined} {...hold.props}>
-        {m.authorKind === "person" ? m.text && <p className="m-plain">{m.text}</p> : <div className="m-markdown"><Prose>{m.text}</Prose></div>}
+        {m.authorKind === "person" ? m.text && <p className="m-plain">{m.text}</p> : <div className="m-markdown"><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={ownerOf(here, f)} file={f}>{words}</FileLink> : <OneFile here={here} file={f} />}>{m.text}</Prose></div>}
       </div>
-      <Files here={here} files={m.attachments} />
+      <Files here={here} files={m.authorKind === "person" ? m.attachments : rest} />
     </div>
   );
 }
@@ -337,17 +338,19 @@ function QuoteCard({ q, onJump }: { q: Quote; onJump?: (ts: string) => void }) {
 
 function Files({ here, files }: { here: Here; files: Attachment[] | undefined }) {
   if (!files?.length) return null;
-  // Files are kept in a session's workspace: the agent whose workspace holds it, else the first.
-  const owner = (f: Attachment) => here.view.agents.find((a) => f.path.startsWith(`${a.session.workspace}/`))?.session.key ?? here.view.agents[0]?.session.key ?? null;
-  return (
-    <div className="m-files">
-      {files.map((f) => {
-        const key = owner(f);
-        if (!key) return <FileCard key={f.path} name={f.name} size={f.size} />;
-        return isImage(f.name) ? <StationImage key={f.path} sessionKey={key} file={f} /> : <StationFile key={f.path} sessionKey={key} file={f} />;
-      })}
-    </div>
-  );
+  return <div className="m-files">{files.map((f) => <OneFile key={f.path} here={here} file={f} />)}</div>;
+}
+
+/** The session a file is kept by: the agent whose workspace holds it, else the first. */
+function ownerOf(here: Here, file: Attachment): string | null {
+  return here.view.agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.session.key ?? here.view.agents[0]?.session.key ?? null;
+}
+
+/** One file: an image, or a card. */
+function OneFile({ here, file }: { here: Here; file: Attachment }) {
+  const key = ownerOf(here, file);
+  if (!key) return <FileCard name={file.name} size={file.size} />;
+  return isImage(file.name) ? <StationImage sessionKey={key} file={file} /> : <StationFile sessionKey={key} file={file} />;
 }
 
 /** An image at its own proportions within 240×200 (known before it loads); a tap shows it whole. */

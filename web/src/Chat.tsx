@@ -9,8 +9,8 @@ import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
-import { Prose } from "./Prose.tsx";
-import { FilePreview, fileSize, isImage, useFileUrl } from "./FilePreview.tsx";
+import { placeFiles, Prose } from "./Prose.tsx";
+import { FileLink, FilePreview, fileSize, isImage, useFileUrl } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { track } from "./telemetry.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -154,9 +154,8 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
                 </div>
                 <Quotes quotes={m.quotes} />
                 {m.authorKind === "person"
-                  ? m.text && <div className="msg-plain">{m.text}</div>
-                  : <div className="markdown"><Prose>{m.text}</Prose></div>}
-                <Files owner={ownerOf} files={m.attachments} />
+                  ? <>{m.text && <div className="msg-plain">{m.text}</div>}<Files owner={ownerOf} files={m.attachments} /></>
+                  : <ProseWithFiles owner={ownerOf} text={m.text} files={m.attachments} />}
               </div>
             </div>
           )];
@@ -414,6 +413,17 @@ function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?
 }
 
 // ── files ───────────────────────────────────────────────────────────────
+
+/** An agent's Markdown with its files: those its text names shown there, the rest below it. */
+function ProseWithFiles({ owner, text, files }: { owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined }) {
+  const { placed, rest } = useMemo(() => placeFiles(text, files), [text, files]);
+  return (
+    <>
+      <div className="markdown"><Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <FileItem sessionKey={owner(f)} file={f} />}>{text}</Prose></div>
+      <Files owner={owner} files={rest} />
+    </>
+  );
+}
 
 /** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */
 function Files({ owner, files }: { owner: (file: Attachment) => string | null; files: Attachment[] | undefined }) {

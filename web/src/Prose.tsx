@@ -4,9 +4,11 @@
 // regex engine so no wasm is fetched.
 import { Check, Copy } from "./icons.tsx";
 import { isValidElement, useEffect, useState, type ReactNode } from "react";
-import Markdown, { type Components } from "react-markdown";
+import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { HighlighterCore } from "shiki/core";
+import type { Attachment } from "./core/shapes.ts";
+import { inlineFile } from "./Prose.css.ts";
 
 let highlighter: Promise<HighlighterCore> | null = null;
 const THEME = "vitesse-light";
@@ -81,6 +83,53 @@ function CodeBlock({ children }: { children?: ReactNode }) {
 
 const components: Components = { pre: ({ children }) => <CodeBlock>{children}</CodeBlock> };
 
-export function Prose({ children }: { children: string }) {
-  return <Markdown remarkPlugins={[remarkGfm]} components={components}>{children}</Markdown>;
+/** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`. */
+function nameOf(url: string): string {
+  let u = url.trim().replace(/^(ember-)?file:\/\//, "");
+  try { u = decodeURIComponent(u); } catch { /* kept as written */ }
+  return u.slice(u.lastIndexOf("/") + 1);
+}
+
+/**
+ * Which of a message's files its text places, by the name its links and
+ * images give (`![](shot.png)`, `[the report](report.pdf)`), and the rest,
+ * shown below the text. Code is passed over: a name in it places nothing.
+ */
+export function placeFiles(text: string, files: Attachment[] | undefined): { placed: Map<string, Attachment>; rest: Attachment[] } {
+  const placed = new Map<string, Attachment>();
+  if (!files?.length || !text) return { placed, rest: files ?? [] };
+  const prose = text.replace(/^ {0,3}(`{3,}|~{3,})[^]*?(^ {0,3}\1|(?![^]))/gm, "").replace(/(`+)[^]*?\1/g, "");
+  for (const [, url] of prose.matchAll(/\]\(\s*<?([^)\s>]+)>?(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g)) {
+    const name = nameOf(url!);
+    const file = files.find((f) => f.name === name);
+    if (file) placed.set(name, file);
+  }
+  const used = new Set(placed.values());
+  return { placed, rest: files.filter((f) => !used.has(f)) };
+}
+
+/**
+ * Markdown. With `files` (from placeFiles), a link or image naming one of the
+ * message's files shows it there, as `file` draws it: shown whole for an
+ * image, or a link on a line of its own; a link within a sentence stays a
+ * link (its words), opening the file.
+ */
+export function Prose({ children, files, file }: { children: string; files?: Map<string, Attachment>; file?: (f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode }) {
+  const withFiles: Components = (() => {
+    if (!files?.size || !file) return components;
+    const at = (url: unknown) => (typeof url === "string" ? files.get(nameOf(url)) : undefined);
+    return {
+      ...components,
+      p: ({ node, children, ...props }) => {
+        const parts = node?.children.filter((c) => c.type !== "text" || c.value.trim()) ?? [];
+        const only = parts.length === 1 && parts[0]!.type === "element" && parts[0]!.tagName === "a" ? at(parts[0]!.properties.href) : undefined;
+        return only ? <div className={inlineFile}>{file(only, "shown")}</div> : <p {...props}>{children}</p>;
+      },
+      img: ({ node: _, ...props }) => { const f = at(props.src); return f ? <span className={inlineFile}>{file(f, "shown")}</span> : <img {...props} />; },
+      a: ({ node: _, ...props }) => { const f = at(props.href); return f ? file(f, "link", props.children) : <a {...props} />; },
+    };
+  })();
+  // Links to the files are kept as written (the default would empty a file:// one); any other goes through the default.
+  const url = (u: string) => (files?.has(nameOf(u)) ? u : defaultUrlTransform(u));
+  return <Markdown remarkPlugins={[remarkGfm]} components={withFiles} urlTransform={url}>{children}</Markdown>;
 }

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { useApi, type Api, type Attachment } from "./api.ts";
 import { Close, Download, Minus, Plus } from "./icons.tsx";
 import { Prose } from "./Prose.tsx";
+import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
 import { Segmented } from "./ui.tsx";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
@@ -128,6 +129,18 @@ export function FilePreview({ open, onClose, sessionKey, file }: { open: boolean
         {open && <Viewer onClose={onClose} sessionKey={sessionKey} file={file} />}
       </RDialog.Portal>
     </RDialog.Root>
+  );
+}
+
+/** Words in a message that name one of its files: a link that opens it (just the words when no session can show it). */
+export function FileLink({ sessionKey, file, children }: { sessionKey: string | null; file: Attachment; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  if (sessionKey === null) return <>{children}</>;
+  return (
+    <>
+      <button type="button" className={fileLink} title={file.name} onClick={() => setOpen(true)}>{children}</button>
+      <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
+    </>
   );
 }
 
