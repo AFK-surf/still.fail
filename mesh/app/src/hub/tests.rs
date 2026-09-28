@@ -907,6 +907,64 @@ async fn archiving_a_session_keeps_a_zstd_copy_of_its_transcript_showing_it_agai
     assert!(!copy.exists());
 }
 
+#[tokio::test]
+async fn idle_chats_that_are_done_are_archived_by_the_station_busy_blocked_unread_and_bound_ones_stay() {
+    let r = setup();
+    let day = 86_400_000;
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let idle = session_key("cl", "C1", &m.thread_ts);
+    r.call(&idle, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    let b = InboundMessage { channel: "C2".into(), ..say("<@UBOT> look") };
+    r.accept(&b).await;
+    settle().await;
+    let blocked = session_key("cl", "C2", &b.thread_ts);
+    r.call(&blocked, "chat_state", json!({ "kind": "block" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    let (web, thread) = r.hub.new_session(NewChat { runtime: RuntimeKind::Claude, profile: None, model: None, effort: None, title: None, created_by: "local".into() }).unwrap();
+    r.hub.say(thread.id, "local", "hi", vec![], vec![]).unwrap();
+    settle().await;
+    // The agent's answer is unread: the chat stays.
+    r.call(&web, "chat_post", json!({ "to": format!("EMBER/{}", thread.thread_ts), "text": "hello", "kind": "final" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+    r.accept_via(&say("<@UBOT> hi"), "team").await;
+    settle().await;
+    let bound = r.store.binding("team").unwrap().unwrap();
+    r.call(&bound, "chat_state", json!({ "kind": "final" })).await.unwrap();
+    r.claude.last().complete();
+    settle().await;
+
+    r.hub.auto_archive(now_ms()).unwrap();
+    assert!(r.store.list_sessions().unwrap().iter().all(|s| s.archived_at.is_none()), "nothing has idled a day yet");
+    let later = now_ms() + 2 * day;
+    r.hub.auto_archive(later).unwrap();
+    assert_eq!(r.session(&idle).archived_by.as_deref(), Some(AUTO));
+    assert_eq!(r.session(&blocked).archived_at, None, "stopped at a block");
+    assert_eq!(r.session(&web).archived_at, None, "unread");
+    assert_eq!(r.session(&bound).archived_at, None, "a single-session connect's");
+    r.store.set_read("local", thread.id, r.store.last_entry(thread.id).unwrap()).unwrap();
+    r.hub.auto_archive(later).unwrap();
+    assert_eq!(r.session(&web).archived_by.as_deref(), Some(AUTO));
+    assert!(r.store.get_thread(thread.id).unwrap().unwrap().hidden_at.is_some(), "its own chat with it");
+    // Someone writes in the Slack thread again: its session is back.
+    r.accept(&reply(&m, "9999.5", "<@UBOT> one more")).await;
+    assert_eq!(r.session(&idle).archived_at, None);
+    // A chat opened with a session that has one is a chat of its own, archived alone.
+    r.hub.archive(&web, false).unwrap();
+    let second = r.hub.open_chat(&web, "local", None).unwrap();
+    assert_eq!(second.home, None);
+    r.hub.archive_chat(second.id, true).unwrap();
+    assert_eq!(r.session(&web).archived_at, None);
+    assert!(r.store.get_thread(second.id).unwrap().unwrap().hidden_at.is_some());
+    r.hub.archive_chat(thread.id, true).unwrap();
+    assert_eq!(r.session(&web).archived_by.as_deref(), Some(MANUAL));
+}
+
 #[test]
 fn command_parsing() {
     assert!(is_stop_command("<@UBOT>  -stop "));

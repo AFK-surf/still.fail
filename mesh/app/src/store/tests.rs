@@ -2,6 +2,10 @@
 
 use super::*;
 
+fn archive_file(store: &Store, thread: i64) -> std::path::PathBuf {
+    store.archive_dir().join("threads").join(format!("{thread}.jsonl.zst"))
+}
+
 fn memory() -> Store {
     Store::open(":memory:", None).unwrap()
 }
@@ -185,7 +189,7 @@ fn archiving_writes_a_thread_out_to_a_zstd_file_and_back() {
     let entries = store.entries_after(own.id, 0).unwrap();
     let file = archive.path().join("threads").join(format!("{}.jsonl.zst", own.id));
 
-    store.set_archived("a", true).unwrap();
+    store.set_archived("a", true, MANUAL).unwrap();
     assert!(file.exists(), "every session of it is archived");
     assert!(!archive.path().join("threads").join(format!("{}.jsonl.zst", shared.id)).exists(), "b still takes part");
     let text = String::from_utf8(zstd::decode_all(&std::fs::read(&file).unwrap()[..]).unwrap()).unwrap();
@@ -200,12 +204,12 @@ fn archiving_writes_a_thread_out_to_a_zstd_file_and_back() {
     assert_eq!(store.list_threads("local", None, Some(own.id)).unwrap().remove(0), before);
     assert_eq!(store.participants(Some("a")).unwrap()["a"], vec!["local".to_string(), "slack:ds:U1".to_string()]);
 
-    store.set_archived("a", false).unwrap();
+    store.set_archived("a", false, MANUAL).unwrap();
     assert!(!file.exists(), "shown again: back in the database");
     assert_eq!(store.entries_after(own.id, 0).unwrap(), entries);
 
     // Someone writing in an archived thread brings it back first.
-    store.set_archived("a", true).unwrap();
+    store.set_archived("a", true, MANUAL).unwrap();
     let mut heard = store.subscribe();
     assert_eq!(say(&store, own.id, "2.4", AuthorKind::Person, "local", "还在吗"), (3, true));
     assert!(!file.exists());
@@ -213,15 +217,15 @@ fn archiving_writes_a_thread_out_to_a_zstd_file_and_back() {
     let appended: Vec<Vec<i64>> = drain(&mut heard)
         .into_iter()
         .filter_map(|c| match c {
-            StoreChange::Thread { entries, .. } => Some(entries.iter().map(|e| e.n).collect()),
+            StoreChange::Thread { entries, .. } if !entries.is_empty() => Some(entries.iter().map(|e| e.n).collect()),
             _ => None,
         })
         .collect();
     assert_eq!(appended, vec![vec![3]]);
 
     // Deleting the session removes an archived thread's file with it.
-    store.set_archived("a", true).unwrap();
-    store.set_archived("b", true).unwrap();
+    store.set_archived("a", true, MANUAL).unwrap();
+    store.set_archived("b", true, MANUAL).unwrap();
     assert!(archive.path().join("threads").join(format!("{}.jsonl.zst", shared.id)).exists());
     let mut removed = store.subscribe();
     store.delete_session("a").unwrap();
@@ -257,9 +261,9 @@ fn deleting_removes_the_sessions_rows_and_the_threads_only_it_was_in() {
     store.set_read("local", own.id, 99).unwrap();
     store.start_turn("t", "a", "input").unwrap();
     store.set_binding("team", Some("a")).unwrap();
-    store.set_archived("a", true).unwrap();
+    store.set_archived("a", true, MANUAL).unwrap();
     assert!(store.get_session("a").unwrap().unwrap().archived_at.unwrap() > 0);
-    store.set_archived("a", false).unwrap();
+    store.set_archived("a", false, MANUAL).unwrap();
     assert_eq!(store.get_session("a").unwrap().unwrap().archived_at, None);
     let mut events = store.subscribe();
     store.delete_session("a").unwrap();
@@ -313,4 +317,72 @@ fn the_store_announces_what_changed() {
         other => panic!("{other:?}"),
     }
     assert_eq!(changes[5], StoreChange::Read { viewer: "local".into(), thread: thread.id, n });
+}
+
+#[test]
+fn a_sessions_own_chat_is_archived_with_it_a_chat_of_its_own_alone_anything_new_said_brings_them_back() {
+    let store = memory();
+    session(&store, "a");
+    let own = store.open_thread_of("ember", "EMBER", "1.1", None, None, Some("a")).unwrap();
+    let other = store.open_thread("ember", "EMBER", "2.1", None, None).unwrap();
+    store.join_thread(own.id, "a", "ember").unwrap();
+    store.join_thread(other.id, "a", "ember").unwrap();
+    say(&store, other.id, "2.2", AuthorKind::Person, "local", "hi");
+    assert_eq!(store.home_chat("a").unwrap().unwrap().id, own.id);
+    assert_eq!(store.chats_of_their_own().unwrap().iter().map(|t| t.id).collect::<Vec<_>>(), vec![other.id]);
+    let thread = |id: i64| store.get_thread(id).unwrap().unwrap();
+    let row = || store.get_session("a").unwrap().unwrap();
+
+    store.set_archived("a", true, AUTO).unwrap();
+    assert_eq!((row().archived_by.as_deref(), thread(own.id).hidden_by.as_deref()), (Some(AUTO), Some(AUTO)));
+    assert_eq!(thread(other.id).hidden_at, None, "a chat of its own stays");
+    // Its agent says something there: the session comes back, with its own chat.
+    say(&store, other.id, "2.3", AuthorKind::Agent, "a", "done");
+    assert_eq!(row().archived_at, None);
+    assert_eq!(row().shown_at, None, "brought back by what was said, not by hand");
+    assert_eq!(thread(own.id).hidden_at, None);
+
+    store.set_thread_hidden(other.id, true, MANUAL).unwrap();
+    assert!(thread(other.id).hidden_at.is_some());
+    assert_eq!(row().archived_at, None, "its sessions stay");
+    assert!(archive_file(&store, other.id).exists(), "out of lists: in its archive file");
+    assert_eq!(store.entries_after(other.id, 0).unwrap().iter().map(|e| e.text.clone().unwrap()).collect::<Vec<_>>(), vec!["hi", "done"]);
+    // Someone writes in it: shown again.
+    say(&store, other.id, "2.4", AuthorKind::Person, "local", "again");
+    assert_eq!(thread(other.id).hidden_at, None);
+
+    // Shown again by hand: the idle clock starts over.
+    store.set_archived("a", true, MANUAL).unwrap();
+    store.set_archived("a", false, MANUAL).unwrap();
+    assert!(row().shown_at.is_some());
+}
+
+#[test]
+fn a_database_made_before_archiving_gains_its_columns_and_each_sessions_first_chat_is_its_own() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ember.db");
+    {
+        let db = Connection::open(&path).unwrap();
+        let old = SCHEMA
+            .replace("  archived_at INTEGER,\n  archived_by TEXT,\n  shown_at INTEGER\n", "  archived_at INTEGER\n")
+            .replace("  home TEXT,\n  hidden_at INTEGER,\n  hidden_by TEXT,\n  shown_at INTEGER,\n", "");
+        assert!(!old.contains("hidden_at"));
+        db.execute_batch(&old).unwrap();
+        db.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}")).unwrap();
+        db.execute_batch(
+            "INSERT INTO sessions (key, connect, scope, runtime, profile, workspace, token, created_at, last_active_at, archived_at)
+               VALUES ('a', 'ember', 'all', 'claude', 'cc', '/w/a', 'a', 1, 1, 5);
+             INSERT INTO threads (id, surface, channel, thread_ts, created_at) VALUES (1, 'ember', 'EMBER', '1.1', 1), (2, 'ember', 'EMBER', '2.1', 2);
+             INSERT INTO thread_sessions (thread, session, connect, joined_at) VALUES (1, 'a', 'ember', 1), (2, 'a', 'ember', 2);",
+        )
+        .unwrap();
+    }
+    let store = Store::open(path.to_str().unwrap(), None).unwrap();
+    let first = store.get_thread(1).unwrap().unwrap();
+    assert_eq!((first.home.as_deref(), first.hidden_at, first.hidden_by.as_deref()), (Some("a"), Some(5), Some(MANUAL)));
+    assert_eq!(store.get_thread(2).unwrap().unwrap().home, None);
+    assert_eq!(store.get_session("a").unwrap().unwrap().archived_by.as_deref(), Some(MANUAL));
+    drop(store);
+    // Opened again: nothing more to add.
+    Store::open(path.to_str().unwrap(), None).unwrap();
 }

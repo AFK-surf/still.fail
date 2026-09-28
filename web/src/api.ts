@@ -15,6 +15,21 @@ export { CoreError };
 
 // ── what is sent to a station (its admin API's inputs) ──
 
+/**
+ * An item of a station's archive (GET /chats?archived=1), as the station sends it: its sidebar row with when it was
+ * archived, by a person or by the station for idling, and whether the chat went alone (its agents still at work) or
+ * with its session.
+ */
+export interface ArchivedChat {
+  id: string;
+  session: string;
+  thread: number | null;
+  title: string;
+  last: { text: string | null } | null;
+  lastActiveAt: number;
+  archived?: { at: number; by: "manual" | "auto"; alone: boolean };
+}
+
 export type ConnectKind = "slack";
 
 /** POST /connects, PUT /connects/:id. Blank or missing tokens keep the stored ones. */
@@ -172,9 +187,20 @@ export function stationApi(t: StationCall) {
   return {
     stop: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/stop`),
     /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */
-    archive: (of: { thread?: number | null; session: string }, archived: boolean) =>
-      request<unknown>(archived ? "POST" : "DELETE", of.thread != null ? `/threads/${of.thread}/archive` : `/sessions/${at(of.session)}/archive`),
-    archivedChats: () => request<Station.ChatRow[]>("GET", "/chats?archived=1"),
+    archive: async (of: { thread?: number | null; session: string }, archived: boolean) => {
+      const method = archived ? "POST" : "DELETE";
+      const bySession = () => request<unknown>(method, `/sessions/${at(of.session)}/archive`);
+      if (of.thread == null) return bySession();
+      try {
+        return await request<unknown>(method, `/threads/${of.thread}/archive`);
+      } catch (error) {
+        // A station from before chats were archived by themselves: its session instead, as it always was.
+        if (error instanceof CoreError && error.status === 404) return bySession();
+        throw error;
+      }
+    },
+    /** The archive's items; a station from before it answers its shown ones (none say `archived`), so none. */
+    archivedChats: async () => (await request<ArchivedChat[]>("GET", "/chats?archived=1")).filter((row) => row.archived),
     deleteSession: (key: string) => request<{ ok: true }>("DELETE", `/sessions/${at(key)}`),
     evict: (key: string) => request<{ ok: true }>("POST", `/sessions/${at(key)}/evict`),
     putConnect: (id: string, input: ConnectInput) => request<Overview>("PUT", `/connects/${at(id)}`, input),

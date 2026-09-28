@@ -317,15 +317,28 @@ impl AdminApi {
     /// The viewer's sidebar: one kind of item, an agent (a shown session) merged with its internal chat. An agent in an
     /// internal chat is that chat's item; one with none yet is an item without a chat, whose chat is made with its
     /// first message. A Slack thread is no item: it lends its agent's item a title (while the chat has no words of its
-    /// own), the connect and the origin.
-    pub(super) fn chats(&self, viewer: &Viewer) -> Result<Vec<Value>> {
+    /// own), the connect and the origin. `archived`: the archive's items instead, archived sessions (with their own
+    /// chats) and chats of their own archived alone, each with `archived: {at, by, alone}`.
+    pub(super) fn chats(&self, viewer: &Viewer, archived: bool) -> Result<Vec<Value>> {
         let store = &self.deps.store;
         let is_mine = self.is_mine(viewer);
         let stats = store.session_stats(None)?;
-        let shown: BTreeMap<String, crate::store::SessionRow> = store.list_sessions()?.into_iter().filter(|s| s.archived_at.is_none()).map(|s| (s.key.clone(), s)).collect();
-        let order: Vec<String> = store.list_sessions()?.into_iter().filter(|s| s.archived_at.is_none()).map(|s| s.key).collect();
+        let sessions = store.list_sessions()?;
+        let shown: BTreeMap<String, crate::store::SessionRow> =
+            sessions.iter().filter(|s| s.archived_at.is_some() == archived).map(|s| (s.key.clone(), s.clone())).collect();
+        let order: Vec<String> = sessions.iter().filter(|s| s.archived_at.is_some() == archived).map(|s| s.key.clone()).collect();
+        // In the archive, a chat of its own shows its agents whatever they are doing elsewhere.
+        let all: BTreeMap<String, crate::store::SessionRow> = sessions.into_iter().map(|s| (s.key.clone(), s)).collect();
+        let listed = |t: &ThreadSummary| t.thread.hidden_at.is_some() == archived;
+        let in_chat = |t: &ThreadSummary| -> Vec<String> {
+            let alone = archived && t.thread.home.is_none();
+            t.sessions.iter().filter(|m| if alone { all.contains_key(&m.session) } else { shown.contains_key(&m.session) }).map(|m| m.session.clone()).collect()
+        };
+        let archived_of = |s: &crate::store::SessionRow| {
+            json!({ "at": s.archived_at.unwrap_or(0), "by": s.archived_by.as_deref().unwrap_or(crate::store::MANUAL), "alone": false })
+        };
         let agent = |key: &str| {
-            let s = &shown[key];
+            let s = &all[key];
             let stat = stats.get(key);
             json!({
                 "key": key, "runtime": s.runtime, "model": s.model, "effort": s.effort, "process": self.deps.hub.process_state(key),
@@ -339,22 +352,24 @@ impl AdminApi {
         for t in &threads {
             for m in &t.sessions {
                 if t.thread.surface == EMBER_SURFACE {
-                    chatted.insert(m.session.clone());
+                    if listed(t) {
+                        chatted.insert(m.session.clone());
+                    }
                 } else {
                     origins.entry(m.session.clone()).or_insert(t);
                 }
             }
         }
         let mut rows = Vec::new();
-        for t in threads.iter().filter(|t| t.thread.surface == EMBER_SURFACE && t.sessions.iter().any(|m| shown.contains_key(&m.session))) {
+        for t in threads.iter().filter(|t| t.thread.surface == EMBER_SURFACE && listed(t) && !in_chat(t).is_empty()) {
             let from = t.sessions.iter().find_map(|m| origins.get(&m.session).copied());
-            let agents: Vec<Value> = t.sessions.iter().filter(|m| shown.contains_key(&m.session)).map(|m| agent(&m.session)).collect();
+            let agents: Vec<Value> = in_chat(t).iter().map(|key| agent(key)).collect();
             let origin = from.map(|f| self.origin(f));
             let creator = self.creator(t.thread.created_by.as_deref());
             let people = self.people(&t.people);
             let mut names = self.author_names(t.thread.id);
             let last = t.last_message.as_ref().map(|m| message_view(m, &mut names));
-            let starters: Vec<Option<Value>> = agents.iter().map(|a| self.creator(shown.get(a["key"].as_str().unwrap_or("")).and_then(|s| s.created_by.as_deref()))).collect();
+            let starters: Vec<Option<Value>> = agents.iter().map(|a| self.creator(all.get(a["key"].as_str().unwrap_or("")).and_then(|s| s.created_by.as_deref()))).collect();
             let key = agents[0]["key"].clone();
             let title = match (from, &origin) {
                 (Some(f), Some(o)) if !has_words(t) => chat_title(f, o["channelName"].as_str()),
@@ -370,7 +385,7 @@ impl AdminApi {
                 })
             });
             let mine = is_mine(creator.as_ref()) || people.iter().any(|p| is_mine(Some(p))) || starters.iter().any(|s| is_mine(s.as_ref()));
-            rows.push(json!({
+            let mut row = json!({
                 // An item is its agent's, from its first moment to its last: the session key is its id, chat or no chat.
                 "id": key, "session": key, "thread": t.thread.id,
                 "title": title,
@@ -381,7 +396,16 @@ impl AdminApi {
                 "lastActiveAt": t.thread.created_at.max(t.last_message.as_ref().map(|m| m.created_at).unwrap_or(0)),
                 "connect": from.and_then(slack_connect_of),
                 "origin": origin,
-            }));
+            });
+            if archived {
+                row["archived"] = match t.thread.home.as_ref().and_then(|home| all.get(home)) {
+                    Some(home) => archived_of(home),
+                    None => json!({
+                        "at": t.thread.hidden_at.unwrap_or(0), "by": t.thread.hidden_by.as_deref().unwrap_or(crate::store::MANUAL), "alone": true,
+                    }),
+                };
+            }
+            rows.push(row);
         }
         for key in order.iter().filter(|k| !chatted.contains(*k)) {
             let s = &shown[key];
@@ -394,7 +418,7 @@ impl AdminApi {
                     _ => NO_WORDS.to_string(),
                 },
             };
-            rows.push(json!({
+            let mut row = json!({
                 "id": key, "session": key, "thread": null,
                 "title": title,
                 "agents": [agent(key)],
@@ -405,7 +429,11 @@ impl AdminApi {
                 "lastActiveAt": s.last_active_at,
                 "connect": if s.connect == INTERNAL_CONNECT { None } else { Some(s.connect.clone()) },
                 "origin": origin,
-            }));
+            });
+            if archived {
+                row["archived"] = archived_of(s);
+            }
+            rows.push(row);
         }
         Ok(rows)
     }

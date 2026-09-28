@@ -34,7 +34,7 @@ use crate::pool::{PoolSignals, ProfileHealth, pick_profile, serves, usable};
 use crate::runtime::AgentDriver;
 use crate::session::{DeclaredState, SessionActor, SessionDeps};
 use crate::store::{
-    Attachment, AuthorKind, EMBER_SURFACE, NewMessage, NewSession, Post, Quote, SessionRow, SessionScope, SessionThread, Store, ThreadRow, now_ms,
+    AUTO, Attachment, AuthorKind, EMBER_SURFACE, MANUAL, NewMessage, NewSession, Post, Quote, SessionRow, SessionScope, SessionThread, Store, ThreadRow, now_ms,
     slack_surface, write_compressed,
 };
 use crate::transcript::{TimelineEntry, iso, transcript_path};
@@ -409,7 +409,9 @@ impl Hub {
         if self.store.get_session(session)?.is_none() {
             bail!("unknown session {session}");
         }
-        let thread = self.store.open_thread(EMBER_SURFACE, INTERNAL_CHANNEL, &next_ts(), title, Some(created_by))?;
+        // The first chat made with a session is its own; later ones are chats of their own (ThreadRow::home).
+        let home = if self.store.home_chat(session)?.is_some() { None } else { Some(session) };
+        let thread = self.store.open_thread_of(EMBER_SURFACE, INTERNAL_CHANNEL, &next_ts(), title, Some(created_by), home)?;
         self.store.join_thread(thread.id, session, INTERNAL_CONNECT)?;
         Ok(thread)
     }
@@ -439,15 +441,25 @@ impl Hub {
         Ok(n)
     }
 
-    /// Hides a session from lists, or shows it again (see Store::set_archived). Archiving also keeps a copy of its
-    /// transcript, written like an archived thread; the runtime's own file in the profile's home stays as it is.
+    /// Hides a session from lists, or shows it again, by hand (see archive_by).
     pub fn archive(&self, key: &str, archived: bool) -> Result<()> {
+        self.archive_by(key, archived, MANUAL)
+    }
+
+    /// Hides a session from lists, or shows it again (see Store::set_archived); `by` is MANUAL or AUTO. Archiving also
+    /// keeps a copy of its transcript, written like an archived thread (the runtime's own file in the profile's home
+    /// stays as it is), and ends its process if idle.
+    pub fn archive_by(&self, key: &str, archived: bool, by: &str) -> Result<()> {
         let row = self.store.get_session(key)?.ok_or_else(|| anyhow!("unknown session {key}"))?;
-        self.store.set_archived(key, archived)?;
+        self.store.set_archived(key, archived, by)?;
         let copy = self.transcript_copy(key);
         if !archived {
             let _ = std::fs::remove_file(&copy);
             return Ok(());
+        }
+        let actor = self.actors.lock().unwrap().get(key).cloned();
+        if let (Some(actor), Ok(runtime)) = (actor, tokio::runtime::Handle::try_current()) {
+            runtime.spawn(async move { actor.evict().await });
         }
         let config = self.config();
         let profile = config.profiles.iter().find(|p| p.id == row.profile);
@@ -455,8 +467,77 @@ impl Hub {
             (Some(runtime), Some(id), Some(profile)) => transcript_path(runtime, &profile.home, id),
             _ => None,
         };
-        if let Some(path) = path {
+        if let Some(path) = path.filter(|p| p.exists()) {
             write_compressed(&copy, &std::fs::read_to_string(path)?)?;
+        }
+        Ok(())
+    }
+
+    /// Archives a chat on the pages, or shows it again: a session's own chat goes with its session; a chat of its own
+    /// goes alone, its sessions staying as they are.
+    pub fn archive_chat(&self, thread: i64, archived: bool) -> Result<()> {
+        let chat = self.ember_chat(thread)?;
+        match chat.home {
+            Some(home) => self.archive(&home, archived),
+            None => self.store.set_thread_hidden(thread, archived, MANUAL),
+        }
+    }
+
+    /// Archives what has idled past auto_archive_ms (counted from its last activity, or from being shown again by hand)
+    /// and is done: nothing running or waiting to be heard, not stopped at a block for someone, nothing its chat's
+    /// starter has not read, and no single-session connect feeding it. Anything new said brings it back
+    /// (Store::bring_back).
+    pub fn auto_archive(&self, now: i64) -> Result<()> {
+        let after = self.config().auto_archive_ms as i64;
+        if after <= 0 {
+            return Ok(());
+        }
+        let idle = |at: &[Option<i64>]| now - at.iter().flatten().copied().max().unwrap_or(0) >= after;
+        let unread = |t: &ThreadRow| -> Result<bool> {
+            Ok(match (&t.created_by, t.surface == EMBER_SURFACE) {
+                (Some(starter), true) => self.store.unread_count(starter, t.id)? > 0,
+                _ => false,
+            })
+        };
+        let bound = self.store.list_bindings()?;
+        let stats = self.store.session_stats(None)?;
+        let busy = |key: &str| -> Result<bool> {
+            let Some(row) = self.store.get_session(key)? else { return Ok(true) };
+            let stat = stats.get(key);
+            let last = stat.and_then(|s| s.last_turn.as_ref());
+            Ok(row.running
+                || self.process_state(key) == "running"
+                || stat.is_some_and(|s| s.pending > 0)
+                || last.is_some_and(|t| t.declared.as_deref() == Some("block") || t.ended_at.is_none()))
+        };
+        for s in self.store.list_sessions()? {
+            if s.archived_at.is_some() || !idle(&[Some(s.last_active_at), s.shown_at]) || bound.contains_key(&s.key) || busy(&s.key)? {
+                continue;
+            }
+            let mut unheard = false;
+            for t in self.store.session_threads(&s.key)? {
+                unheard |= unread(&t.thread)?;
+            }
+            if unheard {
+                continue;
+            }
+            info!(session = s.key, "archiving an idle session");
+            self.archive_by(&s.key, true, AUTO)?;
+        }
+        for t in self.store.chats_of_their_own()? {
+            let said = self.store.last_message(t.id)?.map(|m| m.created_at);
+            if !idle(&[Some(t.created_at), said, t.shown_at]) || unread(&t)? {
+                continue;
+            }
+            let mut working = false;
+            for m in self.store.thread_sessions(t.id)? {
+                working |= busy(&m.session)?;
+            }
+            if working {
+                continue;
+            }
+            info!(thread = t.id, "archiving an idle chat");
+            self.store.set_thread_hidden(t.id, true, AUTO)?;
         }
         Ok(())
     }

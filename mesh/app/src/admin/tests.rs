@@ -1123,6 +1123,36 @@ async fn sessions_can_be_archived_shown_again_and_deleted_with_their_workspace()
 }
 
 #[tokio::test]
+async fn chats_are_archived_with_their_session_or_alone_and_listed_in_the_archive() {
+    let t = setup().await;
+    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
+    let key = made["key"].as_str().unwrap().to_string();
+    let own = made["thread"]["id"].as_i64().unwrap();
+    let other = t.call("POST", "/threads", Some(json!({ "session": key }))).await.1["id"].as_i64().unwrap();
+    let rows = |v: Value| {
+        let mut rows: Vec<(i64, Option<String>)> =
+            v.as_array().unwrap().iter().map(|r| (r["thread"].as_i64().unwrap(), r["archived"]["by"].as_str().map(String::from))).collect();
+        rows.sort();
+        rows
+    };
+    assert_eq!(rows(t.get("/chats").await), vec![(own, None), (other, None)]);
+    // A chat of its own goes alone.
+    assert_eq!(t.call("POST", &format!("/threads/{other}/archive"), None).await.1["id"], json!(other));
+    assert_eq!(rows(t.get("/chats").await), vec![(own, None)]);
+    assert_eq!(rows(t.get("/chats?archived=1").await), vec![(other, Some("manual".into()))]);
+    assert_eq!(t.get("/chats?archived=1").await[0]["archived"]["alone"], json!(true));
+    assert_eq!(t.store.get_session(&key).unwrap().unwrap().archived_at, None);
+    // A session's own chat goes with the session.
+    t.call("POST", &format!("/threads/{own}/archive"), None).await;
+    assert_eq!(rows(t.get("/chats").await), vec![]);
+    assert_eq!(rows(t.get("/chats?archived=1").await), vec![(own, Some("manual".into())), (other, Some("manual".into()))]);
+    assert!(t.store.get_session(&key).unwrap().unwrap().archived_at.is_some());
+    t.call("DELETE", &format!("/threads/{own}/archive"), None).await;
+    assert_eq!(rows(t.get("/chats").await), vec![(own, None)]);
+    assert_eq!(t.call("POST", "/threads/99999/archive", None).await.0, 404);
+}
+
+#[tokio::test]
 async fn events_announce_each_kind_of_change() {
     let quotas = Arc::new(AtomicUsize::new(0));
     let t = setup_with(Setup { quota: Some(quotas.clone()), ..Setup::default() }).await;

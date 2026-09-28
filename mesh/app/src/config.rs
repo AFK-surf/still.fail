@@ -66,6 +66,8 @@ pub struct RawConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_warm_claude: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_archive_days: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub telemetry: Option<RawTelemetry>,
     #[serde(flatten)]
     pub rest: Map<String, Value>,
@@ -379,6 +381,8 @@ pub struct Config {
     pub warm_ms: u64,
     /// Idle claude processes beyond this count are evicted, oldest first, once past warm_ms.
     pub max_warm_claude: u32,
+    /// Chats idle this long, and done (Hub::auto_archive), are archived by the station; 0: never.
+    pub auto_archive_ms: u64,
     /// What this station sends ember: errors to PostHog; traces to ember cloud.
     pub telemetry_errors: bool,
     pub telemetry_traces: bool,
@@ -540,6 +544,7 @@ pub fn parse_config(raw: &RawConfig, data_dir: &Path) -> Result<Config> {
         max_nudges: raw.max_nudges.unwrap_or(2),
         warm_ms: (raw.warm_minutes.unwrap_or(30.0) * 60_000.0) as u64,
         max_warm_claude: raw.max_warm_claude.unwrap_or(4),
+        auto_archive_ms: (raw.auto_archive_days.unwrap_or(1.0).max(0.0) * 86_400_000.0) as u64,
         telemetry_errors: raw.telemetry.as_ref().and_then(|t| t.errors) == Some(true),
         telemetry_traces: raw.telemetry.as_ref().and_then(|t| t.traces) == Some(true),
     })

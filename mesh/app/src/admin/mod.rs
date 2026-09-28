@@ -448,7 +448,7 @@ impl AdminApi {
                 let (key, thread) = self.deps.hub.new_session(chat).map_err(|e| http_error(400, e.to_string()))?;
                 return ok(json!({ "key": key, "thread": self.thread(thread.id, viewer)? }));
             }
-            ("GET", "/chats") => return ok(Value::Array(self.chats(viewer)?)),
+            ("GET", "/chats") => return ok(Value::Array(self.chats(viewer, asked.param("archived") == Some("1"))?)),
             ("GET", "/threads") => return ok(Value::Array(self.threads(viewer, asked.param("session"))?)),
             ("POST", "/threads") => {
                 // Another chat on the pages with a session in it.
@@ -619,6 +619,11 @@ impl AdminApi {
                         let session = input.text("session");
                         self.session_row(&session)?;
                         self.deps.hub.add_to_thread(thread_id, &session).map_err(|e| http_error(400, e.to_string()))?;
+                        return ok(self.thread(thread_id, viewer)?);
+                    }
+                    // A chat archived or shown again: with its session when it is that session's own (Hub::archive_chat).
+                    (Some("archive"), "POST" | "DELETE") => {
+                        self.deps.hub.archive_chat(thread_id, method == "POST").map_err(|e| http_error(400, e.to_string()))?;
                         return ok(self.thread(thread_id, viewer)?);
                     }
                     _ => {}

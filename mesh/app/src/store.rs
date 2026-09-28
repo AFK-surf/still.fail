@@ -87,7 +87,16 @@ pub struct SessionRow {
     pub last_active_at: i64,
     /// Hidden from lists since then; None while shown.
     pub archived_at: Option<i64>,
+    /// Who archived it: a person ("manual"), or the station once it had idled long enough ("auto").
+    pub archived_by: Option<String>,
+    /// When it was last shown again by hand: the station's idle clock starts over from then (Hub::auto_archive).
+    pub shown_at: Option<i64>,
 }
+
+/// Archived by a person.
+pub const MANUAL: &str = "manual";
+/// Archived by the station, for idling (or brought back by something said).
+pub const AUTO: &str = "auto";
 
 /// A session as it is first recorded.
 #[derive(Debug, Clone, Default)]
@@ -121,6 +130,18 @@ pub struct ThreadRow {
     pub title: Option<String>,
     pub created_by: Option<String>,
     pub created_at: i64,
+    /// A chat on the page made for a session (the first one it has there): that session's own, archived and shown with
+    /// it. None for a chat of its own (another one opened with a session, whichever sessions join it) and Slack threads.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub home: Option<String>,
+    /// A chat archived from lists since then: with its session (its home's), or alone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hidden_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hidden_by: Option<String>,
+    /// When a chat of its own was last shown again by hand, as a session's shown_at.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shown_at: Option<i64>,
 }
 
 /// A thread of a session, with the connect the session posts there through.
@@ -441,7 +462,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   running INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   last_active_at INTEGER NOT NULL,
-  archived_at INTEGER
+  archived_at INTEGER,
+  archived_by TEXT,
+  shown_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS threads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -452,6 +475,10 @@ CREATE TABLE IF NOT EXISTS threads (
   created_by TEXT,
   created_at INTEGER NOT NULL,
   archived_at INTEGER,
+  home TEXT,
+  hidden_at INTEGER,
+  hidden_by TEXT,
+  shown_at INTEGER,
   UNIQUE (surface, channel, thread_ts)
 );
 CREATE TABLE IF NOT EXISTS thread_sessions (
@@ -589,6 +616,8 @@ fn to_session(r: &Row) -> rusqlite::Result<SessionRow> {
         created_at: r.get("created_at")?,
         last_active_at: r.get("last_active_at")?,
         archived_at: r.get("archived_at")?,
+        archived_by: r.get("archived_by")?,
+        shown_at: r.get("shown_at")?,
     })
 }
 
@@ -601,7 +630,45 @@ fn to_thread(r: &Row) -> rusqlite::Result<ThreadRow> {
         title: r.get("title")?,
         created_by: r.get("created_by")?,
         created_at: r.get("created_at")?,
+        home: r.get("home")?,
+        hidden_at: r.get("hidden_at")?,
+        hidden_by: r.get("hidden_by")?,
+        shown_at: r.get("shown_at")?,
     })
+}
+
+/// Columns archiving came with, added to a database made before them (same schema version: a station without them
+/// opens it as it is). When they come, each session's first chat on the page is taken as its own, and chats of
+/// sessions archived then as archived with them.
+fn add_archive_columns(db: &Connection) -> Result<()> {
+    let has = |table: &str, column: &str| -> Result<bool> {
+        let mut stmt = db.prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?"))?;
+        Ok(stmt.exists([column])?)
+    };
+    for (column, kind) in [("archived_by", "TEXT"), ("shown_at", "INTEGER")] {
+        if !has("sessions", column)? {
+            db.execute_batch(&format!("ALTER TABLE sessions ADD COLUMN {column} {kind}"))?;
+        }
+    }
+    if has("threads", "home")? {
+        return Ok(());
+    }
+    db.execute_batch(
+        "BEGIN;
+         ALTER TABLE threads ADD COLUMN home TEXT;
+         ALTER TABLE threads ADD COLUMN hidden_at INTEGER;
+         ALTER TABLE threads ADD COLUMN hidden_by TEXT;
+         ALTER TABLE threads ADD COLUMN shown_at INTEGER;
+         UPDATE threads SET home = (SELECT ts.session FROM thread_sessions ts WHERE ts.thread = threads.id ORDER BY ts.joined_at, ts.rowid LIMIT 1)
+         WHERE surface = 'ember' AND id = (
+           SELECT MIN(t2.id) FROM threads t2 JOIN thread_sessions ts2 ON ts2.thread = t2.id
+           WHERE t2.surface = 'ember' AND ts2.session = (SELECT ts.session FROM thread_sessions ts WHERE ts.thread = threads.id ORDER BY ts.joined_at, ts.rowid LIMIT 1));
+         UPDATE sessions SET archived_by = 'manual' WHERE archived_at IS NOT NULL AND archived_by IS NULL;
+         UPDATE threads SET hidden_at = (SELECT archived_at FROM sessions WHERE key = threads.home), hidden_by = 'manual'
+         WHERE home IN (SELECT key FROM sessions WHERE archived_at IS NOT NULL);
+         COMMIT;",
+    )?;
+    Ok(())
 }
 
 fn to_session_thread(r: &Row) -> rusqlite::Result<SessionThread> {
@@ -741,6 +808,7 @@ impl Store {
             }
         }
         db.execute_batch(SCHEMA)?;
+        add_archive_columns(&db)?;
         db.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
         let (archive_dir, temp) = match archive {
             Some(dir) => (dir.to_path_buf(), None),
@@ -876,32 +944,29 @@ impl Store {
         })
     }
 
-    /// Hides a session from lists, or shows it again. A thread whose sessions are all archived goes out to its archive
-    /// file; showing one of them again brings it back.
-    pub fn set_archived(&self, key: &str, archived: bool) -> Result<()> {
-        self.with(|i, changes| {
-            i.db.execute("UPDATE sessions SET archived_at = ? WHERE key = ?", params![if archived { Some(now_ms()) } else { None }, key])?;
-            for t in i.session_threads(key)? {
-                let id = t.thread.id;
-                if !archived && i.is_archived(id)? {
-                    i.restore_thread(id)?;
-                } else if archived && !i.is_archived(id)? {
-                    let shown = i
-                        .db
-                        .query_row(
-                            "SELECT 1 FROM thread_sessions ts JOIN sessions s ON s.key = ts.session WHERE ts.thread = ? AND s.archived_at IS NULL LIMIT 1",
-                            [id],
-                            |_| Ok(()),
-                        )
-                        .optional()?
-                        .is_some();
-                    if !shown {
-                        i.archive_thread(id)?;
-                    }
-                }
-            }
-            changes.push(StoreChange::Session(key.to_string()));
-            Ok(())
+    /// Hides a session from lists, or shows it again, with its own chat (ThreadRow::home); `by` is MANUAL or AUTO. A
+    /// thread out of lists (archived itself, or every session of it archived) goes out to its archive file; showing it
+    /// again brings it back.
+    pub fn set_archived(&self, key: &str, archived: bool, by: &str) -> Result<()> {
+        self.with(|i, changes| i.set_archived(key, archived, by, changes))
+    }
+
+    /// Hides a chat of its own from lists, or shows it again; its sessions stay as they are. (A session's own chat goes
+    /// with the session: set_archived.)
+    pub fn set_thread_hidden(&self, thread: i64, hidden: bool, by: &str) -> Result<()> {
+        self.with(|i, changes| i.set_thread_hidden(thread, hidden, by, changes))
+    }
+
+    /// A session's own chat on the page (ThreadRow::home), if it has one.
+    pub fn home_chat(&self, session: &str) -> Result<Option<ThreadRow>> {
+        self.with(|i, _| Ok(i.db.query_row("SELECT * FROM threads WHERE home = ? ORDER BY id LIMIT 1", [session], to_thread).optional()?))
+    }
+
+    /// Chats of their own on the page (no session's home) still in lists.
+    pub fn chats_of_their_own(&self) -> Result<Vec<ThreadRow>> {
+        self.with(|i, _| {
+            let mut stmt = i.db.prepare("SELECT * FROM threads WHERE surface = ? AND home IS NULL AND hidden_at IS NULL")?;
+            Ok(stmt.query_map([EMBER_SURFACE], to_thread)?.collect::<rusqlite::Result<_>>()?)
         })
     }
 
@@ -993,10 +1058,15 @@ impl Store {
 
     /// The thread at this address, made if new.
     pub fn open_thread(&self, surface: &str, channel: &str, thread_ts: &str, title: Option<&str>, created_by: Option<&str>) -> Result<ThreadRow> {
+        self.open_thread_of(surface, channel, thread_ts, title, created_by, None)
+    }
+
+    /// The thread at this address, made if new as `home`'s own chat (ThreadRow::home).
+    pub fn open_thread_of(&self, surface: &str, channel: &str, thread_ts: &str, title: Option<&str>, created_by: Option<&str>, home: Option<&str>) -> Result<ThreadRow> {
         self.with(|i, _| {
             i.db.execute(
-                "INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                params![surface, channel, thread_ts, title, created_by, now_ms()],
+                "INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at, home) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                params![surface, channel, thread_ts, title, created_by, now_ms(), home],
             )?;
             i.thread_at(surface, channel, thread_ts)?.ok_or_else(|| anyhow!("thread {surface} {channel}/{thread_ts} not made"))
         })
@@ -1768,7 +1838,102 @@ impl Inner {
         insert_entry(&tx, &entry)?;
         tx.commit()?;
         changes.push(StoreChange::Thread { id: entry.thread, entries: vec![entry.clone()] });
+        self.bring_back(&entry, changes)?;
         Ok(entry)
+    }
+
+    fn set_archived(&mut self, key: &str, archived: bool, by: &str, changes: &mut Changes) -> Result<()> {
+        let now = now_ms();
+        let tx = self.db.transaction()?;
+        if archived {
+            tx.execute("UPDATE sessions SET archived_at = ?, archived_by = ? WHERE key = ?", params![now, by, key])?;
+        } else {
+            let shown = (by == MANUAL).then_some(now);
+            tx.execute("UPDATE sessions SET archived_at = NULL, archived_by = NULL, shown_at = COALESCE(?, shown_at) WHERE key = ?", params![shown, key])?;
+        }
+        let hidden = archived.then_some(now);
+        let hidden_by = archived.then_some(by);
+        tx.execute("UPDATE threads SET hidden_at = ?, hidden_by = ? WHERE home = ?", params![hidden, hidden_by, key])?;
+        tx.commit()?;
+        for t in self.session_threads(key)? {
+            self.file_away(t.thread.id)?;
+            changes.push(StoreChange::Thread { id: t.thread.id, entries: vec![] });
+        }
+        changes.push(StoreChange::Session(key.to_string()));
+        Ok(())
+    }
+
+    fn set_thread_hidden(&mut self, thread: i64, hidden: bool, by: &str, changes: &mut Changes) -> Result<()> {
+        let now = now_ms();
+        if hidden {
+            self.db.execute("UPDATE threads SET hidden_at = ?, hidden_by = ? WHERE id = ?", params![now, by, thread])?;
+        } else {
+            let shown = (by == MANUAL).then_some(now);
+            self.db.execute("UPDATE threads SET hidden_at = NULL, hidden_by = NULL, shown_at = COALESCE(?, shown_at) WHERE id = ?", params![shown, thread])?;
+        }
+        self.file_away(thread)?;
+        changes.push(StoreChange::Thread { id: thread, entries: vec![] });
+        Ok(())
+    }
+
+    /// Out of every list: archived itself, or none of its sessions shown.
+    fn out_of_lists(&self, thread: i64) -> Result<bool> {
+        let Some(hidden) = self.db.query_row("SELECT hidden_at FROM threads WHERE id = ?", [thread], |r| r.get::<_, Option<i64>>(0)).optional()? else {
+            return Ok(false);
+        };
+        if hidden.is_some() {
+            return Ok(true);
+        }
+        let shown = self
+            .db
+            .query_row(
+                "SELECT 1 FROM thread_sessions ts JOIN sessions s ON s.key = ts.session WHERE ts.thread = ? AND s.archived_at IS NULL LIMIT 1",
+                [thread],
+                |_| Ok(()),
+            )
+            .optional()?
+            .is_some();
+        Ok(!shown)
+    }
+
+    /// Writes a thread out to its archive file when it went out of lists, or brings it back when it came back.
+    fn file_away(&mut self, thread: i64) -> Result<()> {
+        let out = self.out_of_lists(thread)?;
+        let filed = self.is_archived(thread)?;
+        if out && !filed {
+            self.archive_thread(thread)?;
+        } else if !out && filed {
+            self.restore_thread(thread)?;
+        }
+        Ok(())
+    }
+
+    /// Something new said in a thread brings what it is about back into lists: the chat, if it was archived alone, and
+    /// the archived sessions that hear it (a person's message goes to every session of the thread) or said it.
+    fn bring_back(&mut self, entry: &EntryRow, changes: &mut Changes) -> Result<()> {
+        if entry.kind != EntryKind::Message || entry.author_kind == AuthorKind::Ember {
+            return Ok(());
+        }
+        let Some(thread) = self.get_thread(entry.thread)? else { return Ok(()) };
+        let archived: Vec<String> = if entry.author_kind == AuthorKind::Agent {
+            self.db
+                .query_row("SELECT key FROM sessions WHERE key = ? AND archived_at IS NOT NULL", [&entry.author], |r| r.get(0))
+                .optional()?
+                .into_iter()
+                .collect()
+        } else {
+            let mut stmt = self
+                .db
+                .prepare("SELECT s.key FROM thread_sessions ts JOIN sessions s ON s.key = ts.session WHERE ts.thread = ? AND s.archived_at IS NOT NULL")?;
+            stmt.query_map([entry.thread], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?
+        };
+        for key in archived {
+            self.set_archived(&key, false, AUTO, changes)?;
+        }
+        if thread.hidden_at.is_some() && thread.home.is_none() {
+            self.set_thread_hidden(thread.id, false, AUTO, changes)?;
+        }
+        Ok(())
     }
 
     // ── archive ────────────────────────────────────────────────────────────

@@ -280,6 +280,17 @@ impl App {
             warn!("no connect is connected; add or enable one on the admin page");
         }
         hub.recover()?;
+        // Chats idle long enough go to the archive (Hub::auto_archive): looked at now and every hour.
+        let archiving = hub.clone();
+        tokio::spawn(async move {
+            let mut hourly = tokio::time::interval(std::time::Duration::from_secs(3600));
+            loop {
+                hourly.tick().await;
+                if let Err(error) = archiving.auto_archive(crate::store::now_ms()) {
+                    warn!(error = %error, "auto-archiving failed");
+                }
+            }
+        });
         jobs.relaunch();
         app.up.store(true, Ordering::SeqCst);
         Ok(app)

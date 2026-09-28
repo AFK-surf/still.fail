@@ -137,7 +137,7 @@ impl Events {
         let id = self.next.fetch_add(1, Ordering::SeqCst);
         let mut client = Client { id, viewer: viewer.clone(), host, rows: HashMap::new(), out: out.clone(), live: vec![] };
         if let Some(api) = self.api.upgrade() {
-            client.rows = api.chats(&viewer).unwrap_or_default().into_iter().map(|row| (row["id"].as_str().unwrap_or("").to_string(), row.to_string())).collect();
+            client.rows = api.chats(&viewer, false).unwrap_or_default().into_iter().map(|row| (row["id"].as_str().unwrap_or("").to_string(), row.to_string())).collect();
             // Those sessions as they run, on this same stream: each message a `live` event with its key.
             for (key, from) in live {
                 let (tx, mut messages) = mpsc::unbounded_channel();
@@ -432,7 +432,7 @@ impl Events {
         }
         if dirty.rows_all || !dirty.rows.is_empty() {
             for viewer in viewers.iter().filter(|v| dirty.rows_all || dirty.rows.contains(&v.id())) {
-                let rows = match api.chats(viewer) {
+                let rows = match api.chats(viewer, false) {
                     Ok(rows) => rows,
                     Err(e) => {
                         warn!(error = %e, "sidebar rows not read");

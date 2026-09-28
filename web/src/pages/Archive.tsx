@@ -3,8 +3,7 @@
 // with its session deleted for good. Anything new said in a chat brings it
 // back by itself.
 import { useEffect, useState } from "react";
-import { stationApi, useStations, useStationCall, type StationView } from "../api.ts";
-import type { ChatRow } from "../../../src/admin/types.ts";
+import { stationApi, useStations, useStationCall, type ArchivedChat as ChatRow, type StationView } from "../api.ts";
 import { useToast } from "../toast.tsx";
 import { About, Button, Confirm, MobileBack } from "../ui.tsx";
 
