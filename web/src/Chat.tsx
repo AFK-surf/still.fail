@@ -2,7 +2,7 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Download, Edit, Plus, Quote as QuoteIcon, Read, Received, Said, Search, Send, Sparks, Think, Web } from "./icons.tsx";
+import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Download, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { useApi, useChatSend, type Activity as ActivityView, type Api, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
@@ -159,15 +159,19 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
           )];
         })}
         {outbox.map((o) => (
-          <div key={o.id} className="msg msg-mine" data-author="你" data-role="person" data-enter>
+          <div key={o.id} className="msg msg-mine" data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
             <Quotes quotes={o.quotes} />
             {o.text && <div className="msg-bubble"><div className="msg-plain">{o.text}</div></div>}
             <Files owner={ownerOf} files={o.attachments} />
             {o.state === "failed"
-              ? <span className="msg-time msg-failed">发送失败{o.error ? `：${o.error}` : ""}
-                  <button type="button" className="inline-link" onClick={() => void (id !== null && sending.retry(id, o.id).catch(() => {}))}>重试</button>
-                  <button type="button" className="inline-link" onClick={() => void (id !== null && sending.discard(id, o.id))}>删除</button>
-                </span>
+              // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
+              ? <div className="msg-unsent">
+                  <Tip label={o.error ? `没发出去：${o.error}` : "没发出去"}>
+                    <span className="msg-unsent-note"><Info size={12} strokeWidth={2} />未发送</span>
+                  </Tip>
+                  <button type="button" className="msg-unsent-btn" onClick={() => void (id !== null && sending.retry(id, o.id).catch(() => {}))}><Retry size={12} strokeWidth={2} />重试</button>
+                  <button type="button" className="msg-unsent-btn" onClick={() => void (id !== null && sending.discard(id, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
+                </div>
               : <span className="msg-time msg-waiting msg-sending"><span className="spinner" aria-hidden="true" />正在发送</span>}
           </div>
         ))}

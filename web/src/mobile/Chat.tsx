@@ -271,19 +271,21 @@ function Said({ m, agent, here, draft, list }: { m: ChatMessage; agent: ChatAgen
 
 /** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
 function Out({ o, here }: { o: Outgoing; here: Here }) {
+  const app = useApp();
   const sending = useChatSend();
   const thread = here.view.thread;
   return (
-    <div className="m-mine">
+    <div className="m-mine" data-unsent={o.state === "failed" || undefined}>
       {o.quotes.map((q, i) => <QuoteCard key={i} q={q} />)}
       {o.text && <div className="m-bubble">{o.text}</div>}
       <Files here={here} files={o.attachments} />
       {o.state === "failed" ? (
-        <span className="m-failed">
-          <span>发送失败{o.error ? `：${o.error}` : ""}</span>
-          <button type="button" className="m-retry" onClick={() => void (thread && sending.retry(thread.id, o.id).catch(() => {}))}>重试</button>
-          <button type="button" className="m-drop" onClick={() => void (thread && sending.discard(thread.id, o.id))}>删除</button>
-        </span>
+        // Not sent: said briefly (a tap says why); sending it again or dropping it right beside.
+        <div className="m-unsent">
+          <button type="button" className="m-unsent-note" onClick={() => app.toast(o.error ? `没发出去：${o.error}` : "没发出去")}>未发送</button>
+          <button type="button" className="m-unsent-btn" onClick={() => void (thread && sending.retry(thread.id, o.id).catch(() => {}))}>重试</button>
+          <button type="button" className="m-unsent-btn" onClick={() => void (thread && sending.discard(thread.id, o.id))}>删除</button>
+        </div>
       ) : <span className="m-meta m-waiting"><Spinner size={10} />正在发送</span>}
     </div>
   );

@@ -53,27 +53,41 @@ const FRAME = `<!doctype html>
     port.onmessage = fromClient;
     start().catch((error) => { document.body.innerHTML = "<p></p>"; document.querySelector("p").textContent = "预览没能启动：" + error.message; });
   });
-  // The service's frame: moved by the client's bar (back, forward, reload, go), and where it is said back to it, as it
-  // loads and as a page moves itself on (history.pushState).
+  // The service's frame, and a history of its own: the bar's back, forward and go move along it with replace(), so they
+  // never step the page it sits in (a frame shares its window's history: history.back() at its start leaves the page).
+  // Where it is, and whether it can go back or on, is said back to the client as it loads and as a page moves itself.
   let inner = null;
+  const trail = [];
+  let here = -1;
+  let moving = false;
   let said = "";
+  const where = () => {
+    try { const at = inner.contentWindow.location; return at.pathname + at.search + at.hash; } catch { return null; }
+  };
   const report = () => {
-    try {
-      const at = inner.contentWindow.location;
-      const path = at.pathname + at.search + at.hash;
-      if (path === said) return;
-      said = path;
-      parent.postMessage({ type: "ember-preview-at", nonce, path }, "*");
-    } catch {}
+    const path = where();
+    if (path === null) return;
+    if (!moving && trail[here] !== path) {
+      trail.splice(here + 1);
+      trail.push(path);
+      here = trail.length - 1;
+    }
+    const state = path + "|" + here + "|" + trail.length;
+    if (state === said) return;
+    said = state;
+    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1 }, "*");
+  };
+  const replace = (path) => {
+    moving = true;
+    inner.contentWindow.location.replace(path);
   };
   window.addEventListener("message", (event) => {
     if (event.source !== parent || event.data?.type !== "ember-preview-nav" || !inner) return;
-    const service = inner.contentWindow;
     const { action, path } = event.data;
-    if (action === "back") service.history.back();
-    else if (action === "forward") service.history.forward();
-    else if (action === "reload") service.location.reload();
-    else if (action === "go" && typeof path === "string" && path.startsWith("/")) inner.src = path;
+    if (action === "back" && here > 0) replace(trail[--here]);
+    else if (action === "forward" && here < trail.length - 1) replace(trail[++here]);
+    else if (action === "reload") { moving = true; inner.contentWindow.location.reload(); }
+    else if (action === "go" && typeof path === "string" && path.startsWith("/")) inner.contentWindow.location.replace(path);
   });
   async function start() {
     await navigator.serviceWorker.register("/_ember/sw.js", { scope: "/" });
@@ -81,7 +95,7 @@ const FRAME = `<!doctype html>
     worker.postMessage({ type: "ember-preview-frame", nonce });
     inner = document.createElement("iframe");
     inner.src = params.get("path") || "/";
-    inner.addEventListener("load", () => { said = ""; report(); });
+    inner.addEventListener("load", () => { report(); moving = false; });
     document.body.append(inner);
     setInterval(report, 500);
   }

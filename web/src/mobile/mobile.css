@@ -329,11 +329,12 @@ button.m-info-row { cursor: pointer; }
 .m-bubble[data-pressed], .m-said-body[data-pressed] { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--m-accent) 12%, transparent); }
 .m-meta { font-size: 11px; color: var(--m-subtle); white-space: nowrap; }
 .m-waiting { display: inline-flex; align-items: center; gap: 5px; }
-.m-failed { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--m-red); }
-.m-failed > span { overflow: hidden; text-overflow: ellipsis; }
-.m-retry, .m-drop { padding: 0; border: 0; background: none; font-size: 12px !important; cursor: pointer; }
-.m-retry { color: var(--m-accent) !important; font-weight: 600; }
-.m-drop { color: var(--m-muted) !important; }
+/* A message that did not go: faded, a short note (a tap says why), and what to do about it. */
+.m-mine[data-unsent] > :not(.m-unsent) { opacity: 0.55; }
+.m-unsent { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 4px; font-size: 12px; }
+.m-unsent-note { margin-right: 6px; padding: 0; border: 0; background: none; color: var(--m-red); font: inherit; }
+.m-unsent-btn { padding: 4px 8px; border: 0; border-radius: 8px; background: none; color: var(--m-muted); font: inherit; }
+.m-unsent-btn:active { background: var(--m-surface2); }
 .m-said { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .m-said-head { display: flex; align-items: center; gap: 6px; }
 .m-agent-head { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--m-ink); }

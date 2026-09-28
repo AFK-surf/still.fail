@@ -48,14 +48,16 @@ interface Bar {
   at: string | null;
   go(path: string): void;
   reload(): void;
-  /** Absent where the frame's history cannot be reached (the desktop app's frame). */
+  /** Absent where the frame's history cannot be reached (the desktop app's frame); off at either end of it. */
   back?(): void;
   forward?(): void;
+  canBack?: boolean;
+  canForward?: boolean;
   external?: string | undefined;
 }
 
 /** Back, forward, reload, where it is (typed to go elsewhere), and its page of its own: over the frame. */
-function PreviewBar({ name, at, go, reload, back, forward, external }: Bar) {
+function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canForward = false, external }: Bar) {
   const [typed, setTyped] = useState(at ?? "/");
   const [editing, setEditing] = useState(false);
   // Where it went is what the bar says, unless someone is typing there.
@@ -63,8 +65,8 @@ function PreviewBar({ name, at, go, reload, back, forward, external }: Bar) {
   const icon = { size: 14, strokeWidth: 1.75 };
   return (
     <form className="preview-bar" onSubmit={(e) => { e.preventDefault(); go(typed.startsWith("/") ? typed : `/${typed}`); (document.activeElement as HTMLElement | null)?.blur(); }}>
-      {back && <button type="button" className="icon-btn" aria-label="后退" title="后退" onClick={back}><ArrowLeft {...icon} /></button>}
-      {forward && <button type="button" className="icon-btn" aria-label="前进" title="前进" onClick={forward}><ArrowRight {...icon} /></button>}
+      {back && <button type="button" className="icon-btn" aria-label="后退" title="后退" disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button>}
+      {forward && <button type="button" className="icon-btn" aria-label="前进" title="前进" disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button>}
       <button type="button" className="icon-btn" aria-label="刷新" title="刷新" onClick={reload}><Refresh {...icon} /></button>
       <label className="preview-address">
         <span className="preview-host">{name}</span>
@@ -102,6 +104,7 @@ function WebPreview({ station, port, name, external }: Shown) {
   const [nonce] = useState(() => crypto.randomUUID());
   const [first] = useState("/");
   const [at, setAt] = useState<string | null>(null);
+  const [moves, setMoves] = useState({ back: false, forward: false });
   const frame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     const bridges: MessagePort[] = [];
@@ -109,6 +112,7 @@ function WebPreview({ station, port, name, external }: Shown) {
       if (event.origin !== ORIGIN || event.source !== frame.current?.contentWindow || event.data?.nonce !== nonce) return;
       if (event.data?.type === "ember-preview-at" && typeof event.data.path === "string") {
         setAt(event.data.path);
+        setMoves({ back: event.data.back === true, forward: event.data.forward === true });
         return;
       }
       if (event.data?.type !== "ember-preview-ready") return;
@@ -136,7 +140,7 @@ function WebPreview({ station, port, name, external }: Shown) {
   const nav = (action: "back" | "forward" | "reload" | "go", path?: string) => frame.current?.contentWindow?.postMessage({ type: "ember-preview-nav", action, path }, ORIGIN);
   return (
     <div className="preview">
-      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={() => nav("reload")} back={() => nav("back")} forward={() => nav("forward")} external={external} />
+      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={() => nav("reload")} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} />
       <iframe ref={frame} className="preview-frame" title={name} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} />
     </div>
   );
