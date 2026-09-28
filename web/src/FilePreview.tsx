@@ -1,0 +1,519 @@
+// A file sent in a chat, opened over the page: images to zoom and pan,
+// video and audio to play, PDFs drawn by pdf.js, text and code
+// highlighted, Markdown rendered, CSV as a table, HTML in a sandbox. Anything
+// else says it cannot be shown and offers the download.
+import { Dialog as RDialog } from "radix-ui";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useApi, type Api, type Attachment } from "./api.ts";
+import { Close, Download } from "./icons.tsx";
+import { Prose } from "./Prose.tsx";
+import { useStation } from "./station.tsx";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
+
+export function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// ── what a file is ─────────────────────────────────────────────────────
+
+export type PreviewKind = "image" | "video" | "audio" | "pdf" | "markdown" | "csv" | "html" | "code" | "text";
+
+const MEDIA: Record<string, [PreviewKind, string]> = {
+  png: ["image", "image/png"], jpg: ["image", "image/jpeg"], jpeg: ["image", "image/jpeg"], gif: ["image", "image/gif"], webp: ["image", "image/webp"],
+  svg: ["image", "image/svg+xml"], avif: ["image", "image/avif"], bmp: ["image", "image/bmp"], ico: ["image", "image/x-icon"],
+  mp4: ["video", "video/mp4"], m4v: ["video", "video/mp4"], webm: ["video", "video/webm"], mov: ["video", "video/quicktime"], ogv: ["video", "video/ogg"],
+  mp3: ["audio", "audio/mpeg"], m4a: ["audio", "audio/mp4"], aac: ["audio", "audio/aac"], wav: ["audio", "audio/wav"], ogg: ["audio", "audio/ogg"], oga: ["audio", "audio/ogg"], opus: ["audio", "audio/ogg"], flac: ["audio", "audio/flac"],
+  pdf: ["pdf", "application/pdf"],
+  md: ["markdown", "text/markdown"], markdown: ["markdown", "text/markdown"],
+  csv: ["csv", "text/csv"], tsv: ["csv", "text/tab-separated-values"],
+  html: ["html", "text/html"], htm: ["html", "text/html"],
+};
+
+/** Extensions Shiki knows by another name; the rest are tried as they are. */
+const LANGUAGE: Record<string, string> = {
+  mjs: "js", cjs: "js", mts: "ts", cts: "ts", h: "c", hh: "cpp", hpp: "cpp", cc: "cpp", cxx: "cpp", kts: "kotlin", yml: "yaml",
+  zsh: "bash", sh: "bash", patch: "diff", htm: "html", conf: "ini", cfg: "ini", env: "dotenv", gradle: "groovy", plist: "xml", svg: "xml",
+};
+const PLAIN = new Set(["txt", "text", "log", "out", "err", "lock"]);
+const NAMED: Record<string, string> = { dockerfile: "docker", makefile: "make", "cmakelists.txt": "cmake" };
+const CODE = new Set(["ts", "tsx", "js", "jsx", "json", "jsonc", "json5", "py", "rs", "go", "java", "kt", "swift", "c", "cpp", "cs", "rb", "php", "bash", "fish", "ps1",
+  "yaml", "toml", "xml", "sql", "css", "scss", "less", "html", "vue", "svelte", "lua", "dart", "diff", "ini", "dotenv", "groovy", "scala", "r", "pl", "ex", "exs",
+  "erl", "hs", "ml", "clj", "zig", "nim", "proto", "graphql", "tex", "vim", "nix", "tf", "hcl", "docker", "make", "cmake", "asm", "wasm", "sol", "prisma", "astro"]);
+
+export interface Kind { kind: PreviewKind | null; type: string; language?: string }
+
+/** What a file shows as, by its name; `kind` null: look at its bytes to know. */
+export function kindOf(name: string): Kind {
+  const lower = name.toLowerCase();
+  const named = NAMED[lower];
+  if (named) return { kind: "code", type: "text/plain", language: named };
+  const dot = lower.lastIndexOf(".");
+  const ext = dot > 0 ? lower.slice(dot + 1) : "";
+  const media = MEDIA[ext];
+  if (media) return { kind: media[0], type: media[1], ...(media[0] === "html" ? { language: "html" } : {}) };
+  if (PLAIN.has(ext)) return { kind: "text", type: "text/plain" };
+  const language = LANGUAGE[ext] ?? ext;
+  if (CODE.has(language)) return { kind: "code", type: "text/plain", language };
+  return { kind: null, type: "application/octet-stream" };
+}
+
+export const isImage = (name: string) => kindOf(name).kind === "image";
+
+// ── fetching ───────────────────────────────────────────────────────────
+
+const storedName = (a: Attachment) => a.path.split("/").at(-1)!;
+
+// Files sent never change: each is fetched once per page, and the most recent are kept for a chat opened again.
+const blobs = new Map<string, Promise<Blob>>();
+const KEEP_BLOBS = 100;
+
+function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment): Promise<Blob> {
+  const id = `${station}/${sessionKey}/${file.path}`;
+  let blob = blobs.get(id);
+  if (!blob) {
+    // Typed by its name, so the browser plays and shows it whatever the station called it.
+    const { type } = kindOf(file.name);
+    blob = api.file(sessionKey, storedName(file)).then((b) => (type !== "application/octet-stream" && b.type !== type ? b.slice(0, b.size, type) : b));
+    // A failure is not kept: the next look tries again.
+    blob.catch(() => blobs.delete(id));
+    blobs.set(id, blob);
+    if (blobs.size > KEEP_BLOBS) blobs.delete(blobs.keys().next().value!);
+  }
+  return blob;
+}
+
+type Loaded = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; blob: Blob; url: string };
+
+/** A file as a blob and its URL, fetched from the station once and kept while shown. */
+function useFile(sessionKey: string, file: Attachment, enabled: boolean): Loaded {
+  const api = useApi();
+  const station = useStation();
+  const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
+  useEffect(() => {
+    if (!enabled) return;
+    let u: string | null = null;
+    let current = true;
+    setLoaded({ state: "loading" });
+    fetchFile(api, station.address, sessionKey, file).then((blob) => {
+      if (!current) return;
+      u = URL.createObjectURL(blob);
+      setLoaded({ state: "ready", blob, url: u });
+    }, (error: unknown) => {
+      if (current) setLoaded({ state: "error", message: error instanceof Error ? error.message : String(error) });
+    });
+    return () => {
+      current = false;
+      if (u) URL.revokeObjectURL(u);
+    };
+  }, [api, station.address, sessionKey, file.path, enabled]);
+  return loaded;
+}
+
+/** A file as a blob URL, fetched from the station once and kept while shown. */
+export function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean): string | null {
+  const loaded = useFile(sessionKey, file, enabled);
+  return loaded.state === "ready" ? loaded.url : null;
+}
+
+// ── the viewer ─────────────────────────────────────────────────────────
+
+/** A file over a dimmed page; Esc or a click outside closes it. */
+export function FilePreview({ open, onClose, sessionKey, file }: { open: boolean; onClose(): void; sessionKey: string; file: Attachment }) {
+  return (
+    <RDialog.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <RDialog.Portal>
+        <RDialog.Overlay className="lightbox-overlay" />
+        {open && <Viewer onClose={onClose} sessionKey={sessionKey} file={file} />}
+      </RDialog.Portal>
+    </RDialog.Root>
+  );
+}
+
+function Viewer({ onClose, sessionKey, file }: { onClose(): void; sessionKey: string; file: Attachment }) {
+  const loaded = useFile(sessionKey, file, true);
+  const known = kindOf(file.name);
+  const [sniffed, setSniffed] = useState<PreviewKind | "binary" | null>(null);
+  const [controls, setControls] = useState<ReactNode>(null);
+  const blob = loaded.state === "ready" ? loaded.blob : null;
+  useEffect(() => {
+    if (known.kind || !blob) return;
+    let live = true;
+    void looksLikeText(blob).then((text) => { if (live) setSniffed(text ? "text" : "binary"); });
+    return () => { live = false; };
+  }, [blob, known.kind]);
+  const kind = known.kind ?? sniffed;
+  let body: ReactNode;
+  if (loaded.state === "loading" || (kind === null && loaded.state === "ready")) body = <div className="fp-note"><span className="spinner" aria-hidden="true" />正在载入…</div>;
+  else if (loaded.state === "error") body = <div className="fp-note">载入失败：{loaded.message}</div>;
+  else {
+    const { url, blob } = loaded;
+    switch (kind) {
+      case "image": body = <ImageViewer url={url} file={file} setControls={setControls} />; break;
+      case "video": body = <video className="fp-video" src={url} controls autoPlay playsInline />; break;
+      case "audio": body = <div className="fp-audio"><span className="fp-audio-name">{file.name}</span><audio src={url} controls autoPlay /></div>; break;
+      case "pdf": body = <PdfViewer blob={blob} />; break;
+      case "markdown": case "csv": case "html": case "code": case "text":
+        body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} />; break;
+      default: body = <div className="fp-note">这种文件没法在这里预览，下载后查看。<a className="lightbox-action" href={url} download={file.name}><Download size={14} />下载</a></div>;
+    }
+  }
+  return (
+    <RDialog.Content className="lightbox" data-kind={kind ?? undefined} aria-describedby={undefined} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <RDialog.Title className="sr-only">{file.name}</RDialog.Title>
+      <div className="lightbox-body" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>{body}</div>
+      <div className="lightbox-bar">
+        <span className="lightbox-name" title={file.path}>{file.name}</span>
+        <span className="lightbox-size">{fileSize(file.size)}</span>
+        {controls}
+        {loaded.state === "ready" && <a className="lightbox-action" href={loaded.url} download={file.name}><Download size={14} />下载</a>}
+        <RDialog.Close className="lightbox-action" aria-label="关闭"><Close size={14} /></RDialog.Close>
+      </div>
+    </RDialog.Content>
+  );
+}
+
+/** Text, when its first bytes decode as UTF-8 with no NULs. */
+async function looksLikeText(blob: Blob): Promise<boolean> {
+  const head = new Uint8Array(await blob.slice(0, 8192).arrayBuffer());
+  if (head.includes(0)) return false;
+  try {
+    // The cut may split a character; leave its last bytes out.
+    new TextDecoder("utf-8", { fatal: true }).decode(head.length === 8192 ? head.slice(0, -4) : head);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ── images: zoom and pan ───────────────────────────────────────────────
+
+interface View { scale: number; x: number; y: number }
+const MAX_SCALE = 16;
+
+/**
+ * An image fitted to the window, to zoom (wheel, pinch, double-click, the
+ * bar's buttons, + − 0) around the pointer and drag about when larger than
+ * the window.
+ */
+function ImageViewer({ url, file, setControls }: { url: string; file: Attachment; setControls(c: ReactNode): void }) {
+  const stage = useRef<HTMLDivElement>(null);
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(file.width && file.height ? { w: file.width, h: file.height } : null);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const [view, setView] = useState<View | null>(null);
+  const viewRef = useRef<View | null>(null);
+  viewRef.current = view;
+
+  useLayoutEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    const measure = () => setBox({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const fit = natural && box ? Math.min(1, box.w / natural.w, box.h / natural.h) : 1;
+  const minScale = Math.min(fit, 1) / 2;
+
+  /** Keeps a larger-than-window image covering the window, a smaller one centred. */
+  const clamp = useCallback((v: View): View => {
+    if (!natural || !box) return v;
+    const scale = Math.min(MAX_SCALE, Math.max(minScale, v.scale));
+    const spareX = Math.max(0, (natural.w * scale - box.w) / 2), spareY = Math.max(0, (natural.h * scale - box.h) / 2);
+    return { scale, x: Math.min(spareX, Math.max(-spareX, v.x)), y: Math.min(spareY, Math.max(-spareY, v.y)) };
+  }, [natural, box, minScale]);
+
+  // Fitted when it first shows and whenever the window changes while still fitted.
+  const fitted = useRef(true);
+  useEffect(() => {
+    if (!natural || !box) return;
+    if (fitted.current || !viewRef.current) setView({ scale: fit, x: 0, y: 0 });
+    else setView((v) => (v ? clamp(v) : v));
+  }, [natural, box, fit, clamp]);
+
+  /** To `scale`, the image's point under (px, py) — relative to the stage's centre — staying put. */
+  const zoomTo = useCallback((scale: number, px = 0, py = 0) => {
+    const v = viewRef.current;
+    if (!v) return;
+    const next = Math.min(MAX_SCALE, Math.max(minScale, scale));
+    const k = next / v.scale;
+    fitted.current = false;
+    setView(clamp({ scale: next, x: px - (px - v.x) * k, y: py - (py - v.y) * k }));
+  }, [clamp, minScale]);
+  const reset = useCallback(() => { fitted.current = true; setView({ scale: fit, x: 0, y: 0 }); }, [fit]);
+
+  const fromCentre = (clientX: number, clientY: number) => {
+    const r = stage.current!.getBoundingClientRect();
+    return [clientX - r.left - r.width / 2, clientY - r.top - r.height / 2] as const;
+  };
+
+  // The wheel zooms; it has to be a listener that can stop the page scrolling.
+  useEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const v = viewRef.current;
+      if (!v) return;
+      // A trackpad's pinch comes as a wheel with ctrl, in small steps.
+      const step = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      const factor = Math.exp(-step * (e.ctrlKey ? 0.01 : 0.002));
+      zoomTo(v.scale * factor, ...fromCentre(e.clientX, e.clientY));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoomTo]);
+
+  // Drag to pan; two fingers pinch.
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{ view: View; x: number; y: number; distance: number } | null>(null);
+  const start = () => {
+    const points = [...pointers.current.values()];
+    const v = viewRef.current;
+    if (!v || !points.length) { gesture.current = null; return; }
+    const x = points.reduce((s, p) => s + p.x, 0) / points.length, y = points.reduce((s, p) => s + p.y, 0) / points.length;
+    const distance = points.length > 1 ? Math.hypot(points[0]!.x - points[1]!.x, points[0]!.y - points[1]!.y) : 0;
+    gesture.current = { view: v, x, y, distance };
+  };
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    start();
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!pointers.current.has(e.pointerId) || !gesture.current) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const points = [...pointers.current.values()];
+    const g = gesture.current;
+    const x = points.reduce((s, p) => s + p.x, 0) / points.length, y = points.reduce((s, p) => s + p.y, 0) / points.length;
+    let scale = g.view.scale;
+    if (points.length > 1 && g.distance > 0) scale = Math.min(MAX_SCALE, Math.max(minScale, g.view.scale * Math.hypot(points[0]!.x - points[1]!.x, points[0]!.y - points[1]!.y) / g.distance));
+    // The point under the gesture's start stays under its centre now.
+    const [sx, sy] = fromCentre(g.x, g.y);
+    const k = scale / g.view.scale;
+    fitted.current = false;
+    setView(clamp({ scale, x: sx - (sx - g.view.x) * k + (x - g.x), y: sy - (sy - g.view.y) * k + (y - g.y) }));
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    start();
+  };
+  const onDoubleClick = (e: React.MouseEvent) => {
+    const v = viewRef.current;
+    if (!v) return;
+    if (v.scale > fit * 1.01) reset();
+    else zoomTo(Math.max(fit * 2.5, 1), ...fromCentre(e.clientX, e.clientY));
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const v = viewRef.current;
+      if (!v || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "+" || e.key === "=") zoomTo(v.scale * 1.25);
+      else if (e.key === "-" || e.key === "_") zoomTo(v.scale / 1.25);
+      else if (e.key === "0") reset();
+      else if (e.key === "1") zoomTo(1);
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomTo, reset]);
+
+  const scale = view?.scale ?? fit;
+  useEffect(() => {
+    setControls(
+      <span className="lightbox-zoom">
+        <button type="button" className="lightbox-action" aria-label="缩小" disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}>−</button>
+        <button type="button" className="lightbox-action lightbox-percent" title="适应窗口" onClick={reset}>{Math.round(scale * 100)}%</button>
+        <button type="button" className="lightbox-action" aria-label="放大" disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}>+</button>
+        <button type="button" className="lightbox-action" title="原始大小" onClick={() => zoomTo(1)}>1:1</button>
+      </span>,
+    );
+  }, [scale, minScale, zoomTo, reset, setControls]);
+  useEffect(() => () => setControls(null), [setControls]);
+
+  const larger = !!natural && !!box && !!view && (natural.w * view.scale > box.w + 1 || natural.h * view.scale > box.h + 1);
+  return (
+    <div ref={stage} className="fp-stage" data-pan={larger || undefined} data-zoomed={(view && view.scale > fit * 1.01) || undefined}
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onDoubleClick={onDoubleClick}>
+      <img className="fp-image" src={url} alt={file.name} draggable={false}
+        onLoad={(e) => { const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
+        style={natural && view ? { width: natural.w, height: natural.h, transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.scale})` } : { visibility: "hidden" }} />
+    </div>
+  );
+}
+
+// ── PDFs ───────────────────────────────────────────────────────────────
+
+/** Pages drawn by pdf.js (loaded when first needed), each when it scrolls near: the same everywhere, phones included. */
+function PdfViewer({ blob }: { blob: Blob }) {
+  const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const page = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    let live = true;
+    let task: PDFDocumentLoadingTask | null = null;
+    void (async () => {
+      const [pdfjs, worker] = await Promise.all([import("pdfjs-dist"), import("pdfjs-dist/build/pdf.worker.min.mjs?url")]);
+      pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+      const data = new Uint8Array(await blob.arrayBuffer());
+      if (!live) return;
+      task = pdfjs.getDocument({ data });
+      const loaded = await task.promise;
+      if (live) setDoc(loaded);
+    })().catch((e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)); });
+    return () => { live = false; void task?.destroy(); };
+  }, [blob]);
+  useLayoutEffect(() => {
+    const el = page.current;
+    if (!el) return;
+    const measure = () => { const cs = getComputedStyle(el); setWidth(el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)); };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={page} className="fp-page fp-pdf">
+      {error ? <div className="fp-plain">这个 PDF 打不开：{error}</div>
+        : !doc || width <= 0 ? <div className="fp-plain"><span className="spinner" aria-hidden="true" /></div>
+        : Array.from({ length: doc.numPages }, (_, i) => <PdfPage key={i} doc={doc} number={i + 1} width={width} />)}
+    </div>
+  );
+}
+
+function PdfPage({ doc, number, width }: { doc: PDFDocumentProxy; number: number; width: number }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const [near, setNear] = useState(number <= 2);
+  useEffect(() => {
+    let live = true;
+    void doc.getPage(number).then((p) => {
+      if (!live) return;
+      const v = p.getViewport({ scale: 1 });
+      setSize({ w: v.width, h: v.height });
+    });
+    return () => { live = false; };
+  }, [doc, number]);
+  useEffect(() => {
+    const el = canvas.current;
+    if (!el || near) return;
+    const observer = new IntersectionObserver(([e]) => { if (e?.isIntersecting) setNear(true); }, { rootMargin: "600px 0px" });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [near, size]);
+  useEffect(() => {
+    const el = canvas.current;
+    if (!el || !near || !size || width <= 0) return;
+    let task: RenderTask | null = null;
+    let live = true;
+    void doc.getPage(number).then((p) => {
+      if (!live) return;
+      const scale = (width / size.w) * Math.min(3, window.devicePixelRatio || 1);
+      const viewport = p.getViewport({ scale });
+      el.width = Math.floor(viewport.width);
+      el.height = Math.floor(viewport.height);
+      task = p.render({ canvas: el, canvasContext: el.getContext("2d")!, viewport });
+      task.promise.catch(() => {});
+    });
+    return () => { live = false; task?.cancel(); };
+  }, [doc, number, near, size, width]);
+  const shown = size ? { width, aspectRatio: `${size.w} / ${size.h}` } : { width, aspectRatio: "210 / 297" };
+  return <canvas ref={canvas} className="fp-pdf-page" style={shown} aria-label={`第 ${number} 页`} />;
+}
+
+// ── text ───────────────────────────────────────────────────────────────
+
+/** Above this a file shows as plain text, unhighlighted; above the next, only its start. */
+const HIGHLIGHT_LIMIT = 256 * 1024;
+const SHOW_LIMIT = 2 * 1024 * 1024;
+const TABLE_ROWS = 2000;
+
+function TextViewer({ blob, kind, language, name, setControls }: { blob: Blob; kind: PreviewKind; language: string | undefined; name: string; setControls(c: ReactNode): void }) {
+  const [text, setText] = useState<string | null>(null);
+  const cut = blob.size > SHOW_LIMIT;
+  const rendered = kind === "markdown" || kind === "csv" || kind === "html";
+  const [source, setSource] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void blob.slice(0, SHOW_LIMIT).text().then((t) => { if (live) setText(t); });
+    return () => { live = false; };
+  }, [blob]);
+  useEffect(() => {
+    if (!rendered) return;
+    setControls(
+      <span className="lightbox-zoom" role="group" aria-label="显示方式">
+        <button type="button" className="lightbox-action" aria-pressed={!source} onClick={() => setSource(false)}>预览</button>
+        <button type="button" className="lightbox-action" aria-pressed={source} onClick={() => setSource(true)}>源码</button>
+      </span>,
+    );
+    return () => setControls(null);
+  }, [rendered, source, setControls]);
+  if (text === null) return <div className="fp-note"><span className="spinner" aria-hidden="true" />正在载入…</div>;
+  let content: ReactNode;
+  if (kind === "html" && !source) {
+    // Its scripts run, but in an origin of its own: nothing of ember's is reachable from it.
+    content = <iframe className="fp-frame fp-html" sandbox="allow-scripts" srcDoc={text} title={name} />;
+    return <div className="fp-page fp-page-frame">{content}</div>;
+  }
+  if (kind === "markdown" && !source) content = <div className="markdown fp-markdown"><Prose>{text}</Prose></div>;
+  else if (kind === "csv" && !source) content = <CsvTable text={text} tab={name.toLowerCase().endsWith(".tsv")} />;
+  else {
+    const lang = kind === "markdown" ? "markdown" : kind === "csv" ? undefined : language;
+    const fence = "`".repeat(Math.max(3, ...[...text.matchAll(/`{3,}/g)].map((m) => m[0].length + 1)));
+    content = lang && text.length <= HIGHLIGHT_LIMIT
+      ? <div className="markdown fp-code"><Prose>{`${fence}${lang}\n${text}\n${fence}`}</Prose></div>
+      : <pre className="fp-plain">{text}</pre>;
+  }
+  return (
+    <div className="fp-page">
+      {cut && <div className="fp-cut">文件较大，只显示前 {fileSize(SHOW_LIMIT)}，完整内容请下载。</div>}
+      {content}
+    </div>
+  );
+}
+
+/** Rows of a CSV (or TSV), quotes and all. */
+export function parseCsv(text: string, separator: string, limit = Infinity): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [], field = "", quoted = false;
+  for (let i = 0; i < text.length && rows.length < limit; i++) {
+    const c = text[i]!;
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"' && field === "") quoted = true;
+    else if (c === separator) { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); rows.push(row); row = []; field = "";
+    } else field += c;
+  }
+  if ((field || row.length) && rows.length < limit) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function CsvTable({ text, tab }: { text: string; tab: boolean }) {
+  const rows = parseCsv(text, tab ? "\t" : ",", TABLE_ROWS + 1);
+  const [head, ...body] = rows;
+  if (!head) return <pre className="fp-plain">{text}</pre>;
+  const more = body.length > TABLE_ROWS;
+  return (
+    <>
+      <div className="fp-table-wrap">
+        <table className="fp-table">
+          <thead><tr><th aria-label="行号" />{head.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
+          <tbody>{body.slice(0, TABLE_ROWS).map((r, i) => <tr key={i}><td className="fp-row">{i + 1}</td>{head.map((_, j) => <td key={j}>{r[j] ?? ""}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
+      {more && <div className="fp-cut">只显示前 {TABLE_ROWS} 行，完整内容请下载。</div>}
+    </>
+  );
+}

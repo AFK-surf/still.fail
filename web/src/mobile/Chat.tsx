@@ -7,7 +7,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { useLocation, useParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, useStationCall, type Attachment, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Outgoing, type Quote } from "../api.ts";
 import { useHost, type HostComposer } from "./ChatHost.tsx";
-import { Activity, fileSize, Lightbox, useAwayFromBottom, useEmissions, useFileUrl, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
+import { FilePreview, fileSize, isImage, useFileUrl } from "../FilePreview.tsx";
+import { Activity, useAwayFromBottom, useEmissions, useLinger, useMarkRead, useOlderOnScroll, useRememberPlace, useUnreadLine, type AgentAtWork } from "../Chat.tsx";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ChevronRight, Close, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
 import { Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
@@ -334,8 +335,6 @@ function QuoteCard({ q, onJump }: { q: Quote; onJump?: (ts: string) => void }) {
 
 // ── files ──────────────────────────────────────────────────────────────
 
-const IMAGE = /\.(png|jpe?g|gif|webp)$/i;
-
 function Files({ here, files }: { here: Here; files: Attachment[] | undefined }) {
   if (!files?.length) return null;
   // Files are kept in a session's workspace: the agent whose workspace holds it, else the first.
@@ -344,7 +343,8 @@ function Files({ here, files }: { here: Here; files: Attachment[] | undefined })
     <div className="m-files">
       {files.map((f) => {
         const key = owner(f);
-        return IMAGE.test(f.name) && key ? <StationImage key={f.path} sessionKey={key} file={f} /> : <FileCard key={f.path} name={f.name} size={f.size} />;
+        if (!key) return <FileCard key={f.path} name={f.name} size={f.size} />;
+        return isImage(f.name) ? <StationImage key={f.path} sessionKey={key} file={f} /> : <StationFile key={f.path} sessionKey={key} file={f} />;
       })}
     </div>
   );
@@ -360,7 +360,18 @@ function StationImage({ sessionKey, file }: { sessionKey: string; file: Attachme
   return (
     <>
       <button type="button" className="m-image" style={box} disabled={!url} onClick={() => setOpen(true)}>{url && <img src={url} alt={file.name} />}</button>
-      {url && <Lightbox open={open} onClose={() => setOpen(false)} url={url} file={file} />}
+      <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
+    </>
+  );
+}
+
+/** Any other file: its card, a tap shows it (or says it cannot, and offers the download). */
+function StationFile({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="m-file-open" onClick={() => setOpen(true)} aria-label={`查看 ${file.name}`}><FileCard name={file.name} size={file.size} /></button>
+      <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
     </>
   );
 }

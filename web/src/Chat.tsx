@@ -2,15 +2,15 @@
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Download, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
+import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
-import { useApi, useChatSend, type Activity as ActivityView, type Api, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
+import { useApi, useChatSend, type Activity as ActivityView, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot } from "./dock.tsx";
 import { Prose } from "./Prose.tsx";
-import { Dialog as RDialog } from "radix-ui";
+import { FilePreview, fileSize, isImage, useFileUrl } from "./FilePreview.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { track } from "./telemetry.ts";
 
@@ -357,12 +357,12 @@ export function useMarkRead(floor: RefObject<HTMLElement | null>, chat: ChatView
 }
 
 function MessageAvatar({ message, name }: { message: ChatMessage; name: string }) {
-  if (message.authorKind === "agent") return <span className="msg-avatar msg-avatar-agent">{message.by.runtime ? <ModelLogo maker={message.by.maker} runtime={message.by.runtime} size={12} /> : <Mark size={12} />}</span>;
-  if (message.authorKind === "ember") return <span className="msg-avatar msg-avatar-agent"><Mark size={12} /></span>;
+  if (message.authorKind === "agent") return <span className="msg-avatar msg-avatar-agent">{message.by.runtime ? <ModelLogo maker={message.by.maker} runtime={message.by.runtime} size={16} /> : <Mark size={16} />}</span>;
+  if (message.authorKind === "ember") return <span className="msg-avatar msg-avatar-agent"><Mark size={16} /></span>;
   const picture = message.by.picture;
   return picture
-    ? <img className="msg-avatar" src={picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />
-    : <span className="msg-avatar"><Avatar id={message.author} name={name} size={18} /></span>;
+    ? <img className="msg-avatar" src={picture} alt="" width={28} height={28} referrerPolicy="no-referrer" />
+    : <span className="msg-avatar"><Avatar id={message.author} name={name} size={28} /></span>;
 }
 
 /**
@@ -412,76 +412,35 @@ function QuoteCard({ quote, onJump, comment, onRemove }: { quote: Quote; onJump?
 
 // ── files ───────────────────────────────────────────────────────────────
 
-export function fileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-const IMAGE = /\.(png|jpe?g|gif|webp)$/i;
-const storedName = (a: Attachment) => a.path.split("/").at(-1)!;
-
-// Files sent never change: each is fetched once per page, and the most recent are kept for a chat opened again.
-const blobs = new Map<string, Promise<Blob>>();
-const KEEP_BLOBS = 100;
-
-function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment): Promise<Blob> {
-  const id = `${station}/${sessionKey}/${file.path}`;
-  let blob = blobs.get(id);
-  if (!blob) {
-    blob = api.file(sessionKey, storedName(file));
-    // A failure is not kept: the next look tries again.
-    blob.catch(() => blobs.delete(id));
-    blobs.set(id, blob);
-    if (blobs.size > KEEP_BLOBS) blobs.delete(blobs.keys().next().value!);
-  }
-  return blob;
-}
-
-/** A file as a blob URL, fetched from the station once and kept while shown. */
-export function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean): string | null {
-  const api = useApi();
-  const station = useStation();
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!enabled) return;
-    let u: string | null = null;
-    let current = true;
-    fetchFile(api, station.address, sessionKey, file).then((blob) => {
-      if (!current) return;
-      u = URL.createObjectURL(blob);
-      setUrl(u);
-    }, () => {});
-    return () => {
-      current = false;
-      if (u) URL.revokeObjectURL(u);
-    };
-  }, [api, station.address, sessionKey, file.path, enabled]);
-  return url;
-}
-
 /** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */
 function Files({ owner, files }: { owner: (file: Attachment) => string | null; files: Attachment[] | undefined }) {
   if (!files?.length) return null;
   return <div className="msg-files">{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} />)}</div>;
 }
 
-/** Images show themselves at their own proportions and open in a lightbox; other files are a card. */
+/** Images show themselves at their own proportions; other files are a card. Either opens in a preview. */
 function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
-  const image = IMAGE.test(file.name);
+  const image = isImage(file.name);
   const url = useFileUrl(sessionKey ?? "", file, image && sessionKey !== null);
   const [open, setOpen] = useState(false);
+  const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
   if (image) {
     return (
       <>
         <button type="button" className="msg-image" onClick={() => url && setOpen(true)} title={file.path} aria-label={`查看 ${file.name}`} style={imageBox(file)}>
           {url ? <img src={url} alt={file.name} /> : <span className="msg-image-wait" />}
         </button>
-        {url && <Lightbox open={open} onClose={() => setOpen(false)} url={url} file={file} />}
+        {preview}
       </>
     );
   }
-  return <FileCard file={file} />;
+  if (sessionKey === null) return <FileCard file={file} />;
+  return (
+    <>
+      <button type="button" className="file-card-open" onClick={() => setOpen(true)} aria-label={`查看 ${file.name}`}><FileCard file={file} /></button>
+      {preview}
+    </>
+  );
 }
 
 /**
@@ -495,27 +454,6 @@ export function imageBox(file: Attachment): { width: number; aspectRatio: string
   const scale = Math.min(1, 360 / file.width, 300 / file.height);
   const width = Math.max(40, Math.round(file.width * scale)), height = Math.max(40, Math.round(file.height * scale));
   return { width, aspectRatio: `${width} / ${height}` };
-}
-
-/** An image at full size over a dimmed page; Esc or a click outside closes it. */
-export function Lightbox({ open, onClose, url, file }: { open: boolean; onClose(): void; url: string; file: Attachment }) {
-  return (
-    <RDialog.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <RDialog.Portal>
-        <RDialog.Overlay className="lightbox-overlay" />
-        <RDialog.Content className="lightbox" aria-describedby={undefined} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-          <RDialog.Title className="sr-only">{file.name}</RDialog.Title>
-          <img className="lightbox-image" src={url} alt={file.name} />
-          <div className="lightbox-bar">
-            <span className="lightbox-name">{file.name}</span>
-            <span className="lightbox-size">{fileSize(file.size)}</span>
-            <a className="lightbox-action" href={url} download={file.name}><Download size={14} />下载</a>
-            <RDialog.Close className="lightbox-action" aria-label="关闭"><Close size={14} /></RDialog.Close>
-          </div>
-        </RDialog.Content>
-      </RDialog.Portal>
-    </RDialog.Root>
-  );
 }
 
 function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; error?: string | null }) {
@@ -932,7 +870,7 @@ export function Activity({ agent, leaving, pose, onOpen, mark, className }: {
   return (
     <div className={`msg agent-activity${className ? ` ${className}` : ""}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined}>
       <button type="button" className="activity-line" onClick={onOpen} title="打开执行历史" aria-label={`${agent.who}：${now.current.text}`}>
-        <span className="activity-avatar" aria-hidden="true">{mark ?? <span className="msg-avatar msg-avatar-agent"><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span>}</span>
+        <span className="activity-avatar" aria-hidden="true">{mark ?? <span className="msg-avatar msg-avatar-agent"><ModelLogo maker={agent.maker} runtime={agent.runtime} size={16} /></span>}</span>
         <span className="activity-tail">
           <span className="activity-now">
             {now.previous && <span key={`was-${now.n - 1}`} className="activity-now-text" data-out="">{now.previous.text}</span>}

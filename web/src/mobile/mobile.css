@@ -377,6 +377,7 @@ button.m-agent-head { cursor: pointer; }
 .m-file-text > span { font-size: 13px; color: var(--m-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-file-text small { font-size: 11px; color: var(--m-muted); }
 .m-file-text small[data-error] { color: var(--m-red); }
+.m-file-open { display: inline-flex; max-width: 100%; padding: 0; border: 0; background: none; font: inherit; text-align: left; border-radius: 12px; }
 .m-file-remove { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; background: none; color: var(--m-subtle) !important; }
 
 /* The composer: a capsule floating over the list, which runs on around it. */
