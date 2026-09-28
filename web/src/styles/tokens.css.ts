@@ -9,7 +9,7 @@ import { createGlobalThemeContract } from "@vanilla-extract/css";
 
 const names = [
   "font-body", "font-mono",
-  "canvas", "sidebar", "list", "text", "muted", "subtle", "line", "line-strong", "hover", "selected", "paper",
+  "canvas", "raised", "sidebar", "list", "text", "muted", "subtle", "line", "line-strong", "hover", "selected", "paper",
   "accent", "accent-text", "accent-bg", "blue", "blue-bg", "code-inline", "green", "green-bg", "amber", "amber-bg",
   "red", "red-bg", "neutral-bg", "overlay", "shadow", "primary", "primary-hover", "on-primary", "field-hover",
   "field-focus", "online",

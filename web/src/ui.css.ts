@@ -67,7 +67,7 @@ export const select = style({
 export const segmented = style({
   position: "relative", isolation: "isolate", display: "flex", alignItems: "center", alignSelf: "center",
   height: "max-content", padding: "var(--pad)", gap: "var(--gap)", borderRadius: "999px",
-  background: `color-mix(in oklch, ${vars.text} 6%, transparent)`,
+  background: `color-mix(in srgb, ${vars.text} 6%, transparent)`,
   vars: { "--pad": "3px", "--gap": "2px" },
 });
 export const segmentedThumb = style({

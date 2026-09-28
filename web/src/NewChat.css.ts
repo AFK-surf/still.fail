@@ -9,7 +9,7 @@ export const newChatSub = style({
 });
 export const spentNotice = style({
   margin: "0 0 8px", padding: "8px 12px", borderRadius: "10px",
-  background: `color-mix(in oklch, ${vars.amber} 12%, transparent)`, color: vars.text, fontSize: vars.textSm,
+  background: `color-mix(in srgb, ${vars.amber} 12%, transparent)`, color: vars.text, fontSize: vars.textSm,
 });
 /** New chat: a centred composer with the choices of where and on what it runs. */
 export const newChat = style({
@@ -38,6 +38,6 @@ globalStyle(`${newChatInner} > ${composerWrap}, ${newChatInner} > form`, { justi
  */
 /** Here rather than with its class: it comes after .new-chat-held, and wins over it. */
 globalStyle(composerBox, {
-  border: "0", background: `color-mix(in oklch, ${vars.canvas} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
-  backdropFilter: "blur(20px)", boxShadow: "0 4px 12px rgb(0 0 0 / .07), 0 1px 3px rgb(0 0 0 / .05)",
+  border: "0", background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
+  backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
 });

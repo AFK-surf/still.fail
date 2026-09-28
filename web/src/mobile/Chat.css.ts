@@ -133,7 +133,8 @@ export const mComposerField = style({
 });
 export const mSend = style({
   display: "grid", placeItems: "center", flex: "none", width: "36px", height: "36px", padding: "0", border: "0",
-  borderRadius: "50%", background: "var(--m-line)", color: "var(--m-surface) !important", cursor: "pointer",
+  borderRadius: "50%", background: "color-mix(in srgb, var(--text) 18%, var(--raised))", color: "var(--raised) !important",
+  cursor: "pointer",
   selectors: {
     "&[data-ready]": { background: "var(--m-ink)", color: "var(--m-bg) !important" },
   },

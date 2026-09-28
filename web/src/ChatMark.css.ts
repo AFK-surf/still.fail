@@ -19,7 +19,7 @@ export const chatMark = style({
     // At work: a turning ring with a gap.
     '&[data-tone="busy"]::after': {
       content: "\"\"", position: "absolute", inset: 0, borderRadius: "50%", boxSizing: "border-box",
-      border: "2px solid #f2b01e", borderRightColor: "color-mix(in oklch, #f2b01e 25%, transparent)",
+      border: "2px solid #f2b01e", borderRightColor: "color-mix(in srgb, #f2b01e 25%, transparent)",
       animation: `${spinKeyframes} 1.2s linear infinite`,
     },
   },

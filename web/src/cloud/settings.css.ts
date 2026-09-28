@@ -17,7 +17,7 @@ export const onboardingRow = style({ display: "flex", alignItems: "stretch", gap
 export const enrollWait = style({
   display: "flex", alignItems: "center", gap: "12px", marginTop: "16px", padding: "12px 14px",
   borderRadius: vars.rField, cornerShape: vars.cornerShape,
-  background: `color-mix(in oklch, ${vars.accent} 9%, transparent)`,
+  background: `color-mix(in srgb, ${vars.accent} 9%, transparent)`,
 });
 /** A first profile to add, station by station (cloud/settings.tsx): where it goes is part of adding it. */
 export const firstStations = style({ width: "100%", display: "grid", gap: "28px", textAlign: "left" });

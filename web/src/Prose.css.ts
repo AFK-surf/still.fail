@@ -38,7 +38,7 @@ export const codeCopy = style({
   display: "inline-flex", alignItems: "center", gap: "4px", border: "0",
   borderRadius: `calc(6px * ${vars.cornerScale})`, color: vars.muted, cursor: "pointer", cornerShape: vars.cornerShape,
   height: "24px", padding: "0 7px", fontSize: "11px",
-  background: `color-mix(in oklch, ${vars.canvas} 80%, transparent)`,
+  background: `color-mix(in srgb, ${vars.canvas} 80%, transparent)`,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
   },

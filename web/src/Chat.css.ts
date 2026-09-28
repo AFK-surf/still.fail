@@ -22,8 +22,8 @@ export const chatToBottom = style({
     [`${chat}[data-under-composer] &`]: {
       right: "calc((100% - min(760px, 100% - 2 * var(--composer-inset))) / 2 + 6px)", width: "32px", height: "32px",
       bottom: "calc(12px + var(--composer-height))", border: "0",
-      background: `color-mix(in oklch, ${vars.canvas} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
-      backdropFilter: "blur(20px)", boxShadow: "0 4px 12px rgb(0 0 0 / .07), 0 1px 3px rgb(0 0 0 / .05)",
+      background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)",
+      backdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
       vars: { "--composer-inset": "32px" },
     },
   },
@@ -52,7 +52,7 @@ export const msgSystem = style({ display: "flex", justifyContent: "center" });
 export const msgSystemBox = style({
   display: "flex", alignItems: "flex-start", gap: "8px", maxWidth: "min(560px, 100%)", padding: "8px 12px",
   borderRadius: "12px", background: `color-mix(in oklch, ${vars.amber} 10%, ${vars.canvas})`,
-  border: `1px solid color-mix(in oklch, ${vars.amber} 22%, transparent)`, fontSize: vars.textSm, color: vars.text,
+  border: `1px solid color-mix(in srgb, ${vars.amber} 22%, transparent)`, fontSize: vars.textSm, color: vars.text,
 });
 /** A draft past its three lines scrolls: what is cut above or below fades out over a line's height, not at a hard edge. */
 export const composerText = style({
@@ -90,8 +90,8 @@ export const sendBtn = style({
     "&:hover:not(:disabled)": { background: vars.primaryHover },
     "&:disabled": { background: vars.lineStrong, color: vars.canvas, cursor: "default" },
     [`${composerBox} &:not(:disabled)`]: { background: vars.text, color: vars.canvas },
-    [`${composerBox} &:disabled`]: { background: vars.line, color: vars.canvas },
-    [`${composerBox} &:hover:not(:disabled)`]: { background: `color-mix(in oklch, ${vars.text} 82%, ${vars.canvas})` },
+    [`${composerBox} &:disabled`]: { background: `color-mix(in srgb, ${vars.text} 18%, ${vars.raised})`, color: vars.raised },
+    [`${composerBox} &:hover:not(:disabled)`]: { background: `color-mix(in srgb, ${vars.text} 82%, ${vars.canvas})` },
   },
 });
 /** Over the first message that was unread when the chat opened. */
@@ -387,11 +387,11 @@ export const composerThumb = style({
 });
 export const composerThumbBusy = style({
   position: "absolute", inset: "0", display: "grid", placeItems: "center",
-  background: `color-mix(in oklch, ${vars.canvas} 55%, transparent)`,
+  background: `color-mix(in srgb, ${vars.canvas} 55%, transparent)`,
 });
 export const composerThumbRemove = style({
   position: "absolute", top: "4px", right: "4px", display: "grid", placeItems: "center", width: "20px", height: "20px",
-  padding: "0", border: "0", borderRadius: "50%", background: "color-mix(in oklch, #000 55%, transparent)",
+  padding: "0", border: "0", borderRadius: "50%", background: "color-mix(in srgb, #000 55%, transparent)",
   color: "#fff", cursor: "pointer", opacity: "0", transition: `opacity ${vars.dur} ${vars.easeOut}`,
   selectors: {
     [`${composerThumb}:hover &`]: { opacity: "1" },
@@ -410,7 +410,7 @@ globalStyle(`${msgSystemBox} ${markdown} > :first-child`, { marginTop: "0" });
 globalStyle(`${msgSystemBox} ${markdown} > :last-child`, { marginBottom: "0" });
 globalStyle(`${msgSystemBox} ${msgTime}`, { flex: "none", marginTop: "1px" });
 globalStyle(`${sendBtn} ${spinner}`, {
-  width: "14px", height: "14px", borderColor: `color-mix(in oklch, ${vars.onPrimary} 35%, transparent)`,
+  width: "14px", height: "14px", borderColor: `color-mix(in srgb, ${vars.onPrimary} 35%, transparent)`,
   borderTopColor: vars.onPrimary,
 });
 globalStyle(`${chatEmpty} p`, { margin: "0" });

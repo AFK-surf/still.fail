@@ -84,6 +84,16 @@ export function useDraft({ key, carry, upload, quotes: held }: {
     shown.current = key;
     if (carry && key !== undefined && carry.current === key) { carry.current = null; return; }
     if (before === undefined) return;
+    // A new chat moved to another station: what is written goes with it; files stay with the station they went up to.
+    if (before.startsWith("new:") && key?.startsWith("new:")) {
+      const { files } = now.current;
+      if (files.length) kept.set(before, { text: "", files, quotes: [] });
+      else kept.delete(before);
+      const theirs = kept.get(key)?.files ?? [];
+      kept.delete(key);
+      setFiles(theirs); setError(null);
+      return;
+    }
     put(before);
     const next = key === undefined ? undefined : kept.get(key);
     if (key !== undefined) kept.delete(key);

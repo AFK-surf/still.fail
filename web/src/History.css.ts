@@ -159,7 +159,7 @@ export const hItem = style({
   borderRadius: `calc(8px * ${vars.cornerScale})`, transition: `background-color 900ms ${vars.easeOut}`,
   cornerShape: vars.cornerShape,
   selectors: {
-    "&[data-focus]": { background: `color-mix(in oklch, ${vars.accent} 10%, transparent)`, transition: "none" },
+    "&[data-focus]": { background: `color-mix(in srgb, ${vars.accent} 10%, transparent)`, transition: "none" },
   },
 });
 export const hPhaseText = style({ animation: `${fadeInKeyframes} 180ms ${vars.easeOut}` });

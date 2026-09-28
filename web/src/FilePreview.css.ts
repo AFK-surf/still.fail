@@ -83,7 +83,7 @@ globalStyle(`${fpBody} > *`, { gridArea: "1 / 1" });
 export const fpStep = style({
   gridArea: "1 / 1", alignSelf: "center", zIndex: "1", display: "grid", placeItems: "center", width: "40px", height: "40px",
   margin: "0 16px", border: "0", borderRadius: "50%", padding: "0", cursor: "pointer",
-  background: `color-mix(in oklch, ${vars.canvas} 80%, transparent)`, color: vars.text, backdropFilter: "blur(12px)",
+  background: `color-mix(in srgb, ${vars.canvas} 80%, transparent)`, color: vars.text, backdropFilter: "blur(12px)",
   boxShadow: "0 1px 3px rgba(0, 0, 0, .10)", transition: `opacity ${vars.dur} ${vars.easeOut}, background ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&[data-side=before]": { justifySelf: "start" },

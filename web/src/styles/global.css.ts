@@ -25,6 +25,9 @@ globalStyle(":root", {
     "--font-body": "\"Inter Variable\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Hiragino Sans GB\", sans-serif",
     "--font-mono": "ui-monospace, SFMono-Regular, Menlo, monospace",
     "--canvas": "oklch(100% 0 0)",
+    // What floats over the canvas (the composer): a grey ground of its own, a step darker than the canvas in light and
+    // a step lighter in dark, where a shadow does not show.
+    "--raised": "#e4e4e8",
     "--sidebar": "oklch(96.9% .005 85)",
     "--list": "oklch(98.5% .002 85)",
     "--text": "oklch(27% .009 255)",
@@ -77,6 +80,7 @@ globalStyle(":root:not([data-theme=\"light\"])", {
       colorScheme: "dark",
       vars: {
         "--canvas": "#1f2023",
+        "--raised": "#2a2c31",
         "--sidebar": "#19191b",
         "--list": "#1c1d20",
         "--text": "#e9e9ea",
@@ -115,6 +119,7 @@ globalStyle(":root[data-theme=\"dark\"]", {
   colorScheme: "dark",
   vars: {
     "--canvas": "#1f2023",
+    "--raised": "#2a2c31",
     "--sidebar": "#19191b",
     "--list": "#1c1d20",
     "--text": "#e9e9ea",
@@ -217,6 +222,6 @@ globalStyle("::view-transition-group(*), ::view-transition-old(*), ::view-transi
 });
 /** The quoted passage, highlighted where it was said after following a quote. */
 globalStyle("::highlight(quote-flash)", {
-  backgroundColor: `color-mix(in oklch, ${vars.accent} 28%, transparent)`, color: "inherit",
+  backgroundColor: `color-mix(in srgb, ${vars.accent} 28%, transparent)`, color: "inherit",
 });
-globalStyle(":root[data-quote-flash=\"fading\"] ::highlight(quote-flash)", { backgroundColor: `color-mix(in oklch, ${vars.accent} 12%, transparent)` });
+globalStyle(":root[data-quote-flash=\"fading\"] ::highlight(quote-flash)", { backgroundColor: `color-mix(in srgb, ${vars.accent} 12%, transparent)` });

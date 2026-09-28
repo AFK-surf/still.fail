@@ -49,7 +49,7 @@ export const modelPoolItem = style({
 /** Hints that name another page link to it. */
 export const inlineLink = style({
   color: vars.accentText, textDecoration: "underline",
-  textDecorationColor: "color-mix(in oklch, currentColor 40%, transparent)", textUnderlineOffset: "2px",
+  textDecorationColor: "color-mix(in srgb, currentColor 40%, transparent)", textUnderlineOffset: "2px",
   selectors: {
     "&:hover": { textDecorationColor: "currentColor" },
   },
