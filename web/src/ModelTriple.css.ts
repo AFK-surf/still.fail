@@ -43,14 +43,14 @@ export const runPickerNote = style({ margin: "0 8px 6px", maxWidth: "240px", fon
 export const btnSm = style({ height: "28px", padding: "0 10px", fontSize: vars.textXs });
 export const modelTriple = style({
   display: "inline-flex", alignItems: "center", gap: "6px", maxWidth: "100%", justifySelf: "start", alignSelf: "start",
-  width: "max-content", height: "30px", padding: "0 10px", border: `1px solid ${vars.line}`,
+  width: "max-content", height: "30px", padding: "0 10px", border: "1px solid transparent",
   borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", color: vars.text,
   font: "inherit", fontSize: vars.textSm, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden",
   selectors: {
     "&:hover": { background: vars.hover },
     "&[data-state=\"open\"]": { background: vars.hover },
     "&:disabled": { color: vars.muted, cursor: "default" },
-    [`${newChat} &`]: { borderColor: "transparent", height: "28px", fontSize: vars.textXs },
+    [`${newChat} &`]: { height: "28px", fontSize: vars.textXs },
   },
 });
 /**
