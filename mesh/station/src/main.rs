@@ -290,9 +290,11 @@ async fn run(options: Run) -> Result<()> {
     let (stop_tx, stopping) = watch::channel(false);
     // The app in this process (ember-app) while it takes over from the Node part: EMBER_STATION_APP=rust.
     let in_process = std::env::var("EMBER_STATION_APP").as_deref() == Ok("rust");
+    // Held for as long as this runs: a dropped sender reads as "not answering" to whoever waits on `ready`.
+    let ready_tx = Arc::new(ready_tx);
     let (backend, supervised, app) = if in_process {
         let app: Arc<std::sync::OnceLock<Arc<ember_app::server::App>>> = Arc::default();
-        let (cell, data, ui) = (app.clone(), data.clone(), options.app.join("dist").join("admin"));
+        let (cell, data, ui, ready_tx) = (app.clone(), data.clone(), options.app.join("dist").join("admin"), ready_tx.clone());
         let config = std::env::var_os("EMBER_CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
         let started = tokio::spawn(async move {
             match ember_app::server::App::start(ember_app::server::AppOptions { data, config, ui }).await {
@@ -309,7 +311,7 @@ async fn run(options: Run) -> Result<()> {
         (local::Backend::App(app.clone()), started, Some(app))
     } else {
         let launch = node::Launch { node: options.node, app: options.app, data: data.clone(), socket: socket.clone(), secret: secret.clone() };
-        let supervised = tokio::spawn(node::supervise(launch, ready_tx, telemetry.clone(), stopping));
+        let supervised = tokio::spawn(node::supervise(launch, ready_tx.clone(), telemetry.clone(), stopping));
         (local::Backend::Node { socket, secret }, supervised, None)
     };
     let listener = local::bind(&data, options.port, options.named).await?;
@@ -327,7 +329,10 @@ async fn run(options: Run) -> Result<()> {
     info!("stopping");
     stop_tx.send_replace(true);
     match app.as_ref().and_then(|a| a.get()) {
-        Some(app) => app.shutdown().await,
+        Some(app) => {
+            ready_tx.send_replace(false);
+            app.shutdown().await;
+        }
         None => {
             let _ = supervised.await;
         }

@@ -31,7 +31,7 @@ pub struct Launch {
 
 /// Runs the Node part for as long as this process runs: `ready` says whether it answers now. Spans it writes go to
 /// `telemetry`.
-pub async fn supervise(launch: Launch, ready: watch::Sender<bool>, telemetry: Arc<Telemetry>, mut stopping: watch::Receiver<bool>) {
+pub async fn supervise(launch: Launch, ready: Arc<watch::Sender<bool>>, telemetry: Arc<Telemetry>, mut stopping: watch::Receiver<bool>) {
     let mut backoff = Duration::from_secs(1);
     loop {
         let started = Instant::now();
