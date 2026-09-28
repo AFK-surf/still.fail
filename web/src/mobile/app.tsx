@@ -8,7 +8,7 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
-import "./mobile.css";
+import "./legacy.css";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface Entry { id: string; name: string; account: Account }

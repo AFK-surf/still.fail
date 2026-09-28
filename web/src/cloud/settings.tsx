@@ -25,6 +25,7 @@ import { cloud, useAction, useWorkspace as useWorkspaceTopic, type LoginSession,
 import { Avatar } from "./gate.tsx";
 import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
+import * as nav from "../Sidebar.css.ts";
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", admin: "管理员", member: "成员" };
 export const ROLE_HINT: Record<Role, string> = {
@@ -39,19 +40,19 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   // Connects and profiles are a station's: none to show before there is one.
   const some = (useStations(entry.id).value?.length ?? 0) > 0;
   return (
-    <div className="nav-scroll">
-      <NavLink className="nav-row" to={lastChat(entry.id, `/w/${entry.id}`)} end><ArrowLeft {...ICON} />{some ? "返回会话" : "返回"}</NavLink>
-      <div className="nav-heading">账号</div>
-      <NavLink className="nav-row" to={`${base}/account`}><Avatar account={entry.account} size={18} /><span className="nav-text">{entry.account.email}</span></NavLink>
-      <div className="nav-heading">Workspace · {entry.name}</div>
-      <NavLink className="nav-row" to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
-      {some && <NavLink className="nav-row" to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>}
-      {some && <NavLink className="nav-row" to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>}
-      {some && <NavLink className="nav-row" to={`${base}/memory`}><Brain {...ICON} />记忆</NavLink>}
-      <NavLink className="nav-row" to={`${base}/members`}><Users {...ICON} />成员</NavLink>
-      <NavLink className="nav-row" to={`${base}/general`}><Settings {...ICON} />通用</NavLink>
-      <div className="nav-heading">离开</div>
-      <NavLink className="nav-row" to={`${base}/leave`}><LogOut {...ICON} />退出与删除</NavLink>
+    <div className={nav.navScroll}>
+      <NavLink className={nav.navRow} to={lastChat(entry.id, `/w/${entry.id}`)} end><ArrowLeft {...ICON} />{some ? "返回会话" : "返回"}</NavLink>
+      <div className={nav.navHeading}>账号</div>
+      <NavLink className={nav.navRow} to={`${base}/account`}><Avatar account={entry.account} size={18} /><span className={nav.navText}>{entry.account.email}</span></NavLink>
+      <div className={nav.navHeading}>Workspace · {entry.name}</div>
+      <NavLink className={nav.navRow} to={`${base}/stations`}><Server {...ICON} />Station</NavLink>
+      {some && <NavLink className={nav.navRow} to={`${base}/connects`}><Plug {...ICON} />连接</NavLink>}
+      {some && <NavLink className={nav.navRow} to={`${base}/profiles`}><Key {...ICON} />Profile</NavLink>}
+      {some && <NavLink className={nav.navRow} to={`${base}/memory`}><Brain {...ICON} />记忆</NavLink>}
+      <NavLink className={nav.navRow} to={`${base}/members`}><Users {...ICON} />成员</NavLink>
+      <NavLink className={nav.navRow} to={`${base}/general`}><Settings {...ICON} />通用</NavLink>
+      <div className={nav.navHeading}>离开</div>
+      <NavLink className={nav.navRow} to={`${base}/leave`}><LogOut {...ICON} />退出与删除</NavLink>
     </div>
   );
 }

@@ -1,0 +1,4 @@
+/* The styles from before the *.css.ts ones (vanilla-extract), in a layer under them: a scoped style always wins over
+   these, whatever order the bundle puts them in; among themselves they cascade as they always did. */
+@import "./theme.css" layer(legacy);
+@import "./app.css" layer(legacy);

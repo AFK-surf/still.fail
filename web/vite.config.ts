@@ -1,4 +1,5 @@
 import react from "@vitejs/plugin-react";
+import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -44,7 +45,7 @@ export default defineConfig(({ mode }) => {
     root: here(consoleBuild ? "admin" : "."),
     publicDir: here("public"),
     base: mode === "cloud" || consoleBuild ? "/" : "/admin/",
-    plugins: [react(), ...(posthog && mode !== "cloud" ? [stationKeyFile(posthog)] : [])],
+    plugins: [react(), vanillaExtractPlugin(), ...(posthog && mode !== "cloud" ? [stationKeyFile(posthog)] : [])],
     define: {
       __POSTHOG__: JSON.stringify(posthog),
       // When this build was made: the core's worker of a newer build takes over from an older one (src/core/worker.ts).

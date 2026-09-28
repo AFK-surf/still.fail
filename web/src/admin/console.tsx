@@ -15,6 +15,7 @@ import { signOut, useAccounts, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type Admission, type AdminUser, type AdminWorkspace, type InviteCodeView } from "../cloud/api.ts";
 import { Avatar } from "../cloud/gate.tsx";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
+import * as nav from "../Sidebar.css.ts";
 
 // Each account is asked once per page load whether it is the admin.
 const probes = new Map<string, Promise<boolean>>();
@@ -42,16 +43,16 @@ export function Console({ account }: { account: Account }) {
   const atIndex = useLocation().pathname === "/";
   return (
     <div className="shell" data-detail={!atIndex}>
-      <nav className="sidebar" aria-label="管理后台">
+      <nav className={nav.sidebar} aria-label="管理后台">
         <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label="调整侧边栏宽度" />
-        <div className="brand brand-compact"><Lockup /></div>
-        <div className="nav-scroll">
-          <div className="nav-heading">管理后台</div>
-          <NavLink className="nav-row" to="/users"><Users {...ICON} />用户</NavLink>
-          <NavLink className="nav-row" to="/workspaces"><Boxes {...ICON} />Workspace</NavLink>
-          <NavLink className="nav-row" to="/codes"><Ticket {...ICON} />邀请码</NavLink>
+        <div className={`${nav.brand} ${nav.brandCompact}`}><Lockup /></div>
+        <div className={nav.navScroll}>
+          <div className={nav.navHeading}>管理后台</div>
+          <NavLink className={nav.navRow} to="/users"><Users {...ICON} />用户</NavLink>
+          <NavLink className={nav.navRow} to="/workspaces"><Boxes {...ICON} />Workspace</NavLink>
+          <NavLink className={nav.navRow} to="/codes"><Ticket {...ICON} />邀请码</NavLink>
         </div>
-        <div className="nav-foot-row admin-foot">
+        <div className={`${nav.navFootRow} admin-foot`}>
           <span className="admin-account"><Avatar account={account} size={20} /><span className="account-email">{account.email}</span></span>
           <Tip label="退出登录" side="top"><IconButton label="退出登录" icon={LogOut} onClick={() => void signOut(account.sub)} /></Tip>
         </div>
