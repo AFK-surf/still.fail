@@ -116,13 +116,8 @@ class AppState(val core: EmberCore, private val prefs: SharedPreferences, val cl
     var onlyMine by mutableStateOf(prefs.getBoolean("onlyMine", false)); private set
     fun showOnlyMine(on: Boolean) { onlyMine = on; prefs.edit().putBoolean("onlyMine", on).apply() }
 
-    /** Looks for a newer build of the app; one found is said once (updating is in 我). */
-    suspend fun checkUpdates() {
-        val found = updates.check() ?: return
-        if (prefs.getLong("updateSaid", 0) == found.versionCode) return
-        prefs.edit().putLong("updateSaid", found.versionCode).apply()
-        toast = "有新版本 ${found.versionName}，可在「我」里更新"
-    }
+    /** Looks for a newer build of the app: one found shows 更新 in the home page's top bar (and in 我). */
+    suspend fun checkUpdates() { updates.check() }
 
     fun flag(name: String, default: Boolean) = prefs.getBoolean(name, default)
     fun setFlag(name: String, on: Boolean) = prefs.edit().putBoolean(name, on).apply()

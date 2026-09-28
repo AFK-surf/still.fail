@@ -1587,6 +1587,14 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
 [data-sidebar="closed"] .sidebar-buddy { left: 14px; }
 [data-desktop] .sidebar-buddy { top: 8px; }
 [data-desktop][data-sidebar="closed"] .sidebar-buddy { left: 84px; }
+/* 更新 beside the buddy (the desktop app): left of it on the open sidebar's edge, right of it at rest by the window's buttons. */
+.sidebar-update { position: fixed; z-index: 40; top: 18px; left: calc(var(--sidebar-w, 240px) - 36px); transform: translateX(-100%); height: 22px; padding: 0 9px; border: 0; border-radius: 999px; font: inherit; font-size: var(--text-xs); font-weight: 500; white-space: nowrap; background: var(--accent-bg); color: var(--accent-text); cursor: pointer; -webkit-app-region: no-drag; }
+.sidebar-update:hover:not(:disabled) { filter: brightness(.96); }
+.sidebar-update:disabled { cursor: progress; }
+[data-sidebar-moving] .sidebar-update { transition: left 380ms var(--ease-out), transform 380ms var(--ease-out); }
+[data-sidebar="closed"] .sidebar-update { left: 50px; transform: none; }
+[data-desktop] .sidebar-update { top: 11px; }
+[data-desktop][data-sidebar="closed"] .sidebar-update { left: 120px; }
 .brand-wordmark { display: block; }
 .brand-phone { display: none; }
 @media (min-width: 701px) {
@@ -1599,7 +1607,7 @@ a.chooser { text-decoration: none; color: var(--accent-text); }
   [data-desktop][data-sidebar="closed"] .page-bar { padding-left: 124px; }
 }
 @media (max-width: 700px) {
-  .sidebar-buddy, .brand-wordmark { display: none; }
+  .sidebar-buddy, .sidebar-update, .brand-wordmark { display: none; }
   .brand-phone { display: contents; }
 }
 @media (prefers-reduced-motion: reduce) { .sidebar-buddy, .shell { transition: none; } .sidebar-buddy[data-pose="hop"] img { animation: none; } }

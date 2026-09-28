@@ -32,7 +32,7 @@ class Updates(context: Context, private val origin: String) {
     private val context = context.applicationContext
     /** A build newer than this one, once a check found it. */
     var available by mutableStateOf<Release?>(null); private set
-    /** What an update under way is doing ("正在下载 40%"), null when none is. */
+    /** What an update under way is doing ("下载中 40%"), null when none is. */
     var progress by mutableStateOf<String?>(null); private set
     private var checkedAt = 0L
 
@@ -76,7 +76,7 @@ class Updates(context: Context, private val origin: String) {
             return "允许 ember 安装应用后，再点一次更新"
         }
         return try {
-            progress = "正在下载"
+            progress = "下载中"
             val apk = download(release)
             progress = "正在安装"
             withContext(Dispatchers.IO) { commit(apk) }
@@ -112,7 +112,7 @@ class Updates(context: Context, private val origin: String) {
                         val percent = if (release.size > 0) done * 100 / release.size else -1
                         if (percent != shown) {
                             shown = percent
-                            withContext(Dispatchers.Main) { progress = if (percent >= 0) "正在下载 $percent%" else "正在下载" }
+                            withContext(Dispatchers.Main) { progress = if (percent >= 0) "下载中 $percent%" else "下载中" }
                         }
                     }
                 }

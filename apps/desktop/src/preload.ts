@@ -11,6 +11,16 @@ contextBridge.exposeInMainWorld("emberDesktop", {
   inWorkspace: (account: string, workspace: string) => ipcRenderer.send("station:workspace", account, workspace),
   /** ember cloud's origin: its links (https://…/o/…) are the app's own. */
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
+  /** A newer build of the app: what there is of it now, each change after, and downloading and installing it (main.ts). */
+  appUpdate: {
+    state: (): Promise<unknown> => ipcRenderer.invoke("update:state"),
+    watch: (listener: (state: unknown) => void): (() => void) => {
+      const on = (_event: unknown, state: unknown) => listener(state);
+      ipcRenderer.on("update:state", on);
+      return () => ipcRenderer.off("update:state", on);
+    },
+    start: () => ipcRenderer.send("update:start"),
+  },
 });
 
 ipcRenderer.on("core:port", (event, id: number) => window.postMessage({ emberCore: "port", id }, location.origin, event.ports));
