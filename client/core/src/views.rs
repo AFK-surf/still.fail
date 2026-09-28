@@ -728,6 +728,7 @@ impl Views {
             "link": self.link(station),
             "offline": self.offline(station),
             "thread": thread,
+            "archived": thread.get("hiddenAt").is_some_and(|at| !at.is_null()),
         })))
     }
 }
@@ -867,6 +868,7 @@ impl Views {
             "thread": null,
             "title": title,
             "people": [],
+            "archived": agent["session"].get("archivedAt").is_some_and(|at| !at.is_null()),
             "agents": [agent],
             "messages": [],
             "more": false,
@@ -1919,6 +1921,33 @@ mod tests {
     }
 
     #[test]
+    fn an_open_chat_tracks_archive_and_restore_without_losing_messages() {
+        run(async {
+            let t = setup();
+            let mut ui = Ui::default();
+            t.subscribe(1, chat_topic("ws/a", 7));
+            t.read(&mut ui, 1).await;
+            let mut chat = thread(7, &["k"], t.host.now_ms());
+            t.set(page_of("ws/a", 7), page(1, &["kept message"], chat.clone()));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.as_ref().unwrap()["archived"], false);
+            for hidden in [json!(42), Value::Null] {
+                chat["hiddenAt"] = hidden.clone();
+                t.set(threads("ws/a"), json!([chat.clone()]));
+                t.read(&mut ui, 1).await;
+                let v = ui.value.as_ref().unwrap();
+                assert_eq!(v["archived"], !hidden.is_null());
+                assert_eq!(v["messages"][0]["text"], "kept message");
+            }
+            // Compression alone does not mean a shared chat was hidden from its users.
+            chat["archivedAt"] = json!(42);
+            t.set(threads("ws/a"), json!([chat]));
+            t.read(&mut ui, 1).await;
+            assert_eq!(ui.value.as_ref().unwrap()["archived"], false);
+        });
+    }
+
+    #[test]
     fn chat_is_a_thread_its_messages_and_its_agents() {
         run(async {
             let t = setup();
@@ -2077,6 +2106,11 @@ mod tests {
             assert_eq!((v["agents"].as_array().unwrap().len(), a["session"]["key"].as_str(), a["connect"]["name"].as_str(), a["status"].as_str()), (1, Some("k"), Some("Slack"), Some("idle")));
             assert_eq!((a["turns"][0]["id"].as_str(), a["threads"][0]["id"].as_i64()), (Some("t1"), Some(3)));
             assert_eq!(v["me"], json!({"id": "Me@x.com", "email": "Me@x.com"}));
+            for archived in [json!(42), Value::Null] {
+                t.set(session_of("ws/a", "k"), json!({"session": full_session("k", json!({"archivedAt": archived.clone()})), "threads": [], "turns": []}));
+                t.read(&mut ui, 1).await;
+                assert_eq!(ui.value.as_ref().unwrap()["archived"], !archived.is_null());
+            }
             // Deleted: the page says so.
             t.store.set(&session_of("ws/a", "k"), Err(CoreError::new("http_404", "这个会话已经删除了").with_status(404)));
             t.read(&mut ui, 1).await;

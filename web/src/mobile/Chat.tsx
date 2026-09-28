@@ -326,7 +326,7 @@ function Out({ o, here }: { o: Outgoing; here: Here }) {
         // Not sent: said briefly (a tap says why); sending it again or dropping it right beside.
         <div className={css.mUnsent}>
           <button type="button" className={css.mUnsentNote} onClick={() => app.toast(o.error ? `没发出去：${o.error}` : "没发出去")}>未发送</button>
-          <button type="button" className={css.mUnsentBtn} onClick={() => void (thread && sending.retry(thread.id, o.id).catch(() => {}))}>重试</button>
+          <button type="button" className={css.mUnsentBtn} disabled={here.view.offline || !!here.view.archived} onClick={() => void (thread && sending.retry(thread.id, o.id).catch(() => {}))}>重试</button>
           <button type="button" className={css.mUnsentBtn} onClick={() => void (thread && sending.discard(thread.id, o.id))}>删除</button>
         </div>
       ) : <span className={`${chatCss.mMeta} ${chatCss.mWaiting}`}><Spinner size={10} />正在发送</span>}
@@ -490,15 +490,17 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);
   const send = (draft: Draft) => {
+    if (view.offline || view.archived) return;
     // Before the agent has a chat, the message makes one.
     const thread = view.thread?.id;
     void draft.send(async () => thread ?? (await call.request<{ id: number }>("POST", "/threads", { session: here.key })).id, { first: thread === undefined });
   };
   useLayoutEffect(() => use({
-    station: here.station, placeholder: "发消息", offline: view.offline, send,
+    station: here.station, placeholder: view.archived ? "还原对话后才能发送" : "发消息", offline: view.offline, archived: !!view.archived, send,
+    restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {
-      if (!keeper || Date.now() - warmed.current < 60_000) return;
+      if (view.offline || view.archived || !keeper || Date.now() - warmed.current < 60_000) return;
       warmed.current = Date.now();
       api.warm(keeper).catch(() => {});
     },

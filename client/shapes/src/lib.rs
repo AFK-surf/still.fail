@@ -1313,6 +1313,9 @@ pub struct Person {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatView {
+    /// Archived chats must be restored before composing another message.
+    #[serde(default)]
+    pub archived: bool,
     pub me: Me,
     pub thread: Option<ChatThread>,
     pub title: String,

@@ -702,6 +702,8 @@ data class Link (
 /// An item's page: its chat (with the viewer's read position), or its agent before it has one.
 @Serializable
 data class ChatView (
+	/// Archived chats must be restored before composing another message.
+	val archived: Boolean? = null,
 	val me: Me,
 	val thread: ChatThread? = null,
 	val title: String,
