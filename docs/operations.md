@@ -11,6 +11,8 @@ bin/ember start                                 # PATH 里需要 claude 和 code
 
 以上是从源码运行。正式安装走 ember cloud：在 workspace 里拿到安装命令（`curl -fsSL <origin>/install.sh | sh -s -- <token>`，cloud/src/install.ts），它把发布包放到 `~/.ember/app`、把 `ember` 链接进 `~/.local/bin`、加入 workspace，并注册成用户服务（macOS 用 launchd，Linux 用 systemd 用户服务），日志写到 `~/.ember/ember.log`。之后 `ember update` 更新到最新发布；`ember station enroll <origin> <token>` 手动加入 workspace。
 
+更新不打断 agent：服务定义（plist / unit）没变时，`ember update` 把新版本放到原处后给运行中的 station 发 SIGUSR2，station 在自己的进程里 exec 新版本（pid 不变），把正在跑的 claude / codex 进程的管道、两个监听 socket 和每个会话的状态交接过去（mesh/app/src/handoff.rs），轮次、工具调用和 job 都接着跑。交接不了（服务定义变了、新版本读不了这一版的交接、交接失败）就退回重启：先发 SIGUSR1 排空（不再开新轮次，消息排队，等正在跑的轮次结束，最多 10 分钟，`run/drained` 说明排空了），再重启。job 不随 station 停止，重启后的 station 接着跟踪它们。station 在 `run/station.json` 里写着自己的 pid 和支持的这些能力。
+
 数据目录默认 `~/.ember`（`EMBER_DATA` 可改），配置文件是其中的 `config.json`（`EMBER_CONFIG` 可改）。
 
 两个端口，都只监听本机：

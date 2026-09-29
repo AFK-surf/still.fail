@@ -273,13 +273,61 @@ struct Run {
     named: bool,
     /// Ends when the process that started it does (the desktop app).
     with_parent: bool,
+    /// What the previous binary handed over (--handoff <file>), when it exec'd this one.
+    handoff: Option<PathBuf>,
+}
+
+/// What a station hands over to its next binary (ember_app::handoff), written to <data>/run/handoff.json.
+#[derive(Serialize, Deserialize)]
+struct Handoff {
+    version: u32,
+    /// The admin page's listening socket.
+    admin: Option<i32>,
+    app: ember_app::handoff::HandedApp,
+}
+
+/// How long a drain waits for running turns to end, and how long a drained station waits to be stopped before it
+/// takes turns again (whoever asked went away).
+const DRAIN_LIMIT: Duration = Duration::from_secs(600);
+const DRAINED_LIMIT: Duration = Duration::from_secs(300);
+
+/// Says who runs this data directory and what it can do, for `ember update` (cloud/src/install.ts): SIGUSR2 hands over
+/// to the binary now at this one's path (handoff), SIGUSR1 holds turns and says when none runs (drain).
+fn write_station_file(run: &Path, started_at: u64) {
+    let text = json!({ "pid": std::process::id(), "startedAt": started_at, "version": VERSION, "handoff": ember_app::handoff::VERSION, "drain": 1 }).to_string();
+    if let Err(error) = std::fs::write(run.join("station.json"), format!("{text}\n")) {
+        warn!(%error, "station.json not written");
+    }
 }
 
 async fn run(options: Run) -> Result<()> {
-    let data = options.data;
+    let data = options.data.clone();
     std::fs::create_dir_all(data.join("run"))?;
     // One station per data directory: a second would take the first one's port and runtimes away.
     let _lock = lock(&data.join("run").join("station.lock"))?;
+    // Handed over: the file is read once (it names descriptors only this process holds).
+    let mut handoff: Option<Handoff> = match &options.handoff {
+        Some(path) => {
+            let read = std::fs::read(path).map_err(anyhow::Error::from).and_then(|b| Ok(serde_json::from_slice::<Handoff>(&b)?));
+            let _ = std::fs::remove_file(path);
+            match read {
+                Ok(handoff) if handoff.version == ember_app::handoff::VERSION => {
+                    info!(sessions = handoff.app.hub.sessions.len(), "taking over from the previous binary");
+                    Some(handoff)
+                }
+                Ok(handoff) => {
+                    warn!(version = handoff.version, "handoff of another version; starting afresh");
+                    None
+                }
+                Err(error) => {
+                    warn!(%error, "handoff not read; starting afresh");
+                    None
+                }
+            }
+        }
+        None => None,
+    };
+    let _ = std::fs::remove_file(data.join("run").join("drained"));
     let telemetry = Telemetry::new(traces_on(&data));
     let (ready_tx, ready) = watch::channel(false);
     // Held for as long as this runs: a dropped sender reads as "not answering" to whoever waits on `ready`.
@@ -299,8 +347,9 @@ async fn run(options: Run) -> Result<()> {
     }));
     {
         let (cell, data, ready_tx) = (backend.0.clone(), data.clone(), ready_tx.clone());
+        let handed = handoff.as_mut().map(|h| std::mem::take(&mut h.app));
         tokio::spawn(async move {
-            match ember_app::server::App::start(ember_app::server::AppOptions { data, config, ui }).await {
+            match ember_app::server::App::start(ember_app::server::AppOptions { data, config, ui, handoff: handed }).await {
                 Ok(app) => {
                     let _ = cell.set(app);
                     ready_tx.send_replace(true);
@@ -312,17 +361,49 @@ async fn run(options: Run) -> Result<()> {
             }
         });
     }
-    let listener = local::bind(&data, options.port, options.named).await?;
-    tokio::spawn(local::serve(listener, backend.clone(), ready.clone()));
+    let handed_admin = handoff.as_ref().and_then(|h| h.admin).and_then(|fd| {
+        ember_app::handoff::claim_listener(fd).map_err(|error| warn!(%error, "the admin page's socket handed over could not be taken up")).ok()
+    });
+    let listener = match handed_admin {
+        Some(listener) => listener,
+        None => local::bind(&data, options.port, options.named).await?,
+    };
+    let door = local::serve(listener, backend.clone(), ready.clone());
     tokio::spawn(mesh(data.clone(), backend.clone(), ready, telemetry));
+    write_station_file(&data.join("run"), now() * 1000 + (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_millis() as u64));
     // SIGTERM (launchd, the desktop app) or ^C: the runtimes end first. So does, with --with-parent, the parent's end
     // (the desktop app's, killed): orphaned, this would hold the machine's station with no app to stop it. Run
-    // otherwise (launchd, nohup), the parent may well end first.
+    // otherwise (launchd, nohup), the parent may well end first. SIGUSR2 hands over to the next binary; SIGUSR1 drains.
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-    tokio::select! {
-        _ = term.recv() => {}
-        _ = tokio::signal::ctrl_c() => {}
-        _ = orphaned(), if options.with_parent => info!("parent ended"),
+    let mut usr1 = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::user_defined1())?;
+    let mut usr2 = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::user_defined2())?;
+    let draining = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    loop {
+        tokio::select! {
+            _ = term.recv() => break,
+            _ = tokio::signal::ctrl_c() => break,
+            _ = orphaned(), if options.with_parent => {
+                info!("parent ended");
+                break;
+            }
+            _ = usr1.recv() => {
+                if let Some(app) = backend.0.get().cloned() {
+                    if !draining.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                        tokio::spawn(drain(app, data.join("run"), draining.clone()));
+                    }
+                }
+            }
+            _ = usr2.recv() => {
+                let Some(app) = backend.0.get().cloned() else {
+                    warn!("asked to hand over before the station is up; not now");
+                    continue;
+                };
+                if let Err(error) = hand_over(&options, &door, &app, &ready_tx).await {
+                    warn!(error = %format!("{error:#}"), "not handed over; going on as before");
+                    let _ = std::fs::write(data.join("run").join("handoff-failed"), format!("{error:#}\n"));
+                }
+            }
+        }
     }
     info!("stopping");
     ready_tx.send_replace(false);
@@ -333,6 +414,66 @@ async fn run(options: Run) -> Result<()> {
         reports.shutdown().await;
     }
     Ok(())
+}
+
+/// Holds turns until none runs (or DRAIN_LIMIT passes), then says so in <data>/run/drained, for whoever restarts the
+/// station to stop it now. Nobody does within DRAINED_LIMIT: turns go on again.
+async fn drain(app: Arc<ember_app::server::App>, run: PathBuf, draining: Arc<std::sync::atomic::AtomicBool>) {
+    info!("draining: no new turns; waiting for running ones to end");
+    app.hold();
+    let until = Instant::now() + DRAIN_LIMIT;
+    while app.any_running() && Instant::now() < until {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    let said = if app.any_running() { "timeout" } else { "idle" };
+    info!(said, "drained");
+    let _ = std::fs::write(run.join("drained"), format!("{said}\n"));
+    tokio::time::sleep(DRAINED_LIMIT).await;
+    warn!("drained but not stopped; taking turns again");
+    let _ = std::fs::remove_file(run.join("drained"));
+    app.release();
+    draining.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Hands over to the binary now at this one's path (`ember update` put the new release there): asks it whether it
+/// reads this binary's handoff, stops taking anything new, gives up what runs (ember_app::handoff) and execs it in this
+/// process. Fails, and goes on as before, as long as nothing was given up; once the runtimes were, it cannot fail back:
+/// a failed exec exits, and the next start resumes what was cut off the usual way.
+async fn hand_over(options: &Run, door: &ember_app::handoff::Door, app: &ember_app::server::App, ready_tx: &watch::Sender<bool>) -> Result<()> {
+    use std::os::unix::process::CommandExt;
+    let exe = std::env::current_dir()?.join(std::env::args_os().next().ok_or_else(|| anyhow!("no argv[0]"))?);
+    let answer = tokio::process::Command::new(&exe).arg("handoff-version").output().await.with_context(|| format!("{} did not run", exe.display()))?;
+    let theirs = String::from_utf8_lossy(&answer.stdout).trim().parse::<u32>().ok();
+    if !answer.status.success() || theirs != Some(ember_app::handoff::VERSION) {
+        bail!("{} does not take this binary's handoff (it reads {:?}, this writes {})", exe.display(), theirs, ember_app::handoff::VERSION);
+    }
+    info!(to = %exe.display(), "handing over to the next binary");
+    // The page's requests under way finish; new ones wait in the backlog for the next binary.
+    door.pause(Duration::from_secs(10)).await?;
+    let handed = match app.hand_off().await {
+        Ok(handed) => handed,
+        Err(error) => {
+            door.resume();
+            return Err(error);
+        }
+    };
+    ready_tx.send_replace(false);
+    let admin = door.keep().map_err(|error| warn!(%error, "the admin page's socket is not handed over")).ok();
+    let path = options.data.join("run").join("handoff.json");
+    let written = serde_json::to_vec(&Handoff { version: ember_app::handoff::VERSION, admin, app: handed }).map_err(anyhow::Error::from).and_then(|bytes| write_private(&path, &bytes));
+    if let Err(error) = written {
+        tracing::error!(%error, "handoff not written; exiting (the next start resumes what was cut off)");
+        std::process::exit(1);
+    }
+    // The same arguments, less an earlier --handoff.
+    let mut args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    if let Some(i) = args.iter().position(|a| a == "--handoff") {
+        args.drain(i..(i + 2).min(args.len()));
+    }
+    args.extend(["--handoff".into(), path.into_os_string()]);
+    let error = std::process::Command::new(&exe).args(&args).exec();
+    tracing::error!(%error, "exec of the next binary failed; exiting (the next start resumes what was cut off)");
+    std::process::exit(1);
 }
 
 /// Resolves once this process's parent has ended (it is then another's child).
@@ -870,6 +1011,7 @@ async fn main() -> Result<()> {
     // What the Node part ran on, from launchers written before it went (older desktop apps): taken and let be.
     let _ = take("--node");
     let port = take("--port");
+    let handoff = take("--handoff").map(PathBuf::from);
     let with_parent = args.iter().position(|a| a == "--with-parent").map(|i| args.remove(i)).is_some();
     match args.first().map(String::as_str) {
         Some("enroll") if args.len() == 3 => enroll(&data, args[1].trim_end_matches('/'), &args[2]).await,
@@ -877,12 +1019,17 @@ async fn main() -> Result<()> {
             let Some(app) = app else { usage() };
             let named = port.is_some();
             let port = port.map(|p| p.parse::<u16>()).transpose().context("--port")?.unwrap_or(4760);
-            let ran = run(Run { data, app: PathBuf::from(app), port, named, with_parent }).await;
+            let ran = run(Run { data, app: PathBuf::from(app), port, named, with_parent, handoff }).await;
             if let Some(held) = ran.as_ref().err().and_then(|e| e.downcast_ref::<Held>()) {
                 eprintln!("{held}");
                 std::process::exit(HELD);
             }
             ran
+        }
+        // Which handoff this binary reads: asked by the running station before it execs this one.
+        Some("handoff-version") => {
+            println!("{}", ember_app::handoff::VERSION);
+            Ok(())
         }
         Some("id") => {
             println!("{}", hex::encode(load_key(&data)?.public().as_bytes()));

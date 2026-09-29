@@ -5,7 +5,11 @@
 // again if it stops. Claude Code and Codex are the machine's own: it says how to get them when they are missing.
 // On Linux the service is a systemd user service (lingering, so it runs with no one logged in); with no user systemd
 // (a container, another init) the station is started in the background, and said not to come back after a reboot.
-// Without a token, on a station already in a workspace, it updates the station (`ember update` runs it so).
+// Without a token, on a station already in a workspace, it updates the station (`ember update` runs it so). An update
+// does not stop the agents when it can help it: with the service's definition unchanged, the running station hands
+// over to the new release in its own process (SIGUSR2, mesh/station/src/main.rs), turns, runtimes and jobs going on;
+// else, or if that fails, the station is first drained (SIGUSR1: no new turns, and it says once none runs), then
+// restarted. A station older than these says neither (no run/station.json): it is restarted as before.
 
 /** The installer for an ember cloud at `origin`. */
 export function installScript(origin: string): string {
@@ -69,34 +73,12 @@ echo "下载 ember station…"
 curl -fL --progress-bar "$origin/releases/ember-station-$platform.tar.gz" -o "$tmp/ember.tar.gz"
 tar -xzf "$tmp/ember.tar.gz" -C "$tmp"
 
-# One running at a time: the old one stops before the new one takes its place.
-if [ "$os" = Darwin ]; then
-  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
-  # bootout returns before the service is gone; bootstrapping it again before then fails.
-  for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1 || break; sleep 1; done
-else
-  user_systemd && systemctl --user stop "$unit" 2>/dev/null || true
-  [ -f "$data/ember.pid" ] && kill "$(cat "$data/ember.pid")" 2>/dev/null || true
-  rm -f "$data/ember.pid"
-fi
-mkdir -p "$data"
-rm -rf "$app.old"
-[ -d "$app" ] && mv "$app" "$app.old"
-mv "$tmp/ember" "$app"
-rm -rf "$app.old"
-mkdir -p "$HOME/.local/bin"
-ln -sf "$app/bin/ember" "$HOME/.local/bin/ember"
-
-if [ -n "$token" ]; then
-  echo "加入 workspace…"
-  "$app/bin/ember" station enroll "$origin" "$token"
-fi
-
 # The agents it starts are found on this PATH (Claude Code, Codex, and what they run).
 agent_path="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin"
+# The service's definition, as this release has it: written below, and compared with the one running now.
 if [ "$os" = Darwin ]; then
-  mkdir -p "$(dirname "$plist")"
-  cat > "$plist" <<PLIST
+  service_file="$plist"
+  cat > "$tmp/service" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -111,16 +93,10 @@ if [ "$os" = Darwin ]; then
 </dict>
 </plist>
 PLIST
-  started=""
-  for _ in 1 2 3 4 5; do
-    launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null && { started=yes; break; }
-    sleep 2
-  done
-  [ -n "$started" ] || { echo "launchd 没能启动 ember station（launchctl bootstrap gui/$(id -u) \${plist}）" >&2; exit 1; }
-else
-  if user_systemd; then
-    mkdir -p "$unit_dir"
-    cat > "$unit_dir/$unit" <<UNIT
+elif user_systemd; then
+  service_file="$unit_dir/$unit"
+  # KillMode=process: stopping the service stops the station, not the jobs it runs (the next one takes them up).
+  cat > "$tmp/service" <<UNIT
 [Unit]
 Description=ember station
 After=network-online.target
@@ -131,12 +107,115 @@ Environment=PATH=$agent_path
 Environment=EMBER_DATA=$data
 Restart=always
 RestartSec=5
+KillMode=process
 StandardOutput=append:$data/ember.log
 StandardError=append:$data/ember.log
 
 [Install]
 WantedBy=default.target
 UNIT
+else
+  service_file=""
+fi
+
+# What the running station says of itself (run/station.json): its pid, when it started, what it can do.
+station_json="$data/run/station.json"
+said() { sed -n "s/.*\\"$1\\": *\\([0-9]*\\).*/\\1/p" "$station_json" 2>/dev/null | head -1; }
+pid=""
+if [ -z "$token" ] && [ -f "$station_json" ]; then
+  pid=$(said pid)
+  # Still that station (a pid is reused once its process is gone): signals go to nothing else.
+  case "$(ps -p "\${pid:-0}" -o command= 2>/dev/null)" in
+    *ember-station*) ;;
+    *) pid="" ;;
+  esac
+fi
+swapped=""
+swap_app() {
+  mkdir -p "$data"
+  rm -rf "$app.old"
+  [ -d "$app" ] && mv "$app" "$app.old"
+  mv "$tmp/ember" "$app"
+  swapped=yes
+}
+
+# Handed over without stopping: the new release goes where the old one was, and the running station execs it.
+handed=""
+if [ -n "$pid" ] && [ -n "$(said handoff)" ] && { [ -z "$service_file" ] || cmp -s "$tmp/service" "$service_file"; }; then
+  started=$(said startedAt)
+  swap_app
+  rm -f "$data/run/handoff-failed"
+  echo "把运行中的 station 交接给新版本（agent 不中断）…"
+  kill -USR2 "$pid"
+  for _ in $(seq 1 120); do
+    sleep 1
+    if [ "$(said startedAt)" != "$started" ]; then
+      [ "$(said pid)" = "$pid" ] && handed=yes
+      break
+    fi
+    [ -f "$data/run/handoff-failed" ] && break
+  done
+  if [ -n "$handed" ]; then
+    rm -rf "$app.old"
+  elif [ -f "$data/run/handoff-failed" ]; then
+    echo "没能交接（$(cat "$data/run/handoff-failed")），改为重启 station。" >&2
+  elif [ "$(said startedAt)" != "$started" ]; then
+    # It went down mid-way and its service started the new release: done, the usual way.
+    handed=restarted
+    rm -rf "$app.old"
+  else
+    echo "station 没有回应交接，改为重启。" >&2
+  fi
+fi
+
+if [ -z "$handed" ] && [ -n "$pid" ] && [ -n "$(said drain)" ] && [ -z "\${EMBER_NO_DRAIN:-}" ]; then
+  # Restarted: once no turn runs, so none is cut off (at most 10 minutes; it takes no new ones meanwhile).
+  rm -f "$data/run/drained"
+  kill -USR1 "$pid"
+  echo "等 agent 正在跑的这一轮结束再重启（最多 10 分钟；新消息会排队，重启后处理）…"
+  for _ in $(seq 1 630); do
+    { [ -f "$data/run/drained" ] || ! kill -0 "$pid" 2>/dev/null; } && break
+    sleep 1
+  done
+fi
+
+if [ -z "$handed" ]; then
+# One running at a time: the old one stops before the new one takes its place.
+if [ "$os" = Darwin ]; then
+  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+  # bootout returns before the service is gone; bootstrapping it again before then fails.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1 || break; sleep 1; done
+else
+  user_systemd && systemctl --user stop "$unit" 2>/dev/null || true
+  [ -f "$data/ember.pid" ] && kill "$(cat "$data/ember.pid")" 2>/dev/null || true
+  rm -f "$data/ember.pid"
+fi
+[ -n "$swapped" ] || swap_app
+rm -rf "$app.old"
+fi
+mkdir -p "$HOME/.local/bin"
+ln -sf "$app/bin/ember" "$HOME/.local/bin/ember"
+
+if [ -n "$token" ]; then
+  echo "加入 workspace…"
+  "$app/bin/ember" station enroll "$origin" "$token"
+fi
+
+if [ -n "$handed" ]; then
+  :
+elif [ "$os" = Darwin ]; then
+  mkdir -p "$(dirname "$plist")"
+  cp "$tmp/service" "$plist"
+  started=""
+  for _ in 1 2 3 4 5; do
+    launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null && { started=yes; break; }
+    sleep 2
+  done
+  [ -n "$started" ] || { echo "launchd 没能启动 ember station（launchctl bootstrap gui/$(id -u) \${plist}）" >&2; exit 1; }
+else
+  if user_systemd; then
+    mkdir -p "$unit_dir"
+    cp "$tmp/service" "$unit_dir/$unit"
     systemctl --user daemon-reload
     systemctl --user enable "$unit" >/dev/null 2>&1
     systemctl --user restart "$unit"
@@ -150,7 +229,11 @@ UNIT
 fi
 
 echo
-echo "ember station 已安装并在后台运行，几秒后会出现在 workspace 里。"
+if [ "$handed" = yes ]; then
+  echo "ember station 已更新，正在跑的 agent 没有中断。"
+else
+  echo "ember station 已安装并在后台运行，几秒后会出现在 workspace 里。"
+fi
 echo "  程序：\${app}（命令 ember 在 ~/.local/bin）"
 echo "  数据和日志：$data"
 [ "$os" = Linux ] && [ -z "\${no_service:-}" ] && echo "  服务：systemctl --user status $unit"

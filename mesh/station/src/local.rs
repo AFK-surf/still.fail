@@ -2,13 +2,13 @@
 //! port is the usual 4760 unless something else holds it (then any free one), or the one asked for with --port (then
 //! taken is an error); it is written to <data>/run/ports.json.
 
-use std::{convert::Infallible, net::SocketAddr, path::Path, sync::{Arc, OnceLock}};
+use std::{convert::Infallible, path::Path, sync::{Arc, OnceLock, Weak}};
 
 use anyhow::{Result, bail};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full, combinators::UnsyncBoxBody};
 use hyper::{Request, Response, StatusCode, body::Incoming, service::service_fn};
-use hyper_util::rt::TokioIo;
+use ember_app::handoff::{Door, serve_http1};
 use tokio::{net::TcpListener, sync::watch};
 use tracing::{info, warn};
 
@@ -57,27 +57,29 @@ pub async fn bind(data: &Path, port: u16, named: bool) -> Result<TcpListener> {
 }
 
 /// Serves the admin page here: each request passed on as it is (a browser on this machine is its local viewer), or
-/// 503 while the station is not up.
-pub async fn serve(listener: TcpListener, backend: Backend, ready: watch::Receiver<bool>) {
+/// 503 while the station is not up. The door can pause, to hand the socket over to the next binary.
+pub fn serve(listener: TcpListener, backend: Backend, ready: watch::Receiver<bool>) -> Arc<Door> {
     let backend = Arc::new(backend);
-    loop {
-        let (stream, _): (_, SocketAddr) = match listener.accept().await {
-            Ok(accepted) => accepted,
-            Err(error) => {
-                warn!(%error, "admin page accept failed");
-                continue;
-            }
-        };
-        let (backend, ready) = (backend.clone(), ready.clone());
+    let cell: Arc<OnceLock<Weak<Door>>> = Arc::default();
+    let door_of = cell.clone();
+    let door = Door::open(listener, move |stream, closing| {
+        let (backend, ready, door) = (backend.clone(), ready.clone(), door_of.clone());
         tokio::spawn(async move {
             let service = service_fn(move |req: Request<Incoming>| {
                 let (backend, ready) = (backend.clone(), ready.clone());
                 let up = *ready.borrow();
-                async move { Ok::<_, Infallible>(pass(&backend, up, req).await) }
+                let busy = door.get().and_then(Weak::upgrade).map(|d| d.busy());
+                async move {
+                    let answer = pass(&backend, up, req).await;
+                    drop(busy);
+                    Ok::<_, Infallible>(answer)
+                }
             });
-            let _ = hyper::server::conn::http1::Builder::new().serve_connection(TokioIo::new(stream), service).await;
+            serve_http1(stream, service, closing).await;
         });
-    }
+    });
+    let _ = cell.set(Arc::downgrade(&door));
+    door
 }
 
 async fn pass(backend: &Backend, ready: bool, mut req: Request<Incoming>) -> Response<Body> {

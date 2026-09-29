@@ -17,7 +17,6 @@ use ember_shapes::RuntimeKind;
 use futures_util::future::BoxFuture;
 use http_body_util::BodyExt;
 use hyper::{Request, Response};
-use hyper_util::rt::TokioIo;
 use serde_json::{Value, json};
 use tokio::sync::watch;
 use tracing::{error, info, warn};
@@ -31,6 +30,7 @@ use crate::chat::slack::SlackSurface;
 use crate::chat::{ChatEvent, ChatSurface};
 use crate::config::{Config, Profile};
 use crate::connections::{Connection, Connections};
+use crate::handoff::{Door, HandedApp};
 use crate::hub::{Hub, HubOptions};
 use crate::login::{LoginCommands, LoginManager};
 use crate::machine_logins::{MachineLogins, process_env};
@@ -47,6 +47,8 @@ pub struct AppOptions {
     pub config: PathBuf,
     /// The built page (dist/admin).
     pub ui: PathBuf,
+    /// What the previous binary handed over (handoff.rs), when it exec'd this one.
+    pub handoff: Option<HandedApp>,
 }
 
 /// This station's place in ember cloud, as <data>/mesh/cloud.json says (written by `ember station enroll`, kept up to
@@ -120,6 +122,8 @@ pub struct App {
     ui: PathBuf,
     up: AtomicBool,
     pub mesh: Arc<MeshFile>,
+    /// The agents' MCP endpoint.
+    mcp: Arc<Door>,
 }
 
 impl App {
@@ -130,13 +134,29 @@ impl App {
         let config = settings.config();
         let store = Arc::new(Store::open(&options.data.join("ember.db").to_string_lossy(), None)?);
         link_homes(&config);
-        let reaped = crate::runtime::process::reap_stale_groups(&store).await?;
+        let mut handoff = options.handoff;
+        let kept = handoff.as_ref().map(|h| h.pgids().into_iter().collect()).unwrap_or_default();
+        let reaped = crate::runtime::process::reap_stale_groups(&store, &kept).await?;
         if reaped > 0 {
             warn!(count = reaped, "reaped runtime processes left by a previous run");
         }
-        let listener = crate::ports::listen(&config.http.host, config.http.port, config.http.named, "agent 的 MCP 端点").await?;
+        let handed_listener = match handoff.as_mut().and_then(|h| h.mcp.take()) {
+            Some(fd) => match crate::handoff::claim_listener(fd) {
+                Ok(listener) => Some(listener),
+                Err(e) => {
+                    warn!(error = %e, "the MCP endpoint's socket handed over could not be taken up; listening anew");
+                    None
+                }
+            },
+            None => None,
+        };
+        let handed = handed_listener.is_some();
+        let listener = match handed_listener {
+            Some(listener) => listener,
+            None => crate::ports::listen(&config.http.host, config.http.port, config.http.named, "agent 的 MCP 端点").await?,
+        };
         let port = listener.local_addr()?.port();
-        if port != config.http.port {
+        if port != config.http.port && !handed {
             warn!(port, "the MCP endpoint's usual port is taken; listening on a free one");
         }
         let mcp_url = format!("http://{}:{port}/mcp", config.http.host);
@@ -189,6 +209,10 @@ impl App {
             })),
         });
         let _ = hub_cell.set(hub.clone());
+        // What the previous binary handed over runs on from where it was.
+        if let Some(handoff) = handoff.take() {
+            hub.adopt(handoff.hub).await;
+        }
         // Background jobs and web services (jobs.rs): their agents told through the hub; a service's link is ember
         // cloud's /o/ link of its session, with its port.
         let (told, linked) = (Arc::downgrade(&hub), mesh.clone());
@@ -261,7 +285,20 @@ impl App {
         });
         let access = settings.clone();
         let gate = AccessGate::new(move || access.config().admin_access.clone(), None, || None);
-        let app = Arc::new(App { settings: settings.clone(), connections: connections.clone(), hub: hub.clone(), jobs: jobs.clone(), logins, admin, gate, ui: options.ui, up: AtomicBool::new(false), mesh });
+        let mcp_door = serve_mcp(listener, mcp, jobs.clone());
+        let app = Arc::new(App {
+            settings: settings.clone(),
+            connections: connections.clone(),
+            hub: hub.clone(),
+            jobs: jobs.clone(),
+            logins,
+            admin,
+            gate,
+            ui: options.ui,
+            up: AtomicBool::new(false),
+            mesh,
+            mcp: mcp_door,
+        });
 
         // Edits apply as they are saved: homes linked, connects (re)connected.
         let mut edits = settings.subscribe();
@@ -273,7 +310,6 @@ impl App {
                 reconnect.reconcile(&config).await;
             }
         });
-        tokio::spawn(serve_mcp(listener, mcp, jobs.clone()));
         info!(port, "ember listening");
         connections.reconcile(&config).await;
         if connections.ids().is_empty() {
@@ -359,6 +395,42 @@ impl App {
         plain(503, "admin client not built: run `pnpm build`")
     }
 
+    /// Holds turns: none starts, messages stay pending (Hub::hold). For a restart: once none runs, nothing is cut off.
+    pub fn hold(&self) {
+        self.hub.hold();
+    }
+
+    /// Lets turns start again.
+    pub fn release(&self) {
+        self.hub.release();
+    }
+
+    /// Whether any turn is running.
+    pub fn any_running(&self) -> bool {
+        self.hub.any_running()
+    }
+
+    /// Gives up what runs to the station's next binary (handoff.rs), and stops. Until the runtimes' readers stop it
+    /// can still fail and go on as it was; after, it cannot: the caller must exec the next binary (or exit, and the
+    /// next start resumes what was cut off the usual way).
+    pub async fn hand_off(&self) -> Result<HandedApp> {
+        // Tool calls under way finish (they may still change a session's state); new ones wait for the next binary.
+        self.mcp.pause(Duration::from_secs(30)).await?;
+        let hub = match self.hub.hand_off().await {
+            Ok(hub) => hub,
+            Err(e) => {
+                self.mcp.resume();
+                return Err(e);
+            }
+        };
+        self.up.store(false, Ordering::SeqCst);
+        let mcp = self.mcp.keep().map_err(|e| warn!(error = %e, "the MCP endpoint's socket is not handed over")).ok();
+        self.logins.stop_all();
+        self.connections.stop_all().await;
+        self.jobs.shutdown().await;
+        Ok(HandedApp { mcp, hub })
+    }
+
     /// Stops: sign-ins end, connects disconnect, runtimes end (a running turn stays marked running, for the next start
     /// to resume).
     pub async fn shutdown(&self) {
@@ -416,24 +488,26 @@ fn encode(s: &str) -> String {
 
 /// The agents' MCP endpoint, and what their jobs say (`ember-job notify`): loopback only, /mcp, /jobs/notify and
 /// /health.
-async fn serve_mcp(listener: tokio::net::TcpListener, mcp: Arc<McpEndpoint>, jobs: Arc<crate::jobs::Jobs>) {
-    loop {
-        let (stream, _) = match listener.accept().await {
-            Ok(accepted) => accepted,
-            Err(e) => {
-                warn!(error = %e, "mcp accept failed");
-                continue;
-            }
-        };
-        let (mcp, jobs) = (mcp.clone(), jobs.clone());
+fn serve_mcp(listener: tokio::net::TcpListener, mcp: Arc<McpEndpoint>, jobs: Arc<crate::jobs::Jobs>) -> Arc<Door> {
+    let cell: Arc<OnceLock<std::sync::Weak<Door>>> = Arc::default();
+    let door_of = cell.clone();
+    let door = Door::open(listener, move |stream, closing| {
+        let (mcp, jobs, door) = (mcp.clone(), jobs.clone(), door_of.clone());
         tokio::spawn(async move {
             let service = hyper::service::service_fn(move |req: Request<hyper::body::Incoming>| {
                 let (mcp, jobs) = (mcp.clone(), jobs.clone());
-                async move { Ok::<_, Infallible>(answer_mcp(&mcp, &jobs, req).await) }
+                let busy = door.get().and_then(std::sync::Weak::upgrade).map(|d| d.busy());
+                async move {
+                    let answer = answer_mcp(&mcp, &jobs, req).await;
+                    drop(busy);
+                    Ok::<_, Infallible>(answer)
+                }
             });
-            let _ = hyper::server::conn::http1::Builder::new().serve_connection(TokioIo::new(stream), service).await;
+            crate::handoff::serve_http1(stream, service, closing).await;
         });
-    }
+    });
+    let _ = cell.set(Arc::downgrade(&door));
+    door
 }
 
 async fn answer_mcp(mcp: &McpEndpoint, jobs: &crate::jobs::Jobs, req: Request<hyper::body::Incoming>) -> Response<Body> {

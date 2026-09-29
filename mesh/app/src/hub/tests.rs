@@ -152,6 +152,9 @@ impl AgentSession for FakeSession {
     async fn dispose(&self) {
         self.disposed.store(true, Ordering::SeqCst);
     }
+    async fn hand_off(&self) -> Result<Value> {
+        Ok(json!({ "id": self.id, "busy": self.busy() }))
+    }
 }
 
 struct FakeDriver {
@@ -205,6 +208,36 @@ impl AgentDriver for FakeDriver {
         Ok(session)
     }
     async fn shutdown(&self) {}
+    async fn adopt_session(&self, handed: &Value, events: Events) -> Result<Arc<dyn AgentSession>> {
+        let options = OpenOptions {
+            profile: {
+                let raw: RawConfig = serde_json::from_value(json!({ "profiles": [{ "id": "cc", "runtime": "claude", "home": "homes/cc" }] })).unwrap();
+                parse_config(&raw, Path::new("/tmp")).unwrap().profiles[0].clone()
+            },
+            cwd: PathBuf::new(),
+            resume: None,
+            model: None,
+            effort: None,
+            instructions: String::new(),
+            mcp_token: String::new(),
+            mcp_url: String::new(),
+            route: String::new(),
+        };
+        let session = Arc::new(FakeSession {
+            id: handed["id"].as_str().unwrap_or_default().to_string(),
+            options,
+            events,
+            prompts: Mutex::default(),
+            steers: Mutex::default(),
+            backgrounds: AtomicUsize::new(0),
+            aborts: AtomicUsize::new(0),
+            disposed: AtomicBool::new(false),
+            busy: AtomicBool::new(handed["busy"] == json!(true)),
+            unsteerable: AtomicBool::new(false),
+        });
+        self.sessions.lock().unwrap().push(session.clone());
+        Ok(session)
+    }
 }
 
 fn message() -> InboundMessage {
@@ -697,6 +730,69 @@ async fn after_a_restart_a_cut_off_turn_is_resumed() {
     settle().await;
     assert_eq!(claude.last().options.resume, Some(runtime_id));
     assert!(claude.last().prompts()[0].contains("restarted while you were in the middle of a turn"));
+}
+
+#[tokio::test]
+async fn handed_over_to_the_next_binary_a_running_turn_goes_on_and_what_came_meanwhile_reaches_it() {
+    let first = setup();
+    let m = message();
+    first.accept(&m).await;
+    settle().await;
+    let key = session_key("cl", "C1", &m.thread_ts);
+    let old = first.claude.last();
+    let handed = first.hub.hand_off().await.unwrap();
+    assert_eq!(handed.sessions.len(), 1);
+    assert!(handed.sessions[0].turn.is_some(), "its turn goes along");
+    // Said while handing over: it waits, pending, and the old binary does nothing more with it.
+    first.accept(&reply(&m, "9999.7", "one more thing")).await;
+    settle().await;
+    assert!(old.steers().is_empty() && old.prompts().len() == 1);
+    // The next binary: same store, new hub and drivers, what was handed over read back from its file.
+    let claude = FakeDriver::new(RuntimeKind::Claude);
+    let chat = first.chat.clone();
+    let read = first.config.clone();
+    let hub = Hub::new(HubOptions {
+        config: Arc::new(move || read.lock().unwrap().clone()),
+        store: first.store.clone(),
+        chats: Arc::new(move |id| (id == "cl").then(|| chat.clone() as Arc<dyn ChatSurface>)),
+        drivers: vec![claude.clone(), FakeDriver::new(RuntimeKind::Codex)],
+        mcp_url: "x".into(),
+        internal: None,
+        link: None,
+    });
+    hub.adopt(serde_json::from_str(&serde_json::to_string(&handed).unwrap()).unwrap()).await;
+    hub.recover().unwrap();
+    settle().await;
+    let taken = claude.last();
+    assert_eq!(taken.id, old.id);
+    assert!(taken.prompts().is_empty(), "not resumed: its turn runs on");
+    assert!(taken.steers().first().is_some_and(|s| s.contains("one more thing")), "{:?}", taken.steers());
+    assert!(first.store.get_session(&key).unwrap().unwrap().running);
+    // Its end is the next binary's: it ended without a state, so it nudges.
+    taken.complete();
+    settle().await;
+    assert_eq!(taken.prompts().len(), 1, "{:?}", taken.prompts());
+    assert!(taken.prompts()[0].contains(crate::instructions::NUDGE));
+}
+
+#[tokio::test]
+async fn held_turns_start_once_released_with_what_waited_meanwhile() {
+    let r = setup_with(Setup { max_nudges: Some(0), ..Setup::default() });
+    let m = message();
+    r.accept(&m).await;
+    settle().await;
+    let session = r.claude.last();
+    session.complete();
+    settle().await;
+    r.hub.hold();
+    r.accept(&reply(&m, "9999.8", "next")).await;
+    settle().await;
+    assert_eq!(session.prompts().len(), 1, "held: nothing starts");
+    assert!(!r.hub.any_running());
+    r.hub.release();
+    settle().await;
+    assert_eq!(session.prompts().len(), 2);
+    assert!(session.prompts()[1].contains("next"));
 }
 
 #[tokio::test]

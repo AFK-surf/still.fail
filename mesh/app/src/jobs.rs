@@ -1,8 +1,8 @@
 //! Background jobs: commands a session's agent starts that the station runs and keeps, apart from the agent's turns.
 //! Each runs in a process group of its own with its output in a log file; the agent hears when it ends, and whatever
 //! the job says on the way (`ember-job notify …`). A job with a port is a web service: kept up (started again when it
-//! ends, with a growing pause), and seen by the workspace's members through the station's /preview. A restart of the
-//! station starts again what was running.
+//! ends, with a growing pause), and seen by the workspace's members through the station's /preview. Jobs outlive the
+//! station: a restart takes up what still runs, and starts again what does not (the machine restarted).
 
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom};
@@ -17,7 +17,7 @@ use tokio::process::Command;
 use tracing::{info, warn};
 
 use crate::mcp::{Run, Tool};
-use crate::runtime::process::{group_alive, signal_group};
+use crate::runtime::process::{end_group, group_alive, signal_group, still_ours, watch_exit};
 use crate::store::{JobRow, Store, now_ms};
 
 /// At most this many jobs of one session run at once.
@@ -30,6 +30,10 @@ const NOTICES_SHOWN: usize = 20;
 /// A service that ran this long before it ended starts again at once; one that keeps ending waits longer each time.
 const STEADY: Duration = Duration::from_secs(60);
 const MAX_PAUSE: Duration = Duration::from_secs(60);
+
+/// How a job's command runs: under a shell that writes its exit code to a file when it ends, so a station that did not
+/// start it (it outlived the one that did) still learns how it ended.
+const WRAPPER: &str = r#"/bin/sh -c "$1"; code=$?; printf '%s' "$code" > "$2"; exit "$code""#;
 
 /// What `ember-job` is, in each job's PATH: `ember-job notify <words>` (or the words on stdin) tells the agent.
 const EMBER_JOB: &str = r#"#!/bin/sh
@@ -64,7 +68,7 @@ pub struct Jobs {
     /// Where `ember-job notify` posts (the MCP endpoint's /jobs/notify).
     notify_url: Mutex<String>,
     running: Mutex<HashMap<String, Running>>,
-    /// Shutting down: jobs end with the station and stay recorded as running, to start again with it.
+    /// Shutting down: jobs go on without the station and stay recorded as running, to be taken up by the next one.
     closing: AtomicBool,
     me: Weak<Jobs>,
 }
@@ -109,6 +113,7 @@ impl Jobs {
         let dir = data.join("jobs");
         std::fs::create_dir_all(dir.join("logs"))?;
         std::fs::create_dir_all(dir.join("bin"))?;
+        std::fs::create_dir_all(dir.join("exit"))?;
         let script = dir.join("bin").join("ember-job");
         std::fs::write(&script, EMBER_JOB)?;
         #[cfg(unix)]
@@ -193,14 +198,24 @@ impl Jobs {
         Ok(self.store.get_job(&job.id)?.unwrap_or(job))
     }
 
+    /// Where a job's exit code is written when it ends.
+    fn exit_file(&self, id: &str) -> PathBuf {
+        self.dir.join("exit").join(id)
+    }
+
     /// Runs a job's command, and follows it to its end.
     fn spawn(&self, job: &JobRow, restarted: bool) -> Result<()> {
         let log = std::fs::OpenOptions::new().create(true).append(true).open(&job.log)?;
         let path = format!("{}:{}", self.dir.join("bin").display(), std::env::var("PATH").unwrap_or_default());
+        let exit = self.exit_file(&job.id);
+        let _ = std::fs::remove_file(&exit);
         let mut command = Command::new("/bin/sh");
         command
             .arg("-c")
+            .arg(WRAPPER)
+            .arg("ember-job")
             .arg(&job.command)
+            .arg(&exit)
             .current_dir(&job.cwd)
             .env("PATH", path)
             .env("EMBER_JOB_ID", &job.id)
@@ -224,20 +239,41 @@ impl Jobs {
         tokio::spawn(async move {
             let status = child.wait().await;
             let Some(jobs) = me.upgrade() else { return };
-            jobs.ended(&id, pgid, status.ok().and_then(|s| s.code()), stopping.load(Ordering::SeqCst), began.elapsed()).await;
+            jobs.ended(&id, Some(pgid), status.ok().and_then(|s| s.code()), stopping.load(Ordering::SeqCst), began.elapsed()).await;
         });
         Ok(())
     }
 
-    /// A job's command ended: said to its agent, and a service started again.
-    async fn ended(&self, id: &str, pgid: i32, code: Option<i32>, stopped: bool, ran: Duration) {
-        self.running.lock().unwrap().remove(id);
-        let _ = self.store.forget_process(pgid as i64);
-        // What it started itself (a server forked off) goes with it.
-        signal_group(pgid, libc::SIGTERM);
-        // The station stopping: it stays running on record, to start again with the station.
+    /// Follows a job an earlier station started (it went on through the restart) to its end.
+    fn follow(&self, job: &JobRow, pgid: i32) {
+        let stopping = Arc::new(AtomicBool::new(false));
+        self.running.lock().unwrap().insert(job.id.clone(), Running { pgid, stopping: stopping.clone() });
+        let (me, id, exit) = (self.me.clone(), job.id.clone(), self.exit_file(&job.id));
+        let began = Instant::now().checked_sub(Duration::from_millis((now_ms() - job.started_at).max(0) as u64)).unwrap_or_else(Instant::now);
+        tokio::spawn(async move {
+            let status = watch_exit(pgid).await;
+            let Some(jobs) = me.upgrade() else { return };
+            // Its status when it is this process's child (an exec handoff kept it so); else what its shell wrote.
+            let code = match status {
+                Some(status) => status.code(),
+                None => read_exit(&exit),
+            };
+            jobs.ended(&id, Some(pgid), code, stopping.load(Ordering::SeqCst), began.elapsed()).await;
+        });
+    }
+
+    /// A job's command ended: said to its agent, and a service started again. `pgid`: its group, when it ended just
+    /// now (what it started itself goes with it).
+    async fn ended(&self, id: &str, pgid: Option<i32>, code: Option<i32>, stopped: bool, ran: Duration) {
+        // The station stopping: left as it is on record, for the next one to find it ended (its exit file says how).
         if self.closing.load(Ordering::SeqCst) {
             return;
+        }
+        self.running.lock().unwrap().remove(id);
+        if let Some(pgid) = pgid {
+            let _ = self.store.forget_process(pgid as i64);
+            // What it started itself (a server forked off) goes with it.
+            signal_group(pgid, libc::SIGTERM);
         }
         let Ok(Some(job)) = self.store.get_job(id) else { return };
         let code = code.map(i64::from);
@@ -313,36 +349,66 @@ impl Jobs {
         Ok(job)
     }
 
-    /// After a start of the station: what was running runs again, and its agent is told.
+    /// After a start of the station: what still runs is followed again; what ended meanwhile is told as ended; what was
+    /// running and is gone without a word (the machine restarted, or an older station ended it) runs again, and its
+    /// agent is told; a service waiting to start again starts. Groups of jobs no longer running are ended.
     pub fn relaunch(&self) {
-        for job in self.store.list_jobs(None).unwrap_or_default().into_iter().filter(|j| j.state == "running") {
-            match self.spawn(&job, true) {
-                Ok(()) => self.tell(&job, format!("The station restarted; {} was started again.", Self::named(&job))),
+        let recorded: HashMap<i64, crate::store::ProcessRow> =
+            self.store.list_processes().unwrap_or_default().into_iter().filter(|p| p.runtime == "job").map(|p| (p.pgid, p)).collect();
+        let mut followed = std::collections::HashSet::new();
+        let jobs = self.store.list_jobs(None).unwrap_or_default();
+        for job in jobs.iter().filter(|j| j.state == "running") {
+            if let Some(entry) = job.pgid.and_then(|pgid| recorded.get(&pgid)) {
+                if still_ours(entry) {
+                    info!(job = job.id, pgid = entry.pgid, "job went on through the restart; following it again");
+                    self.follow(job, entry.pgid as i32);
+                    followed.insert(entry.pgid);
+                    continue;
+                }
+                let _ = self.store.forget_process(entry.pgid);
+                if let Some(code) = read_exit(&self.exit_file(&job.id)) {
+                    // It ended while no station was running: as if it had just ended.
+                    let (me, id) = (self.me.clone(), job.id.clone());
+                    let ran = Duration::from_millis((now_ms() - job.started_at).max(0) as u64);
+                    tokio::spawn(async move {
+                        if let Some(jobs) = me.upgrade() {
+                            jobs.ended(&id, None, Some(code), false, ran).await;
+                        }
+                    });
+                    continue;
+                }
+            }
+            match self.spawn(job, true) {
+                Ok(()) => self.tell(job, format!("The station restarted; {} was started again.", Self::named(job))),
                 Err(e) => {
                     warn!(job = job.id, error = %e, "job not started again");
                     let _ = self.store.job_ended(&job.id, "failed", None);
-                    self.tell(&job, format!("The station restarted; {} could not be started again: {e}", Self::named(&job)));
+                    self.tell(job, format!("The station restarted; {} could not be started again: {e}", Self::named(job)));
                 }
             }
         }
+        // A service that ended just before the station stopped, waiting out its pause: it starts now.
+        for job in jobs.iter().filter(|j| j.state == "exited" && j.port.is_some()) {
+            if let Err(e) = self.spawn(job, true) {
+                warn!(job = job.id, error = %e, "service not started again");
+                let _ = self.store.job_ended(&job.id, "failed", None);
+            }
+        }
+        for (pgid, entry) in recorded {
+            if followed.contains(&pgid) {
+                continue;
+            }
+            if still_ours(&entry) {
+                warn!(pgid, label = entry.label, "ending the group of a job no longer running");
+                tokio::spawn(end_group(pgid as i32, Duration::from_secs(5)));
+            }
+            let _ = self.store.forget_process(pgid);
+        }
     }
 
-    /// The station stops: its jobs end with it (and start again with it).
+    /// The station stops: its jobs go on (the next station takes them up).
     pub async fn shutdown(&self) {
         self.closing.store(true, Ordering::SeqCst);
-        let groups: Vec<i32> = self.running.lock().unwrap().values().map(|r| r.pgid).collect();
-        for pgid in &groups {
-            signal_group(*pgid, libc::SIGTERM);
-        }
-        for _ in 0..50 {
-            if groups.iter().all(|g| !group_alive(*g)) {
-                return;
-            }
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-        for pgid in groups {
-            signal_group(pgid, libc::SIGKILL);
-        }
     }
 
     /// `ember-job notify`: the job with this token tells its agent something.
@@ -380,7 +446,7 @@ impl Jobs {
         vec![
             Tool {
                 name: "job_start".into(),
-                description: "Start a background job: a shell command the station runs apart from your turns, with its output kept in a log. You are told when it ends, and whatever it says on the way: inside the job, `ember-job notify <words>` sends you a message (use it for milestones or problems in a long run). Give a port for a web service: it is kept up (started again if it ends), gets PORT in its environment, and the workspace's members can open it through the returned link (post the link where people should see it). Jobs keep running across your turns and are started again when the station restarts.".into(),
+                description: "Start a background job: a shell command the station runs apart from your turns, with its output kept in a log. You are told when it ends, and whatever it says on the way: inside the job, `ember-job notify <words>` sends you a message (use it for milestones or problems in a long run). Give a port for a web service: it is kept up (started again if it ends), gets PORT in its environment, and the workspace's members can open it through the returned link (post the link where people should see it). Jobs keep running across your turns and across restarts of the station (one that did not survive, say the machine restarted, is started again).".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -452,6 +518,11 @@ impl Jobs {
             },
         ]
     }
+}
+
+/// The exit code a job's shell wrote when it ended, if it did.
+fn read_exit(path: &Path) -> Option<i32> {
+    std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
 /// The job a tool names (`id`), when it is this session's.

@@ -15,11 +15,12 @@ use std::time::Duration;
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use ember_shapes::RuntimeKind;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::{Mutex as AsyncMutex, oneshot};
 use tracing::{debug, info, warn};
 
-use super::process::{GroupProcess, Spawn, spawn_group};
+use super::process::{GroupProcess, HandedProcess, Spawn, adopt_group, spawn_group};
 use super::{AgentDriver, AgentSession, Events, FailureReason, LiveEvent, LiveField, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, clean_env};
 use crate::config::{Profile, expand_route};
 use crate::machine_logins::{link_codex_auth, process_env};
@@ -94,6 +95,7 @@ enum Notice {
 
 /// One app-server process and its JSON-RPC connection.
 struct Host {
+    profile: String,
     proc: Arc<GroupProcess>,
     pending: Arc<Mutex<HashMap<i64, oneshot::Sender<Result<Value>>>>>,
     threads: Arc<Mutex<HashMap<String, ThreadSink>>>,
@@ -101,6 +103,25 @@ struct Host {
     /// What the process was started with; a profile edit that changes it needs a new process.
     signature: String,
     ready: AsyncMutex<bool>,
+}
+
+/// An app-server as the next binary takes it up.
+#[derive(Serialize, Deserialize)]
+struct HandedHost {
+    profile: String,
+    signature: String,
+    next_id: i64,
+    ready: bool,
+    process: HandedProcess,
+}
+
+/// A thread as the next binary takes it up (its app-server is handed over apart, before it).
+#[derive(Serialize, Deserialize)]
+struct HandedThread {
+    thread_id: String,
+    profile: String,
+    busy: bool,
+    turn_id: Option<String>,
 }
 
 fn host_signature(profile: &Profile) -> String {
@@ -122,21 +143,33 @@ impl Host {
             args.extend(["-c".into(), format!("{k}={v}")]);
         }
         args.extend(["--listen".into(), "stdio://".into()]);
+        let label = format!("codex app-server {}", profile.id);
+        Host::wire(&profile.id, host_signature(profile), 1, false, move |on_line| spawn_group(Spawn { command, args, cwd: &profile.home, env, runtime: "codex", label }, store, on_line))
+    }
+
+    /// Takes up an app-server the previous binary handed over.
+    fn adopt(handed: HandedHost, store: Arc<Store>) -> Result<Arc<Host>> {
+        info!(profile = handed.profile, pgid = handed.process.pgid, "taking up a codex app-server handed over");
+        let (process, label) = (handed.process, format!("codex app-server {}", handed.profile));
+        Host::wire(&handed.profile, handed.signature, handed.next_id, handed.ready, move |on_line| adopt_group(&process, store, "codex", &label, on_line))
+    }
+
+    /// A host on the process `start` gives, fed its lines.
+    fn wire(profile: &str, signature: String, next_id: i64, ready: bool, start: impl FnOnce(Box<dyn Fn(String) + Send>) -> Result<Arc<GroupProcess>>) -> Result<Arc<Host>> {
         let pending: Arc<Mutex<HashMap<i64, oneshot::Sender<Result<Value>>>>> = Arc::default();
         let threads: Arc<Mutex<HashMap<String, ThreadSink>>> = Arc::default();
         let (line_pending, line_threads) = (pending.clone(), threads.clone());
         let replies: Arc<Mutex<Option<Arc<GroupProcess>>>> = Arc::default();
         let line_replies = replies.clone();
-        let proc = spawn_group(
-            Spawn { command, args, cwd: &profile.home, env, runtime: "codex", label: format!("codex app-server {}", profile.id) },
-            store,
-            move |line| on_line(&line, &line_pending, &line_threads, &line_replies),
-        )?;
+        let proc = start(Box::new(move |line| on_line(&line, &line_pending, &line_threads, &line_replies)))?;
         *replies.lock().unwrap() = Some(proc.clone());
-        let host = Arc::new(Host { proc: proc.clone(), pending, threads, next_id: AtomicI64::new(1), signature: host_signature(profile), ready: AsyncMutex::new(false) });
+        let host = Arc::new(Host { profile: profile.to_string(), proc: proc.clone(), pending, threads, next_id: AtomicI64::new(next_id), signature, ready: AsyncMutex::new(ready) });
         let exit = host.clone();
         tokio::spawn(async move {
             let code = proc.exited().await;
+            if proc.handed() {
+                return;
+            }
             let reason = format!("codex app-server exited ({code})");
             for (_, pending) in exit.pending.lock().unwrap().drain() {
                 let _ = pending.send(Err(anyhow!(reason.clone())));
@@ -285,6 +318,66 @@ fn end_turn(state: &Mutex<ThreadState>, events: &Events, outcome: TurnOutcome) {
     let _ = events.send(RuntimeEvent::TurnEnded(outcome));
 }
 
+/// A thread's share of its app-server's notifications: its turns and live steps, as events.
+fn thread_sink(state: &Arc<Mutex<ThreadState>>, events: &Events, thread_id: &str) -> ThreadSink {
+    let live = Mutex::new(LiveFromCodex::default());
+    let (sink_state, sink_events, sink_thread) = (state.clone(), events.clone(), thread_id.to_string());
+    Arc::new(move |notice| match notice {
+        Notice::Method(method, params) => {
+            for event in live.lock().unwrap().feed(&method, &params) {
+                let _ = sink_events.send(RuntimeEvent::Live(event));
+            }
+            match method.as_str() {
+                "turn/started" => {
+                    let started = {
+                        let mut s = sink_state.lock().unwrap();
+                        if let Some(id) = params.get("turn").and_then(|t| t.get("id")).and_then(Value::as_str) {
+                            s.turn_id = Some(id.to_string());
+                        }
+                        let was = s.busy;
+                        s.busy = true;
+                        !was
+                    };
+                    if started {
+                        let _ = sink_events.send(RuntimeEvent::TurnStarted);
+                    }
+                }
+                "turn/completed" => {
+                    let turn = params.get("turn").cloned().unwrap_or(Value::Null);
+                    let outcome = match turn.get("status").and_then(Value::as_str) {
+                        Some("interrupted") => TurnOutcome::Aborted,
+                        Some("failed") => {
+                            let error = turn.get("error").cloned().unwrap_or(Value::Null);
+                            TurnOutcome::Failed {
+                                reason: classify_codex_error(error.get("codexErrorInfo").unwrap_or(&Value::Null)),
+                                message: error.get("message").and_then(Value::as_str).unwrap_or("turn failed").chars().take(1000).collect(),
+                            }
+                        }
+                        _ => TurnOutcome::Completed,
+                    };
+                    end_turn(&sink_state, &sink_events, outcome);
+                }
+                "error" if params.get("willRetry") != Some(&Value::Bool(true)) => {
+                    let error = params.get("error").cloned().unwrap_or(Value::Null).to_string();
+                    warn!(thread = sink_thread, error, "codex turn error");
+                }
+                _ => {}
+            }
+        }
+        Notice::HostExited(reason) => {
+            let busy = {
+                let mut s = sink_state.lock().unwrap();
+                s.closed = true;
+                s.busy
+            };
+            if busy {
+                end_turn(&sink_state, &sink_events, TurnOutcome::Failed { reason: FailureReason::Exited, message: reason.clone() });
+            }
+            let _ = sink_events.send(RuntimeEvent::Closed(reason));
+        }
+    })
+}
+
 #[async_trait]
 impl AgentDriver for CodexDriver {
     fn runtime(&self) -> RuntimeKind {
@@ -328,64 +421,54 @@ impl AgentDriver for CodexDriver {
         };
         let thread_id = opened.get("thread").and_then(|t| t.get("id")).and_then(Value::as_str).ok_or_else(|| anyhow!("codex gave no thread id"))?.to_string();
         let state = Arc::new(Mutex::new(ThreadState { busy: false, turn_id: None, closed: false }));
-        let live = Mutex::new(LiveFromCodex::default());
-        let (sink_state, sink_events, sink_thread) = (state.clone(), events.clone(), thread_id.clone());
-        let sink: ThreadSink = Arc::new(move |notice| match notice {
-            Notice::Method(method, params) => {
-                for event in live.lock().unwrap().feed(&method, &params) {
-                    let _ = sink_events.send(RuntimeEvent::Live(event));
-                }
-                match method.as_str() {
-                    "turn/started" => {
-                        let started = {
-                            let mut s = sink_state.lock().unwrap();
-                            if let Some(id) = params.get("turn").and_then(|t| t.get("id")).and_then(Value::as_str) {
-                                s.turn_id = Some(id.to_string());
-                            }
-                            let was = s.busy;
-                            s.busy = true;
-                            !was
-                        };
-                        if started {
-                            let _ = sink_events.send(RuntimeEvent::TurnStarted);
-                        }
-                    }
-                    "turn/completed" => {
-                        let turn = params.get("turn").cloned().unwrap_or(Value::Null);
-                        let outcome = match turn.get("status").and_then(Value::as_str) {
-                            Some("interrupted") => TurnOutcome::Aborted,
-                            Some("failed") => {
-                                let error = turn.get("error").cloned().unwrap_or(Value::Null);
-                                TurnOutcome::Failed {
-                                    reason: classify_codex_error(error.get("codexErrorInfo").unwrap_or(&Value::Null)),
-                                    message: error.get("message").and_then(Value::as_str).unwrap_or("turn failed").chars().take(1000).collect(),
-                                }
-                            }
-                            _ => TurnOutcome::Completed,
-                        };
-                        end_turn(&sink_state, &sink_events, outcome);
-                    }
-                    "error" if params.get("willRetry") != Some(&Value::Bool(true)) => {
-                        let error = params.get("error").cloned().unwrap_or(Value::Null).to_string();
-                        warn!(thread = sink_thread, error, "codex turn error");
-                    }
-                    _ => {}
-                }
-            }
-            Notice::HostExited(reason) => {
-                let busy = {
-                    let mut s = sink_state.lock().unwrap();
-                    s.closed = true;
-                    s.busy
-                };
-                if busy {
-                    end_turn(&sink_state, &sink_events, TurnOutcome::Failed { reason: FailureReason::Exited, message: reason.clone() });
-                }
-                let _ = sink_events.send(RuntimeEvent::Closed(reason));
-            }
-        });
-        host.threads.lock().unwrap().insert(thread_id.clone(), sink);
+        host.threads.lock().unwrap().insert(thread_id.clone(), thread_sink(&state, &events, &thread_id));
         Ok(Arc::new(CodexSession { thread_id, host, state }))
+    }
+
+    async fn hand_off(&self) -> Result<Value> {
+        let hosts: Vec<Arc<Host>> = self.hosts.lock().await.values().filter(|h| h.alive()).cloned().collect();
+        // Replies owed are the old binary's to take: wait for them, before anything is given up.
+        for _ in 0..100 {
+            if hosts.iter().all(|h| h.pending.lock().unwrap().is_empty()) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        if let Some(host) = hosts.iter().find(|h| !h.pending.lock().unwrap().is_empty()) {
+            bail!("codex app-server {} still owes replies", host.profile);
+        }
+        let mut handed = vec![];
+        for host in hosts {
+            let ready = host.ready.try_lock().map(|r| *r).unwrap_or(false);
+            match host.proc.hand_off().await {
+                Ok(process) => handed.push(HandedHost { profile: host.profile.clone(), signature: host.signature.clone(), next_id: host.next_id.load(Ordering::SeqCst), ready, process }),
+                Err(e) => warn!(profile = host.profile, error = %e, "codex app-server not handed over"),
+            }
+        }
+        Ok(serde_json::to_value(handed)?)
+    }
+
+    async fn adopt(&self, handed: &Value) -> Result<()> {
+        let handed: Vec<HandedHost> = serde_json::from_value(handed.clone())?;
+        let mut hosts = self.hosts.lock().await;
+        for host in handed {
+            let profile = host.profile.clone();
+            match Host::adopt(host, self.store.clone()) {
+                Ok(host) => {
+                    hosts.insert(profile, host);
+                }
+                Err(e) => warn!(profile, error = %e, "codex app-server handed over could not be taken up"),
+            }
+        }
+        Ok(())
+    }
+
+    async fn adopt_session(&self, handed: &Value, events: Events) -> Result<Arc<dyn AgentSession>> {
+        let handed: HandedThread = serde_json::from_value(handed.clone())?;
+        let host = self.hosts.lock().await.get(&handed.profile).filter(|h| h.alive()).cloned().ok_or_else(|| anyhow!("codex app-server {} was not taken up", handed.profile))?;
+        let state = Arc::new(Mutex::new(ThreadState { busy: handed.busy, turn_id: handed.turn_id, closed: false }));
+        host.threads.lock().unwrap().insert(handed.thread_id.clone(), thread_sink(&state, &events, &handed.thread_id));
+        Ok(Arc::new(CodexSession { thread_id: handed.thread_id, host, state }))
     }
 
     async fn shutdown(&self) {
@@ -477,8 +560,29 @@ impl AgentSession for CodexSession {
             s.closed = true;
         }
         self.host.threads.lock().unwrap().remove(&self.thread_id);
+        // Handed over, the thread is the next binary's.
+        if self.host.proc.handed() {
+            return;
+        }
         // Best effort: the thread just stays loaded.
         let _ = self.host.request("thread/unsubscribe", json!({ "threadId": self.thread_id })).await;
+    }
+
+    /// After the driver's hand_off: its app-server's reader has stopped, so the thread stands as it last said.
+    async fn hand_off(&self) -> Result<Value> {
+        if !self.host.proc.handed() {
+            bail!("codex app-server {} was not handed over", self.host.profile);
+        }
+        let (busy, turn_id) = {
+            let mut s = self.state.lock().unwrap();
+            if s.closed {
+                bail!("codex session is closed");
+            }
+            s.closed = true;
+            (s.busy, s.turn_id.clone())
+        };
+        self.host.threads.lock().unwrap().remove(&self.thread_id);
+        Ok(serde_json::to_value(HandedThread { thread_id: self.thread_id.clone(), profile: self.host.profile.clone(), busy, turn_id })?)
     }
 }
 

@@ -9,8 +9,9 @@
 //! Everything said in a thread is recorded once (see store.rs): people's messages are delivered to every session in the
 //! thread, and what agents and the station post there is recorded after the platform takes it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
@@ -33,7 +34,7 @@ use crate::machine_sessions::{MachineRoots, MachineSession};
 use crate::mcp::{Run, Tool};
 use crate::pool::{PoolSignals, ProfileHealth, pick_profile, serves, usable};
 use crate::runtime::AgentDriver;
-use crate::session::{DeclaredState, SessionActor, SessionDeps};
+use crate::session::{DeclaredState, HandedSession, SessionActor, SessionDeps};
 use crate::store::{
     AUTO, Attachment, AuthorKind, EMBER_SURFACE, MANUAL, NewMessage, NewSession, Post, Quote, SessionRow, SessionScope, SessionThread, Store, ThreadRow, now_ms,
     slack_surface, write_compressed,
@@ -155,7 +156,20 @@ pub struct Hub {
     picked: Mutex<HashMap<String, i64>>,
     /// What running turns are doing, for the pages' live view.
     pub live: Arc<LiveHub>,
+    /// Turns held (SessionDeps::held).
+    held: AtomicBool,
+    /// Sessions taken up from the previous binary: their turns run on, not cut off.
+    adopted: Mutex<HashSet<String>>,
     me: Weak<Hub>,
+}
+
+/// What the hub hands over to the station's next binary: its drivers' shared processes, then its sessions.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
+pub struct HandedHub {
+    #[serde(default)]
+    pub drivers: HashMap<RuntimeKind, Value>,
+    #[serde(default)]
+    pub sessions: Vec<HandedSession>,
 }
 
 impl Hub {
@@ -183,8 +197,146 @@ impl Hub {
             health: Mutex::new(Arc::new(|_| ProfileHealth::default())),
             picked: Mutex::default(),
             live: LiveHub::new(locate, posts),
+            held: AtomicBool::new(false),
+            adopted: Mutex::default(),
             me: me.clone(),
         })
+    }
+
+    /// Holds turns: none starts from now on, and messages stay pending. Those running go on.
+    pub fn hold(&self) {
+        self.held.store(true, Ordering::SeqCst);
+    }
+
+    /// Lets turns start again, and what waited meanwhile go on.
+    pub fn release(&self) {
+        if !self.held.swap(false, Ordering::SeqCst) {
+            return;
+        }
+        let actors: Vec<Arc<SessionActor>> = self.actors.lock().unwrap().values().cloned().collect();
+        for actor in actors {
+            drop(actor.release());
+        }
+        for key in self.store.sessions_with_pending().unwrap_or_default() {
+            if let Ok(Some(row)) = self.store.get_session(&key) {
+                if let Ok(actor) = self.actor(&row) {
+                    drop(actor.kick());
+                }
+            }
+        }
+    }
+
+    /// Whether any turn is running.
+    pub fn any_running(&self) -> bool {
+        let actors: Vec<Arc<SessionActor>> = self.actors.lock().unwrap().values().cloned().collect();
+        actors.iter().any(|a| a.process_state() == "running")
+    }
+
+    /// Resolves once no actor has a task queued or running (and has stayed so a moment: a runtime's last events may
+    /// still be on their way into the queues), or fails after `limit`.
+    async fn settle(&self, limit: Duration) -> Result<()> {
+        let until = std::time::Instant::now() + limit;
+        let mut quiet = 0;
+        while quiet < 3 {
+            let actors: Vec<Arc<SessionActor>> = self.actors.lock().unwrap().values().cloned().collect();
+            quiet = if actors.iter().all(|a| a.settled()) { quiet + 1 } else { 0 };
+            if std::time::Instant::now() > until {
+                bail!("sessions did not settle within {} s", limit.as_secs());
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        Ok(())
+    }
+
+    /// Gives up the drivers' processes and the sessions to the station's next binary. Turns are held first; until the
+    /// runtimes' readers stop it can still fail and be released, after that it cannot (what could not be handed over
+    /// ends with this binary, and the next resumes it the usual way).
+    pub async fn hand_off(&self) -> Result<HandedHub> {
+        self.hold();
+        if let Err(e) = self.settle(Duration::from_secs(30)).await {
+            self.release();
+            return Err(e);
+        }
+        let mut handed = HandedHub::default();
+        // Shared processes first (codex's app-servers wait out replies owed, and can still refuse)...
+        let mut drivers: Vec<(RuntimeKind, Arc<dyn AgentDriver>)> = self.drivers.iter().map(|(k, d)| (*k, d.clone())).collect();
+        drivers.sort_by_key(|(k, _)| crate::config::runtime_name(*k));
+        for (runtime, driver) in &drivers {
+            match driver.hand_off().await {
+                Ok(state) => {
+                    handed.drivers.insert(*runtime, state);
+                }
+                Err(e) if handed.drivers.values().all(Value::is_null) => {
+                    self.release();
+                    return Err(e.context(format!("{} would not hand over", crate::config::runtime_name(*runtime))));
+                }
+                Err(e) => warn!(error = %e, "a driver could not hand over"),
+            }
+        }
+        // ...then each session's runtime session, and, once the events they said last are taken in, the actors.
+        let actors: Vec<Arc<SessionActor>> = self.actors.lock().unwrap().values().cloned().collect();
+        let mut agents = vec![];
+        for actor in &actors {
+            match actor.hand_off_agent().await {
+                Some(agent) => agents.push((actor.clone(), agent)),
+                // No runtime session, but notices or a wait: those go along.
+                None if actor.holds_state() => agents.push((actor.clone(), Value::Null)),
+                None => {}
+            }
+        }
+        if let Err(e) = self.settle(Duration::from_secs(10)).await {
+            warn!(error = %e, "handing over with sessions unsettled");
+        }
+        for (actor, agent) in agents {
+            handed.sessions.push(actor.snapshot(agent));
+        }
+        info!(sessions = handed.sessions.len(), "handed over");
+        Ok(handed)
+    }
+
+    /// Takes up what the previous binary handed over: the drivers' processes, then the sessions on them.
+    pub async fn adopt(&self, handed: HandedHub) {
+        for (runtime, state) in &handed.drivers {
+            if let Some(driver) = self.drivers.get(runtime) {
+                if let Err(e) = driver.adopt(state).await {
+                    warn!(runtime = crate::config::runtime_name(*runtime), error = %e, "a driver's processes could not be taken up");
+                }
+            }
+        }
+        for session in handed.sessions {
+            let key = session.key.clone();
+            let taken = async {
+                let row = self.store.get_session(&key)?.ok_or_else(|| anyhow!("session {key} is gone"))?;
+                let agent = if session.agent.is_null() {
+                    None
+                } else {
+                    let driver = self.driver(session.runtime)?;
+                    let (events, received) = tokio::sync::mpsc::unbounded_channel();
+                    Some((driver.adopt_session(&session.agent, events).await?, received))
+                };
+                let actor = self.actor(&row)?;
+                let (running, with_agent) = (session.turn.is_some(), agent.is_some());
+                let notices = !session.notices.is_empty();
+                actor.adopt(session, agent);
+                if notices {
+                    drop(actor.release());
+                }
+                Ok::<_, anyhow::Error>((running, with_agent))
+            };
+            match taken.await {
+                Ok((running, with_agent)) => {
+                    info!(session = key, with_agent, "session taken up from the previous binary");
+                    // Without its runtime session, a turn it had is resumed the usual way (Hub::recover).
+                    if with_agent {
+                        self.adopted.lock().unwrap().insert(key.clone());
+                        if !running {
+                            self.idle_now(&key);
+                        }
+                    }
+                }
+                Err(e) => warn!(session = key, error = %e, "session handed over could not be taken up; it resumes the usual way"),
+            }
+        }
     }
 
     fn config(&self) -> Arc<Config> {
@@ -324,7 +476,12 @@ impl Hub {
 
     /// After a restart: resume cut-off turns, then deliver whatever is still pending.
     pub fn recover(&self) -> Result<()> {
+        let adopted = self.adopted.lock().unwrap().clone();
         for row in self.store.list_sessions()?.into_iter().filter(|s| s.running) {
+            // Taken up from the previous binary: its turn runs on.
+            if adopted.contains(&row.key) {
+                continue;
+            }
             if !self.online(&row) {
                 continue;
             }
@@ -1370,6 +1527,9 @@ impl SessionDeps for Hub {
     }
     fn idle(&self, key: &str) {
         self.idle_now(key);
+    }
+    fn held(&self) -> bool {
+        self.held.load(Ordering::SeqCst)
     }
 }
 

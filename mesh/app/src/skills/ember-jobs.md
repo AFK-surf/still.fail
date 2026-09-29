@@ -6,7 +6,8 @@ description: Background jobs and web services on the ember station (job_start, j
 # Background jobs and web services
 
 The station runs jobs for you apart from your turns: each in its own process group, its output in a log, kept across your
-turns and started again when the station restarts. You hear when one ends, and whatever it says on the way. A job with a
+turns and across restarts of the station (one that did not survive, say the machine restarted, is started again). You
+hear when one ends, and whatever it says on the way. A job with a
 port is a web service: kept up (started again if it ends) and opened by the workspace's members through its link.
 
 ## Background jobs: when

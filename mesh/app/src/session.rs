@@ -5,13 +5,15 @@ use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
 use anyhow::{Result, anyhow};
 use ember_shapes::RuntimeKind;
 use futures_util::FutureExt;
 use futures_util::future::BoxFuture;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info, warn};
 
@@ -61,6 +63,11 @@ pub trait SessionDeps: Send + Sync {
     fn live(&self) -> Option<Arc<LiveHub>>;
     /// The runtime process has gone idle (see the hub's eviction deadlines).
     fn idle(&self, key: &str);
+    /// Turns are held (the station is about to restart or hand over to its next binary): none starts, and messages
+    /// stay pending, until it is released.
+    fn held(&self) -> bool {
+        false
+    }
 }
 
 struct Turn {
@@ -74,6 +81,45 @@ struct Working {
     connect: String,
     thread: ThreadRef,
     ts: Option<String>,
+}
+
+/// A session as the station's next binary takes it up (handoff.rs): its runtime session, as its driver handed it
+/// over, and where the actor stood.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HandedSession {
+    pub key: String,
+    pub runtime: RuntimeKind,
+    /// The driver's own words for the runtime session (AgentSession::hand_off).
+    pub agent: Value,
+    pub turn: Option<HandedTurn>,
+    #[serde(default)]
+    pub working_for: Vec<HandedWorking>,
+    #[serde(default)]
+    pub notices: Vec<String>,
+    /// The agent's wait: how long is left of it (ms), and how long it was.
+    pub waiting_ms: Option<i64>,
+    #[serde(default)]
+    pub waiting_seconds: u64,
+    #[serde(default)]
+    pub nudges: u32,
+    #[serde(default)]
+    pub stop_requested: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HandedTurn {
+    pub id: String,
+    /// final, block or waiting.
+    pub declared: Option<String>,
+    pub wait: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HandedWorking {
+    pub connect: String,
+    pub channel: String,
+    pub thread_ts: String,
+    pub ts: Option<String>,
 }
 
 #[derive(Default)]
@@ -95,9 +141,21 @@ struct State {
     /// kept meanwhile (the work may run inside it).
     waiting: Option<u64>,
     waits: u64,
+    /// When the wait is over (ms), and how long it was said to be.
+    waiting_until: i64,
+    waiting_seconds: u64,
 }
 
 type Task = Box<dyn FnOnce(Arc<SessionActor>) -> BoxFuture<'static, Result<()>> + Send>;
+
+/// One queued task, counted until it is done (or dropped).
+struct Counted(Arc<AtomicUsize>);
+
+impl Drop for Counted {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 
 pub struct SessionActor {
     pub key: String,
@@ -108,11 +166,14 @@ pub struct SessionActor {
     state: Mutex<State>,
     /// Set for shutdown: queued and future tasks are skipped from then on.
     closing: AtomicBool,
+    /// Tasks queued or running.
+    queued: Arc<AtomicUsize>,
 }
 
 impl SessionActor {
     pub fn new(key: &str, runtime: RuntimeKind, deps: Weak<dyn SessionDeps>) -> Arc<SessionActor> {
         let (queue, mut tasks) = mpsc::unbounded_channel::<(Task, oneshot::Sender<()>)>();
+        let queued: Arc<AtomicUsize> = Arc::default();
         let actor = Arc::new(SessionActor {
             key: key.to_string(),
             runtime,
@@ -120,10 +181,12 @@ impl SessionActor {
             queue,
             state: Mutex::new(State { idle_since: now_ms(), ..State::default() }),
             closing: AtomicBool::new(false),
+            queued: queued.clone(),
         });
         let me = Arc::downgrade(&actor);
         tokio::spawn(async move {
             while let Some((task, done)) = tasks.recv().await {
+                let _counted = Counted(queued.clone());
                 let Some(actor) = me.upgrade() else { return };
                 if !actor.closing.load(Ordering::SeqCst) {
                     let key = actor.key.clone();
@@ -163,7 +226,10 @@ impl SessionActor {
         Fut: Future<Output = Result<()>> + Send + 'static,
     {
         let (done, wait) = oneshot::channel();
-        let _ = self.queue.send((Box::new(move |actor| Box::pin(task(actor))), done));
+        self.queued.fetch_add(1, Ordering::SeqCst);
+        if self.queue.send((Box::new(move |actor| Box::pin(task(actor))), done)).is_err() {
+            self.queued.fetch_sub(1, Ordering::SeqCst);
+        }
         async move {
             let _ = wait.await;
         }
@@ -232,6 +298,112 @@ impl SessionActor {
         })
     }
 
+    /// No task queued or running.
+    pub fn settled(&self) -> bool {
+        self.queued.load(Ordering::SeqCst) == 0
+    }
+
+    /// Turns were held and are no longer: what waited meanwhile (messages, notices, a wait that ran out) goes on.
+    pub fn release(&self) -> impl Future<Output = ()> + Send + 'static {
+        self.enqueue(|a| async move {
+            let over = {
+                let st = a.st();
+                st.waiting.is_some() && st.waiting_until <= now_ms()
+            };
+            if over {
+                let seconds = a.st().waiting_seconds;
+                a.wait_ms(seconds, 0);
+            }
+            a.pump().await?;
+            if !a.st().notices.is_empty() {
+                a.give_notices().await?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Whether the actor holds anything the next binary should take up besides a runtime session: words for the agent
+    /// not yet given, or its wait.
+    pub fn holds_state(&self) -> bool {
+        let st = self.st();
+        !st.notices.is_empty() || st.waiting.is_some()
+    }
+
+    /// Gives the runtime session up to the next binary (turns are held and the queue settled). None when there is
+    /// none, or it could not be given up: then it ends with this binary, and the next resumes it the usual way.
+    pub async fn hand_off_agent(&self) -> Option<Value> {
+        let agent = self.agent()?;
+        match agent.hand_off().await {
+            Ok(handed) => Some(handed),
+            Err(e) => {
+                warn!(session = self.key, error = %e, "runtime session not handed over");
+                None
+            }
+        }
+    }
+
+    /// Where the session stands, with its runtime session as `hand_off_agent` gave it (null: none): for the next
+    /// binary. From here on this actor does nothing more.
+    pub fn snapshot(&self, agent: Value) -> HandedSession {
+        self.closing.store(true, Ordering::SeqCst);
+        let mut st = self.st();
+        st.agent = None;
+        HandedSession {
+            key: self.key.clone(),
+            runtime: self.runtime,
+            agent,
+            turn: st.turn.as_ref().map(|t| HandedTurn {
+                id: t.id.clone(),
+                declared: t.declared.map(|d| d.as_str().to_string()),
+                wait: match t.declared {
+                    Some(DeclaredState::Waiting(seconds)) => Some(seconds),
+                    _ => None,
+                },
+            }),
+            working_for: st.working_for.iter().map(|w| HandedWorking { connect: w.connect.clone(), channel: w.thread.channel.clone(), thread_ts: w.thread.thread_ts.clone(), ts: w.ts.clone() }).collect(),
+            notices: st.notices.clone(),
+            waiting_ms: st.waiting.map(|_| (st.waiting_until - now_ms()).max(0)),
+            waiting_seconds: st.waiting_seconds,
+            nudges: st.nudges,
+            stop_requested: st.stop_requested,
+        }
+    }
+
+    /// Takes up a session the previous binary handed over, on `agent` when it had one (its driver took the runtime
+    /// session up, with its events coming on the receiver).
+    pub fn adopt(self: &Arc<Self>, handed: HandedSession, agent: Option<(Arc<dyn AgentSession>, mpsc::UnboundedReceiver<RuntimeEvent>)>) {
+        let (agent, events) = match agent {
+            Some((agent, events)) => (Some(agent), Some(events)),
+            None => (None, None),
+        };
+        let generation = {
+            let mut st = self.st();
+            st.generation += 1;
+            st.agent = agent.map(|agent| (st.generation, agent));
+            st.turn = handed.turn.map(|t| Turn {
+                id: t.id,
+                declared: match t.declared.as_deref() {
+                    Some("final") => Some(DeclaredState::Final),
+                    Some("block") => Some(DeclaredState::Block),
+                    Some("waiting") => Some(DeclaredState::Waiting(t.wait.unwrap_or(0))),
+                    _ => None,
+                },
+            });
+            st.working_for = handed.working_for.into_iter().map(|w| Working { connect: w.connect, thread: ThreadRef::new(&w.channel, &w.thread_ts), ts: w.ts }).collect();
+            st.notices = handed.notices;
+            st.nudges = handed.nudges;
+            st.stop_requested = handed.stop_requested;
+            st.idle_since = now_ms();
+            st.generation
+        };
+        if let Some(ms) = handed.waiting_ms {
+            self.wait_ms(handed.waiting_seconds, ms);
+        }
+        if let Some(events) = events {
+            self.follow(generation, events);
+        }
+    }
+
     /// Starts the runtime process ahead of a message, so its start-up overlaps the typing. Nothing is sent; an unused
     /// process is evicted as usual.
     pub fn warm(&self) -> impl Future<Output = ()> + Send + 'static {
@@ -239,8 +411,11 @@ impl SessionActor {
             if a.agent().is_some() || a.closing.load(Ordering::SeqCst) {
                 return Ok(());
             }
-            info!(session = a.key, "warming session process");
             let deps = a.deps()?;
+            if deps.held() {
+                return Ok(());
+            }
+            info!(session = a.key, "warming session process");
             a.ensure_agent(&deps).await?;
             a.st().idle_since = now_ms();
             deps.store().notify(&a.key);
@@ -291,6 +466,9 @@ impl SessionActor {
 
     async fn give_notices(self: &Arc<Self>) -> Result<()> {
         let deps = self.deps()?;
+        if deps.held() {
+            return Ok(());
+        }
         if let Some(agent) = self.agent().filter(|a| a.busy()) {
             let Some(text) = self.take_notices() else { return Ok(()) };
             if !agent.steer(&text).await {
@@ -305,6 +483,9 @@ impl SessionActor {
 
     async fn pump(self: &Arc<Self>) -> Result<()> {
         let deps = self.deps()?;
+        if deps.held() {
+            return Ok(()); // they stay pending: delivered once released, or by the next binary
+        }
         let store = deps.store();
         let pending = store.pending_messages(&self.key)?;
         if pending.is_empty() {
@@ -664,6 +845,9 @@ impl SessionActor {
             self.st().nudges = 0;
             return Ok(());
         }
+        if deps.held() {
+            return Ok(());
+        }
         let attempt = {
             let mut st = self.st();
             if st.nudges < deps.max_nudges() {
@@ -689,17 +873,28 @@ impl SessionActor {
     /// Asks the agent again after `seconds`, unless a turn has started by then (what it waited on brought it back, or
     /// someone wrote).
     fn wait(self: &Arc<Self>, seconds: u64) {
+        self.wait_ms(seconds, seconds as i64 * 1000);
+    }
+
+    /// The same, with `ms` of it left.
+    fn wait_ms(self: &Arc<Self>, seconds: u64, ms: i64) {
         let wait = {
             let mut st = self.st();
             st.waits += 1;
             st.waiting = Some(st.waits);
+            st.waiting_until = now_ms() + ms;
+            st.waiting_seconds = seconds;
             st.waits
         };
         let me = Arc::downgrade(self);
         tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_secs(seconds)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(ms.max(0) as u64)).await;
             let Some(actor) = me.upgrade() else { return };
             let _ = actor.enqueue(move |a| async move {
+                // Held: the wait stays, for the next binary to take up.
+                if a.deps()?.held() {
+                    return Ok(());
+                }
                 if a.st().waiting.take_if(|w| *w == wait).is_none() {
                     return Ok(());
                 }

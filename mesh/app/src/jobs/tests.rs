@@ -107,19 +107,76 @@ async fn a_service_is_kept_up_and_stays_down_once_stopped() {
     assert_eq!(r.store.get_job(&job.id).unwrap().unwrap().restarts, restarts, "not started again");
 }
 
-#[tokio::test]
-async fn what_ran_when_the_station_stopped_runs_again_when_it_starts() {
+/// The same store, and the same jobs directory, as a restarted station has.
+fn restarted(before: &Rig, dir: &Path, store: Arc<Store>) -> Rig {
+    let _ = before;
+    let told: Arc<StdMutex<Vec<(String, String)>>> = Arc::default();
+    let heard = told.clone();
+    let jobs = Jobs::new(store.clone(), dir, Arc::new(move |session, text| heard.lock().unwrap().push((session.to_string(), text))), Arc::new(|_, _| None)).unwrap();
+    Rig { _dir: tempfile::tempdir().unwrap(), store, jobs, told, work: before.work.clone() }
+}
+
+fn shared() -> (tempfile::TempDir, Arc<Store>) {
     let dir = tempfile::tempdir().unwrap();
     let store = Arc::new(Store::open(&dir.path().join("ember.db").to_string_lossy(), None).unwrap());
+    (dir, store)
+}
+
+#[tokio::test]
+async fn a_job_goes_on_through_a_restart_of_the_station_and_is_followed_to_its_end() {
+    let (dir, store) = shared();
     let before = rig_on(tempfile::tempdir().unwrap(), store.clone());
-    let job = before.jobs.start("s1", "watch", "sleep 30", &before.work, None).unwrap();
+    let data = before._dir.path().to_path_buf();
+    let job = before.jobs.start("s1", "build", "sleep 1; echo built; exit 4", &before.work, None).unwrap();
     before.jobs.shutdown().await;
     tokio::time::sleep(Duration::from_millis(200)).await;
+    let pgid = before.store.get_job(&job.id).unwrap().unwrap().pgid.unwrap() as i32;
+    assert!(group_alive(pgid), "the station stopping does not stop it");
+    let after = restarted(&before, &data, store);
+    after.jobs.relaunch();
+    let followed = after.store.get_job(&job.id).unwrap().unwrap();
+    assert_eq!((followed.pgid, followed.restarts), (Some(pgid as i64), 0), "the same run, not started again");
+    assert!(after.said().is_empty());
+    until("it ends", || after.state(&job.id) == "exited").await;
+    assert_eq!(after.store.get_job(&job.id).unwrap().unwrap().exit_code, Some(4), "how it ended, from what its shell wrote");
+    until("its agent is told", || !after.said().is_empty()).await;
+    assert!(after.said()[0].contains("ended with exit code 4"), "{}", after.said()[0]);
+    drop(dir);
+}
+
+#[tokio::test]
+async fn a_job_that_ended_while_no_station_ran_is_told_as_ended_not_run_again() {
+    let (_dir, store) = shared();
+    let before = rig_on(tempfile::tempdir().unwrap(), store.clone());
+    let data = before._dir.path().to_path_buf();
+    let job = before.jobs.start("s1", "quick", "sleep 0.3; exit 5", &before.work, None).unwrap();
+    before.jobs.shutdown().await;
+    tokio::time::sleep(Duration::from_millis(1000)).await;
     assert_eq!(before.state(&job.id), "running", "still running on record");
-    let after = rig_on(dir, store);
+    let after = restarted(&before, &data, store);
+    after.jobs.relaunch();
+    until("it is told as ended", || after.state(&job.id) == "exited").await;
+    let ended = after.store.get_job(&job.id).unwrap().unwrap();
+    assert_eq!((ended.exit_code, ended.restarts), (Some(5), 0));
+    until("its agent is told", || !after.said().is_empty()).await;
+    assert!(after.said()[0].contains("ended with exit code 5"), "{}", after.said()[0]);
+}
+
+#[tokio::test]
+async fn a_job_gone_without_a_word_runs_again_when_the_station_starts() {
+    let (_dir, store) = shared();
+    let before = rig_on(tempfile::tempdir().unwrap(), store.clone());
+    let data = before._dir.path().to_path_buf();
+    let job = before.jobs.start("s1", "watch", "sleep 30", &before.work, None).unwrap();
+    before.jobs.shutdown().await;
+    // What a restart of the machine does to it.
+    let pgid = before.store.get_job(&job.id).unwrap().unwrap().pgid.unwrap() as i32;
+    signal_group(pgid, libc::SIGKILL);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let after = restarted(&before, &data, store);
     after.jobs.relaunch();
     let again = after.store.get_job(&job.id).unwrap().unwrap();
-    assert!(again.pgid.is_some() && again.restarts == 1);
+    assert!(again.pgid.is_some_and(|p| p != pgid as i64) && again.restarts == 1);
     assert_eq!(after.said(), [format!("The station restarted; Job \"watch\" ({}) was started again.", job.id)]);
     after.jobs.stop(&job.id).await.unwrap();
 }

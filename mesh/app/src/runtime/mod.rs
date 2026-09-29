@@ -11,7 +11,7 @@ pub mod process;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 use ember_shapes::RuntimeKind;
 use serde::{Deserialize, Serialize};
@@ -173,6 +173,11 @@ pub trait AgentSession: Send + Sync {
     async fn abort(&self);
     /// Releases the session; ends the runtime process when it is not shared.
     async fn dispose(&self);
+    /// Gives the session up to the station's next binary (handoff.rs): what the driver's adopt_session takes it up
+    /// from. No events come after it.
+    async fn hand_off(&self) -> Result<serde_json::Value> {
+        bail!("this runtime cannot hand a session over")
+    }
 }
 
 #[async_trait]
@@ -181,6 +186,19 @@ pub trait AgentDriver: Send + Sync {
     async fn open(&self, options: OpenOptions, events: Events) -> Result<Arc<dyn AgentSession>>;
     /// Ends every process this driver started.
     async fn shutdown(&self);
+    /// Gives up what the driver itself runs (processes its sessions share) to the station's next binary, before the
+    /// sessions are.
+    async fn hand_off(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::Value::Null)
+    }
+    /// Takes up what the previous binary's hand_off gave, before its sessions.
+    async fn adopt(&self, _handed: &serde_json::Value) -> Result<()> {
+        Ok(())
+    }
+    /// Takes up a session the previous binary handed over; what it does comes on `events` from now on.
+    async fn adopt_session(&self, _handed: &serde_json::Value, _events: Events) -> Result<Arc<dyn AgentSession>> {
+        bail!("this runtime cannot take a session over")
+    }
 }
 
 /// A random UUID (v4), as runtimes take for session ids.

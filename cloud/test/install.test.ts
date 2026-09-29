@@ -15,6 +15,16 @@ test("without a token the installer only updates a station already in a workspac
   assert.match(script, /if \[ -n "\$token" \]; then\n  echo "加入 workspace…"/);
 });
 
+test("an update hands over to the new release only when the running station says it can and its service is unchanged", () => {
+  const script = installScript("https://ember.test");
+  assert.match(script, /if \[ -n "\$pid" \] && \[ -n "\$\(said handoff\)" \] && \{ \[ -z "\$service_file" \] \|\| cmp -s "\$tmp\/service" "\$service_file"; \}; then/);
+  assert.match(script, /kill -USR2 "\$pid"/);
+  // Otherwise drained first (when it can be), then restarted as before.
+  assert.match(script, /if \[ -z "\$handed" \] && \[ -n "\$pid" \] && \[ -n "\$\(said drain\)" \]/);
+  assert.match(script, /kill -USR1 "\$pid"/);
+  assert.match(script, /KillMode=process/);
+});
+
 test("the releases bucket serves the station's releases and the apps' builds, and nothing else", () => {
   assert.equal(releaseType("ember-station-linux-x64.tar.gz"), "application/gzip");
   assert.equal(releaseType("desktop/latest-mac.yml"), "text/yaml; charset=utf-8");

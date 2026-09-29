@@ -15,13 +15,14 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use ember_shapes::RuntimeKind;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::debug;
+use tracing::{debug, info};
 
-use super::process::{GroupProcess, Spawn, spawn_group};
+use super::process::{GroupProcess, HandedProcess, Spawn, adopt_group, spawn_group};
 use super::{AgentDriver, AgentSession, Events, FailureReason, LiveEvent, LiveField, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, clean_env, uuid};
 use crate::config::expand_route;
 use crate::machine_logins::{CLAUDE_TOKEN_MARGIN_MS, machine_claude_token, process_env};
@@ -54,12 +55,22 @@ pub fn classify_result(text: &str) -> FailureReason {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 struct Turn {
     busy: bool,
     aborting: bool,
     auth_failure: Option<String>,
+    #[serde(skip)]
     closed: bool,
+}
+
+/// A session as the next binary takes it up.
+#[derive(Serialize, Deserialize)]
+struct Handed {
+    id: String,
+    process: HandedProcess,
+    turn: Turn,
+    machine_expires: Option<i64>,
 }
 
 pub struct ClaudeDriver {
@@ -71,6 +82,55 @@ pub struct ClaudeDriver {
 impl ClaudeDriver {
     pub fn new(store: Arc<Store>, command: &str) -> ClaudeDriver {
         ClaudeDriver { store, command: command.into(), live: Mutex::new(vec![]) }
+    }
+
+    /// A session on a process `start` gives (started now, or taken up from the previous binary), fed its lines.
+    fn wire(
+        &self,
+        session_id: String,
+        turn: Turn,
+        machine_expires: Option<i64>,
+        events: Events,
+        start: impl FnOnce(Box<dyn Fn(String) + Send>) -> Result<Arc<GroupProcess>>,
+    ) -> Result<Arc<dyn AgentSession>> {
+        let turn = Arc::new(Mutex::new(turn));
+        let (line_turn, line_events) = (turn.clone(), events.clone());
+        let live = Mutex::new(LiveFromClaude::default());
+        // Set once the process is up: the line handler needs it to interrupt a turn an auth failure stops.
+        let proc_slot: Arc<Mutex<Option<Arc<GroupProcess>>>> = Arc::new(Mutex::new(None));
+        let line_proc = proc_slot.clone();
+        let proc = start(Box::new(move |line| {
+            let Ok(frame) = serde_json::from_str::<Value>(&line) else {
+                debug!(line = &line[..line.floor_char_boundary(500)], "claude non-json line");
+                return;
+            };
+            for event in live.lock().unwrap().feed(&frame) {
+                let _ = line_events.send(RuntimeEvent::Live(event));
+            }
+            on_frame(&frame, &line_turn, &line_events, &line_proc);
+        }))?;
+        *proc_slot.lock().unwrap() = Some(proc.clone());
+
+        let session = Arc::new(ClaudeSession { id: session_id, proc: proc.clone(), turn: turn.clone(), events: events.clone(), machine_expires });
+        self.live.lock().unwrap().push(session.clone());
+        let exit_turn = turn;
+        tokio::spawn(async move {
+            let code = proc.exited().await;
+            // Handed over: the next binary follows it now.
+            if proc.handed() {
+                return;
+            }
+            let busy = {
+                let mut t = exit_turn.lock().unwrap();
+                t.closed = true;
+                std::mem::take(&mut t.busy)
+            };
+            if busy {
+                let _ = events.send(RuntimeEvent::TurnEnded(TurnOutcome::Failed { reason: FailureReason::Exited, message: format!("claude exited ({code}) during the turn") }));
+            }
+            let _ = events.send(RuntimeEvent::Closed(format!("claude exited ({code})")));
+        });
+        Ok(session)
     }
 }
 
@@ -143,44 +203,19 @@ impl AgentDriver for ClaudeDriver {
         // session, they took up to 36 s before a new session could start. One the user chose wins.
         env.entry("CLAUDE_CODE_CERT_STORE".into()).or_insert_with(|| "bundled".into());
 
-        let turn = Arc::new(Mutex::new(Turn::default()));
-        let (line_turn, line_events) = (turn.clone(), events.clone());
-        let live = Mutex::new(LiveFromClaude::default());
-        // Set once the process is up: the line handler needs it to interrupt a turn an auth failure stops.
-        let proc_slot: Arc<Mutex<Option<Arc<GroupProcess>>>> = Arc::new(Mutex::new(None));
-        let line_proc = proc_slot.clone();
-        let proc = spawn_group(
-            Spawn { command: &self.command, args, cwd: &options.cwd, env, runtime: "claude", label: format!("claude {session_id}") },
-            self.store.clone(),
-            move |line| {
-                let Ok(frame) = serde_json::from_str::<Value>(&line) else {
-                    debug!(line = &line[..line.len().min(500)], "claude non-json line");
-                    return;
-                };
-                for event in live.lock().unwrap().feed(&frame) {
-                    let _ = line_events.send(RuntimeEvent::Live(event));
-                }
-                on_frame(&frame, &line_turn, &line_events, &line_proc);
-            },
-        )?;
-        *proc_slot.lock().unwrap() = Some(proc.clone());
+        let label = format!("claude {session_id}");
+        let (command, store) = (self.command.clone(), self.store.clone());
+        let machine_expires = machine.map(|m| m.1);
+        self.wire(session_id, Turn::default(), machine_expires, events, move |on_line| {
+            spawn_group(Spawn { command: &command, args, cwd: &options.cwd, env, runtime: "claude", label }, store, on_line)
+        })
+    }
 
-        let session = Arc::new(ClaudeSession { id: session_id, proc: proc.clone(), turn: turn.clone(), events: events.clone(), machine_expires: machine.map(|m| m.1) });
-        self.live.lock().unwrap().push(session.clone());
-        let exit_turn = turn;
-        tokio::spawn(async move {
-            let code = proc.exited().await;
-            let busy = {
-                let mut t = exit_turn.lock().unwrap();
-                t.closed = true;
-                std::mem::take(&mut t.busy)
-            };
-            if busy {
-                let _ = events.send(RuntimeEvent::TurnEnded(TurnOutcome::Failed { reason: FailureReason::Exited, message: format!("claude exited ({code}) during the turn") }));
-            }
-            let _ = events.send(RuntimeEvent::Closed(format!("claude exited ({code})")));
-        });
-        Ok(session)
+    async fn adopt_session(&self, handed: &Value, events: Events) -> Result<Arc<dyn AgentSession>> {
+        let handed: Handed = serde_json::from_value(handed.clone())?;
+        info!(session = handed.id, pgid = handed.process.pgid, busy = handed.turn.busy, "taking up a claude process handed over");
+        let (store, process, label) = (self.store.clone(), handed.process, format!("claude {}", handed.id));
+        self.wire(handed.id, handed.turn, handed.machine_expires, events, move |on_line| adopt_group(&process, store, "claude", &label, on_line))
     }
 
     async fn shutdown(&self) {
@@ -321,6 +356,21 @@ impl AgentSession for ClaudeSession {
     async fn dispose(&self) {
         self.proc.kill(Duration::from_secs(5)).await;
         let _ = &self.events;
+    }
+
+    async fn hand_off(&self) -> Result<Value> {
+        if self.turn.lock().unwrap().closed {
+            return Err(anyhow!("claude session is closed"));
+        }
+        let process = self.proc.hand_off().await?;
+        // Its reader has stopped: the turn stands as its last line left it.
+        let turn = {
+            let mut t = self.turn.lock().unwrap();
+            let handed = Turn { busy: t.busy, aborting: t.aborting, auth_failure: t.auth_failure.clone(), closed: false };
+            t.closed = true;
+            handed
+        };
+        Ok(serde_json::to_value(Handed { id: self.id.clone(), process, turn, machine_expires: self.machine_expires })?)
     }
 }
 
