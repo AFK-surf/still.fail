@@ -58,7 +58,6 @@ const gridLines = {
   backgroundImage: `linear-gradient(${LINE} 1px, transparent 1px), linear-gradient(90deg, ${LINE} 1px, transparent 1px)`,
   backgroundSize: "64px 64px",
 };
-const white = { backgroundImage: `linear-gradient(180deg, var(--s-title) 30%, ${MUTED})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" };
 
 // ---- Nav ----
 
@@ -212,41 +211,6 @@ export const sectionLight = style({
   maskImage: "radial-gradient(ellipse 50% 40% at 50% 0%, #000 10%, transparent 70%)",
   WebkitMaskImage: "radial-gradient(ellipse 50% 40% at 50% 0%, #000 10%, transparent 70%)",
 });
-export const sectionTitle = style({
-  margin: "0 0 72px", textAlign: "center", fontSize: "clamp(34px, 6vw, 72px)", lineHeight: "1.05", letterSpacing: "-.045em", fontWeight: "700",
-  ...white, "@media": { [NARROW]: { marginBottom: "48px" } },
-});
-/** A title's second line, dimmer. */
-export const faint = style({ display: "block", backgroundImage: `linear-gradient(180deg, ${MUTED}, var(--s-faint))`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" });
-
-// The mesh: stations linked to each other and to the devices people talk from; ember cloud apart, for accounts only.
-export const network = style({
-  display: "block", width: "100%", maxWidth: "1000px", height: "auto", margin: "0 auto", overflow: "visible",
-  selectors: { "&[data-shape=\"tall\"]": { display: "none", maxWidth: "420px" } },
-  "@media": { [NARROW]: { selectors: { "&[data-shape=\"wide\"]": { display: "none" }, "&[data-shape=\"tall\"]": { display: "block" } } } },
-});
-export const wire = style({
-  fill: "none", stroke: `${ink(18)}`, strokeWidth: "1.5", strokeDasharray: "4 6",
-  selectors: {
-    "&[data-kind=\"mesh\"]": { stroke: `color-mix(in srgb, ${EMBER} 55%, transparent)`, strokeWidth: "2", strokeDasharray: "none" },
-    "&[data-kind=\"cloud\"]": { stroke: `${ink(10)}`, strokeDasharray: "2 6" },
-  },
-});
-export const packet = style({ fill: EMBER, filter: `drop-shadow(0 0 6px ${EMBER})`, selectors: { "&[data-kind=\"mesh\"]": { fill: "#FFD2BC" } } });
-export const node = style({
-  fill: "var(--s-node)", stroke: `${ink(14)}`, strokeWidth: "1.2",
-  selectors: { "&[data-kind=\"cloud\"]": { fill: "transparent", strokeDasharray: "4 5", stroke: `${ink(22)}` } },
-});
-// Words over the lines keep a margin of the page's dark around them.
-const halo = { paintOrder: "stroke", stroke: BG, strokeWidth: "5px", strokeLinejoin: "round" } as const;
-export const nodeLabel = style({ fill: FG, fontSize: "15px", fontWeight: "600", fontFamily: vars.fontBody, ...halo });
-export const hub = style({ fill: `color-mix(in srgb, ${EMBER} 14%, ${BG})`, stroke: EMBER, strokeWidth: "1.5" });
-const pulse = keyframes({ "0%": { transform: "scale(1)", opacity: ".6" }, "100%": { transform: "scale(1.8)", opacity: "0" } });
-export const ring = style({
-  fill: "none", stroke: EMBER, strokeWidth: "1.5", transformBox: "fill-box", transformOrigin: "center",
-  animation: `${pulse} 2.8s ease-out infinite`, "@media": { [STILL]: { animation: "none", opacity: "0" } },
-});
-
 // Installing.
 export const terminal = style({
   position: "relative", maxWidth: "840px", margin: "0 auto", borderRadius: "18px", overflow: "hidden",
