@@ -31,6 +31,18 @@
 3. **客户端**：存储 key 先读新 key，没有再读旧 key 并写到新 key。桌面端 `productName` 改了以后，userData 目录也跟着变，第一次启动时把旧目录的内容搬过来。安卓换包名等于新 app，要重新安装、重新登录，这个躲不掉。`stillfail://` 为主，`ember://` 继续认。
 4. 默认连接的 cloud 地址改成 `https://app.still.fail`。
 
+## 上线清单（按顺序，等用户号令）
+
+1. **合进 main**：`rename-still-fail` rebase 到最新 main，冲突解掉，studio 上重跑 `sh scripts/check.sh full origin/main..HEAD`，再 fast-forward 推 main。
+2. **Google 登录**：studio 上 `~/ember-deploy/google-oauth.json` 备份成 `google-oauth.ember.json`，把 `google-oauth.still-fail.json` 换上去（新 OAuth 客户端，只登记了 `https://app.still.fail/v1/auth/google/callback`；旧域名上的 Google 登录会先跳到新域名）。
+3. **先发 station 安装包**：`scripts/release.sh station`（出 `stillfail-station-*.tar.gz`；旧的 `ember-station-*.tar.gz` 冻结在改名前最后一版，老安装脚本照样能用）。
+4. **再发 cloud 全部**：`python3 cloud/deploy.py`（relay → api → web / admin / preview / site）。新增自定义域名 `app.still.fail`、`admin.still.fail`、`preview.still.fail`，证书要等几分钟。验：`https://app.still.fail/healthz`、`/ping`、首页，旧的 `ember.3720.org` 同样能用。
+5. **web**：在 `https://app.still.fail` 登录一次（新域名，浏览器里的登录带不过去）。
+6. **station**：每台跑一次更新（`ember update` 或 `stillfail update`），升级时自己把 `~/.ember` 搬到 `~/.stillfail` 并留软链接。验：新服务在跑、旧服务已卸、会话和历史都在、`stillfail-job` / `ember-job` 都能用。
+7. **桌面端**：在 studio 本机终端（ssh 里签不了名）跑 `scripts/release.sh desktop`；MBA 上装新的 still.fail.app，删掉旧 ember.app（登录状态从旧数据目录自动搬过来）。旧 app 不再有更新。
+8. **安卓**：`scripts/release.sh android`；手机上装新 app（包名 `fail.still.android`），登录，删掉旧 app。确认 `assetlinks.json` 里的签名指纹对得上。
+9. **以后**：youdid.wtf 买了、接到 Cloudflare 后加进 `cloud/wrangler.site.jsonc` 重发官网。
+
 ## 现在的状态
 
 在分支 `rename-still-fail` 上做，**不合进 main、不部署，等用户号令**。
