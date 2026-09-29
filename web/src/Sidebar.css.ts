@@ -104,7 +104,9 @@ export const rowPicture = style({
   vars: { "--mark-around": vars.sidebar },
   selectors: {
     [`${navSession}[data-offline] &`]: { opacity: 0.5 },
-    [`${navSessionWrap}:hover ${navSession}:not([aria-current="page"]) &`]: { vars: { "--mark-around": vars.hover } },
+    [`${navSessionWrap}:hover ${navSession}:not([aria-current="page"]) &`]: {
+      vars: { "--mark-around": vars.hover, "--mark-under": vars.sidebar },
+    },
     [`${navSession}[aria-current="page"] &`]: { vars: { "--mark-around": vars.selected } },
   },
 });
