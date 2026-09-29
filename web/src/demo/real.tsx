@@ -23,7 +23,7 @@ export function RealEmber() {
   if (!shown) return null;
   // On the page itself, over whatever the app has open (its dialogs are on the page too, and hold the pointer).
   return createPortal(
-    <div className={css.veil} onClick={(e) => { if (e.target === e.currentTarget) set(false); }}>
+    <div className={css.veil} data-real-ember="" onClick={(e) => { if (e.target === e.currentTarget) set(false); }}>
       <div className={css.card} role="dialog" aria-modal="true" aria-labelledby="real-ember-title">
         <img className={css.mark} src="/mark-dark.svg" alt="" />
         <h2 id="real-ember-title" className={css.title}>这一步要在真实的 Ember 里做</h2>

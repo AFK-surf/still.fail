@@ -249,6 +249,22 @@ export function mountDemo(element: HTMLElement): void {
     if (root.contains(this) && !touched) return;
     focus.call(this, { ...options, preventScroll: true });
   };
+  // A link out of the demo (Slack, a web service, an app's settings) opens nothing: it too needs a real ember. Only the
+  // app's own links count, in its box or its dialogs and menus on the page; the page's own, and the note's, go.
+  const inApp = (el: Element) => !el.closest("[data-real-ember]") && (root.contains(el) || !!el.closest("[role=dialog], [role=menu], [data-radix-popper-content-wrapper]"));
+  document.addEventListener("click", (event) => {
+    const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+    if (!link || !inApp(link)) return;
+    const to = new URL(link.href, location.href);
+    if (to.origin === location.origin && link.target !== "_blank") return;
+    event.preventDefault();
+    event.stopPropagation();
+    askForReal();
+  }, true);
+  window.open = () => {
+    askForReal();
+    return null;
+  };
   root.addEventListener("pointerdown", () => {
     touched = true;
     story.stop();
