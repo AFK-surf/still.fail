@@ -180,7 +180,7 @@ function AddSheet({ view }: { view: WorkspaceView }) {
                     const on = already || picked.has(p.email);
                     return (
                       <button key={p.email} type="button" className={settingsCss.mModelRow} style={{ padding: "9px 0" }} disabled={already} onClick={() => toggle(p.email)}>
-                        <span className={settingsCss.mCheck} data-on={on || undefined}>{on && <Check size={13} />}</span>
+                        <span className={settingsCss.mCheck} data-on={on || undefined}>{on && <Check size={14} />}</span>
                         <Avatar id={p.email} name={p.name || p.email} size={26} picture={p.image ?? undefined} />
                         <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.name}</span><span className={listsCss.mRowNote}>{p.email}</span></span>
                         {already ? <span className={listsCss.mRowNote}>已在</span> : p.guest && <span className={listsCss.mRowNote}>访客</span>}

@@ -113,10 +113,11 @@ globalStyle(`${mAttach} button`, {
   flex: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", padding: "16px 0 12px",
   border: "0", borderRadius: "18px", background: "var(--m-chip)", cursor: "pointer",
 });
-globalStyle(`${mJob} > ${jobDot}`, { marginTop: "calc((15px * 1.45 - 8px) / 2 - .5px)" });
+// The dot on the name's 21px line, half a pixel up for CJK ink (rounded to a whole pixel).
+globalStyle(`${mJob} > ${jobDot}`, { marginTop: "6px" });
 globalStyle(`${mJobHead} span > span`, {
   fontSize: "12.5px", color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
-globalStyle(`${mJobHead} > ${jobDot}`, { marginTop: "calc((16px * 1.45 - 8px) / 2 - .5px)" });
+globalStyle(`${mJobHead} > ${jobDot}`, { marginTop: "7px" });
 globalStyle(`${mJobNotices} p`, { margin: "0", display: "grid", gridTemplateColumns: "3.4em 1fr", gap: "10px" });
 globalStyle(`${mJobNotices} time`, { color: "var(--m-subtle)", fontVariantNumeric: "tabular-nums" });

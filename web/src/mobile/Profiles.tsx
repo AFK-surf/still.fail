@@ -222,7 +222,7 @@ function Models({ p, onSave }: { p: Profile; onSave: (models: string[]) => void 
               const on = p.models.includes(m);
               return (
                 <button key={m} type="button" className={settingsCss.mModelRow} onClick={() => save(on ? p.models.filter((x) => x !== m) : [...p.models, m])}>
-                  <span className={settingsCss.mCheck} data-on={on || undefined}>{on && <Check size={13} />}</span>
+                  <span className={settingsCss.mCheck} data-on={on || undefined}>{on && <Check size={14} />}</span>
                   <span className={partsCss.mGrow}>{p.names[m] ?? m}</span>
                 </button>
               );
@@ -275,9 +275,9 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  if (!job || job.state === "starting") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={12} />正在生成 {provider} 的登录链接…</p>;
-  if (job.state === "verifying") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={12} />正在完成登录…</p>;
-  if (job.state === "done") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={12} />已登录，正在添加…</p>;
+  if (!job || job.state === "starting") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />正在生成 {provider} 的登录链接…</p>;
+  if (job.state === "verifying") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />正在完成登录…</p>;
+  if (job.state === "done") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />已登录，正在添加…</p>;
   if (job.state === "needs_approval" && job.url && job.userCode) {
     return (
       <>

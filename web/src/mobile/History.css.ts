@@ -117,12 +117,13 @@ export const mRunBecomes = style({
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const mSettingRow = style({
-  display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", padding: "12px 14px",
-  border: "0", borderRadius: "12px", background: "var(--m-chip)", textAlign: "left", cursor: "pointer",
+  display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", minHeight: "46px",
+  padding: "12px 14px", border: "0", borderRadius: "12px", background: "var(--m-chip)", textAlign: "left", cursor: "pointer",
 });
 export const mSettingText = style({ display: "flex", flexDirection: "column" });
 export const mPickLine = style({
-  display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", padding: "11px 4px",
+  display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", minHeight: "44px",
+  padding: "11px 4px",
   border: "0", borderRadius: "10px", background: "none", fontSize: "15px !important", textAlign: "left",
   cursor: "pointer",
 });

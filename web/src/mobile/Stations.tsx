@@ -216,7 +216,7 @@ export function FirstStation() {
       <b>添加第一台 station</b>
       <p>agent 在你的机器上干活。先把一台 Mac 或 Linux 机器加进来。</p>
       <div className={`${sheetsCss.mForm} ${settingsCss.mSteps}`} style={{ alignSelf: "stretch", padding: 0, textAlign: "left" }}>
-        {!view ? <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={12} />正在读取 workspace…</p>
+        {!view ? <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />正在读取 workspace…</p>
           : !manager ? <p className={settingsCss.mCallout}>这个 workspace 还没有 station，等管理员添加。</p>
           : made ? <EnrollSteps install={made.install} />
           : (

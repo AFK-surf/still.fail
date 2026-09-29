@@ -39,7 +39,7 @@ globalStyle(`${mSwitchRow} b`, { fontSize: "14px", fontWeight: "600" });
 globalStyle(`${mStepsList} a, ${mStepsList} ${mLink}`, { color: "var(--m-accent)" });
 /** Here rather than with its class: it comes after .m-choice b, and wins over it. */
 globalStyle(`${mJobText} b`, {
-  fontSize: "15px", fontWeight: "500", lineHeight: "1.45", overflow: "hidden", textOverflow: "ellipsis",
+  fontSize: "15px", fontWeight: "500", lineHeight: "21px", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
 /** Here rather than with its class: it comes after .m-choice span, and wins over it. */
@@ -47,7 +47,7 @@ globalStyle(`${mJobText} > span`, {
   fontSize: "12.5px", color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** Here rather than with its class: it comes after .m-choice b, and wins over it. */
-globalStyle(`${mJobHead} b`, { fontSize: "16px", fontWeight: "600", lineHeight: "1.45" });
+globalStyle(`${mJobHead} b`, { fontSize: "16px", fontWeight: "600", lineHeight: "23px" });
 /** Here rather than with its class: it comes after .m-switch-row b, and wins over it. */
 globalStyle(`${mJobsEmpty} b`, { fontSize: "15px", fontWeight: "600", color: "var(--m-ink)" });
 /** Here rather than with its class: it comes after .m-choice span, and wins over it. */

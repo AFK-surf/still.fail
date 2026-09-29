@@ -80,7 +80,8 @@ export const mSegThumb = style({
 });
 export const mNavBack = style({
   display: "inline-flex", alignItems: "center", gap: "0", padding: "4px 6px 4px 0", border: "0", background: "none",
-  borderRadius: "8px", color: "var(--m-accent) !important", fontSize: "17px !important", cursor: "pointer",
+  borderRadius: "8px", color: "var(--m-accent) !important", fontSize: "17px !important", lineHeight: "24px",
+  cursor: "pointer",
 });
 export const mNavbar = style({
   display: "grid", gridTemplateColumns: "84px minmax(0, 1fr) 84px", alignItems: "center", flex: "none",
@@ -102,15 +103,15 @@ export const mListCard = style({
   },
 });
 export const mListRow = style({
-  display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", padding: "12px 16px",
-  border: "0", background: "none", color: "var(--m-ink)", textAlign: "left",
+  display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", minHeight: "46px",
+  padding: "12px 16px", border: "0", background: "none", color: "var(--m-ink)", textAlign: "left",
   selectors: {
     "button&": { cursor: "pointer" },
   },
 });
 export const mPickRow = style({
   display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "calc(100% - 24px)",
-  margin: "0 12px", padding: "12px 8px", border: "0", background: "none", color: "var(--m-ink)", textAlign: "left",
+  minHeight: "46px", margin: "0 12px", padding: "12px 8px", border: "0", background: "none", color: "var(--m-ink)", textAlign: "left",
   cursor: "pointer",
   selectors: {
     "&:disabled": { color: "var(--m-subtle)" },
@@ -164,7 +165,7 @@ globalStyle(`${mInfoAgent} span`, {
 });
 /** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */
 globalStyle(`${mHomeWorkspace} b`, {
-  minWidth: "0", fontSize: "24px", fontWeight: "700", letterSpacing: "-0.4px", overflow: "hidden",
+  minWidth: "0", fontSize: "24px", lineHeight: "34px", fontWeight: "700", letterSpacing: "-0.4px", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** Here rather than with its class: it comes after .m-ring-disc b, and wins over it. */

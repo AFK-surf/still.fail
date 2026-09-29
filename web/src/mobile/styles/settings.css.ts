@@ -6,7 +6,8 @@ import { mCard } from "./lists.css.ts";
 export const mStationPage = style({ paddingTop: "12px", paddingBottom: "var(--m-foot)" });
 export const mProfileTools = style({ display: "flex", alignItems: "center", gap: "12px", padding: "0 12px 8px" });
 export const mModelRow = style({
-  display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", padding: "11px 24px",
+  display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", minHeight: "44px",
+  padding: "11px 24px",
   border: "0", background: "none", textAlign: "left", cursor: "pointer",
 });
 export const mCheck = style({

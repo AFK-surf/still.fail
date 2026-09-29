@@ -24,7 +24,7 @@ export const mHomeBar = style({
   gap: "10px", padding: "calc(var(--m-top) + 8px) 16px 8px",
 });
 export const mHomeMe = style({
-  flex: "none", padding: "0", border: "0", borderRadius: "50%", background: "none", cursor: "pointer",
+  display: "grid", flex: "none", padding: "0", border: "0", borderRadius: "50%", background: "none", cursor: "pointer",
 });
 export const mHomeWorkspace = style({
   flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "6px", padding: "0", border: "0",
@@ -81,7 +81,7 @@ export const mRowAgent = style({
   position: "absolute", display: "grid", placeItems: "center",
   selectors: {
     [`${mRowPicture}[data-count="1"] &`]: { inset: "0" },
-    [`${mRowPicture}[data-count="2"] &`]: { width: "21px", height: "21px" },
+    [`${mRowPicture}[data-count="2"] &`]: { width: "22px", height: "22px" },
     [`${mRowPicture}[data-count="2"] &:first-child`]: { left: "0", top: "0" },
     [`${mRowPicture}[data-count="2"] &:last-child`]: { right: "0", bottom: "0" },
   },
@@ -102,6 +102,8 @@ export const mChatMark = style({
     [`${mChatRow}[data-offline] &`]: { color: "var(--m-subtle)" },
   },
 });
+/** The Slack mark's tip wrapper: a box of the mark's size, not a text line it sits on the baseline of. */
+globalStyle(`${mChatMark} > span`, { display: "grid" });
 export const mChatLine2 = style({ display: "flex", alignItems: "center", gap: "8px", height: "20px" });
 export const mChatLast = style({ flex: "1", minWidth: "0", display: "flex" });
 export const mChatTime = style({

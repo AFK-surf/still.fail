@@ -108,7 +108,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
       {/* The choices, then the composer as a floating capsule, as in a chat. */}
       <div className={css.mNewBottom}>
         <div className={css.mChoosers}>
-          <Chooser leading={<Server size={13} />} label={view.name} onClick={() => pickStation(app, stations, view.station, onStation)} />
+          <Chooser leading={<Server size={14} />} label={view.name} onClick={() => pickStation(app, stations, view.station, onStation)} />
           {!runtime || !model ? (
             // Nothing to choose from: the chooser leads to where models are enabled.
             <Chooser label="没有可用模型 · 去勾选" onClick={() => app.push(app.at(`/s/${view.id}/overview`))} />
@@ -117,7 +117,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
               <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={entry.name}
                 onClick={() => pickModel(app, view, model, (m) => { const rt = m.runtimes.find((r) => r === runtime) ?? m.runtimes[0]!; pick({ runtime: rt as RuntimeKind, model: m.model, effort: rt !== runtime ? "" : effort }); })} />
               {/* The runtime only when the model runs on more than one. */}
-              {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={13} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
+              {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={14} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
                 onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind, model, effort: "" }))} />}
               <Chooser label={effort || "默认深度"} onClick={() => pickEffort(app, efforts, effort, (e) => pick({ runtime, model, effort: e }))} />
             </>

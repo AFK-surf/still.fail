@@ -112,6 +112,6 @@ export const mReaderLabel = style({ display: "flex", alignItems: "center", fontS
 globalStyle(`${mGrab} span`, { width: "38px", height: "5px", borderRadius: "3px", background: "var(--m-line)" });
 globalStyle(`${mMenu} button`, {
   display: "flex", alignItems: "center", justifyContent: "space-between", boxSizing: "border-box", width: "100%",
-  padding: "12px 16px", border: "0", background: "none", color: "var(--m-ink)", fontSize: "15px !important",
+  minHeight: "46px", padding: "12px 16px", border: "0", background: "none", color: "var(--m-ink)", fontSize: "15px !important",
   cursor: "pointer",
 });
