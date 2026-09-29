@@ -89,25 +89,31 @@ export const navButton = style({ "@media": { [NARROW]: { display: "none" } } });
 
 // ---- Buttons ----
 
-/**
- * A light in a button where the pointer is (motion.ts sets where, --mx/--my, and how strong, --glow, following the
- * pointer with a spring); none without script.
- */
-const GLOW = `radial-gradient(circle 90px at var(--mx) var(--my), color-mix(in srgb, ${EMBER} calc(var(--glow) * 55%), transparent), transparent)`;
 export const button = style({
-  vars: { "--mx": "50%", "--my": "50%", "--glow": "0" },
-  position: "relative", display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 20px", borderRadius: "999px",
+  position: "relative", overflow: "hidden", display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 20px", borderRadius: "999px",
   fontSize: "15px", fontWeight: "550", whiteSpace: "nowrap", transition: `transform .2s ${vars.easeOut}, box-shadow .2s, background .2s`,
   selectors: {
     "&:hover": { transform: "translateY(-2px)" },
-    "&[data-kind=\"primary\"]": { background: `${GLOW}, var(--s-primary)`, color: "var(--s-on-primary)" },
+    "&[data-kind=\"primary\"]": { background: "var(--s-primary)", color: "var(--s-on-primary)" },
+    // A light sweeping across the main one as the pointer comes onto it.
+    "&[data-kind=\"primary\"]::after": {
+      content: "\"\"", position: "absolute", inset: "0", pointerEvents: "none", transform: "translateX(-120%) skewX(-20deg)",
+      background: `linear-gradient(90deg, transparent, color-mix(in srgb, ${EMBER} 45%, transparent), transparent)`,
+    },
+    "&[data-kind=\"primary\"]:hover::after": { transform: "translateX(120%) skewX(-20deg)", transition: `transform .6s ${vars.easeOut}` },
     "&[data-kind=\"primary\"]:hover": { boxShadow: `0 10px 34px -8px color-mix(in srgb, ${EMBER} 80%, transparent)` },
-    "&[data-kind=\"ghost\"]": { color: FG, boxShadow: `inset 0 0 0 1px ${ink(18)}`, background: GLOW },
-    "&[data-kind=\"ghost\"]:hover": { background: `${GLOW}, ${ink(6)}` },
+    "&[data-kind=\"ghost\"]": { color: FG, boxShadow: `inset 0 0 0 1px ${ink(18)}` },
+    "&[data-kind=\"ghost\"]:hover": { background: `${ink(6)}` },
     "&[data-size=\"large\"]": { height: "50px", padding: "0 28px", fontSize: "16px" },
   },
 });
 export const actions = style({ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" });
+
+/** A button's words and their twin under them, in a window a line high: rolled up a line on hover. */
+export const roll = style({ display: "grid", overflow: "hidden", height: "1.3em", lineHeight: "1.3em" });
+globalStyle(`${roll} > span`, { transition: `transform .45s cubic-bezier(.7, 0, .2, 1)` });
+globalStyle(`${button}:hover ${roll} > span`, { transform: "translateY(-100%)" });
+globalStyle(`${button}:hover ${roll} > span + span`, { transitionDelay: ".03s" });
 
 // ---- Hero ----
 

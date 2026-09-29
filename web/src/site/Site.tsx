@@ -20,7 +20,12 @@ function Themed({ name, className, alt = "", life }: { name: string; className?:
 }
 
 function Button({ href, kind, large, children, className }: { href: string; kind: "primary" | "ghost"; large?: boolean; children: ReactNode; className?: string }) {
-  return <a className={`${css.button} ${className ?? ""}`} data-kind={kind} data-size={large ? "large" : undefined} href={href}>{children}</a>;
+  // Its words twice, one under the other: on hover they roll up, the second taking the first's place (site.css.ts).
+  return (
+    <a className={`${css.button} ${className ?? ""}`} data-kind={kind} data-size={large ? "large" : undefined} href={href}>
+      <span className={css.roll}><span>{children}</span><span aria-hidden>{children}</span></span>
+    </a>
+  );
 }
 
 /**
