@@ -284,6 +284,37 @@ impl AdminApi {
         Ok(json!({ "session": self.summary(key)?, "threads": self.threads(viewer, Some(key))?, "turns": turns, "jobs": jobs }))
     }
 
+    /// The jobs still up (running, or a service being started again), newest first, each with the chat it is in as the
+    /// viewer's list has it (`chat`: its id, title and whether it is archived), or none when no chat shows its session.
+    pub(super) fn open_jobs(&self, viewer: &Viewer) -> Result<Vec<Value>> {
+        let open: Vec<_> = self.deps.store.list_jobs(None)?.into_iter().filter(|j| j.state == "running" || (j.port.is_some() && j.state == "exited")).collect();
+        if open.is_empty() {
+            return Ok(vec![]);
+        }
+        // An archived chat first, so a listed one showing the same session wins; a chat that is the session's own wins over one it only takes part in.
+        let mut chats: HashMap<String, (bool, Value)> = HashMap::new();
+        for (archived, chat) in self.chats(viewer, true)?.into_iter().map(|c| (true, c)).chain(self.chats(viewer, false)?.into_iter().map(|c| (false, c))) {
+            let shown = json!({ "id": chat["id"], "title": chat["title"], "archived": archived });
+            for agent in chat["agents"].as_array().into_iter().flatten() {
+                let Some(key) = agent["key"].as_str() else { continue };
+                let own = chat["session"].as_str() == Some(key);
+                if own || chats.get(key).is_none_or(|(was_own, _)| !was_own) {
+                    chats.insert(key.to_string(), (own, shown.clone()));
+                }
+            }
+        }
+        Ok(open
+            .iter()
+            .map(|j| {
+                let mut v = crate::jobs::shown(&self.deps.store, j);
+                if let Some((_, chat)) = chats.get(&j.session_key) {
+                    v["chat"] = chat.clone();
+                }
+                v
+            })
+            .collect())
+    }
+
     // ── threads ────────────────────────────────────────────────────────────
 
     pub(super) fn threads(&self, viewer: &Viewer, session: Option<&str>) -> Result<Vec<Value>> {

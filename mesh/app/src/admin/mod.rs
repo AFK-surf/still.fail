@@ -493,6 +493,8 @@ impl AdminApi {
             }
             ("GET", "/chats") => return ok(Value::Array(self.chats(viewer, asked.param("archived") == Some("1"))?)),
             ("GET", "/threads") => return ok(Value::Array(self.threads(viewer, asked.param("session"))?)),
+            // The services and jobs still up on this station, across its chats (the sidebar keeps those left open a long while in view).
+            ("GET", "/jobs") => return ok(Value::Array(self.open_jobs(viewer)?)),
             ("POST", "/threads") => {
                 // Another chat on the pages with a session in it.
                 let input = read_json(body).await?;
