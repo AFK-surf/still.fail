@@ -12,6 +12,7 @@ import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
 import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
+import { follower, type Follower } from "../motion.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface Entry { id: string; name: string; account: Account }
@@ -189,15 +190,19 @@ const SheetDragContext = createContext<Drag | null>(null);
 function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void }) {
   const [shown, setShown] = useState<SheetSpec | null>(null);
   const [open, setOpen] = useState(false);
-  const [height, setHeight] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const sheet = useRef<HTMLDivElement>(null);
+  // Its height: following the finger at once while dragged, then on to where it settles at the speed it was let go of.
+  const height = useRef<Follower | null>(null);
+  height.current ??= follower(0, (v) => { if (sheet.current) sheet.current.style.height = `${v}px`; });
+  useEffect(() => () => height.current?.stop(), []);
   const total = () => window.innerHeight;
   useBackClose(!!spec, close);
   useEffect(() => {
     if (spec) {
       // A sheet comes up in the keyboard's place: what was being typed into lets go of it first.
       (document.activeElement as HTMLElement | null)?.blur?.();
-      setHeight(spec.height * total());
+      height.current!.jump(spec.height * total());
       setShown(spec);
       requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)));
       return;
@@ -206,6 +211,8 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     const timer = setTimeout(() => setShown(null), 300);
     return () => clearTimeout(timer);
   }, [spec]);
+  // Drawn as it is when it (re)appears.
+  useLayoutEffect(() => { if (shown && sheet.current) sheet.current.style.height = `${height.current!.value}px`; }, [shown]);
   useEffect(() => {
     if (!spec) return;
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
@@ -213,22 +220,34 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     return () => window.removeEventListener("keydown", key);
   }, [spec, close]);
   const from = useRef({ y: 0, h: 0, moved: false });
+  /** The finger's last moves, for how fast it was going when let go (height per second: up is positive). */
+  const trail = useRef<{ y: number; t: number }[]>([]);
   if (!shown) return null;
+  const h = () => height.current!.value;
+  const follow = (y: number, most: number) => {
+    from.current.moved = true;
+    const now = performance.now();
+    trail.current = [...trail.current.filter((p) => now - p.t < 100), { y, t: now }];
+    height.current!.jump(Math.max(120, Math.min(most, from.current.h + from.current.y - y)));
+  };
+  const speed = () => {
+    const [first, last] = [trail.current[0], trail.current.at(-1)];
+    return first && last && last.t > first.t ? ((first.y - last.y) / (last.t - first.t)) * 1000 : 0;
+  };
+  const settle = (to: number) => height.current!.to(to, { type: "spring", visualDuration: 0.32, bounce: 0, velocity: speed() });
+  const grab = (y: number) => { from.current = { y, h: h(), moved: false }; trail.current = [{ y, t: performance.now() }]; setDragging(true); };
   const drag: Drag = {
     draggable: !!shown.draggable,
-    start: (y) => { from.current = { y, h: height, moved: false }; setDragging(true); },
-    move: (y) => {
-      from.current.moved = true;
-      setHeight(Math.max(120, Math.min(total() * 0.94, from.current.h + from.current.y - y)));
-    },
+    start: grab,
+    move: (y) => follow(y, total() * 0.94),
     end: () => {
       setDragging(false);
       if (!from.current.moved) return;
-      const f = height / total();
+      const f = h() / total();
       if (f < 0.3) close();
-      else setHeight(total() * (f > 0.72 ? 0.94 : 0.55));
+      else settle(total() * (f > 0.72 ? 0.94 : 0.55));
     },
-    tap: () => setHeight(total() * (height > total() * 0.9 ? 0.55 : 0.94)),
+    tap: () => { trail.current = []; settle(total() * (h() > total() * 0.9 ? 0.55 : 0.94)); },
   };
   // With a finger the sheet's top (its grabber and head) drags it: a draggable sheet between half and full height or
   // down to close; any other down to close, or back to its height.
@@ -237,28 +256,25 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.pointerType !== "touch" || e.clientY - e.currentTarget.getBoundingClientRect().top > 64 || (e.target as HTMLElement).closest("button, input, textarea, a")) return;
       e.currentTarget.setPointerCapture(e.pointerId);
-      from.current = { y: e.clientY, h: height, moved: false };
-      setDragging(true);
+      grab(e.clientY);
     },
     onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
       if (!dragging || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
-      from.current.moved = true;
-      const next = from.current.h + from.current.y - e.clientY;
-      setHeight(Math.max(120, Math.min(shown.draggable ? total() * 0.94 : base, next)));
+      follow(e.clientY, shown.draggable ? total() * 0.94 : base);
     },
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
       setDragging(false);
       if (!from.current.moved) return;
       if (shown.draggable) return drag.end();
-      if (base - height > 80) close();
-      else setHeight(base);
+      if (base - h() > 80) close();
+      else settle(base);
     },
   };
   return (
     <div className={css.mOverlay} data-open={open || undefined}>
       <div className={css.mScrim} onClick={close} />
-      <div className={css.mSheet} data-open={open || undefined} data-dragging={dragging || undefined} style={{ height }} {...headDrag}>
+      <div ref={sheet} className={css.mSheet} data-open={open || undefined} data-dragging={dragging || undefined} {...headDrag}>
         <SheetDragContext.Provider value={drag}>{shown.content()}</SheetDragContext.Provider>
       </div>
     </div>

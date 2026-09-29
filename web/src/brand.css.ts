@@ -21,7 +21,6 @@ export const illus = style({
 });
 export const sidebarBuddy = style({
   selectors: {
-    "[data-sidebar-moving] &": { transition: `left 380ms ${vars.easeOut}` },
     "[data-sidebar=\"closed\"] &": { left: "14px" },
     "[data-desktop] &": { top: "8px" },
     "[data-desktop][data-sidebar=\"closed\"] &": { left: "84px" },
@@ -29,9 +28,6 @@ export const sidebarBuddy = style({
   "@media": {
     "(max-width: 700px)": {
       display: "none",
-    },
-    "(prefers-reduced-motion: reduce)": {
-      transition: "none",
     },
   },
 });
@@ -44,7 +40,6 @@ export const sidebarUpdate = style({
   selectors: {
     "&:hover:not(:disabled)": { filter: "brightness(.96)" },
     "&:disabled": { cursor: "progress" },
-    "[data-sidebar-moving] &": { transition: `left 380ms ${vars.easeOut}, transform 380ms ${vars.easeOut}` },
     "[data-sidebar=\"closed\"] &": { left: "50px", transform: "none" },
     "[data-desktop] &": { top: "11px" },
     "[data-desktop][data-sidebar=\"closed\"] &": { left: "120px" },

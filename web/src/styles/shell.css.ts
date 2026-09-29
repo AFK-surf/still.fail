@@ -10,12 +10,8 @@ export const shell = style({
     "(min-width: 701px)": {
       gridTemplateColumns: "var(--sidebar-w, 240px) minmax(0, 1fr)",
       selectors: {
-        "[data-sidebar-moving] &": { transition: `grid-template-columns 380ms ${vars.easeOut}` },
         "[data-sidebar=\"closed\"] &": { gridTemplateColumns: "0px minmax(0, 1fr)" },
       },
-    },
-    "(prefers-reduced-motion: reduce)": {
-      transition: "none",
     },
   },
 });

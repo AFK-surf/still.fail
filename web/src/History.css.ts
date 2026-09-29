@@ -126,21 +126,13 @@ export const hLiveThinking = style({
 });
 /** Long history text folds to five lines. */
 export const fold = style({ display: "grid", gap: "2px", minWidth: "0" });
+/** Folded and unfolded by a click, it moves from one height to the other (History.tsx Fold). */
 export const foldBody = style({
   selectors: {
     "&[data-folded]": {
       maxHeight: "calc(5lh + 2px)", overflow: "hidden",
       WebkitMaskImage: "linear-gradient(to bottom, #000 60%, transparent)",
       maskImage: "linear-gradient(to bottom, #000 60%, transparent)",
-    },
-    "&[data-anim]": { transition: `max-height 240ms ${vars.easeOut}` },
-    "&[data-anim]:not([data-folded])": { maxHeight: "4000px" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      selectors: {
-        "&[data-anim]": { transition: "none" },
-      },
     },
   },
 });

@@ -47,12 +47,9 @@ export const chatList = style({
     [`${chat}[data-under-composer] &`]: {
       paddingBottom: "calc(24px + var(--composer-height))", scrollPaddingBottom: "calc(8px + var(--composer-height))",
     },
-    // Making way for the small web services in the corner (Previews.tsx), with its composer: what it shows, not its
-    // scrollbar, which stays at the window's edge.
-    [`${chat}[data-avoid-previews=settled] &`]: { transition: "padding-right 280ms cubic-bezier(.2, .8, .2, 1)" },
-    // While they are resized it follows their edge at once: easing, it would restart every frame and lag, shaking.
-    [`:root[data-preview-resizing] ${chat}[data-avoid-previews=settled] &`]: { transition: "none" },
   },
+  // Making way for the small web services in the corner (Previews.tsx, which moves it), with its composer: what it
+  // shows, not its scrollbar, which stays at the window's edge.
   paddingRight: "calc(32px + var(--avoid-previews, 0px))",
   "@media": {
     "(max-width: 700px)": {

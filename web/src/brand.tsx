@@ -4,6 +4,9 @@ import { useDark } from "./theme.ts";
 import type { AppUpdate } from "./core/client.ts";
 import { shortcutOf, useKeymap, useShortcut } from "./keymap.ts";
 import * as css from "./brand.css.ts";
+import * as shellCss from "./styles/shell.css.ts";
+import * as sidebarCss from "./styles/sidebar.css.ts";
+import { moveState } from "./motion.ts";
 import { Tip } from "./ui.tsx";
 // ember's brand, from web/public (see the brand package's brand.md): the station
 // buddy mark, the lockup and the illustrations. Marks and lockup have -dark twins,
@@ -77,11 +80,16 @@ function SidebarBuddy() {
   useEffect(() => () => clearTimeout(timer.current), []);
   const toggle = () => {
     const next = !closed;
-    // It moves (and the sidebar with it) only now: resizing the sidebar follows the pointer at once.
-    document.documentElement.dataset.sidebarMoving = "";
-    setTimeout(() => { delete document.documentElement.dataset.sidebarMoving; }, 420);
+    // It moves (and the sidebar with it, the page bars' room for it, 更新 by it) only now: resizing the sidebar follows
+    // the pointer at once.
+    const moves = (selector: string, props: string[]) => [...document.querySelectorAll<HTMLElement>(selector)].map((el) => [el, props] as [HTMLElement, string[]]);
+    moveState([
+      ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
+      ...moves(`.${css.sidebarBuddy}`, ["left"]),
+      ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
+      ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
+    ], () => closeSidebar(next));
     setClosed(next);
-    closeSidebar(next);
     // It hops on the way, and lands in the pose of where it goes.
     setPose("hop");
     clearTimeout(timer.current);

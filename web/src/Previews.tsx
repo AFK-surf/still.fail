@@ -16,6 +16,7 @@ import { useLink } from "./station.tsx";
 import { Close, Minus, Web } from "./icons.tsx";
 import { Tip } from "./ui.tsx";
 import { previewKey, viewportOf } from "./viewport.ts";
+import { follower, type Follower } from "./motion.ts";
 import * as css from "./Previews.css.ts";
 
 export { previewKey };
@@ -95,7 +96,6 @@ export function PreviewSlot({ station, port, file, name, service: job, restartin
  * `behind`); pointed at, they are all laid out, in columns up from the corner. Tucked away, only a capsule is there.
  */
 const SMALL = { width: 280, height: 176, margin: 16, gap: 12, peek: 7, shrink: 0.06, behind: 2 };
-const MOVE = { duration: 280, easing: "cubic-bezier(.2, .8, .2, 1)" };
 /** How long the pointer can be off them (crossing the gap between two) before they go back to rest. */
 const LINGER = 250;
 const TUCKED = "ember.previewsTucked";
@@ -163,22 +163,28 @@ interface Drawn { transform: string; clipPath: string; opacity: string }
  * scaled down: all of it shows. */
 const LAID = 800;
 
-/** Where the small ones' edge was, for each element making way for them. */
-const avoided = new WeakMap<HTMLElement, number | null>();
-/** Makes way, in whatever is marked for it, for what is in the corner from `edge` on (none: no room is taken). It eases
- * only as the small ones come, go or change; the first time it is seen (a page come in with small ones there), or as
- * it moves or resizes itself (its side panel opening or closing), it takes its room at once: what it shows stays clear
- * of them, instead of running under them and back. */
+/** What makes way for the small ones: the room it gives them, and where it and their edge were when it last looked. */
+const avoiding = new WeakMap<HTMLElement, { room: Follower; right: number; edge: number | null }>();
+/** Makes way, in whatever is marked for it, for what is in the corner from `edge` on (none: no room is taken). It moves
+ * only as the small ones come, go or change (and not while they are resized: it follows the edge dragged at once); the
+ * first time it is seen (a page come in with small ones there), or as it moves or resizes itself (its side panel
+ * opening or closing), it takes its room at once: what it shows stays clear of them, instead of running under them
+ * and back. */
 function avoid(edge: number | null): void {
+  const resizing = document.documentElement.dataset.previewResizing !== undefined;
   for (const el of document.querySelectorAll<HTMLElement>("[data-avoid-previews]")) {
-    const room = `${edge === null ? 0 : Math.max(0, Math.round(el.getBoundingClientRect().right - edge))}px`;
-    const eases = avoided.has(el) && avoided.get(el) !== edge;
-    avoided.set(el, edge);
-    if (el.style.getPropertyValue("--avoid-previews") !== room) {
-      if (!eases) el.dataset.avoidPreviews = "";
-      el.style.setProperty("--avoid-previews", room);
+    const right = el.getBoundingClientRect().right;
+    const room = edge === null ? 0 : Math.max(0, Math.round(right - edge));
+    const was = avoiding.get(el);
+    if (!was) {
+      avoiding.set(el, { room: follower(room, (v) => el.style.setProperty("--avoid-previews", `${v}px`)), right, edge });
+      el.style.setProperty("--avoid-previews", `${room}px`);
+      continue;
     }
-    if (el.dataset.avoidPreviews !== "settled") requestAnimationFrame(() => { el.dataset.avoidPreviews = "settled"; });
+    if (resizing || Math.abs(was.right - right) > 0.5) was.room.jump(room);
+    else if (was.edge !== edge) was.room.to(room);
+    was.right = right;
+    was.edge = edge;
   }
 }
 
@@ -193,6 +199,40 @@ function draw(box: Box, bar: number, seen: Seen, opacity = 1): Drawn {
   };
 }
 
+const FRAME = ["x", "y", "w", "h", "top", "opacity"] as const;
+const CARD = ["x", "y", "w", "h"] as const;
+/** How a frame is drawn as it moves: the area it is seen in and how much of its top (its bar) is cut off, over its
+ * `box` (where it is laid out, at once); and its card's place. */
+interface Motions {
+  el: HTMLDivElement;
+  box: Box;
+  frame: Record<(typeof FRAME)[number], Follower>;
+  card: Record<(typeof CARD)[number], Follower>;
+  drawFrame(): void;
+  stop(): void;
+}
+function motionsFor(frame: HTMLDivElement, card: HTMLDivElement): Motions {
+  const m: Motions = {
+    el: frame,
+    box: { x: 0, y: 0, w: 1, h: 1 },
+    frame: {} as Motions["frame"],
+    card: {} as Motions["card"],
+    drawFrame() {
+      const { box } = m, f = m.frame;
+      const top = f.top.value;
+      const sx = f.w.value / box.w, sy = f.h.value / Math.max(1, box.h - top);
+      frame.style.transform = `translate(${f.x.value - box.x}px, ${f.y.value - box.y - top * sy}px) scale(${sx}, ${sy})`;
+      frame.style.clipPath = `inset(${top}px 0px 0px 0px)`;
+      frame.style.opacity = String(f.opacity.value);
+    },
+    stop() { for (const f of [...Object.values(m.frame), ...Object.values(m.card)]) f.stop(); },
+  };
+  for (const k of FRAME) m.frame[k] = follower(k === "opacity" ? 1 : 0, () => m.drawFrame());
+  const side = { x: "left", y: "top", w: "width", h: "height" } as const;
+  for (const k of CARD) m.card[k] = follower(0, (v) => { card.style[side[k]] = `${v}px`; });
+  return m;
+}
+
 /** Every kept web service's frame, over the page: on its slot, or small in the corner. Once per window. */
 export function Previews() {
   const all = usePreviews();
@@ -200,6 +240,16 @@ export function Previews() {
   const frames = useRef(new Map<string, HTMLDivElement>());
   const cards = useRef(new Map<string, HTMLDivElement>());
   const placed = useRef(new Map<string, Placed>());
+  const motions = useRef(new Map<string, Motions>());
+  const motionOf = (key: string, frame: HTMLDivElement, card: HTMLDivElement): Motions => {
+    let m = motions.current.get(key);
+    if (!m || m.el !== frame) {
+      m?.stop();
+      m = motionsFor(frame, card);
+      motions.current.set(key, m);
+    }
+    return m;
+  };
   const capsule = useRef<HTMLButtonElement>(null);
   // The small ones, the latest last.
   const [deck, setDeck] = useState<string[]>([]);
@@ -256,6 +306,7 @@ export function Previews() {
   };
   useEffect(() => {
     for (const key of placed.current.keys()) if (!all.some((k) => k.key === key)) placed.current.delete(key);
+    for (const [key, m] of motions.current) if (!all.some((k) => k.key === key)) { m.stop(); motions.current.delete(key); }
     if (!all.length) {
       order.current = [];
       setDeck([]);
@@ -338,21 +389,21 @@ export function Previews() {
         const to = draw(box, bar, at, seen ? 1 : 0);
         const style = `${mode} ${box.x} ${box.y} ${box.w} ${box.h} ${to.transform} ${to.clipPath} ${to.opacity}`;
         if (style === was?.style) continue;
-        Object.assign(frame.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px`, ...to });
+        Object.assign(frame.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
         frame.dataset.mode = mode;
         card.dataset.mode = shell && seen ? "small" : "hidden";
-        if (shell) Object.assign(card.style, { left: `${shell.x}px`, top: `${shell.y}px`, width: `${shell.w}px`, height: `${shell.h}px` });
-        // Going small, back into its chat, laid out or back to rest: it moves there, from where it was.
-        const moved = was && was.mode !== "hidden" && mode !== "hidden" && was.layout !== layout;
-        if (moved && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-          frame.animate([{ ...draw(box, bar, was.seen, Number(was.to.opacity)) }, { ...to }] as Keyframe[], MOVE);
-          if (was.mode === "small" && mode === "small" && shell) {
-            const from = was.seen.area;
-            card.animate([
-              { left: `${from.x}px`, top: `${from.y}px`, width: `${from.w}px`, height: `${from.h}px` },
-              { left: `${shell.x}px`, top: `${shell.y}px`, width: `${shell.w}px`, height: `${shell.h}px` },
-            ], MOVE);
-          }
+        // Going small, back into its chat, laid out or back to rest: it moves there, from where it is (and on to where
+        // that goes, if it moves on meanwhile); anything else is taken at once.
+        const moved = !!was && was.mode !== "hidden" && mode !== "hidden" && was.layout !== layout;
+        const m = motionOf(entry.key, frame, card);
+        m.box = box;
+        const goal = { x: at.area.x, y: at.area.y, w: at.area.w, h: at.area.h, top: at.bar ? 0 : bar, opacity: seen ? 1 : 0 };
+        const going = moved || Object.values(m.frame).some((f) => f.moving);
+        for (const k of FRAME) if (going) m.frame[k].to(goal[k]); else m.frame[k].jump(goal[k]);
+        m.drawFrame();
+        if (shell) {
+          const cardGoing = (moved && was!.mode === "small" && mode === "small") || Object.values(m.card).some((f) => f.moving);
+          for (const k of CARD) if (cardGoing) m.card[k].to(shell[k]); else m.card[k].jump(shell[k]);
         }
         placed.current.set(entry.key, { mode, box, seen: at, to, layout, style });
       }

@@ -16,8 +16,6 @@ export const composerSlot = style({
       // Clear of the small web services in the corner, with the rest of the chat (session.css.ts chat).
       right: "var(--avoid-previews, 0px)",
     },
-    [`${chat}[data-under-composer][data-avoid-previews=settled] > &`]: { transition: "right 280ms cubic-bezier(.2, .8, .2, 1)" },
-    [`:root[data-preview-resizing] ${chat}[data-under-composer][data-avoid-previews=settled] > &`]: { transition: "none" },
   },
 });
 export const composerDock = style({

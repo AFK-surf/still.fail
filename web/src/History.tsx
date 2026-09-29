@@ -5,6 +5,8 @@ import { useToast } from "./toast.tsx";
 import { ChevronDown, ChevronRight, Hourglass, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
+import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
 import { useApi, useHistory, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryView, type Place } from "./api.ts";
 import { ICON, Pill, SlackLogo, Tip } from "./ui.tsx";
 import { useLink } from "./station.tsx";
@@ -224,8 +226,7 @@ function Fold({ children, className }: { children: ReactNode; className?: string
   const box = useRef<HTMLDivElement>(null);
   const [long, setLong] = useState(false);
   const [open, setOpen] = useState(false);
-  // Only a reader's own click animates; folding on arrival happens before the first paint.
-  const [animate, setAnimate] = useState(false);
+  const run = useRef<AnimationPlaybackControls | null>(null);
   // Measured before paint, so a long entry never shows at full height first.
   useLayoutEffect(() => {
     const el = box.current;
@@ -237,12 +238,29 @@ function Fold({ children, className }: { children: ReactNode; className?: string
     check();
     const observer = new ResizeObserver(check);
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); run.current?.stop(); };
   }, []);
+  // Only a reader's own click moves it (folding on arrival happens before the first paint): from the height it shows
+  // (on its way, if clicked again) to the one it has now.
+  const toggle = () => {
+    const el = box.current!;
+    const from = el.getBoundingClientRect().height;
+    run.current?.stop();
+    Object.assign(el.style, { height: "", maxHeight: "", overflow: "" });
+    flushSync(() => setOpen(!open));
+    const to = el.getBoundingClientRect().height;
+    if (reducedMotion() || Math.abs(to - from) < 1) return;
+    // Its fold's height limit held off while it moves, what is past its height hidden.
+    // Held at where it was until the motion takes it (from the next frame): the new height is never seen at once.
+    Object.assign(el.style, { maxHeight: "none", overflow: "hidden", height: `${from}px` });
+    const now = animate(el, { height: [`${from}px`, `${to}px`] }, { duration: 0.24, ease: EASE_OUT });
+    run.current = now;
+    void now.finished.then(() => { if (run.current === now) { Object.assign(el.style, { height: "", maxHeight: "", overflow: "" }); run.current = null; } }, () => {});
+  };
   return (
     <div className={css.fold}>
-      <div ref={box} className={`${css.foldBody}${className ? ` ${className}` : ""}`} data-folded={long && !open ? true : undefined} data-anim={animate || undefined}>{children}</div>
-      {long && <button type="button" className={`${controlsCss.textToggle} ${css.foldToggle}`} onClick={() => { setAnimate(true); setOpen(!open); }}>{open ? "收起" : "展开"}</button>}
+      <div ref={box} className={`${css.foldBody}${className ? ` ${className}` : ""}`} data-folded={long && !open ? true : undefined}>{children}</div>
+      {long && <button type="button" className={`${controlsCss.textToggle} ${css.foldToggle}`} onClick={toggle}>{open ? "收起" : "展开"}</button>}
     </div>
   );
 }

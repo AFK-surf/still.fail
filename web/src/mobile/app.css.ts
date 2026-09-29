@@ -51,9 +51,10 @@ export const mSheet = style({
   boxSizing: "border-box", maxHeight: "94vh", maxWidth: "720px", marginInline: "auto", paddingBottom: "var(--m-foot)", borderRadius: "26px 26px 0 0",
   background: "color-mix(in srgb, var(--m-surface) 80%, transparent)", WebkitBackdropFilter: "blur(28px)",
   backdropFilter: "blur(28px)", boxShadow: "0 -6px 36px rgba(0, 0, 0, .18)", transform: "translateY(100%)",
-  transition: "transform 300ms var(--m-ease), height 320ms var(--m-ease)",
+  // Its height is moved from script (app.tsx SheetHost): on from where a finger lets go of it, at that speed.
+  transition: "transform 300ms var(--m-ease)",
   selectors: {
-    "&[data-open]": { transform: "none", transition: "transform 380ms var(--m-ease), height 320ms var(--m-ease)" },
+    "&[data-open]": { transform: "none", transition: "transform 380ms var(--m-ease)" },
     "&[data-dragging]": { transition: "none" },
   },
   "@media": {
