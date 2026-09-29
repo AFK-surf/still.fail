@@ -49,6 +49,9 @@ globalStyle(`${made}::view-transition-old(m-made-scene)`, { animation: `${sceneO
 globalStyle(`${made}::view-transition-old(m-made-choosers)`, { animation: `${choosersOut} 100ms cubic-bezier(.3, 0, .5, 1) both` });
 // The choices sink into the composer's top edge (their own box's foot), not over it.
 globalStyle(`${made}::view-transition-group(m-made-choosers)`, { overflow: "clip" });
-// The message sent is drawn on its way by a copy of it; the composer's hint waits until the words have left it.
+// The message sent is drawn on its way by a copy of it.
 globalStyle(`${made} ${mMessages}:not([data-ghost]) ${msgMine}`, { visibility: "hidden" });
-globalStyle(`${made} ${mComposerField}::placeholder`, { color: "transparent" });
+// The composer's hint is gone as the words are sent, and comes in where it is once they have left the composer (only
+// that eased: going, or a theme's change, is not).
+globalStyle(`${made}:not([data-made-hint]) ${mComposerField}::placeholder`, { transition: "color 200ms cubic-bezier(.2, .8, .2, 1)" });
+globalStyle(`:root[data-made-hint="hidden"] ${mComposerField}::placeholder`, { color: "transparent" });

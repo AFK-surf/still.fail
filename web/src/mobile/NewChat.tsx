@@ -88,13 +88,20 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
   const opened = useRef(false);
   const send = (draft: Draft) => {
     if (!model || !runtime) return draft.setError("先在 Profile 里启用模型");
-    // Where its words are as it goes (the composer empties at once): where the message starts from.
+    // Where its words are as it goes: where the message starts from. The composer empties at once; its words stay
+    // there (a stand-in, and no hint over them) until the chat's page takes them.
     const from = typedAt(scene.current);
+    const stand = standIn(scene.current, draft.text);
+    document.documentElement.dataset.madeHint = "hidden";
     void sendDraft(draft, null, ensureChat).then((to) => {
-      if (to === null || opened.current) return;
+      if (to === null || opened.current) {
+        stand?.remove();
+        delete document.documentElement.dataset.madeHint;
+        return;
+      }
       opened.current = true;
       // The new item's page (its address from now on, until its station's key takes over: ChatScreen).
-      toMadeChat(scene.current, from, () => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(String(to))}`, { replace: true }));
+      toMadeChat(scene.current, from, stand, () => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(String(to))}`, { replace: true }));
     });
   };
   useLayoutEffect(() => use({ station: view.station, placeholder: "做任何事", offline: false, send }));
@@ -209,6 +216,27 @@ function typedAt(scene: HTMLElement | null): Typed | null {
   return field ? textAt(field) : null;
 }
 
+/** The words just sent, drawn where they were in the composer, in its type. */
+function standIn(scene: HTMLElement | null, text: string): HTMLElement | null {
+  const host = scene?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
+  const field = host?.querySelector<HTMLTextAreaElement>(`.${hostCss.mComposerCapsule} textarea:not([aria-hidden])`);
+  if (!host || !field || !text.trim()) return null;
+  const box = field.getBoundingClientRect();
+  const frame = host.getBoundingClientRect();
+  const style = getComputedStyle(field);
+  const el = document.createElement("div");
+  el.setAttribute("aria-hidden", "true");
+  el.textContent = text;
+  Object.assign(el.style, {
+    position: "absolute", left: `${box.left - frame.left}px`, top: `${box.top - frame.top}px`, width: `${box.width}px`,
+    height: `${box.height}px`, boxSizing: "border-box", padding: style.padding, overflow: "hidden", zIndex: "7",
+    pointerEvents: "none", font: style.font, lineHeight: style.lineHeight, color: style.color, whiteSpace: "pre-wrap",
+    overflowWrap: style.overflowWrap, wordBreak: style.wordBreak,
+  });
+  host.append(el);
+  return el;
+}
+
 /** Where the text in a box starts (its content box's corner), and its size. */
 function textAt(el: Element): Typed {
   const box = el.getBoundingClientRect();
@@ -231,9 +259,9 @@ function textAt(el: Element): Typed {
  * element taken away ends a view transition at once, and the chat's rows are (the message sent is drawn anew once its
  * station has it, maybe while it moves).
  */
-function toMadeChat(scene: HTMLElement | null, from: Typed | null, go: () => void): void {
+function toMadeChat(scene: HTMLElement | null, from: Typed | null, stand: HTMLElement | null, go: () => void): void {
   const host = scene?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
-  if (!scene || !host) { go(); return; }
+  if (!scene || !host) { stand?.remove(); delete document.documentElement.dataset.madeHint; go(); return; }
   const root = document.documentElement;
   const choosers = host.querySelector<HTMLElement>("[data-choosers]");
   scene.style.viewTransitionName = "m-made-scene";
@@ -277,6 +305,7 @@ function toMadeChat(scene: HTMLElement | null, from: Typed | null, go: () => voi
     });
     ghost.append(copy);
     host.append(ghost);
+    stand?.remove();
     const timing = { duration: 480, delay: 60, easing: EASE, fill: "backwards" } as const;
     moves.push(copy.animate([
       { transform: `translate(${from.x - to.x}px, ${from.y - to.y}px) scale(${from.size / to.size})` },
@@ -285,6 +314,12 @@ function toMadeChat(scene: HTMLElement | null, from: Typed | null, go: () => voi
     const bubble = ghost.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
     if (bubble) moves.push(bubble.animate([{ backgroundColor: "transparent" }, { backgroundColor: getComputedStyle(bubble).backgroundColor }], timing).finished);
     for (const el of ghost.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)) moves.push(el.animate([{ opacity: 0 }, { opacity: 1 }], timing).finished);
+    // The composer's hint comes in once the words are out of it (above its top edge), not while they pass over it.
+    const out = () => {
+      if (!copy.isConnected || copy.getBoundingClientRect().bottom <= top) delete root.dataset.madeHint;
+      else requestAnimationFrame(out);
+    };
+    requestAnimationFrame(out);
   });
   void Promise.allSettled(moves).then(async () => {
     // The page's own moves, begun as the new page settled (within the transition), are over too.
@@ -292,7 +327,9 @@ function toMadeChat(scene: HTMLElement | null, from: Typed | null, go: () => voi
     scene.style.viewTransitionName = "";
     if (choosers) choosers.style.viewTransitionName = "";
     ghost?.remove();
+    stand?.remove();
     delete root.dataset.made;
+    delete root.dataset.madeHint;
   });
 }
 
