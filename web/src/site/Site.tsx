@@ -150,7 +150,6 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
       <header className={css.hero}>
         <div className={css.grid} /><div className={css.beam} />
         <div className={css.wrap}>
-          <span className={css.eyebrow}>Claude Code · Codex · 跑在你自己的机器上</span>
           {/* The two domains, what the user keeps saying to the agent: the one the page was opened on is lit (data-host, set
               before the first paint by site/index.html; still.fail when neither). */}
           <h1 className={css.title}>

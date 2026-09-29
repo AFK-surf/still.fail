@@ -123,10 +123,6 @@ export const beam = style({
   background: `conic-gradient(from 180deg at 50% 0%, transparent 40%, color-mix(in srgb, ${EMBER} 60%, transparent) 50%, transparent 60%)`,
   animation: `${sway} 14s ease-in-out infinite`, "@media": { [STILL]: { animation: "none" } },
 });
-export const eyebrow = style({
-  display: "inline-block", marginBottom: "28px", padding: "6px 14px", borderRadius: "999px", fontSize: "13px", letterSpacing: ".04em",
-  border: `1px solid ${LINE}`, color: MUTED, background: CARD, animation: `${fadeUp} .9s ${vars.easeOut} both`,
-});
 export const title = style({
   margin: "0 auto", fontSize: "clamp(52px, 10vw, 136px)", lineHeight: "1", letterSpacing: "-.055em", fontWeight: "700",
   ...white, animation: `${fadeUp} .9s .06s ${vars.easeOut} both`,
