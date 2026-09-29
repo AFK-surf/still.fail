@@ -7,6 +7,8 @@ import { pageBarTitle } from "./conversation.css.ts";
 export const sessionPage = style({
   flex: "1", minHeight: "0", flexDirection: "column", display: "grid", gridTemplateColumns: "minmax(0, 1fr)",
   gridTemplateRows: "minmax(0, 1fr)",
+  // The tab set slides in from past the right edge and back out there.
+  overflowX: "clip",
   selectors: {
     // The tab set's width is a whole number of pixels (38% of the page rarely is), so what is centred in it stays sharp.
     "&[data-panel=\"true\"]": { gridTemplateColumns: ["minmax(0, 1fr) minmax(360px, 38%)", "minmax(0, 1fr) minmax(360px, round(down, 38%, 1px))"] },

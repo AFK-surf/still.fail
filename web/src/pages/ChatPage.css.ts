@@ -1,6 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
-import { fadeInKeyframes } from "../styles/keyframes.css.ts";
 import { muted } from "../styles/shell.css.ts";
 import { sessionPage } from "../styles/session.css.ts";
 import { resizeHandle } from "../ui.css.ts";
@@ -71,8 +70,6 @@ export const sidePanel = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column", borderLeft: `1px solid ${vars.line}`,
   background: vars.canvas,
   selectors: {
-    // Eases in when opened, not when a chat that has it open is switched to.
-    "&[data-opening]": { animation: `${fadeInKeyframes} 160ms ${vars.easeOut}` },
   },
   "@media": {
     "(max-width: 1100px)": {

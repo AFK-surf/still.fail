@@ -7,7 +7,7 @@ import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
 import { Boxes, Close, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
 import { alarmOf, JobDot, JobsPopover, JobsTab, toneOf, useNow } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { lastChat, PENDING } from "../lastChat.ts";
 import { keepTabs, keptTabs } from "../chatTabs.ts";
@@ -19,6 +19,7 @@ import { ChatPanel } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
 import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
+import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
@@ -107,18 +108,70 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   // The job picked in the 任务 tab.
   const [jobPicked, pickJob] = useState<string | null>(null);
   const shown = active && open.includes(active) ? active : open[0] ?? null;
+  // The panel as it was when its last tab closed, kept while it slides out over the chat (which takes the room at once).
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [leaving, setLeaving] = useState<{ tabs: string[]; shown: string; width: number } | null>(null);
   // Tabs and the one in front change together, and are kept for this chat in one write.
   const commit = (next: string[], front: string | null) => {
+    if (next.length) setLeaving(null);
+    else {
+      setOpening(false);
+      if (open.length && shown && panelRef.current && !reducedMotion()) setLeaving({ tabs: open, shown, width: panelRef.current.getBoundingClientRect().width });
+    }
     setTabs(next);
     setActiveState(front);
     keepTabs(chatKey, { tabs: next, active: front });
   };
   const saveTabs = (next: string[]) => commit(next, active);
   const setActive = (key: string | null) => commit(open, key);
-  // Whether the panel is being opened here (it eases in then), not shown with the chat as it was left.
+  // Whether the panel is being opened here (it slides in then), not shown with the chat as it was left.
   const [opening, setOpening] = useState(false);
+  // Opened, the panel's column widens from nothing and the chat narrows with it, frame by frame; closed, the other way.
+  // The panel keeps its whole width all along and shows through its column as it grows, so it comes in from the right
+  // edge without its content re-laying out. Turned back on its way, it goes on from the width it has. Where the panel
+  // lies over the chat (`max-width: 1100px`) it slides instead.
+  const sliding = leaving && !(open.length && shown) ? "out" : opening ? "in" : null;
+  const pageRef = useRef<HTMLDivElement>(null);
+  const slide = useRef<{ run: AnimationPlaybackControls; value: number } | null>(null);
+  useLayoutEffect(() => {
+    const page = pageRef.current;
+    const el = panelRef.current;
+    // Slid out: the page has laid itself out without the panel now, so the column it held is let go of in the same frame.
+    if (!sliding) return void page?.style.removeProperty("grid-template-columns");
+    if (!page || !el) return;
+    const was = slide.current;
+    was?.run.stop();
+    const narrow = matchMedia("(max-width: 1100px)").matches;
+    // Its width at rest, without what the motion holds.
+    page.style.removeProperty("grid-template-columns");
+    el.style.removeProperty("width");
+    el.style.removeProperty("transform");
+    const whole = sliding === "out" && leaving ? leaving.width : el.getBoundingClientRect().width;
+    const start = was ? was.value : sliding === "in" ? 0 : whole;
+    const goal = sliding === "in" ? whole : 0;
+    const draw = (v: number) => {
+      el.style.width = `${whole}px`;
+      if (narrow) el.style.transform = `translateX(${whole - v}px)`;
+      else page.style.gridTemplateColumns = `minmax(0, 1fr) ${v}px`;
+    };
+    draw(start);
+    const now = { value: start, run: animate(start, goal, {
+      duration: sliding === "in" ? 0.28 : 0.24, ease: EASE_OUT,
+      onUpdate: (v) => { now.value = v; draw(v); },
+      onComplete: () => {
+        if (slide.current !== now) return;
+        slide.current = null;
+        if (sliding === "out") return setLeaving(null);
+        page.style.removeProperty("grid-template-columns");
+        el.style.removeProperty("width");
+        el.style.removeProperty("transform");
+        setOpening(false);
+      },
+    }) };
+    slide.current = now;
+  }, [sliding]);
   const openTab = (key: string) => {
-    if (open.length === 0) setOpening(true);
+    if (open.length === 0 && !reducedMotion()) setOpening(true);
     commit(open.includes(key) ? open : [...open, key], key);
   };
   const closeTab = (key: string) => {
@@ -225,6 +278,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   }
   const chat = chatView.value;
   const panel = open.length > 0;
+  // What the panel shows: its tabs, or while it slides out, what it showed.
+  const side = panel && shown ? { tabs: open, shown } : leaving;
   const slackUrl = chat.slackUrl;
   // Before its agent has a chat, the first message makes one, bound to the agent; the page stays (the core shows the
   // chat at the same address once it is there).
@@ -233,7 +288,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     ensureChat: async () => ({ key: session, thread: (await call.request<{ id: number }>("POST", "/threads", { session })).id }),
   };
   return (
-    <div className={sessionCss.sessionPage} data-panel={panel}>
+    <div ref={pageRef} className={sessionCss.sessionPage} data-panel={panel || leaving !== null}>
       <div className={jobsCss.sessionMain}>
       <header className={sidebarCss.pageBar}>
         <MobileBack to={link("/chats")} label="对话" />
@@ -266,12 +321,12 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
         <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} {...firstMessage} {...(made ? { made } : {})} />
       </OpenFile.Provider>
       </div>
-        {panel && shown && (
-          <Tabs.Root className={css.sidePanel} data-over-composer value={shown} onValueChange={setActive} data-opening={opening || undefined} onAnimationEnd={(e) => { if (e.target === e.currentTarget) setOpening(false); }}>
+        {side && (
+          <Tabs.Root ref={panelRef} className={css.sidePanel} data-over-composer value={side.shown} onValueChange={setActive} inert={side === leaving}>
             <ResizeHandle variable="--panel-w" edge="left" min={320} max={960} label="调整侧栏宽度" />
             <div className={css.sideBar}>
               <Tabs.List className={css.sideTabList} aria-label="执行历史">
-                {open.map((key) => {
+                {side.tabs.map((key) => {
                   if (key === JOBS) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
@@ -321,7 +376,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               {/* The panel's switch stays in the top-right corner, open or closed. */}
               <IconButton label="收起侧栏" icon={PanelClose} shortcut="panel.close" onClick={() => saveTabs([])} />
             </div>
-            {open.map((key) => {
+            {side.tabs.map((key) => {
               if (key === JOBS) {
                 return (
                   <Tabs.Content key={key} className={css.sideContent} value={key}>
