@@ -26,42 +26,54 @@ const call = (activity: string, name: string, hint: string, input: object, resul
   activity, ms, step: step(name, hint, input, result, ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`, failed),
 });
 
+// The main chat: a request that says nothing ("that thing, do that to it"), the agent working out what was meant and
+// doing it, "still no good", and then "what the hell did you do": still.fail and youdid.wtf, played out.
 const FIRST = {
   calls: [
-    call("搜索 (?<=", "Grep", "(?<=", { pattern: "\\(\\?<=", path: "src" }, "src/auth/validate.ts:14:  const EMAIL = /^[^@\\s]+(?<=@)[^@\\s]+\\.[a-z]{2,}$/i;", 40),
-    call("读取 src/auth/validate.ts", "Read", "src/auth/validate.ts", { file_path: "src/auth/validate.ts" }, "export function isEmail(value: string) { … }", 10),
-    call("编辑 src/auth/validate.ts", "Edit", "src/auth/validate.ts", { file_path: "src/auth/validate.ts", old_string: "(?<=@)", new_string: "@" }, "The file has been updated.", 10),
-    call("运行 pnpm test auth", "Bash", "pnpm test auth", { command: "pnpm test auth" }, "FAIL  src/auth/validate.test.ts\n  ✕ accepts plus addressing\n\nTests: 1 failed, 11 passed, 12 total", 2100, true),
-    call("编辑 src/auth/validate.ts", "Edit", "src/auth/validate.ts", { file_path: "src/auth/validate.ts", old_string: "[^@\\s]+@", new_string: "[^@\\s+]+(\\+[^@\\s]+)?@" }, "The file has been updated.", 10),
-    call("运行 pnpm test auth", "Bash", "pnpm test auth", { command: "pnpm test auth" }, "PASS  src/auth/validate.test.ts\n\nTests: 12 passed, 12 total\nTime:  0.84 s", 1900),
+    call("查看最近的讨论", "Bash", "git log --since=yesterday", { command: "git log --since=yesterday --oneline" }, "9d2e1f0 登录页：按钮样式调整\n41c7a2b 登录页：手机上的布局", 300),
+    call("搜索 登录 按钮", "Grep", "LoginButton", { pattern: "LoginButton", path: "src" }, "src/auth/LoginForm.tsx:38:  <LoginButton width={320} />", 40),
+    call("读取 src/auth/LoginForm.tsx", "Read", "src/auth/LoginForm.tsx", { file_path: "src/auth/LoginForm.tsx" }, "export function LoginForm() { … }", 10),
+    call("编辑 src/auth/LoginForm.tsx", "Edit", "src/auth/LoginForm.tsx", { file_path: "src/auth/LoginForm.tsx", old_string: "width={320}", new_string: "block" }, "The file has been updated.", 10),
+    call("截图 登录页 375px", "Bash", "pnpm shot /login --width 375", { command: "pnpm shot /login --width 375" }, "saved shots/login-375.png", 1600),
   ],
-  thought: "Safari 16.4 之前不支持后行断言，换成普通写法后行为一致，测试都过了。",
+  thought: "昨天的提交都在动登录页，手机上按钮是写死的 320px 宽，最可能说的是这个。",
   answer: [
-    "找到原因了：`src/auth/validate.ts` 校验邮箱的正则用了后行断言 `(?<=@)`，Safari 16.4 之前不支持，整个 bundle 解析失败，所以直接白屏。",
+    "我猜你说的是登录页那个按钮：手机上它是写死的 320px，超出屏幕了。",
     "",
-    "- 换成不用断言的写法，匹配结果不变",
-    "- 补了 12 个用例，`pnpm test auth` 全部通过",
+    "- 改成撑满容器，375px 宽下截图看过了，不再超出",
+    "- 分支 `fix/login-button`",
     "",
-    "分支是 `fix/safari-login-regex`，可以的话我就合进 main。",
+    "如果你说的「那个」不是这个，告诉我是哪个页面就行。",
   ].join("\n"),
 };
-const FOLLOW_UP = "看过了没问题 👍 顺手在 browserslist 里把 Safari 15 也加上吧，免得以后再踩";
+const FOLLOW_UP = "还是不行";
 const SECOND = {
   calls: [
-    call("读取 package.json", "Read", "package.json", { file_path: "package.json" }, "\"browserslist\": [\"defaults\"]", 10),
-    call("编辑 package.json", "Edit", "package.json", { file_path: "package.json", old_string: "[\"defaults\"]", new_string: "[\"defaults\", \"safari >= 15\"]" }, "The file has been updated.", 10),
-    call("运行 pnpm build", "Bash", "pnpm build", { command: "pnpm build" }, "✓ built in 6.42s", 2200),
-    call("运行 git push", "Bash", "git push origin HEAD:main", { command: "git push origin HEAD:main" }, "a3f9c21..7c1e2d4  HEAD -> main", 900),
+    call("截图 登录页 375px", "Bash", "pnpm shot /login --width 375", { command: "pnpm shot /login --width 375" }, "saved shots/login-375.png", 1500),
+    call("读取 src/auth/login.css", "Read", "src/auth/login.css", { file_path: "src/auth/login.css" }, ".form { padding: 0 24px 0 8px; }", 10),
+    call("编辑 src/auth/login.css", "Edit", "src/auth/login.css", { file_path: "src/auth/login.css", old_string: "padding: 0 24px 0 8px", new_string: "padding: 0 16px" }, "The file has been updated.", 10),
+    call("运行 pnpm test login", "Bash", "pnpm test login", { command: "pnpm test login" }, "Tests: 18 passed, 18 total", 1900),
   ],
-  thought: "build 通过，产物里没有后行断言了，合进 main。",
-  answer: "加好了：`browserslist` 里加上 `safari >= 15`，`pnpm build` 通过。已合进 main（`7c1e2d4`）。",
+  thought: "按钮不超出了，但整个表单左右留白不对称，看着还是歪的。",
+  answer: "再看了一遍 375px 的截图：表单左右留白是 8px 和 24px，所以按钮看着还是歪的。改成左右各 16px，现在居中了，测试都过了。",
 };
-/** Where the opening frame stands in the second turn: at its build. */
-const OPENING_AT = 2;
+const WTF = "你干的什么 JB？？我说的是深色模式！按钮都看不见了！";
+const THIRD = {
+  calls: [
+    call("截图 登录页 深色", "Bash", "pnpm shot /login --theme dark", { command: "pnpm shot /login --theme dark" }, "saved shots/login-dark.png", 1500),
+    call("搜索 #111", "Grep", "#111", { pattern: "#111", path: "src/auth" }, "src/auth/login.css:22:  .submit { color: #111; background: #111; }", 40),
+    call("编辑 src/auth/login.css", "Edit", "src/auth/login.css", { file_path: "src/auth/login.css", old_string: "color: #111; background: #111;", new_string: "color: var(--on-primary); background: var(--primary);" }, "The file has been updated.", 10),
+    call("截图 浅色 / 深色", "Bash", "pnpm shot /login --theme light,dark", { command: "pnpm shot /login --theme light,dark" }, "saved shots/login-light.png, shots/login-dark.png", 1700),
+  ],
+  thought: "深色模式下按钮的字和底色都写死成 #111，所以整个按钮看不见。",
+  answer: "明白了，是深色模式：登录按钮的文字和背景都写死成 `#111`，深色下整个按钮都看不见。改成跟着主题走的颜色，浅色、深色都截图核对过了，两张图在 PR 里。之前那两处改动也保留着，一起在 `fix/login-button`。",
+};
+/** Where the opening frame stands in the second turn: at its tests. */
+const OPENING_AT = 3;
 
 /**
- * The chats as the demo opens (and as the site is built to HTML: the same frame): the Safari chat well under way —
- * asked, answered, asked again, its agent at the build of that second request. The story goes on from there.
+ * The chats as the demo opens (and as the site is built to HTML: the same frame): the main chat well under way —
+ * asked, answered, "still no good", its agent at the tests of its second go. The story goes on from there.
  */
 export function openingChats(): DemoChat[] {
   const chats = startingChats();
@@ -70,13 +82,13 @@ export function openingChats(): DemoChat[] {
     c.messages = [...c.messages, message(c, by, text, Date.now() - minutes * 60_000)];
     if (typeof by === "object") addItem(c, received(c, by, text));
   };
-  said_(LIN, SAFARI_ASK, 12);
+  said_(LIN, SAFARI_ASK, 9);
   addItem(c, groupOf(FIRST.calls.map((x) => x.step), 0));
   addItem(c, said(FIRST.thought));
-  c.messages = [...c.messages, message(c, "agent", FIRST.answer, Date.now() - 8 * 60_000)];
+  c.messages = [...c.messages, message(c, "agent", FIRST.answer, Date.now() - 6 * 60_000)];
   addItem(c, posted(c, FIRST.answer));
   addItem(c, marked("完成"));
-  said_(CHEN, FOLLOW_UP, 1);
+  said_(LIN, FOLLOW_UP, 1);
   const { result: _, ...building } = SECOND.calls[OPENING_AT]!.step;
   addItem(c, groupOf([...SECOND.calls.slice(0, OPENING_AT).map((x) => x.step), building], 1));
   c.running = { activity: SECOND.calls[OPENING_AT]!.activity, since: Date.now() - 20_000 };
@@ -146,9 +158,17 @@ export function makeStory(stage: Stage) {
     await wait(900);
     await turn(SAFARI_KEY, FIRST.calls, FIRST.thought, FIRST.answer);
     await wait(2600);
-    say(SAFARI_KEY, CHEN, FOLLOW_UP);
+    say(SAFARI_KEY, LIN, FOLLOW_UP);
     await wait(700);
     await turn(SAFARI_KEY, SECOND.calls, SECOND.thought, SECOND.answer);
+    await wtf();
+  }
+
+  async function wtf() {
+    await wait(2200);
+    say(SAFARI_KEY, LIN, WTF);
+    await wait(700);
+    await turn(SAFARI_KEY, THIRD.calls, THIRD.thought, THIRD.answer);
   }
 
   async function deps() {
@@ -167,9 +187,10 @@ export function makeStory(stage: Stage) {
   return {
     async play() {
       try {
-        // First where the opening frame left off (openingChats): the second turn, at its build.
+        // First where the opening frame left off (openingChats): the second turn, at its tests.
         await wait(1200);
         await turn(SAFARI_KEY, SECOND.calls, SECOND.thought, SECOND.answer, { from: OPENING_AT });
+        await wtf();
         await deps();
         await wait(4000);
         if (stopped) return;

@@ -136,13 +136,13 @@ function seed(chat: DemoChat, lines: [Who, string, number][]): DemoChat {
   return chat;
 }
 
-export const SAFARI_ASK = "登录页在 Safari 16 上直接白屏，控制台报 `SyntaxError: Invalid regular expression: invalid group specifier name`，帮忙看下？";
+export const SAFARI_ASK = "那个谁，你把那个啥……那个一下，懂我意思？";
 export const DEPS_KEY = "ember:c-demo-deps";
 export const SAFARI_KEY = "ember:c-demo-safari";
 
 export function startingChats(): DemoChat[] {
   return [
-    chatOf("safari", 7, "Safari 上登录页白屏", OPUS, [LIN, CHEN]),
+    chatOf("safari", 7, "把那个弄一下", OPUS, [LIN, CHEN]),
     seed(chatOf("deps", 6, "每周依赖升级", SONNET, [CHEN], { blocked: true, originText: "Slack · Acme · #frontend" }), [
       [CHEN, "这周的依赖升级跑一下", 70],
       ["agent", "其余 23 个包都升好了，测试通过。只剩 React Router 8：它改了 loader 的写法，要动 14 个路由文件。这周要一起升吗？", 58],
