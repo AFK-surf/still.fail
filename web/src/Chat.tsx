@@ -696,12 +696,12 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <Tip label={file.path}><button ref={box} type="button" className={look.image} onClick={() => (url || failed) && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
+        <button ref={box} type="button" className={look.image} onClick={() => (url || failed) && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
           data-loaded={loaded ?? undefined} data-failed={failed || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} />}
           {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>暂时无法预览</span></span>}
           {url && <img src={url} alt={file.name} onLoad={shown} />}
-        </button></Tip>
+        </button>
         {preview}
       </>
     );
