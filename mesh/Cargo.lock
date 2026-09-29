@@ -792,17 +792,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
-name = "stillfail-shapes"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "serde_path_to_error",
- "serde_with",
- "typeshare",
-]
-
-[[package]]
 name = "enum-assoc"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3613,7 +3602,6 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bytes",
- "stillfail-shapes",
  "futures-util",
  "getrandom 0.3.4",
  "hex",
@@ -3628,6 +3616,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "stillfail-shapes",
  "tempfile",
  "thiserror 2.0.21",
  "thumbhash",
@@ -3635,6 +3624,17 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "zstd",
+]
+
+[[package]]
+name = "stillfail-shapes"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_with",
+ "typeshare",
 ]
 
 [[package]]

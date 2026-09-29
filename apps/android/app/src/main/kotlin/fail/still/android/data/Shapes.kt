@@ -1115,7 +1115,7 @@ data class MadeSlackApp (
 	val team: String? = null,
 	val created: Long,
 	val links: SlackAppLinks,
-	/// The link that installs it through Slack's OAuth (a station in ember cloud); none when its tokens are copied by hand.
+	/// The link that installs it through Slack's OAuth (a station in still.fail cloud); none when its tokens are copied by hand.
 	val install: String? = null,
 	/// Its install's state, what a connect names it by.
 	val state: String? = null,
@@ -1234,7 +1234,7 @@ data class StationView (
 	/// Its line in a list: offline since when, or what it is and whether its agents work.
 	val summary: String,
 	val online: Boolean,
-	/// Seconds, from ember cloud.
+	/// Seconds, from still.fail cloud.
 	val lastSeen: Long? = null,
 	val version: String? = null,
 	val link: Link,

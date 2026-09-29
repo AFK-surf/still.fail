@@ -1037,7 +1037,7 @@ export interface MadeSlackApp {
 	team?: string;
 	created: number;
 	links: SlackAppLinks;
-	/** The link that installs it through Slack's OAuth (a station in ember cloud); none when its tokens are copied by hand. */
+	/** The link that installs it through Slack's OAuth (a station in still.fail cloud); none when its tokens are copied by hand. */
 	install?: string;
 	/** Its install's state, what a connect names it by. */
 	state?: string;
@@ -1149,7 +1149,7 @@ export interface StationView {
 	/** Its line in a list: offline since when, or what it is and whether its agents work. */
 	summary: string;
 	online: boolean;
-	/** Seconds, from ember cloud. */
+	/** Seconds, from still.fail cloud. */
 	lastSeen?: number;
 	version?: string;
 	link: Link;

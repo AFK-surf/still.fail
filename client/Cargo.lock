@@ -860,82 +860,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
-name = "stillfail-core"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "stillfail-shapes",
- "futures",
- "hex",
- "iroh",
- "iroh-mainline-address-lookup",
- "iroh-mdns-address-lookup",
- "noq-proto",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.21",
- "tokio",
-]
-
-[[package]]
-name = "stillfail-core-ffi"
-version = "0.1.0"
-dependencies = [
- "stillfail-core",
- "futures",
- "getrandom 0.3.4",
- "libc",
- "reqwest",
- "rusqlite",
- "rustls",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tokio-tungstenite",
- "uniffi",
- "webpki-roots 1.0.9",
-]
-
-[[package]]
-name = "stillfail-core-node"
-version = "0.1.0"
-dependencies = [
- "stillfail-core-ffi",
- "napi",
- "napi-build",
- "napi-derive",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "stillfail-core-wasm"
-version = "0.1.0"
-dependencies = [
- "console_error_panic_hook",
- "stillfail-core",
- "futures",
- "js-sys",
- "serde",
- "serde-wasm-bindgen",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
-name = "stillfail-shapes"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "serde_path_to_error",
- "serde_with",
- "typeshare",
-]
-
-[[package]]
 name = "enum-assoc"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3635,6 +3559,82 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "stillfail-core"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "futures",
+ "hex",
+ "iroh",
+ "iroh-mainline-address-lookup",
+ "iroh-mdns-address-lookup",
+ "noq-proto",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "stillfail-shapes",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
+name = "stillfail-core-ffi"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "getrandom 0.3.4",
+ "libc",
+ "reqwest",
+ "rusqlite",
+ "rustls",
+ "serde_json",
+ "stillfail-core",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-tungstenite",
+ "uniffi",
+ "webpki-roots 1.0.9",
+]
+
+[[package]]
+name = "stillfail-core-node"
+version = "0.1.0"
+dependencies = [
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "stillfail-core-ffi",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "stillfail-core-wasm"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "futures",
+ "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
+ "stillfail-core",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "stillfail-shapes"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_with",
+ "typeshare",
+]
 
 [[package]]
 name = "strsim"
