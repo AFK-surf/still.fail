@@ -73,7 +73,7 @@ export const navLinks = style({
 });
 export const navLink = style({ transition: "color .2s", selectors: { "&:hover": { color: FG } } });
 /** The theme switch (ThemeSwitch.tsx): three small buttons in a pill. */
-export const themeSwitch = style({ display: "flex", gap: "2px", padding: "3px", borderRadius: "999px", background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
+export const themeSwitch = style({ "@media": { [NARROW]: { marginLeft: "auto" } }, display: "flex", gap: "2px", padding: "3px", borderRadius: "999px", background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
 export const themeChoice = style({
   display: "grid", placeItems: "center", width: "30px", height: "30px", padding: "0", border: "0", borderRadius: "999px",
   background: "transparent", color: DIM, cursor: "pointer", transition: "color .2s, background .2s",
@@ -86,7 +86,8 @@ globalStyle(`:root[data-theme="dark"] ${lightOnly}`, { display: "none" });
 globalStyle(`:root[data-theme="dark"] ${darkOnly}`, { display: "contents" });
 globalStyle(`:root:not([data-theme="light"]) ${lightOnly}`, { "@media": { "(prefers-color-scheme: dark)": { display: "none" } } });
 globalStyle(`:root:not([data-theme="light"]) ${darkOnly}`, { "@media": { "(prefers-color-scheme: dark)": { display: "contents" } } });
-export const navButton = style({ "@media": { [NARROW]: { marginLeft: "auto" } } });
+// On a phone the bar keeps the logo and the theme; the hero has the buttons.
+export const navButton = style({ "@media": { [NARROW]: { display: "none" } } });
 
 // ---- Buttons ----
 
@@ -165,7 +166,6 @@ export const demo = style({
 const PHONE_BOX = "screen and (max-width: 747px)";
 export const frameWide = style({ height: "100%", "@media": { [PHONE_BOX]: { display: "none" } } });
 export const framePhone = style({ height: "100%", display: "none", "@media": { [PHONE_BOX]: { display: "block" } } });
-export const demoNote = style({ margin: "26px auto 0", maxWidth: "640px", fontSize: "14px", color: DIM });
 export const key = style({ padding: "2px 8px", borderRadius: "6px", background: `${ink(8)}`, color: FG, fontWeight: "550", whiteSpace: "nowrap" });
 
 // ---- Sections ----
@@ -205,7 +205,6 @@ export const node = style({
 // Words over the lines keep a margin of the page's dark around them.
 const halo = { paintOrder: "stroke", stroke: BG, strokeWidth: "5px", strokeLinejoin: "round" } as const;
 export const nodeLabel = style({ fill: FG, fontSize: "15px", fontWeight: "600", fontFamily: vars.fontBody, ...halo });
-export const nodeNote = style({ fill: DIM, fontSize: "12px", fontFamily: vars.fontBody, ...halo });
 export const hub = style({ fill: `color-mix(in srgb, ${EMBER} 14%, ${BG})`, stroke: EMBER, strokeWidth: "1.5" });
 const pulse = keyframes({ "0%": { transform: "scale(1)", opacity: ".6" }, "100%": { transform: "scale(1.8)", opacity: "0" } });
 export const ring = style({

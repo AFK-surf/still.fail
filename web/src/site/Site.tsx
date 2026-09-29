@@ -38,8 +38,8 @@ function Demo({ mount, frame }: { mount?: (root: HTMLElement) => void; frame?: {
 // ---- The mesh ----
 
 interface Point { x: number; y: number }
-interface Station extends Point { name: string; note: string }
-interface Device extends Point { name: string; note: string; links: number[] }
+interface Station extends Point { name: string }
+interface Device extends Point { name: string; links: number[] }
 
 /** One layout of the mesh: where its stations, devices and ember cloud stand, in a drawing of `size`. */
 interface Layout { size: [number, number]; box: [number, number]; cloud: Point; stations: Station[]; devices: Device[] }
@@ -47,29 +47,29 @@ interface Layout { size: [number, number]; box: [number, number]; cloud: Point; 
 const WIDE: Layout = {
   size: [1000, 540], box: [150, 56], cloud: { x: 500, y: 34 },
   stations: [
-    { name: "Mac Studio", note: "办公室", x: 500, y: 250 },
-    { name: "MacBook", note: "你的笔记本", x: 300, y: 420 },
-    { name: "Linux 服务器", note: "机房", x: 700, y: 420 },
+    { name: "Mac Studio", x: 500, y: 250 },
+    { name: "MacBook", x: 300, y: 420 },
+    { name: "Linux 服务器", x: 700, y: 420 },
   ],
   devices: [
-    { name: "Slack", note: "@ 它就开工", x: 110, y: 200, links: [0, 1] },
-    { name: "网页", note: "ember.3720.org", x: 110, y: 470, links: [1] },
-    { name: "桌面端", note: "macOS", x: 890, y: 200, links: [0, 2] },
-    { name: "手机", note: "Android", x: 890, y: 470, links: [2, 0] },
+    { name: "Slack", x: 110, y: 200, links: [0, 1] },
+    { name: "网页", x: 110, y: 470, links: [1] },
+    { name: "桌面端", x: 890, y: 200, links: [0, 2] },
+    { name: "手机", x: 890, y: 470, links: [2, 0] },
   ],
 };
 const TALL: Layout = {
   size: [420, 800], box: [124, 52], cloud: { x: 210, y: 30 },
   stations: [
-    { name: "Mac Studio", note: "办公室", x: 210, y: 330 },
-    { name: "MacBook", note: "你的笔记本", x: 96, y: 520 },
-    { name: "Linux 服务器", note: "机房", x: 324, y: 520 },
+    { name: "Mac Studio", x: 210, y: 330 },
+    { name: "MacBook", x: 96, y: 520 },
+    { name: "Linux 服务器", x: 324, y: 520 },
   ],
   devices: [
-    { name: "Slack", note: "@ 它就开工", x: 76, y: 170, links: [0, 1] },
-    { name: "桌面端", note: "macOS", x: 344, y: 170, links: [0, 2] },
-    { name: "网页", note: "浏览器", x: 76, y: 730, links: [1] },
-    { name: "手机", note: "Android", x: 344, y: 730, links: [2] },
+    { name: "Slack", x: 76, y: 170, links: [0, 1] },
+    { name: "桌面端", x: 344, y: 170, links: [0, 2] },
+    { name: "网页", x: 76, y: 730, links: [1] },
+    { name: "手机", x: 344, y: 730, links: [2] },
   ],
 };
 
@@ -107,14 +107,12 @@ function Mesh({ tall }: { tall?: boolean }) {
       ))}
       <g transform={`translate(${cloud.x - 90} ${cloud.y - bh / 2})`}>
         <rect className={css.node} data-kind="cloud" width="180" height={bh} rx="14" />
-        <text className={css.nodeLabel} x="90" y={bh / 2 - 3} textAnchor="middle">ember cloud</text>
-        <text className={css.nodeNote} x="90" y={bh / 2 + 14} textAnchor="middle">只管账号</text>
+        <text className={css.nodeLabel} x="90" y={bh / 2 + 5} textAnchor="middle">ember cloud</text>
       </g>
       {devices.map((d) => (
         <g key={d.name} transform={`translate(${d.x - bw / 2} ${d.y - bh / 2})`}>
           <rect className={css.node} width={bw} height={bh} rx="14" />
-          <text className={css.nodeLabel} x={bw / 2} y={bh / 2 - 3} textAnchor="middle">{d.name}</text>
-          <text className={css.nodeNote} x={bw / 2} y={bh / 2 + 14} textAnchor="middle">{d.note}</text>
+          <text className={css.nodeLabel} x={bw / 2} y={bh / 2 + 5} textAnchor="middle">{d.name}</text>
         </g>
       ))}
       {stations.map((s, i) => (
@@ -124,7 +122,6 @@ function Mesh({ tall }: { tall?: boolean }) {
           <g className={css.lightOnly}><image href="/mark.svg" x={s.x - 30} y={s.y - 34} width="60" height="60" /></g>
           <g className={css.darkOnly}><image href="/mark-dark.svg" x={s.x - 30} y={s.y - 34} width="60" height="60" /></g>
           <text className={css.nodeLabel} x={s.x} y={s.y + 76} textAnchor="middle">{s.name}</text>
-          <text className={css.nodeNote} x={s.x} y={s.y + 94} textAnchor="middle">{s.note}</text>
         </g>
       ))}
     </svg>
@@ -165,14 +162,12 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
               <Demo {...(mountDemo ? { mount: mountDemo } : {})} {...(demo ? { frame: demo } : {})} />
             </div>
           </div>
-          <p className={css.demoNote}>真的 ember 界面，随便点</p>
         </div>
       </header>
 
       <section id="mesh" className={css.section}>
         <div className={css.sectionLight} />
         <div className={css.wrap}>
-          <h2 className={`${css.sectionTitle} ${css.reveal}`}>你的机器连成一张网<span className={css.faint}>哪台都能叫它干活</span></h2>
           <Mesh />
           <Mesh tall />
         </div>
