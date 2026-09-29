@@ -38,6 +38,7 @@ import "../ModelTriple.css.ts";
 import "../Preview.css.ts";
 import "../PreviewStage.css.ts";
 import "../annotate/Marks.css.ts";
+import "../annotate/ImageMarks.css.ts";
 import "../ViewportSize.css.ts";
 import "../Previews.css.ts";
 import "../Jobs.css.ts";

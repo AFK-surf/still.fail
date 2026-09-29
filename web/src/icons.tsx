@@ -33,6 +33,10 @@ export function ArrowRight(props: IconProps) {
   return <Svg {...props}><path d="M4 12H20 M14 6L20 12L14 18" /></Svg>;
 }
 
+export function ArrowUpRight(props: IconProps) {
+  return <Svg {...props}><path d="M5 19L18.5 5.5 M9.5 5H19V14.5" /></Svg>;
+}
+
 export function ArrowUp(props: IconProps) {
   return <Svg {...props}><path d="M12 20V4 M6 10L12 4L18 10" /></Svg>;
 }
@@ -103,6 +107,10 @@ export function Compose(props: IconProps) {
 
 export function Copy(props: IconProps) {
   return <Svg {...props}><path d="M8 6.5Q8 3.5 11 3.5H17Q20.5 3.5 20.5 7V13Q20.5 16 17.5 16 M7 8H13Q16 8 16 11V17Q16 20.5 12.5 20.5H7Q3.5 20.5 3.5 17V11.5Q3.5 8 7 8Z" /></Svg>;
+}
+
+export function Cursor(props: IconProps) {
+  return <Svg {...props}><path d="M5.5 3.5L18.5 10.5L12.5 12.5L10 18.5Z M12.5 12.5L18 18" /></Svg>;
 }
 
 export function Devices(props: IconProps) {
@@ -225,6 +233,10 @@ export function Received(props: IconProps) {
   return <Svg {...props}><path d="M12 3.5V14 M7.5 10L12 14.5L16.5 10 M4 15V17Q4 20.5 7.5 20.5H16.5Q20 20.5 20 17V15" /></Svg>;
 }
 
+export function Redo(props: IconProps) {
+  return <Svg {...props}><path d="M20 9H12Q3.5 9 3.5 15Q3.5 20.5 10 20.5H14 M15 3.5L20.5 9L15 14.5" /></Svg>;
+}
+
 export function Refresh(props: IconProps) {
   return <Svg {...props}><path d="M20 9Q18.5 3.5 12 3.5Q7.5 3.5 5 7 M20 4V9H15 M4 15Q5.5 20.5 12 20.5Q16.5 20.5 19 17 M4 20V15H9" /></Svg>;
 }
@@ -235,6 +247,10 @@ export function Retry(props: IconProps) {
 
 export function Said(props: IconProps) {
   return <Svg {...props}><path d="M8 4H16Q20.5 4 20.5 8.5V14Q20.5 18 16.5 18H10L5 20.5V17.5Q3.5 16.5 3.5 14V8.5Q3.5 4 8 4Z M8 9H16 M8 13H13" /></Svg>;
+}
+
+export function Scribble(props: IconProps) {
+  return <Svg {...props}><path d="M3.5 17.5Q6 11 9 8Q12 5 12.5 7.5Q13 10 9.5 14.5Q7 18.5 10 18.5Q13 18.5 16.5 12.5Q18.5 9.5 20.5 11" /></Svg>;
 }
 
 export function Search(props: IconProps) {
@@ -265,8 +281,16 @@ export function Sparks(props: IconProps) {
   return <Svg {...props}><path d="M9.5 8C10.5 12 12 13.5 16 14.5C12 15.5 10.5 17 9.5 21C8.5 17 7 15.5 3 14.5C7 13.5 8.5 12 9.5 8Z M17 3C17.5 5.5 18.5 6.5 21 7C18.5 7.5 17.5 8.5 17 11C16.5 8.5 15.5 7.5 13 7C15.5 6.5 16.5 5.5 17 3Z" /></Svg>;
 }
 
+export function Square(props: IconProps) {
+  return <Svg {...props}><path d="M8 4.5H16Q19.5 4.5 19.5 8V16Q19.5 19.5 16 19.5H8Q4.5 19.5 4.5 16V8Q4.5 4.5 8 4.5Z" /></Svg>;
+}
+
 export function Stop(props: IconProps) {
   return <Svg {...props}><path d="M8.5 4.5H15.5Q19.5 4.5 19.5 8.5V15.5Q19.5 19.5 15.5 19.5H8.5Q4.5 19.5 4.5 15.5V8.5Q4.5 4.5 8.5 4.5Z" /></Svg>;
+}
+
+export function Text(props: IconProps) {
+  return <Svg {...props}><path d="M5 7V4.5H19V7 M12 4.5V19.5 M9 19.5H15" /></Svg>;
 }
 
 export function Think(props: IconProps) {
@@ -312,6 +336,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "arrow-down": ArrowDown,
   "arrow-left": ArrowLeft,
   "arrow-right": ArrowRight,
+  "arrow-up-right": ArrowUpRight,
   "arrow-up": ArrowUp,
   "bot": Bot,
   "boxes": Boxes,
@@ -330,6 +355,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "command": Command,
   "compose": Compose,
   "copy": Copy,
+  "cursor": Cursor,
   "devices": Devices,
   "download": Download,
   "edit": Edit,
@@ -360,9 +386,11 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "quote": Quote,
   "read": Read,
   "received": Received,
+  "redo": Redo,
   "refresh": Refresh,
   "retry": Retry,
   "said": Said,
+  "scribble": Scribble,
   "search": Search,
   "send": Send,
   "server": Server,
@@ -370,7 +398,9 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "shield-check": ShieldCheck,
   "sliders": Sliders,
   "sparks": Sparks,
+  "square": Square,
   "stop": Stop,
+  "text": Text,
   "think": Think,
   "thread": Thread,
   "ticket": Ticket,

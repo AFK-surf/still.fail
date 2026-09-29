@@ -12,6 +12,7 @@ import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
 import { VideoViewer } from "./VideoViewer.tsx";
+import { useImageMarks } from "./annotate/ImageMarks.tsx";
 import { useBackClose } from "./backClose.ts";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
@@ -245,13 +246,15 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
   const api = useApi();
   const station = useStation();
   const step = useCallback((to: Shown | undefined) => { if (to) setShown(to); }, []);
+  // An image being marked: its bar stays, and it stays the one shown.
+  const [marking, setMarking] = useState(false);
   // The neighbours are fetched ahead, so a step shows the next one at once.
   useEffect(() => {
     for (const n of [before, after]) if (n) fetchFile(api, station.address, n.sessionKey, n.file).catch(() => {});
   }, [api, station.address, before?.file.path, after?.file.path]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || marking) return;
       if (e.key === "ArrowLeft" && before) step(before);
       else if (e.key === "ArrowRight" && after) step(after);
       else return;
@@ -259,7 +262,7 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [before, after, step]);
+  }, [before, after, step, marking]);
   const loaded = useFile(sessionKey, file, true);
   const known = kindOf(file.name);
   // An image stands in as the chat showed it (its thumbnail, kept) while the whole of it comes.
@@ -299,7 +302,7 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
   let body: ReactNode;
   if (known.kind === "image" && (loaded.state === "ready" || (loaded.state === "loading" && thumb))) {
     body = <ImageViewer key={file.path} url={loaded.state === "ready" ? loaded.url : thumb!} file={file} setControls={setControls} onSwipe={(d) => step(d < 0 ? before : after)}
-      waiting={loaded.state === "loading"} />;
+      waiting={loaded.state === "loading"} onMarking={setMarking} onClose={onClose} />;
   } else if (loaded.state === "loading" || (kind === null && loaded.state === "ready")) {
     body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <Progress got={loaded.got} size={file.size} /> : <><span className={waitingCss.spinner} aria-hidden="true" />正在载入…</>}</div>;
   }
@@ -307,7 +310,7 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
   else {
     const { url, blob } = loaded;
     switch (kind) {
-      case "image": body = <ImageViewer key={file.path} url={url} file={file} setControls={setControls} onSwipe={(d) => step(d < 0 ? before : after)} />; break;
+      case "image": body = <ImageViewer key={file.path} url={url} file={file} setControls={setControls} onSwipe={(d) => step(d < 0 ? before : after)} onMarking={setMarking} onClose={onClose} />; break;
       case "video": body = <VideoViewer key={file.path} url={url} blob={blob} name={file.name} />; break;
       case "audio": body = <div className={css2.fpAudio}><span className={css2.fpAudioName}>{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
@@ -317,7 +320,7 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
     }
   }
   return (
-    <RDialog.Content className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || undefined}
+    <RDialog.Content className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
       // A mouse wakes the bars by moving; a finger has no hover, and a tap on the file shows or hides them.
       onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
       onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onBar.current) setAwake(false); }}
@@ -338,7 +341,7 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
         </div>
         {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
         {controls}
-        {loaded.state === "ready"
+        {marking ? null : loaded.state === "ready"
           ? <Tip label="下载"><a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label="下载"><Download size={18} /></a></Tip>
           // Its place kept until it comes.
           : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Download size={18} /></span>}
@@ -346,7 +349,7 @@ function Viewer({ onClose, ...opened }: { onClose(): void; sessionKey: string; f
       </header>
       <div className={css2.fpBody}>
         {body}
-        {images.length > 1 && at >= 0 && <>
+        {images.length > 1 && at >= 0 && !marking && <>
           <Tip label="上一张（←）"><button type="button" className={css2.fpStep} data-side="before" aria-label="上一张" disabled={!before} onClick={() => step(before)}><ChevronLeft size={22} /></button></Tip>
           <Tip label="下一张（→）"><button type="button" className={css2.fpStep} data-side="after" aria-label="下一张" disabled={!after} onClick={() => step(after)}><ChevronRight size={22} /></button></Tip>
         </>}
@@ -380,16 +383,30 @@ const MAX_SCALE = 16;
  * the bar's buttons, + − 0) around the pointer and pan (drag, wheel) when larger
  * than the window. Fitted, a sideways swipe steps to the image before or after.
  */
-/** `waiting`: `url` is only the thumbnail, standing in the image's place until the whole of it comes. */
-function ImageViewer({ url, file, setControls, onSwipe, waiting = false }: { url: string; file: Attachment; setControls(c: ReactNode): void; onSwipe(direction: -1 | 1): void; waiting?: boolean }) {
+/**
+ * `waiting`: `url` is only the thumbnail, standing in the image's place until the whole of it comes. Once it has, it
+ * can be marked (annotate/ImageMarks.tsx): `onMarking` says when, `onClose` closes the preview once its marked image
+ * is in the chat's draft.
+ */
+function ImageViewer({ url, file, setControls, onSwipe, waiting = false, onMarking, onClose }:
+  { url: string; file: Attachment; setControls(c: ReactNode): void; onSwipe(direction: -1 | 1): void; waiting?: boolean; onMarking(on: boolean): void; onClose(): void }) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(file.width && file.height ? { w: file.width, h: file.height } : null);
-  const zoom = useZoom(natural, setControls, onSwipe);
+  const [zoomControls, setZoomControls] = useState<ReactNode>(null);
+  const [marksOn, setMarksOn] = useState(false);
+  const zoom = useZoom(natural, setZoomControls, marksOn ? undefined : onSwipe);
+  const marks = useImageMarks({ url: waiting ? null : url, name: file.name, natural, scale: zoom.scale, pass: zoom.stageProps, onDone: onClose });
+  useEffect(() => { setMarksOn(marks.on); onMarking(marks.on); }, [marks.on, onMarking]);
+  useEffect(() => () => onMarking(false), [onMarking]);
+  useEffect(() => { setControls(marks.on ? marks.bar : <>{zoomControls}{marks.bar}</>); }, [marks.on, marks.bar, zoomControls, setControls]);
+  useEffect(() => () => setControls(null), [setControls]);
   return (
     <div ref={zoom.stage} className={css2.fpStage} {...zoom.stageProps}>
       <img className={css2.fpImage} src={url} alt={file.name} draggable={false} data-waiting={waiting || undefined}
         // A thumbnail's own size is not the image's: it only stands in the image's place.
         onLoad={(e) => { const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight && (!waiting || !natural)) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
         style={zoom.place ?? { visibility: "hidden" }} />
+      {marks.sheet(zoom.place)}
+      {marks.tools}
     </div>
   );
 }
