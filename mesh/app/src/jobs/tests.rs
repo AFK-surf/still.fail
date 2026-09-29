@@ -87,8 +87,15 @@ async fn a_job_tells_its_agent_on_the_way_through_its_token() {
 async fn a_job_has_its_command_under_the_new_name_and_the_old_and_its_variables_under_both() {
     let r = rig();
     let job = r.jobs.start("s1", "names", r#"stillfail-job 2>&1; ember-job 2>&1; [ "$STILLFAIL_JOB_ID" = "$EMBER_JOB_ID" ] && [ "$STILLFAIL_JOB_TOKEN" = "$EMBER_JOB_TOKEN" ] && echo same"#, &r.work, None).unwrap();
-    until("it ends", || r.state(&job.id) == "exited").await;
+    // Three shells in a row: given longer than `until` gives, for a machine busy with the other tests.
+    for _ in 0..400 {
+        if r.state(&job.id) != "running" {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
     let ended = r.store.get_job(&job.id).unwrap().unwrap();
+    assert_eq!(ended.state, "exited");
     assert_eq!(tail(Path::new(&ended.log), 10), "usage: stillfail-job notify <words>\nusage: stillfail-job notify <words>\nsame");
     // Made again (a station starting over the same directory), the link stays one.
     let bin = r._dir.path().join("jobs").join("bin");
