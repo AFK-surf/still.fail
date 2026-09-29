@@ -88,6 +88,148 @@ pub async fn proxy_preview(method: &str, headers: &[(String, String)], body: req
     PreviewAnswer { status: answer.status().as_u16(), headers, body: Box::pin(answer.bytes_stream().map(|chunk| chunk.map_err(std::io::Error::other))) }
 }
 
+// ── a service's WebSocket ────────────────────────────────────────────────────
+
+/// A WebSocket message on a preview's socket stream, as the client core frames it (client/core/src/station.rs): a kind
+/// byte, the payload's length (4 bytes, big-endian), then the payload.
+pub const FRAME_TEXT: u8 = 1;
+pub const FRAME_BINARY: u8 = 2;
+/// Its payload: the close code (2 bytes, big-endian) and the reason, when there is one.
+pub const FRAME_CLOSE: u8 = 8;
+/// A frame longer than this is not a client talking.
+const MAX_FRAME: usize = 16 * 1024 * 1024;
+
+/// Request headers passed on to the service's socket: what a page's own WebSocket would send that the service may
+/// look at (its sub-protocols, cookies, the browser it is).
+const SOCKET_HEADERS: [&str; 3] = ["sec-websocket-protocol", "cookie", "user-agent"];
+
+pub type ServiceSocket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+/// Opens `path` of ws://localhost:`port` for a preview's page, with its headers (by lowercase name). Answers the socket
+/// and the sub-protocol the service chose, or the status to answer and why: the service's own refusal, 502 when it
+/// does not answer.
+pub async fn open_socket(headers: &[(String, String)], port: u16, path: &str) -> Result<(ServiceSocket, Option<String>), (u16, String)> {
+    use tokio_tungstenite::tungstenite::{self, client::IntoClientRequest, http::HeaderValue};
+    let mut request = format!("ws://localhost:{port}{path}").into_client_request().map_err(|e| (400, format!("地址不对：{e}")))?;
+    for (name, value) in headers {
+        if SOCKET_HEADERS.contains(&name.as_str())
+            && let (Ok(name), Ok(value)) = (tungstenite::http::HeaderName::from_bytes(name.as_bytes()), HeaderValue::from_str(value))
+        {
+            request.headers_mut().insert(name, value);
+        }
+    }
+    // As a page of the service itself would: a dev server turns away sockets from other origins.
+    request.headers_mut().insert("origin", HeaderValue::from_str(&format!("http://localhost:{port}")).expect("an origin"));
+    let connecting = tokio_tungstenite::connect_async(request);
+    match tokio::time::timeout(std::time::Duration::from_secs(20), connecting).await {
+        Err(_) => Err((502, format!("这台机器上的 localhost:{port} 没有回应"))),
+        Ok(Err(tungstenite::Error::Http(answer))) => {
+            let status = answer.status().as_u16();
+            Err((if status < 400 { 502 } else { status }, format!("localhost:{port} 没有接受这个 WebSocket（{status}）")))
+        }
+        Ok(Err(e)) => Err((502, format!("这台机器上的 localhost:{port} 没有回应：{e}"))),
+        Ok(Ok((socket, answer))) => {
+            let protocol = answer.headers().get("sec-websocket-protocol").and_then(|v| v.to_str().ok()).map(str::to_string);
+            Ok((socket, protocol))
+        }
+    }
+}
+
+/// One frame (module doc of FRAME_TEXT).
+pub fn frame(kind: u8, payload: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(5 + payload.len());
+    out.push(kind);
+    out.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+    out.extend_from_slice(payload);
+    out
+}
+
+/// Reads one frame; None when the stream ended between frames.
+async fn read_frame<R: tokio::io::AsyncRead + Unpin>(from: &mut R) -> std::io::Result<Option<(u8, Vec<u8>)>> {
+    use tokio::io::AsyncReadExt;
+    let mut head = [0u8; 5];
+    match from.read_exact(&mut head[..1]).await {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(e) => return Err(e),
+    }
+    from.read_exact(&mut head[1..]).await?;
+    let len = u32::from_be_bytes([head[1], head[2], head[3], head[4]]) as usize;
+    if len > MAX_FRAME {
+        return Err(std::io::Error::other("frame too long"));
+    }
+    let mut payload = vec![0u8; len];
+    from.read_exact(&mut payload).await?;
+    Ok(Some((head[0], payload)))
+}
+
+/// Passes messages between the service's socket and the client's stream until either closes; a close on one is
+/// passed on to the other.
+pub async fn pump_socket<R, W>(socket: ServiceSocket, mut from_client: R, mut to_client: W)
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    use futures_util::SinkExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio_tungstenite::tungstenite::Message;
+    use tokio_tungstenite::tungstenite::protocol::{CloseFrame, frame::coding::CloseCode};
+    let (mut to_service, mut from_service) = socket.split();
+    let up = async {
+        loop {
+            let message = match read_frame(&mut from_client).await {
+                Ok(Some((FRAME_TEXT, payload))) => Message::text(String::from_utf8_lossy(&payload).into_owned()),
+                Ok(Some((FRAME_BINARY, payload))) => Message::binary(payload),
+                Ok(Some((FRAME_CLOSE, payload))) => {
+                    let code = if payload.len() >= 2 { u16::from_be_bytes([payload[0], payload[1]]) } else { 1000 };
+                    let reason = String::from_utf8_lossy(payload.get(2..).unwrap_or_default()).into_owned();
+                    let _ = to_service.send(Message::Close(Some(CloseFrame { code: CloseCode::from(code), reason: reason.into() }))).await;
+                    return;
+                }
+                Ok(Some(_)) => continue,
+                // The client went (its page, its tab): the service's socket goes too.
+                Ok(None) | Err(_) => {
+                    let _ = to_service.send(Message::Close(Some(CloseFrame { code: CloseCode::Away, reason: "".into() }))).await;
+                    return;
+                }
+            };
+            if to_service.send(message).await.is_err() {
+                return;
+            }
+        }
+    };
+    let down = async {
+        while let Some(message) = from_service.next().await {
+            let bytes = match message {
+                Ok(Message::Text(text)) => frame(FRAME_TEXT, text.as_bytes()),
+                Ok(Message::Binary(data)) => frame(FRAME_BINARY, &data),
+                Ok(Message::Close(close)) => {
+                    let (code, reason) = close.map(|c| (u16::from(c.code), c.reason.to_string())).unwrap_or((1005, String::new()));
+                    let mut payload = code.to_be_bytes().to_vec();
+                    payload.extend_from_slice(reason.as_bytes());
+                    let _ = to_client.write_all(&frame(FRAME_CLOSE, &payload)).await;
+                    break;
+                }
+                // Pings are answered by the socket itself.
+                Ok(_) => continue,
+                Err(_) => {
+                    let _ = to_client.write_all(&frame(FRAME_CLOSE, &1006u16.to_be_bytes())).await;
+                    break;
+                }
+            };
+            if to_client.write_all(&bytes).await.is_err() {
+                return;
+            }
+        }
+        let _ = to_client.shutdown().await;
+    };
+    // Either side ending ends both: the other half is dropped (the service's socket closes, the stream is reset).
+    tokio::select! {
+        _ = up => {}
+        _ = down => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +306,92 @@ mod tests {
         assert!(text(gone.body).await.contains(&format!("localhost:{port} 没有回应")));
         assert_eq!(preview_target("/preview/99999/"), None, "not a port");
         assert_eq!(preview_target("/preview/8080"), Some((8080, "/".into())));
+    }
+
+    /// A WebSocket service: checks the origin it was opened from and the sub-protocol asked for, then echoes each
+    /// message back with what it saw first, and closes with 4001 when told "bye".
+    #[allow(clippy::result_large_err)] // tungstenite's handshake callback answers its own Response as the error
+    async fn socket_service() -> u16 {
+        use tokio_tungstenite::tungstenite::{Message, handshake::server::{Request, Response}};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            while let Ok((tcp, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut seen = String::new();
+                    let socket = tokio_tungstenite::accept_hdr_async(tcp, |request: &Request, mut response: Response| {
+                        let h = |n: &str| request.headers().get(n).and_then(|v| v.to_str().ok()).unwrap_or("-").to_string();
+                        seen = format!("{} {} {} {}", request.uri(), h("origin"), h("sec-websocket-protocol"), h("x-ember-mesh"));
+                        if let Some(asked) = request.headers().get("sec-websocket-protocol") {
+                            response.headers_mut().insert("sec-websocket-protocol", asked.clone());
+                        }
+                        Ok(response)
+                    })
+                    .await
+                    .unwrap();
+                    let (mut to, mut from) = socket.split();
+                    use futures_util::SinkExt;
+                    while let Some(Ok(message)) = from.next().await {
+                        match message {
+                            Message::Text(t) if t.as_str() == "bye" => {
+                                let close = tokio_tungstenite::tungstenite::protocol::CloseFrame { code: 4001u16.into(), reason: "done".into() };
+                                let _ = to.send(Message::Close(Some(close))).await;
+                                break;
+                            }
+                            Message::Text(t) => to.send(Message::text(format!("{seen} | {t}"))).await.unwrap(),
+                            Message::Binary(b) => to.send(Message::binary(b)).await.unwrap(),
+                            _ => {}
+                        }
+                    }
+                });
+            }
+        });
+        port
+    }
+
+    #[tokio::test]
+    async fn a_services_websocket_passes_messages_both_ways_framed_until_it_closes() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let port = socket_service().await;
+        let asked = vec![("sec-websocket-protocol".to_string(), "vite-hmr".to_string()), ("x-ember-mesh".to_string(), "secret".to_string())];
+        let (socket, protocol) = open_socket(&asked, port, "/hmr?token=1").await.unwrap();
+        assert_eq!(protocol.as_deref(), Some("vite-hmr"));
+        // The client's side of the stream: frames written to `client`, read from it.
+        let (client, station) = tokio::io::duplex(64 * 1024);
+        let (from_client, to_client) = tokio::io::split(station);
+        let pump = tokio::spawn(pump_socket(socket, from_client, to_client));
+        let (mut reading, mut writing) = tokio::io::split(client);
+        writing.write_all(&frame(FRAME_TEXT, b"hi")).await.unwrap();
+        writing.write_all(&frame(FRAME_BINARY, &[0, 1, 2])).await.unwrap();
+        let got = read_frame(&mut reading).await.unwrap().unwrap();
+        assert_eq!((got.0, String::from_utf8(got.1).unwrap()), (FRAME_TEXT, format!("/hmr?token=1 http://localhost:{port} vite-hmr - | hi")), "the path, the service's own origin, the sub-protocol; none of ember's headers");
+        assert_eq!(read_frame(&mut reading).await.unwrap().unwrap(), (FRAME_BINARY, vec![0, 1, 2]));
+        writing.write_all(&frame(FRAME_TEXT, b"bye")).await.unwrap();
+        let (kind, payload) = read_frame(&mut reading).await.unwrap().unwrap();
+        assert_eq!((kind, u16::from_be_bytes([payload[0], payload[1]]), &payload[2..]), (FRAME_CLOSE, 4001, &b"done"[..]), "the service's close, with its code and reason");
+        let mut rest = Vec::new();
+        reading.read_to_end(&mut rest).await.unwrap();
+        assert!(rest.is_empty(), "then the stream ends");
+        pump.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_client_gone_closes_the_services_socket_and_a_refusal_says_why() {
+        let port = socket_service().await;
+        let (socket, _) = open_socket(&[], port, "/").await.unwrap();
+        let (client, station) = tokio::io::duplex(1024);
+        let (from_client, to_client) = tokio::io::split(station);
+        let pump = tokio::spawn(pump_socket(socket, from_client, to_client));
+        drop(client);
+        tokio::time::timeout(std::time::Duration::from_secs(5), pump).await.expect("the pump ends with its client").unwrap();
+        // A port with plain HTTP on it (no socket there) and one with nothing at all.
+        let (http, task) = service().await;
+        let refused = open_socket(&[], http, "/").await.err().unwrap();
+        assert!(refused.0 >= 400, "{refused:?}");
+        task.abort();
+        let _ = task.await;
+        let none = open_socket(&[], http, "/").await.err().unwrap();
+        assert_eq!(none.0, 502);
+        assert!(none.1.contains(&format!("localhost:{http} 没有回应")), "{}", none.1);
     }
 }

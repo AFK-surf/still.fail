@@ -56,7 +56,12 @@ UI → core:
 { "id": 7, "call": "job.stop", "params": { … } }          // one answer
 { "id": 8, "subscribe": { "topic": "station.session", "station": "ws1/st1", "key": "…" } }
 { "id": 8, "unsubscribe": true }
+{ "id": 7, "cancel": true }                                 // stops a call under way: it answers { code: "cancelled" }
 ```
+
+A call may tell its UI how far it has got before it answers: values under its
+id (`{ "id": 7, "value": … }`), then its answer. A UI that goes away cancels
+its calls under way.
 
 core → UI:
 
@@ -324,6 +329,9 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to entry `seq` (`PUT /threads/:id/read {n}`); nothing is sent when it is read that far already. `unread` in `chats` follows |
 | `station.upload` | `station`, `key`, `name`, `bytes` | the attachment (into that session's workspace; a message may carry uploads of any session in its chat) |
 | `station.file` | `station`, `key`, `name` | `{ type, bytes }` |
+| `station.preview` | `station`, `port`, `method`, `path`, `headers?`, `body?`, `stream?` | a request to a web service on the station's machine (`/preview/<port>`): `{ status, headers, body }`; with `stream`, values `{ head: { status, headers } }` then `{ chunk }` for each piece of the body as it comes, and the answer (null) at its end. Only waited on (`status`) until its head; cancelled, the station stops asking the service |
+| `preview.socket` | `station`, `port`, `path`, `headers?`, `socket` (a name the UI gives it) | a WebSocket of that service, over the mesh only: values `{ open: { protocol } }`, then `{ text }` or `{ binary }` for each message; the answer is its close, `{ code, reason }`. Cancelling the call drops it |
+| `preview.socket.send` | `socket`, one of `text`, `binary`, `close: [code, reason]` | — ; what the page sends on the socket it named so |
 | `migrate` | `accounts`, `device` | — (web only: what localStorage held before the core existed) |
 
 A UI never makes a request of a station or ember cloud itself (no method, no
