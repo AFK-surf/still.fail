@@ -38,8 +38,9 @@ export const RELEASE_FILE = /^(stillfail|ember)-station-(darwin-arm64|linux-x64|
 const APP_FILES: [RegExp, string][] = [
   // The station's latest release, for stations to say a newer one is out (mesh/app/src/updates.rs).
   [/^station\.json$/, "application/json"],
-  [/^desktop\/latest-mac\.yml$/, "text/yaml; charset=utf-8"],
-  [/^desktop\/ember-[0-9.]+-arm64-mac\.zip$/, "application/zip"],
+  // The old ember.app's feed (it carries the bridge build that brings it over) and the renamed app's own.
+  [/^desktop\/(latest|stillfail)-mac\.yml$/, "text/yaml; charset=utf-8"],
+  [/^desktop\/(ember|stillfail)-[0-9.]+-arm64-mac\.zip$/, "application/zip"],
   [/^android\/latest\.json$/, "application/json"],
   [/^android\/ember-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
 ];
