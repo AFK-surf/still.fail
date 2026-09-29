@@ -57,6 +57,9 @@ struct Pending {
     failed: Option<String>,
     /// Its session and thread, once made.
     made: Option<(String, u64)>,
+    /// Its station has listed it: from then on its row is the station's alone, so one archived or removed there is
+    /// not shown again from here.
+    listed: Cell<bool>,
 }
 
 /// The prefix of the keys the core gives chats not made yet: no station's session key starts so.
@@ -99,7 +102,7 @@ impl Views {
         self.sent.set(self.sent.get() + 1);
         let now = self.host.now_ms();
         let key = format!("{PENDING_PREFIX}{}-{}", now.round() as i64, self.sent.get());
-        let chat = Pending { station: station.to_string(), ask, created_at: now, queue: Vec::new(), failed: None, made: None };
+        let chat = Pending { station: station.to_string(), ask, created_at: now, queue: Vec::new(), failed: None, made: None, listed: Cell::new(false) };
         self.pending.borrow_mut().insert(key.clone(), chat);
         self.pending_changed(&key);
         key
@@ -258,7 +261,11 @@ impl Views {
                 Some((session, thread)) => (session.clone(), json!(thread)),
                 None => (key.clone(), Value::Null),
             };
-            if rows.iter().any(|r| r.get("id").and_then(Value::as_str) == Some(&id)) {
+            if chat.listed.get() {
+                continue;
+            }
+            if chat.made.is_some() && rows.iter().any(|r| r.get("id").and_then(Value::as_str) == Some(&id)) {
+                chat.listed.set(true);
                 continue;
             }
             // Made, it has no queue: its first message is in the outbox until the station's rows come.
@@ -2464,6 +2471,10 @@ mod tests {
             t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
             let items = list.value.clone().unwrap()["days"][0]["items"].clone();
             assert_eq!((items.as_array().map(Vec::len), items[0]["pending"].clone()), (Some(1), Value::Null));
+            // Archived elsewhere, it leaves the station's rows: it is not listed again from what was asked here.
+            t.set(rows("local"), json!([]));
+            t.read_all(&mut [(&mut screen, 1), (&mut list, 2)]).await;
+            assert_eq!(list.value.clone().unwrap()["days"].as_array().map(Vec::len), Some(0));
         });
     }
 
