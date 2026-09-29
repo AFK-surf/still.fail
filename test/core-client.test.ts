@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CoreClient, CoreError, desktopOpener, type Channel, type Opener } from "../web/src/core/client.ts";
+import { CoreClient, CoreError, WAKE_ANSWER_MS, desktopOpener, type Channel, type Opener } from "../web/src/core/client.ts";
 import { migrateLegacy } from "../web/src/core/migrate.ts";
 
 /** A worker stand-in: records what the client posts and answers on demand. */
@@ -126,6 +126,31 @@ test("back from the back/forward cache: bye, then everything subscribed again", 
   client.resume();
   await assert.rejects(pending);
   assert.deepEqual(workers.last.sent.slice(2), [{ bye: true }, { id: 1, subscribe: { topic: "session", station: "local", key: "k" } }]);
+});
+
+test("back after being away: the core is told, and a worker that was up and now says nothing is replaced", () => {
+  const workers = new FakeWorkers();
+  const timers: [number, () => void][] = [];
+  const client = new CoreClient(workers.opener, { schedule: (ms, run) => { if (ms === WAKE_ANSWER_MS) timers.push([ms, run]); else run(); } });
+  client.subscribe({ topic: "accounts" }, () => undefined, () => undefined);
+  // Not up yet (still starting): it is told, but not timed.
+  client.wake(1234.4);
+  assert.deepEqual(workers.last.sent.at(-1), { id: 2, call: "client.wake", params: { away: 1234 } });
+  assert.equal(timers.length, 0);
+  workers.last.reply({ id: 1, value: [] });
+  // Up, and it answers: nothing happens.
+  client.wake(60_000);
+  workers.last.reply({ id: 3, ok: {} });
+  timers.shift()![1]();
+  assert.equal(workers.opened.length, 1);
+  // Up, and silent: a new worker, with the subscriptions again.
+  client.wake(60_000);
+  const old = workers.last;
+  timers.shift()![1]();
+  assert.equal(old.closed, true);
+  assert.deepEqual(old.sent.at(-1), { bye: true });
+  assert.equal(workers.opened.length, 2);
+  assert.deepEqual(workers.last.sent, [{ id: 1, subscribe: { topic: "accounts" } }]);
 });
 
 test("desktop: posts wait for the core's port, go out as objects and come back as its JSON; the core exiting fails the channel", async () => {

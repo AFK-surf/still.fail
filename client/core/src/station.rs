@@ -27,9 +27,9 @@ use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::rc::{Rc, Weak};
 
-use futures::future::{AbortHandle, Abortable, LocalBoxFuture, join_all};
+use futures::future::{AbortHandle, Abortable, Either, LocalBoxFuture, join_all};
 use futures::stream::LocalBoxStream;
-use futures::{FutureExt, StreamExt};
+use futures::{FutureExt, StreamExt, pin_mut};
 use serde_json::{Value, json};
 
 use crate::entries::n_of;
@@ -41,6 +41,7 @@ use crate::protocol::Topic;
 use crate::status::{Place, Status, Waiting, station_what};
 use crate::store::{Source, Store};
 use crate::trace::{Kind, Span, SpanContext, Tracer, route};
+use crate::wake;
 
 /// How long a failed or ended stream waits before it is opened again.
 pub const RECONNECT_MS: u64 = 2_000;
@@ -128,6 +129,8 @@ impl WireReply {
 /// for an event stream carries `accept: text/event-stream`.
 pub trait StationWire {
     fn request(&self, station: &StationAddr, head: RequestHead, body: Vec<u8>) -> LocalBoxFuture<'static, Result<WireReply>>;
+    /// The way to the station is taken for gone (wake.rs): what is open to it closes, and the next request opens it anew.
+    fn reset(&self, _station: &StationAddr) {}
 }
 
 fn wants_stream(head: &RequestHead) -> bool {
@@ -228,6 +231,14 @@ impl StationWire for MeshWire {
         }
         .boxed_local()
     }
+
+    fn reset(&self, station: &StationAddr) {
+        let StationAddr::Remote { station, .. } = station else { return };
+        // Only a link already made: nothing to close before the endpoint is up.
+        if let Some(Ok(mesh)) = (self.mesh)().now_or_never() {
+            mesh.drop_link(station);
+        }
+    }
 }
 
 /// `local` over one wire, every other station over another.
@@ -247,6 +258,13 @@ impl StationWire for RoutedWire {
         match station {
             StationAddr::Local => self.local.request(station, head, body),
             StationAddr::Remote { .. } => self.remote.request(station, head, body),
+        }
+    }
+
+    fn reset(&self, station: &StationAddr) {
+        match station {
+            StationAddr::Local => self.local.reset(station),
+            StationAddr::Remote { .. } => self.remote.reset(station),
         }
     }
 }
@@ -1072,7 +1090,22 @@ impl Stations {
             }
             // Asked anew each time: a session is followed from what its topic has by then.
             let path = self.events_path(&station, &wants);
-            let opened = self.tracer.instrument(Some(span.context()), self.open_stream(&addr, &path)).await;
+            let opening = self.tracer.instrument(Some(span.context()), self.open_stream(&addr, &path));
+            // Still opening when the UI came back from being away since before: on a way taken for gone, tried anew now.
+            let sent = self.host.now_ms();
+            let dropped = wake::woken_for(self.host.clone(), move |w| w.drops_request(sent));
+            pin_mut!(opening, dropped);
+            let opened = match futures::future::select(opening, dropped).await {
+                Either::Left((opened, _)) => opened,
+                Either::Right(_) => {
+                    self.wire.reset(&addr);
+                    span.fail();
+                    span.end();
+                    previous = Some((wake::GONE.to_string(), 0.0));
+                    self.set_stale(&station, true);
+                    continue;
+                }
+            };
             if !self.took_over(&station, generation) {
                 return;
             }
@@ -1090,7 +1123,21 @@ impl Stations {
                     let mut parser = SseParser::default();
                     let opened_at = self.host.now_ms();
                     let mut why = "ended".to_string();
-                    while let Some(chunk) = body.next().await {
+                    let mut heard = opened_at;
+                    loop {
+                        // Nothing on it while the UI was away (not even the keepalive): taken for gone, and the link with it.
+                        let gone = wake::woken_for(self.host.clone(), move |w| w.drops_stream(heard));
+                        pin_mut!(gone);
+                        let chunk = match futures::future::select(body.next(), gone).await {
+                            Either::Left((Some(chunk), _)) => chunk,
+                            Either::Left((None, _)) => break,
+                            Either::Right(_) => {
+                                self.wire.reset(&addr);
+                                why = wake::GONE.to_string();
+                                break;
+                            }
+                        };
+                        heard = self.host.now_ms();
                         match chunk {
                             Ok(bytes) => {
                                 for (name, data) in parser.feed(&bytes) {
@@ -1103,12 +1150,17 @@ impl Stations {
                             }
                         }
                     }
+                    let woke = why == wake::GONE;
                     if !self.is_current(&station, generation) {
                         return;
                     }
                     previous = Some((why.clone(), self.host.now_ms() - opened_at));
                     self.set_stale(&station, true);
                     self.set_link(&station, json!({ "state": "reconnecting", "message": if why == "ended" { "连接断开了".to_string() } else { why } }));
+                    // Taken for gone as the UI came back: opened again at once.
+                    if woke {
+                        continue;
+                    }
                 }
                 Err(error) => {
                     failed(&mut span, &error);
@@ -1123,7 +1175,8 @@ impl Stations {
             }
             // Not reached: less and less often, up to RECONNECT_MAX_MS.
             let wait = RECONNECT_MS.saturating_mul(1u64 << misses.saturating_sub(1).min(8)).min(RECONNECT_MAX_MS);
-            self.host.sleep(wait).await;
+            // A UI back after being away wants it now: no more waiting.
+            futures::future::select(self.host.sleep(wait), self.host.woken()).await;
         }
     }
 

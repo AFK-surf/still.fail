@@ -132,6 +132,8 @@ export interface ClientOptions {
 // A worker that keeps failing (a broken build, a panic on start) is retried
 // with growing pauses rather than in a tight loop.
 const RETRY_MS = [0, 1000, 2000, 5000, 10_000, 30_000];
+/** A worker that answered before and says nothing this long after the page is back is taken for gone. */
+export const WAKE_ANSWER_MS = 5000;
 
 export class CoreClient {
   readonly #open: Opener;
@@ -145,6 +147,10 @@ export class CoreClient {
   #queue: unknown[] = [];
   #failures = 0;
   #closed = false;
+  /** The current channel has answered: it was up, so silence from it means something. */
+  #up = false;
+  /** Bumped by every message from the worker, so a wake can tell whether anything came after it. */
+  #heard = 0;
 
   constructor(open: Opener, options: ClientOptions = {}) {
     this.#open = open;
@@ -187,6 +193,25 @@ export class CoreClient {
     if (this.#channel) for (const [id, sub] of this.#subs) this.#post({ id, subscribe: sub.topic });
   }
 
+  /**
+   * The page is back after `away` ms hidden (a phone's page frozen in the background): the core gives up what went
+   * out before and reconnects (client/core/src/wake.rs). A worker that was up and now says nothing at all is gone
+   * (the system can end it without a word to its port): a new one is started.
+   */
+  wake(away: number): void {
+    if (this.#closed || !this.#channel) return;
+    const channel = this.#channel;
+    const heard = this.#heard;
+    this.call("client.wake", { away: Math.max(0, Math.round(away)) }).catch(() => undefined);
+    if (!this.#up) return;
+    this.#schedule(WAKE_ANSWER_MS, () => {
+      if (this.#channel !== channel || this.#heard !== heard) return;
+      // A worker only frozen longer than this, not gone, drops this page's client rather than keep it.
+      this.#post({ bye: true });
+      this.#restart("回到前台后核心没有回应");
+    });
+  }
+
   close(): void {
     this.#closed = true;
     this.#rejectCalls("连接已关闭");
@@ -212,6 +237,7 @@ export class CoreClient {
       return;
     }
     this.#channel = channel;
+    this.#up = false;
     for (const [id, sub] of this.#subs) this.#post({ id, subscribe: sub.topic });
     const queued = this.#queue;
     this.#queue = [];
@@ -264,6 +290,7 @@ export class CoreClient {
 
   #receive(data: unknown): void {
     if (typeof data !== "object" || data === null) return;
+    this.#heard++;
     const message = data as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean };
     // A newer build's core took over: this page is of the older build, so it loads the newer one.
     if (message.retired) {
@@ -281,6 +308,7 @@ export class CoreClient {
     }
     // A healthy answer: the worker is up again.
     this.#failures = 0;
+    this.#up = true;
     if (message.id === undefined) return;
     const call = this.#calls.get(message.id);
     if (call) {
@@ -411,6 +439,21 @@ export function connectCore(): CoreClient {
   const open = window.emberDesktop ? desktopOpener(window.emberDesktop) : workerOpener();
   const client = new CoreClient(open, { onFault: (error) => captureException(error, { source: "core" }) });
   addEventListener("pagehide", () => client.suspend());
-  addEventListener("pageshow", (event) => { if (event.persisted) client.resume(); });
+  // Hidden since when (wall clock: a frozen page's monotonic clock may stand still).
+  let hidden = document.visibilityState === "hidden" ? Date.now() : null;
+  const back = () => {
+    if (hidden === null) return;
+    const away = Date.now() - hidden;
+    hidden = null;
+    client.wake(away);
+  };
+  addEventListener("pageshow", (event) => {
+    if (event.persisted) client.resume();
+    back();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") hidden ??= Date.now();
+    else back();
+  });
   return client;
 }

@@ -40,6 +40,7 @@ use crate::store::{Source, Store};
 use crate::sync::Sync;
 use crate::trace::{self, Kind, Span, Tracer};
 use crate::views::{EmailOf, Views};
+use crate::wake::{self, Wake, Wakes, WakingHost};
 
 /// The first wait before an events socket is opened again; it doubles up to [`SOCKET_RETRY_MAX_MS`], and starts
 /// over once a socket held for a minute.
@@ -92,6 +93,8 @@ struct Inner {
     sockets: RefCell<HashMap<String, Socket>>,
     /// What is waited on, for the `status` topic.
     status: Rc<Status>,
+    /// Told when a UI is back after being away (wake.rs).
+    wakes: Rc<Wakes>,
 }
 
 struct Socket {
@@ -120,6 +123,9 @@ impl Core {
 
     /// A core that records `sample` of its traces (0: none).
     pub async fn traced(host: Rc<dyn Host>, sample: f64) -> Core {
+        // Everything the core asks of the host is given up or opened again when a UI comes back (wake.rs).
+        let wakes = Rc::new(Wakes::default());
+        let host: Rc<dyn Host> = WakingHost::new(host, wakes.clone());
         let tracer = Tracer::new(host.clone(), sample);
         let accounts = Accounts::load(host.clone()).await;
         let status = Status::new(host.clone());
@@ -183,6 +189,7 @@ impl Core {
                 live: RefCell::default(),
                 sockets: RefCell::default(),
                 status: status.clone(),
+                wakes,
             }
         });
         // Whom each account reaches, as the data center has it from the last run: views put together before the
@@ -405,6 +412,10 @@ impl Inner {
             Call::AuthComplete { query } => {
                 let (account, return_to) = self.accounts.complete_sign_in(&query).await?;
                 Ok(json!({ "account": account, "return_to": return_to }))
+            }
+            Call::Wake { away } => {
+                self.wakes.wake(Wake { at: self.host.now_ms(), away: away.max(0.0) });
+                Ok(json!({}))
             }
             Call::ClientError { source, message } => {
                 let key = format!("{source}\u{0}{message}");
@@ -1015,12 +1026,20 @@ async fn follow_socket(core: Weak<Inner>, sub: String) {
                 // Nothing is replayed: what changed while it was closed is read now.
                 this.refresh_all().await;
                 drop(this);
+                let mut woke = false;
                 while let Some(frame) = frames.next().await {
-                    let (Some(this), Ok(text)) = (core.upgrade(), frame) else { break };
-                    this.on_cloud_event(&sub, &text);
+                    let Some(this) = core.upgrade() else { break };
+                    match frame {
+                        Ok(text) => this.on_cloud_event(&sub, &text),
+                        Err(error) => {
+                            woke = error.0 == wake::GONE;
+                            break;
+                        }
+                    }
                 }
                 let Some(this) = core.upgrade() else { return };
-                if this.host.now_ms() - opened >= 60_000.0 {
+                // Held a while, or taken for gone when the UI came back (it was fine before): opened again soon.
+                if woke || this.host.now_ms() - opened >= 60_000.0 {
                     wait = SOCKET_RETRY_MS;
                 }
                 this.socket_state(&sub, SocketState::Retrying);
@@ -1041,10 +1060,13 @@ async fn follow_socket(core: Weak<Inner>, sub: String) {
         }
         let Some(this) = core.upgrade() else { return };
         this.status.socket_down(&sub, &down, this.host.now_ms() + wait as f64);
-        let sleep = this.host.sleep(wait);
+        let (sleep, woken) = (this.host.sleep(wait), this.host.woken());
         drop(this);
-        sleep.await;
-        wait = (wait * 2).min(SOCKET_RETRY_MAX_MS);
+        // A UI back after being away wants it now: the wait starts over.
+        match futures::future::select(sleep, woken).await {
+            futures::future::Either::Left(_) => wait = (wait * 2).min(SOCKET_RETRY_MAX_MS),
+            futures::future::Either::Right(_) => wait = SOCKET_RETRY_MS,
+        }
     }
 }
 
@@ -1076,6 +1098,9 @@ enum Call {
     /// A client could not do something with what the core gave it (a view it cannot read, say): recorded as an error
     /// span, so it is seen with the rest of the trace, the same one at most once a minute.
     ClientError { source: String, message: String },
+    /// A UI is back after `away` ms (a page hidden, a phone's app in the background): what went out before is
+    /// suspect (wake.rs). Its answer also tells the UI the core is alive.
+    Wake { away: f64 },
     AuthBegin { redirect_uri: String, return_to: String, device_name: String },
     AuthComplete { query: String },
     SignOut { account: String },
@@ -1108,7 +1133,7 @@ impl Call {
             Call::ChatCreate { station, .. } | Call::ChatSendTo { station, .. } | Call::ChatRetryIn { station, .. } | Call::ChatDiscardIn { station, .. } => Some(station),
             Call::ChatOlder { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
             Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } => Some(station),
-            Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::CloudRequest { .. } | Call::Migrate { .. } | Call::ClientError { .. } => None,
+            Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::CloudRequest { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } => None,
         }
     }
 }
@@ -1241,6 +1266,11 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
         body: String,
     }
     #[derive(Deserialize)]
+    struct WakeParams {
+        #[serde(default)]
+        away: f64,
+    }
+    #[derive(Deserialize)]
     struct Migrate {
         accounts: Option<Value>,
         device: Option<String>,
@@ -1264,6 +1294,7 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
             let p = read::<ClientErrorParams>(params)?;
             Call::ClientError { source: p.source, message: p.message }
         }
+        "client.wake" => Call::Wake { away: read::<WakeParams>(params)?.away },
         "cloud.request" => {
             let p: CloudRequest = read(params)?;
             Call::CloudRequest { account: p.account, method: p.method, path: p.path, body: p.body }
@@ -1705,6 +1736,27 @@ mod tests {
             host.settle().await;
             assert_eq!(host.open_sockets("/v1/events"), 1);
             assert_eq!(count(&host, "/v1/me"), 2, "read again once it opened");
+        });
+    }
+
+    #[test]
+    fn back_after_being_away_a_socket_waiting_to_retry_tries_at_once() {
+        run(async {
+            let (host, core) = cloud_core().await;
+            host.refuse_sockets.set(true);
+            let ui = core.connect();
+            core.receive(ui, ClientMessage::Subscribe { id: 1, subscribe: Topic::Workspaces });
+            host.settle().await;
+            // Refused for a while: the next try is 32 s away.
+            pass(SOCKET_RETRY_MS * 40).await;
+            host.refuse_sockets.set(false);
+            assert_eq!(host.open_sockets("/v1/events"), 0);
+            host.take_emitted();
+            core.receive(ui, ClientMessage::Call { id: 9, call: "client.wake".into(), params: json!({ "away": 60_000 }) });
+            pass(0).await;
+            assert_eq!(host.open_sockets("/v1/events"), 1);
+            // Answered, so the page knows the core is there.
+            assert!(host.take_emitted().iter().any(|(_, m)| *m == CoreMessage::Ok { id: 9, ok: json!({}) }));
         });
     }
 

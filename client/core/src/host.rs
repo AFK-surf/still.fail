@@ -96,6 +96,10 @@ pub trait Host {
     /// The viewer's time zone at that moment: minutes to add to UTC to get local time.
     fn utc_offset_min(&self, at_ms: f64) -> i32;
     fn sleep(&self, ms: u64) -> LocalBoxFuture<'static, ()>;
+    /// The next time a UI says it is back after being away (wake.rs); never, on a host the core has not wrapped.
+    fn woken(&self) -> LocalBoxFuture<'static, crate::wake::Wake> {
+        Box::pin(futures::future::pending())
+    }
     /// Runs a task to completion on the core's thread.
     fn spawn(&self, task: LocalBoxFuture<'static, ()>);
     fn random_bytes(&self, buf: &mut [u8]);

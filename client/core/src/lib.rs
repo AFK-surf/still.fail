@@ -26,6 +26,7 @@ pub mod sync;
 pub mod testing;
 pub mod trace;
 pub mod views;
+pub mod wake;
 
 pub use crate::core::Core;
 pub use error::CoreError;

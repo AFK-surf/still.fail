@@ -142,6 +142,15 @@ impl Mesh {
         opening.await
     }
 
+    /// Closes the link to a station, if one is open or opening: taken for gone (wake.rs), so the next request opens
+    /// another rather than waiting on this one. Requests on it fail (a read is asked once more, on the new one).
+    pub fn drop_link(&self, station_id: &str) {
+        let opening = self.links.borrow_mut().remove(station_id);
+        if let Some(Ok(link)) = opening.as_ref().and_then(|o| o.peek()) {
+            link.conn.close(0u32.into(), b"woke");
+        }
+    }
+
     /// Takes over the device key a page kept before the core existed (32 bytes).
     ///
     /// The page's key wins: it is stored whenever it differs from the stored
