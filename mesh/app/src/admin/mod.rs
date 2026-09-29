@@ -139,6 +139,8 @@ pub struct AdminDeps {
     pub check_on_start: bool,
     /// Who this machine's own Claude Code and Codex are signed in as, for the pages to say.
     pub machine_logins: Option<Arc<MachineLogins>>,
+    /// The station's and its runtimes' versions, and updating them; None where nothing is to be updated (tests).
+    pub updates: Option<Arc<crate::updates::Updates>>,
     /// Development only (EMBER_DEV=1): POST /dev/inject.
     pub dev: bool,
     /// Background jobs, for the pages to stop one; None where there are none (tests).
@@ -351,6 +353,15 @@ impl AdminApi {
         api
     }
 
+    /// The station's updates, for someone who may update what runs on the machine: the station's own page, or a
+    /// workspace's owner or admin.
+    fn updates_for(&self, viewer: &Viewer) -> Result<Arc<crate::updates::Updates>> {
+        if matches!(viewer, Viewer::Mesh { role, .. } if role != "owner" && role != "admin") {
+            return Err(http_error(403, "只有 workspace 的 owner 或管理员能更新 station 和它的运行时"));
+        }
+        self.deps.updates.clone().ok_or_else(|| http_error(404, "这台 station 不能在这里更新"))
+    }
+
     fn config(&self) -> Arc<Config> {
         self.deps.settings.config()
     }
@@ -514,6 +525,18 @@ impl AdminApi {
                 let dir = self.staged();
                 files::sweep_staged(&dir).await;
                 return ok(serde_json::to_value(files::save_upload(body, &dir, asked.param("name").unwrap_or("file")).await?)?);
+            }
+            // The station's and its runtimes' versions read again, or one of them updated: the station's own business.
+            ("POST", "/updates/check") => {
+                let updates = self.updates_for(viewer)?;
+                updates.check().await;
+                return ok(serde_json::to_value(updates.get())?);
+            }
+            ("POST", "/updates") => {
+                let updates = self.updates_for(viewer)?;
+                let input = read_json(body).await?;
+                updates.update(input.get("id").and_then(Value::as_str).unwrap_or_default()).map_err(|e| http_error(400, e.to_string()))?;
+                return ok(serde_json::to_value(updates.get())?);
             }
             ("POST", "/profiles/machine") => return ok(me.new_machine_profile(&read_json(body).await?, viewer).await?),
             ("POST", "/profiles") => return ok(me.new_keyed_profile(&read_json(body).await?, viewer).await?),

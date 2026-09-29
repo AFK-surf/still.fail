@@ -438,6 +438,7 @@ async fn setup_with(o: Setup) -> Rig {
         slack_apps: Some(slack.clone()),
         check_on_start: false,
         machine_logins: o.machine,
+        updates: None,
         dev: false,
         jobs: None,
     });

@@ -41,6 +41,7 @@ export const warn = style({
 });
 globalStyle(`${warn} [data-level="amber"]`, { color: vars.amber });
 globalStyle(`${warn} [data-level="red"]`, { color: vars.red });
+export const cardVersions = style({ marginLeft: "17px", selectors: { "&:empty": { display: "none" } } });
 export const cardFoot = style({
   display: "flex", flexWrap: "wrap", gap: "0 12px", marginLeft: "17px", fontSize: vars.textXs, color: vars.muted,
 });

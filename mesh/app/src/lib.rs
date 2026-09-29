@@ -33,3 +33,4 @@ pub mod store;
 pub mod telemetry;
 pub mod thumbs;
 pub mod transcript;
+pub mod updates;

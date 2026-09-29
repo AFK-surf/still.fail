@@ -785,6 +785,37 @@ pub struct MachineLogin {
     pub text: String,
 }
 
+/// A piece of software on a station and whether a newer one is out (updates.rs): the station itself (`station`) or a
+/// runtime (`claude`, `codex`).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SoftwareVersion {
+    /// station | claude | codex
+    pub id: String,
+    pub name: String,
+    /// On the machine (a runtime may not be: then `updatable` says it can be installed from here).
+    pub installed: bool,
+    /// What runs now; none when it is not installed, or not a release (a clone).
+    pub version: Option<String>,
+    /// The latest out, when it could be read.
+    pub latest: Option<String>,
+    /// The latest is newer than what runs.
+    pub newer: bool,
+    /// The pages can update it (or install it, when it is not installed).
+    pub updatable: bool,
+    /// Why it cannot be updated from here (the desktop app's station, a runtime installed another way…).
+    pub note: Option<String>,
+    /// idle | updating | failed
+    pub state: String,
+    /// What the last update that failed said.
+    pub message: Option<String>,
+    /// When what is out was last read.
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub checked_at: Option<i64>,
+}
+
 /// A station's overview, with what the clients show of its connects and profiles.
 #[typeshare]
 #[skip_serializing_none]
@@ -806,6 +837,9 @@ pub struct Overview {
     /// This machine's own logins (none from a station older than them).
     #[serde(default)]
     pub machine_logins: Vec<MachineLogin>,
+    /// The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them).
+    #[serde(default)]
+    pub updates: Vec<SoftwareVersion>,
     /// Its agents' processes, in a line.
     pub processes_text: String,
 }

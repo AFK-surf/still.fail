@@ -200,6 +200,7 @@ impl AdminApi {
             "disk": disk_room(&config.data_dir),
             "logins": logins,
             "machineLogins": self.deps.machine_logins.as_ref().map(|m| m.get()).unwrap_or_default(),
+            "updates": self.deps.updates.as_ref().map(|u| u.get()).unwrap_or_default(),
             "slackApps": slack_apps,
         })
     }

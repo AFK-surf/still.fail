@@ -1075,6 +1075,34 @@ export interface PendingLogin {
 	created?: string;
 }
 
+/**
+ * A piece of software on a station and whether a newer one is out (updates.rs): the station itself (`station`) or a
+ * runtime (`claude`, `codex`).
+ */
+export interface SoftwareVersion {
+	/** station | claude | codex */
+	id: string;
+	name: string;
+	/** On the machine (a runtime may not be: then `updatable` says it can be installed from here). */
+	installed: boolean;
+	/** What runs now; none when it is not installed, or not a release (a clone). */
+	version?: string;
+	/** The latest out, when it could be read. */
+	latest?: string;
+	/** The latest is newer than what runs. */
+	newer: boolean;
+	/** The pages can update it (or install it, when it is not installed). */
+	updatable: boolean;
+	/** Why it cannot be updated from here (the desktop app's station, a runtime installed another way…). */
+	note?: string;
+	/** idle | updating | failed */
+	state: string;
+	/** What the last update that failed said. */
+	message?: string;
+	/** When what is out was last read. */
+	checkedAt?: number;
+}
+
 /** A station's overview, with what the clients show of its connects and profiles. */
 export interface Overview {
 	viewer: Viewer;
@@ -1090,6 +1118,8 @@ export interface Overview {
 	logins: PendingLogin[];
 	/** This machine's own logins (none from a station older than them). */
 	machineLogins?: MachineLogin[];
+	/** The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them). */
+	updates?: SoftwareVersion[];
 	/** Its agents' processes, in a line. */
 	processesText: string;
 }

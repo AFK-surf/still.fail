@@ -24,6 +24,8 @@ export const RELEASE_FILE = /^ember-station-(darwin-arm64|linux-x64|linux-arm64)
  * latest (the desktop app's electron-updater, the Android app's Updates.kt), and the files it names.
  */
 const APP_FILES: [RegExp, string][] = [
+  // The station's latest release, for stations to say a newer one is out (mesh/app/src/updates.rs).
+  [/^station\.json$/, "application/json"],
   [/^desktop\/latest-mac\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/ember-[0-9.]+-arm64-mac\.zip$/, "application/zip"],
   [/^android\/latest\.json$/, "application/json"],

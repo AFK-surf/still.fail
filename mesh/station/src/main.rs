@@ -47,7 +47,16 @@ const HOP: [&str; 9] = ["connection", "keep-alive", "proxy-connection", "transfe
 const MAX_HEAD: usize = 16 * 1024;
 // Files sent to a session go through here; the station caps them at 50 MB.
 const MAX_BODY: usize = 64 * 1024 * 1024;
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// This station's version, as ember cloud and `ember update` are told it: its release's (`0.1.<n>`, the BUILD beside
+/// the binary's mesh/target/release: ember_app::updates), else the crate's. Read once: an update puts the next
+/// release's in its place before this one hands over.
+fn version() -> &'static str {
+    static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    VERSION.get_or_init(|| {
+        let app = std::env::current_exe().ok().and_then(|exe| exe.ancestors().nth(4).map(Path::to_path_buf));
+        app.and_then(|app| ember_app::updates::station_version(&app)).unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
+    })
+}
 /// ember cloud expects a "ping" this often and drops a station silent for three of them.
 const PING: Duration = Duration::from_secs(30);
 /// How ember cloud closes the socket of a station removed from its workspace.
@@ -133,7 +142,7 @@ async fn enroll(data: &Path, origin: &str, token: &str) -> Result<()> {
     let signature = hex::encode(key.sign(message.as_bytes()).to_bytes());
     let response = http()
         .post(format!("{origin}/v1/stations/enroll"))
-        .json(&json!({ "token": token, "station": station, "signature": signature, "version": VERSION }))
+        .json(&json!({ "token": token, "station": station, "signature": signature, "version": version() }))
         .send()
         .await?;
     if !response.status().is_success() {
@@ -294,7 +303,7 @@ const DRAINED_LIMIT: Duration = Duration::from_secs(300);
 /// Says who runs this data directory and what it can do, for `ember update` (cloud/src/install.ts): SIGUSR2 hands over
 /// to the binary now at this one's path (handoff), SIGUSR1 holds turns and says when none runs (drain).
 fn write_station_file(run: &Path, started_at: u64) {
-    let text = json!({ "pid": std::process::id(), "startedAt": started_at, "version": VERSION, "handoff": ember_app::handoff::VERSION, "drain": 1 }).to_string();
+    let text = json!({ "pid": std::process::id(), "startedAt": started_at, "version": version(), "handoff": ember_app::handoff::VERSION, "drain": 1 }).to_string();
     if let Err(error) = std::fs::write(run.join("station.json"), format!("{text}\n")) {
         warn!(%error, "station.json not written");
     }
@@ -656,7 +665,7 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
     headers.insert("x-ember-station", id.parse()?);
     headers.insert("x-ember-ts", ts.to_string().parse()?);
     headers.insert("x-ember-signature", signature.parse()?);
-    headers.insert("x-ember-version", VERSION.parse()?);
+    headers.insert("x-ember-version", version().parse()?);
     let (mut socket, _) = match tokio::time::timeout(Duration::from_secs(20), tokio_tungstenite::connect_async(request)).await.context("connect timed out")? {
         Ok(connected) => connected,
         Err(tungstenite::Error::Http(response)) if response.status().as_u16() == 404 => {
@@ -999,6 +1008,8 @@ async fn main() -> Result<()> {
         let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| filter.into());
         tracing_subscriber::registry().with(tracing_subscriber::fmt::layer()).with(filter).with(errors::ErrorLayer).init();
     }
+    // Read before anything can replace the release around this binary.
+    let _ = version();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut take = |flag: &str| -> Option<String> {
         let i = args.iter().position(|a| a == flag)?;

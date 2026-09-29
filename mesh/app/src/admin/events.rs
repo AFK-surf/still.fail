@@ -265,7 +265,7 @@ impl Events {
             }
         });
         let watched: Vec<tokio::sync::watch::Receiver<u64>> =
-            api.deps.mesh.iter().map(|m| m.changes()).chain(api.deps.machine_logins.iter().map(|m| m.changes())).collect();
+            api.deps.mesh.iter().map(|m| m.changes()).chain(api.deps.machine_logins.iter().map(|m| m.changes())).chain(api.deps.updates.iter().map(|u| u.changes())).collect();
         for mut watch in watched {
             let events = me.clone();
             tokio::spawn(async move {

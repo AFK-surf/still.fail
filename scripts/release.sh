@@ -48,6 +48,12 @@ for platform in $platforms; do
       file="ember-station-$platform.tar.gz"
       tar -czf "$out/$file" -C "$out/$platform" ember
       put "$out/$file" "$file" application/gzip
+      station=yes
       ;;
   esac
 done
+# What stations read to say a newer release is out (mesh/app/src/updates.rs), once its files are there.
+if [ -n "${station:-}" ]; then
+  printf '{"version":"0.1.%s","build":%s,"commit":"%s"}\n' "$build" "$build" "$(git -C "$root" rev-parse HEAD)" > "$out/station.json"
+  put "$out/station.json" station.json application/json
+fi

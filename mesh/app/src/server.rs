@@ -247,6 +247,15 @@ impl App {
         );
         let refresh = machine_logins.clone();
         tokio::spawn(async move { refresh.refresh().await });
+        // The station's and the runtimes' versions, read at start and every few hours; updated from the pages.
+        let origin_of = mesh.clone();
+        let updates = crate::updates::Updates::new(
+            crate::updates::app_of(&options.ui),
+            options.data.clone(),
+            process_env(),
+            Box::new(move || origin_of.status().origin),
+        );
+        updates.start();
         let (quota_codex, models_codex) = (codex.clone(), codex.clone());
         let admin = AdminApi::new(AdminDeps {
             settings: settings.clone(),
@@ -280,6 +289,7 @@ impl App {
             slack_apps: None,
             check_on_start: true,
             machine_logins: Some(machine_logins),
+            updates: Some(updates),
             dev: std::env::var("EMBER_DEV").as_deref() == Ok("1"),
             jobs: Some(jobs.clone()),
         });

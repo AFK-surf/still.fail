@@ -305,7 +305,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
   return (
     <Section title={`${stations.length} 台`} actions={manager && <Button icon={Plus} onClick={() => setAdding(true)}>添加 station</Button>}>
-      <StationList stations={stations} menu={(s) => manager && <Menu items={[
+      <StationList stations={stations} manager={manager} menu={(s) => manager && <Menu items={[
         { label: "改名", onSelect: () => { const n = window.prompt("station 的名字", s.name); if (n?.trim()) rename.run({ id: s.id, name: n.trim() }); } },
         { label: "从 workspace 移除", icon: Trash, danger: true, onSelect: () => setRemoving(s) },
       ]} />} />

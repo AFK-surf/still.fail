@@ -1157,6 +1157,33 @@ data class PendingLogin (
 	val created: String? = null
 )
 
+/// A piece of software on a station and whether a newer one is out (updates.rs): the station itself (`station`) or a
+/// runtime (`claude`, `codex`).
+@Serializable
+data class SoftwareVersion (
+	/// station | claude | codex
+	val id: String,
+	val name: String,
+	/// On the machine (a runtime may not be: then `updatable` says it can be installed from here).
+	val installed: Boolean,
+	/// What runs now; none when it is not installed, or not a release (a clone).
+	val version: String? = null,
+	/// The latest out, when it could be read.
+	val latest: String? = null,
+	/// The latest is newer than what runs.
+	val newer: Boolean,
+	/// The pages can update it (or install it, when it is not installed).
+	val updatable: Boolean,
+	/// Why it cannot be updated from here (the desktop app's station, a runtime installed another way…).
+	val note: String? = null,
+	/// idle | updating | failed
+	val state: String,
+	/// What the last update that failed said.
+	val message: String? = null,
+	/// When what is out was last read.
+	val checkedAt: Long? = null
+)
+
 /// A station's overview, with what the clients show of its connects and profiles.
 @Serializable
 data class Overview (
@@ -1173,6 +1200,8 @@ data class Overview (
 	val logins: List<PendingLogin>,
 	/// This machine's own logins (none from a station older than them).
 	val machineLogins: List<MachineLogin>? = null,
+	/// The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them).
+	val updates: List<SoftwareVersion>? = null,
 	/// Its agents' processes, in a line.
 	val processesText: String
 )

@@ -78,6 +78,7 @@ import "../mobile/WorkspacePage.css.ts";
 import "../mobile/Preview.css.ts";
 import "../mobile/Connects.css.ts";
 import "../cloud/StationCards.css.ts";
+import "../Versions.css.ts";
 import "../Sidebar.css.ts";
 import "../OpenJobs.css.ts";
 import "../ChatMark.css.ts";
