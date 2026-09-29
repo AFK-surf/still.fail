@@ -124,15 +124,24 @@ export const beam = style({
   animation: `${sway} 14s ease-in-out infinite`, "@media": { [STILL]: { animation: "none" } },
 });
 export const title = style({
-  margin: "0 auto", fontSize: "clamp(52px, 10vw, 136px)", lineHeight: "1", letterSpacing: "-.055em", fontWeight: "700",
-  ...white, animation: `${fadeUp} .9s .06s ${vars.easeOut} both`,
+  margin: "0 auto", fontSize: "clamp(64px, 15vw, 232px)", lineHeight: ".92", letterSpacing: "-.06em", fontWeight: "800",
+  animation: `${fadeUp} .9s .06s ${vars.easeOut} both`,
 });
-const accent = { backgroundImage: `linear-gradient(180deg, #FFB08C, ${EMBER})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" };
-/** A line of the title that is a domain: lit when the page was opened on it (data-host on the root), still.fail otherwise. */
+/**
+ * A line of the title that is a domain. The one the page was opened on (data-host on the root; still.fail otherwise) is
+ * lit, ember orange and glowing; the other is only its outline. Padded, so what hangs out of a letter (y, f) is not cut
+ * off by the text clip, and pulled back by as much.
+ */
+const lit = {
+  backgroundImage: `linear-gradient(180deg, #FFC2A3, ${EMBER} 70%)`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+  WebkitTextStroke: "0", filter: `drop-shadow(0 0 48px color-mix(in srgb, ${EMBER} 45%, transparent))`,
+};
 export const titleDomain = style({
+  display: "inline-block", padding: ".04em .1em .16em", margin: "-.04em -.1em -.16em",
+  color: "transparent", WebkitTextStroke: `1.5px color-mix(in srgb, var(--s-title) 30%, transparent)`,
   selectors: {
-    [`:root:not([data-host="youdid.wtf"]) &[data-domain="still.fail"]`]: accent,
-    [`:root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: accent,
+    [`:root:not([data-host="youdid.wtf"]) &[data-domain="still.fail"]`]: lit,
+    [`:root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: lit,
   },
 });
 export const heroActions = style({ marginTop: "44px", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
