@@ -5,7 +5,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { stationApi, useApi, useChat, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
-import { useHost, type HostComposer } from "./ChatHost.tsx";
+import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
+import { DraftKey } from "../draft.ts";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
@@ -177,7 +178,9 @@ function Messages({ view, lives, list, floor, draft, here }: {
       {quoting.pop}
       <Gallery.Provider value={stable.images}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
-        <ChatRows chat={view} rows={rows} to={to} owners={ownersOf(view)} owner={stable.owner} onOpenHistory={stable.open} />
+        <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>
+          <ChatRows chat={view} rows={rows} to={to} owners={ownersOf(view)} owner={stable.owner} onOpenHistory={stable.open} />
+        </DraftKey.Provider>
         <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
       </Gallery.Provider>

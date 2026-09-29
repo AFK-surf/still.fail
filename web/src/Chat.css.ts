@@ -552,3 +552,6 @@ export const msgVideoUnavailable = style({
 globalStyle(`${msgVideo}[data-unavailable] .${msgVideoName}`, {
   background: "transparent", color: vars.text, textAlign: "center", padding: "8px 12px",
 });
+
+/** Where an inline visualization comes while its file is fetched: its least height, quietly. */
+export const msgVizWait = style({ height: "120px", margin: "0 0 8px", borderRadius: `calc(12px * ${vars.cornerScale})`, background: vars.paper });

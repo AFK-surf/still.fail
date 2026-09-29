@@ -143,6 +143,21 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
   return loaded;
 }
 
+/** A text file's content, fetched from the station once. */
+export function useFileText(sessionKey: string, file: Attachment): { state: "loading" } | { state: "error" } | { state: "ready"; text: string } {
+  const loaded = useFile(sessionKey, file, true);
+  const [text, setText] = useState<{ blob: Blob; text: string } | null>(null);
+  const blob = loaded.state === "ready" ? loaded.blob : null;
+  useEffect(() => {
+    if (!blob) return;
+    let current = true;
+    void blob.text().then((t) => { if (current) setText({ blob, text: t }); });
+    return () => { current = false; };
+  }, [blob]);
+  if (loaded.state === "error") return { state: "error" };
+  return text && text.blob === blob ? { state: "ready", text: text.text } : { state: "loading" };
+}
+
 /** A chat attachment as a blob URL. Images use thumbnails; video stills need the original file. */
 export function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean, thumb = true): string | null {
   const loaded = useFile(sessionKey, file, enabled, thumb);

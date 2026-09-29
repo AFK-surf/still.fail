@@ -14,7 +14,8 @@ pub fn agent_home_paths(agent_home: &Path) -> (PathBuf, PathBuf) {
 
 /// The skills the station brings, by directory name: about its own tools, so they are rewritten at every start and
 /// change with the station (the team's own skills sit beside them).
-const BUILTIN_SKILLS: &[(&str, &str)] = &[("ember-jobs", include_str!("skills/ember-jobs.md"))];
+const BUILTIN_SKILLS: &[(&str, &str)] =
+    &[("ember-jobs", include_str!("skills/ember-jobs.md")), ("ember-viz", include_str!("skills/ember-viz.md"))];
 
 /// Writes the station's own skills into the shared skills directory.
 pub fn write_builtin_skills(agent_home: &Path) -> Result<()> {
@@ -201,7 +202,7 @@ mod tests {
         write("pdf", "---\nname: pdf\ndescription: Reading PDFs.\n---\n");
         let skills = list_skills(&home);
         let names: Vec<(String, bool, bool)> = skills.iter().map(|s| (s.name.clone(), s.project, s.builtin)).collect();
-        assert_eq!(names, [("发版".into(), true, false), ("pdf".into(), false, false), ("ember-jobs".into(), false, true)]);
+        assert_eq!(names, [("发版".into(), true, false), ("pdf".into(), false, false), ("ember-jobs".into(), false, true), ("ember-viz".into(), false, true)]);
         assert_eq!(skills[0].description, "项目记忆：每周发版时使用。");
     }
 }

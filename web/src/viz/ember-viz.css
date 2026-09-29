@@ -1,0 +1,222 @@
+/*
+ * The stylesheet of an inline visualization (Viz.tsx): an HTML file placed in a message, drawn in a sandboxed frame.
+ * Two layers, after Codex's Visualize: the page hands in ember's own tokens as --e-* (its palette, type, corners, for
+ * the theme it shows), and what an agent writes against is the contract below — the variable and class names of
+ * Codex's visualize.css, so an agent that knows one knows the other. Keep it in step with skills/ember-viz.md.
+ */
+:root {
+
+  /* Agent-facing contract. */
+  --background: var(--e-canvas, #fff);
+  --foreground: var(--e-text, #3a3d42);
+  --card: var(--e-paper, #f6f4ef);
+  --card-foreground: var(--foreground);
+  --popover: var(--e-canvas, #fff);
+  --popover-foreground: var(--foreground);
+  --primary: var(--e-primary, #24272b);
+  --primary-foreground: var(--e-on-primary, #fff);
+  --secondary: var(--e-neutral-bg, #f0f1f3);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--e-neutral-bg, #f0f1f3);
+  --muted-foreground: var(--e-muted, #6b7079);
+  --accent: var(--e-accent-bg, #fdf0ea);
+  --accent-foreground: var(--e-accent-text, #a8491f);
+  --brand: var(--e-accent, #e8763f);
+  --destructive: var(--e-red, #b53a2c);
+  --border: var(--e-line, #e8e6e1);
+  --border-strong: var(--e-line-strong, #cdd0d5);
+  --input: var(--e-line-strong, #cdd0d5);
+  --ring: var(--e-field-focus, #646970);
+  --hover: var(--e-hover, #f1efeb);
+  --selected: var(--e-selected, #ebe8e2);
+  --shadow: var(--e-shadow, rgb(0 0 0 / 10%));
+
+  --blue: var(--e-blue, #2b5fc4);
+  --green: var(--e-green, #1d7a55);
+  --orange: var(--e-accent, #e8763f);
+  --red: var(--e-red, #b53a2c);
+  --purple: var(--e-code-inline, #7c3fa0);
+  --yellow: var(--e-amber, #8a6414);
+  --blue-bg: var(--e-blue-bg, #eef3fc);
+  --green-bg: var(--e-green-bg, #ecf7f1);
+  --orange-bg: var(--e-accent-bg, #fdf0ea);
+  --red-bg: var(--e-red-bg, #fcefed);
+  --yellow-bg: var(--e-amber-bg, #fcf5e6);
+  /* Series colours in order, for charts: tell series apart by label or shape too, never by colour alone. */
+  --chart-1: var(--blue);
+  --chart-2: var(--orange);
+  --chart-3: var(--green);
+  --chart-4: var(--purple);
+  --chart-5: var(--yellow);
+  --chart-6: var(--red);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-size-base: 14px;
+  --font-size-small: 12px;
+  --font-size-h1: 22px;
+  --font-size-h2: 18px;
+  --font-size-h3: 16px;
+  --line-height: 1.6;
+  --radius-card: var(--e-r-card, 20px);
+  --radius-field: var(--e-r-field, 12px);
+  --radius-small: calc(var(--radius-field) / 2);
+  --corner-shape: var(--e-corner-shape, round);
+  --dur: 140ms;
+  --ease-out: cubic-bezier(.2, .7, .2, 1);
+
+  background: transparent;
+  color: var(--foreground);
+  font: var(--font-size-base) / var(--line-height) var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+body { padding: 2px; overflow-wrap: anywhere; }
+h1, h2, h3, h4 { margin: 0 0 .5em; line-height: 1.3; font-weight: 600; }
+h1 { font-size: var(--font-size-h1); }
+h2 { font-size: var(--font-size-h2); }
+h3 { font-size: var(--font-size-h3); }
+h4 { font-size: var(--font-size-base); }
+p { margin: 0 0 .75em; }
+p:last-child { margin-bottom: 0; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, kbd, pre { font-family: var(--font-mono); font-size: .92em; }
+code { padding: .1em .35em; border-radius: var(--radius-small); background: var(--muted); }
+pre { margin: 0 0 .75em; padding: 10px 12px; border-radius: var(--radius-field); background: var(--muted); overflow-x: auto; }
+pre code { padding: 0; background: none; }
+hr { height: 1px; margin: 12px 0; border: 0; background: var(--border); }
+svg { color: var(--foreground); }
+svg text { fill: currentColor; font-family: var(--font-sans); }
+
+/* Text. */
+.text-muted { color: var(--muted-foreground); }
+.text-small { font-size: var(--font-size-small); }
+.text-destructive { color: var(--destructive); }
+.text-warning { color: var(--yellow); }
+.text-success { color: var(--green); }
+.text-brand { color: var(--accent-foreground); }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cursor-interaction { cursor: pointer; }
+
+/* Surfaces. */
+.card {
+  padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-card); corner-shape: var(--corner-shape);
+  background: var(--card); color: var(--card-foreground);
+}
+.card > :last-child { margin-bottom: 0; }
+.widget { display: flex; flex-direction: column; gap: 12px; }
+.viz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.viz-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.viz-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.viz-dotted-background {
+  background-image: radial-gradient(color-mix(in srgb, var(--foreground) 14%, transparent) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+/* A figure: a number with its label. */
+.viz-stat { display: flex; flex-direction: column; gap: 2px; }
+.viz-stat-label { color: var(--muted-foreground); font-size: var(--font-size-small); }
+.viz-stat-value { font-size: 24px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+
+/* Badges: neutral by default, a status colour when named. */
+.viz-badge {
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px;
+  background: var(--muted); color: var(--foreground); font-size: var(--font-size-small); font-weight: 500; white-space: nowrap;
+}
+.viz-badge.is-blue { background: var(--blue-bg); color: var(--blue); }
+.viz-badge.is-green { background: var(--green-bg); color: var(--green); }
+.viz-badge.is-orange { background: var(--orange-bg); color: var(--accent-foreground); }
+.viz-badge.is-red { background: var(--red-bg); color: var(--red); }
+.viz-badge.is-yellow { background: var(--yellow-bg); color: var(--yellow); }
+
+/* Diagrams (ember's own): boxes in a flow, arrows between them, a note aside. */
+.viz-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.viz-flow.is-vertical { flex-direction: column; align-items: flex-start; }
+.viz-node {
+  display: flex; flex-direction: column; gap: 2px; min-width: 96px; padding: 10px 12px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-field); corner-shape: var(--corner-shape);
+  background: var(--background);
+}
+.viz-node-title { font-weight: 600; }
+.viz-node-body { color: var(--muted-foreground); font-size: var(--font-size-small); }
+.viz-node.is-active { border-color: var(--brand); background: var(--accent); }
+.viz-node.is-blue { border-color: color-mix(in srgb, var(--blue) 40%, transparent); background: var(--blue-bg); }
+.viz-node.is-green { border-color: color-mix(in srgb, var(--green) 40%, transparent); background: var(--green-bg); }
+.viz-node.is-red { border-color: color-mix(in srgb, var(--red) 40%, transparent); background: var(--red-bg); }
+.viz-node.is-yellow { border-color: color-mix(in srgb, var(--yellow) 40%, transparent); background: var(--yellow-bg); }
+.viz-arrow {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 40px;
+  color: var(--muted-foreground); font-size: var(--font-size-small); text-align: center;
+}
+.viz-arrow::after { content: "→"; font-size: 16px; line-height: 1; }
+.viz-flow.is-vertical .viz-arrow::after { content: "↓"; }
+.viz-note {
+  padding: 8px 12px; border-left: 3px solid var(--brand); border-radius: var(--radius-small);
+  background: var(--accent); color: var(--foreground); font-size: var(--font-size-small);
+}
+
+/* Buttons. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-field); corner-shape: var(--corner-shape);
+  background: var(--background); color: var(--foreground); font: inherit; font-weight: 500; white-space: nowrap;
+  cursor: pointer; transition: background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
+}
+.btn:hover { background: var(--hover); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn-primary { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }
+.btn-primary:hover { border-color: var(--e-primary-hover, var(--primary)); background: var(--e-primary-hover, var(--primary)); }
+.btn-ghost { border-color: transparent; background: transparent; }
+.btn-ghost:hover { background: var(--hover); }
+.btn.is-selected { border-color: var(--brand); background: var(--accent); color: var(--accent-foreground); }
+.btn-sm { height: 26px; padding: 0 8px; font-size: var(--font-size-small); }
+
+/* Forms. */
+.form-label { display: block; margin-bottom: 4px; color: var(--muted-foreground); font-size: var(--font-size-small); }
+.form-control, .form-select {
+  width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--input); border-radius: var(--radius-field);
+  corner-shape: var(--corner-shape); background: var(--background); color: var(--foreground); font: inherit;
+}
+textarea.form-control { height: auto; min-height: 72px; padding: 8px 10px; resize: vertical; }
+.form-control:hover, .form-select:hover { border-color: var(--e-field-hover, var(--input)); }
+.form-control:focus, .form-select:focus { border-color: var(--ring); outline: none; }
+.form-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.form-check-input { width: 16px; height: 16px; margin: 0; accent-color: var(--brand); }
+.form-check-label { cursor: pointer; }
+.form-switch .form-check-input { width: 28px; }
+.form-range { width: 100%; accent-color: var(--brand); }
+.form-control-color { width: 34px; height: 34px; padding: 2px; border: 1px solid var(--input); border-radius: var(--radius-small); background: none; }
+
+/* Tabs as pills. */
+.nav { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.nav-justified > * { flex: 1; }
+.nav-link {
+  display: inline-flex; align-items: center; justify-content: center; height: 30px; padding: 0 12px; border: 0;
+  border-radius: 999px; background: none; color: var(--muted-foreground); font: inherit; cursor: pointer;
+}
+.nav-link:hover { background: var(--hover); color: var(--foreground); text-decoration: none; }
+.nav-pills .nav-link.is-selected, .nav-pills .nav-link.active { background: var(--primary); color: var(--primary-foreground); }
+
+/* Tables. */
+.table-responsive { max-width: 100%; overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: var(--font-size-base); }
+.table th, .table td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.table th { color: var(--muted-foreground); font-size: var(--font-size-small); font-weight: 500; }
+.table tr:last-child td { border-bottom: 0; }
+.table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Progress. */
+.progress { height: 8px; overflow: hidden; border-radius: 999px; background: var(--muted); }
+.progress-bar { height: 100%; border-radius: inherit; background: var(--brand); transition: width var(--dur) var(--ease-out); }
+
+/* The tooltip the frame draws for any element with data-tooltip (see bridge.js). */
+.viz-tooltip {
+  position: fixed; z-index: 10; max-width: 240px; padding: 5px 8px; border-radius: var(--radius-small);
+  background: var(--primary); color: var(--primary-foreground); font-size: var(--font-size-small); line-height: 1.4;
+  white-space: pre-line; pointer-events: none;
+}
