@@ -7,7 +7,7 @@ import type { Account } from "../cloud/accounts.ts";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
 import { ChevronRight } from "../icons.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { Avatar, Button, Field, PickRow } from "./parts.tsx";
+import { Button, Field, PickRow } from "./parts.tsx";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as css from "./Workspaces.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -20,7 +20,8 @@ function WorkspacesSheet() {
   const app = useApp();
   const byAccount: AccountWorkspaces[] = useWorkspaces().value ?? [];
   const pending = byAccount.flatMap((a) => a.invitations.map((invite) => ({ account: a.account, invite })));
-  const current = byAccount.flatMap((a) => a.workspaces).find((w) => w.id === app.entry.id);
+  const currentOf = byAccount.find((a) => a.workspaces.some((w) => w.id === app.entry.id));
+  const current = currentOf?.workspaces.find((w) => w.id === app.entry.id);
   const others = byAccount
     .map((a) => ({ account: a.account, workspaces: a.workspaces.filter((w) => w.id !== app.entry.id) }))
     .filter((a) => a.workspaces.length > 0);
@@ -45,6 +46,7 @@ function WorkspacesSheet() {
             <span className={partsCss.mGrow}>
               <b>{current.name}</b>
               <small>你是{ROLE_LABEL[current.role]} · {current.stations} 台 station · {current.members} 人</small>
+              {byAccount.length > 1 && <small>{currentOf!.account.email}</small>}
             </span>
             <span className={css.mCurrentGo}>设置<ChevronRight size={14} /></span>
           </button>
@@ -63,15 +65,11 @@ function WorkspacesSheet() {
           </>
         )}
         {others.length > 0 && <div className={css.mSheetLabel}>切换到</div>}
-        {others.map(({ account, workspaces }) => (
-          <div key={account.sub}>
-            {byAccount.length > 1 && <div className={css.mSheetAccount}><Avatar id={account.email} name={account.name || account.email} size={16} picture={account.picture} />{account.email}</div>}
-            {workspaces.map((w) => (
-              <PickRow key={w.id} label={w.name} sub={`${w.stations} 台 station · ${w.members} 人`}
-                onClick={() => { app.sheet(null); app.replace(`/w/${w.id}`); }} />
-            ))}
-          </div>
-        ))}
+        {/* With more than one account signed in, each workspace says whose it is in its own line: a heading per account read as something to tap. */}
+        {others.flatMap(({ account, workspaces }) => workspaces.map((w) => (
+          <PickRow key={w.id} label={w.name} sub={`${byAccount.length > 1 ? `${account.email} · ` : ""}${w.stations} 台 station · ${w.members} 人`}
+            onClick={() => { app.sheet(null); app.replace(`/w/${w.id}`); }} />
+        )))}
         <PickRow label="＋ 新建 workspace" accent onClick={() => app.sheet({ height: 0.8, content: () => <NewWorkspaceSheet /> })} />
       </div>
     </>

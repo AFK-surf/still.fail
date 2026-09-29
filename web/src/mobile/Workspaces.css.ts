@@ -3,10 +3,6 @@ import { mGrow } from "./styles/parts.css.ts";
 import { mHPhase, mSettingText } from "./History.css.ts";
 
 export const mSheetLabel = style({ padding: "6px 20px 2px", fontSize: "13px", color: "var(--m-muted)" });
-export const mSheetAccount = style({
-  display: "flex", alignItems: "center", gap: "6px", padding: "14px 20px 2px", fontSize: "13px",
-  color: "var(--m-muted)",
-});
 export const mSheetNone = style({ padding: "8px 20px", fontSize: "14px", color: "var(--m-subtle)" });
 export const mInvite = style({ display: "flex", alignItems: "center", gap: "8px", padding: "8px 20px" });
 globalStyle(`${mInvite} ${mGrow}`, { display: "flex", flexDirection: "column", fontSize: "15px" });
@@ -23,5 +19,5 @@ export const mCurrent = style({
 });
 globalStyle(`${mCurrent} ${mGrow}`, { display: "flex", flexDirection: "column", gap: "2px", minWidth: "0" });
 globalStyle(`${mCurrent} b`, { fontSize: "17px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-globalStyle(`${mCurrent} small`, { fontSize: "13px", color: "var(--m-muted)" });
+globalStyle(`${mCurrent} small`, { fontSize: "13px", color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const mCurrentGo = style({ display: "flex", alignItems: "center", gap: "2px", flex: "none", fontSize: "14px", color: "var(--m-muted)" });
