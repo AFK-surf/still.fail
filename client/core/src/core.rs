@@ -592,10 +592,17 @@ impl Inner {
                 // Named before it opens: what the page sends meanwhile (a close right away) waits, and goes once it is open.
                 let (tx, mut from_page) = futures::channel::mpsc::unbounded();
                 let _open = Registered::new(self.preview_sockets.clone(), (at.0, name), tx).ok_or_else(|| CoreError::invalid("这个名字的 WebSocket 已经开着"))?;
-                let socket = self.stations.preview_socket(&StationAddr::parse(&station)?, port, &path, headers).await?;
+                let station = StationAddr::parse(&station)?;
+                let opening = self.stations.preview_socket(&station, port, &path, headers);
+                let mut held = Vec::new();
+                let socket = match open_unless_closed(opening, &mut from_page, &mut held).await? {
+                    Ok(socket) => socket,
+                    Err((code, reason)) => return Ok(json!({ "code": code, "reason": reason })),
+                };
                 let protocol = socket.reply.header("sec-websocket-protocol").unwrap_or("").to_string();
                 progress(json!({ "open": { "protocol": protocol } }));
                 let (mut from_station, mut to_station) = (socket.reply.body.fuse(), socket.send);
+                let mut from_page = futures::stream::iter(held).chain(from_page);
                 let mut buf = Vec::new();
                 // The page's own close, once sent: what the socket closed with if the station says nothing after.
                 let mut closing: Option<(u16, String)> = None;
@@ -1184,6 +1191,22 @@ fn encode(segment: &str) -> String {
 
 /// Where a preview socket's messages from its page go (`preview.socket.send`).
 type SocketInbox = futures::channel::mpsc::UnboundedSender<station::SocketFrame>;
+
+/// A preview socket's open, or the page's close if that comes first: the open is then let go (an older station takes
+/// the socket for a request and never answers). Whatever else the page sends meanwhile is `held` for once it is open.
+async fn open_unless_closed<T>(opening: impl std::future::Future<Output = Result<T>>, from_page: &mut futures::channel::mpsc::UnboundedReceiver<station::SocketFrame>, held: &mut Vec<station::SocketFrame>) -> Result<std::result::Result<T, (u16, String)>> {
+    let mut opening = std::pin::pin!(opening.fuse());
+    loop {
+        futures::select! {
+            opened = opening => return opened.map(Ok),
+            frame = from_page.next() => match frame {
+                Some(station::SocketFrame::Close(code, reason)) => return Ok(Err((code, reason))),
+                Some(frame) => held.push(frame),
+                None => return opening.await.map(Ok),
+            },
+        }
+    }
+}
 
 /// An entry of a map for as long as this is held: gone with it, however the call holding it ends (cancelled too).
 struct Registered<K: std::hash::Hash + Eq, V> {
@@ -2031,6 +2054,22 @@ mod tests {
             assert!(parse_call("preview.socket.send", json!({ "socket": "s1", "text": "a", "close": [1000, ""] })).is_err());
             assert_eq!(parse_call("preview.socket.send", json!({ "socket": "s1", "close": [4001, "done"] })).unwrap(), Call::PreviewSocketSend { socket: "s1".into(), frame: station::SocketFrame::Close(4001, "done".into()) });
             assert_eq!(parse_call("preview.socket.send", json!({ "socket": "s1", "binary": BASE64.encode([0, 1]) })).unwrap(), Call::PreviewSocketSend { socket: "s1".into(), frame: station::SocketFrame::Binary(vec![0, 1]) });
+        });
+    }
+
+    #[test]
+    fn a_preview_socket_closed_before_it_opens_does_not_wait_for_the_station() {
+        run(async {
+            let (tx, mut from_page) = futures::channel::mpsc::unbounded();
+            let mut held = Vec::new();
+            tx.unbounded_send(station::SocketFrame::Text("early".into())).unwrap();
+            tx.unbounded_send(station::SocketFrame::Close(1001, "gone".into())).unwrap();
+            // A station that never answers: the page's close ends it.
+            let opened = open_unless_closed(futures::future::pending::<Result<()>>(), &mut from_page, &mut held).await.unwrap();
+            assert_eq!(opened, Err((1001, "gone".to_string())));
+            assert_eq!(held, vec![station::SocketFrame::Text("early".into())], "what came before is kept");
+            // Open first: the open.
+            assert_eq!(open_unless_closed(async { Ok(7) }, &mut from_page, &mut held).await.unwrap(), Ok(7));
         });
     }
 
