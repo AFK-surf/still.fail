@@ -50,12 +50,12 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
 
     // A station enrolls with a one-time token and proves it holds its key.
     const enrollment = await (await bob("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "studio" })).json() as any;
-    assert.match(enrollment.command, /^ember station enroll https:\/\/relay\.example [A-Za-z0-9_-]{43}$/);
+    assert.match(enrollment.command, /^stillfail station enroll https:\/\/relay\.example [A-Za-z0-9_-]{43}$/);
     const station = await key();
     const forged = await key();
     const enroll = (token: string, id: string, signature: string) =>
       h.fetch("/v1/stations/enroll", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, station: id, signature, version: "0.1.0" }) });
-    const message = (id: string) => `ember-station-enroll-v1:${h.origin}:${enrollment.token}:${id}`;
+    const message = (id: string) => `stillfail-station-enroll-v1:${h.origin}:${enrollment.token}:${id}`;
     assert.equal((await enroll(enrollment.token, station.id, await forged.sign(message(station.id)))).status, 401, "must hold the key");
     const enrolled = await (await enroll(enrollment.token, station.id, await station.sign(message(station.id)))).json() as any;
     assert.deepEqual([enrolled.workspace, enrolled.name, enrolled.relay_url], [home.id, "studio", h.origin]);
@@ -63,7 +63,7 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
 
     const ts = Math.floor(Date.now() / 1000);
     const connect = async () => h.fetch("/v1/stations/connect", {
-      headers: { upgrade: "websocket", "x-ember-station": station.id, "x-ember-ts": String(ts), "x-ember-signature": await station.sign(`ember-station-connect-v1:${h.origin}:${station.id}:${ts}`) },
+      headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-connect-v1:${h.origin}:${station.id}:${ts}`) },
     });
     const presence = await connect();
     assert.equal(presence.status, 101);
@@ -75,7 +75,7 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     // offline, for 30 days, whichever of the workspace's stations it is shown to.
     const device = await key();
     const issued = await (await bob("POST", `/v1/workspaces/${home.id}/credential`, { device: device.id })).json() as any;
-    const keys = await (await h.fetch("/.well-known/ember-grant-keys")).json() as any;
+    const keys = await (await h.fetch("/.well-known/stillfail-grant-keys")).json() as any;
     assert.equal(keys.keys[0].d, undefined, "no private half");
     const { payload, protectedHeader } = await jwtVerify(issued.credential, await importJWK(keys.keys[0], "EdDSA"), { issuer: "ember-cloud" });
     assert.deepEqual([payload.ws, payload.role, payload.device, payload.email, payload.name], [home.id, "admin", device.id, "bob@example.test", "Name of bob"]);
@@ -136,12 +136,12 @@ test("the web app may use this origin's /auth/callback; other redirects are refu
   }
 });
 
-test("the Android app signs in through ember://auth/callback", async () => {
+test("the Android app signs in through stillfail://auth/callback", async () => {
   const h = await harness();
   try {
-    const flow = await h.begin("google-android-user", undefined, "ember://auth/callback");
+    const flow = await h.begin("google-android-user", undefined, "stillfail://auth/callback");
     const { redirect, code } = await h.complete(flow);
-    assert.equal(`${redirect.protocol}//${redirect.host}${redirect.pathname}`, "ember://auth/callback");
+    assert.equal(`${redirect.protocol}//${redirect.host}${redirect.pathname}`, "stillfail://auth/callback");
     assert.equal(redirect.searchParams.get("state"), flow.state);
     const tokens = await h.exchange(flow, code);
     assert.equal(tokens.status, 200);

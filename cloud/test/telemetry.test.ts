@@ -42,7 +42,7 @@ async function enrolled(h: Harness) {
   const response = await h.fetch("/v1/stations/enroll", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token: enrollment.token, station: station.id, signature: await station.sign(`ember-station-enroll-v1:${h.origin}:${enrollment.token}:${station.id}`) }),
+    body: JSON.stringify({ token: enrollment.token, station: station.id, signature: await station.sign(`stillfail-station-enroll-v1:${h.origin}:${enrollment.token}:${station.id}`) }),
   });
   assert.equal(response.status, 200);
   return station;
@@ -51,10 +51,10 @@ async function enrolled(h: Harness) {
 /** A station's signed headers for `body`. */
 async function signed(h: Harness, station: Awaited<ReturnType<typeof key>>, body: string, ts = Math.floor(Date.now() / 1000)) {
   const digest = createHash("sha256").update(body).digest("hex");
-  return { "x-ember-station": station.id, "x-ember-ts": String(ts), "x-ember-signature": await station.sign(`ember-station-telemetry-v1:${h.origin}:${station.id}:${ts}:${digest}`) };
+  return { "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-telemetry-v1:${h.origin}:${station.id}:${ts}:${digest}`) };
 }
 
-test("a signed-in client's spans go on to Axiom with ember cloud's token", async () => {
+test("a signed-in client's spans go on to Axiom with still.fail cloud's token", async () => {
   const axiom = fakeAxiom();
   const h = await harness({ axiom: axiom.answer });
   try {
@@ -135,7 +135,7 @@ test("without Axiom, or when it fails, a batch is refused and not retried", asyn
   }
 });
 
-test("a call in a recorded trace is a span of ember cloud's, without ids", async () => {
+test("a call in a recorded trace is a span of still.fail cloud's, without ids", async () => {
   const axiom = fakeAxiom();
   const h = await harness({ axiom: axiom.answer });
   try {

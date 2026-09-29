@@ -18,9 +18,9 @@ const upgrade = (protocols: string) => ({ upgrade: "websocket", "sec-websocket-p
 
 /** A device's events socket; `take` returns what arrived since the last take. */
 async function listen(h: Harness, token: string) {
-  const response = await h.fetch("/v1/events", { headers: upgrade(`ember-events, ember-token.${token}`) });
+  const response = await h.fetch("/v1/events", { headers: upgrade(`stillfail-events, stillfail-token.${token}`) });
   assert.equal(response.status, 101);
-  assert.equal(response.headers.get("sec-websocket-protocol"), "ember-events");
+  assert.equal(response.headers.get("sec-websocket-protocol"), "stillfail-events");
   const ws = response.webSocket!;
   ws.accept();
   const got: AccountEvent[] = [];
@@ -50,9 +50,9 @@ async function expect(listeners: Record<string, Listener>, expected: Record<stri
 
 async function connectStation(h: Harness, station: Awaited<ReturnType<typeof key>>, options: { ts?: number; signer?: Awaited<ReturnType<typeof key>> } = {}) {
   const ts = options.ts ?? Math.floor(Date.now() / 1000);
-  const signature = await (options.signer ?? station).sign(`ember-station-connect-v1:${h.origin}:${station.id}:${ts}`);
+  const signature = await (options.signer ?? station).sign(`stillfail-station-connect-v1:${h.origin}:${station.id}:${ts}`);
   const response = await h.fetch("/v1/stations/connect", {
-    headers: { upgrade: "websocket", "x-ember-station": station.id, "x-ember-ts": String(ts), "x-ember-signature": signature, "x-ember-version": "0.2.0" },
+    headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": signature, "x-stillfail-version": "0.2.0" },
   });
   if (response.status !== 101) return { status: response.status };
   const ws = response.webSocket!;
@@ -71,7 +71,7 @@ async function enrollStation(h: Harness, owner: ReturnType<Harness["as"]>, works
   const response = await h.fetch("/v1/stations/enroll", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token: enrollment.token, station: station.id, signature: await station.sign(`ember-station-enroll-v1:${h.origin}:${enrollment.token}:${station.id}`) }),
+    body: JSON.stringify({ token: enrollment.token, station: station.id, signature: await station.sign(`stillfail-station-enroll-v1:${h.origin}:${enrollment.token}:${station.id}`) }),
   });
   assert.equal(response.status, 200);
   return station;
@@ -117,7 +117,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     const station = await enrollStation(h, alice, w, "studio");
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "enroll");
 
-    // A station's socket is what ember cloud tells it: whether it is up, devices find out over the mesh, so connecting
+    // A station's socket is what still.fail cloud tells it: whether it is up, devices find out over the mesh, so connecting
     // tells no one.
     const first = await connectStation(h, station);
     assert.equal(first.status, 101);
@@ -206,13 +206,13 @@ test("sockets refuse bad credentials", { timeout: 20000 }, async () => {
     const tokens = await h.login("alice");
     const events = (headers: Record<string, string>) => h.fetch("/v1/events", { headers });
     assert.equal((await events({})).status, 426);
-    assert.equal((await events(upgrade("ember-events"))).status, 401);
-    assert.equal((await events(upgrade("ember-events, ember-token.invalid"))).status, 401);
-    assert.equal((await events(upgrade(`ember-events, ember-token.${tokens.refresh_token}`))).status, 401, "refresh is not access");
-    assert.equal((await events(upgrade(`ember-token.${tokens.access_token}`))).status, 401, "must ask for ember-events");
+    assert.equal((await events(upgrade("stillfail-events"))).status, 401);
+    assert.equal((await events(upgrade("stillfail-events, stillfail-token.invalid"))).status, 401);
+    assert.equal((await events(upgrade(`stillfail-events, stillfail-token.${tokens.refresh_token}`))).status, 401, "refresh is not access");
+    assert.equal((await events(upgrade(`stillfail-token.${tokens.access_token}`))).status, 401, "must ask for stillfail-events");
     assert.equal((await events({ upgrade: "websocket", authorization: `Bearer ${tokens.access_token}` })).status, 401, "the token travels as a subprotocol");
     await h.fetch("/v1/auth/logout", { method: "POST", headers: { authorization: `Bearer ${tokens.refresh_token}`, "content-type": "application/json" }, body: '{"all":true}' });
-    assert.equal((await events(upgrade(`ember-events, ember-token.${tokens.access_token}`))).status, 401, "a revoked session");
+    assert.equal((await events(upgrade(`stillfail-events, stillfail-token.${tokens.access_token}`))).status, 401, "a revoked session");
 
     const alice = h.as(await h.login("alice"));
     const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;

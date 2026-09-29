@@ -18,6 +18,10 @@ export async function harness(
     /** The console's host. */
     adminOrigin?: string;
     previewOrigin?: string;
+    /** The hosts' old names (before the rename to still.fail), bound to the same Workers: PUBLIC_ORIGIN_ALIASES and so on. */
+    oldOrigin?: string;
+    oldAdminOrigin?: string;
+    oldPreviewOrigin?: string;
     /** The static sites' files (`/web/…`, `/admin/…`, `/preview/…`): a few stand-ins unless given. */
     assets?: (request: Request) => Promise<Response> | Response;
     /** Axiom: a stand-in answering its requests, or "real" to reach it (with AXIOM_TOKEN from the environment). */
@@ -27,6 +31,9 @@ export async function harness(
   const origin = options.origin ?? "https://relay.example";
   const adminOrigin = options.adminOrigin ?? "https://admin.relay.example";
   const previewOrigin = options.previewOrigin ?? "https://preview.relay.example";
+  const oldOrigin = options.oldOrigin ?? "https://old.relay.example";
+  const oldAdminOrigin = options.oldAdminOrigin ?? "https://admin.old.relay.example";
+  const oldPreviewOrigin = options.oldPreviewOrigin ?? "https://preview.old.relay.example";
   const signingKey = options.signingKey ?? randomSecret(),
     adminToken = randomSecret();
   const { publicKey, privateKey } = await generateKeyPair("RS256");
@@ -52,9 +59,10 @@ export async function harness(
     external: ["cloudflare:workers", "cloudflare:sockets", "node:*"],
     conditions: ["workerd", "worker", "browser"],
   })).outputFiles[0].text;
-  // ember cloud's Workers as Cloudflare runs them: the static sites on their hosts, and routes (which take
-  // precedence) sending the API's and the relay's paths to theirs (cloud/wrangler*.jsonc).
-  const host = new URL(origin).host, adminHost = new URL(adminOrigin).host;
+  // still.fail cloud's Workers as Cloudflare runs them: the static sites on their hosts, and routes (which take
+  // precedence) sending the API's and the relay's paths to theirs (cloud/wrangler*.jsonc); on each host's new name
+  // and its old one.
+  const hosts = [origin, oldOrigin].map((o) => new URL(o).host), adminHosts = [adminOrigin, oldAdminOrigin].map((o) => new URL(o).host);
   const common = { modules: true, compatibilityDate: "2026-09-08", compatibilityFlags: ["nodejs_compat"] };
   const mf = new Miniflare(
     convertV4MiniflareOptions({
@@ -66,24 +74,26 @@ export async function harness(
         ...common,
         name: "static",
         script: await bundle("test/static-worker.ts"),
-        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin },
+        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin },
         serviceBindings: { ASSETS: (options.assets ?? standInAssets) as any },
       }, {
         ...common,
         name: "relay",
         script: await bundle("test/relay-worker.ts"),
-        routes: [`${host}/relay*`, `${host}/ping*`, `${host}/generate_204*`, `${host}/v1/admin/relay/*`],
-        bindings: { PUBLIC_ORIGIN: origin, ADMIN_TOKEN: adminToken },
+        routes: hosts.flatMap((host) => [`${host}/relay*`, `${host}/ping*`, `${host}/generate_204*`, `${host}/v1/admin/relay/*`]),
+        bindings: { PUBLIC_ORIGIN: origin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_TOKEN: adminToken },
         serviceBindings: options.relay ? { TEST_RELAY: { external: { address: new URL(options.relay).host, http: {} } } } : {},
         durableObjects: { RELAY: { className: "Relay", useSQLite: true }, RELAY_BUDGET: { className: "RelayBudget", useSQLite: true } },
       }, {
         ...common,
         name: "api",
         script: await bundle("test/worker.ts"),
-        routes: [`${host}/v1/*`, `${adminHost}/v1/*`, `${host}/healthz*`, `${host}/install.sh*`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`],
+        routes: [...hosts.flatMap((host) => [`${host}/v1/*`, `${host}/healthz*`, `${host}/install.sh*`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`]), ...adminHosts.map((host) => `${host}/v1/*`)],
         bindings: {
         PUBLIC_ORIGIN: origin,
+        PUBLIC_ORIGIN_ALIASES: oldOrigin,
         ADMIN_ORIGIN: adminOrigin,
+        ADMIN_ORIGIN_ALIASES: oldAdminOrigin,
         GOOGLE_CLIENT_ID: options.noGoogle ? "" : "test-google-client",
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
@@ -103,7 +113,7 @@ export async function harness(
           const body = new URLSearchParams(await request.text());
           const code = codes.get(body.get("code") ?? "");
           codes.delete(body.get("code") ?? "");
-          if (!code || (await digest(body.get("code_verifier") ?? "")) !== code.challenge || body.get("redirect_uri") !== origin + "/v1/auth/google/callback") return new MFResponse(null, { status: 401 });
+          if (!code || (await digest(body.get("code_verifier") ?? "")) !== code.challenge || ![origin, oldOrigin].some((o) => body.get("redirect_uri") === o + "/v1/auth/google/callback")) return new MFResponse(null, { status: 401 });
           const idToken = await new SignJWT({
             nonce: code.invalid === "nonce" ? "incorrect" : code.nonce,
             sub: code.sub,
@@ -145,6 +155,8 @@ export async function harness(
   /** A request to the console's host. */
   const fetchAdmin = (path: string, init?: RequestInit) => mf.dispatchFetch(adminOrigin + path, init as any);
   const fetchPreview = (path: string, init?: RequestInit) => mf.dispatchFetch(previewOrigin + path, init as any);
+  /** A request to a host's old name (before the rename): "main", "admin" or "preview". */
+  const fetchOld = (on: "main" | "admin" | "preview", path: string, init?: RequestInit) => mf.dispatchFetch({ main: oldOrigin, admin: oldAdminOrigin, preview: oldPreviewOrigin }[on] + path, init as any);
   /** A request straight to one of the Workers ("api", "relay", "static"), whatever the routes say. */
   const fetchWorker = async (name: string, url: string, init?: RequestInit) => ((await mf.getWorker(name)) as unknown as { fetch(url: string, init?: RequestInit): Promise<Response> }).fetch(url, init);
   async function begin(sub = "google-test-user", invalid?: string, callback = "http://127.0.0.1:32145/oauth/callback") {
@@ -213,6 +225,8 @@ export async function harness(
     mf,
     origin,
     adminOrigin,
+    oldOrigin,
+    oldAdminOrigin,
     as,
     grantPublicJwk,
     adminToken,
@@ -221,6 +235,7 @@ export async function harness(
     fetch,
     fetchAdmin,
     fetchPreview,
+    fetchOld,
     fetchWorker,
     begin,
     complete,
@@ -232,13 +247,15 @@ export async function harness(
 
 /** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`: see test/static-worker.ts). */
 export const STAND_IN_FILES: Record<string, string> = {
-  "/web/index.html": "<title>ember</title>",
+  "/web/index.html": "<title>still.fail</title>",
   "/web/assets/app.js": "// the web app",
-  "/admin/index.html": "<title>ember 管理后台</title>",
+  "/admin/index.html": "<title>still.fail 管理后台</title>",
   "/admin/assets/console.js": "// the console",
-  "/preview/_ember/frame.html": "<title>ember preview</title>",
-  "/preview/_ember/sw.js": "// the preview's service worker",
-  "/preview/404.html": "这是 ember 的预览地址",
+  "/preview/_stillfail/frame.html": "<title>still.fail preview</title>",
+  "/preview/_stillfail/sw.js": "// the preview's service worker",
+  "/preview/_ember/frame.html": "<title>still.fail preview (old path)</title>",
+  "/preview/_ember/sw.js": "// the preview's service worker (old path)",
+  "/preview/404.html": "这是 still.fail 的预览地址",
 };
 
 function standInAssets(request: Request): Response {

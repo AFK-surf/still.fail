@@ -2,25 +2,25 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { harness } from "./harness.ts";
 
-// ember cloud's Workers on its hosts: the static sites (the web app, the admin's console, the preview host) on each
+// still.fail cloud's Workers on its hosts: the static sites (the web app, the admin's console, the preview host) on each
 // host's Custom Domain, and the API's and the relay's paths routed to their Workers ahead of them.
 
 test("each host serves its own static site, the API and the relay on their paths ahead of it", async () => {
   const h = await harness();
   try {
     const text = async (response: { status: number; text(): Promise<string> }) => [response.status, await response.text()];
-    assert.deepEqual(await text(await h.fetch("/")), [200, "<title>ember</title>"]);
-    assert.deepEqual(await text(await h.fetch("/w/some-workspace/chats")), [200, "<title>ember</title>"]);
+    assert.deepEqual(await text(await h.fetch("/")), [200, "<title>still.fail</title>"]);
+    assert.deepEqual(await text(await h.fetch("/w/some-workspace/chats")), [200, "<title>still.fail</title>"]);
     assert.deepEqual(await text(await h.fetch("/assets/app.js")), [200, "// the web app"]);
-    assert.deepEqual(await text(await h.fetchAdmin("/")), [200, "<title>ember 管理后台</title>"]);
-    assert.deepEqual(await text(await h.fetchAdmin("/codes")), [200, "<title>ember 管理后台</title>"]);
-    assert.deepEqual(await text(await h.fetchAdmin("/auth/callback?code=x&state=y")), [200, "<title>ember 管理后台</title>"]);
+    assert.deepEqual(await text(await h.fetchAdmin("/")), [200, "<title>still.fail 管理后台</title>"]);
+    assert.deepEqual(await text(await h.fetchAdmin("/codes")), [200, "<title>still.fail 管理后台</title>"]);
+    assert.deepEqual(await text(await h.fetchAdmin("/auth/callback?code=x&state=y")), [200, "<title>still.fail 管理后台</title>"]);
     assert.deepEqual(await text(await h.fetchAdmin("/assets/console.js")), [200, "// the console"]);
     // Each site's files are its own.
-    assert.deepEqual(await text(await h.fetchAdmin("/assets/app.js")), [200, "<title>ember 管理后台</title>"]);
-    assert.deepEqual(await text(await h.fetch("/assets/console.js")), [200, "<title>ember</title>"]);
-    assert.deepEqual(await text(await h.fetchPreview("/_ember/frame")), [200, "<title>ember preview</title>"]);
-    assert.equal((await h.fetchPreview("/_ember/sw.js")).headers.get("service-worker-allowed"), "/");
+    assert.deepEqual(await text(await h.fetchAdmin("/assets/app.js")), [200, "<title>still.fail 管理后台</title>"]);
+    assert.deepEqual(await text(await h.fetch("/assets/console.js")), [200, "<title>still.fail</title>"]);
+    assert.deepEqual(await text(await h.fetchPreview("/_stillfail/frame")), [200, "<title>still.fail preview</title>"]);
+    assert.equal((await h.fetchPreview("/_stillfail/sw.js")).headers.get("service-worker-allowed"), "/");
     assert.equal((await h.fetchPreview("/anything")).status, 404);
     // The API's and the relay's paths are theirs on the main host.
     assert.equal(((await (await h.fetch("/healthz")).json()) as { service: string }).service, "ember-cloud");

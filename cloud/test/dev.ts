@@ -1,4 +1,4 @@
-// A local ember cloud for trying the whole path without Cloudflare: its Workers
+// A local still.fail cloud for trying the whole path without Cloudflare: its Workers
 // in miniflare (Google mocked; see harness.ts) behind a small server on :8787
 // (PORT), on :8789 (ADMIN_PORT) as the admin console's host and :8790 as the
 // preview host. The static sites come from dist/cloud-web, dist/cloud-admin and
@@ -67,9 +67,12 @@ async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
   }
   if (url.pathname === "/__dev/login") {
     const account = await signIn(url.searchParams.get("user") ?? "alice");
+    // Under the web app's key, and its key from before the rename (for a build of the web app from then).
     res.writeHead(200, { "content-type": "text/html" }).end(`<script>
-      const list = JSON.parse(localStorage.getItem("ember.accounts") || "[]").filter((a) => a.sub !== ${JSON.stringify(account.sub)});
-      localStorage.setItem("ember.accounts", JSON.stringify([...list, ${JSON.stringify(account)}]));
+      for (const key of ["stillfail.accounts", "ember.accounts"]) {
+        const list = JSON.parse(localStorage.getItem(key) || "[]").filter((a) => a.sub !== ${JSON.stringify(account.sub)});
+        localStorage.setItem(key, JSON.stringify([...list, ${JSON.stringify(account)}]));
+      }
       location.replace("/");</script>`);
     return;
   }
@@ -111,7 +114,7 @@ server.on("upgrade", (req, socket, head) => {
   upstream.on("error", () => socket.destroy());
   socket.on("error", () => upstream.destroy());
 });
-server.listen(port, "127.0.0.1", () => console.log(`READY ember cloud (dev) on :${port}`));
+server.listen(port, "127.0.0.1", () => console.log(`READY still.fail cloud (dev) on :${port}`));
 createServer(handle(adminOrigin)).listen(adminPort, "127.0.0.1", () => console.log(`READY admin console (dev) on :${adminPort}`));
 createServer(handle(previewOrigin)).listen(previewPort, "127.0.0.1", () => console.log(`READY preview host (dev) on :${previewPort}`));
 

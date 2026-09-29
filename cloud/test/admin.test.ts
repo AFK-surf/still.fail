@@ -53,7 +53,7 @@ test("the admin sees every user, workspace and code", async () => {
     const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
     const station = hex((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer);
     const enrollment = await (await alice("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "studio" })).json() as any;
-    const signature = hex(await crypto.subtle.sign("Ed25519", pair.privateKey, new TextEncoder().encode(`ember-station-enroll-v1:${h.origin}:${enrollment.token}:${station}`)));
+    const signature = hex(await crypto.subtle.sign("Ed25519", pair.privateKey, new TextEncoder().encode(`stillfail-station-enroll-v1:${h.origin}:${enrollment.token}:${station}`)));
     assert.equal((await h.fetch("/v1/stations/enroll", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: enrollment.token, station, signature, version: "0.3.1" }) })).status, 200);
 
     const made = await (await aliceAdmin("POST", "/v1/admin/invite-codes", { note: "  for   carol " })).json() as any;
