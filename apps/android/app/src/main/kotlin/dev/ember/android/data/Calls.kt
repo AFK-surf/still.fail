@@ -251,7 +251,7 @@ private val SLACK_GROUPS = listOf("base", "public", "dm", "customize", "files", 
 
 // ember cloud's invite-code errors in Chinese; the core passes their codes through.
 private val INVITE_ERRORS = mapOf(
-    "invite_code_required" to "ember 目前只对受邀的人开放，需要邀请码才能新建 workspace",
+    "invite_code_required" to "still.fail 目前只对受邀的人开放，需要邀请码才能新建 workspace",
     "invite_code_invalid" to "这个邀请码不对，检查一下有没有输错",
     "invite_code_used" to "这个邀请码已经被用过了",
     "invite_code_expired" to "这个邀请码已经过期了",

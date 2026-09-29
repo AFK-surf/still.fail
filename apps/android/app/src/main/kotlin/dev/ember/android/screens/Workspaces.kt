@@ -134,14 +134,14 @@ fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
                 else Button("不加入，建一个自己的 workspace", primary = false, busy = create.busy) { make("") }
             }
             asking -> {
-                Title("ember 目前只对受邀的人开放")
-                Lead("有邀请码的话填在下面，就能建一个自己的 workspace。也可以请已经在用 ember 的人把 ${first.email} 邀请进他们的 workspace。")
+                Title("still.fail 目前只对受邀的人开放")
+                Lead("有邀请码的话填在下面，就能建一个自己的 workspace。也可以请已经在用 still.fail 的人把 ${first.email} 邀请进他们的 workspace。")
                 InviteCodeForm(create, make)
                 Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
             }
             else -> {
                 Title("你还不在任何 workspace 里")
-                Lead("可以请已经在用 ember 的人把 ${first.email} 邀请进他们的 workspace，也可以自己建一个。")
+                Lead("可以请已经在用 still.fail 的人把 ${first.email} 邀请进他们的 workspace，也可以自己建一个。")
                 Button("建一个 workspace", primary = true, busy = create.busy) { make("") }
                 create.error?.let { Error(errorText(it)) }
                 Button("换一个账号", primary = false) { scope.launch { signIn(app, context) } }
@@ -293,7 +293,7 @@ private fun ColumnScope.NewWorkspaceSheet(app: AppState) {
             Field(code, { code = it }, "XXXX-XXXX-XXXX", mono = true)
             val error = create.error
             if (error != null && needsInviteCode(error) && code.isNotBlank()) Error(errorText(error))
-            else Text("ember 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。", fontSize = 12.sp, color = C.muted)
+            else Text("still.fail 目前只对受邀的人开放：这个账号还没被邀请进任何 workspace，新建需要一个邀请码。", fontSize = 12.sp, color = C.muted)
         }
         create.error?.takeIf { !needsInviteCode(it) }?.let { Error(it.message) }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {

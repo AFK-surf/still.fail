@@ -96,11 +96,11 @@ fun NewChatScreen(scope: String) {
                 if (all.isEmpty()) {
                     // No station at all: the first step is adding one, on the stations page.
                     Text("还没有 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                    Text("station 是一台运行 ember 的机器：agent 在那里干活。在要用的机器上执行一条命令，它就会加入这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+                    Text("station 是一台运行 still.fail 的机器：agent 在那里干活。在要用的机器上执行一条命令，它就会加入这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
                     Button("添加 station", primary = true) { app.replace(Screen.Stations) }
                 } else {
                     Text("没有在线的 station", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                    Text("在一台机器上打开 ember，它就会连上这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+                    Text("在一台机器上打开 still.fail，它就会连上这个 workspace。", fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
                 }
             }
             else -> {

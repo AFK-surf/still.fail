@@ -123,7 +123,7 @@ fun StationsScreen(current: WorkspaceEntry) {
                     } else if (!s.online) {
                         Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-                            Text("这台机器很久没联系 ember 了", fontSize = 13.sp, color = C.muted)
+                            Text("这台机器很久没联系 still.fail 了", fontSize = 13.sp, color = C.muted)
                         }
                     }
                 }
@@ -161,7 +161,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 Card {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
-                        Text("离线：在这台机器上打开 ember 就会重新连上", fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
+                        Text("离线：在这台机器上打开 still.fail 就会重新连上", fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
                     }
                 }
             }
@@ -182,7 +182,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                     overview.connects.forEach { c -> ConnectRow(address, c) }
                     ListRow {
                         Mark(14.dp)
-                        Text("ember 对话", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                        Text("still.fail 对话", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                         Text("内置", fontSize = 13.sp, color = C.muted)
                     }
                     if (s.online && overview.profiles.isNotEmpty()) ListRow(onClick = { openNewConnect(app, address) }) { Text("＋ 添加连接", fontSize = 15.sp, color = C.accent) }

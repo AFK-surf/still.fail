@@ -1122,7 +1122,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread)
         SheetHead("对话信息")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
             InfoList {
-                Detail("来自", view?.place?.let { "Slack · $it" } ?: "ember 对话")
+                Detail("来自", view?.place?.let { "Slack · $it" } ?: "still.fail 对话")
                 Detail("发起", (view?.thread ?: thread).creator?.shown?.display ?: "未记录")
                 Detail("参与", "${view?.people?.size ?: 0} 人") { view?.people?.let { if (it.isNotEmpty()) PeopleStack(it.take(8), 16.dp, C.surface2) } }
                 Detail("创建", (view?.thread ?: thread).time?.get("createdAt")?.ago ?: "")

@@ -569,7 +569,7 @@ fun NewConnectScreen(station: String) {
             }
             when (step) {
                 "team" -> if (teams.isEmpty()) {
-                    Text("有了 Slack 的配置 token，ember 替你在 Slack 建好 app：名字、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。", fontSize = 14.sp, color = C.muted)
+                    Text("有了 Slack 的配置 token，still.fail 替你在 Slack 建好 app：名字、权限都在这里填，不用去 Slack 后台一项项配。它只归你用。", fontSize = 14.sp, color = C.muted)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button("添加配置 token", primary = true) { step = "token" } }
                     Text("不用配置 token，自己在 Slack 建 app", fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { step = "manual" })
                 } else {
@@ -585,7 +585,7 @@ fun NewConnectScreen(station: String) {
                     Steps(listOf(
                         "打开 api.slack.com/apps，用要放 bot 的那个 Slack 工作区的账号登录。" to { open("https://api.slack.com/apps") },
                         "拉到页面最下面的「Your App Configuration Tokens」，点 Generate Token，选这个工作区。" to null,
-                        "把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。ember 会自己续期，以后不用再管。" to null,
+                        "把以 xoxe-1- 开头的 Refresh Token 粘贴到下面。still.fail 会自己续期，以后不用再管。" to null,
                     ))
                     SecretField(config, { config = it }, "xoxe-1-…")
                     if (config.startsWith("xoxe.xoxp-")) Text("这是 Access Token。要的是它下面那个 Refresh Token，以 xoxe-1- 开头。", fontSize = 13.sp, color = C.red)
@@ -624,7 +624,7 @@ fun NewConnectScreen(station: String) {
                 }
                 "manual" -> {
                     Steps(listOf(
-                        "用 ember 的配置在 Slack 新建一个 app。" to { scope.launch { try { open(api.createAppUrl("ember")) } catch (e: CoreException) { error = e.message } }; Unit },
+                        "用 still.fail 的配置在 Slack 新建一个 app。" to { scope.launch { try { open(api.createAppUrl("ember")) } catch (e: CoreException) { error = e.message } }; Unit },
                         "在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。" to null,
                         "在 Install App 页安装到工作区，复制 Bot User OAuth Token。" to null,
                         "把两个 token 填在下面。" to null,
@@ -716,7 +716,7 @@ private fun openWaitingMenu(app: AppState, station: String, a: MadeSlackApp) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow("继续连接") { openNewConnect(app, station, a.appId) }
             PickRow("从这里移除", color = C.red) {
-                confirm(app, "移除「${a.name}」？", "只从 ember 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。", "移除", danger = true) {
+                confirm(app, "移除「${a.name}」？", "只从 still.fail 里移除；这个 app 还在 Slack 里，不用了可以去 Slack 的 app 设置页删除。", "移除", danger = true) {
                     app.api(station).dropSlackApp(a.appId); app.toast = "已移除"
                 }
             }

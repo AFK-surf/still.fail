@@ -216,10 +216,10 @@ private fun openProfileMenu(app: AppState, station: String, p: Profile) {
             // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
             val machine = p.machine == true
             PickRow((if (machine) "停用" else "删除 Profile") + if (p.usedBy.isNotEmpty()) "（还有连接在用）" else "", color = C.red, enabled = p.usedBy.isEmpty()) {
-                if (machine) confirm(app, "停用「${p.name}」？", "ember 不再用这台机器上 ${MACHINE_RUNTIME[p.runtime] ?: p.runtime} 的登录；这台机器上的登录不受影响，之后可以再用。", "停用", danger = true) {
+                if (machine) confirm(app, "停用「${p.name}」？", "still.fail 不再用这台机器上 ${MACHINE_RUNTIME[p.runtime] ?: p.runtime} 的登录；这台机器上的登录不受影响，之后可以再用。", "停用", danger = true) {
                     api.deleteProfile(p.id); app.toast = "已停用"; app.pop()
                 }
-                else confirm(app, "删除「${p.name}」？", "只从 ember 的配置里移除；配置目录和里面的登录状态不会删除。", "删除 Profile", danger = true) {
+                else confirm(app, "删除「${p.name}」？", "只从 still.fail 的配置里移除；配置目录和里面的登录状态不会删除。", "删除 Profile", danger = true) {
                     api.deleteProfile(p.id); app.toast = "已删除 Profile"; app.pop()
                 }
             }
@@ -308,7 +308,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
                 Button("取消登录", primary = false) { scope.launch { try { api.cancelLogin(p.id) } catch (e: CoreException) { app.toast = e.message } } }
             } else {
                 Text(
-                    when (job?.state) { "failed" -> "上次登录没成功：${job.error}"; "done" -> "已登录。换账号的话重新登录一次。"; else -> "登录在运行 ember 的机器上完成，你只需要在浏览器里授权。" },
+                    when (job?.state) { "failed" -> "上次登录没成功：${job.error}"; "done" -> "已登录。换账号的话重新登录一次。"; else -> "登录在运行 still.fail 的机器上完成，你只需要在浏览器里授权。" },
                     fontSize = 13.sp, color = C.muted,
                 )
                 Button(if (job?.state == "done" || !needed) "重新登录" else "登录", primary = needed, busy = busy) {
@@ -349,13 +349,13 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("ember", job.userCode))
                 copied = true; open(job.url)
             }
-            Text("在打开的 OpenAI 页面用要给 ember 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。", fontSize = 13.sp, color = C.muted)
+            Text("在打开的 OpenAI 页面用要给 still.fail 使用的 ChatGPT 账号登录，粘贴代码。完成后这里会自动继续。如果页面说设备码登录没开启，先在 ChatGPT 的安全设置里打开它。", fontSize = 13.sp, color = C.muted)
         }
         job.state == "needs_code" && job.url != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row {
                 Text("1. ", fontSize = 13.sp, color = C.ink)
                 Text("打开授权页面", fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { open(job.url) })
-                Text("，用要给 ember 使用的 Claude 账号登录并同意。", fontSize = 13.sp, color = C.ink)
+                Text("，用要给 still.fail 使用的 Claude 账号登录并同意。", fontSize = 13.sp, color = C.ink)
             }
             Text("2. 同意后页面上会显示一段授权码，复制过来：", fontSize = 13.sp, color = C.ink)
             Field(code, { code = it }, "粘贴授权码", mono = true)
@@ -477,7 +477,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                     Text(if (picked.kind == "opencode-go") "OpenCode Go key" else "API key", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                     SecretField(key, { key = it }, "先验证能用，再添加")
                 }
-                if (picked.kind == "subscription") Text("登录在运行 ember 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。", fontSize = 13.sp, color = C.muted)
+                if (picked.kind == "subscription") Text("登录在运行 still.fail 的机器上完成，你只需要在浏览器里授权；登录成功后才会添加这个 Profile。", fontSize = 13.sp, color = C.muted)
                 error?.let { Text(it, fontSize = 13.sp, color = C.red) }
                 val run = { work: suspend () -> Unit -> busy = true; error = null; scope.launch { try { work() } catch (e: CoreException) { error = e.message } finally { busy = false } }; Unit }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

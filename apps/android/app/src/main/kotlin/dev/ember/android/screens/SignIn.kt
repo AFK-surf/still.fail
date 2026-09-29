@@ -57,7 +57,7 @@ import kotlinx.serialization.json.put
 /** Starts a Google sign-in through ember cloud in a Custom Tab; MainActivity finishes it when ember://auth/callback comes back. */
 suspend fun signIn(app: AppState, context: Context) {
     try {
-        val url = Auth.begin(app.core, "ember Android · ${Build.MANUFACTURER} ${Build.MODEL}")
+        val url = Auth.begin(app.core, "still.fail Android · ${Build.MANUFACTURER} ${Build.MODEL}")
         CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, url.toUri())
     } catch (e: CoreException) {
         app.toast = "没能开始登录：${e.message}"

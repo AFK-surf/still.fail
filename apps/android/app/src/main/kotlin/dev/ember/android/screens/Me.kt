@@ -120,7 +120,7 @@ fun MeScreen(current: WorkspaceEntry) {
         LaunchedEffect(Unit) { app.checkUpdates() }
         ListCard {
             ListRow(onClick = if (newer == null || updates.progress != null) null else ({ scope.launch { updates.install()?.let { app.toast = it } } })) {
-                Text("ember ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                Text("still.fail ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
                 Text(updates.progress ?: newer?.let { "更新到 ${it.versionName}" } ?: "已是最新", fontSize = 15.sp, color = if (newer != null && updates.progress == null) C.accent else C.muted)
             }
         }
