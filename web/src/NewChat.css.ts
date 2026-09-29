@@ -5,7 +5,7 @@ import { composerBox } from "./styles/composer.css.ts";
 
 export const newChatSub = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "0 0 8px", color: vars.muted,
-  fontSize: vars.textSm,
+  fontSize: vars.textSm, lineHeight: "20px",
 });
 export const spentNotice = style({
   margin: "0 0 8px", padding: "8px 12px", borderRadius: "10px",
@@ -21,7 +21,7 @@ export const newChatInner = style({
 /** Where the offer of the machine's sessions hangs, under the status line: it takes no room (NewChat.tsx). */
 export const newChatOffer = style({ position: "relative", height: "0", width: "100%" });
 globalStyle(`${newChatOffer} > *`, { position: "absolute", top: "0", left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" });
-export const newChatTitle = style({ margin: "0", fontSize: vars.textLg, fontWeight: "600" });
+export const newChatTitle = style({ margin: "0", fontSize: vars.textLg, lineHeight: "34px", fontWeight: "600" });
 export const newChatStatus = style({});
 export const newChatHeld = style({ border: `1px solid ${vars.line}` });
 /** Here rather than with its class: it comes after .new-chat-held, and wins over it. */

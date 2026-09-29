@@ -251,13 +251,13 @@ export function Previews() {
             {!tucked && (
               <Tip label="收起">
                 <button type="button" className={css.action} aria-label="收起成胶囊" onClick={(e) => { e.stopPropagation(); tuck(true); }}>
-                  <Minus size={13} strokeWidth={2} />
+                  <Minus size={12} strokeWidth={2} />
                 </button>
               </Tip>
             )}
             <Tip label="关闭">
               <button type="button" className={css.action} aria-label={`关闭「${entry.name}」`} onClick={(e) => { e.stopPropagation(); closePreview(entry.key); }}>
-                <Close size={13} strokeWidth={2} />
+                <Close size={12} strokeWidth={2} />
               </button>
             </Tip>
           </span>

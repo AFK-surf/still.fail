@@ -22,7 +22,7 @@ export const deviceCodeValue = style({
 export const modelChips = style({});
 export const modelChip = style({
   display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", borderRadius: "999px",
-  background: vars.hover, fontSize: vars.textSm,
+  background: vars.hover, fontSize: vars.textSm, lineHeight: "20px",
 });
 /** A profile's state under its name: the check, when, and checking again. */
 export const profileState = style({ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px" });

@@ -175,7 +175,7 @@ function Note({ mark, x, y, onComment, onDone, onRemove }:
           else if (e.key === "Escape") { e.preventDefault(); if (mark.comment) onDone(); else onRemove(); }
         }} />
       <span className={css.noteKey} aria-hidden="true">↵</span>
-      <Tip label="删掉这处标注"><button type="button" className={css.noteRemove} aria-label="删掉这处标注" onClick={onRemove}><Trash size={13} strokeWidth={1.75} /></button></Tip>
+      <Tip label="删掉这处标注"><button type="button" className={css.noteRemove} aria-label="删掉这处标注" onClick={onRemove}><Trash size={14} strokeWidth={1.75} /></button></Tip>
     </div>
   );
 }

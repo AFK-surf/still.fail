@@ -17,7 +17,7 @@ export const history = style({
   },
 });
 export const historyHead = style({
-  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", height: "44px",
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", height: "45px",
   padding: "0 8px 0 16px", borderBottom: `1px solid ${vars.line}`,
 });
 export const historyIdentity = style({
@@ -85,7 +85,7 @@ export const hGroup = style({ borderRadius: `calc(12px * ${vars.cornerScale})`, 
 export const hGroupHead = style({
   display: "flex", alignItems: "center", gap: "6px", width: "100%", padding: "6px 8px", margin: "0 -8px", border: "0",
   borderRadius: `calc(10px * ${vars.cornerScale})`, background: "none", color: vars.muted, fontSize: vars.textXs,
-  textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
+  lineHeight: "18px", textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
   },

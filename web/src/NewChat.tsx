@@ -128,8 +128,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   const toolbar = useMemo(() => (
     <>
       {station.name && (
-        <Chooser side="top" label={<><Server size={13} />{station.name}</>} title="在哪台 station 上运行">
-          {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={13} />{s.name}</Item>)}
+        <Chooser side="top" label={<><Server size={14} />{station.name}</>} title="在哪台 station 上运行">
+          {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={14} />{s.name}</Item>)}
         </Chooser>
       )}
       {!runtime || !model ? (
@@ -170,8 +170,8 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
               ? <Button variant="primary" icon={Plus} onClick={() => { setProfileKind("claude-sub"); setAddingProfile(true); }}>添加 Profile</Button>
               : <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profilesPage(station)}>去勾选模型</Link>}
             {stations.length > 1 && (
-              <Chooser side="bottom" label={<><Server size={13} />{station.name}</>} title="换一台 station">
-                {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={13} />{s.name}</Item>)}
+              <Chooser side="bottom" label={<><Server size={14} />{station.name}</>} title="换一台 station">
+                {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={14} />{s.name}</Item>)}
               </Chooser>
             )}
             {blocked === "profile" && <MachineLoginOffers logins={view.overview?.machineLogins} onAdd={(c) => { setProfileKind(c); setAddingProfile(true); }} />}

@@ -8,7 +8,8 @@ export const sessionPage = style({
   flex: "1", minHeight: "0", flexDirection: "column", display: "grid", gridTemplateColumns: "minmax(0, 1fr)",
   gridTemplateRows: "minmax(0, 1fr)",
   selectors: {
-    "&[data-panel=\"true\"]": { gridTemplateColumns: "minmax(0, 1fr) minmax(360px, 38%)" },
+    // The tab set's width is a whole number of pixels (38% of the page rarely is), so what is centred in it stays sharp.
+    "&[data-panel=\"true\"]": { gridTemplateColumns: ["minmax(0, 1fr) minmax(360px, 38%)", "minmax(0, 1fr) minmax(360px, round(down, 38%, 1px))"] },
   },
   "@media": {
     "(max-width: 1100px)": {
@@ -19,7 +20,12 @@ export const sessionPage = style({
     "(min-width: 1101px)": {
       selectors: {
         // The chat keeps 360px however wide the tab set is dragged: the tab set gives way first.
-        "&[data-panel=\"true\"]": { gridTemplateColumns: "minmax(360px, 1fr) minmax(0, var(--panel-w, max(360px, 38%)))" },
+        "&[data-panel=\"true\"]": {
+          gridTemplateColumns: [
+            "minmax(360px, 1fr) minmax(0, var(--panel-w, max(360px, 38%)))",
+            "minmax(360px, 1fr) minmax(0, var(--panel-w, max(360px, round(down, 38%, 1px))))",
+          ],
+        },
       },
     },
   },

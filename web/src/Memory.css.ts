@@ -21,10 +21,10 @@ globalStyle(`${memoryDoc} > :last-child`, { marginBottom: "0" });
 /** Here rather than with its class: it comes after .memory-doc > :first-child, and wins over it. */
 globalStyle(`${memorySkill} + ${memorySkill}`, { marginTop: "2px" });
 globalStyle(`${memorySkillRow} > svg`, {
-  flex: "none", marginTop: `calc((${vars.textSm} * 1.55 - 16px) / 2)`, color: vars.subtle,
+  flex: "none", marginTop: "2px", color: vars.subtle,
 });
 globalStyle(`${memorySkillText} b`, {
-  display: "flex", alignItems: "baseline", gap: "8px", fontSize: vars.textSm, fontWeight: "500", lineHeight: "1.55",
+  display: "flex", alignItems: "baseline", gap: "8px", fontSize: vars.textSm, fontWeight: "500", lineHeight: "20px",
 });
 globalStyle(`${memorySkillText} > span`, { fontSize: vars.textXs, color: vars.muted });
 globalStyle(`${memorySkill} ${memoryDoc}`, { padding: "12px 12px 18px 38px" });

@@ -25,13 +25,13 @@ export function MineFilter({ label = "筛选", mine = "我创建的", compact, a
   const leaving = useRef(false);
   const item = (value: boolean, text: string) => (
     <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => setOnlyMine(value)}>
-      <span className={chatCss.chooserCheck}>{onlyMine === value && <Check size={13} />}</span>{text}
+      <span className={chatCss.chooserCheck}>{onlyMine === value && <Check size={14} />}</span>{text}
     </DropdownMenu.Item>
   );
   return (
     <DropdownMenu.Root modal={false}>
       <Tip label={`筛选${label}`}><DropdownMenu.Trigger className={compact ? css.mineFilterBtn : `${css.mineFilterBtn} ${css.mineFilterWide}`} aria-label={`筛选${label}：${onlyMine ? mine : "全部"}`} data-on={onlyMine || undefined}>
-        <Filter size={15} strokeWidth={1.8} />{!compact && <span>{onlyMine ? mine : "全部"}</span>}
+        <Filter size={16} strokeWidth={1.8} />{!compact && <span>{onlyMine ? mine : "全部"}</span>}
       </DropdownMenu.Trigger></Tip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
@@ -41,7 +41,7 @@ export function MineFilter({ label = "筛选", mine = "我创建的", compact, a
           {archive && <>
             <DropdownMenu.Separator className={controlsCss.menuSep} />
             <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => { leaving.current = true; navigate(archive); }}>
-              <span className={chatCss.chooserCheck}><Archive size={13} /></span>已归档
+              <span className={chatCss.chooserCheck}><Archive size={14} /></span>已归档
             </DropdownMenu.Item>
           </>}
         </DropdownMenu.Content>

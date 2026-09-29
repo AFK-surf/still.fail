@@ -35,7 +35,7 @@ export function History({ station, sessionKey, summary, actions, details, focus 
   // A place as its platform's mark and its name; an ember chat opens its agent's page.
   const where = (place: Place | null): ReactNode => {
     if (!place) return null;
-    const inner = <>{place.surface === "ember" ? <Mark size={13} /> : <SlackLogo size={13} />}<span className={css.hPlaceName}>{place.name}</span></>;
+    const inner = <>{place.surface === "ember" ? <Mark size={12} /> : <SlackLogo size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
     // A Slack thread opens in Slack; an ember chat, its agent's page.
     if (place.url) return <Tip label="在 Slack 中打开"><a className={css.hPlace} href={place.url} target="_blank" rel="noopener">{inner}</a></Tip>;
     return place.session
@@ -132,7 +132,7 @@ function HistoryItemView({ item, where }: { item: HistoryItem; where(place: Plac
         <div className={`${css.hReceived} ${css.hPost}`} data-failed={body.content.failed}>
           <div className={css.hLabel}>
             <Send {...ICON} size={14} />
-            发送到 {where(body.content.place ?? null) ?? <span className={css.hPlace}><SlackLogo size={13} />Slack</span>}
+            发送到 {where(body.content.place ?? null) ?? <span className={css.hPlace}><SlackLogo size={12} />Slack</span>}
             {body.content.block && <Pill tone="blue">Block</Pill>}
             {body.content.failed && <Pill tone="red">发送失败</Pill>}
           </div>

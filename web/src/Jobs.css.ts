@@ -43,7 +43,7 @@ export const jobRow = style({
 export const jobFold = style({});
 export const jobText = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "1px" });
 export const jobName = style({
-  fontSize: vars.textSm, fontWeight: "500", lineHeight: "1.55", overflow: "hidden", textOverflow: "ellipsis",
+  fontSize: vars.textSm, fontWeight: "500", lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
 export const jobMeta = style({
@@ -135,8 +135,8 @@ export const jobOutput = style({
 globalStyle(`${jobFold}[data-open] > ${jobRow}`, { background: vars.hover });
 /** Here rather than with its class: it comes after .job-fold[data-open] > .job-row, and wins over it. */
 globalStyle(`${jobRow}[data-static]:hover`, { background: "none" });
-/** The dot sits on the name's line: centred on its line box (13px × 1.55), half a pixel up for CJK ink. */
-globalStyle(`${jobRow} > ${jobDot}`, { marginTop: `calc((${vars.textSm} * 1.55 - 8px) / 2 - .5px)` });
+/** The dot sits on the name's line: centred on its 20px line box, half a pixel up for CJK ink. */
+globalStyle(`${jobRow} > ${jobDot}`, { marginTop: "5.5px" });
 globalStyle(`${jobNotices} li`, { display: "grid", gridTemplateColumns: "5.6em 1fr", gap: "8px" });
 globalStyle(`${jobNotices} time`, { color: vars.subtle, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" });
 globalStyle(`${jobNotices}[data-clock] li`, { gridTemplateColumns: "3.4em 1fr" });

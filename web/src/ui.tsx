@@ -316,7 +316,7 @@ export function Chooser({ label, title, children, side = "bottom", className = c
 export function ChooserItem({ checked, onSelect, children }: { checked: boolean; onSelect(): void; children: ReactNode }) {
   return (
     <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={onSelect}>
-      <span className={chatCss.chooserCheck}>{checked && <Check size={13} />}</span>{children}
+      <span className={chatCss.chooserCheck}>{checked && <Check size={14} />}</span>{children}
     </DropdownMenu.Item>
   );
 }
@@ -540,7 +540,7 @@ export function ProviderLogo({ runtime, kind, size = 16 }: { runtime: "claude" |
 export function RuntimeTags({ runtimes }: { runtimes: ("claude" | "codex")[] }) {
   return (
     <span className={waitingCss.runtimeTags}>
-      {runtimes.map((r) => <Tip key={r} label={r === "claude" ? "Claude Code" : "Codex"}><span className={waitingCss.runtimeTag}><RuntimeLogo runtime={r} size={11} />{r === "claude" ? "CC" : "Codex"}</span></Tip>)}
+      {runtimes.map((r) => <Tip key={r} label={r === "claude" ? "Claude Code" : "Codex"}><span className={waitingCss.runtimeTag}><RuntimeLogo runtime={r} size={12} />{r === "claude" ? "CC" : "Codex"}</span></Tip>)}
     </span>
   );
 }

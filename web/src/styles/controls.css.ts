@@ -35,7 +35,7 @@ export const btnDangerSolid = style({
 });
 export const textToggle = style({
   display: "inline-flex", alignItems: "center", gap: "2px", border: "0", background: "none", padding: "2px 4px",
-  color: vars.muted, fontSize: vars.textXs, cursor: "pointer",
+  color: vars.muted, fontSize: vars.textXs, lineHeight: "18px", cursor: "pointer",
   selectors: {
     "&:hover": { color: vars.text },
   },
@@ -61,7 +61,7 @@ export const popover = style({
 });
 export const menuList = style({ minWidth: "180px" });
 export const menuItem = style({
-  display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "34px", padding: "7px 10px",
+  display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "34px", padding: "7px 10px", lineHeight: "20px",
   border: "0", borderRadius: vars.rOption, background: "none", textAlign: "left", fontSize: vars.textSm,
   cursor: "pointer", outline: "none", userSelect: "none", cornerShape: vars.cornerShape,
   selectors: {

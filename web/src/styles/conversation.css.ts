@@ -2,7 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
 
 export const pageBarTitle = style({
-  gridColumn: "2", display: "flex", alignItems: "center", gap: "8px", minWidth: "0",
+  gridColumn: "2", display: "flex", alignItems: "center", gap: "8px", minWidth: "0", lineHeight: "22px",
   "@media": {
     "(max-width: 700px)": {
       gridColumn: "2", justifyContent: "center",

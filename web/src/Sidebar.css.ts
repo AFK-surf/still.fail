@@ -60,13 +60,13 @@ globalStyle(`${navFootRow} > ${iconBtn}, ${navFootRow} > * > ${iconBtn}`, { flex
 
 export const navHeading = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 8px 4px",
-  fontSize: vars.textXs, color: vars.muted,
+  fontSize: vars.textXs, lineHeight: "18px", color: vars.muted,
 });
 export const navEmpty = style({ margin: "16px 10px", fontSize: vars.textSm, color: vars.muted });
 export const navError = style({ color: vars.red });
 
 export const navRow = style({
-  display: "flex", alignItems: "center", gap: 8, minHeight: 32, padding: "6px 10px", borderRadius: vars.rNav,
+  display: "flex", alignItems: "center", gap: 8, minHeight: 32, padding: "6px 10px", lineHeight: "20px", borderRadius: vars.rNav,
   fontSize: vars.textSm, color: vars.text, transition: `background ${vars.dur} ${vars.easeOut}`, cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover },
@@ -118,7 +118,7 @@ export const rowAgent = style({
   },
 });
 /** A station's link coming back: a small turning ring (the global spinner) where the row's mark goes. */
-export const rowSpinner = style({ width: 11, height: 11, borderWidth: 1.5 });
+export const rowSpinner = style({ width: 12, height: 12, borderWidth: 1.5 });
 
 export const navSessionText = style({ display: "grid", gap: 2, minWidth: 0, flex: 1 });
 export const navSessionHead = style({

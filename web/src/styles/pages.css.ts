@@ -16,7 +16,7 @@ export const pageHead = style({
 export const identity = style({ display: "flex", alignItems: "center", gap: "16px", marginBottom: "28px" });
 export const identityText = style({ flex: "1", minWidth: "0" });
 export const identityName = style({
-  display: "flex", alignItems: "center", gap: "4px", margin: "0", fontSize: vars.textLg, fontWeight: "650",
+  display: "flex", alignItems: "center", gap: "4px", margin: "0", fontSize: vars.textLg, lineHeight: "34px", fontWeight: "650",
 });
 export const iconBtn = style({
   display: "inline-grid", placeItems: "center", width: "32px", height: "32px", padding: "0", border: "0",
@@ -32,7 +32,7 @@ export const iconBtn = style({
 });
 export const identitySub = style({
   display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 14px", margin: "6px 0 0", color: vars.muted,
-  fontSize: vars.textSm,
+  fontSize: vars.textSm, lineHeight: "20px",
 });
 export const section = style({ marginBottom: "28px" });
 export const card = style({
@@ -65,4 +65,4 @@ export const mark = style({
   display: "inline-grid", placeItems: "center", flex: "none", borderRadius: `calc(10px * ${vars.cornerScale})`,
   background: vars.paper, color: vars.text, cornerShape: vars.cornerShape,
 });
-globalStyle(`${pageHead} h1`, { margin: "0", fontSize: vars.textLg, fontWeight: "650" });
+globalStyle(`${pageHead} h1`, { margin: "0", fontSize: vars.textLg, lineHeight: "34px", fontWeight: "650" });

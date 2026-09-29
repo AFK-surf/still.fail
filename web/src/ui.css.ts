@@ -206,7 +206,7 @@ export const srOnly = style({
   position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap",
 });
 export const mobileBack = style({
-  display: "none", alignItems: "center", gap: "2px", color: vars.muted, fontSize: vars.textSm,
+  display: "none", alignItems: "center", gap: "2px", color: vars.muted, fontSize: vars.textSm, lineHeight: "20px",
   "@media": {
     "(max-width: 700px)": {
       display: "inline-flex", marginBottom: "12px",
@@ -217,10 +217,10 @@ export const mobileBack = style({
   },
 });
 /** A detail page's way back, on every screen, above its header. */
-export const pageBackRow = style({ marginBottom: "14px" });
+export const pageBackRow = style({ display: "flex", alignItems: "center", height: "24px", marginBottom: "14px" });
 export const pageBack = style({
   display: "inline-flex", alignItems: "center", gap: "2px", marginLeft: "-4px", color: vars.muted,
-  fontSize: vars.textSm, textDecoration: "none",
+  fontSize: vars.textSm, lineHeight: "20px", textDecoration: "none",
   selectors: {
     "&:hover": { color: vars.text },
   },
@@ -295,7 +295,7 @@ export const about = style({
 export const aboutText = style({ display: "block", lineHeight: "1.5" });
 globalStyle(`${empty} h2`, { margin: "10px 0 0", fontSize: vars.textMd, color: vars.text });
 globalStyle(`${empty} p`, { margin: "0", maxWidth: "34em", fontSize: vars.textSm });
-globalStyle(`${sectionHead} h2`, { margin: "0", fontSize: vars.textBody, fontWeight: "600" });
+globalStyle(`${sectionHead} h2`, { margin: "0", fontSize: vars.textBody, lineHeight: "22px", fontWeight: "600" });
 globalStyle(`${switchRowText} ${muted}`, { fontSize: vars.textXs });
 globalStyle(`${choiceText} strong`, { fontWeight: "600" });
 globalStyle(`${choiceText} ${muted}`, { fontSize: vars.textXs, lineHeight: "1.5" });

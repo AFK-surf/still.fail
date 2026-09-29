@@ -7,7 +7,7 @@ const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", wh
 /** Under the composer, quiet as the words around it until pointed at. */
 export const offer = style({
   display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", border: 0, borderRadius: vars.rNav,
-  background: "transparent", color: vars.muted, font: "inherit", fontSize: vars.textSm, cursor: "pointer",
+  background: "transparent", color: vars.muted, font: "inherit", fontSize: vars.textSm, lineHeight: "20px", cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 

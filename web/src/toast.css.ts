@@ -102,7 +102,7 @@ globalStyle(resizeHandle, {
 globalStyle(hPlace, {
   display: "inline-flex", alignItems: "center", gap: "4px", padding: "1px 6px", margin: "0 2px", border: "0",
   borderRadius: `calc(6px * ${vars.cornerScale})`, background: vars.neutralBg, color: vars.text, font: "inherit",
-  fontSize: vars.textXs, fontWeight: "500", textDecoration: "none", verticalAlign: "1px",
+  fontSize: vars.textXs, lineHeight: "18px", fontWeight: "500", textDecoration: "none", verticalAlign: "1px",
   cornerShape: vars.cornerShape, maxWidth: "100%", minWidth: "0", whiteSpace: "nowrap",
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */

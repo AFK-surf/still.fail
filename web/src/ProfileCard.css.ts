@@ -29,11 +29,11 @@ export const profileCardGrid = style({
 export const profileCardMark = style({ width: "24px", height: "24px", background: "none" });
 export const profileCardMain = style({ flex: "1", minWidth: "0", display: "grid", gap: "2px" });
 export const profileCardTitle = style({
-  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontWeight: "500", overflow: "hidden",
+  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", fontWeight: "500", lineHeight: "20px", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** What it is wraps rather than cutting off (an account's long address would hide its plan). */
-export const profileCardSub = style({ color: vars.muted, fontSize: vars.textXs, overflowWrap: "anywhere" });
+export const profileCardSub = style({ color: vars.muted, fontSize: vars.textXs, lineHeight: "18px", overflowWrap: "anywhere" });
 export const profileCardEmail = style({
   display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });

@@ -97,11 +97,11 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
         <Tip label={title}><Popover.Trigger className={css2.modelTriple} disabled={options.length === 0} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className={css2.tripleModel}>没有可用模型</span> : (
             <>
-              <span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={13} /><Tip label={value.model || undefined}><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></Tip></span>
-              {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={13} />{RUNTIME_LABEL[value.runtime]}</span>}
+              <span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><Tip label={value.model || undefined}><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></Tip></span>
+              {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={14} />{RUNTIME_LABEL[value.runtime]}</span>}
               <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
               <span className={`${css2.triplePart} ${css2.tripleAccount}`}>
-                {shown && <ProviderLogo runtime={value.runtime} kind={shown.kind ?? "env"} size={13} />}
+                {shown && <ProviderLogo runtime={value.runtime} kind={shown.kind ?? "env"} size={14} />}
                 <span className={css2.tripleAccountName}>{value.profile ? shown?.name ?? value.profile : shown ? `自动 · ${shown.name}` : "自动分配"}</span>
                 {!value.profile && <span className={css2.tripleAccountShort}>自动</span>}
                 {shown && <span className={css2.tripleRings}><QuotaBars quota={shown.quota} compact small /></span>}
@@ -126,7 +126,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
                   {groups.length > 1 && <h5>{who}</h5>}
                   {list.map((o) => (
                     <Tip key={o.model} label={o.ids.join("\n")}><button type="button" className={css2.runPickerOption} aria-pressed={option === o} onClick={() => set({ model: o.model })}>
-                      <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={13} />
+                      <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={14} />
                       <span className={css2.runOptionText}><span className={css2.runOptionName}>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}</span>
                     </button></Tip>
                   ))}
@@ -139,7 +139,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
                 <h4>运行时</h4>
                 {option!.runtimes.map((r) => (
                   <button key={r} type="button" className={css2.runPickerOption} aria-pressed={on === r} onClick={() => set({ runtime: r })}>
-                    <RuntimeLogo runtime={r} size={13} />{RUNTIME_LABEL[r]}
+                    <RuntimeLogo runtime={r} size={14} />{RUNTIME_LABEL[r]}
                   </button>
                 ))}
               </div>
@@ -158,7 +158,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
               </button>
               {accounts.map((a) => (
                 <button key={a.id} type="button" className={css2.runPickerOption} aria-pressed={profile === a.id} onClick={() => set({ profile: a.id })}>
-                  <ProviderLogo runtime={on} kind={a.kind ?? "env"} size={15} />
+                  <ProviderLogo runtime={on} kind={a.kind ?? "env"} size={14} />
                   <span className={css2.runOptionText}><span>{a.name}</span></span>
                   <QuotaBars quota={a.quota} compact />
                 </button>

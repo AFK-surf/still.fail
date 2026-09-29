@@ -46,7 +46,7 @@ export const modelTriple = style({
   display: "inline-flex", alignItems: "center", gap: "6px", maxWidth: "100%", justifySelf: "start", alignSelf: "start",
   width: "max-content", height: "30px", padding: "0 10px", border: "1px solid transparent",
   borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", color: vars.text,
-  font: "inherit", fontSize: vars.textSm, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden",
+  font: "inherit", fontSize: vars.textSm, lineHeight: "20px", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden",
   selectors: {
     "&:hover": { background: vars.hover },
     "&[data-state=\"open\"]": { background: vars.hover },
@@ -117,7 +117,7 @@ export const runPickerFilter = style({ height: "30px", margin: "0 4px 6px", font
 export const runPickerGroup = style({});
 export const runPickerEmpty = style({ margin: "4px 8px", fontSize: vars.textXs });
 globalStyle(`${runOptionText} ${muted}`, { fontSize: vars.textXs, whiteSpace: "normal", maxWidth: "260px" });
-globalStyle(`${runPickerColumn} h4`, { margin: "4px 8px 6px", fontSize: vars.textXs, fontWeight: "500", color: vars.muted });
+globalStyle(`${runPickerColumn} h4`, { margin: "4px 8px 6px", fontSize: vars.textXs, lineHeight: "18px", fontWeight: "500", color: vars.muted });
 globalStyle(`${runPickerOption} ${quotaChips}`, { marginLeft: "auto", paddingLeft: "12px" });
 /** The model control takes the room left beside the other choices, and fits itself in it (.model-triple-fit). */
 globalStyle(`${composerChoices} > :not(${modelTripleFit})`, { flex: "none" });
@@ -126,7 +126,7 @@ globalStyle(`${modelPoolItem} ${mono}`, { minWidth: "0", overflow: "hidden", tex
 globalStyle(`${modelTriple} ${quotaChips}`, { marginLeft: "2px" });
 globalStyle(`${modelTriple} ${chooserChevron}`, { color: vars.muted, flex: "none" });
 globalStyle(`${modelTriple} ${quotaRingNumber}`, { display: "none" });
-globalStyle(`${runPickerGroup} h5`, { margin: "8px 8px 2px", fontSize: vars.textXs, fontWeight: "500", color: vars.subtle });
+globalStyle(`${runPickerGroup} h5`, { margin: "8px 8px 2px", fontSize: vars.textXs, lineHeight: "18px", fontWeight: "500", color: vars.subtle });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */
 globalStyle(`${runCardRow} > ${modelTripleFit}`, { flex: "1 1 auto", marginTop: "-5px" });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */

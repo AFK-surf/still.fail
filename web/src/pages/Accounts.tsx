@@ -161,7 +161,7 @@ export function AddAccountDialog({ open, onClose, initial = "claude-sub" }: { op
             <Choices label="账号" value={choice} onChange={(v) => setChoice(v as Choice)}
               options={(Object.keys(CHOICES) as Choice[]).map((c) => ({
                 value: c, title: CHOICES[c].title, description: CHOICES[c].description,
-                icon: <span className={pagesCss.mark} style={{ width: 28, height: 28 }}><ProviderLogo runtime={CHOICES[c].runtime ?? "claude"} kind={CHOICES[c].kind} size={15} /></span>,
+                icon: <span className={pagesCss.mark} style={{ width: 28, height: 28 }}><ProviderLogo runtime={CHOICES[c].runtime ?? "claude"} kind={CHOICES[c].kind} size={16} /></span>,
               }))} />
           </Field>
           {KEYED.has(kind) && (
@@ -524,7 +524,7 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
       {all.length > 0 && !choosing && (
         on.length === 0 ? <p className={shellCss.muted}>还没有启用模型。</p> : (
           <ul className={css.modelChips}>
-            {on.map((m) => <Tip key={m} label={m}><li className={css.modelChip}><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} /><span>{name(m)}</span></li></Tip>)}
+            {on.map((m) => <Tip key={m} label={m}><li className={css.modelChip}><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} /><span>{name(m)}</span></li></Tip>)}
           </ul>
         )
       )}
@@ -550,7 +550,7 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
                     <li key={m}>
                       <Tip label={m}><label className={chatCss.modelPoolItem} data-on={enabled.has(m) || undefined}>
                         <input type="checkbox" checked={enabled.has(m)} onChange={() => toggle(m)} />
-                        <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={13} />
+                        <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
                         <span>{name(m)}</span>
                         {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>检查里没有了</span>}
                       </label></Tip>
