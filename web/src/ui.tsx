@@ -602,13 +602,11 @@ export function pageChanging(): { settle: (() => void)[]; moving: Promise<void>;
 /**
  * One page becoming another in a view transition (what both have and name moves between them; the rest crossfades):
  * `go` navigates, rendered at once; with `ready`, the new page is waited for (a little) until it shows what the
- * transition lands on. `still`: the two look alike, so nothing moves, the old stays until the new is ready and gives
- * way to it at once. `patience`: how long (ms) the new page is waited for at most. Plainly without the API or motion.
+ * transition lands on. `patience`: how long (ms) the new page is waited for at most. Plainly without the API or motion.
  * Resolves when it is over.
  */
-export function transitionTo(go: () => void, ready?: () => boolean, still = false, patience = 800): Promise<void> {
+export function transitionTo(go: () => void, ready?: () => boolean, patience = 800): Promise<void> {
   if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { go(); return Promise.resolve(); }
-  if (still) document.documentElement.dataset.still = "";
   // What is named for it only while it runs (its styles): a named element blurs nothing behind it (the composer's glass).
   document.documentElement.dataset.transitioning = "";
   const transition = document.startViewTransition(async () => {
@@ -619,5 +617,5 @@ export function transitionTo(go: () => void, ready?: () => boolean, still = fals
   });
   const now = { settle: [] as (() => void)[], moving: transition.ready.catch(() => {}), done: transition.finished.catch(() => {}) };
   changing = now;
-  return transition.finished.catch(() => {}).finally(() => { if (changing === now) changing = null; delete document.documentElement.dataset.transitioning; if (still) delete document.documentElement.dataset.still; });
+  return transition.finished.catch(() => {}).finally(() => { if (changing === now) changing = null; delete document.documentElement.dataset.transitioning; });
 }

@@ -153,7 +153,7 @@ const decoded = (Object.keys(ILLUS_SIZE) as Illus[]).map((name) => {
 void decoded;
 
 /** A scene beside text that says the same, hence no alt. */
-export function Illustration({ name }: { name: Illus }) {
+export function Illustration({ name, ...marks }: { name: Illus; "data-made-leave"?: string }) {
   const [width, height] = ILLUS_SIZE[name];
-  return <img className={css.illus} src={illustrationUrl(name)} alt="" width={width} height={height} decoding="sync" />;
+  return <img className={css.illus} src={illustrationUrl(name)} alt="" width={width} height={height} decoding="sync" {...marks} />;
 }

@@ -84,3 +84,4 @@ import "../OpenJobs.css.ts";
 import "../ChatMark.css.ts";
 import "../Switcher.css.ts";
 import "../Shortcuts.css.ts";
+import "../madeChat.css.ts";

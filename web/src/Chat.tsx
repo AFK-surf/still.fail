@@ -31,14 +31,23 @@ import * as waitingCss from "./styles/waiting.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
+import * as dockCss from "./dock.css.ts";
+import { toMadeChat as toMadeChatOf } from "./madeChat.ts";
+
+/** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
+export const OVER_DOCK = "4";
 
 /**
- * From a new chat, whose page already looks like the chat (its first messages on their way), to the chat itself: the
- * page is kept until the chat shows them, then gives way at once (`still`), or crossfades to it (the phone's, where the
- * composer stays put and nothing else would move).
+ * From a new chat to the chat it made (madeChat.ts): its scene leaves, the composer moves to the chat's foot
+ * (dock.tsx), and the words sent go up to where the chat has its first message.
  */
-export function toMadeChat(go: () => void, still = true): void {
-  void transitionTo(go, () => document.querySelector(`.${css.chatMessages} .${chatCss2.msgMine}`) !== null, still);
+export function toMadeChat(go: () => void): void {
+  toMadeChatOf(go, {
+    scope: document,
+    layer: () => document.querySelector<HTMLElement>(`.${dockCss.composerDock}`)?.offsetParent as HTMLElement | null,
+    z: OVER_DOCK,
+    list: () => document.querySelector<HTMLElement>(`.${css.chatMessages}`),
+  });
 }
 
 /**

@@ -249,7 +249,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     <DockContext.Provider value={value}>
       {children}
       {spec && (
-        <div ref={box} className={css.composerDock} data-variant={spec.variant} data-switching={switching || undefined} hidden={!shown}>
+        <div ref={box} className={css.composerDock} data-made-composer data-variant={spec.variant} data-switching={switching || undefined} hidden={!shown}>
           <StationContext.Provider value={spec.station}>
             {composer}
           </StationContext.Provider>
@@ -292,6 +292,6 @@ export function useComposerMove(): (event: MouseEvent<HTMLAnchorElement>, to: st
     const dock = document.querySelector<HTMLElement>(`.${css.composerDock}:not([hidden])`);
     if (!dock || dock.dataset.variant === next) return;
     event.preventDefault();
-    void transitionTo(() => navigate(to), next === "chat" ? () => document.querySelector(`.${sessionCss.chatList}`) !== null : undefined, false, 400);
+    void transitionTo(() => navigate(to), next === "chat" ? () => document.querySelector(`.${sessionCss.chatList}`) !== null : undefined, 400);
   };
 }

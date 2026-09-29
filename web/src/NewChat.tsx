@@ -18,6 +18,9 @@ import * as controlsCss from "./styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import { MachineSessions } from "./MachineSessions.tsx";
+import { composerText } from "./Chat.css.ts";
+import { notSent, sendingFirst } from "./madeChat.ts";
+import { OVER_DOCK } from "./Chat.tsx";
 
 /** What a new chat runs on, kept per station (its id) for next time, on either screen (the phone's, mobile/NewChat.tsx). */
 export interface Choice { runtime: RuntimeKind | ""; model: string; effort: string; profile?: string }
@@ -149,6 +152,13 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   const composer = (
     <ComposerSlot variant="new" station={station} draftKey={`new:${station.address}`} thread={null} sessionKey={null} ensureChat={ensureChat}
       placeholder="做任何事" toolbar={toolbar} locked={!runtime || !model} roomy
+      // Its words stay where they were until the chat's page takes them (../madeChat.ts), over the composer.
+      onSending={(text) => {
+        const field = document.querySelector<HTMLElement>(`[data-made-composer] .${composerText}`);
+        const layer = field?.closest<HTMLElement>("[data-made-composer]")?.offsetParent;
+        if (text === null) notSent();
+        else if (field && layer instanceof HTMLElement) sendingFirst(field, text, layer, OVER_DOCK);
+      }}
       onSent={(to) => {
         const key = String(to);
         // What is being typed goes on in the chat, in the same composer.
@@ -184,20 +194,21 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   return (
     <div className={css.newChat}>
       <div className={css.newChatInner}>
-        <Illustration name="new-chat" />
-        <h1 className={css.newChatTitle}>新对话</h1>
-        <p className={css.newChatSub}>说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
+        {/* What leaves as the chat comes (../madeChat.ts): the scene above the composer out of view, what is by it where it is. */}
+        <Illustration name="new-chat" data-made-leave="up" />
+        <h1 className={css.newChatTitle} data-made-leave="up">新对话</h1>
+        <p className={css.newChatSub} data-made-leave="up">说要做什么。它会在 {station.name || "这台机器"} 上用选好的模型开一个新会话。</p>
         {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
         {entry?.spent && (
-          <p className={css.spentNotice} role="status">
+          <p className={css.spentNotice} role="status" data-made-leave="up">
             {entry.name} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。
           </p>
         )}
         {composer}
         {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
-        <p className={css.newChatStatus}>{!view.overview ? `正在读取 ${station.name} 的 Profile…` : ""}</p>
+        <p className={css.newChatStatus} data-made-leave="fade">{!view.overview ? `正在读取 ${station.name} 的 Profile…` : ""}</p>
         {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}
-        <div className={css.newChatOffer}>
+        <div className={css.newChatOffer} data-made-leave="fade">
           <MachineSessions models={view.models} onContinued={(key) => {
             keepTabs(`${station.address}:${key}`, { tabs: [], active: null });
             onCreated(station.address, key);

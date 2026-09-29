@@ -212,9 +212,6 @@ globalStyle("::view-transition-old(root), ::view-transition-new(root)", { animat
  */
 globalStyle("::view-transition-group(dock), ::view-transition-new(dock)", { animation: "none" });
 globalStyle("::view-transition-old(dock)", { display: "none" });
-/** A new chat that looks like its chat already gives way to it without a move. */
-globalStyle(":root[data-still]::view-transition-group(*), :root[data-still]::view-transition-old(*), :root[data-still]::view-transition-new(*)", { animation: "none" });
-globalStyle(":root[data-still]::view-transition-old(*)", { display: "none" });
 globalStyle("::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*)", {
   "@media": {
     "(prefers-reduced-motion: reduce)": {

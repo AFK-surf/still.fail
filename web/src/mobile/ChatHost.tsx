@@ -130,7 +130,7 @@ function Composer({ shown, draftKey, latest, draft, now, root, upload: uploader 
     <div className={`${css.mComposer} ${css.mHostComposer} ${rootCss.wide}`} ref={capsule}>
       {menu}
       {/* Files dropped in go with the message, as ＋ adds them (pasted ones, the text box takes); offline, nothing goes to the station. */}
-      <div ref={frame} className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
+      <div ref={frame} className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} data-made-composer onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) e.preventDefault(); }}
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!locked) upload(e.dataTransfer.files); } }}>
         {shown.archived && <ArchiveNotice className={css.mComposerOffline} offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}

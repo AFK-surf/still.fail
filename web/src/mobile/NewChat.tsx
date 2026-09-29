@@ -10,7 +10,7 @@ import { keepChoice, keepStation, lastChoice, lastStation, useEnsureChat, type C
 import { optionOf } from "../ModelTriple.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
 import { useNavigate } from "react-router";
-import { pageChanging, transitionTo } from "../ui.tsx";
+import { notSent, sendingFirst, toMadeChat } from "../madeChat.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import type { Draft } from "./Chat.tsx";
 import { useHost } from "./ChatHost.tsx";
@@ -21,8 +21,6 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./NewChat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
-import * as msgCss from "../styles/chat.css.ts";
-import * as conversationCss from "../styles/conversation.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
@@ -88,27 +86,25 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
   const opened = useRef(false);
   const send = (draft: Draft) => {
     if (!model || !runtime) return draft.setError("先在 Profile 里启用模型");
-    // Where its words are as it goes: where the message starts from. The composer empties at once; its words stay
-    // there (a stand-in, and no hint over them) until the chat's page takes them.
-    const from = typedAt(scene.current);
-    const stand = standIn(scene.current, draft.text);
-    document.documentElement.dataset.madeHint = "hidden";
+    // Its words stay where they were in the composer until the chat's page takes them (../madeChat.ts).
+    const host = scene.current?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
+    const field = host?.querySelector<HTMLElement>(`[data-made-composer] textarea:not([aria-hidden])`);
+    if (host && field) sendingFirst(field, draft.text, host, "7");
     void sendDraft(draft, null, ensureChat).then((to) => {
-      if (to === null || opened.current) {
-        stand?.remove();
-        delete document.documentElement.dataset.madeHint;
-        return;
-      }
+      if (to === null || opened.current) { notSent(); return; }
       opened.current = true;
-      // The new item's page (its address from now on, until its station's key takes over: ChatScreen).
-      toMadeChat(scene.current, from, stand, () => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(String(to))}`, { replace: true }));
+      // The new item's page (its address from now on, until its station's key takes over: ChatScreen), its first
+      // message coming up out of the composer, over it.
+      toMadeChat(() => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(String(to))}`, { replace: true }), {
+        scope: host ?? document, layer: () => host ?? null, z: "7", list: () => host?.querySelector<HTMLElement>(`.${chatCss.mMessages}`) ?? null, wait: 90,
+      });
     });
   };
   useLayoutEffect(() => use({ station: view.station, placeholder: "做任何事", offline: false, send }));
   const scene = useRef<HTMLDivElement>(null);
   return (
     <>
-      <div className={css.mNewBody} ref={scene}>
+      <div className={css.mNewBody} ref={scene} data-made-leave="up">
         <Illustration name="new-chat" width={230} />
         <h2>想让 agent 做什么？</h2>
         <p className={partsCss.mMuted}>说要做什么。它会在 {view.name} 上用选好的模型开一个新会话。</p>
@@ -121,7 +117,7 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
         <p className={css.mNewSpent}>{entry.name} 能用的账号额度都用完了{entry.spent.back ? `，${entry.spent.back}` : ""}。现在发的消息要等额度恢复才会有回复；也可以换一个模型。</p>
       )}
       {/* The choices, then the composer as a floating capsule, as in a chat. */}
-      <div className={css.mNewBottom} data-choosers>
+      <div className={css.mNewBottom} data-made-leave="fade">
         <div className={css.mChoosers}>
           <Chooser leading={<Server size={14} />} label={view.name} onClick={() => pickStation(app, stations, view.station, onStation)} />
           {!runtime || !model ? (
@@ -207,131 +203,3 @@ function NoProfile({ view }: { view: StationView }) {
     </StationContext.Provider>
   );
 }
-
-/** Where a new chat's composer's words start, and their size, as it is sent. */
-interface Typed { x: number; y: number; size: number }
-
-function typedAt(scene: HTMLElement | null): Typed | null {
-  const field = scene?.closest(`.${hostCss.mChatHost}`)?.querySelector<HTMLTextAreaElement>(`.${hostCss.mComposerCapsule} textarea:not([aria-hidden])`);
-  return field ? textAt(field) : null;
-}
-
-/** The words just sent, drawn where they were in the composer, in its type. */
-function standIn(scene: HTMLElement | null, text: string): HTMLElement | null {
-  const host = scene?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
-  const field = host?.querySelector<HTMLTextAreaElement>(`.${hostCss.mComposerCapsule} textarea:not([aria-hidden])`);
-  if (!host || !field || !text.trim()) return null;
-  const box = field.getBoundingClientRect();
-  const frame = host.getBoundingClientRect();
-  const style = getComputedStyle(field);
-  const el = document.createElement("div");
-  el.setAttribute("aria-hidden", "true");
-  el.textContent = text;
-  Object.assign(el.style, {
-    position: "absolute", left: `${box.left - frame.left}px`, top: `${box.top - frame.top}px`, width: `${box.width}px`,
-    height: `${box.height}px`, boxSizing: "border-box", padding: style.padding, overflow: "hidden", zIndex: "7",
-    pointerEvents: "none", font: style.font, lineHeight: style.lineHeight, color: style.color, whiteSpace: "pre-wrap",
-    overflowWrap: style.overflowWrap, wordBreak: style.wordBreak,
-  });
-  host.append(el);
-  return el;
-}
-
-/** Where the text in a box starts (its content box's corner), and its size. */
-function textAt(el: Element): Typed {
-  const box = el.getBoundingClientRect();
-  const style = getComputedStyle(el);
-  return {
-    x: box.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft),
-    y: box.top + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + (parseFloat(style.lineHeight) - parseFloat(style.fontSize)) / 2,
-    size: parseFloat(style.fontSize),
-  };
-}
-
-/**
- * A new chat becoming its chat, around what stays: the bar and the composer do not move (the composer is the one live
- * box throughout, not pictured twice); the scene above it rises out of view and the choices fade where they are.
- * What comes is drawn where it arrives and moved from where it comes from: the words just sent float up out of the
- * composer to where the chat has its first message, their bubble forming around them, and what follows rises out of
- * the composer's top edge. Nothing is crossfaded over anything.
- *
- * Only the leaving is a view transition (pictures of what is gone). What arrives moves on the page itself: a named
- * element taken away ends a view transition at once, and the chat's rows are (the message sent is drawn anew once its
- * station has it, maybe while it moves).
- */
-function toMadeChat(scene: HTMLElement | null, from: Typed | null, stand: HTMLElement | null, go: () => void): void {
-  const host = scene?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
-  if (!scene || !host) { stand?.remove(); delete document.documentElement.dataset.madeHint; go(); return; }
-  const root = document.documentElement;
-  const choosers = host.querySelector<HTMLElement>("[data-choosers]");
-  scene.style.viewTransitionName = "m-made-scene";
-  if (choosers) choosers.style.viewTransitionName = "m-made-choosers";
-  root.dataset.made = "";
-  const moves: Promise<unknown>[] = [transitionTo(go, () => host.querySelector(`.${chatCss.mMessages} .${msgCss.msgMine}`) !== null)];
-  let ghost: HTMLElement | null = null;
-  // The new page, before its picture is taken: what arrives set where it comes from.
-  pageChanging()?.settle.push(() => {
-    const list = host.querySelector<HTMLElement>(`.${chatCss.mMessages}`);
-    const first = list?.querySelector<HTMLElement>(`.${msgCss.msgMine}`);
-    const capsule = host.querySelector(`.${hostCss.mComposerCapsule}`);
-    if (!list || !first || !capsule) return;
-    const top = capsule.getBoundingClientRect().top;
-    const box = list.getBoundingClientRect();
-    const rise = Math.max(0, top - first.getBoundingClientRect().top);
-    const clip = Math.max(0, box.bottom - top);
-    const words = first.querySelector(`.${msgCss.msgPlain}`);
-    // Where the message arrives, read before anything is moved.
-    const to = words && textAt(words);
-    const at = first.getBoundingClientRect();
-    const frame = host.getBoundingClientRect();
-    // The list out of the composer's top edge: cut there, wherever it has got to.
-    moves.push(list.animate([
-      { transform: `translateY(${rise}px)`, clipPath: `inset(0 0 ${clip + rise}px 0)` },
-      { transform: "none", clipPath: `inset(0 0 ${clip}px 0)` },
-    ], { duration: 440, delay: 90, easing: EASE, fill: "backwards" }).finished);
-    if (!from || !to) return;
-    // The message itself, drawn where it arrives (the row, hidden meanwhile, may be drawn anew): its words from where
-    // they were typed, at the size they were typed, its bubble and time coming in around them on the way.
-    // The copy is in a layer drawn as the list is (its styles reach it), over the composer.
-    ghost = document.createElement("div");
-    ghost.className = list.className;
-    ghost.dataset.ghost = "";
-    ghost.setAttribute("aria-hidden", "true");
-    Object.assign(ghost.style, { inset: "0", padding: "0", overflow: "visible", zIndex: "7", pointerEvents: "none" });
-    const copy = first.cloneNode(true) as HTMLElement;
-    Object.assign(copy.style, {
-      position: "absolute", left: `${at.left - frame.left}px`, top: `${at.top - frame.top}px`, width: `${at.width}px`,
-      margin: "0", transformOrigin: `${to.x - at.left}px ${to.y - at.top}px`,
-    });
-    ghost.append(copy);
-    host.append(ghost);
-    stand?.remove();
-    const timing = { duration: 480, delay: 60, easing: EASE, fill: "backwards" } as const;
-    moves.push(copy.animate([
-      { transform: `translate(${from.x - to.x}px, ${from.y - to.y}px) scale(${from.size / to.size})` },
-      { transform: "none" },
-    ], timing).finished);
-    const bubble = ghost.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
-    if (bubble) moves.push(bubble.animate([{ backgroundColor: "transparent" }, { backgroundColor: getComputedStyle(bubble).backgroundColor }], timing).finished);
-    for (const el of ghost.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)) moves.push(el.animate([{ opacity: 0 }, { opacity: 1 }], timing).finished);
-    // The composer's hint comes in once the words are out of it (above its top edge), not while they pass over it.
-    const out = () => {
-      if (!copy.isConnected || copy.getBoundingClientRect().bottom <= top) delete root.dataset.madeHint;
-      else requestAnimationFrame(out);
-    };
-    requestAnimationFrame(out);
-  });
-  void Promise.allSettled(moves).then(async () => {
-    // The page's own moves, begun as the new page settled (within the transition), are over too.
-    await Promise.allSettled(moves);
-    scene.style.viewTransitionName = "";
-    if (choosers) choosers.style.viewTransitionName = "";
-    ghost?.remove();
-    stand?.remove();
-    delete root.dataset.made;
-    delete root.dataset.madeHint;
-  });
-}
-
-/** How what arrives slows into place (the phone's --m-ease). */
-const EASE = "cubic-bezier(.2, .8, .2, 1)";
