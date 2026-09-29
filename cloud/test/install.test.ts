@@ -17,12 +17,22 @@ test("without a token the installer only updates a station already in a workspac
 
 test("an update hands over to the new release only when the running station says it can and its service is unchanged", () => {
   const script = installScript("https://ember.test");
-  assert.match(script, /if \[ -n "\$pid" \] && \[ -n "\$\(said handoff\)" \] && \{ \[ -z "\$service_file" \] \|\| cmp -s "\$tmp\/service" "\$service_file"; \}; then/);
+  assert.match(script, /if \[ -n "\$pid" \] && \[ -n "\$\(said handoff\)" \] && same_service; then/);
+  // The caller's PATH is not a change: an update from another shell (an agent's, the station's own) still hands over.
+  assert.match(script, /without_path\(\) \{ sed -e 's#<key>PATH<\/key><string>\[\^<\]\*<\/string>##' -e '\/\^Environment=PATH=\/d'/);
   assert.match(script, /kill -USR2 "\$pid"/);
   // Otherwise drained first (when it can be), then restarted as before.
   assert.match(script, /if \[ -z "\$handed" \] && \[ -n "\$pid" \] && \[ -n "\$\(said drain\)" \]/);
   assert.match(script, /kill -USR1 "\$pid"/);
   assert.match(script, /KillMode=process/);
+});
+
+test("an update started inside the station restarts it in the background, and one to the running release does nothing", () => {
+  const script = installScript("https://ember.test");
+  // The drain waits for the caller's own turn: waiting on it there would wait on itself.
+  assert.match(script, /if \[ -z "\$handed" \] && \[ -n "\$pid" \] && inside_station; then/);
+  assert.match(script, /set -m\n  \( trap '' HUP; restart_and_finish; rm -rf "\$tmp" \) > "\$data\/run\/update.log" 2>&1 < \/dev\/null &\n  exit 0/);
+  assert.match(script, /cmp -s "\$tmp\/ember\/VERSION" "\$app\/VERSION" && same_service; then/);
 });
 
 test("the releases bucket serves the station's releases and the apps' builds, and nothing else", () => {

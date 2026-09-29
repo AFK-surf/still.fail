@@ -10,6 +10,10 @@
 // over to the new release in its own process (SIGUSR2, mesh/station/src/main.rs), turns, runtimes and jobs going on;
 // else, or if that fails, the station is first drained (SIGUSR1: no new turns, and it says once none runs), then
 // restarted. A station older than these says neither (no run/station.json): it is restarted as before.
+// The service's PATH is the caller's (the agents are found on it), so it is not what makes a definition "changed": an
+// update from another shell (an agent's, the station's own) would never hand over. Started from inside the station (an
+// agent's turn, a job), a restart goes on in the background, apart from the caller: the drain waits for the caller's
+// own turn to end, which does not end while it waits. A station already on this release is left as it is.
 
 /** The installer for an ember cloud at `origin`. */
 export function installScript(origin: string): string {
@@ -75,8 +79,9 @@ echo "下载 ember station…"
 curl -fL --progress-bar "$origin/releases/ember-station-$platform.tar.gz" -o "$tmp/ember.tar.gz"
 tar -xzf "$tmp/ember.tar.gz" -C "$tmp"
 
-# The agents it starts are found on this PATH (Claude Code, Codex, and what they run).
-agent_path="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin"
+# The agents it starts are found on this PATH (Claude Code, Codex, and what they run). Each directory once: run from
+# the station (whose PATH is this), it would otherwise grow with every update.
+agent_path=$(printf '%s' "$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin" | tr ':' '\n' | awk 'NF && !seen[$0]++' | paste -sd: -)
 # The service's definition, as this release has it: written below, and compared with the one running now.
 if [ "$os" = Darwin ]; then
   service_file="$plist"
@@ -132,6 +137,25 @@ if [ -z "$token" ] && [ -f "$station_json" ]; then
     *) pid="" ;;
   esac
 fi
+# The service's definition, less its PATH: what makes a service "changed".
+without_path() { sed -e 's#<key>PATH</key><string>[^<]*</string>##' -e '/^Environment=PATH=/d' "$1"; }
+same_service() { [ -z "$service_file" ] || { [ -f "$service_file" ] && [ "$(without_path "$tmp/service")" = "$(without_path "$service_file")" ]; }; }
+# Whether this runs inside the station: the station among the processes it comes from (an agent's turn, a job).
+inside_station() {
+  p=$$
+  while [ -n "$p" ] && [ "$p" -gt 1 ]; do
+    [ "$p" = "$pid" ] && return 0
+    p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
+  done
+  return 1
+}
+
+# Already on this release, and running as its service would: nothing to do.
+if [ -n "$pid" ] && [ -f "$app/VERSION" ] && cmp -s "$tmp/ember/VERSION" "$app/VERSION" && same_service; then
+  echo "ember station 已经是最新版（$(cut -c1-7 "$app/VERSION")），不用更新。"
+  exit 0
+fi
+
 swapped=""
 swap_app() {
   mkdir -p "$data"
@@ -143,7 +167,7 @@ swap_app() {
 
 # Handed over without stopping: the new release goes where the old one was, and the running station execs it.
 handed=""
-if [ -n "$pid" ] && [ -n "$(said handoff)" ] && { [ -z "$service_file" ] || cmp -s "$tmp/service" "$service_file"; }; then
+if [ -n "$pid" ] && [ -n "$(said handoff)" ] && same_service; then
   started=$(said startedAt)
   swap_app
   rm -f "$data/run/handoff-failed"
@@ -170,6 +194,8 @@ if [ -n "$pid" ] && [ -n "$(said handoff)" ] && { [ -z "$service_file" ] || cmp 
   fi
 fi
 
+# Stopped and started again (when not handed over), and said how it went.
+restart_and_finish() {
 if [ -z "$handed" ] && [ -n "$pid" ] && [ -n "$(said drain)" ] && [ -z "\${EMBER_NO_DRAIN:-}" ]; then
   # Restarted: once no turn runs, so none is cut off (at most 10 minutes; it takes no new ones meanwhile).
   rm -f "$data/run/drained"
@@ -251,4 +277,17 @@ if [ -n "$missing" ]; then
   echo "  Codex：      npm install -g @openai/codex（需要 Node）"
   echo "装好之后，在 ember 的「设置 → Profile」里登录账号。"
 fi
+}
+
+if [ -z "$handed" ] && [ -n "$pid" ] && inside_station; then
+  # Apart from the caller (a process group of its own, output to a file): it restarts once the caller's turn is over.
+  mkdir -p "$data/run"
+  echo "这次更新是在 station 里面发起的（agent 的轮次或 job），在后台等正在跑的轮次（包括这一轮）结束后重启 station。"
+  echo "  进度看 $data/run/update.log"
+  trap - EXIT
+  set -m
+  ( trap '' HUP; restart_and_finish; rm -rf "$tmp" ) > "$data/run/update.log" 2>&1 < /dev/null &
+  exit 0
+fi
+restart_and_finish
 `;
