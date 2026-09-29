@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ember · 团队聊天里的 coding agent</title>
+<meta name="description" content="ember 把 Claude Code 和 Codex 请进团队聊天：一个 thread 就是一个持久的 agent 会话，跑在你自己的机器上。">
+<meta property="og:title" content="ember · 团队聊天里的 coding agent">
+<meta property="og:description" content="一个 thread 就是一个持久的 agent 会话，跑在你自己的机器上。">
+<meta property="og:image" content="/og-image.png">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<!-- The site is dark whatever the system's theme, the demo in it too (the app's palette follows data-theme). -->
+<script>document.documentElement.dataset.theme="dark"</script>
+<meta name="color-scheme" content="dark">
+</head>
+<body>
+<!-- The page, built to HTML here by web/site-prerender.mjs (pnpm build:site); the browser takes it over (web/src/site/main.tsx). -->
+<div id="site"><!--site--></div>
+<script type="module" src="./main.ts"></script>
+</body>
+</html>

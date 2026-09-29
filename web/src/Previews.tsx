@@ -53,7 +53,7 @@ export function closePreview(key: string): void {
 }
 
 function usePreviews(): Kept[] {
-  return useSyncExternalStore((listener) => { listeners.add(listener); return () => listeners.delete(listener); }, () => kept);
+  return useSyncExternalStore((listener) => { listeners.add(listener); return () => listeners.delete(listener); }, () => kept, () => kept);
 }
 
 /** Where a web service shows in its chat's side panel; opening it keeps it. */

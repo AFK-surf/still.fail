@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useDark } from "./theme.ts";
 import type { AppUpdate } from "./core/client.ts";
@@ -58,6 +58,18 @@ function closeSidebar(closed: boolean) {
   try { localStorage.setItem(SIDEBAR, closed ? "closed" : "open"); } catch { /* private mode: for this page only */ }
 }
 
+/** Where the buddy (and the update button by it) is put: the page, unless the app is drawn in a part of one (the site's demo). */
+let pageRoot: HTMLElement | null = null;
+export function setPageRoot(element: HTMLElement): void {
+  pageRoot = element;
+}
+
+/** Put on the page (pageRoot), or in place where there is no page yet (the site built to HTML, where it lands the same). */
+function onPage(node: ReactNode): ReactNode {
+  const page = pageRoot ?? document.body;
+  return page ? createPortal(node, page) : node;
+}
+
 function SidebarBuddy() {
   const [closed, setClosed] = useState(() => document.documentElement.dataset.sidebar === "closed");
   const [pose, setPose] = useState<Pose>(closed ? "rest" : "push");
@@ -80,12 +92,12 @@ function SidebarBuddy() {
   const keys = shortcutOf("sidebar.toggle");
   // On the page itself, not in the sidebar: a closed sidebar clips what is in it, and the desktop app's window would
   // then take a click on the buddy for a drag of the window.
-  return createPortal(
+  const buddy = (
     <Tip label={`${closed ? "展开侧边栏" : "收起侧边栏"}${keys ? `  ${keys}` : ""}`}><button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? "展开侧边栏" : "收起侧边栏"}>
       <Themed name={`buddy/${pose}`} width={28} height={28} />
-    </button></Tip>,
-    document.body,
+    </button></Tip>
   );
+  return onPage(buddy);
 }
 
 /**
@@ -106,11 +118,10 @@ function UpdateButton() {
   const label = state.phase === "downloading" ? `下载中 ${state.percent}%` : state.phase === "installing" ? "正在重启…" : state.phase === "failed" ? "更新失败，重试" : "更新";
   const busy = state.phase === "downloading" || state.phase === "installing";
   const title = state.phase === "failed" ? state.message : `更新到 ${state.version}：下载后 ember 会重启`;
-  return createPortal(
+  return onPage(
     <Tip label={title}><button type="button" className={css.sidebarUpdate} disabled={busy} aria-busy={busy} onClick={() => updates.start()}>
       {label}
     </button></Tip>,
-    document.body,
   );
 }
 

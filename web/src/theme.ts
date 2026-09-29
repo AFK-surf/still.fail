@@ -8,6 +8,10 @@ const KEY = "ember.appearance";
 const EVENT = "ember-appearance";
 
 export function readAppearance(): Appearance {
+  // What the page shows, when it says: set from the choice before the first paint (index.html), or fixed by a page
+  // that is always one (the official site is dark).
+  const shown = document.documentElement.dataset.theme;
+  if (shown === "light" || shown === "dark") return shown;
   const value = localStorage.getItem(KEY);
   return value === "light" || value === "dark" ? value : "system";
 }

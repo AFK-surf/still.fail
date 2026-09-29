@@ -133,7 +133,7 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
 function ChatPane({ chats, scope, onlyMine, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; onlyMine: boolean; stationsPage: string; hidden: boolean }) {
   const pending = useContext(ArchivesContext)!;
-  const archived = useSyncExternalStore(pending.subscribe, pending.getSnapshot);
+  const archived = useSyncExternalStore(pending.subscribe, pending.getSnapshot, pending.getSnapshot);
   const view = chats.value;
   const stations = view?.stations ?? [];
   const days = (view?.days ?? []).map((day) => ({ ...day, items: day.items.filter((item) => !archived.has(archiveKey(item))) })).filter((day) => day.items.length > 0);

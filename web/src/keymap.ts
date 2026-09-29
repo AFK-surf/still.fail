@@ -88,7 +88,7 @@ const watch = (f: () => void) => { watchers.add(f); return () => { watchers.dele
 
 /** Redrawn when any action's keys change: what shows them reads them anew. */
 export function useKeymap(): number {
-  return useSyncExternalStore(watch, () => version);
+  return useSyncExternalStore(watch, () => version, () => version);
 }
 
 /** The action other than `except` a binding already does, if any. */
