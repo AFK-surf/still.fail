@@ -399,6 +399,7 @@ impl Events {
                     self.emit("job", &crate::jobs::shown(&api.deps.store, &job), |_| true);
                 }
             }
+            StoreChange::JobRemoved { id, session } => self.emit("job-removed", &json!({ "id": id, "session": session }), |_| true),
         }
     }
 

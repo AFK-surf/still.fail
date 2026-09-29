@@ -125,6 +125,28 @@ async fn a_job_stopped_from_the_pages_does_not_wake_an_idle_agent() {
 }
 
 #[tokio::test]
+async fn clearing_a_sessions_ended_jobs_takes_them_and_their_logs_away_and_leaves_the_rest() {
+    let r = rig();
+    let failed = r.jobs.start("s1", "boom", "echo x; exit 2", &r.work, None).unwrap();
+    let done = r.jobs.start("s1", "done", "true", &r.work, None).unwrap();
+    let live = r.jobs.start("s1", "watch", "sleep 5", &r.work, None).unwrap();
+    let other = r.jobs.start("s2", "boom", "exit 2", &r.work, None).unwrap();
+    until("they end", || [&failed, &done, &other].iter().all(|j| r.state(&j.id) == "exited")).await;
+    r.store.add_job_notice(&failed.id, "broke").unwrap();
+    let mut cleared = r.jobs.clear_ended("s1").unwrap();
+    cleared.sort();
+    let mut want = vec![failed.id.clone(), done.id.clone()];
+    want.sort();
+    assert_eq!(cleared, want);
+    let left: Vec<String> = r.store.list_jobs(None).unwrap().into_iter().map(|j| j.id).collect();
+    assert_eq!(left.len(), 2);
+    assert!(left.contains(&live.id) && left.contains(&other.id));
+    assert!(!Path::new(&failed.log).exists());
+    assert!(r.store.job_notices(&failed.id, 5).unwrap().is_empty());
+    r.jobs.stop(&live.id).await.unwrap();
+}
+
+#[tokio::test]
 async fn a_service_is_kept_up_and_stays_down_once_stopped() {
     let r = rig();
     let job = r.jobs.start("s1", "web", "echo up on $PORT; exit 1", &r.work, Some(4999)).unwrap();

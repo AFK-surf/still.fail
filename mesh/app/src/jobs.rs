@@ -355,6 +355,19 @@ impl Jobs {
         Ok(job)
     }
 
+    /// Takes a session's jobs that are over off its record (the pages' 清掉已结束的), their logs with them: the ids gone.
+    pub fn clear_ended(&self, session: &str) -> Result<Vec<String>> {
+        let gone = self.store.clear_ended_jobs(session)?;
+        for (id, log) in &gone {
+            let log = Path::new(log);
+            if log.starts_with(&self.dir) {
+                let _ = std::fs::remove_file(log);
+            }
+            let _ = std::fs::remove_file(self.exit_file(id));
+        }
+        Ok(gone.into_iter().map(|(id, _)| id).collect())
+    }
+
     /// Whether a session's agent is in a turn, or was within AWAKE.
     fn awake(&self, session: &str) -> bool {
         match self.store.get_session(session) {

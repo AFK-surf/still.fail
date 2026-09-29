@@ -1322,6 +1322,9 @@ pub struct AgentWait {
 #[serde(rename_all = "camelCase")]
 pub struct Job {
     pub id: String,
+    /// The session that started it (a chat's agents each have their own).
+    #[serde(default)]
+    pub session: String,
     pub name: String,
     /// running | exited | stopped | failed (a service that exited is being started again)
     pub state: String,

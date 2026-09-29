@@ -468,6 +468,8 @@ pub enum StoreChange {
     Processes,
     /// A background job started, started again, ended or said something (its session changes as well).
     Job(String),
+    /// A job that was over was taken off its session's record (cleared from the pages).
+    JobRemoved { id: String, session: String },
 }
 
 // ── schema ─────────────────────────────────────────────────────────────────
@@ -1755,6 +1757,30 @@ impl Store {
                 changes.push(StoreChange::Job(id.to_string()));
             }
             Ok(())
+        })
+    }
+
+    /// A session's jobs that are over (stopped, failed, or ended by themselves; a service waiting to start again is not)
+    /// taken off its record, with what they said: their ids and logs.
+    pub fn clear_ended_jobs(&self, session: &str) -> Result<Vec<(String, String)>> {
+        self.with(|i, changes| {
+            let tx = i.db.transaction()?;
+            let gone: Vec<(String, String)> = {
+                let mut stmt = tx.prepare(
+                    "SELECT id, log FROM jobs WHERE session_key = ? AND (state IN ('stopped', 'failed') OR (state = 'exited' AND port IS NULL))",
+                )?;
+                stmt.query_map([session], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?
+            };
+            for (id, _) in &gone {
+                tx.execute("DELETE FROM job_notices WHERE job_id = ?", [id])?;
+                tx.execute("DELETE FROM jobs WHERE id = ?", [id])?;
+            }
+            tx.commit()?;
+            if !gone.is_empty() {
+                changes.push(StoreChange::Session(session.to_string()));
+                changes.extend(gone.iter().map(|(id, _)| StoreChange::JobRemoved { id: id.clone(), session: session.to_string() }));
+            }
+            Ok(gone)
         })
     }
 

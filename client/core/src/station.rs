@@ -1236,6 +1236,15 @@ impl Stations {
                 });
             }
             "job" => self.on_job(station, &data),
+            // A job that was over, cleared: out of its session's jobs.
+            "job-removed" => {
+                let (Some(id), Some(key)) = (data.get("id").and_then(Value::as_str), data.get("session").and_then(Value::as_str)) else { return };
+                self.sink.update(&Topic::Session { station: station.into(), key: key.into() }, &mut |detail| {
+                    if let Some(jobs) = detail.get_mut("jobs").and_then(Value::as_array_mut) {
+                        jobs.retain(|j| j.get("id").and_then(Value::as_str) != Some(id));
+                    }
+                });
+            }
             "overview" => self.set_live(Topic::Overview { station: station.into() }, data),
             "host" => self.set_live(Topic::Host { station: station.into() }, data),
             _ => {}
@@ -2302,6 +2311,11 @@ mod tests {
             assert_eq!(sink.get(&open).unwrap()[0]["restarts"], 1);
             assert_eq!(sink.get(&open).unwrap()[0]["chat"]["id"], "7");
             assert_eq!(wire.count("GET", "/admin/api/jobs"), 2);
+            // One that was over, cleared (here or on another device): out of its chat's.
+            wire.event("job-removed", json!({"id": "j2", "session": "a"}));
+            host.settle().await;
+            let ids: Vec<Value> = sink.get(&session("a")).unwrap()["jobs"].as_array().unwrap().iter().map(|j| j["id"].clone()).collect();
+            assert_eq!(ids, [json!("j1")]);
         });
     }
 

@@ -622,6 +622,14 @@ impl AdminApi {
                 info!(job = id, by = viewer.id(), "job stopped from the admin page");
                 return ok(crate::jobs::shown(&self.deps.store, &job));
             }
+            // A chat's jobs that are over, cleared from the pages: those still up stay.
+            (Some("sessions"), Some(key), Some("jobs"), "DELETE") => {
+                self.session_row(key)?;
+                let jobs = self.deps.jobs.clone().ok_or_else(|| http_error(404, "no jobs here".to_string()))?;
+                let removed = jobs.clear_ended(key)?;
+                info!(session = key, by = viewer.id(), count = removed.len(), "ended jobs cleared from the admin page");
+                return ok(json!({ "removed": removed }));
+            }
             (Some("sessions"), Some(key), None, "DELETE") => {
                 self.session_row(key)?;
                 self.deps.hub.delete_session(key).await?;

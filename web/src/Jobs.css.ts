@@ -95,10 +95,21 @@ export const jobFoldBody = style({
   margin: "0 0 4px", padding: "4px 8px 8px 32px", background: vars.hover,
   borderRadius: `0 0 ${vars.rOption} ${vars.rOption}`, cornerShape: vars.cornerShape,
 });
+/** A group's rows, a little apart. */
+export const jobsGroup = style({ display: "flex", flexDirection: "column", gap: "4px" });
+export const jobsFoot = style({ display: "flex", alignItems: "center", gap: "4px", marginTop: "6px" });
 export const jobsAll = style({
-  display: "flex", alignItems: "center", gap: "10px", width: "100%", height: "38px", marginTop: "6px",
+  display: "flex", alignItems: "center", gap: "10px", flex: "1", minWidth: "0", height: "38px",
   padding: "0 12px 0 32px", border: "0", borderRadius: vars.rOption, background: "none", color: vars.muted,
   font: "inherit", fontSize: vars.textSm, cursor: "pointer", cornerShape: vars.cornerShape,
+  selectors: {
+    "&:hover": { background: vars.hover, color: vars.text },
+  },
+});
+export const jobsClear = style({
+  flex: "none", alignSelf: "flex-start", height: "38px", padding: "0 12px", border: "0", borderRadius: vars.rOption,
+  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textSm, whiteSpace: "nowrap", cursor: "pointer",
+  cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
   },

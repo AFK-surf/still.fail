@@ -140,6 +140,8 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
         "job.get" => op("GET", p.at("id").map(|id| format!("/jobs/{id}")), None),
         "job.log" => op("GET", (|| Ok(format!("/jobs/{}/log?lines={}", p.at("id")?, p.u64("lines")?)))(), None),
         "job.stop" => op("POST", p.at("id").map(|id| format!("/jobs/{id}/stop")), None),
+        // A chat's jobs that are over, taken off its record (its session is read again).
+        "job.clearEnded" => op("DELETE", p.at("session").map(|key| format!("/sessions/{key}/jobs")), None),
         // ── the station itself ──
         "memory.get" => op("GET", Ok("/memory".into()), None),
         "software.update" => op("POST", Ok("/updates".into()), Some(p.pick(&["id"]))),
@@ -197,6 +199,8 @@ mod tests {
     fn operations_make_their_requests() {
         let r = req("job.stop", json!({ "station": "w/s", "id": "job 1" }));
         assert_eq!((r.target, r.method, r.path.as_str(), r.body), (Target::Station("w/s".into()), "POST", "/jobs/job%201/stop", None));
+        let r = req("job.clearEnded", json!({ "station": "local", "session": "ember:c-1" }));
+        assert_eq!((r.method, r.path.as_str()), ("DELETE", "/sessions/ember%3Ac-1/jobs"));
         let r = req("session.settings", json!({ "station": "local", "key": "k", "model": "m", "profile": null }));
         assert_eq!(r.body, Some(json!({ "model": "m", "profile": null })));
         let r = req("workspace.setRole", json!({ "account": "a", "workspace": "w1", "member": "x@y.z", "role": "admin" }));

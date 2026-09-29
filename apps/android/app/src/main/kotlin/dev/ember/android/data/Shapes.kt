@@ -505,6 +505,8 @@ data class JobNotice (
 @Serializable
 data class Job (
 	val id: String,
+	/// The session that started it (a chat's agents each have their own).
+	val session: String? = null,
 	val name: String,
 	/// running | exited | stopped | failed (a service that exited is being started again)
 	val state: String,

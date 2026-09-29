@@ -20,7 +20,7 @@ import { openHistory } from "./History.tsx";
 import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
 import { PeopleStack } from "../components.tsx";
-import { ago, alarmOf, clock, isCurrent, isService, JobDot, metaOf, sorted, toneOf, useJobLog, useNow, useStopJob, type Tone } from "../Jobs.tsx";
+import { ago, alarmOf, clock, isCurrent, isEnded, isService, JobDot, metaOf, sorted, toneOf, useClearEnded, useJobLog, useNow, useStopJob, type Tone } from "../Jobs.tsx";
 import { emberLinkClicked } from "../emberLink.ts";
 import type { Job } from "../core/shapes.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -374,6 +374,8 @@ function JobsNow({ here }: { here: Here }) {
   const current = jobs.filter((j) => isCurrent(j, now));
   const shown = all ? jobs : current;
   const hidden = jobs.length - current.length;
+  const ended = jobs.filter(isEnded).length;
+  const clear = useClearEnded(here.station);
   return (
     <>
       <SheetGrab />
@@ -387,6 +389,7 @@ function JobsNow({ here }: { here: Here }) {
             {all ? "只看眼下的" : <>全部 {jobs.length} 个<span>另有 {hidden} 个已停止或结束</span></>}
           </button>
         )}
+        {ended > 0 && <button type="button" className={css.mJobsAll} onClick={() => clear(jobs)}>清掉 {ended} 个已结束的</button>}
       </div>
     </>
   );

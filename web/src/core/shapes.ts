@@ -479,6 +479,8 @@ export interface JobNotice {
  */
 export interface Job {
 	id: string;
+	/** The session that started it (a chat's agents each have their own). */
+	session?: string;
 	name: string;
 	/** running | exited | stopped | failed (a service that exited is being started again) */
 	state: string;

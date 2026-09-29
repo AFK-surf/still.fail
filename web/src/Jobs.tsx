@@ -164,6 +164,20 @@ export function useStopJob(station: string): (job: Job) => void {
     .catch((e: Error) => toast(`没能停下「${job.name}」：${e.message}`));
 }
 
+/** Whether clearing takes it away: over (stopped, failed, ended by itself), not a service being started again. */
+export const isEnded = (job: Job) => job.state === "stopped" || job.state === "failed" || (job.state === "exited" && !isService(job));
+
+/** Clears the ended ones among `jobs` from the page (each session's, as the station keeps them). */
+export function useClearEnded(station: string): (jobs: Job[]) => void {
+  const call = useStationCall(station);
+  const toast = useToast();
+  return (jobs) => {
+    const sessions = [...new Set(jobs.filter(isEnded).map((j) => j.session).filter((s): s is string => !!s))];
+    void Promise.all(sessions.map((s) => stationApi(call).clearEndedJobs(s)))
+      .catch((e: Error) => toast(`没能清掉已结束的任务：${e.message}`));
+  };
+}
+
 /** The last line a job wrote, and when. */
 function LastOutput({ station, job, now }: { station: string; job: Job; now: number }) {
   const log = useJobLog(station, job.id, 1, job.state === "running" ? 3000 : 600_000);
@@ -197,6 +211,7 @@ export function JobsPopover({ station, jobs, onService, onTab }:
   { station: string; jobs: Job[]; onService: (id: string) => void; onTab: (id?: string) => void }) {
   const now = useNow();
   const stop = useStopJob(station);
+  const clear = useClearEnded(station);
   const [open, setOpen] = useState<string | null>(null);
   if (jobs.length === 0) {
     return <div className={css.jobsEmpty}><b>还没有服务或后台任务</b><span>agent 开网页、或挂上长期盯着的任务时，会列在这里。</span></div>;
@@ -204,14 +219,14 @@ export function JobsPopover({ station, jobs, onService, onTab }:
   const shown = sorted(jobs.filter((j) => isCurrent(j, now)));
   const services = shown.filter(isService);
   const plain = shown.filter((j) => !isService(j));
-  const hidden = jobs.length - shown.length;
+  const ended = jobs.filter(isEnded).length;
   const count = (list: Job[], tone: Tone) => list.filter((j) => toneOf(j) === tone).length;
   const serviceNote = [count(services, "up") && `${count(services, "up")} 个在线`, count(services, "restart") && `${count(services, "restart")} 个在重启`].filter(Boolean).join("，");
   const plainNote = count(plain, "live") ? `${count(plain, "live")} 个在盯着` : "";
   return (
     <>
       {services.length > 0 && (
-        <section>
+        <section className={css.jobsGroup}>
           <div className={css.jobsHead}>服务{serviceNote && <span>{serviceNote}</span>}</div>
           {services.map((j) => (
             <JobRow key={j.id} job={j} now={now} onClick={toneOf(j) === "fail" ? () => onTab(j.id) : () => onService(j.id)}
@@ -220,7 +235,7 @@ export function JobsPopover({ station, jobs, onService, onTab }:
         </section>
       )}
       {plain.length > 0 && (
-        <section>
+        <section className={css.jobsGroup}>
           <div className={css.jobsHead}>后台任务{plainNote && <span>{plainNote}</span>}</div>
           {plain.map((j) => (
             <div key={j.id} className={css.jobFold} data-open={open === j.id || undefined}>
@@ -241,9 +256,13 @@ export function JobsPopover({ station, jobs, onService, onTab }:
         </section>
       )}
       {shown.length === 0 && <p className={css.jobsQuiet}>眼下没有在跑的服务或任务。</p>}
-      <button type="button" className={css.jobsAll} onClick={() => onTab()}>
-        全部 {jobs.length} 个 · 在侧栏看{hidden > 0 && <span>另有 {hidden} 个已停止或结束</span>}
-      </button>
+      <div className={css.jobsFoot}>
+        <button type="button" className={css.jobsAll} onClick={() => onTab()}>
+          全部 {jobs.length} 个 · 在侧栏看
+        </button>
+        {/* What the popover leaves out is all over: the button to clear them says how many. */}
+        {ended > 0 && <button type="button" className={css.jobsClear} onClick={() => clear(jobs)}>清掉 {ended} 个已结束的</button>}
+      </div>
     </>
   );
 }
@@ -256,6 +275,7 @@ export function JobsTab({ station, jobs, picked, onPick, onService }:
   { station: string; jobs: Job[]; picked: string | null; onPick: (id: string) => void; onService: (id: string) => void }) {
   const now = useNow();
   const stop = useStopJob(station);
+  const clear = useClearEnded(station);
   const [view, setView] = useState<"notices" | "output">("notices");
   const all = sorted(jobs);
   const services = all.filter(isService);
@@ -266,7 +286,7 @@ export function JobsTab({ station, jobs, picked, onPick, onService }:
     <div className={css.jobsTab}>
       <div className={css.jobsTabList}>
         {services.length > 0 && (
-          <section>
+          <section className={css.jobsGroup}>
             <div className={css.jobsHead}>服务</div>
             {services.map((j) => (
               <JobRow key={j.id} job={j} now={now} onClick={toneOf(j) === "up" || toneOf(j) === "restart" ? () => onService(j.id) : undefined}
@@ -275,11 +295,12 @@ export function JobsTab({ station, jobs, picked, onPick, onService }:
           </section>
         )}
         {plain.length > 0 && (
-          <section>
+          <section className={css.jobsGroup}>
             <div className={css.jobsHead}>后台任务</div>
             {plain.map((j) => <JobRow key={j.id} job={j} now={now} selected={j.id === job?.id} onClick={() => onPick(j.id)} />)}
           </section>
         )}
+        {jobs.some(isEnded) && <button type="button" className={css.jobsClear} onClick={() => clear(jobs)}>清掉 {jobs.filter(isEnded).length} 个已结束的</button>}
       </div>
       {job && (
         <div className={css.jobDetail}>
