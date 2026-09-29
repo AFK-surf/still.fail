@@ -124,7 +124,26 @@ export const beam = style({
 export const title = style({
   margin: "0 auto", fontSize: "clamp(64px, 15vw, 232px)", lineHeight: ".92", letterSpacing: "-.06em", fontWeight: "800",
   animation: `${fadeUp} .9s .06s ${vars.easeOut} both`,
+  // Script opens the page with the Chinese (intro) and shows the title itself.
+  selectors: { ":root[data-motion] &": { animation: "none", opacity: 0 } },
 });
+/** The title and, over it, the intro. */
+export const titleStage = style({ position: "relative" });
+/** The intro: the two lines in Chinese, large, over where the title will be; only when script plays it. */
+export const intro = style({
+  position: "absolute", inset: "0", display: "none", flexDirection: "column", alignItems: "center", justifyContent: "center",
+  fontSize: "clamp(56px, 12.5vw, 196px)", fontWeight: "900", lineHeight: "1.08", letterSpacing: ".02em", pointerEvents: "none",
+  selectors: { ":root[data-motion] &": { display: "flex" } },
+});
+export const introLine = style({
+  display: "block", whiteSpace: "nowrap", opacity: 0, color: "var(--s-title)",
+  selectors: {
+    [`:root:not([data-host="youdid.wtf"]) &[data-line="still.fail"], :root[data-host="youdid.wtf"] &[data-line="youdid.wtf"]`]: {
+      color: EMBER, textShadow: `0 0 60px color-mix(in srgb, ${EMBER} 55%, transparent)`,
+    },
+  },
+});
+export const introChar = style({ display: "inline-block" });
 /**
  * A line of the title that is a domain. The one the page was opened on (data-host on the root; still.fail otherwise) is
  * lit, ember orange and glowing; the other sits dim behind it. Padded, so what hangs out of a letter (y, f) is not cut
@@ -166,12 +185,16 @@ export const dotWords = style({
 /** A character of those words: they land one at a time (motion.ts), unseen till then when script will move them. */
 export const dotChar = style({ display: "inline-block", selectors: { ":root[data-motion] &": { opacity: 0 } } });
 
-export const heroActions = style({ marginTop: "clamp(64px, 7vw, 100px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
+export const heroActions = style({
+  marginTop: "clamp(64px, 7vw, 100px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both`,
+  selectors: { ":root[data-motion] &": { animationDelay: "2.9s" } },
+});
 
 /** The demo's stage: it rises out of a tilt as the page opens, a beam of light running round its edge. */
 export const stage = style({
   position: "relative", margin: "80px auto 0", maxWidth: "1200px", animation: `${enter} 1.4s .3s cubic-bezier(.2,.8,.2,1) both`,
   "@media": { [NARROW]: { marginTop: "52px" }, [STILL]: { animation: "none" } },
+  selectors: { ":root[data-motion] &": { animationDelay: "3s" } },
 });
 /** Its glow on the page under it. */
 export const stageGlow = style({

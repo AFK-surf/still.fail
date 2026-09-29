@@ -43,6 +43,9 @@ function Demo({ mount, frame }: { mount?: (root: HTMLElement) => void; frame?: {
 /** Words a character to a span, for the characters to land one by one (motion.ts). */
 const chars = (words: string) => [...words].map((c, i) => <span key={i} className={css.dotChar}>{c}</span>);
 
+/** The intro's characters, each its own box to fly to its place on a dot; spaces only keep their room. */
+const bigChars = (words: string) => [...words].map((c, i) => c === " " ? <span key={i}>&nbsp;</span> : <span key={i} className={css.introChar}>{c}</span>);
+
 function Dot({ above, below }: { above: string; below?: string }) {
   // The dot stays plain text of its line (text in a positioned box would drop out of the line's text clip); the words
   // hang from an empty anchor just after it.
@@ -77,10 +80,17 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
         <div className={css.wrap}>
           {/* The two domains, what the user keeps saying to the agent: the one the page was opened on is lit (data-host, set
               before the first paint by site/index.html; still.fail when neither). */}
-          <h1 className={css.title}>
-            <span className={css.titleDomain} data-domain="still.fail">still<Dot above="还是不行" />fail</span><br />
-            <span className={css.titleDomain} data-domain="youdid.wtf">youdid<Dot above="干的什么" below="JB" />wtf</span>
-          </h1>
+          <div className={css.titleStage}>
+            {/* What the page opens with before the title (motion.ts): the Chinese, large, which then goes to the dots. */}
+            <div className={css.intro} aria-hidden>
+              <span className={css.introLine} data-line="still.fail">{bigChars("还是不行")}</span>
+              <span className={css.introLine} data-line="youdid.wtf">{bigChars("干的什么 JB")}</span>
+            </div>
+            <h1 className={css.title}>
+              <span className={css.titleDomain} data-domain="still.fail">still<Dot above="还是不行" />fail</span><br />
+              <span className={css.titleDomain} data-domain="youdid.wtf">youdid<Dot above="干的什么" below="JB" />wtf</span>
+            </h1>
+          </div>
           <div className={`${css.actions} ${css.heroActions}`}>
             <Button href={APP} kind="primary" large>免费开始</Button>
             <Button href="#start" kind="ghost" large>安装 station</Button>
