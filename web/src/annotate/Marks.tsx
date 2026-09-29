@@ -78,6 +78,19 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able }:
   }, [origin, nonce, frame]);
 
   const mark = (value: boolean) => { setMarking(value); tell({ on: value }); };
+  // Esc stops picking wherever the keyboard is: a click on the page is held from moving focus into it, so the keys
+  // stay out here (the frame's own Esc only hears them once its page has focus).
+  useEffect(() => {
+    if (!marking) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      setMarking(false);
+      tell({ on: false });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [marking, tell]);
   const remove = (n: number) => { setMarks((all) => all.filter((m) => m.picked.n !== n)); setEditing(null); tell({ remove: n }); };
   const leave = () => { setMarks([]); setEditing(null); setError(null); tell({ clear: true }); mark(false); };
 
