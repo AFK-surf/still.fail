@@ -14,8 +14,9 @@
 <!-- The theme chosen in the site's bar (web/src/site/ThemeSwitch.tsx), before the first paint: dark when none was;
      "system" leaves it to the system. The demo's app follows the same data-theme. -->
 <script>try{var t=localStorage.getItem("ember.site.theme");if(t!=="system")document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
-<!-- Which of the site's domains the page was opened on: the title lights that one (web/src/site/Site.tsx). -->
-<script>if(/(^|\.)youdid\.wtf$/.test(location.hostname))document.documentElement.dataset.host="youdid.wtf"</script>
+<!-- Which of the site's domains the page was opened on: the title lights that one (web/src/site/Site.tsx). A preview
+     elsewhere can ask for one with ?host=youdid.wtf. -->
+<script>if(/(^|\.)youdid\.wtf$/.test(location.hostname)||new URLSearchParams(location.search).get("host")==="youdid.wtf")document.documentElement.dataset.host="youdid.wtf"</script>
 <meta name="color-scheme" content="light dark">
 </head>
 <body>
