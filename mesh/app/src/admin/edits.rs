@@ -524,7 +524,7 @@ impl AdminApi {
         let named = if runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" };
         let Some(login) = login.filter(|l| l.logged_in) else { return Err(http_error(400, format!("这台机器上的 {named} 没有登录"))) };
         if !login.usable {
-            return Err(http_error(400, "这台机器的登录存在钥匙串里，不能直接用，要单独登录一次"));
+            return Err(http_error(400, "这台机器的登录在 station 读不到的钥匙串里，不能直接用，要单独登录一次"));
         }
         let home = config.data_dir.join("homes").join(&id);
         std::fs::create_dir_all(&home)?;

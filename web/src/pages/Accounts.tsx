@@ -103,7 +103,7 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
         // A refused account is said so, with nothing to do with it here.
         <MachineLoginCard key={l.runtime} login={l} action={l.quota?.state === "blocked" ? null : l.usable
           ? <Tip label="直接用这台机器的登录，不用再登录；在这台机器上换号或登出，它也跟着变"><Button disabled={use.busy} onClick={() => void use.run(l.runtime)}>用这个账号</Button></Tip>
-          : <Tip label="这份登录存在钥匙串里，不能直接用：为 ember 单独登录一次，这台机器上原来的登录不受影响"><Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</Button></Tip>} />
+          : <Tip label="这份登录在 station 读不到的钥匙串里，不能直接用：为 ember 单独登录一次，这台机器上原来的登录不受影响"><Button onClick={() => onAdd(l.runtime === "claude" ? "claude-sub" : "chatgpt-sub")}>登录</Button></Tip>} />
       ))}
       {use.error && <p className={controlsCss.fieldError} role="alert">{use.error.message}</p>}
     </div>

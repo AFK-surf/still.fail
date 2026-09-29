@@ -473,7 +473,7 @@ export function MachineLoginOffers({ logins, profiles, onSignIn, inForm = false 
           );
         })}
       </ListCard>
-      <p className={inForm ? `${partsCss.mSmall} ${partsCss.mMuted}` : settingsCss.mPageNote}>「用这个账号」直接用这台机器的登录，在这台机器上换号或登出，它也跟着变；存在钥匙串里的登录不能直接用，要为 ember 单独登录一次，原来的登录不受影响。</p>
+      <p className={inForm ? `${partsCss.mSmall} ${partsCss.mMuted}` : settingsCss.mPageNote}>「用这个账号」直接用这台机器的登录，在这台机器上换号或登出，它也跟着变；station 读不到的登录（Codex 存在钥匙串里的，或者钥匙串没解锁）不能直接用，要为 ember 单独登录一次，原来的登录不受影响。</p>
     </>
   );
 }
