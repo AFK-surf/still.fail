@@ -98,7 +98,8 @@ export const sideTab = style({
   cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { color: vars.text, background: vars.hover },
-    "&[data-state=\"active\"]": { color: vars.text, background: vars.selected, fontWeight: "500" },
+    // aria-selected, not data-state: the Tip around each tab sets data-state to its own (closed / delayed-open).
+    "&[aria-selected=\"true\"]": { color: vars.text, background: vars.selected, fontWeight: "500" },
   },
 });
 export const sideContent = style({
@@ -139,7 +140,7 @@ export const sideTabWrap = style({
   cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover },
-    [`&:has(${sideTab}[data-state="active"])`]: { background: vars.selected },
+    [`&:has(${sideTab}[aria-selected="true"])`]: { background: vars.selected },
   },
 });
 export const sideTabClose = style({
