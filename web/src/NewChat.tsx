@@ -136,7 +136,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
         // Nothing to choose from: the chooser leads to where models are enabled.
         <Tip label="到 Profile 里勾选可以用的模型"><Link className={chatCss.chooser} to={profilesPage(station)}>没有可用模型 · 去勾选</Link></Tip>
       ) : (
-        <ModelTriple side="top" title="用哪个模型、运行时、思考深度和账号" options={view.models}
+        <ModelTriple side="top" quietAccount title="用哪个模型、运行时、思考深度和账号" options={view.models}
           value={{ model, runtime, effort: choice.effort || null, profile: choice.profile || null }}
           onPick={(p) => pick({ model: p.model, runtime: p.runtime, effort: p.effort ?? "", profile: p.profile ?? "" })} />
       )}

@@ -6,8 +6,9 @@ import { Popover } from "radix-ui";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ModelOption, RunnableProfile, RuntimeKind } from "./api.ts";
 import type { Quota } from "./core/shapes.ts";
+import { QuotaBars } from "./components.tsx";
 import { RUNTIME_LABEL } from "./format.ts";
-import { ModelLogo, RuntimeLogo, Tip } from "./ui.tsx";
+import { ModelLogo, ProviderLogo, RuntimeLogo, Tip } from "./ui.tsx";
 import * as css from "./ModelTriple.css.ts";
 import * as css2 from "./ModelTriple.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -40,13 +41,15 @@ export function modelName(options: { model: string; name?: string; ids?: string[
   return optionOf(options, model)?.name ?? model;
 }
 
-export function ModelTriple({ options, value, onPick, current, runtimeFixed, side = "bottom", title = "换模型" }: {
+export function ModelTriple({ options, value, onPick, current, runtimeFixed, quietAccount, side = "bottom", title = "换模型" }: {
   options: ModelOption[];
   value: Pick;
   onPick(pick: Pick): void;
   /** A session's: the account it runs on now (the station's pick shows it). */
   current?: RunnableProfile | undefined;
   runtimeFixed?: boolean;
+  /** A new chat's: the account is named only when one is kept to or the station's pick runs low, and without its quota. */
+  quietAccount?: boolean;
   side?: "top" | "bottom";
   title?: string;
 }) {
@@ -67,9 +70,9 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
   const changed = next.model !== value.model || next.runtime !== value.runtime || next.effort !== value.effort || next.profile !== value.profile;
   const kept = value.profile ? valueOption?.accounts[value.runtime]?.find((a) => a.id === value.profile) ?? current : undefined;
   const shown = kept ?? current;
-  // The account is the exception: the control names it only when one is kept to, or when the station's pick runs low.
+  // A new chat's account is the exception (quietAccount): named only when one is kept to, or when the station's pick runs low.
   const shownLow = shown ? quotaLine(shown.quota)?.level : undefined;
-  const namesAccount = value.profile !== null || shownLow !== undefined;
+  const namesAccount = !quietAccount || value.profile !== null || shownLow !== undefined;
   // Who runs it waits behind the foot's line, in a panel of its own beside this one: most of the time it is the station's pick.
   const [showAccounts, setShowAccounts] = useState(false);
   const drafted = profile ? accounts.find((a) => a.id === profile) : undefined;
@@ -117,8 +120,10 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
               <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
               {namesAccount && (
                 <span className={`${css2.triplePart} ${css2.tripleAccount}`} data-level={shownLow}>
-                  <span className={css2.tripleAccountName}>{value.profile ? shown?.name ?? value.profile : `自动 · ${shown?.name ?? ""}`}</span>
+                  {!quietAccount && shown && <ProviderLogo runtime={value.runtime} kind={shown.kind ?? "env"} size={14} />}
+                  <span className={css2.tripleAccountName}>{value.profile ? shown?.name ?? value.profile : shown ? `自动 · ${shown.name}` : "自动分配"}</span>
                   {!value.profile && <span className={css2.tripleAccountShort}>自动</span>}
+                  {!quietAccount && shown && <span className={css2.tripleRings}><QuotaBars quota={shown.quota} compact small bare /></span>}
                 </span>
               )}
             </>
