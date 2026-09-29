@@ -1,8 +1,6 @@
 // You, on a narrow screen, as the Android app has it (apps/android/…/screens/Me.kt): who is signed in, which accounts
-// and workspaces, how it looks.
+// and how it looks (workspaces are switched from their name on Home, ./Workspaces.tsx).
 import { signIn, signOut, useAccounts } from "../cloud/accounts.ts";
-import { useWorkspaces } from "../cloud/api.ts";
-import { Check } from "../icons.tsx";
 import { useAppearance, type Appearance } from "../theme.ts";
 import { useApp } from "./app.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, TopBack } from "./parts.tsx";
@@ -17,7 +15,6 @@ const THEMES: [Appearance, string][] = [["system", "跟随系统"], ["light", "�
 export function MeScreen() {
   const app = useApp();
   const accounts = useAccounts() ?? [];
-  const workspaces = useWorkspaces().value ?? [];
   const [appearance, setAppearance] = useAppearance();
   const me = app.entry.account;
   return (
@@ -30,16 +27,6 @@ export function MeScreen() {
           <span><b>{me.name || me.email}</b><span className={listsCss.mRowNote}>{me.email} · Google</span></span>
         </span>
       </Card>
-      {/* One line per workspace: the name gives way with an ellipsis; which account it is under shows only when there are several. */}
-      <SectionHeader title="Workspace" start={24} />
-      <ListCard>
-        {workspaces.flatMap((a) => a.workspaces.map((w) => (
-          <ListRow key={`${a.account.sub}/${w.id}`} onClick={() => app.replace(`/w/${w.id}`)}>
-            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{w.name}</span>{accounts.length > 1 && <span className={listsCss.mRowNote}>{a.account.email}</span>}</span>
-            {w.id === app.entry.id && <Check size={14} className={partsCss.mAccent} />}
-          </ListRow>
-        )))}
-      </ListCard>
       <SectionHeader title="外观" start={24} />
       <div className={`${css.mPadX12} ${css.mSegBlock}`}>
         <Seg options={THEMES.map(([, label]) => label)} selected={Math.max(0, THEMES.findIndex(([v]) => v === appearance))} onSelect={(i) => setAppearance(THEMES[i]![0])} height={36} fill />

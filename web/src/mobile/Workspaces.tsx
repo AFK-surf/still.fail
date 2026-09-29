@@ -1,9 +1,11 @@
-// Switching workspace, as the Android app has it (apps/android/…/screens/Workspaces.kt): a sheet with the invitations
-// waiting, every account's workspaces and a new one; a new workspace in a sheet of its own.
+// The workspace sheet, opened from its name on Home: the one in use (its settings open from it), the invitations
+// waiting, the others to switch to and a new one; a new workspace in a sheet of its own.
 import { useState } from "react";
 import { signIn, useAccounts } from "../cloud/accounts.ts";
 import { cloud, errorText, needsInviteCode, useAction, useWorkspaces, type AccountWorkspaces, type PendingInvitation } from "../cloud/api.ts";
 import type { Account } from "../cloud/accounts.ts";
+import { ROLE_LABEL } from "../cloud/settings.tsx";
+import { ChevronRight } from "../icons.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { Avatar, Button, Field, PickRow } from "./parts.tsx";
 import * as sheetsCss from "./styles/sheets.css.ts";
@@ -18,6 +20,10 @@ function WorkspacesSheet() {
   const app = useApp();
   const byAccount: AccountWorkspaces[] = useWorkspaces().value ?? [];
   const pending = byAccount.flatMap((a) => a.invitations.map((invite) => ({ account: a.account, invite })));
+  const current = byAccount.flatMap((a) => a.workspaces).find((w) => w.id === app.entry.id);
+  const others = byAccount
+    .map((a) => ({ account: a.account, workspaces: a.workspaces.filter((w) => w.id !== app.entry.id) }))
+    .filter((a) => a.workspaces.length > 0);
   const respond = useAction(async ({ account, invite, join }: { account: Account; invite: PendingInvitation; join: boolean }) => {
     if (join) {
       const w = await cloud.acceptInvitationById(account.sub, invite.id);
@@ -31,8 +37,18 @@ function WorkspacesSheet() {
   return (
     <>
       <SheetGrab />
-      <SheetHead title="切换 workspace" />
+      <SheetHead title="Workspace" />
       <div className={sheetsCss.mSheetScroll}>
+        {/* The workspace in use first, as what the sheet is about: its settings open from it, not from a row among the others. */}
+        {current && (
+          <button type="button" className={css.mCurrent} onClick={() => { app.sheet(null); app.push(app.at("/settings/general")); }}>
+            <span className={partsCss.mGrow}>
+              <b>{current.name}</b>
+              <small>你是{ROLE_LABEL[current.role]} · {current.stations} 台 station · {current.members} 人</small>
+            </span>
+            <span className={css.mCurrentGo}>设置<ChevronRight size={14} /></span>
+          </button>
+        )}
         {pending.length > 0 && (
           <>
             <div className={css.mSheetLabel}>邀请</div>
@@ -46,17 +62,16 @@ function WorkspacesSheet() {
             {respond.error && <p className={`${partsCss.mError} ${partsCss.mPad}`}>{respond.error.message}</p>}
           </>
         )}
-        {byAccount.map(({ account, workspaces }) => (
+        {others.length > 0 && <div className={css.mSheetLabel}>切换到</div>}
+        {others.map(({ account, workspaces }) => (
           <div key={account.sub}>
-            <div className={css.mSheetAccount}><Avatar id={account.email} name={account.name || account.email} size={16} picture={account.picture} />{account.email}</div>
-            {workspaces.length === 0 && <p className={css.mSheetNone}>没有 workspace</p>}
+            {byAccount.length > 1 && <div className={css.mSheetAccount}><Avatar id={account.email} name={account.name || account.email} size={16} picture={account.picture} />{account.email}</div>}
             {workspaces.map((w) => (
-              <PickRow key={w.id} label={w.name} sub={`${w.stations} 台 station · ${w.members} 人`} checked={w.id === app.entry.id}
-                onClick={() => { app.sheet(null); if (w.id !== app.entry.id) app.replace(`/w/${w.id}`); }} />
+              <PickRow key={w.id} label={w.name} sub={`${w.stations} 台 station · ${w.members} 人`}
+                onClick={() => { app.sheet(null); app.replace(`/w/${w.id}`); }} />
             ))}
           </div>
         ))}
-        <PickRow label={`「${app.entry.name}」的设置`} sub="名字、成员、退出" onClick={() => app.push(app.at("/settings/general"))} />
         <PickRow label="＋ 新建 workspace" accent onClick={() => app.sheet({ height: 0.8, content: () => <NewWorkspaceSheet /> })} />
       </div>
     </>
