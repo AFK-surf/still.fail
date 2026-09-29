@@ -195,15 +195,6 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
         </div>
       </section>
 
-      <section className={css.final}>
-        <div className={css.finalGlow} />
-        <div className={css.wrap}>
-          <Themed name="mark" className={css.finalMark} />
-          <h2 className={css.sectionTitle}>给团队添一位<span className={css.faint}>不下班的同事</span></h2>
-          <div className={css.actions}><Button href={APP} kind="primary" large>打开 ember</Button></div>
-        </div>
-      </section>
-
       <footer className={css.footer}>
         <div className={`${css.wrap} ${css.footerRow}`}>
           <span className={css.footerFirst}>© 2026 ember</span>

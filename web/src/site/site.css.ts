@@ -245,15 +245,6 @@ export const output = style({
 });
 export const prompt = style({ color: EMBER, userSelect: "none" });
 
-// The last word.
-export const final = style({ textAlign: "center", padding: "150px 0 170px", position: "relative", isolation: "isolate", overflow: "hidden" });
-export const finalGlow = style({
-  position: "absolute", left: "50%", bottom: "-240px", width: "900px", height: "520px", transform: "translateX(-50%)", zIndex: "-1",
-  borderRadius: "50%", filter: "blur(90px)", opacity: ".55", background: `radial-gradient(ellipse, ${EMBER}, transparent 65%)`,
-});
-const hop = keyframes({ "0%,60%,100%": { transform: "translateY(0)" }, "30%": { transform: "translateY(-26px) rotate(-6deg)" }, "45%": { transform: "translateY(0) scale(1.08,.92)" } });
-export const finalMark = style({ display: "block", width: "112px", height: "112px", margin: "0 auto 40px", animation: `${hop} 2.4s ease-in-out infinite`, "@media": { [STILL]: { animation: "none" } } });
-
 // ---- Footer ----
 
 export const footer = style({ padding: "32px 0 48px", color: DIM, fontSize: "14px", borderTop: `1px solid ${LINE}` });
