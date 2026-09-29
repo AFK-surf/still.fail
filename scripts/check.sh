@@ -40,8 +40,9 @@ step() {
 later() { if [ $full = 1 ]; then failed="$failed $1(no toolchain)"; fi; }
 has() { command -v "$1" > /dev/null 2>&1; }
 
-# node_modules where a fresh worktree has none (pnpm links from its store: quick).
-deps() { [ -d "$1/node_modules" ] || (cd "$1" && pnpm install --frozen-lockfile --prefer-offline > /dev/null 2>&1); }
+# node_modules as the lockfile says: a fresh worktree has none, an old checkout may miss what was added since.
+# pnpm links from its store, and does nothing when all is there: quick either way.
+deps() { (cd "$1" && pnpm install --frozen-lockfile --prefer-offline > /dev/null 2>&1); }
 
 # The web core's types come from its wasm build (web/src/core/pkg, not committed). A machine that cannot build it
 # checks the web against stand-ins for the two modules it imports from there; main's deploy checks the real ones.
