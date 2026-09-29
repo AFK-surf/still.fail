@@ -136,14 +136,14 @@ export const intro = style({
   selectors: { ":root[data-motion] &": { display: "flex" } },
 });
 export const introLine = style({
-  display: "block", whiteSpace: "nowrap", opacity: 0, color: "var(--s-title)",
+  display: "block", whiteSpace: "nowrap", color: "var(--s-title)",
   selectors: {
     [`:root:not([data-host="youdid.wtf"]) &[data-line="still.fail"], :root[data-host="youdid.wtf"] &[data-line="youdid.wtf"]`]: {
       color: EMBER, textShadow: `0 0 60px color-mix(in srgb, ${EMBER} 55%, transparent)`,
     },
   },
 });
-export const introChar = style({ display: "inline-block" });
+export const introChar = style({ display: "inline-block", opacity: 0 });
 /**
  * A line of the title that is a domain. The one the page was opened on (data-host on the root; still.fail otherwise) is
  * lit, ember orange and glowing; the other sits dim behind it. Padded, so what hangs out of a letter (y, f) is not cut

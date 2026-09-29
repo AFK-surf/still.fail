@@ -75,15 +75,14 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   const title = hero.querySelector<HTMLElement>(`.${css.title}`), overlay = hero.querySelector<HTMLElement>(`.${css.intro}`);
   if (!title || !overlay) return;
   const play = <T extends { stop(): void; finished: Promise<unknown> }>(run: T) => { running.push(run); return run.finished.catch(() => {}); };
-  const lines = [...overlay.querySelectorAll<HTMLElement>(`.${css.introLine}`)];
   const big = [...overlay.querySelectorAll<HTMLElement>(`.${css.introChar}`)];
   // Where each goes: the characters on the dots, in the same order (still.fail's, then youdid.wtf's above and below).
   const small = [...title.querySelectorAll<HTMLElement>(`.${css.dotChar}`)];
   const domains = [...title.querySelectorAll<HTMLElement>("[data-domain]")];
 
-  // 1. The Chinese slams in, a line at a time.
-  await play(animate(lines, { opacity: [0, 1], scale: [1.35, 1] }, { type: "spring", visualDuration: 0.45, bounce: 0.3, delay: stagger(0.32) }));
-  await wait(0.7);
+  // 1. The Chinese slams in, a character at a time, the second line after the first.
+  await play(animate(big, { opacity: [0, 1], scale: [1.8, 1] }, { type: "spring", visualDuration: 0.32, bounce: 0.3, delay: stagger(0.13) }));
+  await wait(0.6);
   if (stopped()) return;
 
   // 2. The English grows out of each dot, and each character flies to its place on it, taking its size and colour.
