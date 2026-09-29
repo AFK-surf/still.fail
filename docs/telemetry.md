@@ -77,8 +77,8 @@ Inside a trace:
   `traceparent`.
 - **ember-mesh**: a span per request stream, from the stream accepted to the
   answer's last byte written (an event stream's: to its head). The station's
-  admin API runs in the same process and has no span of its own (the Node
-  station's `ember-station` spans went with it).
+  admin API runs in the same process (`ember-station`) and has no span of its
+  own.
 
 A request without a trace (one an event caused, a stream's later reads) is a
 trace of its own, one span per hop.
@@ -89,14 +89,12 @@ ember cloud carry one only inside a trace.
 
 Attributes: `http.request.method`, `url.path` (the route with ids as `:id`,
 no query), `http.response.status_code`, sizes (`http.request.body.size`,
-`http.response.body.size`; the admin API's `http.response.size` counts its
-head too), `ember.station` (the station's id), `ember.path` (`relay`,
-`direct`, or `local` for a station's own page), `ember.via` (how the request
-reached the admin API: `mesh`, `local`, `access`), `ember.stream`,
+`http.response.body.size`), `ember.station` (the station's id), `ember.path`
+(`relay`, `direct`, or `local` for a station's own page), `ember.stream`,
 `ember.cancelled` (the span's task ended before it did: the chat was closed
 before it opened), `error.type`. Never message content, titles, file names or
 emails. `service.name` says which hop: `ember-web`, `ember-native`,
-`ember-cloud`, `ember-mesh`, `ember-station`; a station's spans also carry the
+`ember-cloud`, `ember-mesh`; a station's spans also carry the
 resource attribute `ember.station`.
 
 Times: the web core times with `performance.now()`, native with a monotonic
@@ -139,9 +137,9 @@ sender (an account, a station) 60 batches a minute (`429` beyond), answers
   { "telemetry": { "traces": true } }
   ```
 
-  in `config.json` (off by default; read when ember starts ember-mesh, so
-  restart ember after changing it). Off, ember-mesh and the admin API record
-  nothing but still pass the `traceparent` on.
+  in `config.json` (off by default; read when `ember-station` starts, so
+  restart the station after changing it). Off, ember-mesh records nothing but
+  still passes the `traceparent` on.
 - ember cloud records a span only for a call whose `traceparent` is sampled.
 
 ### Looking in Axiom
@@ -156,8 +154,7 @@ hop in them:
     open_ms = maxif(duration / 1ms, name == "chat.open"),
     link_ms = maxif(duration / 1ms, name == "mesh.connect"),
     cloud_ms = maxif(duration / 1ms, ['service.name'] == "ember-cloud"),
-    mesh_ms = maxif(duration / 1ms, ['service.name'] == "ember-mesh"),
-    station_ms = maxif(duration / 1ms, ['service.name'] == "ember-station")
+    mesh_ms = maxif(duration / 1ms, ['service.name'] == "ember-mesh")
     by trace_id
 | where open_ms > 0
 | top 10 by open_ms desc
@@ -165,7 +162,7 @@ hop in them:
 
 Read it as: `open_ms` is what the user waited; `link_ms` opening the link to
 the station (credential plus iroh connection); `mesh_ms` a request's time on the
-station, of which `station_ms` was the admin API's; what a core request span
+station (the admin API's included); what a core request span
 took beyond its mesh span was the network (the relay, or the direct path).
 One trace in order:
 

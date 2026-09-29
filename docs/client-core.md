@@ -357,8 +357,14 @@ client/
 - `mesh.rs` — the device endpoint (mDNS and the DHT to find stations, ember's and iroh's relays) and station links: the credential, reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
 - `station.rs` — the admin API over a link (or over HTTP for `local`): the station topics kept current from its events and live streams, threads (entries by number, gaps, paging, posting, read positions), uploads.
 - `kept.rs` — threads' entries and transcripts kept on the device in 256-entry chunks through `Host` storage, bounded (least recently opened go first), forgotten for stations out of reach.
-- `entries.rs` — a thread's entries merged into messages (edits and deletes applied): the one place that does it.
+- `entries.rs` — a thread's entries merged into messages (edits applied): the one place that does it.
+- `data.rs` — the data center (docs/core-db.md): what ember cloud and the stations said, held as records.
+- `sync.rs` — what the core keeps in sync by itself, whatever the UI shows.
+- `status.rs` — what the core is waiting on (the `status` topic): slow requests and links, sockets that are down.
+- `activity.rs`, `history.rs`, `present.rs`, `format.rs` — what the clients show (an agent's current activity, its execution history, sessions' and rows' state, words and times), decided once for every client.
+- `error.rs` — the one error type calls and topics report.
 - `views.rs` — the view topics, put together from the others.
+- `testing.rs` — a host for tests.
 - `trace.rs` — traces of user actions: spans, the `traceparent` every station request carries, batched export to ember cloud (docs/telemetry.md).
 
 ## Native (Android)
@@ -409,16 +415,20 @@ Nothing in the pages differs but the host underneath:
   macOS, `second-instance` elsewhere), and the app loads the page's own
   `/auth/callback` with that query, which calls `auth.complete` as on the web.
 
+- The app carries a station release (scripts/station-bundle.sh) and runs
+  `ember-station` itself (`src/station.ts`, docs/station-rust.md), on
+  `~/.ember` like an installed station; when one is running already
+  (`ember-station` exits with HELD) it leaves it be.
+
 ember cloud defaults to https://ember.3720.org; `EMBER_CLOUD_ORIGIN`
-overrides it. `apps/desktop/build.sh` builds the core for macOS arm64 and
-packages an unsigned `.app` with electron-builder.
+overrides it. `apps/desktop/build.sh` builds the core and the station for
+macOS arm64 and packages an unsigned `.app` with electron-builder.
 
 ## Web
 
 `web/src/core/` is the UI side: it starts the worker (SharedWorker, else
 Worker), speaks the protocol over its port, and gives React
 `useTopic(topic)` (built on `useSyncExternalStore`) and `call(name, params)`.
-The pages move from `@tanstack/react-query` and `Transport` to these.
 In development the core can also run on the page itself, for debugging.
 
 ## Order of work
