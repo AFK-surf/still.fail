@@ -60,6 +60,6 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       target: "es2022",
     },
-    server: { proxy: { "/admin/api": { target: "http://127.0.0.1:4760", changeOrigin: false } } },
+    server: { proxy: { "/admin/api": { target: `http://127.0.0.1:${process.env.EMBER_ADMIN_PORT ?? 4760}`, changeOrigin: false } } },
   };
 });
