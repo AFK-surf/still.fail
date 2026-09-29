@@ -257,8 +257,8 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   useOlderOnScroll(list, chat.more, chat.messages[0]?.seq, older);
   useMarkRead(floor, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
-  const returning = useRememberPlace(list, place, messages.length > 0);
-  const divider = useUnreadLine(list, chat, messages, mineOf, older, returning);
+  useRememberPlace(list, place, messages.length > 0);
+  const divider = useUnreadLine(list, chat, messages, mineOf, older);
   const away = useAwayFromBottom(list);
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
@@ -295,10 +295,11 @@ export function sameMessage(a: ChatMessage, b: ChatMessage): boolean {
  * before it opened may still arrive from the station: the line goes over the
  * first of them wherever it came from; what is said during the visit gets
  * none. Older pages are loaded first when it lies above them. Nothing unread:
- * no line, and the chat opens at its bottom. Answers the seq of the message
+ * no line, and the chat opens at its bottom or where it was left; something
+ * unread takes it to the line even so. Answers the seq of the message
  * the line goes over.
  */
-export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: ChatMessage[], mine: (m: ChatMessage) => boolean, older: () => Promise<unknown>, returning = false): number | null {
+export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, messages: ChatMessage[], mine: (m: ChatMessage) => boolean, older: () => Promise<unknown>): number | null {
   const [open] = useState(() => ({ read: chat.thread?.read ?? 0, at: Date.now() }));
   const unread = (m: ChatMessage) => m.seq > open.read && m.createdAt <= open.at && !mine(m);
   const first = messages[0]?.seq;
@@ -307,8 +308,8 @@ export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView
   const target = above ? null : messages.find(unread)?.seq ?? null;
   const asked = useRef<number | undefined>(undefined);
   // Until something unread shows (it may come from the station a moment after opening), there is nothing to jump to.
-  // Coming back to a chat goes back to where it was left (useRememberPlace), not to the line.
-  const jumped = useRef(returning);
+  // Coming back to a chat with something unread goes to the line too, over where it was left (useRememberPlace).
+  const jumped = useRef(false);
   const load = useRef(older);
   load.current = older;
   useEffect(() => {
@@ -324,7 +325,12 @@ export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView
     if (!pane || !line) return;
     // A reader's move: the pane lets it take the position instead of holding its bottom.
     pane.dispatchEvent(new WheelEvent("wheel"));
-    pane.scrollTop += line.getBoundingClientRect().top - pane.getBoundingClientRect().top - 12;
+    // The line near the top, below what floats over the pane there (the phone's bar: its scroll padding), with about
+    // four lines of what came before it still in view.
+    const style = getComputedStyle(pane);
+    const covered = parseFloat(style.scrollPaddingTop) || 0;
+    const text = parseFloat(style.lineHeight) || 22;
+    pane.scrollTop += line.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered - 4 * text;
   }, [ref, above, target]);
   return target;
 }
@@ -355,9 +361,9 @@ const leftAt = new Map<string, { ts: string; offset: number }>();
  * Remembers where the reader was in a chat and takes them back there when
  * they return, instead of opening it from the bottom again. The place is kept
  * as the message at the top and its offset, so what arrived meanwhile below
- * does not move it. Answers whether this is a return to a known place.
+ * does not move it. The unread line, when there is one, goes over it (useUnreadLine).
  */
-export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean): boolean {
+export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean): void {
   const [saved] = useState(() => leftAt.get(key));
   const restored = useRef(false);
   useEffect(() => {
@@ -384,7 +390,6 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     pane.dispatchEvent(new WheelEvent("wheel"));
     pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - saved.offset;
   }, [ref, saved, ready]);
-  return saved !== undefined;
 }
 
 /**
