@@ -93,8 +93,8 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
               <span className={css.quotaChipText}>{!lone && <span className={css.quotaChipMark}>{w.mark}</span>}{w.left}%</span>
             </span>
           );
-          // Bare: inside a control with its own tip, so none of their own.
-          return bare ? chip : <Tip key={w.label} label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>{chip}</Tip>;
+          // Bare: inside a control, so not a stop of their own for the keyboard; the tip still shows on hover.
+          return <Tip key={w.label} label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>{chip}</Tip>;
         })}
       </span>
     );

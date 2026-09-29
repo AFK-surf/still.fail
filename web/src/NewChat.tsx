@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi, useChatSend, useStations, type ModelOption, type RuntimeKind, type StationView } from "./api.ts";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { LOCAL_STATION, profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
-import { Button, Chooser, ChooserItem as Item, FirstOne, Tip } from "./ui.tsx";
+import { Button, Chooser, ChooserItem as Item, FirstOne } from "./ui.tsx";
 import { AddAccountDialog, MachineLoginOffers, PROFILE_LEAD, type Choice as ProfileKind } from "./pages/Accounts.tsx";
 import { ModelTriple, optionOf } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
@@ -131,15 +131,15 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
   const toolbar = useMemo(() => (
     <>
       {station.name && (
-        <Chooser side="top" label={<><Server size={14} />{station.name}</>} title="在哪台 station 上运行">
+        <Chooser side="top" label={<><Server size={14} />{station.name}</>}>
           {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={14} />{s.name}</Item>)}
         </Chooser>
       )}
       {!runtime || !model ? (
         // Nothing to choose from: the chooser leads to where models are enabled.
-        <Tip label="到 Profile 里勾选可以用的模型"><Link className={chatCss.chooser} to={profilesPage(station)}>没有可用模型 · 去勾选</Link></Tip>
+        <Link className={chatCss.chooser} to={profilesPage(station)}>没有可用模型 · 去勾选</Link>
       ) : (
-        <ModelTriple side="top" quietAccount title="用哪个模型、运行时、思考深度和账号" options={view.models}
+        <ModelTriple side="top" quietAccount options={view.models}
           value={{ model, runtime, effort: choice.effort || null, profile: choice.profile || null }}
           onPick={(p) => pick({ model: p.model, runtime: p.runtime, effort: p.effort ?? "", profile: p.profile ?? "" })} />
       )}
@@ -180,7 +180,7 @@ function NewChatOn({ view, station, stations, onStation, onCreated }: { view: St
               ? <Button variant="primary" icon={Plus} onClick={() => { setProfileKind("claude-sub"); setAddingProfile(true); }}>添加 Profile</Button>
               : <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profilesPage(station)}>去勾选模型</Link>}
             {stations.length > 1 && (
-              <Chooser side="bottom" label={<><Server size={14} />{station.name}</>} title="换一台 station">
+              <Chooser side="bottom" label={<><Server size={14} />{station.name}</>}>
                 {stations.map((s) => <Item key={s.station} checked={s.station === station.address} onSelect={() => onStation(s.id)}><Server size={14} />{s.name}</Item>)}
               </Chooser>
             )}

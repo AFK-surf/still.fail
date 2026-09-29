@@ -312,7 +312,7 @@ export function JobsTab({ station, jobs, picked, onPick, onService }:
             <Segmented<"notices" | "output"> label="看什么" value={view} onChange={setView} options={[{ value: "notices", label: "通知" }, { value: "output", label: "输出" }]} />
             {job.state === "running" && <Tip label="停止"><button type="button" className={`${pagesCss.iconBtn} ${css.jobDetailStop}`} aria-label="停止" onClick={() => stop(job)}><Stop size={16} /></button></Tip>}
           </div>
-          {job.command && <Tip label={job.command}><div className={css.jobDetailCommand}>{job.command}</div></Tip>}
+          {job.command && <Tip label={job.command} cut><div className={css.jobDetailCommand}>{job.command}</div></Tip>}
           {view === "notices"
             ? <><div className={css.jobDetailNotices}><Notices job={job} now={now} clockTimes /></div><LastOutput station={station} job={job} now={now} /></>
             : <Output station={station} job={job} />}

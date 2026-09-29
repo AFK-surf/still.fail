@@ -41,7 +41,7 @@ export function modelName(options: { model: string; name?: string; ids?: string[
   return optionOf(options, model)?.name ?? model;
 }
 
-export function ModelTriple({ options, value, onPick, current, runtimeFixed, quietAccount, side = "bottom", title = "换模型" }: {
+export function ModelTriple({ options, value, onPick, current, runtimeFixed, quietAccount, side = "bottom" }: {
   options: ModelOption[];
   value: Pick;
   onPick(pick: Pick): void;
@@ -51,7 +51,6 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, qui
   /** A new chat's: the account is named only when one is kept to or the station's pick runs low, and without its quota. */
   quietAccount?: boolean;
   side?: "top" | "bottom";
-  title?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Pick>(value);
@@ -112,10 +111,10 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, qui
   return (
     <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) { setDraft(value); setFilter(""); setModelsWidth(null); setShowAccounts(false); } }}>
       <span className={css2.modelTripleFit} ref={fit}>
-        <Tip label={title}><Popover.Trigger className={css2.modelTriple} disabled={options.length === 0} data-drop={DROPS[drop]}>
+        <Popover.Trigger className={css2.modelTriple} disabled={options.length === 0} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className={css2.tripleModel}>没有可用模型</span> : (
             <>
-              <span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span>
+              <Tip label={value.model || null}><span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span></Tip>
               {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={14} />{RUNTIME_LABEL[value.runtime]}</span>}
               <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
               {namesAccount && (
@@ -129,7 +128,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, qui
             </>
           )}
           <ChevronDown size={12} className={chatCss.chooserChevron} />
-        </Popover.Trigger></Tip>
+        </Popover.Trigger>
       </span>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css2.runPickerPanel}`} side={side} align="start" sideOffset={6} collisionPadding={8}>

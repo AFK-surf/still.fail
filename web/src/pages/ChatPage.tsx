@@ -345,9 +345,9 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   if (key === JOBS) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tip label="服务和后台任务"><Tabs.Trigger className={css.sideTab} value={key}>
+                        <Tabs.Trigger className={css.sideTab} value={key}>
                           <span className={css.sideTabAgent}><Boxes size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text="任务">任务</span></span>
-                        </Tabs.Trigger></Tip>
+                        </Tabs.Trigger>
                         <button type="button" className={css.sideTabClose} aria-label="关闭任务" onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
@@ -356,7 +356,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   if (file) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tip label={file.name}><Tabs.Trigger className={css.sideTab} value={key}>
+                        <Tip label={file.name} cut><Tabs.Trigger className={css.sideTab} value={key}>
                           <span className={css.sideTabAgent}><File size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={file.name}>{file.name}</span></span>
                         </Tabs.Trigger></Tip>
                         <button type="button" className={css.sideTabClose} aria-label={`关闭 ${file.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
@@ -367,7 +367,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   if (service) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tip label={service.name}><Tabs.Trigger className={css.sideTab} value={key}>
+                        <Tip label={service.name} cut><Tabs.Trigger className={css.sideTab} value={key}>
                           <span className={css.sideTabAgent}><JobDot tone={toneOf(service)} /><span className={css.sideTabText} data-text={service.name}>{service.name}</span></span>
                         </Tabs.Trigger></Tip>
                         <button type="button" className={css.sideTabClose} aria-label={`关闭 ${service.name}`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
@@ -380,7 +380,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   const label = a.session.agentText;
                   return (
                     <span key={key} className={css.sideTabWrap}>
-                      <Tip label={`${label} 的执行历史`}><Tabs.Trigger className={css.sideTab} value={key}>
+                      <Tip label={label} cut><Tabs.Trigger className={css.sideTab} value={key}>
                         <span className={css.sideTabAgent}><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={14} /><span className={css.sideTabText} data-text={label}>{label}</span></span>
                       </Tabs.Trigger></Tip>
                       <button type="button" className={css.sideTabClose} aria-label={`关闭 ${label} 的执行历史`} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
@@ -563,7 +563,7 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
   return (
     <div className={css.sessionDetails}>
       {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota). */}
-      <ModelTriple title="换模型、思考深度和账号" runtimeFixed
+      <ModelTriple runtimeFixed
         options={agent.choices} current={agent.account}
         value={{ model: session.model ?? "", runtime: session.runtime, effort: session.effort ?? null, profile: session.profilePinned ? session.profile ?? null : null }}
         onPick={({ model, effort, profile }) => void change.run({ model, effort, profile })} />

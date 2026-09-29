@@ -39,9 +39,9 @@ export function History({ station, sessionKey, summary, actions, details, focus 
     if (!place) return null;
     const inner = <>{place.surface === "ember" ? <Mark size={12} /> : <SlackLogo size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
     // A Slack thread opens in Slack; an ember chat, its agent's page.
-    if (place.url) return <Tip label="在 Slack 中打开"><a className={css.hPlace} href={place.url} target="_blank" rel="noopener">{inner}</a></Tip>;
+    if (place.url) return <a className={css.hPlace} href={place.url} target="_blank" rel="noopener">{inner}</a>;
     return place.session
-      ? <Tip label="打开对话"><Link className={css.hPlace} to={link(`/chats/${encodeURIComponent(place.session)}`)}>{inner}</Link></Tip>
+      ? <Link className={css.hPlace} to={link(`/chats/${encodeURIComponent(place.session)}`)}>{inner}</Link>
       : <span className={css.hPlace}>{inner}</span>;
   };
   const [usageOpen, setUsageOpen] = useState(false);

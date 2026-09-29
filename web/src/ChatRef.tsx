@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, type ReactNode, type RefObject } from "reac
 import { useHref } from "react-router";
 import { useChats, type ChatItem } from "./api.ts";
 import { scopeOf, stationBase, useStation } from "./station.tsx";
-import { ModelLogo, Time, Tip } from "./ui.tsx";
+import { ModelLogo, Time } from "./ui.tsx";
 import { REF_LINK, REF_MARK, refTitle, splitBy } from "./chatRefs.ts";
 import * as css from "./ChatRef.css.ts";
 
@@ -28,7 +28,7 @@ function refOf(item: ChatItem, root: string): ChatRef {
 
 /** A reference in a message: a chip that opens the chat (ChatPage opens its link in the page). */
 export function RefChip({ title, href }: { title: ReactNode; href: string }) {
-  return <Tip label="打开这个对话"><a className={css.refChip} href={href}><span className={css.refChipHash}>@</span>{title}</a></Tip>;
+  return <a className={css.refChip} href={href}><span className={css.refChipHash}>@</span>{title}</a>;
 }
 
 /** Plain text with its references (links to chats) drawn as chips. */

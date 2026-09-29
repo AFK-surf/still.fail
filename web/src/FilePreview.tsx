@@ -230,7 +230,7 @@ export function FileLink({ sessionKey, file, children }: { sessionKey: string | 
   if (sessionKey === null) return <>{children}</>;
   return (
     <>
-      <Tip label={file.name}><button type="button" className={fileLink} onClick={() => setOpen(true)}>{children}</button></Tip>
+      <button type="button" className={fileLink} onClick={() => setOpen(true)}>{children}</button>
       <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
     </>
   );

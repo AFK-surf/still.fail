@@ -486,7 +486,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
       data-enter={enter} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
       avatar={<MessageAvatar message={m} name={who} />} time={m.time?.createdAt}
       name={agent
-        ? <Tip label="打开或关闭执行历史"><button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{who}</button></Tip>
+        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{who}</button>
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
       {m.authorKind === "person"
@@ -806,7 +806,7 @@ export function imageBox(file: Attachment): { width: number; aspectRatio: string
 
 function FileCard({ file, onRemove, pending, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; error?: string | null }) {
   return (
-    <Tip label={file.path ?? file.name}><span className={css.fileCard} data-error={error ? true : undefined}>
+    <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-error={error ? true : undefined}>
       {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
       <span className={css.fileCardText}>
         <span className={css.fileCardName}>{file.name}</span>
@@ -1344,7 +1344,7 @@ function Activity({ agent, leaving, pose, onOpen }: { agent: AgentAtWork; leavin
   const now = useSteady(wait ? { key: "wait", text: "等待中" } : agent.activity?.now ?? { key: "busy", text: "处理中" });
   return (
     <div className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
-      <Tip label="打开执行历史"><button type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
+      <button type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
         <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>
         <span className={css.activityTail}>
           <span className={css.activityNow}>
@@ -1355,7 +1355,7 @@ function Activity({ agent, leaving, pose, onOpen }: { agent: AgentAtWork; leavin
             ? <span className={css.activityElapsed}><Waited since={wait.since} seconds={wait.seconds} /></span>
             : agent.since ? <span className={css.activityElapsed}><Elapsed since={agent.since} /></span> : null}
         </span>
-      </button></Tip>
+      </button>
     </div>
   );
 }

@@ -194,7 +194,7 @@ function RunSection({ item }: { item: ConnectItem }) {
           <span className={css.runCardLabel}>模型</span>
           {models.length === 0
             ? <Link className={chatCss.inlineLink} to={profilesPage(station)}>{connect.runtimeText} 的 Profile 还没有启用模型 · 去勾选</Link>
-            : <ModelTriple title="换模型、思考深度和账号" runtimeFixed options={models}
+            : <ModelTriple runtimeFixed options={models}
                 value={{ model: connect.bind.model ?? "", runtime: connect.bind.runtime, effort: connect.bind.effort ?? null, profile: connect.bind.profile ?? null }}
                 onPick={(p) => save.put({ bind: { model: p.model, effort: p.effort ?? "", profile: p.profile } }, () => toast("已保存，新会话会用新的设置"))} />}
         </div>
@@ -492,7 +492,7 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
           <Field label="模型" hint={entry && entry.runtimes.length > 1 ? "这个模型两个运行时都能跑；运行时创建后不能换。" : undefined}>
             {models.length === 0
               ? <Link className={`${controlsCss.input} ${css.inputLink}`} to={profilesPage(station)}>Profile 还没有启用模型 · 去勾选</Link>
-              : <ModelTriple title="用哪个模型、运行时、思考深度和账号" options={models}
+              : <ModelTriple options={models}
                   value={{ model: entry?.model ?? "", runtime, effort: effort || null, profile }}
                   onPick={(p) => { setModel(p.model); setPicked(p.runtime); setEffort(p.effort ?? ""); setProfile(p.profile); }} />}
           </Field>

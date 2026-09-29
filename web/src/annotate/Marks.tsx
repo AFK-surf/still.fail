@@ -150,7 +150,7 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
     <div className={css.mode} role="status">
       <span className={css.modeDot} data-on={marking || undefined} aria-hidden="true" />
       {error
-        ? <Tip label={error}><span className={css.modeError}>{error}</span></Tip>
+        ? <Tip label={error} cut><span className={css.modeError}>{error}</span></Tip>
         : <span className={css.modeText}>
             {marks.length ? `已标注 ${marks.length} 处` : "点选页面上的元素"}
             {marking && <span>{marks.length ? "可以继续点选" : "↑ ↓ 换一层 · Esc 停止"}</span>}

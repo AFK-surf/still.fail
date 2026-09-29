@@ -12,7 +12,7 @@ import {
 } from "radix-ui";
 import { flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router";
-import { forwardRef, useEffect, useId, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { forwardRef, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./ui.css.ts";
@@ -62,16 +62,25 @@ function TipKeys({ action }: { action: Action }) {
  * A tip over a control; with a `shortcut`, the keys that do the same follow what it says. The only way anything here
  * explains itself on hover: no native `title`. With no label it never opens, but keeps its place in the tree.
  */
-export function Tip({ label, children, side = "bottom", shortcut }: { label: ReactNode; children: ReactNode; side?: "top" | "bottom" | "left" | "right"; shortcut?: Action }) {
+export function Tip({ label, children, side = "bottom", shortcut, cut }: { label: ReactNode; children: ReactNode; side?: "top" | "bottom" | "left" | "right"; shortcut?: Action; /** Only says what the trigger already shows, so opens only while that is cut short. */ cut?: boolean }) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const root = label == null || label === "" ? { open: false }
+    : cut ? { open, onOpenChange: (o: boolean) => setOpen(o && trigger.current !== null && isCut(trigger.current)) } : {};
   return (
-    <Tooltip.Root {...(label == null || label === "" ? { open: false } : {})}>
+    <Tooltip.Root {...root}>
       {/* Focus the browser does not show (a click, or a popover focusing its first item or handing focus back) opens none. */}
-      <Tooltip.Trigger asChild onFocus={(e) => { if (!e.currentTarget.matches(":focus-visible")) e.preventDefault(); }}>{children}</Tooltip.Trigger>
+      <Tooltip.Trigger ref={trigger} asChild onFocus={(e) => { if (!e.currentTarget.matches(":focus-visible")) e.preventDefault(); }}>{children}</Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content className={css.tooltip} side={side} sideOffset={6} collisionPadding={8}>{label}{shortcut && <TipKeys action={shortcut} />}</Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>
   );
+}
+
+/** Whether some text in an element is cut short (clipped, or ended with an ellipsis). */
+function isCut(el: Element): boolean {
+  return [el, ...el.querySelectorAll("*")].some((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflowX !== "visible");
 }
 
 /**
@@ -306,10 +315,10 @@ export function CopyCommand({ text }: { text: string }) {
  * A choice that opens a menu of what it can be (a model, an account): not the browser's own select, so each option can
  * show what matters about it. `trigger` draws the chosen one; the class is the look of the button.
  */
-export function Chooser({ label, title, children, side = "bottom", className = chatCss.chooser }: { label: ReactNode; title: string; children: ReactNode; side?: "top" | "bottom"; className?: string }) {
+export function Chooser({ label, children, side = "bottom", className = chatCss.chooser }: { label: ReactNode; children: ReactNode; side?: "top" | "bottom"; className?: string }) {
   return (
     <DropdownMenu.Root modal={false}>
-      <Tip label={title}><DropdownMenu.Trigger className={className}>{label}<ChevronDown size={12} className={chatCss.chooserChevron} /></DropdownMenu.Trigger></Tip>
+      <DropdownMenu.Trigger className={className}>{label}<ChevronDown size={12} className={chatCss.chooserChevron} /></DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} side={side} align="start" sideOffset={6} collisionPadding={8}>{children}</DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -493,7 +502,7 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
     if (saved) document.documentElement.style.setProperty(variable, `${Math.min(max, Math.max(min, saved))}px`);
   }, [storage]);
   return (
-    <Tip label="拖动调整宽度，双击恢复"><div className={css.resizeHandle} data-edge={edge} role="separator" aria-orientation="vertical" aria-label={label}
+    <div className={css.resizeHandle} data-edge={edge} role="separator" aria-orientation="vertical" aria-label={label}
       onDoubleClick={() => set(null)}
       onPointerDown={(e) => {
         const column = e.currentTarget.parentElement!.getBoundingClientRect();
@@ -512,7 +521,7 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
         handle.addEventListener("pointermove", move);
         handle.addEventListener("pointerup", up);
         e.preventDefault();
-      }} /></Tip>
+      }} />
   );
 }
 
