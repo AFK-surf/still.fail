@@ -4,6 +4,7 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import * as css from "./site.css.ts";
 import { ThemeSwitch } from "./ThemeSwitch.tsx";
+import { heroMotion } from "./motion.ts";
 
 const APP = "https://ember.3720.org";
 const INSTALL = "curl -fsSL https://ember.3720.org/install.sh | sh -s -- <token>";
@@ -39,13 +40,16 @@ function Demo({ mount, frame }: { mount?: (root: HTMLElement) => void; frame?: {
  * A domain's dot, and what the domain says in Chinese standing upright on it: above it, and, when there is a `below`,
  * on through it underneath, the dot parting the two.
  */
+/** Words a character to a span, for the characters to land one by one (motion.ts). */
+const chars = (words: string) => [...words].map((c, i) => <span key={i} className={css.dotChar}>{c}</span>);
+
 function Dot({ above, below }: { above: string; below?: string }) {
   // The dot stays plain text of its line (text in a positioned box would drop out of the line's text clip); the words
   // hang from an empty anchor just after it.
   return (
     <>.<span className={css.dot} aria-hidden>
-      <span className={css.dotSay} data-at="above"><span className={css.dotWords}>{above}</span></span>
-      {below && <span className={css.dotSay} data-at="below"><span className={css.dotWords}>{below}</span></span>}
+      <span className={css.dotSay} data-at="above"><span className={css.dotWords}>{chars(above)}</span></span>
+      {below && <span className={css.dotSay} data-at="below"><span className={css.dotWords}>{chars(below)}</span></span>}
     </span></>
   );
 }
@@ -53,6 +57,8 @@ function Dot({ above, below }: { above: string; below?: string }) {
 // ---- The rest ----
 
 export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => void; demo?: { wide: string; phone: string } }) {
+  const hero = useRef<HTMLElement>(null);
+  useEffect(() => (hero.current ? heroMotion(hero.current) : undefined), []);
   return (
     <div className={css.page}>
       <nav className={css.nav}>
@@ -66,7 +72,7 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
         </div>
       </nav>
 
-      <header className={css.hero}>
+      <header className={css.hero} ref={hero}>
         <div className={css.grid} /><div className={css.beam} />
         <div className={css.wrap}>
           {/* The two domains, what the user keeps saying to the agent: the one the page was opened on is lit (data-host, set

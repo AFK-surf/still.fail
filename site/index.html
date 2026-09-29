@@ -17,6 +17,8 @@
 <!-- Which of the site's domains the page was opened on: the title lights that one (web/src/site/Site.tsx). A preview
      elsewhere can ask for one with ?host=youdid.wtf. -->
 <script>if(/(^|\.)youdid\.wtf$/.test(location.hostname)||new URLSearchParams(location.search).get("host")==="youdid.wtf")document.documentElement.dataset.host="youdid.wtf"</script>
+<!-- Script will move the first screen (web/src/site/motion.ts): what it brings in waits unseen for it. -->
+<script>if(!matchMedia("(prefers-reduced-motion: reduce)").matches)document.documentElement.dataset.motion=""</script>
 <meta name="color-scheme" content="light dark">
 </head>
 <body>

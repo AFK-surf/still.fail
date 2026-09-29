@@ -49,7 +49,6 @@ const enter = keyframes({
   to: { opacity: 1, transform: "none" },
 });
 const fadeUp = keyframes({ from: { opacity: 0, transform: "translateY(16px)" }, to: { opacity: 1, transform: "none" } });
-const fadeIn = keyframes({ from: { opacity: 0 }, to: { opacity: 1 } });
 const sway = keyframes({ "0%,100%": { transform: "translateX(-50%) rotate(-4deg)" }, "50%": { transform: "translateX(-50%) rotate(4deg)" } });
 
 /** The grid over a section, fading out from where its light comes. */
@@ -157,13 +156,15 @@ export const dot = style({
 /** Where the words stand, in the title's em: just clear of the dot's top, or of the baseline under it. */
 export const dotSay = style({
   position: "absolute", left: "-.12em", transform: "translateX(-50%)", pointerEvents: "none",
-  animation: `${fadeIn} .6s .7s ${vars.easeOut} both`,
   selectors: { "&[data-at=above]": { bottom: ".22em" }, "&[data-at=below]": { top: ".06em" } },
 });
 export const dotWords = style({
   display: "block", writingMode: "vertical-rl", textOrientation: "upright",
   fontSize: "max(.1em, 8px)", fontWeight: "700", letterSpacing: ".12em", lineHeight: "1", whiteSpace: "nowrap",
 });
+
+/** A character of those words: they land one at a time (motion.ts), unseen till then when script will move them. */
+export const dotChar = style({ display: "inline-block", selectors: { ":root[data-motion] &": { opacity: 0 } } });
 
 export const heroActions = style({ marginTop: "clamp(64px, 7vw, 100px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
 
