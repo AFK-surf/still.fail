@@ -15,6 +15,7 @@ import { CHANGEABLE, useShortcut } from "./keymap.ts";
 import { ChatMark } from "./ChatMark.tsx";
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { archiveKey, PendingArchives } from "./pendingArchives.ts";
+import { OpenJobs } from "./OpenJobs.tsx";
 import * as nav from "./Sidebar.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -34,6 +35,7 @@ export function Sidebar() {
           <ChatList scope="local" newChat="/new" stationsPage="/settings" archive="/archive" />
           <div className={nav.navFoot}>
             <LocalWaiting />
+            <OpenJobs stations={LOCAL_STATIONS} />
             <NavLink className={nav.navRow} to="/settings"><Settings {...ICON} />设置</NavLink>
           </div>
         </>
@@ -41,6 +43,8 @@ export function Sidebar() {
     </nav>
   );
 }
+
+const LOCAL_STATIONS = [{ address: "local" }];
 
 /** On a station's own page: only what the core waits on (its one station's state is the page's). */
 function LocalWaiting() {

@@ -181,6 +181,8 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
     cursor();
   };
   inner.addEventListener("load", hook);
+  // The frame's own document too, when the keyboard is there rather than in the page.
+  document.addEventListener("keydown", key, true);
   hook();
 
   addEventListener("message", (event) => {
