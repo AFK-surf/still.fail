@@ -5,11 +5,13 @@
 // The chat under the small ones makes way for them, as a whole (its messages and composer): whatever of it is marked
 // `data-avoid-previews` leaves them the window's side from their left edge on (`--avoid-previews`, its styles).
 //
+// A visualization an agent posted (Preview.tsx's `file`) is kept and shown the same way.
+//
 // A frame loads anew whenever it moves in the document, so every kept one is drawn here, in one layer over the page,
 // and never moves in it: the chat's side panel has a slot (PreviewSlot) that only says where the frame should be.
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useHref, useLocation, useNavigate } from "react-router";
-import { ServiceFrame, type Restarting } from "./Preview.tsx";
+import { fileService, ServiceFrame, type FileSource, type Restarting } from "./Preview.tsx";
 import { useLink } from "./station.tsx";
 import { Close, Minus, Web } from "./icons.tsx";
 import { Tip } from "./ui.tsx";
@@ -18,11 +20,13 @@ import * as css from "./Previews.css.ts";
 interface Kept {
   key: string;
   station: string;
-  port: number;
+  /** A web service's port, or a visualization's file. */
+  port: number | undefined;
+  file: FileSource | undefined;
   name: string;
   service: string;
-  /** Its page of its own (the bar's "open on its own"). */
-  external: string;
+  /** Its page of its own (the bar's "open on its own"); a visualization has none. */
+  external: string | undefined;
   /** Its chat, with its tab open: where the small one goes back to. */
   back: string;
   restarting: Restarting | null;
@@ -56,18 +60,21 @@ function usePreviews(): Kept[] {
   return useSyncExternalStore((listener) => { listeners.add(listener); return () => listeners.delete(listener); }, () => kept);
 }
 
-/** Where a web service shows in its chat's side panel; opening it keeps it. */
-export function PreviewSlot({ station, port, name, service, restarting, draftKey }:
-  { station: string; port: number; name: string; service: string; restarting: Restarting | null; draftKey?: string }) {
+/** Where a web service (or a visualization, `file`) shows in its chat's side panel; opening it keeps it. */
+export function PreviewSlot({ station, port, file, name, service: job, restarting, draftKey }:
+  { station: string; port?: number; file?: FileSource; name: string; service?: string; restarting: Restarting | null; draftKey?: string }) {
+  const service = file ? fileService(file) : job ?? "";
   const key = previewKey(station, service);
-  const external = useHref(useLink()(`/services/${encodeURIComponent(service)}`));
+  const own = useHref(useLink()(`/services/${encodeURIComponent(service)}`));
+  const external = file ? undefined : own;
   const { pathname } = useLocation();
-  const back = `${pathname}?service=${encodeURIComponent(service)}`;
+  // Back to its chat, with it open again (Chat.tsx's useAskedFile for a visualization).
+  const back = file ? `${pathname}?file=${encodeURIComponent(file.name)}` : `${pathname}?service=${encodeURIComponent(service)}`;
   const restarts = restarting?.restarts ?? null;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    keep({ key, station, port, name, service, external, back, restarting: restarts === null ? null : { restarts }, draftKey });
-  }, [key, station, port, name, service, external, back, restarts, draftKey]);
+    keep({ key, station, port, file, name, service, external, back, restarting: restarts === null ? null : { restarts }, draftKey });
+  }, [key, station, port, file?.session, file?.path, name, service, external, back, restarts, draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const slot = ref.current!;
     slots.set(key, slot);
@@ -326,7 +333,7 @@ export function Previews() {
     <div className={css.layer} data-spread={spread || undefined}>
       {all.map((entry) => (
         <div key={entry.key} ref={(el) => { if (el) frames.current.set(entry.key, el); else frames.current.delete(entry.key); }} className={css.frame} data-mode="hidden">
-          <ServiceFrame station={entry.station} port={entry.port} name={entry.name} external={entry.external} restarting={entry.restarting} draftKey={entry.draftKey} />
+          <ServiceFrame station={entry.station} port={entry.port} file={entry.file} name={entry.name} external={entry.external} restarting={entry.restarting} draftKey={entry.draftKey} />
         </div>
       ))}
       {/* Over a small one's page (which lets the pointer through): its name, and a click goes back. */}

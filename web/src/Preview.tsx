@@ -7,6 +7,9 @@
 // open to anyone. The desktop app needs none of that: the frame is at
 // ember-preview://, which the app serves itself through its core; the bar
 // over it is the same.
+//
+// A visualization an agent posted (an HTML file placed in its message, Viz.tsx) opens the same way, beside its chat
+// or on a phone's page: its preview is the file, drawn in its sandboxed frame, under the same bar.
 import { ArrowLeft, ArrowRight, External, Refresh, Web } from "./icons.tsx";
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
@@ -16,6 +19,8 @@ import * as css from "./Preview.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { useMarks } from "./annotate/Marks.tsx";
 import { Tip } from "./ui.tsx";
+import { DraftKey } from "./draft.ts";
+import { VizPanel } from "./Viz.tsx";
 
 declare const __PREVIEW_ORIGIN__: string;
 const ORIGIN = __PREVIEW_ORIGIN__;
@@ -30,10 +35,28 @@ const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCo
 
 interface Asked { id: number; method: string; path: string; headers: [string, string][]; body: Uint8Array | null }
 
+/** A visualization's file: the session that sent it, its path there and its name. */
+export interface FileSource { session: string; path: string; name: string }
+
+/** A visualization's place among the previews (as a web service's job id is a service's): `file:` and its source. */
+export function fileService(file: FileSource): string {
+  return `file:${JSON.stringify([file.session, file.path, file.name])}`;
+}
+
+export function fileSourceOf(service: string | null): FileSource | null {
+  if (!service?.startsWith("file:")) return null;
+  try {
+    const [session, path, name] = JSON.parse(service.slice("file:".length)) as [string, string, string];
+    return typeof session === "string" && typeof path === "string" && typeof name === "string" ? { session, path, name } : null;
+  } catch { return null; }
+}
+
 export interface Shown {
   station: string;
-  /** How the station reaches it; never shown. */
-  port: number;
+  /** How the station reaches it; never shown. None for a visualization (`file`). */
+  port?: number | undefined;
+  /** A visualization instead of a web service. */
+  file?: FileSource | undefined;
   /** What people know it by. */
   name: string;
   external?: string | undefined;
@@ -45,17 +68,35 @@ export interface Shown {
 
 export interface Restarting { restarts: number }
 
-/** A web service beside a chat, or on a page of its own (`alone`: no "open on its own" there). */
-export function StationPreview({ station, port, name, service, alone = false, restarting = null, draftKey }:
-  { station: string; port: number; name: string; service: string; alone?: boolean; restarting?: Restarting | null; draftKey?: string }) {
-  // Its page of its own, at the station's pages' place (a new window or tab: the browser's).
+/** A web service (or a visualization, `file`) beside a chat, or on a page of its own (`alone`: no "open on its own" there). */
+export function StationPreview({ station, port, file, name, service, alone = false, restarting = null, draftKey }:
+  { station: string; port?: number; file?: FileSource; name: string; service: string; alone?: boolean; restarting?: Restarting | null; draftKey?: string }) {
+  // Its page of its own, at the station's pages' place (a new window or tab: the browser's). A visualization has none.
   const own = useHref(useLink()(`/services/${encodeURIComponent(service)}`));
-  return <ServiceFrame station={station} port={port} name={name} external={alone ? undefined : own} restarting={restarting} draftKey={draftKey} />;
+  return <ServiceFrame station={station} port={port} file={file} name={name} external={alone || file ? undefined : own} restarting={restarting} draftKey={draftKey} />;
 }
 
 /** The frame and its bar, wherever it is put (Previews.tsx keeps it in one place while it moves). */
 export function ServiceFrame(shown: Shown) {
-  return window.emberDesktop ? <DesktopPreview {...shown} /> : <WebPreview {...shown} />;
+  if (shown.file) return <FileFrame {...shown} file={shown.file} />;
+  const port = shown.port ?? 0;
+  return window.emberDesktop ? <DesktopPreview {...shown} port={port} /> : <WebPreview {...shown} port={port} />;
+}
+
+/** A visualization under the bar: its name where an address would be, reload drawing it anew (what it kept stays). */
+function FileFrame({ name, file, draftKey }: Shown & { file: FileSource }) {
+  const [drawn, setDrawn] = useState(0);
+  const reload = useCallback(() => setDrawn((n) => n + 1), []);
+  return (
+    <div className={css.preview}>
+      <PreviewBar name={name} at={null} go={() => {}} reload={reload} fixed />
+      <div className={css.previewStage}>
+        <DraftKey.Provider value={draftKey}>
+          <VizPanel key={drawn} sessionKey={file.session} file={{ name: file.name, path: file.path, size: 0 }} />
+        </DraftKey.Provider>
+      </div>
+    </div>
+  );
 }
 
 interface Bar {
@@ -74,10 +115,12 @@ interface Bar {
   extra?: ReactNode;
   /** What shows in the address's place for now (marking the page). */
   instead?: ReactNode;
+  /** Nowhere else to go (a visualization): the address is only its name. */
+  fixed?: boolean;
 }
 
 /** Back, forward, reload, where it is (typed to go elsewhere), and its page of its own: over the frame. */
-function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canForward = false, external, extra, instead }: Bar) {
+function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canForward = false, external, extra, instead, fixed = false }: Bar) {
   const [typed, setTyped] = useState(at ?? "/");
   const [editing, setEditing] = useState(false);
   // Where it went is what the bar says, unless someone is typing there.
@@ -92,7 +135,7 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
         <label className={css.previewAddress}>
           <Web size={14} strokeWidth={1.75} />
           <span className={css.previewHost}>{name}</span>
-          <input className={css.previewPath} value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />
+          {!fixed && <input className={css.previewPath} value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />}
         </label>
       )}
       {extra}
@@ -123,7 +166,7 @@ function Restart({ name, restarting, reload }: { name: string; restarting: Resta
  * told where to go (ember-preview-nav). `frame` is the frame at `origin`, loaded with `src`.
  */
 function Framed({ name, external, restarting, draftKey, origin, src, nonce, frame }:
-  Omit<Shown, "station" | "port"> & { origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null> }) {
+  Omit<Shown, "station" | "port" | "file"> & { origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null> }) {
   const [at, setAt] = useState<string | null>(null);
   const [moves, setMoves] = useState({ back: false, forward: false });
   // A frame that can mark the page says so (an older one does not).
@@ -157,7 +200,7 @@ function Framed({ name, external, restarting, draftKey, origin, src, nonce, fram
   );
 }
 
-function DesktopPreview({ station, port, ...shown }: Shown) {
+function DesktopPreview({ station, port, file: _, ...shown }: Shown & { port: number }) {
   const [nonce] = useState(() => crypto.randomUUID());
   const [host, setHost] = useState<string | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -170,7 +213,7 @@ function DesktopPreview({ station, port, ...shown }: Shown) {
   return <Framed {...shown} origin={origin} src={origin && `${origin}/_ember/frame?n=${nonce}&path=%2F`} nonce={nonce} frame={frame} />;
 }
 
-function WebPreview({ station, port, ...shown }: Shown) {
+function WebPreview({ station, port, file: _, ...shown }: Shown & { port: number }) {
   const call = useCall();
   // One frame for as long as this shows: moving about (back, reload, a path) is the frame's own, told to it.
   const [nonce] = useState(() => crypto.randomUUID());

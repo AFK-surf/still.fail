@@ -4,10 +4,11 @@
 // words rather than out in a margin. Long-press quotes or copies a message; ＋ adds files.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { stationApi, useApi, useChat, useLives, useStationCall, type Attachment, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { stationApi, useApi, useChat, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
+import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
@@ -76,11 +77,6 @@ export const openedAs = (address: string) => renamed.get(address) ?? address;
 
 /** What the page knows of an agent: its chat entry and its live view. */
 interface Here { station: string; key: string; view: ChatView }
-
-/** A visualization on its own (./Preview.tsx's FileScreen), over its chat: the session that sent it, and its path. */
-export function filePath(station: string, key: string, session: string, file: Attachment): string {
-  return `${stationBase(station)}/chats/${encodeURIComponent(key)}/file?${new URLSearchParams({ session, path: file.path, name: file.name })}`;
-}
 
 /** A web service's page (./Preview.tsx), over its chat. */
 function servicePath(station: string, key: string, job: string): string {
@@ -181,7 +177,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
     }
   };
   return (
-    <OpenFile.Provider value={(session, file) => app.push(filePath(here.station, here.key, session, file))}>
+    <OpenFile.Provider value={(session, file) => app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })))}>
       {quoting.pop}
       {askedFile}
       <Gallery.Provider value={stable.images}>

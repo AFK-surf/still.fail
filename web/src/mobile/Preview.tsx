@@ -1,15 +1,13 @@
-// A web service an agent started, full screen on a narrow screen: the desktop's preview (../Preview.tsx) under a bar
+// A web service an agent started (or a visualization it posted), full screen on a narrow screen: the desktop's preview (../Preview.tsx) under a bar
 // that goes back to the chat. Found by its job; people know it by its name. The job is its chat's, kept as the chat
 // changes (a restart is said over the page, and it loads again once the service is back); read once by itself until the
 // chat has it.
 import { useEffect, useState } from "react";
-import { useLocation, useParams } from "react-router";
+import { useParams } from "react-router";
 import { useChat } from "../api.ts";
 import { useCall } from "../core/react.ts";
 import type { Job } from "../core/shapes.ts";
-import { StationPreview } from "../Preview.tsx";
-import { VizPanel } from "../Viz.tsx";
-import { DraftKey } from "../draft.ts";
+import { fileSourceOf, StationPreview } from "../Preview.tsx";
 import { useStation } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { draftKeyOf } from "./ChatHost.tsx";
@@ -23,17 +21,28 @@ export function PreviewScreen() {
   const app = useApp();
   const station = useStation();
   const { chat = "", service = "" } = useParams();
+  // A visualization an agent posted opens here too, as a service does (../Preview.tsx's fileService).
+  const file = fileSourceOf(service);
   const call = useCall();
   const view = useChat(station.address, { session: chat }).value;
   const live = view?.agents.flatMap((a) => a.jobs ?? []).find((j) => j.id === service);
   const [read, setRead] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
+    if (file) return;
     call("station.request", { station: station.address, method: "GET", path: `/jobs/${encodeURIComponent(service)}` })
       .then((j) => setRead(j as Job), (e: Error) => setError(e.message));
   }, [call, station.address, service]);
   const job = live ?? read;
   const up = job && job.port != null && (job.state === "running" || job.state === "exited");
+  if (file) {
+    return (
+      <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
+        <NavBar back="对话" onBack={app.pop} title={file.name} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+        <StationPreview station={station.address} file={file} name={file.name} service={service} alone restarting={null} draftKey={draftKeyOf(station.address, chat)} />
+      </div>
+    );
+  }
   return (
     <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
       <NavBar back="对话" onBack={app.pop} title={job?.name ?? "服务"} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
@@ -47,19 +56,3 @@ export function PreviewScreen() {
   );
 }
 
-/** A visualization an agent posted (../Viz.tsx), full screen on a narrow screen, under a bar that goes back to its chat. */
-export function FileScreen() {
-  const app = useApp();
-  const station = useStation();
-  const { chat = "" } = useParams();
-  const asked = new URLSearchParams(useLocation().search);
-  const session = asked.get("session") ?? chat, path = asked.get("path") ?? "", name = asked.get("name") ?? path.split("/").at(-1) ?? "";
-  return (
-    <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
-      <NavBar back="对话" onBack={app.pop} title={name} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
-      <DraftKey.Provider value={draftKeyOf(station.address, chat)}>
-        <VizPanel sessionKey={session} file={{ name, path, size: 0 }} />
-      </DraftKey.Provider>
-    </div>
-  );
-}

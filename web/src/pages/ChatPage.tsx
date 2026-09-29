@@ -16,8 +16,8 @@ import { stationApi, useAction, useApi, useChat, useChats, useHistory, useHost, 
 import { History } from "../History.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { ChatPanel } from "../Chat.tsx";
-import { DraftKey } from "../draft.ts";
-import { OpenFile, VizPanel } from "../Viz.tsx";
+import { OpenFile } from "../Viz.tsx";
+import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
@@ -122,7 +122,8 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     commit(open.includes(key) ? open : [...open, key], key);
   };
   const closeTab = (key: string) => {
-    const service = serviceOf(key);
+    const file = fileOf(key);
+    const service = file ? fileService(file) : serviceOf(key);
     if (service) closePreview(previewKey(station.address, service));
     const next = open.filter((t) => t !== key);
     commit(next, shown === key ? next.at(-1) ?? null : active);
@@ -330,11 +331,10 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
               }
               const file = fileOf(key);
               if (file) {
+                // Kept as a web service is (Previews.tsx): small in the corner while another chat or page shows.
                 return (
-                  <Tabs.Content key={key} className={css.sideContent} value={key}>
-                    <DraftKey.Provider value={chatKey}>
-                      <VizPanel sessionKey={file.session} file={{ name: file.name, path: file.path, size: 0 }} />
-                    </DraftKey.Provider>
+                  <Tabs.Content key={key} className={css.sideContent} value={key} forceMount>
+                    <PreviewSlot station={station.address} file={file} name={file.name} restarting={null} draftKey={chatKey} />
                   </Tabs.Content>
                 );
               }
@@ -369,18 +369,12 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
 
-/** A visualization's tab (`file:` and the session that sent it, its path and name), opened from its message. */
+/** A visualization's tab: its place among the previews (Preview.tsx's fileService), opened from its message. */
 function fileTab(session: string, path: string, name: string): string {
-  return `file:${JSON.stringify([session, path, name])}`;
+  return fileService({ session, path, name });
 }
 
-function fileOf(key: string): { session: string; path: string; name: string } | null {
-  if (!key.startsWith("file:")) return null;
-  try {
-    const [session, path, name] = JSON.parse(key.slice("file:".length)) as [string, string, string];
-    return { session, path, name };
-  } catch { return null; }
-}
+const fileOf = (key: string) => fileSourceOf(key);
 
 /** A web service's tab: its job, from its key (`service:<job>`); null for an agent's history tab. */
 function serviceOf(key: string): string | null {
