@@ -164,7 +164,7 @@ export const dotSay = style({
 });
 export const dotWords = style({
   display: "block", writingMode: "vertical-rl", textOrientation: "upright",
-  fontSize: "max(.1em, 11px)", fontWeight: "700", letterSpacing: ".12em", lineHeight: "1", whiteSpace: "nowrap",
+  fontSize: "max(.1em, 8px)", fontWeight: "700", letterSpacing: ".12em", lineHeight: "1", whiteSpace: "nowrap",
 });
 
 export const heroActions = style({ marginTop: "clamp(64px, 7vw, 100px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
