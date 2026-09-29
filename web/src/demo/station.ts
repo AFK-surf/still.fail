@@ -5,8 +5,6 @@
 import data from "./station.json";
 import { CHEN, LIN, stamp, ZHOU, type Runs } from "./fixtures.ts";
 import type { Connect, ConnectsView, Person } from "../core/shapes.ts";
-import { addUserProfile, presentProfile, removeUserProfile, updateUserProfile, userModels, userProfiles } from "./keys.ts";
-import { check } from "./llm.ts";
 
 const TIME = /^(at|checkedAt|resetsAt|startedAt|createdAt|endedAt|lastActiveAt|updatedAt)$/;
 
@@ -37,18 +35,16 @@ export const overview = () => {
     ...base, connects: [slack()],
     // The station's own Claude Code login is the subscription's profile, not offered again.
     machineLogins: base.machineLogins.filter((l) => l.runtime !== "claude"),
-    profiles: [subscription(base.profiles[0]!), ...userProfiles().map(presentProfile)],
+    profiles: [subscription(base.profiles[0]!)],
   };
 };
 export const host = () => now(data.host);
 export const stationView = () => {
   const base = now(data.station);
-  return { ...base, overview: overview(), models: [...base.models, ...userModels()] };
+  return { ...base, overview: overview() };
 };
 /** What a Claude agent's model control offers and the account it runs on. */
-export const runs = (): Runs => ({ choices: stationView().models as Runs["choices"], profile: overview().profiles[0] as Runs["profile"] });
-/** The visitor's own account the demo's agent runs on, when they have added one. */
-export const visitorProfile = () => userProfiles()[0];
+export const runs = (): Runs => ({ choices: stationView().models as Runs["choices"], profile: overview().profiles[0] as unknown as Runs["profile"] });
 /** A connect's Slack app, as the station reads it from Slack: here, with no configuration token to read it with. */
 export const slackApp = () => ({ state: "no_config_token" });
 
@@ -69,42 +65,31 @@ export const connects = (): ConnectsView => ({
   items: [{ station: "local", stationName: "Studio", connect: slack(), sessions: [], candidates: [], running: 0 }],
 });
 
-/** Something the station refuses, with its words (the core hands them to the page as the call's error). */
-export class Refused extends Error {}
+/**
+ * What only a real ember can do: anything that reaches past the demo (Slack, a model's account, signing in, another
+ * machine, ember cloud's members). The page offers the real one instead (mount.tsx).
+ */
+export class NeedsReal extends Error {
+  constructor() {
+    super("这是演示：这一步要连到真实的服务，请在真实的 Ember 里做。");
+  }
+}
 
-/** The station's admin API, as `station.request` reaches it. What is read answers; the visitor's own profiles (keys.ts)
- *  are added, changed and removed for real, in this browser; any other write answers the overview (what most writes
- *  answer with) and changes nothing. */
-export async function request(method: string, path: string, body?: unknown): Promise<unknown> {
-  const input = (body ?? {}) as { access?: { kind?: string; key?: string }; models?: string[] };
-  const profile = /^\/profiles\/([^/]+)(\/.*)?$/.exec(path);
+/** What the demo's station does itself, changing nothing: a chat's agent woken, stopped or moved to another model. */
+const OWN = /^\/sessions\/[^/]+\/(warm|stop|evict|settings)$/;
+
+/** The station's admin API, as `station.request` reaches it: what is read answers; what would reach out needs a real
+ *  ember; what stays in the station answers the overview (what most writes answer with) and changes nothing. */
+export function request(method: string, path: string): unknown {
   if (method === "GET") {
     if (path === "/memory") return data.memory;
     if (path.startsWith("/chats?archived")) return now(data.archived);
     if (path === "/machine-sessions") return now(data.machineSessions);
+    if (path.startsWith("/slack/")) throw new NeedsReal();
     return overview();
   }
-  if (method === "POST" && path === "/profiles") {
-    if (input.access?.kind !== "opencode-go") throw new Refused("演示里只能添加 OpenCode Go 的 key：它存在你的浏览器里，由浏览器直接用它请求模型。");
-    const key = input.access.key?.trim() ?? "";
-    if (!key) throw new Refused("要填 key");
-    const trial = { id: "trial", kind: "opencode-go" as const, key, models: ["kimi-k3"], addedAt: Date.now() };
-    try {
-      await check(trial);
-    } catch (e) {
-      throw new Refused(`这个 key 用不了：${(e as Error).message}`);
-    }
-    const made = addUserProfile("opencode-go", key);
-    return { id: made.id, overview: overview() };
-  }
-  if (profile && userProfiles().some((p) => p.id === decodeURIComponent(profile[1]!))) {
-    const id = decodeURIComponent(profile[1]!);
-    if (method === "DELETE" && !profile[2]) removeUserProfile(id);
-    if (method === "PUT" && !profile[2]) updateUserProfile(id, { ...(input.access?.key !== undefined ? { key: input.access.key } : {}), ...(input.models ? { models: input.models } : {}) });
-    if (profile[2] === "/check") return presentProfile(userProfiles().find((p) => p.id === id)!).check;
-    if (profile[2] === "/quota") return null;
-  }
-  return overview();
+  if (OWN.test(path)) return overview();
+  throw new NeedsReal();
 }
 
 // ---- ember cloud ----

@@ -172,7 +172,7 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
               <Demo {...(mountDemo ? { mount: mountDemo } : {})} {...(demo ? { frame: demo } : {})} />
             </div>
           </div>
-          <p className={css.demoNote}>真的 ember，随便点。想让它真回你：<span className={css.key}>设置 › Profile › 添加 Profile</span> 填你的 OpenCode Go key。</p>
+          <p className={css.demoNote}>真的 ember 界面，随便点</p>
         </div>
       </header>
 

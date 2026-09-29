@@ -26,8 +26,6 @@ export default defineConfig({
   },
   server: {
     fs: { allow: [here("..")] },
-    // OpenCode Go lets no page call it across origins: the site forwards to it (site/serve.mjs does the same).
-    proxy: { "/_llm/opencode": { target: "https://opencode.ai", changeOrigin: true, rewrite: (path) => path.replace(/^\/_llm\/opencode/, "/zen/go") } },
   },
   // The page built to HTML (web/site-prerender.mjs) runs the app's code in Node: bundled whole, its CSS imports and all.
   ssr: { noExternal: true },

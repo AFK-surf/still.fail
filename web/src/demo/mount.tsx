@@ -16,8 +16,7 @@ import { CoreClient, type Topic } from "../core/client.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
-import { runTurn } from "./agent.ts";
-import { userModels } from "./keys.ts";
+import { RealEmber, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
 
 /** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
@@ -73,9 +72,6 @@ function answer(name: string, params: Record<string, unknown>): unknown {
     // 新建对话: made at once, under the key answered; what is sent to it follows.
     const made = newChat(Math.max(...chats.map((c) => c.thread)) + 1, typeof params.model === "string" ? params.model : undefined);
     made.title = "新对话";
-    // One of the visitor's own models (keys.ts): the chat runs on it.
-    const own = typeof params.model === "string" ? userModels().find((m) => m.model === params.model) : undefined;
-    if (own) made.model = { runtime: "claude", model: own.model, name: own.name, effort: "medium", maker: own.maker ?? { id: "opencode", name: "OpenCode" } };
     chats.push(made);
     setTimeout(publish, 0);
     return { key: made.key };
@@ -96,12 +92,6 @@ function answer(name: string, params: Record<string, unknown>): unknown {
       addItem(chat, received(chat, VISITOR, text));
       publish();
     }, 450);
-    const own = station.visitorProfile();
-    if (own) {
-      // With their own key: the demo's agent really answers (agent.ts).
-      setTimeout(() => void runTurn(chat, own, { publish }), 600);
-      return { more: false };
-    }
     setTimeout(() => {
       chat.running = { activity: "思考中", since: chat.running?.since ?? Date.now() };
       publish();
@@ -115,14 +105,18 @@ function answer(name: string, params: Record<string, unknown>): unknown {
       publish();
     }, 2600);
   }
-  if (name === "station.request") {
-    // What it changes (the visitor's profiles) shows everywhere once it is done.
-    return station.request(String(params.method), String(params.path), params.body).then((value) => {
-      if (params.method !== "GET") setTimeout(publish, 0);
-      return value;
-    });
+  // What reaches past the demo is offered in a real ember instead, and fails here as not done.
+  try {
+    if (name === "station.request") return station.request(String(params.method), String(params.path));
+    if (name === "cloud.request") {
+      if (params.method !== "GET") throw new station.NeedsReal();
+      return station.workspace();
+    }
+    if (name === "station.upload" || name.startsWith("auth.")) throw new station.NeedsReal();
+  } catch (e) {
+    if (e instanceof station.NeedsReal) askForReal();
+    throw e;
   }
-  if (name === "cloud.request") return station.workspace();
   return { more: false };
 }
 
@@ -141,7 +135,7 @@ setCore(new CoreClient((onMessage) => {
           .then(() => answer(message.call!, message.params ?? {}))
           .then(
             (ok) => post({ id: message.id, ok }),
-            (e: Error) => post({ id: message.id, error: { code: e instanceof station.Refused ? "http_400" : "internal", message: e.message } }),
+            (e: Error) => post({ id: message.id, error: { code: e instanceof station.NeedsReal ? "demo" : "internal", message: e.message } }),
           );
       }
     },
@@ -213,6 +207,7 @@ export function DemoApp({ phone }: { phone: boolean }) {
           <MemoryRouter key="phone" initialEntries={[`/w/${ENTRY.id}`, `/w/${ENTRY.id}/s/local/chats/${key}`]} initialIndex={1}>
             <Director phone />
             <Routes><Route path="/w/:ws/*" element={<MobileWorkspace entry={ENTRY} />} /></Routes>
+            <RealEmber />
           </MemoryRouter>
         </Tooltip.Provider>
       </ToastProvider>
@@ -221,6 +216,7 @@ export function DemoApp({ phone }: { phone: boolean }) {
       <MemoryRouter key="wide" initialEntries={[`/chats/${key}`]}>
         <Director phone={false} />
         <App />
+        <RealEmber />
       </MemoryRouter>
     );
 }
@@ -242,7 +238,10 @@ export function mountDemo(element: HTMLElement): void {
   // itself, until the visitor has clicked in it.
   for (const type of ["keydown", "keyup", "keypress"]) {
     window.addEventListener(type, (event) => {
-      if (!(event.target instanceof Node && root.contains(event.target))) event.stopImmediatePropagation();
+      // The app's own dialogs and menus are on the page, not in the demo's box: keys there are the app's too.
+      const target = event.target;
+      const app = target instanceof Element && (root.contains(target) || target.closest("[role=dialog], [role=menu], [data-radix-popper-content-wrapper]"));
+      if (!app) event.stopImmediatePropagation();
     }, true);
   }
   const focus = HTMLElement.prototype.focus;
