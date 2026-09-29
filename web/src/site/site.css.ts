@@ -138,7 +138,7 @@ const lit = {
 };
 export const titleDomain = style({
   display: "inline-block", padding: ".04em .1em .16em", margin: "-.04em -.1em -.16em",
-  color: "color-mix(in srgb, var(--s-title) 16%, transparent)",
+  color: "color-mix(in srgb, var(--s-title) 16%, var(--s-bg))",
   selectors: {
     [`:root:not([data-host="youdid.wtf"]) &[data-domain="still.fail"]`]: lit,
     [`:root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: lit,
