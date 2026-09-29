@@ -353,9 +353,9 @@ interface View { scale: number; x: number; y: number }
 const MAX_SCALE = 16;
 
 /**
- * An image fitted to the window, to zoom (wheel, pinch, double-click, the
- * bar's buttons, + − 0) around the pointer and drag about when larger than
- * the window. Fitted, a sideways swipe steps to the image before or after.
+ * An image fitted to the window, to zoom (pinch, ctrl/⌘ + wheel, double-click,
+ * the bar's buttons, + − 0) around the pointer and pan (drag, wheel) when larger
+ * than the window. Fitted, a sideways swipe steps to the image before or after.
  */
 /** `waiting`: `url` is only the thumbnail, standing in the image's place until the whole of it comes. */
 function ImageViewer({ url, file, setControls, onSwipe, waiting = false }: { url: string; file: Attachment; setControls(c: ReactNode): void; onSwipe(direction: -1 | 1): void; waiting?: boolean }) {
@@ -385,8 +385,8 @@ function Progress({ got, size, inBar = false }: { got: FileProgress | null | und
 
 /**
  * Zooming and panning a picture of `natural` size in a stage (an image, a video's frames): fitted to the window, to
- * zoom (wheel, pinch, double-click, the bar's buttons, + − 0 1) around the pointer and drag about when larger than the
- * window. Fitted, a sideways swipe calls `onSwipe`. `place` positions the picture (absolutely, in the stage's centre).
+ * zoom (pinch, ctrl/⌘ + wheel, double-click, the bar's buttons, + − 0 1) around the pointer and pan (drag, wheel) when
+ * larger than the window. Fitted, a sideways swipe calls `onSwipe`. `place` positions the picture (absolutely, in the stage's centre).
  */
 export function useZoom(natural: { w: number; h: number } | null, setControls: (c: ReactNode) => void, onSwipe?: (direction: -1 | 1) => void) {
   const stage = useRef<HTMLDivElement>(null);
@@ -442,7 +442,8 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
     return [clientX - r.left - r.width / 2, clientY - r.top - r.height / 2] as const;
   };
 
-  // The wheel zooms; it has to be a listener that can stop the page scrolling.
+  // The wheel pans (with shift, sideways); only a trackpad's pinch, or the wheel with ctrl or ⌘, zooms. A listener that
+  // can stop the page scrolling.
   useEffect(() => {
     const el = stage.current;
     if (!el) return;
@@ -450,14 +451,23 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
       e.preventDefault();
       const v = viewRef.current;
       if (!v) return;
-      // A trackpad's pinch comes as a wheel with ctrl, in small steps.
-      const step = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
-      const factor = Math.exp(-step * (e.ctrlKey ? 0.01 : 0.002));
-      zoomTo(v.scale * factor, ...fromCentre(e.clientX, e.clientY));
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientHeight : 1;
+      if (e.ctrlKey || e.metaKey) {
+        // A trackpad's pinch comes as a wheel with ctrl, in small steps; a mouse wheel's notches are much larger.
+        const step = e.deltaY * unit;
+        const factor = Math.exp(-step * (e.ctrlKey && Math.abs(step) < 50 ? 0.01 : 0.002));
+        zoomTo(v.scale * factor, ...fromCentre(e.clientX, e.clientY));
+        return;
+      }
+      const dx = (e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX) * unit, dy = (e.shiftKey && !e.deltaX ? 0 : e.deltaY) * unit;
+      const next = clamp({ ...v, x: v.x - dx, y: v.y - dy });
+      if (next.x === v.x && next.y === v.y) return;
+      fitted.current = false;
+      setView(next);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [zoomTo]);
+  }, [zoomTo, clamp]);
 
   // Drag to pan; two fingers pinch.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
