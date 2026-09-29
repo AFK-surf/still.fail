@@ -17,6 +17,7 @@ export const composerSlot = style({
       right: "var(--avoid-previews, 0px)",
     },
     [`${chat}[data-under-composer][data-avoid-previews=settled] > &`]: { transition: "right 280ms cubic-bezier(.2, .8, .2, 1)" },
+    [`:root[data-preview-resizing] ${chat}[data-under-composer][data-avoid-previews=settled] > &`]: { transition: "none" },
   },
 });
 export const composerDock = style({

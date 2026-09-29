@@ -15,8 +15,8 @@
 // follows it again.
 // With a `floor` (an empty last child), the content never gets shorter: what
 // leaves the bottom (an activity folding away) leaves its space behind, filled
-// by the floor, so nothing above it drops down. A change of the pane's width
-// lays everything out anew, so the floor lets go of what it was holding.
+// by the floor, so nothing above it drops down. A change of the width its
+// content is laid out in (the pane's, or its padding) lays everything out anew, so the floor lets go of what it was holding.
 import { useEffect, type RefObject } from "react";
 
 /** `messages` selects which of the pane's children count as messages. */
@@ -26,12 +26,19 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     if (!el) return;
     /** The furthest the content has reached; the floor makes up what it has lost since. */
     let reached = 0;
-    let width = el.clientWidth;
+    /** The width its content is laid out in: the pane's, less its padding (which can change on its own: making way for
+     *  the small web services in the corner, Previews.tsx). */
+    const contentWidth = () => {
+      const style = getComputedStyle(el);
+      return el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    };
+    let width = contentWidth();
     const keepHeight = () => {
       const f = floor?.current;
       if (!f) return;
       const end = el.scrollTop + f.getBoundingClientRect().top - el.getBoundingClientRect().top;
-      if (el.clientWidth !== width) { width = el.clientWidth; reached = 0; }
+      const now = contentWidth();
+      if (now !== width) { width = now; reached = 0; }
       // Only messages' room is held: what a pane shows before it has any (loading, an empty chat's note) is not.
       if (!lastMessage()) reached = 0;
       reached = Math.max(reached, end);
@@ -153,10 +160,10 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
     for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, input, { passive: true });
     // The pane's width changing re-wraps every message: that is taken at once, not glided after (it would lag behind
     // the bottom while the width is dragged).
-    let laidWidth = el.clientWidth;
+    let laidWidth = contentWidth();
     const resize = new ResizeObserver((entries) => {
-      const rewrapped = el.clientWidth !== laidWidth;
-      laidWidth = el.clientWidth;
+      const rewrapped = contentWidth() !== laidWidth;
+      laidWidth = contentWidth();
       smooth = !rewrapped && grown() && entries.some((e) => e.target !== el && isMessage(e.target));
       hold();
     });

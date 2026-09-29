@@ -163,12 +163,21 @@ interface Drawn { transform: string; clipPath: string; opacity: string }
  * scaled down: all of it shows. */
 const LAID = 800;
 
-/** Makes way, in whatever is marked for it, for what is in the corner from `edge` on (none: no room is taken). The first
- * time it is seen it takes its room at once (a page come in with small ones there); after that it eases. */
+/** Where the small ones' edge was, for each element making way for them. */
+const avoided = new WeakMap<HTMLElement, number | null>();
+/** Makes way, in whatever is marked for it, for what is in the corner from `edge` on (none: no room is taken). It eases
+ * only as the small ones come, go or change; the first time it is seen (a page come in with small ones there), or as
+ * it moves or resizes itself (its side panel opening or closing), it takes its room at once: what it shows stays clear
+ * of them, instead of running under them and back. */
 function avoid(edge: number | null): void {
   for (const el of document.querySelectorAll<HTMLElement>("[data-avoid-previews]")) {
     const room = `${edge === null ? 0 : Math.max(0, Math.round(el.getBoundingClientRect().right - edge))}px`;
-    if (el.style.getPropertyValue("--avoid-previews") !== room) el.style.setProperty("--avoid-previews", room);
+    const eases = avoided.has(el) && avoided.get(el) !== edge;
+    avoided.set(el, edge);
+    if (el.style.getPropertyValue("--avoid-previews") !== room) {
+      if (!eases) el.dataset.avoidPreviews = "";
+      el.style.setProperty("--avoid-previews", room);
+    }
     if (el.dataset.avoidPreviews !== "settled") requestAnimationFrame(() => { el.dataset.avoidPreviews = "settled"; });
   }
 }
@@ -209,8 +218,8 @@ export function Previews() {
     setTucked(value);
     setSpread(false);
   };
-  // Dragged by an edge: the corner stays, the card grows or shrinks towards the pointer (in its page's shape, if it has
-  // one of its own: all of them grow or shrink as much).
+  // Dragged by an edge: the corner stays, and the card grows or shrinks towards the pointer, in its shape (its page's,
+  // if it has one of its own; else as it was): all of them grow or shrink as much, and their pages only scale.
   const resize = (edge: Edge, key: string) => (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -219,19 +228,15 @@ export function Previews() {
     handle.setPointerCapture(e.pointerId);
     const from = { x: e.clientX, y: e.clientY, ...fit(size.current) };
     const card = shapeOf(key, size.current);
-    const shaped = viewportOf(key)?.height != null;
+    // No smaller than MIN, no bigger than the window leaves, either way.
+    const least = Math.max(MIN.width / from.width, MIN.height / from.height);
+    const most = Math.min((innerWidth - 2 * SMALL.margin) / from.width, (innerHeight - 2 * SMALL.margin) / from.height);
     document.documentElement.dataset.previewResizing = edge;
     const move = (m: PointerEvent) => {
-      if (!shaped) {
-        size.current = fit({
-          width: edge === "top" ? from.width : from.width + from.x - m.clientX,
-          height: edge === "left" ? from.height : from.height + from.y - m.clientY,
-        });
-        return;
-      }
       const k = Math.max(edge === "top" ? 0 : (card.width + from.x - m.clientX) / card.width,
         edge === "left" ? 0 : (card.height + from.y - m.clientY) / card.height);
-      size.current = fit({ width: from.width * k, height: from.height * k });
+      const to = Math.min(most, Math.max(least, k));
+      size.current = { width: Math.round(from.width * to), height: Math.round(from.height * to) };
     };
     const end = () => {
       handle.removeEventListener("pointermove", move);
