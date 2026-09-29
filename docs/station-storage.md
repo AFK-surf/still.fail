@@ -23,7 +23,7 @@ Two rules shape this:
 - **Message**: something said in a thread, by a person, an agent (a session),
   or ember itself (a notice).
 
-## Tables (ember.db, schema v11)
+## Tables (ember.db, schema v12)
 
 ```sql
 -- One agent. What it runs on and where; people and messages live in threads.
@@ -33,14 +33,19 @@ CREATE TABLE sessions (
   scope TEXT NOT NULL,                -- thread | all
   title TEXT,
   created_by TEXT,                    -- "slack:<connect>:<user>", an email, "local"
-  runtime TEXT NOT NULL, profile TEXT NOT NULL, model TEXT, effort TEXT,
+  runtime TEXT NOT NULL, profile TEXT NOT NULL,
+  profile_pinned INTEGER NOT NULL DEFAULT 0,  -- kept to profile by hand; else the station picks one at each start
+  model TEXT, effort TEXT,
   runtime_session_id TEXT,
   workspace TEXT NOT NULL,
   token TEXT NOT NULL UNIQUE,
   running INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   last_active_at INTEGER NOT NULL,
-  archived_at INTEGER                 -- hidden from lists; deleted sessions are gone entirely
+  archived_at INTEGER,                -- hidden from lists; deleted sessions are gone entirely
+  archived_by TEXT,                   -- manual | auto (the station, after it idled)
+  shown_at INTEGER,                   -- last shown again by hand: the idle clock starts over
+  cwd TEXT                            -- where its runtime runs when not the workspace (a session continued from outside ember)
 );
 
 -- A place people talk. Ids are never used again (AUTOINCREMENT), so what a client keeps of a thread stays true.
@@ -53,6 +58,9 @@ CREATE TABLE threads (
   created_by TEXT,
   created_at INTEGER NOT NULL,
   archived_at INTEGER,                -- its entries are in its archive file (see Archiving)
+  home TEXT,                          -- a page chat made for a session (its first there): archived and shown with it
+  hidden_at INTEGER, hidden_by TEXT,  -- a chat archived from lists: with its home session, or alone
+  shown_at INTEGER,                   -- as a session's shown_at
   UNIQUE (surface, channel, thread_ts)
 );
 
@@ -120,38 +128,13 @@ CREATE TABLE profile_status (
   quota_json TEXT, quota_at INTEGER
 );
 
--- unchanged: turns, bindings, processes
+-- also: turns, bindings, processes, jobs, job_notices
 ```
 
-The v10 → v11 migration moves each message to an entry in thread order: an
-edited one becomes its message with the edited text (there is no older text
-to keep); one deleted in v10 is left out (its words were cleared already, and
-ember takes nothing back), with its deliveries. Deliveries follow their
-messages to `(thread, n)`; a read position (a seq) becomes the last entry of
-the messages it covered. The thread
-table is made anew with `AUTOINCREMENT`, keeping every id. `messages` goes.
-
-v10 had `messages` (one row per message, changed in place under a global
-`rev` cursor); before it, `chats`, `chat_messages` and `inbound`. The v9 → v10
-migration moved those over (data only; no code keeps the old shape), and a v9
-database goes through both steps:
-
-- threads come from `chats` (surface `ember`), from the threads `inbound`
-  rows came from, and from a session's own first thread when it has no
-  messages; `thread_sessions` from the same, each with the connect its first
-  message came through;
-- a message typed on the page is in both old tables and becomes one message:
-  the `chat_messages` row gives its words, files and quotes (the `inbound`
-  copy held the text formatted for the agent); `inbound.status` becomes the
-  delivery's `delivered_at`; the order follows the time things were said;
-- earlier ember notices were stored as the agent's posts and stay agent
-  messages (nothing tells them apart);
-- a Slack thread's surface needs the connect's team: before the store opens,
-  ember asks Slack (`auth.test` with the connect's bot token) once; a connect
-  it cannot ask gets `slack:<connect id>`. New rows follow the same rule — the
-  team of the connection the message came through, `slack:<connect id>`
-  while that is unknown — so migrated and new rows name a thread alike.
-- Schemas before v9 are refused.
+A database of another schema version is refused (the station says to move
+its data by hand); no migrations are kept in the code (`mesh/app/src/store.rs`).
+The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
+`hidden_*`) are added in place when missing.
 
 ### Writing
 
@@ -195,8 +178,8 @@ database goes through both steps:
   `lastMessage` (the latest message as merged, for lists), and the viewer's
   read position and unread count (messages after it that are not the
   viewer's own — in a Slack thread, not of a Slack user the viewer is); the
-  latest said first. The store's `lastMessage(thread)`,
-  `unreadCount(viewer, thread)` and `readPosition(viewer, thread)` give these
+  latest said first. The store's `last_message(thread)`,
+  `unread_count(viewer, thread)` and `read_position(viewer, thread)` give these
   for anything else that lists threads (the sidebar's items do).
 - `GET /threads/:id/entries?after=n` — what came since; `?before=n&limit=`
   — older pages (no cursor: the latest page, 50 unless `limit`, at most
@@ -287,6 +270,10 @@ are those at the moment it opened.
 
 - `POST /sessions/:key/archive` / `DELETE /sessions/:key/archive`: hide and
   show (and archive its threads, below); the answer is the session summary.
+  `POST|DELETE /threads/:id/archive` does the same for a chat (with its
+  session when it is that session's own chat). The station also archives
+  what has idled past `auto_archive_ms` and is done (`Hub::auto_archive`,
+  hourly); anything new said brings it back.
 - `DELETE /sessions/:key`: ends its process, deletes its rows (turns,
   deliveries, thread_sessions; threads left with no session, with their
   entries or archive files, and reads), its workspace directory and its
@@ -304,7 +291,8 @@ their whole thread (deleting a session removes threads left without one):
 
 ### Archiving
 
-When every session of a thread is archived, its entries go to
+When a thread goes out of every list (archived itself, or every session of it
+archived), its entries go to
 `<data>/archive/threads/<id>.jsonl.zst` (one entry per line, zstd) in one step with deleting their rows, and
 the thread row is marked archived (`archived_at`). Since entries never change,
 the file is the thread as it was, and clients' kept copies stay valid.
@@ -370,12 +358,11 @@ Timers that remain on the station and why: host sampling (above), quota
 refresh every five minutes while some `/events` stream is open (the provider
 cannot notify), an idle process's eviction deadline (a timer per process, set
 when it goes idle, instead of a sweep every minute), Slack reconnect and
-rate-limit backoff, ember-mesh's restart backoff, a keepalive comment on open
+rate-limit backoff, a keepalive comment on open
 event streams every 25 s (proxies close silent ones), a 40 ms coalescing of
-transcript writes for live watchers, a sign-in's 15-minute deadline, and the
-profile checks a few seconds after start. ember-mesh is started when
-`mesh/cloud.json` appears and when its binary is built (both watched with
-`fs.watch`), not on a timer.
+transcript writes for live watchers, a sign-in's 15-minute deadline, the
+profile checks a few seconds after start, the hourly auto-archive, and a look
+at `mesh/cloud.json` every 2 s (enrollment and renames; `MeshFile`).
 
 ### ember cloud → devices: `GET /v1/events` (WebSocket)
 

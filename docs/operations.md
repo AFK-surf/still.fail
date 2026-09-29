@@ -4,10 +4,12 @@
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm build                                      # 构建管理页（web/ → dist/admin）；带 PostHog key 构建见 docs/telemetry.md
+pnpm build                                      # 先构建 wasm 的 client core（client/wasm/build.sh，需要 wasm-bindgen），再构建管理页（web/ → dist/admin）；带 PostHog key 构建见 docs/telemetry.md
 (cd mesh && cargo build --release -p ember-station)
 bin/ember start                                 # PATH 里需要 claude 和 codex
 ```
+
+以上是从源码运行。正式安装走 ember cloud：在 workspace 里拿到安装命令（`curl -fsSL <origin>/install.sh | sh -s -- <token>`，cloud/src/install.ts），它把发布包放到 `~/.ember/app`、把 `ember` 链接进 `~/.local/bin`、加入 workspace，并注册成用户服务（macOS 用 launchd，Linux 用 systemd 用户服务），日志写到 `~/.ember/ember.log`。之后 `ember update` 更新到最新发布；`ember station enroll <origin> <token>` 手动加入 workspace。
 
 数据目录默认 `~/.ember`（`EMBER_DATA` 可改），配置文件是其中的 `config.json`（`EMBER_CONFIG` 可改）。
 
@@ -37,7 +39,7 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
 在管理页里可以：
 
 - 打开一个会话默认看它的执行历史；停止正在运行的任务、释放空闲进程都在历史底部。点「新建对话」会在旁边开一个 ember 自己的对话：它和 Slack 一样是一种连接，消息以 `via="web"`、`thread="EMBER/…"` 送给 agent，agent 用 `chat_post` 回到这个对话；
-- 增删改 **连接**（connect）：人找到 ember 的地方。目前只有 Slack 连接（一个 Slack app），以后会有微信。每个连接绑定一个模型（运行时 Claude Code / Codex、一组账号和一个模型），并选一种会话方式（见下文）。页面上的「在 Slack 创建 app」会打开预填好 manifest 的 Slack 新建页；
+- 增删改 **连接**（connect）：人找到 ember 的地方。目前只有 Slack 连接（一个 Slack app），以后会有微信。每个连接绑定运行时（Claude Code / Codex）、模型和思考深度，可以固定一个账号，不固定时由账号池为每个会话挑，并选一种会话方式（见下文）。页面上的「在 Slack 创建 app」会打开预填好 manifest 的 Slack 新建页；
 - 单会话连接可以在连接页「当前会话」里换成任意一个同运行时的已有会话，或新建一个（可以起名）；更改会话方式要在弹窗里确认，弹窗会说明对进行中的对话有什么影响；
 - 订阅账号可以直接在账号页登录：ember 在自己的机器上运行 `claude auth login` / `codex login --device-auth`，页面给出授权链接（Claude 需要把浏览器里显示的授权码粘贴回来，Codex 输入页面给的一次性代码后自动完成）；
 - 这台机器自己的 Claude Code / Codex 已经登录时，可以直接用这份登录（`"machine": true` 的 Profile，只能选模型，不能改名或在 ember 里登录；停用就是移除这个 Profile，本机的登录不受影响）。只支持存在文件里的登录（`~/.claude/.credentials.json`、`~/.codex/auth.json`）；只存在 macOS 钥匙串里的要单独登录一次。Codex 的 home 里 `auth.json` 链接到本机那份，两边共用、各自刷新都写回同一个文件；Claude Code 换新令牌时会把链接替换成新文件，所以改为把本机当前的 access token 通过 `CLAUDE_CODE_OAUTH_TOKEN` 交给 ember 的进程，ember 自己从不刷新：令牌快过期时让本机的 claude 用 haiku 回一个字（不留会话记录），由它在自己的文件里刷新。
@@ -55,11 +57,11 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
 {
   "admin": { "access": { "teamDomain": "…", "aud": "…" } },
   "connects": [
-    { "id": "ds", "name": "ember", "kind": "slack", "mode": "multi-session",
-      "bind": { "runtime": "claude", "profiles": ["claude-ocg"], "model": "deepseek-flash" },
+    { "id": "ds", "kind": "slack", "mode": "multi-session",
+      "bind": { "runtime": "claude", "profile": "claude-ocg", "model": "deepseek-flash" },
       "slack": { "appToken": "xapp-…", "botToken": "xoxb-…" } },
-    { "id": "ops", "name": "ember-ops", "kind": "slack", "mode": "single-session", "requireMention": false,
-      "bind": { "runtime": "codex", "profiles": ["codex-main"] }, "enabled": false }
+    { "id": "ops", "kind": "slack", "mode": "single-session", "requireMention": false,
+      "bind": { "runtime": "codex" }, "enabled": false }
   ],
   "profiles": [
     { "id": "claude-ocg", "name": "OpenCode Go（Claude Code）", "runtime": "claude", "home": "homes/claude-ocg",
@@ -69,11 +71,13 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
   "maxNudges": 2,
   "warmMinutes": 30,
   "maxWarmClaude": 4,
+  "autoArchiveDays": 1,
   "telemetry": { "errors": false }
 }
 ```
 
-- 连接的 `id` 是会话记录的一部分，创建后不要改。旧版的 `bots` 配置在启动时会自动改写成 `connects`（多会话）。
+- 连接的 `id` 是会话记录的一部分，创建后不要改。`bind.profile` 可省略：省略时由账号池在该运行时的账号里挑（只挑启用了这个模型的）。
+- `autoArchiveDays`：空闲且已结束的会话和对话多少天后自动归档，0 为不自动归档。
 - 账号的 `home` 相对数据目录。用订阅登录时，对这个目录登录一次：`CLAUDE_CONFIG_DIR=<home> claude`，或 `CODEX_HOME=<home> codex login`。
 - `env` 里的 `{route}` 会替换成每个会话的路由 ID（Codex 的 app-server 按账号共享，替换成账号 ID），用于 OpenCode Go 这类需要会话亲和头的服务。
 - 账号的 `access` 决定运行时怎么接模型：`subscription`（订阅登录）、`opencode-go`、`anthropic-api`（后两种要 `key`），或 `env`（只用 `env` 里手写的变量）。ember 据此生成环境变量；Codex 的服务商配置在启动 app-server 时用 `-c` 传入，不改 `config.toml`。
@@ -95,6 +99,8 @@ ember 会校验每个经过 tunnel 的请求所带的 Access JWT（签名、团�
 
 ## 开发
 
-- station：在 mesh/ 里 `cargo test`。
-- `pnpm test`（web 的 client core）、`pnpm typecheck`。
+- station：在 mesh/ 里 `cargo test --workspace`。
+- client core：在 client/ 里 `cargo test --workspace --exclude ember-core-wasm`。
+- `pnpm test`（web 里的 TypeScript 部分，需要先构建 wasm core）、`pnpm typecheck`。
+- `pnpm check`：跑全部检查（scripts/check.sh all）。
 - `pnpm dev:web`：管理页的热更新开发服务器，API 代理到本机 4760。
