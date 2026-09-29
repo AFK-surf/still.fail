@@ -83,13 +83,45 @@ async fn a_job_tells_its_agent_on_the_way_through_its_token() {
     assert_eq!(r.said().len(), 2, "a stop asked for is no news");
 }
 
+/// A session whose agent was last at work `ago` ago.
+fn session_active(store: &Store, key: &str, ago: Duration) {
+    let at = now_ms() - ago.as_millis() as i64;
+    store
+        .insert_session(&crate::store::NewSession {
+            key: key.into(),
+            connect: "ds".into(),
+            runtime: "claude".into(),
+            profile: "cc".into(),
+            workspace: format!("/w/{key}"),
+            token: key.into(),
+            created_at: at,
+            last_active_at: at,
+            ..Default::default()
+        })
+        .unwrap();
+}
+
 #[tokio::test]
 async fn a_job_stopped_from_the_pages_tells_its_agent_who_did() {
     let r = rig();
+    session_active(&r.store, "s1", Duration::from_secs(60));
     let job = r.jobs.start("s1", "watch", "sleep 5", &r.work, None).unwrap();
     let stopped = r.jobs.stop_for(&job.id, "ann@example.com").await.unwrap();
     assert_eq!(stopped.state, "stopped");
     assert_eq!(r.said(), [format!("Job \"watch\" ({}) was stopped by ann@example.com from ember's page.", job.id)]);
+}
+
+#[tokio::test]
+async fn a_job_stopped_from_the_pages_does_not_wake_an_idle_agent() {
+    let r = rig();
+    session_active(&r.store, "s1", Duration::from_secs(6 * 60));
+    let job = r.jobs.start("s1", "watch", "sleep 5", &r.work, None).unwrap();
+    assert_eq!(r.jobs.stop_for(&job.id, "ann@example.com").await.unwrap().state, "stopped");
+    // Once it is at work again, it is told.
+    let other = r.jobs.start("s1", "again", "sleep 5", &r.work, None).unwrap();
+    r.store.set_running("s1", true).unwrap();
+    r.jobs.stop_for(&other.id, "ann@example.com").await.unwrap();
+    assert_eq!(r.said(), [format!("Job \"again\" ({}) was stopped by ann@example.com from ember's page.", other.id)]);
 }
 
 #[tokio::test]

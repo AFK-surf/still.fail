@@ -30,6 +30,9 @@ const NOTICES_SHOWN: usize = 20;
 /// A service that ran this long before it ended starts again at once; one that keeps ending waits longer each time.
 const STEADY: Duration = Duration::from_secs(60);
 const MAX_PAUSE: Duration = Duration::from_secs(60);
+/// A job stopped from the pages is told to its agent only if the agent was at work this lately: one idle longer is not
+/// woken for it (the job's state shows it stopped when the agent next looks).
+const AWAKE: Duration = Duration::from_secs(5 * 60);
 
 /// How a job's command runs: under a shell that writes its exit code to a file when it ends, so a station that did not
 /// start it (it outlived the one that did) still learns how it ended.
@@ -342,11 +345,22 @@ impl Jobs {
         Ok(self.store.get_job(id)?.unwrap_or(job))
     }
 
-    /// Stops a job for someone on the pages: its agent is told who did (it did not ask for it).
+    /// Stops a job for someone on the pages: its agent is told who did (it did not ask for it), if it was at work
+    /// within AWAKE; an idle one is not woken for it.
     pub async fn stop_for(&self, id: &str, who: &str) -> Result<JobRow> {
         let job = self.stop(id).await?;
-        self.tell(&job, format!("{} was stopped by {who} from ember's page.", Self::named(&job)));
+        if self.awake(&job.session_key) {
+            self.tell(&job, format!("{} was stopped by {who} from ember's page.", Self::named(&job)));
+        }
         Ok(job)
+    }
+
+    /// Whether a session's agent is in a turn, or was within AWAKE.
+    fn awake(&self, session: &str) -> bool {
+        match self.store.get_session(session) {
+            Ok(Some(s)) => s.running || now_ms() - s.last_active_at < AWAKE.as_millis() as i64,
+            _ => false,
+        }
     }
 
     /// After a start of the station: what still runs is followed again; what ended meanwhile is told as ended; what was
