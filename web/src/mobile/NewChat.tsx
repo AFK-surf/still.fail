@@ -86,8 +86,9 @@ function NewChatOn({ view, stations, onStation }: { view: StationView; stations:
     void sendDraft(draft, null, ensureChat).then((to) => {
       if (to === null || opened.current) return;
       opened.current = true;
-      // The new item's page (its address from now on, until its station's key takes over: ChatScreen).
-      toMadeChat(() => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(String(to))}`, { replace: true }));
+      // The new item's page (its address from now on, until its station's key takes over: ChatScreen), crossfading in
+      // above the composer, which stays.
+      toMadeChat(() => navigate(`${stationBase(view.station)}/chats/${encodeURIComponent(String(to))}`, { replace: true }), false);
     });
   };
   useLayoutEffect(() => use({ station: view.station, placeholder: "做任何事", offline: false, send }));

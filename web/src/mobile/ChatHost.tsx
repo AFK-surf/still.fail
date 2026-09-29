@@ -10,6 +10,7 @@ import { useApp } from "./app.tsx";
 import { ChatScreen, openAttach, openedAs, useComposerBar, type Draft } from "./Chat.tsx";
 import { ComposerExtras } from "../Chat.tsx";
 import { useDraft } from "../draft.ts";
+import { useMorph } from "../morph.ts";
 import { useStationCall, type Attachment } from "../api.ts";
 import { NewChatScreen } from "./NewChat.tsx";
 import { Loading } from "./parts.tsx";
@@ -121,11 +122,15 @@ function Composer({ shown, draftKey, latest, draft, now, root, upload: uploader 
     draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked,
     onPlus: () => openAttach(app, upload), onType: () => latest.current?.type?.(), onSend: () => latest.current?.send(now.current),
   });
+  // Growing or shrinking (a line more, a file, a quote, sent and emptied) in one motion, as the wide screen's
+  // (morph.ts): after the text box has taken its height (useComposerBar), so that it is read with it.
+  const frame = useRef<HTMLDivElement>(null);
+  useMorph(frame, `${draft.text}|${draft.files.length}|${draft.quotes.length}|${draft.error}|${shown.offline}|${shown.archived}`);
   return (
     <div className={`${css.mComposer} ${css.mHostComposer} ${rootCss.wide}`} ref={capsule}>
       {menu}
       {/* Files dropped in go with the message, as ＋ adds them (pasted ones, the text box takes); offline, nothing goes to the station. */}
-      <div className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
+      <div ref={frame} className={`${pagesCss.mFloating} ${css.mComposerCapsule}`} onClick={(e) => { if (e.target === e.currentTarget) draft.bumpFocus(); }}
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) e.preventDefault(); }}
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!locked) upload(e.dataTransfer.files); } }}>
         {shown.archived && <ArchiveNotice className={css.mComposerOffline} offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}

@@ -26,7 +26,7 @@ import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
 import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs, type ChatRef } from "./ChatRef.tsx";
 import { refMark } from "./chatRefs.ts";
-import { easeOut, morph, movingBy, shapeOf, stop, type Shape } from "./morph.ts";
+import { useMorph } from "./morph.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
@@ -34,10 +34,11 @@ import * as controlsCss from "./styles/controls.css.ts";
 
 /**
  * From a new chat, whose page already looks like the chat (its first messages on their way), to the chat itself: the
- * page is kept until the chat shows them, then gives way at once.
+ * page is kept until the chat shows them, then gives way at once (`still`), or crossfades to it (the phone's, where the
+ * composer stays put and nothing else would move).
  */
-export function toMadeChat(go: () => void): void {
-  void transitionTo(go, () => document.querySelector(`.${css.chatMessages} .${chatCss2.msgMine}`) !== null, true);
+export function toMadeChat(go: () => void, still = true): void {
+  void transitionTo(go, () => document.querySelector(`.${css.chatMessages} .${chatCss2.msgMine}`) !== null, still);
 }
 
 /**
@@ -827,28 +828,12 @@ export function Composer({ thread, sessionKey, quotes = [], setQuotes = () => {}
     if (ready) void send();
   };
   const { menu, field } = useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className: css.composerText, onType: warm, onSubmit: submit });
-  // Capsule ⇄ box, in one motion (morph.ts): how it shows is read in the render that changes it (the page still shows
-  // what was), and it goes from there to its new shape once that is laid out. Laid out for another page (a new chat's
-  // roomy box ⇄ a chat's foot), the dock moves it (dock.tsx), not this; nor does this cut into that move.
+  // Capsule ⇄ box, in one motion (morph.ts); laid out for another page (a new chat's roomy box ⇄ a chat's foot), the
+  // dock moves it (dock.tsx).
   const multiline = roomy || text.includes("\n") || text.length > 60 || files.length > 0 || quotes.length > 0;
   const box = useRef<HTMLFormElement>(null);
   // What it is laid out by: any change of it may change its height (a line more or less, capsule ⇄ box, files).
-  const laidOut = `${multiline}|${text}|${files.length}|${quotes.length}`;
-  const shown = useRef({ laidOut, roomy });
-  const from = useRef<Shape | null>(null);
-  if (box.current && shown.current.laidOut !== laidOut && !from.current) from.current = shapeOf(box.current);
-  useLayoutEffect(() => {
-    const el = box.current, was = from.current;
-    const paged = shown.current.roomy !== roomy;
-    from.current = null;
-    shown.current = { laidOut, roomy };
-    if (!el || !was || paged || movingBy(el) === "page" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    stop(el);
-    const height = el.getBoundingClientRect().height;
-    // Its size unchanged (a letter more on the same line), nothing moves.
-    if (Math.abs(height - was.rect.height) < 0.5 && was.corner === getComputedStyle(el).getPropertyValue("corner-shape")) return;
-    morph(el, "text", was, [{ height: `${was.rect.height}px` }, { height: `${height}px` }], { duration: 260, easing: easeOut() });
-  }, [laidOut, roomy]);
+  useMorph(box, `${multiline}|${text}|${files.length}|${quotes.length}`, roomy);
   return (
     <div className={cloudCss.composerWrap}>
       {menu}

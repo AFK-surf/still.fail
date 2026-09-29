@@ -2,7 +2,10 @@
 // Composer) or its page (a new chat's roomy box becoming a chat's foot, dock.tsx). Both do the same: read how it shows
 // just before its layout changes (`shapeOf`), then go from there to how it is laid out now (`morph`) — the box (its
 // place and size, as the caller says, and its corners' size and shape) and what it holds (its text and buttons) on one
-// timeline, rather than the box moving while what is in it jumps.
+// timeline, rather than the box moving while what is in it jumps. Both screens' composers do it as they are typed in
+// (`useMorph`).
+
+import { useLayoutEffect, useRef, type RefObject } from "react";
 
 /** What moves with the box: its text and its buttons (not the text's unseen measure, Chat.tsx). */
 const PARTS = "textarea:not([aria-hidden]), button";
@@ -72,4 +75,28 @@ export function movingBy(box: HTMLElement): string | undefined {
 /** The pages' easing, for a motion's timing. */
 export function easeOut(): string {
   return getComputedStyle(document.documentElement).getPropertyValue("--ease-out").trim() || "ease-out";
+}
+
+/**
+ * `box` going to its new shape whenever what it is laid out by (`laidOut`: its text, files…) changes, in one motion: how
+ * it shows is read in the render that changes it (the page still shows what was), and it goes from there once that is
+ * laid out. Laid out for another page (`page` changing: a new chat's roomy box ⇄ a chat's foot), the page's change
+ * moves it (dock.tsx), not this; nor does this cut into that move.
+ */
+export function useMorph(box: RefObject<HTMLElement | null>, laidOut: string, page: unknown = null): void {
+  const shown = useRef({ laidOut, page });
+  const from = useRef<Shape | null>(null);
+  if (box.current && shown.current.laidOut !== laidOut && !from.current) from.current = shapeOf(box.current);
+  useLayoutEffect(() => {
+    const el = box.current, was = from.current;
+    const paged = shown.current.page !== page;
+    from.current = null;
+    shown.current = { laidOut, page };
+    if (!el || !was || paged || movingBy(el) === "page" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    stop(el);
+    const height = el.getBoundingClientRect().height;
+    // Its size unchanged (a letter more on the same line), nothing moves.
+    if (Math.abs(height - was.rect.height) < 0.5 && was.corner === getComputedStyle(el).getPropertyValue("corner-shape")) return;
+    morph(el, "text", was, [{ height: `${was.rect.height}px` }, { height: `${height}px` }], { duration: 260, easing: easeOut() });
+  }, [laidOut, page]); // eslint-disable-line react-hooks/exhaustive-deps
 }
