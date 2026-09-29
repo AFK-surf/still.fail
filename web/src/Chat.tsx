@@ -1119,7 +1119,10 @@ export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { a
  * the activity folds to its avatar (fold), the avatar floats to where the message goes (float), the message comes out
  * of it, growing into its place (spit), and the avatar goes on down to where the activity now is, which unfolds again
  * (return). The message's own avatar is where the flying one leaves it, the same picture in the same place, so
- * nothing blinks. Until its turn a message waits folded to nothing. With reduced motion messages just appear.
+ * nothing blinks. Until its turn a message waits folded to nothing. With reduced motion messages just appear, and so
+ * do those no one watches come out: arriving while the page is hidden or the reader has scrolled up (scroll.ts), and
+ * all still waiting when the page is hidden or the reader scrolls up (the browser barely runs timers for a hidden
+ * page, so a queue would otherwise still be playing out long after).
  */
 type Pose = "fold" | "float" | "spit" | "return";
 const FOLD_MS = 170;
@@ -1133,6 +1136,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
   const queue = useRef<{ seq: number; agent: string }[]>([]);
   const [current, setCurrent] = useState<{ seq: number; agent: string; pose: Pose } | null>(null);
   const flying = useRef<HTMLElement | null>(null);
+  const [, rerender] = useState(0);
   const reduced = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
 
   // Where an element sits in the list's content, by layout: what the flying avatar moves in (scrolling does not move
@@ -1159,8 +1163,31 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     nextAfter(agent);
   };
 
+  // Everything waiting or coming out shows at once, where it is.
+  const release = () => {
+    if (!current && !queue.current.length) return;
+    for (const q of queue.current) done.current.add(q.seq);
+    if (current) done.current.add(current.seq);
+    queue.current = [];
+    flying.current?.remove();
+    flying.current = null;
+    setCurrent(null);
+    rerender((n) => n + 1);
+  };
+  const watched = () => document.visibilityState === "visible" && !list.current?.hasAttribute("data-reading-up");
   useLayoutEffect(() => {
-    if (!current && queue.current.length) nextAfter(null);
+    if (!watched()) release();
+    else if (!current && queue.current.length) nextAfter(null);
+  });
+  useEffect(() => {
+    const pane = list.current;
+    const change = () => { if (!watched()) release(); };
+    document.addEventListener("visibilitychange", change);
+    pane?.addEventListener("scroll", change, { passive: true });
+    return () => {
+      document.removeEventListener("visibilitychange", change);
+      pane?.removeEventListener("scroll", change);
+    };
   });
   useLayoutEffect(() => {
     if (!current) return;
@@ -1221,7 +1248,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
       for (const m of messages) {
         if (decided.current.has(m.seq)) continue;
         const agent = m.authorKind === "agent" ? m.by.agent : undefined;
-        const emits = !reduced && m.seq > since && agent !== undefined && showing.has(agent);
+        const emits = !reduced && watched() && m.seq > since && agent !== undefined && showing.has(agent);
         decided.current.set(m.seq, emits);
         if (emits) queue.current.push({ seq: m.seq, agent: agent! });
       }

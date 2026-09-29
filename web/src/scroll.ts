@@ -11,8 +11,8 @@
 //   long). This is immediate, so nothing they read moves.
 // Scrolling by anyone else (the reader: wheel, touch and its momentum, keys,
 // the scrollbar; a jump to a message) sets the new position, and whether it is
-// at the bottom. A `to-bottom` event on the pane glides to the bottom and
-// follows it again.
+// at the bottom; the pane carries `data-reading-up` while it is not. A
+// `to-bottom` event on the pane glides to the bottom and follows it again.
 // With a `floor` (an empty last child), the content never gets shorter: what
 // leaves the bottom (an activity folding away) leaves its space behind, filled
 // by the floor, so nothing above it drops down. A change of the width its
@@ -144,6 +144,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       following = distance() <= 2;
       if (following) reading = null;
       else note();
+      el.toggleAttribute("data-reading-up", !following);
     };
     let lastInput = 0;
     const onScroll = () => {
@@ -154,7 +155,7 @@ export function useStickToBottom(ref: RefObject<HTMLElement | null>, messages = 
       moved();
     };
     const input = () => { lastInput = Date.now(); };
-    const toBottom = () => { anchor = null; reading = null; following = true; smooth = true; hold(); };
+    const toBottom = () => { anchor = null; reading = null; following = true; smooth = true; el.removeAttribute("data-reading-up"); hold(); };
     el.addEventListener("to-bottom", toBottom);
     el.addEventListener("scroll", onScroll, { passive: true });
     for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.addEventListener(type, input, { passive: true });
