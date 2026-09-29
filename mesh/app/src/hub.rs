@@ -572,11 +572,13 @@ impl Hub {
         if self.internal.is_none() {
             bail!("ember chat is not available");
         }
-        if self.store.get_session(session)?.is_none() {
+        let Some(row) = self.store.get_session(session)? else {
             bail!("unknown session {session}");
-        }
+        };
         // The first chat made with a session is its own; later ones are chats of their own (ThreadRow::home).
         let home = if self.store.home_chat(session)?.is_some() { None } else { Some(session) };
+        // Its own chat keeps the name the session was given before it had one.
+        let title = title.or(home.and(row.title.as_deref()));
         let thread = self.store.open_thread_of(EMBER_SURFACE, INTERNAL_CHANNEL, &next_ts(), title, Some(created_by), home)?;
         self.store.join_thread(thread.id, session, INTERNAL_CONNECT)?;
         Ok(thread)
