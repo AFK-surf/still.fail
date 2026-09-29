@@ -325,9 +325,10 @@ export function ChooserItem({ checked, onSelect, children }: { checked: boolean;
 /**
  * A phone's screen, where the app is the phone's (mobile/): one column, the list or what is opened from it. Taller than
  * wide and narrow both: a small laptop's window, however narrow, stays the desktop app (whose own narrow widths only
- * fold its side panels over the page: the styles' `max-width: 1100px` blocks).
+ * fold its side panels over the page: the styles' `max-width: 1100px` blocks). Or a finger's screen no bigger than
+ * 1024 either way: a phone on its side, a foldable opened (700–900 wide, some wider than tall); a tablet is bigger.
  */
-export const NARROW = "(orientation: portrait) and (max-width: 700px)";
+export const NARROW = "(orientation: portrait) and (max-width: 700px), (pointer: coarse) and (max-width: 1024px) and (max-height: 1024px)";
 
 /** Whether the screen is narrow (NARROW), following the window as it changes. */
 export function useNarrow(): boolean {

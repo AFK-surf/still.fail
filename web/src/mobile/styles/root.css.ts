@@ -89,6 +89,11 @@ export const m = style({
         },
       },
     },
+    // Wider than a phone (a foldable opened, a phone on its side): the app keeps a phone's column in the middle, its
+    // pages moving within it; the page's colour goes on to the edges.
+    "(min-width: 721px)": {
+      left: "calc(50% - 360px)", right: "calc(50% - 360px)", boxShadow: "0 0 0 100vmax var(--m-bg)",
+    },
   },
 });
 /**
