@@ -680,6 +680,10 @@ impl AdminApi {
                 }
                 let title = input.str("title").map(str::trim).filter(|t| !t.is_empty()).map(|t| t.chars().take(80).collect::<String>());
                 self.deps.store.set_title(key, title.as_deref())?;
+                // Once the session has a chat of its own, the list names it by that chat: the chat takes the name too.
+                if let Some(home) = self.deps.store.home_chat(key)? {
+                    self.deps.store.set_thread_title(home.id, title.as_deref())?;
+                }
                 return ok(json!({ "ok": true }));
             }
             // What a widget in one of the session's messages holds (web/src/Viz.tsx), by its file's path; its
@@ -741,6 +745,16 @@ impl AdminApi {
                         let session = input.text("session");
                         self.session_row(&session)?;
                         self.deps.hub.add_to_thread(thread_id, &session).map_err(|e| http_error(400, e.to_string()))?;
+                        return ok(self.thread(thread_id, viewer)?);
+                    }
+                    // A chat named by hand; no name (or an empty one) names it by its first message again.
+                    (Some("title"), "PUT") => {
+                        if thread.surface != crate::store::EMBER_SURFACE {
+                            return Err(http_error(400, "只能给 ember 自己的对话改名"));
+                        }
+                        let input = read_json(body).await?;
+                        let title = input.str("title").map(str::trim).filter(|t| !t.is_empty()).map(|t| t.chars().take(80).collect::<String>());
+                        self.deps.store.set_thread_title(thread_id, title.as_deref())?;
                         return ok(self.thread(thread_id, viewer)?);
                     }
                     // A chat archived or shown again: with its session when it is that session's own (Hub::archive_chat).

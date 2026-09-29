@@ -1182,6 +1182,35 @@ async fn chats_are_archived_with_their_session_or_alone_and_listed_in_the_archiv
 }
 
 #[tokio::test]
+async fn a_chat_is_renamed_by_hand_and_named_by_its_first_message_again_when_the_name_is_cleared() {
+    let t = setup().await;
+    let made = t.call("POST", "/sessions", Some(json!({ "runtime": "claude" }))).await.1;
+    let key = made["key"].as_str().unwrap().to_string();
+    let own = made["thread"]["id"].as_i64().unwrap();
+    t.call("POST", &format!("/threads/{own}/messages"), Some(json!({ "text": "修一下登录\n细节在后面" }))).await;
+    let title = |t: &Value| t.as_array().unwrap().iter().find(|r| r["thread"] == json!(own)).unwrap()["title"].clone();
+    assert_eq!(title(&t.get("/chats").await), json!("修一下登录"));
+    let named = t.call("PUT", &format!("/threads/{own}/title"), Some(json!({ "title": "  登录排查  " }))).await;
+    assert_eq!((named.0, named.1["title"].clone()), (200, json!("登录排查")));
+    assert_eq!(title(&t.get("/chats").await), json!("登录排查"));
+    let long = "长".repeat(100);
+    t.call("PUT", &format!("/threads/{own}/title"), Some(json!({ "title": long }))).await;
+    assert_eq!(title(&t.get("/chats").await).as_str().unwrap().chars().count(), 80);
+    t.call("PUT", &format!("/threads/{own}/title"), Some(json!({ "title": "  " }))).await;
+    assert_eq!(title(&t.get("/chats").await), json!("修一下登录"), "no name: its first line again");
+    t.call("PUT", &format!("/threads/{own}/title"), Some(json!({ "title": null }))).await;
+    assert_eq!(title(&t.get("/chats").await), json!("修一下登录"));
+    // Naming the session names its own chat too.
+    t.call("POST", &format!("/sessions/{}/title", enc(&key)), Some(json!({ "title": "值班" }))).await;
+    assert_eq!(title(&t.get("/chats").await), json!("值班"));
+    assert_eq!(t.call("PUT", "/threads/99999/title", Some(json!({ "title": "x" }))).await.0, 404);
+    t.hub.accept("ds", at("12.000001", "12.000001", "U42", "<@UBOT> hi", true)).await.unwrap();
+    settle().await;
+    let slack = t.store.list_threads("local", None, None).unwrap().into_iter().find(|x| x.thread.surface != crate::store::EMBER_SURFACE).unwrap().thread.id;
+    assert_eq!(t.call("PUT", &format!("/threads/{slack}/title"), Some(json!({ "title": "x" }))).await.0, 400, "a Slack thread is named in Slack");
+}
+
+#[tokio::test]
 async fn events_announce_each_kind_of_change() {
     let quotas = Arc::new(AtomicUsize::new(0));
     let t = setup_with(Setup { quota: Some(quotas.clone()), ..Setup::default() }).await;

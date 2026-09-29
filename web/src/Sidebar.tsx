@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Brain, ChevronRight, Command, Compose, Key, Monitor, Plug, Settings, Sliders, Unplug } from "./icons.tsx";
+import { Archive, ArrowLeft, Edit, Brain, ChevronRight, Command, Compose, Key, Monitor, Plug, Settings, Sliders, Unplug } from "./icons.tsx";
 import { stationBase, useLink, useOnlyMine } from "./station.tsx";
 import { lastChat } from "./lastChat.ts";
 import { MineFilter } from "./components.tsx";
@@ -14,6 +14,9 @@ import { goToNeighbour } from "./Chat.tsx";
 import { CHANGEABLE, useShortcut } from "./keymap.ts";
 import { ChatMark } from "./ChatMark.tsx";
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
+import { ContextMenu } from "radix-ui";
+import { TitleInput, useRename } from "./Rename.tsx";
+import * as controlsCss from "./styles/controls.css.ts";
 import { archiveKey, PendingArchives } from "./pendingArchives.ts";
 import { OpenJobs } from "./OpenJobs.tsx";
 import * as nav from "./Sidebar.css.ts";
@@ -189,16 +192,22 @@ function ChatRow({ item }: { item: ChatItem }) {
   const { connect } = item;
   const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const move = useComposerMove();
-  return (
-    <div className={nav.navSessionWrap}>
-    <NavLink className={`${nav.navRow} ${nav.navSession}`} to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={(e) => { chatClicked(); move(e, to, "chat"); }}
+  const archive = useArchive(item, to);
+  const rename = useRename(item.station);
+  const [editing, setEditing] = useState(false);
+  // A new chat its station has not made yet, or one on a station offline, is neither renamed nor archived.
+  const menu = !item.offline && !item.pending;
+  const row = (
+    <NavLink className={`${nav.navRow} ${nav.navSession}`} to={to} data-unread={item.unread || undefined} data-offline={item.offline ? true : undefined} onClick={(e) => { if (editing) { e.preventDefault(); return; } chatClicked(); move(e, to, "chat"); }}
       // Pressing a chat does not take the focus from the composer: it stays there, focused, into the next chat.
       onMouseDown={(e) => e.preventDefault()}>
       <AgentsPicture item={item} />
       <span className={nav.navSessionText}>
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className={nav.navSessionHead}>
-          <span className={nav.navSessionTitle}>{item.title}</span>
+          {editing
+            ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
+            : <span className={nav.navSessionTitle}>{item.title}</span>}
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Slack is the only kind of connect there is. */}
           {/* Its station offline: greyed, and marked there instead (the core says so, row by row). */}
@@ -215,19 +224,34 @@ function ChatRow({ item }: { item: ChatItem }) {
         </span>
       </span>
     </NavLink>
-    {!item.offline && <ArchiveButton item={item} to={to} />}
+  );
+  return (
+    <div className={nav.navSessionWrap} data-editing={editing || undefined}>
+    {menu ? (
+      // Right-clicking a row: what can be done to the chat.
+      <ContextMenu.Root modal={false}>
+        <ContextMenu.Trigger asChild disabled={editing}>{row}</ContextMenu.Trigger>
+        <ContextMenu.Portal>
+          <ContextMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()}>
+            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setEditing(true)}><Edit size={14} />重命名</ContextMenu.Item>
+            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void archive()}><Archive size={14} />归档</ContextMenu.Item>
+          </ContextMenu.Content>
+        </ContextMenu.Portal>
+      </ContextMenu.Root>
+    ) : row}
+    {menu && !editing && <ArchiveButton item={item} archive={archive} />}
     </div>
   );
 }
 
-/** Beside a chat's row while pointed at: puts it in the archive (its session with it when it is that session's own). */
-function ArchiveButton({ item, to }: { item: ChatItem; to: string }) {
+/** Puts a chat's row in the archive (its session with it when it is that session's own), leaving its page if open. */
+function useArchive(item: ChatItem, to: string) {
   const pending = useContext(ArchivesContext)!;
   const api = stationApi(useStationCall(item.station));
   const path = useLocation().pathname;
   const navigate = useNavigate();
   const toast = useToast();
-  const archive = async () => {
+  return async () => {
     const key = archiveKey(item);
     if (!pending.begin(key)) return;
     // Move away now; a slow response must not navigate over a chat opened meanwhile.
@@ -241,6 +265,10 @@ function ArchiveButton({ item, to }: { item: ChatItem; to: string }) {
       toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
     }
   };
+}
+
+/** Beside a chat's row while pointed at: puts it in the archive. */
+function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => Promise<void> }) {
   return (
     <Tip label="归档" side="right">
       <button type="button" className={`${pagesCss.iconBtn} ${nav.rowArchive}`} aria-label={`归档「${item.title}」`} onMouseDown={(e) => e.preventDefault()} onClick={() => void archive()}>

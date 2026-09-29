@@ -1002,6 +1002,15 @@ impl Store {
         self.with(|i, changes| i.set_thread_hidden(thread, hidden, by, changes))
     }
 
+    /// Names a chat, or (None) leaves it to be named by the first thing a person said in it.
+    pub fn set_thread_title(&self, thread: i64, title: Option<&str>) -> Result<()> {
+        self.with(|i, changes| {
+            i.db.execute("UPDATE threads SET title = ?1 WHERE id = ?2", params![title, thread])?;
+            changes.push(StoreChange::Thread { id: thread, entries: vec![] });
+            Ok(())
+        })
+    }
+
     /// A session's own chat on the page (ThreadRow::home), if it has one.
     pub fn home_chat(&self, session: &str) -> Result<Option<ThreadRow>> {
         self.with(|i, _| Ok(i.db.query_row("SELECT * FROM threads WHERE home = ? ORDER BY id LIMIT 1", [session], to_thread).optional()?))

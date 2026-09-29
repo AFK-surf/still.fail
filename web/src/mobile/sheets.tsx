@@ -39,12 +39,12 @@ function Confirm({ title, text, action, danger = false, run }: { title: string; 
   );
 }
 
-/** Asks for a line (a name); `run` gets it trimmed. */
-export function ask(app: MobileApp, spec: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; run: (value: string) => Promise<unknown> }) {
+/** Asks for a line (a name); `run` gets it trimmed. `empty`: an empty line may be given too. */
+export function ask(app: MobileApp, spec: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; empty?: boolean; run: (value: string) => Promise<unknown> }) {
   app.sheet({ height: 0.42, content: () => <Ask {...spec} /> });
 }
 
-function Ask({ title, value: first, placeholder, action, hint, secret = false, run }: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; run: (value: string) => Promise<unknown> }) {
+function Ask({ title, value: first, placeholder, action, hint, secret = false, empty = false, run }: { title: string; value: string; placeholder: string; action: string; hint?: string; secret?: boolean; empty?: boolean; run: (value: string) => Promise<unknown> }) {
   const app = useApp();
   const [value, setValue] = useState(first);
   const [busy, setBusy] = useState(false);
@@ -65,7 +65,7 @@ function Ask({ title, value: first, placeholder, action, hint, secret = false, r
         {error && <p className={partsCss.mError}>{error}</p>}
         <div className={sheetsCss.mFormActions}>
           <Button label="取消" primary={false} onClick={() => app.sheet(null)} />
-          <Button label={action} primary busy={busy} enabled={!!value.trim() && value.trim() !== first} onClick={go} />
+          <Button label={action} primary busy={busy} enabled={(empty || !!value.trim()) && value.trim() !== first} onClick={go} />
         </div>
       </div>
     </>

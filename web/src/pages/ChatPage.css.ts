@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { muted } from "../styles/shell.css.ts";
 import { sessionPage } from "../styles/session.css.ts";
+import { pageBarTitle } from "../styles/conversation.css.ts";
 import { resizeHandle } from "../ui.css.ts";
 import { quotaRing, quotaRingNumber } from "../components.css.ts";
 
@@ -169,3 +170,10 @@ globalStyle(`${sidePanel} ${resizeHandle}`, {
   },
 });
 globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "auto", padding: "0", borderBottom: "0" });
+/** Beside the chat's title, shown while the title is pointed at: renames it (as double-clicking the title does). */
+export const renameBtn = style({
+  width: "24px", height: "24px", marginLeft: "-4px", opacity: 0, color: vars.muted,
+  selectors: {
+    [`${pageBarTitle}:hover &, &:focus-visible`]: { opacity: 1 },
+  },
+});
