@@ -25,9 +25,6 @@ export const previewPage = style({
   position: "fixed", inset: "0", display: "flex", flexDirection: "column", background: vars.canvas,
 });
 export const previewMissing = style({ alignItems: "center", justifyContent: "center", color: vars.muted });
-export const previewStage = style({
-  position: "relative", flex: "1", minHeight: "0", display: "flex", flexDirection: "column",
-});
 /** A service starting again: said over its page, which loads anew once it is up. */
 export const previewRestart = style({
   position: "absolute", left: "50%", bottom: "18px", transform: "translateX(-50%)", display: "flex",
@@ -51,7 +48,7 @@ export const previewPath = style({
     "&:focus": { outline: "none", color: vars.text },
   },
 });
-export const previewFrame = style({ flex: "1", minHeight: "0", width: "100%", border: "0", background: "#fff" });
+export const previewFrame = style({ display: "block", width: "100%", height: "100%", border: "0", background: "#fff" });
 globalStyle(`${previewBar} ${iconBtn}`, { width: "28px", height: "28px" });
 globalStyle(`${previewBar} ${iconBtn}:disabled`, { opacity: "0.35", cursor: "default", background: "none" });
 globalStyle(`${previewAddress} svg`, { flex: "none" });

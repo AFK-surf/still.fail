@@ -105,6 +105,10 @@ export function Copy(props: IconProps) {
   return <Svg {...props}><path d="M8 6.5Q8 3.5 11 3.5H17Q20.5 3.5 20.5 7V13Q20.5 16 17.5 16 M7 8H13Q16 8 16 11V17Q16 20.5 12.5 20.5H7Q3.5 20.5 3.5 17V11.5Q3.5 8 7 8Z" /></Svg>;
 }
 
+export function Devices(props: IconProps) {
+  return <Svg {...props}><path d="M12 15.5H6.5Q3 15.5 3 12V7Q3 3.5 6.5 3.5H15Q18.5 3.5 18.5 7V7.5 M8 20H12 M9.5 15.5V20 M17 10H19.5Q21.5 10 21.5 12V18.5Q21.5 20.5 19.5 20.5H17Q15 20.5 15 18.5V12Q15 10 17 10Z" /></Svg>;
+}
+
 export function Download(props: IconProps) {
   return <Svg {...props}><path d="M12 3.5V15 M7.5 10.5L12 15L16.5 10.5 M4.5 20H19.5" /></Svg>;
 }
@@ -163,6 +167,10 @@ export function Monitor(props: IconProps) {
 
 export function More(props: IconProps) {
   return <Svg {...props}><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function Move(props: IconProps) {
+  return <Svg {...props}><path d="M12 3.5V20.5 M3.5 12H20.5 M9.5 6L12 3.5L14.5 6 M9.5 18L12 20.5L14.5 18 M6 9.5L3.5 12L6 14.5 M18 9.5L20.5 12L18 14.5" /></Svg>;
 }
 
 export function Other(props: IconProps) {
@@ -318,6 +326,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "command": Command,
   "compose": Compose,
   "copy": Copy,
+  "devices": Devices,
   "download": Download,
   "edit": Edit,
   "external": External,
@@ -333,6 +342,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "minus": Minus,
   "monitor": Monitor,
   "more": More,
+  "move": Move,
   "other": Other,
   "panel-close": PanelClose,
   "panel-open": PanelOpen,

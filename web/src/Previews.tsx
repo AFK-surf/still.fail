@@ -13,7 +13,10 @@ import { ServiceFrame, type Restarting } from "./Preview.tsx";
 import { useLink } from "./station.tsx";
 import { Close, Minus, Web } from "./icons.tsx";
 import { Tip } from "./ui.tsx";
+import { previewKey, viewportOf } from "./viewport.ts";
 import * as css from "./Previews.css.ts";
+
+export { previewKey };
 
 interface Kept {
   key: string;
@@ -35,8 +38,6 @@ let kept: Kept[] = [];
 const slots = new Map<string, HTMLElement>();
 const listeners = new Set<() => void>();
 const changed = () => { for (const listener of listeners) listener(); };
-
-export const previewKey = (station: string, service: string) => `${station}\n${service}`;
 
 function keep(entry: Kept): void {
   const at = kept.findIndex((k) => k.key === entry.key);
@@ -108,6 +109,17 @@ const fit = ({ width, height }: Size): Size => ({
   width: Math.round(Math.max(MIN.width, Math.min(width, innerWidth - 2 * SMALL.margin))),
   height: Math.round(Math.max(MIN.height, Math.min(height, innerHeight - 2 * SMALL.margin))),
 });
+/** A small one's card: `size`, or, for a page laid out at a size of its own (viewport.ts), as much room in that
+ * page's shape (a phone's tall, a desktop's wide), no bigger than the window leaves. */
+function shapeOf(key: string, size: Size): Size {
+  const box = fit(size);
+  const own = viewportOf(key);
+  if (!own || own.height === null) return box;
+  const ratio = own.width / own.height, area = box.width * box.height;
+  const width = Math.sqrt(area * ratio), height = Math.sqrt(area / ratio);
+  const k = Math.min(1, (innerWidth - 2 * SMALL.margin) / width, (innerHeight - 2 * SMALL.margin) / height);
+  return { width: Math.round(width * k), height: Math.round(height * k) };
+}
 /** The grip: GAP outside the card's corner, following it (the same shape, GAP more radius), its ends a little short
  * of where the corner meets the straight edges. */
 const GRIP = { gap: 5, stroke: 4, trim: 0.26 };
@@ -140,7 +152,8 @@ interface Seen { area: Box; bar: boolean }
 interface Placed { mode: Mode; box: Box; seen: Seen; to: Drawn; layout: string; style: string }
 interface Drawn { transform: string; clipPath: string; opacity: string }
 
-/** A small one's page is laid out this wide (as a window's would be), and drawn scaled down: all of it shows. */
+/** A small one's page is laid out this wide (as a window's would be; or at its own size, viewport.ts), and drawn
+ * scaled down: all of it shows. */
 const LAID = 800;
 
 /** Makes way, in whatever is marked for it, for what is in the corner from `edge` on (none: no room is taken). The first
@@ -189,20 +202,29 @@ export function Previews() {
     setTucked(value);
     setSpread(false);
   };
-  // Dragged by an edge: the corner stays, the card grows or shrinks towards the pointer.
-  const resize = (edge: Edge) => (e: React.PointerEvent<HTMLDivElement>) => {
+  // Dragged by an edge: the corner stays, the card grows or shrinks towards the pointer (in its page's shape, if it has
+  // one of its own: all of them grow or shrink as much).
+  const resize = (edge: Edge, key: string) => (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const handle = e.currentTarget;
     handle.setPointerCapture(e.pointerId);
     const from = { x: e.clientX, y: e.clientY, ...fit(size.current) };
+    const card = shapeOf(key, size.current);
+    const shaped = viewportOf(key)?.height != null;
     document.documentElement.dataset.previewResizing = edge;
     const move = (m: PointerEvent) => {
-      size.current = fit({
-        width: edge === "top" ? from.width : from.width + from.x - m.clientX,
-        height: edge === "left" ? from.height : from.height + from.y - m.clientY,
-      });
+      if (!shaped) {
+        size.current = fit({
+          width: edge === "top" ? from.width : from.width + from.x - m.clientX,
+          height: edge === "left" ? from.height : from.height + from.y - m.clientY,
+        });
+        return;
+      }
+      const k = Math.max(edge === "top" ? 0 : (card.width + from.x - m.clientX) / card.width,
+        edge === "left" ? 0 : (card.height + from.y - m.clientY) / card.height);
+      size.current = fit({ width: from.width * k, height: from.height * k });
     };
     const end = () => {
       handle.removeEventListener("pointermove", move);
@@ -245,11 +267,20 @@ export function Previews() {
         setDeck(small);
       }
       const { spread, tucked } = state.current;
-      const { width, height } = fit(size.current);
       const right = innerWidth - SMALL.margin;
       // Over the capsule while tucked away; else from the corner.
       const bottom = innerHeight - SMALL.margin - (tucked && capsule.current ? capsule.current.offsetHeight + SMALL.gap : 0);
-      const perColumn = Math.max(1, Math.floor((bottom - SMALL.margin + SMALL.gap) / (height + SMALL.gap)));
+      const cardOf = new Map(small.map((k) => [k, shapeOf(k, size.current)]));
+      // Laid out: the latest first, in columns up from the corner, each as wide as its widest.
+      const laidOut = new Map<string, Box>();
+      let column = right, columnWidth = 0, y = bottom;
+      for (const key of [...small].reverse()) {
+        const { width, height } = cardOf.get(key)!;
+        if (y !== bottom && y - height < SMALL.margin) { column -= columnWidth + SMALL.gap; columnWidth = 0; y = bottom; }
+        laidOut.set(key, { x: column - width, y: y - height, w: width, h: height });
+        y -= height + SMALL.gap;
+        columnWidth = Math.max(columnWidth, width);
+      }
       for (const entry of all) {
         const frame = frames.current.get(entry.key);
         const card = cards.current.get(entry.key);
@@ -266,9 +297,9 @@ export function Previews() {
         if (mode === "small") {
           // The latest first: in the corner at rest, the first laid out.
           const i = small.length - 1 - small.indexOf(entry.key);
+          const { width, height } = cardOf.get(entry.key)!;
           if (spread) {
-            const column = Math.floor(i / perColumn), row = i % perColumn;
-            shell = { x: right - width - column * (width + SMALL.gap), y: bottom - height - row * (height + SMALL.gap), w: width, h: height };
+            shell = laidOut.get(entry.key)!;
           } else {
             const d = Math.min(i, SMALL.behind);
             const k = 1 - SMALL.shrink * d;
@@ -280,10 +311,11 @@ export function Previews() {
           layout = `small ${spread} ${tucked} ${i}`;
           // Laid out as a window of the card's shape (its bar put away): its page reflows to it, and all of it shows.
           const area = shell;
-          box = { x: area.x, y: area.y - bar, w: LAID, h: bar + (LAID * area.h) / area.w };
+          const laid = viewportOf(entry.key)?.width ?? LAID;
+          box = { x: area.x, y: area.y - bar, w: laid, h: bar + (laid * area.h) / area.w };
           at = { area, bar: false };
           // Its corners are the card's, at its scale.
-          frame.style.setProperty("--scale", String(area.w / LAID));
+          frame.style.setProperty("--scale", String(area.w / laid));
           card.dataset.front = String(i === 0);
           // Each page just over its card, the latest's over the rest (as they cross, laid out or put back).
           card.style.zIndex = String(21 - 2 * Math.min(i, 9));
@@ -314,7 +346,8 @@ export function Previews() {
       }
       // What the chat keeps free: the small ones at rest (not as they are laid out while pointed at), or the capsule.
       const pill = tucked ? capsule.current?.getBoundingClientRect() : undefined;
-      avoid(!small.length ? null : pill ? pill.left - SMALL.margin : tucked ? null : right - width - SMALL.margin);
+      const front = small.length ? cardOf.get(small[small.length - 1]!)! : null;
+      avoid(!front ? null : pill ? pill.left - SMALL.margin : tucked ? null : right - front.width - SMALL.margin);
       raf = requestAnimationFrame(place);
     };
     place();
@@ -326,7 +359,7 @@ export function Previews() {
     <div className={css.layer} data-spread={spread || undefined}>
       {all.map((entry) => (
         <div key={entry.key} ref={(el) => { if (el) frames.current.set(entry.key, el); else frames.current.delete(entry.key); }} className={css.frame} data-mode="hidden">
-          <ServiceFrame station={entry.station} port={entry.port} name={entry.name} external={entry.external} restarting={entry.restarting} draftKey={entry.draftKey} />
+          <ServiceFrame station={entry.station} port={entry.port} name={entry.name} service={entry.service} external={entry.external} restarting={entry.restarting} draftKey={entry.draftKey} />
         </div>
       ))}
       {/* Over a small one's page (which lets the pointer through): its name, and a click goes back. */}
@@ -340,7 +373,7 @@ export function Previews() {
             {!spread && shown.length > 1 && <span className={css.count}>+{shown.length - 1}</span>}
           </span>
           {EDGES.map((edge) => (
-            <div key={edge} className={css.edge} data-edge={edge} aria-hidden onPointerDown={resize(edge)}
+            <div key={edge} className={css.edge} data-edge={edge} aria-hidden onPointerDown={resize(edge, entry.key)}
               onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => { e.stopPropagation(); unsize(); }} />
           ))}
           <svg ref={shapeGrip} className={css.grip} aria-hidden><path /></svg>

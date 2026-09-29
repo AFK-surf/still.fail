@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { fadeInKeyframes } from "./styles/keyframes.css.ts";
 import { previewBar } from "./Preview.css.ts";
+import * as stageCss from "./PreviewStage.css.ts";
 
 /** A web service's place in its chat's side panel: the frame is drawn over it (Previews.tsx). */
 export const slot = style({ flex: "1", minHeight: "0" });
@@ -120,3 +121,8 @@ export const capsule = style({
 globalStyle(`${capsule} svg`, { flex: "none", color: vars.muted });
 /** A small one's bar is put away: its page alone shows. */
 globalStyle(`${frame}[data-mode=small] ${previewBar}`, { display: "none" });
+/** A small one's page of its own size fills its card (the card is in its shape): no ground round it, nothing to drag. */
+globalStyle(`${frame}[data-mode=small] ${stageCss.stage}`, { padding: "0", background: "none" });
+globalStyle(`${frame}[data-mode=small] :is(${stageCss.edge}, ${stageCss.shade}, ${stageCss.size}, ${stageCss.hold})`, { display: "none" });
+/** Its corners are the card's (its own screen's are drawn in the preview beside its chat). */
+globalStyle(`${frame}[data-mode=small] ${stageCss.device}`, { borderRadius: "0 !important" });

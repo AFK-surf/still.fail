@@ -4,7 +4,8 @@
 // document can be read and its clicks held here without anything put into the service.
 //
 // Told by the client (ember-preview-annotate): `on` (true/false) starts or ends picking, `remove` drops a mark,
-// `clear` drops them all, `capture` asks for the whole page as a PNG with the marks drawn on it. It says
+// `clear` drops them all, `capture` asks for the whole page as a PNG with the marks drawn on it; `canvas` (true/false)
+// that the page is on a canvas (PreviewStage.tsx), whose zooming and two fingers it then hands on (ember-preview-gesture). It says
 // (ember-preview-annotated): `picked` with where a mark is, `focus` when a marked element is picked again, `at` with
 // where the marks are in the frame's viewport as the page scrolls or moves (the client draws them), `off` when Esc
 // ended picking, `reset` when the page went elsewhere (its marks gone), `shot` with the picture. The frame says it can
@@ -165,6 +166,43 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
   };
   const leave = (event: MouseEvent) => { if (!event.relatedTarget) hover = null; };
 
+  // The page as a canvas's (the client laid it out at a size of its own and said `canvas`): zooming (⌘/Ctrl and the
+  // wheel, which a trackpad's pinch is) and two fingers on it move the canvas, not the page. They are said to the
+  // client (ember-preview-gesture: the wheel's delta, or the fingers, where they are in the page's viewport).
+  let canvas = false;
+  let fingers = false;
+  const gesture = (data: Record<string, unknown>) => parent.postMessage({ type: "ember-preview-gesture", nonce, ...data }, "*");
+  const wheel = (event: WheelEvent) => {
+    if (!canvas || !(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    gesture({ kind: "wheel", x: event.clientX, y: event.clientY, deltaY: event.deltaY, deltaMode: event.deltaMode });
+  };
+  // Space held over the page takes hold of it (the canvas's, as the wheel's zooming is), unless it is typed.
+  let spaceDown = false;
+  const space = (event: KeyboardEvent) => {
+    if (!canvas || event.code !== "Space") return;
+    if (event.type === "keydown") {
+      const t = event.target as HTMLElement | null;
+      if (!spaceDown && (t?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName ?? ""))) return;
+      event.preventDefault();
+      if (!spaceDown) { spaceDown = true; gesture({ kind: "space", down: true }); }
+    } else if (spaceDown) {
+      event.preventDefault();
+      spaceDown = false;
+      gesture({ kind: "space", down: false });
+    }
+  };
+  const touch = (event: TouchEvent) => {
+    if (!canvas) return;
+    if (event.touches.length >= 2) fingers = true;
+    if (!fingers) return;
+    // Held from moving the page (only a move: a held start or end would leave its touch unended here).
+    if (event.type === "touchmove" && event.cancelable) event.preventDefault();
+    const points = [...event.touches].slice(0, 2).map((t) => ({ x: t.clientX, y: t.clientY }));
+    gesture({ kind: "fingers", points });
+    if (!event.touches.length) fingers = false;
+  };
+
   // Each page the frame loads: its clicks held while picking; the marks of the one before are gone.
   const hook = () => {
     let now: Document | null = null;
@@ -175,6 +213,10 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
     doc.addEventListener("pointermove", move, true);
     doc.addEventListener("keydown", key, true);
     doc.addEventListener("mouseout", leave, true);
+    doc.addEventListener("wheel", wheel, { capture: true, passive: false });
+    doc.addEventListener("keydown", space, true);
+    doc.addEventListener("keyup", space, true);
+    for (const type of ["touchstart", "touchmove", "touchend", "touchcancel"]) doc.addEventListener(type, touch as EventListener, { capture: true, passive: false });
     if (marks.length) { marks = []; say({ event: "reset" }); }
     hover = null;
     below = [];
@@ -187,8 +229,9 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
 
   addEventListener("message", (event) => {
     if (event.source !== parent || event.data?.type !== "ember-preview-annotate") return;
-    const data = event.data as { on?: boolean; remove?: number; clear?: boolean; capture?: number };
+    const data = event.data as { on?: boolean; remove?: number; clear?: boolean; capture?: number; canvas?: boolean };
     hook();
+    if (typeof data.canvas === "boolean") canvas = data.canvas;
     if (typeof data.on === "boolean") setOn(data.on);
     if (typeof data.remove === "number") { marks = marks.filter((m) => m.n !== data.remove); wake(); }
     if (data.clear) { marks = []; next = 1; wake(); }

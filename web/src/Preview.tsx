@@ -8,7 +8,7 @@
 // ember-preview://, which the app serves itself through its core; the bar
 // over it is the same.
 import { ArrowLeft, ArrowRight, External, Refresh, Web } from "./icons.tsx";
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
 import { useLink } from "./station.tsx";
 import { useCall } from "./core/react.ts";
@@ -16,6 +16,9 @@ import * as css from "./Preview.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { useMarks } from "./annotate/Marks.tsx";
 import { Tip } from "./ui.tsx";
+import { previewKey, useViewport } from "./viewport.ts";
+import { ViewportButton } from "./ViewportSize.tsx";
+import { PreviewStage, useStage } from "./PreviewStage.tsx";
 
 declare const __PREVIEW_ORIGIN__: string;
 const ORIGIN = __PREVIEW_ORIGIN__;
@@ -41,6 +44,8 @@ export interface Shown {
   restarting?: Restarting | null | undefined;
   /** The chat beside it, whose draft its marks go into (annotate/Marks.tsx); none: no marking. */
   draftKey?: string | undefined;
+  /** Its job: the size its page is laid out at is kept by it (viewport.ts); none: as big as the preview. */
+  service?: string | undefined;
 }
 
 export interface Restarting { restarts: number }
@@ -50,7 +55,7 @@ export function StationPreview({ station, port, name, service, alone = false, re
   { station: string; port: number; name: string; service: string; alone?: boolean; restarting?: Restarting | null; draftKey?: string }) {
   // Its page of its own, at the station's pages' place (a new window or tab: the browser's).
   const own = useHref(useLink()(`/services/${encodeURIComponent(service)}`));
-  return <ServiceFrame station={station} port={port} name={name} external={alone ? undefined : own} restarting={restarting} draftKey={draftKey} />;
+  return <ServiceFrame station={station} port={port} name={name} service={service} external={alone ? undefined : own} restarting={restarting} draftKey={draftKey} />;
 }
 
 /** The frame and its bar, wherever it is put (Previews.tsx keeps it in one place while it moves). */
@@ -74,10 +79,12 @@ interface Bar {
   extra?: ReactNode;
   /** What shows in the address's place for now (marking the page). */
   instead?: ReactNode;
+  /** The page's size, after the address. */
+  size?: ReactNode;
 }
 
 /** Back, forward, reload, where it is (typed to go elsewhere), and its page of its own: over the frame. */
-function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canForward = false, external, extra, instead }: Bar) {
+function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canForward = false, external, extra, instead, size }: Bar) {
   const [typed, setTyped] = useState(at ?? "/");
   const [editing, setEditing] = useState(false);
   // Where it went is what the bar says, unless someone is typing there.
@@ -95,6 +102,7 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
           <input className={css.previewPath} value={typed} onChange={(e) => setTyped(e.target.value)} onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} aria-label="路径" spellCheck={false} />
         </label>
       )}
+      {size}
       {extra}
       {external && <Tip label="在新窗口打开"><a className={pagesCss.iconBtn} href={external} target="_blank" rel="noopener" aria-label="在新窗口打开"><External {...icon} /></a></Tip>}
     </form>
@@ -122,13 +130,16 @@ function Restart({ name, restarting, reload }: { name: string; restarting: Resta
  * apps/desktop/src/main.ts): it says where the service is and whether it can go back or on (ember-preview-at), and is
  * told where to go (ember-preview-nav). `frame` is the frame at `origin`, loaded with `src`.
  */
-function Framed({ name, external, restarting, draftKey, origin, src, nonce, frame }:
-  Omit<Shown, "station" | "port"> & { origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null> }) {
+function Framed({ name, external, restarting, draftKey, viewKey, origin, src, nonce, frame }:
+  Omit<Shown, "station" | "port" | "service"> & { viewKey: string | undefined; origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null> }) {
   const [at, setAt] = useState<string | null>(null);
   const [moves, setMoves] = useState({ back: false, forward: false });
   // A frame that can mark the page says so (an older one does not).
   const [markable, setMarkable] = useState(false);
-  const marks = useMarks({ frame, origin, nonce, name, draftKey, able: markable });
+  const viewport = useViewport(viewKey);
+  const stage = useStage(viewKey, viewport);
+  const link = useMemo(() => ({ frame, origin, nonce }), [frame, origin, nonce]);
+  const marks = useMarks({ frame, origin, nonce, name, draftKey, able: markable, scale: stage.placed?.scale ?? 1 });
   useEffect(() => {
     if (!origin) return;
     const onMessage = (event: MessageEvent) => {
@@ -147,12 +158,13 @@ function Framed({ name, external, restarting, draftKey, origin, src, nonce, fram
   const reload = useCallback(() => nav("reload"), [nav]);
   return (
     <div className={css.preview}>
-      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={reload} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} extra={marks.button} instead={marks.address} />
-      <div className={css.previewStage}>
+      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={reload} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} extra={marks.button} instead={marks.address}
+        size={viewKey && <ViewportButton viewKey={viewKey} viewport={viewport} zoom={stage.zoom} turn={stage.turn} compact={marks.address !== null}
+          folded={stage.folded} unfold={() => stage.fold(false)} />} />
+      <PreviewStage stage={stage} link={link} over={marks.over} after={<Restart name={name} restarting={restarting} reload={reload} />}>
+        {/* The frame never moves in the document (it would load anew): only its box's size and place change. */}
         {src && <iframe ref={frame} className={css.previewFrame} title={name} src={src} />}
-        <Restart name={name} restarting={restarting} reload={reload} />
-        {marks.over}
-      </div>
+      </PreviewStage>
     </div>
   );
 }
@@ -167,7 +179,7 @@ function DesktopPreview({ station, port, ...shown }: Shown) {
     return () => { live = false; };
   }, [station, port]);
   const origin = host && `ember-preview://${host}`;
-  return <Framed {...shown} origin={origin} src={origin && `${origin}/_ember/frame?n=${nonce}&path=%2F`} nonce={nonce} frame={frame} />;
+  return <Framed {...shown} viewKey={shown.service && previewKey(station, shown.service)} origin={origin} src={origin && `${origin}/_ember/frame?n=${nonce}&path=%2F`} nonce={nonce} frame={frame} />;
 }
 
 function WebPreview({ station, port, ...shown }: Shown) {
@@ -203,7 +215,7 @@ function WebPreview({ station, port, ...shown }: Shown) {
       for (const bridge of bridges) bridge.close();
     };
   }, [nonce, station, port, call]);
-  return <Framed {...shown} origin={ORIGIN} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} nonce={nonce} frame={frame} />;
+  return <Framed {...shown} viewKey={shown.service && previewKey(station, shown.service)} origin={ORIGIN} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} nonce={nonce} frame={frame} />;
 }
 
 /** A web service on a page of its own (its "open on its own"): the whole window with its bar, found by its job. */
