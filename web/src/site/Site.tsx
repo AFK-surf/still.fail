@@ -35,11 +35,19 @@ function Demo({ mount, frame }: { mount?: (root: HTMLElement) => void; frame?: {
   return <div className={css.demo} id="demo" ref={root} dangerouslySetInnerHTML={{ __html: html }} suppressHydrationWarning />;
 }
 
-/** A domain's dot, with what the domain says in Chinese hanging off it on a line: above the first, below the second. */
-function Dot({ say, up }: { say: string; up?: boolean }) {
-  // The dot stays plain text of its line (text in a positioned box would drop out of the line's text clip); the note
-  // hangs from an empty anchor just after it.
-  return <>.<span className={css.dot}><span className={css.dotNote} data-up={up ? "" : undefined} aria-hidden><span className={css.dotLine} /><span className={css.dotSay}>{say}</span></span></span></>;
+/**
+ * A domain's dot, and what the domain says in Chinese standing upright on it: above it, and, when there is a `below`,
+ * on through it underneath, the dot parting the two.
+ */
+function Dot({ above, below }: { above: string; below?: string }) {
+  // The dot stays plain text of its line (text in a positioned box would drop out of the line's text clip); the words
+  // hang from an empty anchor just after it.
+  return (
+    <>.<span className={css.dot} aria-hidden>
+      <span className={css.dotSay} data-at="above"><span className={css.dotWords}>{above}</span></span>
+      {below && <span className={css.dotSay} data-at="below"><span className={css.dotWords}>{below}</span></span>}
+    </span></>
+  );
 }
 
 // ---- The mesh ----
@@ -160,8 +168,8 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
           {/* The two domains, what the user keeps saying to the agent: the one the page was opened on is lit (data-host, set
               before the first paint by site/index.html; still.fail when neither). */}
           <h1 className={css.title}>
-            <span className={css.titleDomain} data-domain="still.fail">still<Dot say="还是不行" up />fail</span><br />
-            <span className={css.titleDomain} data-domain="youdid.wtf">youdid<Dot say="干的什么 jb" />wtf</span>
+            <span className={css.titleDomain} data-domain="still.fail">still<Dot above="还是不行" />fail</span><br />
+            <span className={css.titleDomain} data-domain="youdid.wtf">youdid<Dot above="干的什么" below="JB" />wtf</span>
           </h1>
           <div className={`${css.actions} ${css.heroActions}`}>
             <Button href={APP} kind="primary" large>免费开始</Button>

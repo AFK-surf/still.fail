@@ -51,7 +51,6 @@ const enter = keyframes({
 });
 const fadeUp = keyframes({ from: { opacity: 0, transform: "translateY(16px)" }, to: { opacity: 1, transform: "none" } });
 const fadeIn = keyframes({ from: { opacity: 0 }, to: { opacity: 1 } });
-const grow = keyframes({ from: { transform: "scaleY(0)" }, to: { transform: "none" } });
 const sway = keyframes({ "0%,100%": { transform: "translateX(-50%) rotate(-4deg)" }, "50%": { transform: "translateX(-50%) rotate(4deg)" } });
 
 /** The grid over a section, fading out from where its light comes. */
@@ -147,30 +146,28 @@ export const titleDomain = style({
   },
 });
 /**
- * A domain's dot and what the domain says in Chinese, led off it by a line: up from the first line's dot, down from the
- * second's. Lit with its line. Its own colour, not the line's text clip, which ends at the line's box.
+ * A domain's dot and what the domain says in Chinese, written upright on it (above, and below when it goes on), lit
+ * with its line. Its own colour, not the line's text clip, which does not reach positioned boxes.
  */
-export const dot = style({ position: "relative", display: "inline-block", width: "0" });
-export const dotNote = style({
-  position: "absolute", left: "-.12em", top: ".1em", display: "flex", flexDirection: "column", alignItems: "center",
-  transform: "translateX(-50%)", color: "color-mix(in srgb, var(--s-title) 30%, var(--s-bg))", WebkitTextFillColor: "currentColor",
-  pointerEvents: "none", animation: `${fadeIn} .6s .7s ${vars.easeOut} both`,
+export const dot = style({
+  position: "relative", display: "inline-block", width: "0",
+  color: "color-mix(in srgb, var(--s-title) 30%, var(--s-bg))", WebkitTextFillColor: "currentColor",
   selectors: {
-    "&[data-up]": { top: "auto", bottom: ".22em", flexDirection: "column-reverse" },
     [`:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"] &, :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"] &`]: { color: EMBER },
   },
 });
-export const dotLine = style({
-  width: "2px", height: ".36em", background: "currentColor", opacity: ".8", transformOrigin: "50% 0",
-  animation: `${grow} .6s .7s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
-  selectors: { [`${dotNote}[data-up] &`]: { height: ".74em", transformOrigin: "50% 100%" } },
-});
+/** Where the words stand, in the title's em: just clear of the dot's top, or of the baseline under it. */
 export const dotSay = style({
-  marginTop: "12px", fontSize: "max(.11em, 14px)", fontWeight: "700", letterSpacing: ".08em", lineHeight: "1", whiteSpace: "nowrap",
-  selectors: { [`${dotNote}[data-up] &`]: { marginTop: "0", marginBottom: "12px" } },
+  position: "absolute", left: "-.12em", transform: "translateX(-50%)", pointerEvents: "none",
+  animation: `${fadeIn} .6s .7s ${vars.easeOut} both`,
+  selectors: { "&[data-at=above]": { bottom: ".22em" }, "&[data-at=below]": { top: ".06em" } },
+});
+export const dotWords = style({
+  display: "block", writingMode: "vertical-rl", textOrientation: "upright",
+  fontSize: "max(.1em, 11px)", fontWeight: "700", letterSpacing: ".12em", lineHeight: "1", whiteSpace: "nowrap",
 });
 
-export const heroActions = style({ marginTop: "clamp(88px, 10vw, 150px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
+export const heroActions = style({ marginTop: "clamp(64px, 7vw, 100px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
 
 /** The demo's stage: it rises out of a tilt as the page opens, a beam of light running round its edge. */
 export const stage = style({
