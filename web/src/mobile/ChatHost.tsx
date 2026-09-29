@@ -45,7 +45,10 @@ export function useHost(): Host {
   return host;
 }
 
-/** Whose draft a chat's page writes (a station's id, the chat's key): what a preview over it offers its marks to. */
+/**
+ * Whose draft a chat's page writes (a station's address, the chat's key), as the wide screen's page names it
+ * (pages/ChatPage.tsx): what a preview over it offers its marks to, and what is written stays when the screen turns wide.
+ */
 export function draftKeyOf(station: string, chat: string): string {
   return `${station}:${openedAs(chat)}`;
 }
@@ -69,7 +72,7 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   // Each chat keeps what is written to it; a new chat's goes on into the chat it makes. Files go to the station the
   // page writes to (its composer says which).
   const upload = useRef<(file: File) => Promise<Attachment>>(() => Promise.reject(new Error("没有 station")));
-  const draftKey = chat === undefined || id === undefined ? undefined : draftKeyOf(id, chat);
+  const draftKey = chat === undefined || station === undefined ? undefined : draftKeyOf(station.address, chat);
   const shared = useDraft({ key: draftKey, station: shown?.station ?? station?.address, upload: (file) => upload.current(file) });
   const [focus, setFocus] = useState(0);
   const draft: Draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
