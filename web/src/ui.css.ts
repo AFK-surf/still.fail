@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
-import { appearKeyframes, dialogInKeyframes, fadeKeyframes, pulseKeyframes } from "./styles/keyframes.css.ts";
+import { appearKeyframes, dialogInKeyframes, fadeKeyframes, pulseKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
 import { gate, muted } from "./styles/shell.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
@@ -19,7 +19,11 @@ export const kindIcon = style({
 });
 export const kindMark = style({ color: vars.text });
 /** Centred on the line: aligned by baseline, the letter inside a small avatar would pull it down. */
-/** An agent: its model's maker on a tile; where it stands is a badge at the corner, as on the phone. Nothing blinks. */
+/**
+ * An agent: its model's maker on a tile; where it stands is a mark at the corner in the chat list's colours
+ * (ChatMark.css.ts): a turning yellow ring at work, red when it wants someone (blocked, failed); no halo, the tile is
+ * small. A gap of the ground (`--ring`) round it.
+ */
 export const agentMark = style({
   position: "relative", display: "inline-grid", placeItems: "center", flex: "none", width: "var(--mark)",
   height: "var(--mark)", borderRadius: `calc(var(--mark) * .3 * ${vars.cornerScale})`, background: vars.neutralBg,
@@ -27,13 +31,18 @@ export const agentMark = style({
   vars: { "--ring": vars.canvas },
   selectors: {
     "&[data-badge]::after": {
-      content: "\"\"", position: "absolute", right: "-3px", bottom: "-3px", width: "10px", height: "10px",
-      boxSizing: "border-box", borderRadius: "50%", border: "2px solid var(--ring)",
+      content: "\"\"", position: "absolute", right: "-3px", bottom: "-3px", width: "12px", height: "12px",
+      boxSizing: "border-box", borderRadius: "50%", border: "2px solid var(--ring)", background: "var(--ring)",
     },
-    "&[data-badge=\"block\"]::after": { background: vars.accent },
-    "&[data-badge=\"run\"]::after": { background: "var(--ring)", boxShadow: `inset 0 0 0 2px ${vars.accent}` },
-    "&[data-badge=\"failed\"]::after": { background: vars.red },
+    "&[data-badge=\"block\"]::after, &[data-badge=\"failed\"]::after": { background: "#e5484d" },
+    // At work: a turning ring with a gap, over the ground's disc.
+    "&[data-badge=\"run\"]::before": {
+      content: "\"\"", position: "absolute", right: "-1px", bottom: "-1px", width: "8px", height: "8px", zIndex: 1,
+      boxSizing: "border-box", borderRadius: "50%", border: "2px solid #f2b01e",
+      borderRightColor: "color-mix(in srgb, #f2b01e 25%, transparent)", animation: `${spinKeyframes} 1.2s linear infinite`,
+    },
   },
+  "@media": { "(prefers-reduced-motion: reduce)": { selectors: { "&[data-badge=\"run\"]::before": { animation: "none" } } } },
 });
 export const empty = style({
   flex: "1", display: "grid", placeContent: "center", justifyItems: "center", gap: "6px", padding: "40px",
