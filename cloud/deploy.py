@@ -53,7 +53,7 @@ def write_private(path: Path, value) -> None:
     os.replace(tmp, path)
 
 
-PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc"}
+PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "site": "wrangler.site.jsonc"}
 
 
 def read_template(name: str = "wrangler.jsonc") -> dict:
@@ -157,6 +157,8 @@ def main() -> None:
             print(f"note: no {POSTHOG}; building the web app without analytics")
         env = {**os.environ, "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else None
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
+    if not args.skip_build and "site" in parts:
+        subprocess.run(["pnpm", "run", "build:site"], cwd=REPO, check=True)
     secrets_of = {
         "api": {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom()},
         "relay": {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
@@ -188,7 +190,7 @@ def main() -> None:
 
     # Cloudflare turns away urllib's default User-Agent. A new custom domain's
     # certificate may take a few minutes; a failure here is not a failed deploy.
-    checks = {"api": f"{origin}/healthz", "relay": f"{origin}/ping", "web": f"{origin}/", "admin": f"{template['vars']['ADMIN_ORIGIN']}/", "preview": "https://preview.ember.3720.org/_ember/frame"}
+    checks = {"api": f"{origin}/healthz", "relay": f"{origin}/ping", "web": f"{origin}/", "admin": f"{template['vars']['ADMIN_ORIGIN']}/", "preview": "https://preview.ember.3720.org/_ember/frame", "site": "https://still.fail/"}
     for part in parts:
         request = urllib.request.Request(checks[part], headers={"user-agent": "ember-deploy"})
         try:

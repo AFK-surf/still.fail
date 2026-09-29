@@ -71,9 +71,9 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
     <div className={css.page}>
       <nav className={css.nav}>
         <div className={`${css.wrap} ${css.navRow}`}>
-          <a href="/"><Themed name="lockup" className={css.logo} alt="ember" /></a>
+          <a href="/" className={css.brand} aria-label="still.fail"><Themed name="mark" className={css.logo} /><span>still<span className={css.brandTail}>.fail</span></span></a>
           <ThemeSwitch />
-          <Button href={APP} kind="primary" className={css.navButton}>打开 ember</Button>
+          <Button href={APP} kind="primary" className={css.navButton}>打开 still.fail</Button>
         </div>
       </nav>
 
@@ -113,7 +113,7 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
             <div className={css.terminalBody}>
               <span className={css.prompt}>$ </span>
               <span className={css.typed} style={{ "--chars": `${INSTALL.length}ch`, "--steps": INSTALL.length } as CSSProperties}>{INSTALL}</span>
-              <span className={css.output} data-at="1">→ 下载 ember station · 加入 workspace「Acme」</span>
+              <span className={css.output} data-at="1">→ 下载 still.fail station · 加入 workspace「Acme」</span>
               <span className={css.output} data-at="2">→ 注册为登录启动的服务</span>
               <span className={css.output} data-at="3" data-ok>✓ station 已上线，去聊天里 @ 它吧</span>
             </div>
@@ -123,7 +123,7 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
 
       <footer className={css.footer}>
         <div className={`${css.wrap} ${css.footerRow}`}>
-          <span className={css.footerFirst}>© 2026 ember</span>
+          <span className={css.footerFirst}>© 2026 still.fail</span>
           <a className={css.navLink} href={APP}>网页版</a>
           <a className={css.navLink} href="https://github.com/zzj3720/ember">GitHub</a>
         </div>

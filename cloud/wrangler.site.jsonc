@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // The official site, still.fail: static files only (`pnpm run build:site` → dist/site, the page built to HTML with
+  // the demo's opening frame in it), no code. youdid.wtf goes here too once its zone is on Cloudflare: the page lights
+  // the domain it was opened on (web/src/site/Site.tsx).
+  "name": "still-fail-site",
+  "compatibility_date": "2026-09-08",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "still.fail", "custom_domain": true }],
+  "assets": { "directory": "../dist/site", "not_found_handling": "single-page-application" },
+}

@@ -66,6 +66,9 @@ export const nav = style({
   background: `color-mix(in srgb, ${BG} 72%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
 });
 export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px" });
+/** The name in the bar: the station buddy and still.fail, its .fail in ember's orange. */
+export const brand = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: "22px", fontWeight: "700", letterSpacing: "-.03em", color: FG });
+export const brandTail = style({ color: EMBER });
 export const logo = style({ display: "block", height: "28px", width: "auto" });
 // The logo on the left, the rest of the bar on the right.
 globalStyle(`${navRow} > :first-child`, { marginRight: "auto" });
