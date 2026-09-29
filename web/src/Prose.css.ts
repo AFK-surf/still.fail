@@ -34,6 +34,10 @@ export const codeBar = style({
     [`${codeBlock}:hover &`]: { opacity: "1" },
     "&:focus-within": { opacity: "1" },
   },
+  "@media": {
+    // A finger has no hover to bring the corner forward: the language and copy get a row of their own, over the code.
+    "(pointer: coarse)": { position: "static", justifyContent: "flex-end", padding: "4px 4px 0", opacity: "1" },
+  },
 });
 export const codeLang = style({
   padding: "0 6px", fontFamily: "var(--font-sans, inherit)", fontSize: "10px", letterSpacing: ".02em",
@@ -49,6 +53,11 @@ export const codeCopy = style({
   },
 });
 export const codeShiki = style({});
+/** A table in its own sideways scroll: the message's `overflow-wrap: anywhere` would else break its cells' words to fit. */
+export const tableScroll = style({ maxWidth: "100%", overflowX: "auto", margin: "0 0 8px" });
+globalStyle(`${tableScroll}:last-child`, { marginBottom: "0" });
+globalStyle(`${tableScroll} > table`, { margin: "0" });
+globalStyle(`${tableScroll} th, ${tableScroll} td`, { overflowWrap: "normal", minWidth: "4em" });
 globalStyle(`${markdown} ${codeBlock} pre`, {
   margin: "0", padding: "10px 12px", borderRadius: "0", background: "none", fontSize: "12px", lineHeight: "1.55",
 });
