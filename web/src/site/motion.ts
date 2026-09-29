@@ -112,8 +112,8 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   });
   // Driven by hand from one number, so that every property arrives together, exactly at its resting value.
   const fly = glyphs.map((g, i) => {
-    const from = { size: parseFloat(g.el.style.fontSize), weight: parseFloat(g.el.style.fontWeight), color: rgba(g.el.style.color) };
-    const to = { size: parseFloat(g.rest.fontSize), weight: parseFloat(g.rest.fontWeight), color: rgba(g.rest.color) };
+    const from = { size: parseFloat(g.el.style.fontSize), weight: parseFloat(g.el.style.fontWeight), color: g.el.style.color };
+    const to = { size: parseFloat(g.rest.fontSize), weight: parseFloat(g.rest.fontWeight), color: g.rest.color };
     const shadow = g.el.style.textShadow, turn = i % 2 ? 360 : -360;
     return play(animate(0, 1, {
       duration: 0.9, ease: [0.7, 0, 0.2, 1], delay: (glyphs.length - 1 - i) * 0.035,
@@ -121,8 +121,9 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
         const at = (a: number, b: number) => a + (b - a) * t;
         Object.assign(g.el.style, {
           fontSize: `${at(from.size, to.size)}px`, fontWeight: `${Math.round(at(from.weight, to.weight))}`,
-          color: `rgba(${from.color.map((c, k) => (k < 3 ? Math.round(at(c, to.color[k]!)) : at(c, to.color[k]!))).join(", ")})`,
-          textShadow: t < 1 && shadow && shadow !== "none" ? shadow.replace(/rgba?\([^)]*\)/, (c) => { const v = rgba(c); return `rgba(${v[0]}, ${v[1]}, ${v[2]}, ${v[3]! * (1 - t)})`; }) : "none",
+          // Mixed by the browser: a computed colour may be written any way (a color-mix() comes back as color(srgb …)).
+          color: t < 1 ? `color-mix(in srgb, ${to.color} ${t * 100}%, ${from.color})` : to.color,
+          textShadow: t < 1 && shadow && shadow !== "none" ? shadow.replace(/(?:rgba?|color)\([^)]*\)/, (c) => `color-mix(in srgb, ${c} ${(1 - t) * 100}%, transparent)`) : "none",
           translate: `${at(g.x, 0)}px ${at(g.y, 0)}px`, transform: `rotate(${turn * t}deg)`,
         });
       },
@@ -142,8 +143,3 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   window.dispatchEvent(new Event("ember-site-opened"));
 }
 
-/** A computed colour as [r, g, b, a]. */
-function rgba(color: string): number[] {
-  const v = color.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0, 1];
-  return [v[0] ?? 0, v[1] ?? 0, v[2] ?? 0, v[3] ?? 1];
-}
