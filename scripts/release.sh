@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds ember station's releases (the layout of scripts/station-bundle.sh) and puts them in ember cloud's releases
+# Builds the still.fail station's releases (the layout of scripts/station-bundle.sh) and puts them in the cloud's releases
 # bucket, where install.sh (cloud/src/install.ts) gets them: this Mac's (darwin-arm64), and Linux's (linux-x64,
 # linux-arm64, built from here: scripts/linux-station.sh).
 # The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip and latest-mac.yml, in desktop/) and
@@ -45,8 +45,10 @@ for platform in $platforms; do
       ;;
     *)
       sh "$root/scripts/station-bundle.sh" "$out/$platform" "$platform"
-      file="ember-station-$platform.tar.gz"
-      tar -czf "$out/$file" -C "$out/$platform" ember
+      # Under the new name only: the old name (ember-station-*.tar.gz) keeps the last release from before the rename,
+      # for the cloud's installer from before it, which would not know this layout (cloud/src/install.ts).
+      file="stillfail-station-$platform.tar.gz"
+      tar -czf "$out/$file" -C "$out/$platform" stillfail
       put "$out/$file" "$file" application/gzip
       station=yes
       ;;

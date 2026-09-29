@@ -10,10 +10,10 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# EMBER_SKIP_CHECKS=1 skips it all (git's --no-verify does too); say why when you do.
+# STILLFAIL_SKIP_CHECKS=1 (or EMBER_SKIP_CHECKS=1) skips it all (git's --no-verify does too); say why when you do.
 set -eu
 cd "$(dirname "$0")/.."
-[ -n "${EMBER_SKIP_CHECKS:-}" ] && { echo "checks skipped (EMBER_SKIP_CHECKS)"; exit 0; }
+[ -n "${STILLFAIL_SKIP_CHECKS:-${EMBER_SKIP_CHECKS:-}}" ] && { echo "checks skipped (STILLFAIL_SKIP_CHECKS)"; exit 0; }
 export PATH="$HOME/.cargo/bin:$PATH"
 
 mode=${1:-commit}
