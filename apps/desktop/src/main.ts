@@ -136,7 +136,7 @@ ipcMain.handle("preview:host", (event, station: unknown, port: unknown) => {
 // is, and whether it can go back or on, is said back to the page as it loads and as a page moves itself.
 const FRAME = `<!doctype html>
 <meta charset="utf-8">
-<title>ember preview</title>
+<title>still.fail preview</title>
 <style>
   html, body { margin: 0; height: 100%; background: #fff; }
   iframe { display: block; width: 100%; height: 100%; border: 0; }
@@ -294,7 +294,7 @@ async function preview(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const host = /^p(\d{1,5})-([0-9a-f]{12})$/.exec(url.hostname);
   const station = host ? previewStations.get(host[2]!) : undefined;
-  if (!host || !station) return plain(404, "预览已经失效：在 ember 里重新打开它。");
+  if (!host || !station) return plain(404, "预览已经失效：在 still.fail 里重新打开它。");
   if (url.pathname === "/_ember/frame") return new Response(FRAME, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
   if (url.pathname === "/_ember/annotate.js") return new Response(await readFile(join(__dirname, "annotate.js")).catch(() => ""), { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });
   if (url.pathname === "/_ember/socket.js") return new Response(SOCKET, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });

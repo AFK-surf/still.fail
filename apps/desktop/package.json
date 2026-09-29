@@ -2,7 +2,7 @@
   "name": "@ember/desktop",
   "productName": "ember",
   "version": "0.1.0",
-  "description": "ember",
+  "description": "still.fail",
   "private": true,
   "main": "build/app/main.js",
   "scripts": {
@@ -58,7 +58,9 @@
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "extendInfo": {
-        "NSLocalNetworkUsageDescription": "ember connects straight to your stations on the local network when it can."
+        "NSLocalNetworkUsageDescription": "still.fail connects straight to your stations on the local network when it can.",
+        "CFBundleName": "still.fail",
+        "CFBundleDisplayName": "still.fail"
       }
     },
     "publish": [
