@@ -37,7 +37,7 @@ export function App() {
   const detail = useDetailOpen();
   // A web service on a page of its own: the whole window, no sidebar.
   const service = /^\/services\/([^/]+)$/.exec(useLocation().pathname)?.[1];
-  if (service) return <ServicePage station="local" service={decodeURIComponent(service)} />;
+  if (service) return <Tooltip.Provider delayDuration={400} skipDelayDuration={200}><ServicePage station="local" service={decodeURIComponent(service)} /></Tooltip.Provider>;
 
   // Once read, the page stays up through a passing error; the core keeps retrying.
   if (!overview.value && overview.error) {

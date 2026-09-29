@@ -1,13 +1,13 @@
 // The one way a model is chosen, wherever it is: the model, the runtime (where it can still change, and the model runs
 // on more than one), how hard it thinks, and who runs it (the station's pick, or one profile kept to). One panel, from
 // one control that shows them together. Picks there are a draft until 确定; a panel closed otherwise changes nothing.
-import { ChevronDown } from "./icons.tsx";
+import { ChevronDown, ChevronRight } from "./icons.tsx";
 import { Popover } from "radix-ui";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ModelOption, RunnableProfile, RuntimeKind } from "./api.ts";
-import { QuotaBars } from "./components.tsx";
+import type { Quota } from "./core/shapes.ts";
 import { RUNTIME_LABEL } from "./format.ts";
-import { ModelLogo, ProviderLogo, RuntimeLogo, Tip } from "./ui.tsx";
+import { ModelLogo, RuntimeLogo, Tip } from "./ui.tsx";
 import * as css from "./ModelTriple.css.ts";
 import * as css2 from "./ModelTriple.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -16,6 +16,15 @@ import * as shellCss from "./styles/shell.css.ts";
 
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
 const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
+
+/** What is left of an account's allowance, in a few words: all of it in gray, or only the window running low, with its level. */
+function quotaLine(quota: Quota | null | undefined): { text: string; level?: "amber" | "red" } | null {
+  if (!quota) return null;
+  if (quota.state !== "ok" || quota.windows.length === 0) return quota.detail ? { text: quota.detail } : null;
+  const low = quota.windows.filter((w) => w.level !== "ok").sort((a, b) => a.left - b.left)[0];
+  if (low) return { text: `${low.label}只剩 ${low.left}%`, level: low.level as "amber" | "red" };
+  return { text: quota.windows.map((w) => `${w.label} ${w.left}%`).join(" · ") };
+}
 
 /** `profile`: the one kept to; null: the station picks. */
 export interface Pick { model: string; runtime: RuntimeKind; effort: string | null; profile: string | null }
@@ -58,6 +67,12 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
   const changed = next.model !== value.model || next.runtime !== value.runtime || next.effort !== value.effort || next.profile !== value.profile;
   const kept = value.profile ? valueOption?.accounts[value.runtime]?.find((a) => a.id === value.profile) ?? current : undefined;
   const shown = kept ?? current;
+  // The account is the exception: the control names it only when one is kept to, or when the station's pick runs low.
+  const shownLow = shown ? quotaLine(shown.quota)?.level : undefined;
+  const namesAccount = value.profile !== null || shownLow !== undefined;
+  // Who runs it waits behind the foot's line, in a panel of its own beside this one: most of the time it is the station's pick.
+  const [showAccounts, setShowAccounts] = useState(false);
+  const drafted = profile ? accounts.find((a) => a.id === profile) : undefined;
   const set = (patch: Partial<Pick>) => setDraft((d) => ({ ...d, ...patch }));
   const [filter, setFilter] = useState("");
   // The models' column keeps the width it opened with, whatever the filter leaves in it.
@@ -92,7 +107,7 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
   }, [label]);
 
   return (
-    <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) { setDraft(value); setFilter(""); setModelsWidth(null); } }}>
+    <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) { setDraft(value); setFilter(""); setModelsWidth(null); setShowAccounts(false); } }}>
       <span className={css2.modelTripleFit} ref={fit}>
         <Tip label={title}><Popover.Trigger className={css2.modelTriple} disabled={options.length === 0} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className={css2.tripleModel}>没有可用模型</span> : (
@@ -100,12 +115,12 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
               <span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span>
               {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={14} />{RUNTIME_LABEL[value.runtime]}</span>}
               <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
-              <span className={`${css2.triplePart} ${css2.tripleAccount}`}>
-                {shown && <ProviderLogo runtime={value.runtime} kind={shown.kind ?? "env"} size={14} />}
-                <span className={css2.tripleAccountName}>{value.profile ? shown?.name ?? value.profile : shown ? `自动 · ${shown.name}` : "自动分配"}</span>
-                {!value.profile && <span className={css2.tripleAccountShort}>自动</span>}
-                {shown && <span className={css2.tripleRings}><QuotaBars quota={shown.quota} compact small bare /></span>}
-              </span>
+              {namesAccount && (
+                <span className={`${css2.triplePart} ${css2.tripleAccount}`} data-level={shownLow}>
+                  <span className={css2.tripleAccountName}>{value.profile ? shown?.name ?? value.profile : `自动 · ${shown?.name ?? ""}`}</span>
+                  {!value.profile && <span className={css2.tripleAccountShort}>自动</span>}
+                </span>
+              )}
             </>
           )}
           <ChevronDown size={12} className={chatCss.chooserChevron} />
@@ -113,6 +128,9 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
       </span>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css2.runPickerPanel}`} side={side} align="start" sideOffset={6} collisionPadding={8}>
+          {/* The accounts' panel stands beside this one: this one is what it is placed by. */}
+          <Popover.Root open={showAccounts} onOpenChange={setShowAccounts}>
+          <Popover.Anchor asChild><div>
           <div className={css2.runPicker}>
             <div className={`${css2.runPickerColumn} ${css2.runPickerModels}`} style={modelsWidth === null ? undefined : { width: modelsWidth }}
               ref={(el) => { if (el && modelsWidth === null) setModelsWidth(Math.ceil(parseFloat(getComputedStyle(el).width))); }}>
@@ -150,27 +168,43 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
                 <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={effort === e} onClick={() => set({ effort: e })}>{e ?? "默认"}</button>
               ))}
             </div>
-            <div className={`${css2.runPickerColumn} ${css2.runPickerAccounts}`}>
-              <h4>账号</h4>
-              {dropped && <p className={css2.runPickerNote}>指定的账号没有启用 {option?.name ?? next.model}，改成了自动分配</p>}
-              <button type="button" className={css2.runPickerOption} aria-pressed={profile === null} onClick={() => set({ profile: null })}>
-                <span className={css2.runOptionText}><strong>自动分配</strong><span className={shellCss.muted}>额度用完或登录失效时换一个</span>{current && !value.profile && <span className={shellCss.muted}>现在：{current.name}</span>}</span>
-              </button>
-              {accounts.map((a) => (
-                <button key={a.id} type="button" className={css2.runPickerOption} aria-pressed={profile === a.id} onClick={() => set({ profile: a.id })}>
-                  <ProviderLogo runtime={on} kind={a.kind ?? "env"} size={14} />
-                  <span className={css2.runOptionText}><span>{a.name}</span></span>
-                  <QuotaBars quota={a.quota} compact />
-                </button>
-              ))}
-            </div>
           </div>
           <div className={css2.runPickerFoot}>
-            <Popover.Close className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css2.btnSm}`}>取消</Popover.Close>
+              {/* In the room the columns leave: a long name is cut short rather than widening the panel. */}
+              <span className={css2.runPickerWhoRoom}><Popover.Trigger className={css2.runPickerWho} data-level={dropped ? "amber" : !profile && !value.profile ? shownLow : undefined}>
+                {/* Short, in the room it has: the account kept to by its name before the @; amber says the station's pick runs low, or the one kept to gave way (its panel says which). */}
+                <span className={css2.runOptionName}>{drafted ? drafted.name.split("@")[0] : "账号"}</span>
+                <ChevronRight size={12} className={css2.runPickerWhoChevron} />
+              </Popover.Trigger></span>
+            {/* Not a Popover.Close: within the accounts' Root, that would close theirs. */}
+            <button type="button" className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css2.btnSm}`} onClick={() => setOpen(false)}>取消</button>
             {/* Nothing changed: it says so, and only closes. */}
             <button type="button" className={changed ? `${controlsCss.btn} ${controlsCss.btnPrimary} ${css2.btnSm}` : `${controlsCss.btn} btn-secondary ${css2.btnSm}`} disabled={!option}
               onClick={() => { setOpen(false); if (changed) onPick(next); }}>{changed ? "确定" : "不变"}</button>
           </div>
+          </div></Popover.Anchor>
+              <Popover.Portal>
+                {/* The accounts: a panel beside this one, its foot on this one's foot. */}
+                <Popover.Content className={`${controlsCss.popover} ${css2.runPickerPanel} ${css2.runPickerAccounts}`} side="right" align="end" sideOffset={14} alignOffset={-6} collisionPadding={8}
+                  onOpenAutoFocus={(e) => e.preventDefault()}>
+                  <h4>账号</h4>
+                  {dropped && <p className={css2.runPickerNote}>指定的账号没有启用 {option?.name ?? next.model}，改成了自动分配</p>}
+                  <button type="button" className={css2.runPickerOption} aria-pressed={profile === null} onClick={() => set({ profile: null })}>
+                    <span className={css2.runOptionText}><span className={css2.runOptionName}>自动</span>
+                    <span className={css2.runAccountNote}>{current && !value.profile ? `现在是 ${current.name}` : "额度用完或登录失效时换一个"}</span></span>
+                  </button>
+                  {accounts.map((a) => {
+                    const line = quotaLine(a.quota);
+                    return (
+                      <button key={a.id} type="button" className={css2.runPickerOption} aria-pressed={profile === a.id} onClick={() => set({ profile: a.id })}>
+                        <span className={css2.runOptionText}><span className={css2.runOptionName}>{a.name}</span>
+                        {line && <span className={css2.runAccountNote} data-level={line.level}>{line.text}</span>}</span>
+                      </button>
+                    );
+                  })}
+                </Popover.Content>
+              </Popover.Portal>
+          </Popover.Root>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

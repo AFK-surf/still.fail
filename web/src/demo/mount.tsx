@@ -1,0 +1,270 @@
+// The official site's demo: the real App, in a part of the page (site/Site.tsx's demo box), on a made-up core — no
+// worker, no station. story.ts plays a few chats in it; the visitor can click around and send messages too.
+import "./demo.css.ts";
+import { startScrollbars } from "../scrollbars.ts";
+import { StrictMode, useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
+import "@fontsource-variable/inter";
+import { App } from "../App.tsx";
+import { setPageRoot } from "../brand.tsx";
+import { Tooltip } from "radix-ui";
+import { ToastProvider } from "../toast.tsx";
+import { MobileWorkspace } from "../mobile/index.tsx";
+import type { Entry } from "../mobile/app.tsx";
+import { CoreClient, type Topic } from "../core/client.ts";
+import { setCore, setTopicSource } from "../core/react.ts";
+import { addItem, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY } from "./fixtures.ts";
+import { makeStory, openingChats } from "./story.ts";
+import { runTurn } from "./agent.ts";
+import { userModels } from "./keys.ts";
+import * as station from "./station.ts";
+
+/** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
+let root: HTMLElement;
+/** The visitor has clicked in the demo: from then on it is theirs (the story stops moving between chats). */
+let touched = false;
+let mounted = false;
+
+// ---- The core ----
+
+
+const chats = openingChats();
+const subs = new Map<number, Topic>();
+let post: (message: unknown) => void = () => undefined;
+
+function valueOf(topic: Topic): unknown {
+  const chat = "key" in topic ? chats.find((c) => c.key === topic.key) : "session" in topic ? chats.find((c) => c.key === topic.session) : undefined;
+  switch (topic.topic) {
+    case "overview": return station.overview();
+    case "status": return { items: [] };
+    case "chats": return chatsView(chats);
+    case "chat": return chat ? chatView(chat, station.runs()) : null;
+    case "slackApp": return station.slackApp();
+    case "live": return chat ? liveView(chat) : null;
+    case "history": return chat ? historyView(chat) : null;
+    case "host": return station.host();
+    case "connects": return station.connects();
+    case "stations": return [station.stationView()];
+    // ember cloud's, for the phone's workspace pages (mobile/).
+    case "accounts": return [station.ACCOUNT];
+    case "workspaces": return station.workspaces();
+    case "workspace": return station.workspace();
+    case "loginSessions": return station.loginSessions();
+    default:
+      if (import.meta.env.DEV) console.warn("demo: no topic", topic);
+      return null;
+  }
+}
+
+// Every topic starts at its value: the first render shows the demo at once (and so does the site built to HTML).
+setTopicSource(valueOf);
+
+function publish() {
+  for (const [id, topic] of subs) post({ id, value: valueOf(topic) });
+}
+
+// What the visitor sends is answered as an account its provider has banned would be: the turn fails, ember says why in
+// the chat, and the agent is marked failed — the station's own words (session.rs failure_notice, quota.rs).
+const BANNED = `⚠️ 运行时认证失败，需要管理员检查账号：${station.BAN_DETAIL}`;
+
+function answer(name: string, params: Record<string, unknown>): unknown {
+  if (name === "chat.create") {
+    // 新建对话: made at once, under the key answered; what is sent to it follows.
+    const made = newChat(Math.max(...chats.map((c) => c.thread)) + 1, typeof params.model === "string" ? params.model : undefined);
+    made.title = "新对话";
+    // One of the visitor's own models (keys.ts): the chat runs on it.
+    const own = typeof params.model === "string" ? userModels().find((m) => m.model === params.model) : undefined;
+    if (own) made.model = { runtime: "claude", model: own.model, name: own.name, effort: "medium", maker: own.maker ?? { id: "opencode", name: "OpenCode" } };
+    chats.push(made);
+    setTimeout(publish, 0);
+    return { key: made.key };
+  }
+  const chat = chats.find((c) => c.thread === params.thread || c.key === params.session);
+  if (name === "chat.send" && chat && typeof params.text === "string" && params.text.trim()) {
+    const text = params.text;
+    story.end(chat.key);
+    // As the core does: on its way at once (the outbox), then the station's own copy in its place, taken by the agent.
+    chat.outbox = [outgoing(text)];
+    // A new chat takes its first message's words as its title, as a station does.
+    if (chat.messages.length === 0) chat.title = text.slice(0, 30);
+    chat.failed = false;
+    setTimeout(publish, 0);
+    setTimeout(() => {
+      chat.outbox = [];
+      chat.messages = [...chat.messages, message(chat, "me", text)];
+      addItem(chat, received(chat, VISITOR, text));
+      publish();
+    }, 450);
+    const own = station.visitorProfile();
+    if (own) {
+      // With their own key: the demo's agent really answers (agent.ts).
+      setTimeout(() => void runTurn(chat, own, { publish }), 600);
+      return { more: false };
+    }
+    setTimeout(() => {
+      chat.running = { activity: "思考中", since: chat.running?.since ?? Date.now() };
+      publish();
+    }, 800);
+    setTimeout(() => {
+      chat.running = null;
+      chat.blocked = false;
+      chat.failed = true;
+      chat.messages = [...chat.messages, message(chat, "ember", BANNED)];
+      addItem(chat, marked("失败：账号被停用"));
+      publish();
+    }, 2600);
+  }
+  if (name === "station.request") {
+    // What it changes (the visitor's profiles) shows everywhere once it is done.
+    return station.request(String(params.method), String(params.path), params.body).then((value) => {
+      if (params.method !== "GET") setTimeout(publish, 0);
+      return value;
+    });
+  }
+  if (name === "cloud.request") return station.workspace();
+  return { more: false };
+}
+
+setCore(new CoreClient((onMessage) => {
+  post = (message) => queueMicrotask(() => onMessage(message));
+  return {
+    post(raw) {
+      const message = raw as { id: number; subscribe?: Topic; unsubscribe?: boolean; call?: string; params?: Record<string, unknown> };
+      if (message.subscribe) {
+        subs.set(message.id, message.subscribe);
+        post({ id: message.id, value: valueOf(message.subscribe) });
+      } else if (message.unsubscribe) {
+        subs.delete(message.id);
+      } else if (message.call) {
+        void Promise.resolve()
+          .then(() => answer(message.call!, message.params ?? {}))
+          .then(
+            (ok) => post({ id: message.id, ok }),
+            (e: Error) => post({ id: message.id, error: { code: e instanceof station.Refused ? "http_400" : "internal", message: e.message } }),
+          );
+      }
+    },
+    close() {},
+  };
+}));
+
+// ---- The story ----
+
+let navigate: ((key: string) => void) | null = null;
+/** The chat the story last opened: where either app opens. */
+let opened = SAFARI_KEY;
+const navigateTarget = () => opened;
+const story = makeStory({
+  chats,
+  publish,
+  open(key) {
+    if (touched) return;
+    opened = key;
+    navigate?.(key);
+  },
+});
+/** Lets the story open chats: the desktop's address of a chat, or the phone's. */
+function Director({ phone }: { phone: boolean }) {
+  const go = useNavigate();
+  const here = useLocation().pathname;
+  useEffect(() => {
+    navigate = (key) => {
+      const to = phone ? `/w/${ENTRY.id}/s/local/chats/${encodeURIComponent(key)}` : `/chats/${encodeURIComponent(key)}`;
+      // Already there (the chat either app opens on): not again, or going back would land on it once more.
+      if (decodeURIComponent(to) !== decodeURIComponent(here)) void go(to);
+    };
+    return () => {
+      navigate = null;
+    };
+  }, [go, phone, here]);
+  return null;
+}
+
+// ---- Wide and narrow ----
+
+/** The made-up workspace, as the phone's pages take it. */
+const ENTRY: Entry = { id: station.WORKSPACE, name: "Acme", account: station.ACCOUNT };
+/** The demo's own width (not the window's) says which app it is: the phone's below this, as mobile/ is for phones. */
+const PHONE_BELOW = 700;
+
+function useDemoWidth(): number {
+  const [width, setWidth] = useState(() => root.clientWidth);
+  useEffect(() => {
+    const observer = new ResizeObserver(() => setWidth(root.clientWidth));
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+  return width;
+}
+
+function Demo() {
+  return <DemoApp phone={useDemoWidth() < PHONE_BELOW} />;
+}
+
+/** The demo as the phone's app or the desktop's, opened on the chat in view (so switching between them keeps it). */
+export function DemoApp({ phone }: { phone: boolean }) {
+  const key = encodeURIComponent(navigateTarget());
+  return phone
+    ? (
+      // As ember cloud's app has the phone's pages (cloud/CloudApp.tsx).
+      <ToastProvider>
+        <Tooltip.Provider delayDuration={400}>
+          <MemoryRouter key="phone" initialEntries={[`/w/${ENTRY.id}`, `/w/${ENTRY.id}/s/local/chats/${key}`]} initialIndex={1}>
+            <Director phone />
+            <Routes><Route path="/w/:ws/*" element={<MobileWorkspace entry={ENTRY} />} /></Routes>
+          </MemoryRouter>
+        </Tooltip.Provider>
+      </ToastProvider>
+    )
+    : (
+      <MemoryRouter key="wide" initialEntries={[`/chats/${key}`]}>
+        <Director phone={false} />
+        <App />
+      </MemoryRouter>
+    );
+}
+
+/** Runs the demo in `element` (once): the app, its made-up core, and the story played when it comes into view. */
+export function mountDemo(element: HTMLElement): void {
+  if (mounted) return;
+  mounted = true;
+  root = element;
+  // What the page was built with (its opening frame, as HTML) gives way to the demo itself.
+  root.replaceChildren();
+  setPageRoot(root);
+  const app = root.appendChild(document.createElement("div"));
+  app.style.height = "100%";
+  startScrollbars();
+
+  // The app is made to be the whole page; here it is a part of one. Keys pressed elsewhere on the page are the page's
+  // (space scrolls it rather than going to the composer), and nothing in it takes the focus, or scrolls the page to
+  // itself, until the visitor has clicked in it.
+  for (const type of ["keydown", "keyup", "keypress"]) {
+    window.addEventListener(type, (event) => {
+      if (!(event.target instanceof Node && root.contains(event.target))) event.stopImmediatePropagation();
+    }, true);
+  }
+  const focus = HTMLElement.prototype.focus;
+  HTMLElement.prototype.focus = function (options?: FocusOptions) {
+    if (root.contains(this) && !touched) return;
+    focus.call(this, { ...options, preventScroll: true });
+  };
+  root.addEventListener("pointerdown", () => {
+    touched = true;
+    story.stop();
+  }, true);
+
+  // Played once the demo is in view, from the start.
+  new IntersectionObserver((entries, observer) => {
+    if (!entries.some((e) => e.isIntersecting)) return;
+    observer.disconnect();
+    void story.play();
+  }, { threshold: 0.3 }).observe(root);
+
+  createRoot(app).render(
+    <StrictMode>
+      <Demo />
+    </StrictMode>,
+  );
+}

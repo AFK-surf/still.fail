@@ -23,11 +23,12 @@ type Said =
 
 /**
  * The marks of the preview in `frame` (at `origin`, told apart by `nonce`), for the chat whose draft is `draftKey`.
- * `able`: its frame can (the frame said so). Gives the bar's button, what takes the address's place in the bar while
+ * `able`: its frame can (the frame said so); `scale`: how much its page is drawn at (a page of its own size, fitted
+ * into the preview), the marks' places being the page's. Gives the bar's button, what takes the address's place in the bar while
  * marking, and what shows over the page.
  */
-export function useMarks({ frame, origin, nonce, name, draftKey, able }:
-  { frame: RefObject<HTMLIFrameElement | null>; origin: string | null; nonce: string; name: string; draftKey: string | undefined; able: boolean }) {
+export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1 }:
+  { frame: RefObject<HTMLIFrameElement | null>; origin: string | null; nonce: string; name: string; draftKey: string | undefined; able: boolean; scale?: number }) {
   const [marking, setMarking] = useState(false);
   const [marks, setMarks] = useState<Mark[]>([]);
   const [at, setAt] = useState<Map<number, Box>>(new Map());
@@ -148,7 +149,8 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able }:
   const over = active && marks.length > 0 ? (
     <div className={css.layer} ref={layer}>
       {marks.map((m) => {
-        const box = at.get(m.picked.n) ?? m.picked.rect;
+        const page = at.get(m.picked.n) ?? m.picked.rect;
+        const box = { x: page.x * scale, y: page.y * scale, width: page.width * scale, height: page.height * scale };
         const open = editing === m.picked.n;
         // The pin's point on the element's top-left corner (kept in sight at the page's edges).
         const pin = { x: Math.max(2, box.x), y: Math.max(24, box.y) };
