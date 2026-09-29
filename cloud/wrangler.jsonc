@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // ember cloud's API (src/index.ts). Template; deploy.py copies it to the ignored wrangler.local.json with the
-  // account id. ember cloud is five Workers (deploy.py deploys each only when it changed):
+  // still.fail cloud's API (src/index.ts). Template; deploy.py copies it to the ignored wrangler.local.json with the
+  // account id. still.fail cloud is five Workers (deploy.py deploys each only when it changed):
   //   ember-cloud    this one: the API, on the paths below
   //   ember-relay    the relay (wrangler.relay.jsonc)
   //   ember-web      the web app, static, on PUBLIC_ORIGIN's Custom Domain (wrangler.web.jsonc)
@@ -9,12 +9,22 @@
   //   ember-preview  the preview host, static, on PREVIEW_ORIGIN's (wrangler.preview.jsonc)
   // A route takes precedence over a Custom Domain on the same host, so the API's and the relay's paths reach their
   // Workers and every other path the static ones.
+  // Each host has its new name (still.fail) and its old one (3720.org), both bound for good (docs/rename-still-fail.md):
+  // PUBLIC_ORIGIN and ADMIN_ORIGIN are the new ones, which every link is made with; the *_ALIASES the old ones,
+  // answered the same (src/compat.ts). The Workers, Durable Objects, bucket and secrets keep their names from before
+  // the rename: renaming them would make new ones, empty.
   "name": "ember-cloud",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-08",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "routes": [
+    { "pattern": "app.still.fail/v1/*", "zone_name": "still.fail" },
+    { "pattern": "admin.still.fail/v1/*", "zone_name": "still.fail" },
+    { "pattern": "app.still.fail/healthz*", "zone_name": "still.fail" },
+    { "pattern": "app.still.fail/install.sh*", "zone_name": "still.fail" },
+    { "pattern": "app.still.fail/releases/*", "zone_name": "still.fail" },
+    { "pattern": "app.still.fail/.well-known/*", "zone_name": "still.fail" },
     { "pattern": "ember.3720.org/v1/*", "zone_name": "3720.org" },
     { "pattern": "admin.ember.3720.org/v1/*", "zone_name": "3720.org" },
     { "pattern": "ember.3720.org/healthz*", "zone_name": "3720.org" },
@@ -26,11 +36,13 @@
   // Workers Logs: requests, errors and console output of the Worker and its Durable Objects, in the Cloudflare dashboard.
   "observability": { "enabled": true, "head_sampling_rate": 1 },
   "vars": {
-    "PUBLIC_ORIGIN": "https://ember.3720.org",
-    "ADMIN_ORIGIN": "https://admin.ember.3720.org",
+    "PUBLIC_ORIGIN": "https://app.still.fail",
+    "PUBLIC_ORIGIN_ALIASES": "https://ember.3720.org",
+    "ADMIN_ORIGIN": "https://admin.still.fail",
+    "ADMIN_ORIGIN_ALIASES": "https://admin.ember.3720.org",
     "GOOGLE_CLIENT_ID": "",
   },
-  // ember station's releases (scripts/release.sh puts them, install.sh gets them from /releases/).
+  // The stations' releases (scripts/release.sh puts them, install.sh gets them from /releases/).
   "r2_buckets": [{ "binding": "RELEASES", "bucket_name": "ember-releases" }],
   "durable_objects": {
     "bindings": [

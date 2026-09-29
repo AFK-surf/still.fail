@@ -1,13 +1,19 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // ember's relay (src/relay-worker.ts), a Worker of its own so deploying the rest of ember cloud drops no relay
-  // connection. Its paths are routes on PUBLIC_ORIGIN's host (see wrangler.jsonc).
+  // still.fail's relay (src/relay-worker.ts), a Worker of its own so deploying the rest of still.fail cloud drops no
+  // relay connection. Its paths are routes on PUBLIC_ORIGIN's host and on its old one, PUBLIC_ORIGIN_ALIASES (see
+  // wrangler.jsonc). Its name, its Durable Objects' and its container's are those from before the rename: renaming
+  // them would make new ones.
   "name": "ember-relay",
   "main": "src/relay-worker.ts",
   "compatibility_date": "2026-09-08",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "routes": [
+    { "pattern": "app.still.fail/relay*", "zone_name": "still.fail" },
+    { "pattern": "app.still.fail/ping*", "zone_name": "still.fail" },
+    { "pattern": "app.still.fail/generate_204*", "zone_name": "still.fail" },
+    { "pattern": "app.still.fail/v1/admin/relay/*", "zone_name": "still.fail" },
     { "pattern": "ember.3720.org/relay*", "zone_name": "3720.org" },
     { "pattern": "ember.3720.org/ping*", "zone_name": "3720.org" },
     { "pattern": "ember.3720.org/generate_204*", "zone_name": "3720.org" },
@@ -15,7 +21,7 @@
   ],
   "preview_urls": false,
   "observability": { "enabled": true, "head_sampling_rate": 1 },
-  "vars": { "PUBLIC_ORIGIN": "https://ember.3720.org" },
+  "vars": { "PUBLIC_ORIGIN": "https://app.still.fail", "PUBLIC_ORIGIN_ALIASES": "https://ember.3720.org" },
   "containers": [{ "class_name": "Relay", "image": "./Dockerfile", "max_instances": 1, "instance_type": "lite" }],
   "durable_objects": {
     "bindings": [

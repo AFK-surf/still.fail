@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
-"""Deploys ember cloud, five Workers (wrangler.jsonc says what each is):
+"""Deploys still.fail cloud, five Workers (wrangler.jsonc says what each is; they keep their names from before the
+rename to still.fail, as do their Durable Objects, bucket and secrets: renaming would make new, empty ones):
   api      ember-cloud    the API (wrangler.jsonc)
   relay    ember-relay    the relay and its container (wrangler.relay.jsonc)
   web      ember-web      the web app, static (wrangler.web.jsonc)
   admin    ember-admin    the admin's console, static (wrangler.admin.jsonc)
   preview  ember-preview  the preview host, static (wrangler.preview.jsonc)
-Each is deployed on its own: deploying the API drops no relay connection and serves no page.
+Each is deployed on its own: deploying the API drops no relay connection and serves no page. (And the official
+site, `site`, still-fail-site: only when asked for by name or with all of them.)
 
     python3 deploy.py                 # all of them, in this order: relay, api, web, admin, preview
     python3 deploy.py api web         # only these (the static ones are built first)
     python3 deploy.py --check         # only report what is missing
 
-Inputs (none of them in the repository):
-  --google  Google "Web application" OAuth client JSON (default ~/ember-deploy/google-oauth.json;
-            its redirect URIs must include <origin>/v1/auth/google/callback)
-  keys      ~/ember-deploy/keys.json, created on first run: session signing key, admin token and
+Inputs (none of them in the repository), in the deploy directory: $STILLFAIL_DEPLOY_DIR (or $EMBER_DEPLOY_DIR),
+else ~/stillfail-deploy, else ~/ember-deploy while only that one exists (from before the rename; move it when you
+like, nothing else changes):
+  --google  Google "Web application" OAuth client JSON (default <deploy>/google-oauth.json;
+            its redirect URIs must include <origin>/v1/auth/google/callback for every origin still in use:
+            https://app.still.fail and https://ember.3720.org)
+  keys      <deploy>/keys.json, created on first run: session signing key, admin token and
             the Ed25519 key that signs station grants. Keep it; losing it logs everyone out and makes
             stations distrust new grants until they re-enroll.
-  posthog   ~/ember-deploy/posthog.json, {host, key}: PostHog's project key, built into the web app
+  posthog   <deploy>/posthog.json, {host, key}: PostHog's project key, built into the web app
             (docs/telemetry.md). Without it the web app is built without analytics.
-  axiom     ~/ember-deploy/axiom.json, {"dataset", "token"}: where traces go (docs/telemetry.md).
+  axiom     <deploy>/axiom.json, {"dataset", "token"}: where traces go (docs/telemetry.md).
             Without it the cloud takes no traces.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
@@ -38,7 +43,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
-DEPLOY = Path.home() / "ember-deploy"
+
+
+def env_var(name: str):
+    """STILLFAIL_<name>, or EMBER_<name> from before the rename."""
+    return os.environ.get(f"STILLFAIL_{name}") or os.environ.get(f"EMBER_{name}")
+
+
+def deploy_dir() -> Path:
+    if env_var("DEPLOY_DIR"):
+        return Path(env_var("DEPLOY_DIR")).expanduser()
+    new, old = Path.home() / "stillfail-deploy", Path.home() / "ember-deploy"
+    # The keys in it are what every session and station trusts: never start a fresh one next to the old.
+    return old if old.exists() and not new.exists() else new
+
+
+DEPLOY = deploy_dir()
 KEYS = DEPLOY / "keys.json"
 POSTHOG = DEPLOY / "posthog.json"
 AXIOM = DEPLOY / "axiom.json"
@@ -116,7 +136,7 @@ def docker_env():
     env = dict(os.environ)
     env["PATH"] = "/opt/homebrew/bin:" + env.get("PATH", "")
     host = subprocess.check_output(["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"], env=env, text=True).strip()
-    with tempfile.TemporaryDirectory(prefix="ember-docker-") as directory:
+    with tempfile.TemporaryDirectory(prefix="stillfail-docker-") as directory:
         # Keep the plugins (buildx) the normal config would find.
         plugins = [str(p) for p in [Path.home() / ".docker" / "cli-plugins", Path("/opt/homebrew/lib/docker/cli-plugins"), Path("/Applications/OrbStack.app/Contents/MacOS/xbin")] if p.exists()]
         Path(directory, "config.json").write_text(json.dumps({"auths": {"https://index.docker.io/v1/": {}}, "credsStore": "", "cliPluginsExtraDirs": plugins}))
@@ -139,10 +159,12 @@ def main() -> None:
 
     template = read_template()
     origin = template["vars"]["PUBLIC_ORIGIN"]
+    aliases = [o.strip() for o in template["vars"].get("PUBLIC_ORIGIN_ALIASES", "").split(",") if o.strip()]
     web = json.loads(args.google.read_text())["web"]
-    callback = f"{origin}/v1/auth/google/callback"
-    if callback not in web.get("redirect_uris", []):
-        print(f"note: {args.google} does not list {callback}; make sure it is registered in Google Cloud Console")
+    # Google calls back the new origin; a login started on an old one before a deploy, the old one.
+    for callback in [f"{o}/v1/auth/google/callback" for o in [origin, *aliases]]:
+        if callback not in web.get("redirect_uris", []):
+            print(f"note: {args.google} does not list {callback}; make sure it is registered in Google Cloud Console")
     if args.check:
         print("account", account_id())
         print("keys", "present" if KEYS.exists() else "will be created")
@@ -152,10 +174,10 @@ def main() -> None:
 
     account = account_id()
     if not args.skip_build and {"web", "admin", "preview"} & set(parts):
-        # web/vite.config.ts reads the key from the file EMBER_POSTHOG names.
+        # web/vite.config.ts reads the key from the file STILLFAIL_POSTHOG (EMBER_POSTHOG before the rename) names.
         if not POSTHOG.exists():
             print(f"note: no {POSTHOG}; building the web app without analytics")
-        env = {**os.environ, "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else None
+        env = {**os.environ, "STILLFAIL_POSTHOG": str(POSTHOG), "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else None
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
     if not args.skip_build and "site" in parts:
         subprocess.run(["pnpm", "run", "build:site"], cwd=REPO, check=True)
@@ -173,7 +195,7 @@ def main() -> None:
         extra = ["--containers-rollout", "immediate"] if part == "relay" else []
         wrangler("deploy", "--config", str(local), *extra, env=env, capture=True)
         if part in secrets_of:
-            with tempfile.TemporaryDirectory(prefix="ember-secrets-") as directory:
+            with tempfile.TemporaryDirectory(prefix="stillfail-secrets-") as directory:
                 path = Path(directory) / "secrets.json"
                 write_private(path, secrets_of[part])
                 wrangler("secret", "bulk", str(path), "--config", str(local), env=env, capture=True)
@@ -190,14 +212,25 @@ def main() -> None:
 
     # Cloudflare turns away urllib's default User-Agent. A new custom domain's
     # certificate may take a few minutes; a failure here is not a failed deploy.
-    checks = {"api": f"{origin}/healthz", "relay": f"{origin}/ping", "web": f"{origin}/", "admin": f"{template['vars']['ADMIN_ORIGIN']}/", "preview": "https://preview.ember.3720.org/_ember/frame", "site": "https://still.fail/"}
+    # Each on its new host and its old one.
+    admin = template["vars"]["ADMIN_ORIGIN"]
+    old, old_admin = (aliases or [origin])[0], (template["vars"].get("ADMIN_ORIGIN_ALIASES") or admin).split(",")[0].strip()
+    checks = {
+        "api": [f"{origin}/healthz", f"{old}/healthz"],
+        "relay": [f"{origin}/ping", f"{old}/ping"],
+        "web": [f"{origin}/", f"{old}/"],
+        "admin": [f"{admin}/", f"{old_admin}/"],
+        "preview": ["https://preview.still.fail/_stillfail/frame", "https://preview.ember.3720.org/_ember/frame"],
+        "site": ["https://still.fail/"],
+    }
     for part in parts:
-        request = urllib.request.Request(checks[part], headers={"user-agent": "ember-deploy"})
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                print("check", part, checks[part], response.status)
-        except OSError as error:
-            print("check", part, checks[part], "failed:", error)
+        for url in dict.fromkeys(checks[part]):
+            request = urllib.request.Request(url, headers={"user-agent": "stillfail-deploy"})
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    print("check", part, url, response.status)
+            except OSError as error:
+                print("check", part, url, "failed:", error)
 
 
 if __name__ == "__main__":
