@@ -5,7 +5,7 @@
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
-import { useApi, useChatSend, type ChatTo, type Activity as ActivityView, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
+import { useApi, useChatSend, type ChatTo, type Activity as ActivityView, type AgentWait, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { usePerson, useStation } from "./station.tsx";
 import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
@@ -216,8 +216,8 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   const firstSeq = useRef<number | null>(null);
   if (firstSeq.current === null) firstSeq.current = messages.at(-1)?.seq ?? 0;
   // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
-  const atWork: AgentAtWork[] = chat.agents.filter((a) => a.status === "running").map(({ session, since }) => (
-    { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, activity: lives.get(session.key)?.activity ?? null, since }
+  const atWork: AgentAtWork[] = chat.agents.filter((a) => a.status === "running").map(({ session, since, wait }) => (
+    { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, activity: lives.get(session.key)?.activity ?? null, since, wait }
   ));
   const emissions = useEmissions(list);
   const shown = useLinger(atWork, emissions.keeps);
@@ -955,6 +955,8 @@ export interface AgentAtWork {
   key: string; who: string; runtime: RuntimeKind; maker: Maker | undefined;
   /** What it is doing, as the core says (null until its live view has come). */
   activity: ActivityView | null; since: number | undefined;
+  /** While it waits on work it started (a station yet to update never says so): since when, at most how many seconds. */
+  wait?: AgentWait | undefined;
 }
 
 /** How long an activity stays once its agent stops (a turn ending and the next starting leave a moment between), then how long it takes to fade and fold away. */
@@ -1126,9 +1128,10 @@ export function Activity({ agent, leaving, pose, onOpen, mark, className }: {
   /** Its avatar, drawn as the agent's messages draw theirs (a message comes out of it onto theirs); the pane's class. */
   mark?: ReactNode; className?: string;
 }) {
-  const now = useSteady(agent.activity?.now ?? { key: "busy", text: "处理中" });
+  const wait = agent.wait;
+  const now = useSteady(wait ? { key: "wait", text: "等待中" } : agent.activity?.now ?? { key: "busy", text: "处理中" });
   return (
-    <div className={`${conversationCss.msg} ${css.agentActivity}${className ? ` ${className}` : ""}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined}>
+    <div className={`${conversationCss.msg} ${css.agentActivity}${className ? ` ${className}` : ""}`} data-transient="" data-agent={agent.key} data-leaving={leaving || undefined} data-folded={pose.folded || undefined} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
       <Tip label="打开执行历史"><button type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
         <span className={css.activityAvatar} aria-hidden="true">{mark ?? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span>}</span>
         <span className={css.activityTail}>
@@ -1136,7 +1139,9 @@ export function Activity({ agent, leaving, pose, onOpen, mark, className }: {
             {now.previous && <span key={`was-${now.n - 1}`} className={css.activityNowText} data-out="">{now.previous.text}</span>}
             <span key={now.n} className={css.activityNowText} data-in={now.switched || undefined}>{now.current.text}</span>
           </span>
-          {agent.since ? <span className={css.activityElapsed}><Elapsed since={agent.since} /></span> : null}
+          {wait
+            ? <span className={css.activityElapsed}><Waited since={wait.since} seconds={wait.seconds} /></span>
+            : agent.since ? <span className={css.activityElapsed}><Elapsed since={agent.since} /></span> : null}
         </span>
       </button></Tip>
     </div>
@@ -1182,15 +1187,28 @@ export function useSteady(now: { key: string; text: string }) {
   return state;
 }
 
-/** Seconds (then minutes) since a moment, ticking. */
-export function Elapsed({ since }: { since: number }) {
+/** Seconds (then minutes) since a moment, ticking; at most `most` seconds. */
+export function Elapsed({ since, most }: { since: number; most?: number }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
   const s = Math.max(0, Math.floor((now - since) / 1000));
-  return <>{s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`}</>;
+  return <>{span(most === undefined ? s : Math.min(s, most))}</>;
+}
+
+/** How long a wait has gone on, ticking, at most its limit, with the limit: 1m 20s / 10m. */
+export function Waited({ since, seconds }: { since: number; seconds?: number | undefined }) {
+  return <><Elapsed since={since} {...(seconds ? { most: seconds } : {})} />{seconds ? ` / ${span(seconds)}` : ""}</>;
+}
+
+/** Seconds in short: 45s, 3m 20s, 1h 5m. */
+function span(s: number): string {
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return s % 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s / 60}m`;
+  const m = Math.floor((s % 3600) / 60);
+  return m ? `${Math.floor(s / 3600)}h ${m}m` : `${s / 3600}h`;
 }
 
 /** The quoted passage inside a message, as a range over its text nodes (whitespace-insensitive), or null. */

@@ -305,6 +305,9 @@ pub struct TurnSummary {
     pub kind: String,
     pub outcome: Option<String>,
     pub declared: Option<String>,
+    /// For waiting: at most how long, in seconds, until the agent is asked again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wait_seconds: Option<i64>,
     pub detail: Option<String>,
     pub started_at: i64,
     pub ended_at: Option<i64>,
@@ -557,7 +560,8 @@ CREATE TABLE IF NOT EXISTS turns (
   ended_at INTEGER,
   outcome TEXT,
   detail TEXT,
-  declared TEXT
+  declared TEXT,
+  wait_seconds INTEGER
 );
 CREATE TABLE IF NOT EXISTS processes (
   pgid INTEGER PRIMARY KEY,
@@ -657,6 +661,10 @@ fn add_archive_columns(db: &Connection) -> Result<()> {
         if !has("sessions", column)? {
             db.execute_batch(&format!("ALTER TABLE sessions ADD COLUMN {column} {kind}"))?;
         }
+    }
+    // Came with waiting's limit, after the turns table.
+    if !has("turns", "wait_seconds")? {
+        db.execute_batch("ALTER TABLE turns ADD COLUMN wait_seconds INTEGER")?;
     }
     if has("threads", "home")? {
         return Ok(());
@@ -1507,9 +1515,13 @@ impl Store {
         })
     }
 
-    pub fn end_turn(&self, id: &str, outcome: &str, detail: Option<&str>, declared: Option<&str>) -> Result<()> {
+    /// Ends a turn; `wait_seconds` is how long a turn ending as waiting waits at most.
+    pub fn end_turn(&self, id: &str, outcome: &str, detail: Option<&str>, declared: Option<&str>, wait_seconds: Option<u64>) -> Result<()> {
         self.with(|i, changes| {
-            i.db.execute("UPDATE turns SET ended_at = ?, outcome = ?, detail = ?, declared = ? WHERE id = ?", params![now_ms(), outcome, detail, declared, id])?;
+            i.db.execute(
+                "UPDATE turns SET ended_at = ?, outcome = ?, detail = ?, declared = ?, wait_seconds = ? WHERE id = ?",
+                params![now_ms(), outcome, detail, declared, wait_seconds.map(|s| s as i64), id],
+            )?;
             if let Some(key) = i.db.query_row("SELECT session_key FROM turns WHERE id = ?", [id], |r| r.get::<_, String>(0)).optional()? {
                 changes.push(StoreChange::Session(key));
             }
@@ -1527,6 +1539,7 @@ impl Store {
                         kind: r.get("kind")?,
                         outcome: r.get("outcome")?,
                         declared: r.get("declared")?,
+                        wait_seconds: r.get("wait_seconds")?,
                         detail: r.get("detail")?,
                         started_at: r.get("started_at")?,
                         ended_at: r.get("ended_at")?,
@@ -1546,7 +1559,7 @@ impl Store {
                    (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
                    (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
                      WHERE d.session = s.key ORDER BY d.rowid LIMIT 1) AS first_text,
-                   l.kind, l.outcome, l.declared, l.detail, l.started_at, l.ended_at
+                   l.kind, l.outcome, l.declared, l.wait_seconds, l.detail, l.started_at, l.ended_at
                  FROM sessions s
                  LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
                  {}",
@@ -1567,6 +1580,7 @@ impl Store {
                                 kind: r.get("kind")?,
                                 outcome: r.get("outcome")?,
                                 declared: r.get("declared")?,
+                                wait_seconds: r.get("wait_seconds")?,
                                 detail: r.get("detail")?,
                                 started_at,
                                 ended_at: r.get("ended_at")?,

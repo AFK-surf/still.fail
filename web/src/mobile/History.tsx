@@ -5,11 +5,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router";
 import { stationApi, useApi, useChat, useHistory, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
-import { ArrowRight, Check, ChevronDown, ChevronRight, Received, Send, Stop, Unplug } from "../icons.tsx";
+import { ArrowRight, Check, ChevronDown, ChevronRight, Hourglass, Received, Send, Stop, Unplug } from "../icons.tsx";
 import { modelName, optionOf } from "../ModelTriple.tsx";
 import { Prose } from "../Prose.tsx";
 import { useStickToBottom } from "../scroll.ts";
-import { useOlderOnScroll } from "../Chat.tsx";
+import { useOlderOnScroll, Waited } from "../Chat.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { SheetGrab, useApp, type MobileApp } from "./app.tsx";
 import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, ProviderMark, QuotaRing, QuotaRings, Ring, Seg, SlackMark, Spinner, stateOf, type Icon } from "./parts.tsx";
@@ -171,7 +171,12 @@ function Item({ item, station, chat, agent }: { item: HistoryItem; station: stri
           text={body.content.text} full={<div className={chatCss.mMarkdown}><Prose>{body.content.text}</Prose></div>} />
       );
     case "mark":
-      return <p className={css.mHMark}>{body.content.text}</p>;
+      return (
+        <p className={css.mHMark}>
+          {body.content.wait && <Hourglass size={14} />}
+          {body.content.wait && body.content.wait.until == null ? <span>等待中 <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}
+        </p>
+      );
     case "text":
       return (
         <div className={body.content.subagent ? css.mHSub : undefined}>

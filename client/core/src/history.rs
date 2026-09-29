@@ -238,7 +238,8 @@ enum Item {
     Received(usize),
     Text(usize),
     Post(usize),
-    Mark(String),
+    /// A state marked, and for waiting at most how many seconds.
+    Mark(String, Option<u64>),
     Group(Vec<usize>, Vec<usize>),
 }
 
@@ -288,7 +289,8 @@ pub fn present(live: &Value, cx: &Context) -> Value {
                         grouping = false;
                     }
                     "chat_state" if arg("kind").is_some() && !sub => {
-                        items.push((Item::Mark(arg("kind").unwrap_or_default()), i, i));
+                        let seconds = a.as_ref().and_then(|a| a.get("seconds")).and_then(Value::as_f64).map(|s| s.max(0.0) as u64);
+                        items.push((Item::Mark(arg("kind").unwrap_or_default(), seconds), i, i));
                         grouping = false;
                     }
                     _ => {
@@ -352,7 +354,26 @@ pub fn present(live: &Value, cx: &Context) -> Value {
                     "failed": failed_of(&steps[*step]),
                 })
             }
-            Item::Mark(kind) => json!({ "kind": "mark", "text": match kind.as_str() {
+            // Waiting is drawn as a line with an hourglass, not as a rule across, saying how long it waited: from its
+            // mark until the next word came in (what brought it back), at most its limit; still waiting, the clients
+            // count on from `since`.
+            Item::Mark(kind, seconds) if kind == "waiting" => {
+                let at = |i: usize| timeline[i].get("at").and_then(Value::as_str).and_then(epoch_ms).map(|ms| ms as i64);
+                let since = at(*first);
+                let until = since.and_then(|_| (*first + 1..timeline.len()).find(|&j| s(&timeline[j], "kind") == "user" && !flag(&timeline[j], "subagent")).and_then(at));
+                let waited = since.zip(until).map(|(a, b)| {
+                    let w = ((b - a).max(0) / 1000) as u64;
+                    seconds.map_or(w, |s| w.min(s))
+                });
+                let most = seconds.map(|s| format!(" / {}", span(s))).unwrap_or_default();
+                let text = match waited {
+                    Some(w) => format!("等待了 {}{most}", span(w)),
+                    None => format!("等待中{}", seconds.map(|s| format!("，最长 {}", span(s))).unwrap_or_default()),
+                };
+                let wait = since.map(|since| json!({ "since": since, "until": until, "seconds": seconds }));
+                json!({ "kind": "mark", "text": text, "wait": wait })
+            }
+            Item::Mark(kind, _) => json!({ "kind": "mark", "text": match kind.as_str() {
                 "final" => "标记为已完成".to_string(),
                 "block" => "进入 block 状态：agent 停下来等人处理".to_string(),
                 other => format!("标记为 {other}"),
@@ -480,6 +501,17 @@ fn group(timeline: &[Value], steps: &[Step], members: &[usize], thinking: &[usiz
     json!({ "kind": "group", "summary": summary, "title": title, "failures": failed, "pending": pending, "thinking": thinking, "steps": steps })
 }
 
+/// Seconds in short, as the chat's activity says them: 45s, 3m 20s, 10m, 1h 5m.
+fn span(s: u64) -> String {
+    match s {
+        0..60 => format!("{s}s"),
+        60..3600 if s % 60 == 0 => format!("{}m", s / 60),
+        60..3600 => format!("{}m {}s", s / 60, s % 60),
+        _ if s % 3600 / 60 == 0 => format!("{}h", s / 3600),
+        _ => format!("{}h {}m", s / 3600, s % 3600 / 60),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -563,6 +595,27 @@ mod tests {
         assert_eq!(items[1]["entries"], json!([1, 6]));
         assert_eq!((items[2]["body"]["content"]["block"].as_bool(), items[2]["body"]["content"]["place"]["name"].as_str()), (Some(true), Some("#ops")));
         assert_eq!(items[3]["body"]["content"]["text"], "标记为已完成");
+        let waits = |args: &str| {
+            let live = json!({"loaded": true, "timeline": [{"kind": "tool_call", "tool": "mcp__ember__chat_state", "text": args}]});
+            present(&live, &cx(&threads, &members, &slack))["items"][0]["body"]["content"].clone()
+        };
+        let waits = |args: &str, next: Option<&str>| {
+            let mut timeline = vec![json!({"kind": "tool_call", "tool": "mcp__ember__chat_state", "text": args, "at": "2026-09-27T00:00:00.000Z"})];
+            if let Some(at) = next {
+                timeline.push(json!({"kind": "user", "text": "<message via=\"ember\">done</message>", "at": at}));
+            }
+            let live = json!({"loaded": true, "timeline": timeline});
+            present(&live, &cx(&threads, &members, &slack))["items"][0]["body"]["content"].clone()
+        };
+        // Brought back after 80 seconds: how long it waited, and its limit.
+        let back = waits("{\"kind\":\"waiting\",\"seconds\":150}", Some("2026-09-27T00:01:20.000Z"));
+        assert_eq!(back["text"], "等待了 1m 20s / 2m 30s");
+        assert_eq!(back["wait"], json!({"since": 1790467200000_i64, "until": 1790467280000_i64, "seconds": 150}));
+        // Asked again late (a restart, say): never past its limit.
+        assert_eq!(waits("{\"kind\":\"waiting\",\"seconds\":60}", Some("2026-09-27T01:00:00.000Z"))["text"], "等待了 1m / 1m");
+        // Still waiting: the clients count on from since.
+        let now = waits("{\"kind\":\"waiting\",\"seconds\":600}", None);
+        assert_eq!((now["text"].as_str(), now["wait"]["until"].is_null()), (Some("等待中，最长 10m"), true));
         assert_eq!(h["live"], json!([{"id": "s", "text": "正在思考…"}]));
         assert_eq!(h["phase"]["text"], "正在启动 Codex");
         assert_eq!(h["usage"][4]["value"], "50%");

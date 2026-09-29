@@ -50,7 +50,7 @@ export const mHBrief = style({
   cursor: "pointer",
 });
 export const mHSub = style({ paddingLeft: "12px" });
-export const mHMark = style({ fontSize: "13px", color: "var(--m-muted)" });
+export const mHMark = style({ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--m-muted)" });
 export const mHPlace = style({
   display: "inline-flex", alignItems: "center", gap: "3px", maxWidth: "100%", minWidth: "0", padding: "0", border: "0",
   borderRadius: "4px", background: "none", verticalAlign: "middle",

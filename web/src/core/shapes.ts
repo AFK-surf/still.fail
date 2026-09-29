@@ -36,6 +36,15 @@ export interface AgentProcess {
 	rssMb?: number;
 }
 
+/**
+ * An agent waiting on work it started, which brings it back: since its turn ended, and at most how many seconds
+ * until it is asked again (absent from a station yet to update).
+ */
+export interface AgentWait {
+	since: number;
+	seconds?: number;
+}
+
 export interface Attachment {
 	name: string;
 	path: string;
@@ -96,6 +105,8 @@ export interface TurnSummary {
 	kind: string;
 	outcome?: string;
 	declared?: string;
+	/** For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none). */
+	waitSeconds?: number;
 	detail?: string;
 	startedAt: number;
 	endedAt?: number;
@@ -389,6 +400,8 @@ export interface TurnRecord {
 	kind: string;
 	outcome?: string;
 	declared?: string;
+	/** For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none). */
+	waitSeconds?: number;
 	detail?: string;
 	startedAt: number;
 	endedAt?: number;
@@ -495,6 +508,8 @@ export interface ChatAgent {
 	attention: Attention[];
 	/** When its running turn began; absent when none runs. */
 	since?: number;
+	/** While it waits on work it started (its turn ended as waiting): since when, and for how long at most. */
+	wait?: AgentWait;
 	turns: TurnRecord[];
 	threads: ChatThread[];
 	/** Its background jobs, newest first; those with a port are web services, shown by their names. */
@@ -814,9 +829,20 @@ export interface HistoryLive {
 	text: string;
 }
 
-/** A state the agent marked, in words. */
+/**
+ * A wait in an agent's history: from its mark (`since`) until the next word brought it back (`until`, absent while it
+ * still waits: count on from `since`), at most `seconds`.
+ */
+export interface HistoryWait {
+	since: number;
+	until?: number;
+	seconds?: number;
+}
+
+/** A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with an hourglass). */
 export interface HistoryMark {
 	text: string;
+	wait?: HistoryWait;
 }
 
 /** A place a message came from or went to: a chat on ember's page (`session`: the agent it opens), or a Slack thread. */

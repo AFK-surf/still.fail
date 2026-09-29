@@ -137,6 +137,7 @@ import dev.ember.android.AppState
 import dev.ember.android.LocalApp
 import dev.ember.android.Screen
 import dev.ember.android.data.ActivityNow
+import dev.ember.android.data.AgentWait
 import dev.ember.android.data.Attachment
 import dev.ember.android.data.ChatAgent
 import dev.ember.android.data.ChatOf
@@ -311,8 +312,9 @@ private sealed interface Entry {
     data class Floor(val px: Int) : Entry { override val id get() = "floor" }
 }
 
-/** An agent at work: who it is, its transcript and steps in flight, and since when its turn runs. */
-class AgentAtWork(val key: String, val who: String, val runtime: String, val maker: Maker?, val live: Live?, val since: Long?)
+/** An agent at work: who it is, its transcript and steps in flight, since when its turn runs, and while it waits on work
+ * it started, since when and for how long at most. */
+class AgentAtWork(val key: String, val who: String, val runtime: String, val maker: Maker?, val live: Live?, val since: Long?, val wait: AgentWait? = null)
 
 /** What the messages need to know about the chat: who is who, and whose workspace keeps a file. */
 private class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<AgentHere>) {
@@ -353,7 +355,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
 
     // Only an agent that has taken a message and runs is at work (not one with messages waiting for it): until then
     // the message itself says it waits.
-    val busy = agents.filter { it.view.status == "running" }.map { a -> AgentAtWork(a.key, a.who, a.runtime, a.maker, a.live, a.view.since) }
+    val busy = agents.filter { it.view.status == "running" }.map { a -> AgentAtWork(a.key, a.who, a.runtime, a.maker, a.live, a.view.since, a.view.wait) }
     // When the turn ends, the activity stays a moment to fade and fold away instead of vanishing.
     val lastBusy = remember { mutableStateOf<List<AgentAtWork>>(emptyList()) }
     var leaving by remember { mutableStateOf(false) }
@@ -718,7 +720,8 @@ private fun quoteText(who: String, text: String) = androidx.compose.ui.text.buil
 @Composable
 private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
     val app = LocalApp.current
-    val shown = steady(agent.live?.activity?.now ?: ActivityNow(key = "busy", text = "处理中"))
+    val wait = agent.wait
+    val shown = steady(if (wait != null) ActivityNow(key = "wait", text = "等待中") else agent.live?.activity?.now ?: ActivityNow(key = "busy", text = "处理中"))
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
     val fade by animateFloatAsState(if (leaving) 0f else 1f, tween(220), label = "leaving")
@@ -728,14 +731,20 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean) {
     ) {
         Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
             ModelMark(agent.maker, agent.runtime, 20.dp)
-            if (!leaving) CircularProgressIndicator(Modifier.size(26.dp), color = C.accent, strokeWidth = 1.5.dp)
+            // Waiting on work it started: a still, quiet ring.
+            if (wait != null) CircularProgressIndicator(progress = { 1f }, modifier = Modifier.size(26.dp), color = C.line, strokeWidth = 1.5.dp)
+            else if (!leaving) CircularProgressIndicator(Modifier.size(26.dp), color = C.accent, strokeWidth = 1.5.dp)
         }
         AnimatedContent(
             targetState = shown, contentKey = { it.key }, modifier = Modifier.weight(1f, fill = false),
             transitionSpec = { (fadeIn(tween(240)) + slideInVertically(tween(240)) { it / 4 }) togetherWith (fadeOut(tween(240)) + slideOutVertically(tween(240)) { -it / 4 }) },
             label = "now",
         ) { said -> Text(said.text, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-        agent.since?.let { Text(elapsed(now - it), fontSize = 11.sp, color = C.subtle, maxLines = 1) }
+        if (wait != null) {
+            val most = wait.seconds?.let { " / ${elapsed(it * 1000)}" } ?: ""
+            val waited = wait.seconds?.let { minOf(now, wait.since + it * 1000) } ?: now
+            Text(elapsed(waited - wait.since) + most, fontSize = 11.sp, color = C.subtle, maxLines = 1)
+        } else agent.since?.let { Text(elapsed(now - it), fontSize = 11.sp, color = C.subtle, maxLines = 1) }
     }
 }
 
@@ -1183,8 +1192,12 @@ fun InfoRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> U
     )
 }
 
-/** A running clock's reading: seconds, then minutes and seconds (as the web's). */
+/** A running clock's reading in short, as the web's: 45s, 3m 20s, 1h 5m. */
 private fun elapsed(ms: Long): String {
     val s = (ms / 1000).coerceAtLeast(0)
-    return if (s < 60) "${s}s" else "${s / 60}m ${s % 60}s"
+    return when {
+        s < 60 -> "${s}s"
+        s < 3600 -> if (s % 60 != 0L) "${s / 60}m ${s % 60}s" else "${s / 60}m"
+        else -> if (s % 3600 / 60 != 0L) "${s / 3600}h ${s % 3600 / 60}m" else "${s / 3600}h"
+    }
 }

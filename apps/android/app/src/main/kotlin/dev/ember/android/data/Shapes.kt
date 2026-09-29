@@ -45,6 +45,14 @@ data class AgentProcess (
 	val rssMb: Double? = null
 )
 
+/// An agent waiting on work it started, which brings it back: since its turn ended, and at most how many seconds
+/// until it is asked again (absent from a station yet to update).
+@Serializable
+data class AgentWait (
+	val since: Long,
+	val seconds: Long? = null
+)
+
 @Serializable
 data class Attachment (
 	val name: String,
@@ -110,6 +118,8 @@ data class TurnSummary (
 	val kind: String,
 	val outcome: String? = null,
 	val declared: String? = null,
+	/// For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none).
+	val waitSeconds: Long? = null,
 	val detail: String? = null,
 	val startedAt: Long,
 	val endedAt: Long? = null
@@ -412,6 +422,8 @@ data class TurnRecord (
 	val kind: String,
 	val outcome: String? = null,
 	val declared: String? = null,
+	/// For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none).
+	val waitSeconds: Long? = null,
 	val detail: String? = null,
 	val startedAt: Long,
 	val endedAt: Long? = null
@@ -523,6 +535,8 @@ data class ChatAgent (
 	val attention: List<Attention>,
 	/// When its running turn began; absent when none runs.
 	val since: Long? = null,
+	/// While it waits on work it started (its turn ended as waiting): since when, and for how long at most.
+	val wait: AgentWait? = null,
 	val turns: List<TurnRecord>,
 	val threads: List<ChatThread>,
 	/// Its background jobs, newest first; those with a port are web services, shown by their names.
@@ -876,10 +890,20 @@ data class HistoryLive (
 	val text: String
 )
 
-/// A state the agent marked, in words.
+/// A wait in an agent's history: from its mark (`since`) until the next word brought it back (`until`, absent while it
+/// still waits: count on from `since`), at most `seconds`.
+@Serializable
+data class HistoryWait (
+	val since: Long,
+	val until: Long? = null,
+	val seconds: Long? = null
+)
+
+/// A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with an hourglass).
 @Serializable
 data class HistoryMark (
-	val text: String
+	val text: String,
+	val wait: HistoryWait? = null
 )
 
 /// A place a message came from or went to: a chat on ember's page (`session`: the agent it opens), or a Slack thread.

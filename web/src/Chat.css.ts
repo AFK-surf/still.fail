@@ -308,6 +308,8 @@ export const activityAvatar = style({
       content: "\"\"", position: "absolute", inset: "-3px", borderRadius: "50%", border: "1.5px solid transparent",
       borderTopColor: vars.accent, borderRightColor: vars.accent, animation: `${spinKeyframes} 1.1s linear infinite`,
     },
+    // Waiting on work it started: a still, quiet ring.
+    [`${agentActivity}[data-waiting] &::after`]: { borderColor: vars.line, animation: "none" },
     [`${agentActivity}[data-leaving] &::after`]: { opacity: "0", transition: "opacity 160ms" },
     [`${agentActivity}[data-away] &`]: { visibility: "hidden" },
   },

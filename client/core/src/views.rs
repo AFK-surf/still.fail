@@ -1054,6 +1054,8 @@ impl Views {
             // When its running turn began (null when none runs): its activity counts from there.
             "since": detail.get("turns").and_then(Value::as_array).and_then(|t| t.last())
                 .filter(|t| t.get("endedAt").is_none_or(Value::is_null)).and_then(|t| t.get("startedAt")).cloned().unwrap_or(Value::Null),
+            // While it waits on work it started: since when, and for how long at most.
+            "wait": crate::present::waiting(&session),
             "turns": detail.get("turns").cloned().unwrap_or_else(|| json!([])),
             "threads": detail.get("threads").cloned().unwrap_or_else(|| json!([])),
             // Its background jobs and web services (a station yet to update says none).

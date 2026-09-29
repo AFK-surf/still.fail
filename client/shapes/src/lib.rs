@@ -163,6 +163,9 @@ pub struct TurnSummary {
     pub kind: String,
     pub outcome: Option<String>,
     pub declared: Option<String>,
+    /// For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none).
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub wait_seconds: Option<i64>,
     pub detail: Option<String>,
     #[typeshare(serialized_as = "I54")]
     pub started_at: i64,
@@ -179,6 +182,9 @@ pub struct TurnRecord {
     pub kind: String,
     pub outcome: Option<String>,
     pub declared: Option<String>,
+    /// For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none).
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub wait_seconds: Option<i64>,
     pub detail: Option<String>,
     #[typeshare(serialized_as = "I54")]
     pub started_at: i64,
@@ -1249,10 +1255,25 @@ pub struct ChatAgent {
     /// When its running turn began; absent when none runs.
     #[typeshare(serialized_as = "Option<I54>")]
     pub since: Option<i64>,
+    /// While it waits on work it started (its turn ended as waiting): since when, and for how long at most.
+    pub wait: Option<AgentWait>,
     pub turns: Vec<TurnRecord>,
     pub threads: Vec<ChatThread>,
     /// Its background jobs, newest first; those with a port are web services, shown by their names.
     pub jobs: Vec<Job>,
+}
+
+/// An agent waiting on work it started, which brings it back: since its turn ended, and at most how many seconds
+/// until it is asked again (absent from a station yet to update).
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentWait {
+    #[typeshare(serialized_as = "I54")]
+    pub since: i64,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub seconds: Option<i64>,
 }
 
 /// A background job an agent started (a web service when it has a port): shown by its name; the port is how the
@@ -1531,12 +1552,29 @@ pub struct HistoryPost {
     pub failed: bool,
 }
 
-/// A state the agent marked, in words.
+/// A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with an hourglass).
 #[typeshare]
+#[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryMark {
     pub text: String,
+    pub wait: Option<HistoryWait>,
+}
+
+/// A wait in an agent's history: from its mark (`since`) until the next word brought it back (`until`, absent while it
+/// still waits: count on from `since`), at most `seconds`.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryWait {
+    #[typeshare(serialized_as = "I54")]
+    pub since: i64,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub until: Option<i64>,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub seconds: Option<i64>,
 }
 
 /// Tool calls and thinking between two boundaries: named by its latest call, what it did by kind (`title`), how many

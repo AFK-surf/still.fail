@@ -125,6 +125,10 @@ export function Filter(props: IconProps) {
   return <Svg {...props}><path d="M4 6H20 M7 12H17 M10 18H14" /></Svg>;
 }
 
+export function Hourglass(props: IconProps) {
+  return <Svg {...props}><path d="M5.5 3H18.5 M5.5 21H18.5 M7 3V6.5Q7 9.5 12 12Q17 14.5 17 17.5V21 M17 3V6.5Q17 9.5 12 12Q7 14.5 7 17.5V21" /></Svg>;
+}
+
 export function ImageUpload(props: IconProps) {
   return <Svg {...props}><path d="M11.5 3.5H7Q3.5 3.5 3.5 7V17Q3.5 20.5 7 20.5H17Q20.5 20.5 20.5 17V13 M4 17L9 12L15 18 M17.5 11V3.5 M14 7L17.5 3.5L21 7" /></Svg>;
 }
@@ -319,6 +323,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "external": External,
   "file": File,
   "filter": Filter,
+  "hourglass": Hourglass,
   "image-upload": ImageUpload,
   "info": Info,
   "key": Key,

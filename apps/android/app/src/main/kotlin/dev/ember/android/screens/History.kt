@@ -283,7 +283,17 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
                 if (post.failed) Pill("发送失败", C.red)
             }, post.text) { Markdown(post.text, size = 15) }
         }
-        is HistoryBody.Mark -> Text(body.content.text, fontSize = 13.sp, color = C.muted)
+        is HistoryBody.Mark -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            val wait = body.content.wait
+            if (wait != null) IconIn(Icons.Hourglass, 14.dp, C.muted)
+            // A wait: how long it waited, said by the core once it is over; still waiting, it counts on here.
+            if (wait != null && wait.until == null) {
+                var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
+                val waited = ((now - wait.since) / 1000).coerceAtLeast(0).let { s -> wait.seconds?.let { minOf(s, it) } ?: s }
+                Text("等待中 ${shortSpan(waited)}" + (wait.seconds?.let { " / ${shortSpan(it)}" } ?: ""), fontSize = 13.sp, color = C.muted)
+            } else Text(body.content.text, fontSize = 13.sp, color = C.muted)
+        }
         is HistoryBody.Text -> Box(Modifier.let { if (body.content.subagent) it.padding(start = 12.dp) else it }) {
             val app = LocalApp.current
             val text = body.content.text
@@ -691,4 +701,11 @@ private fun Detail(label: String, value: String) {
         Text(label, fontSize = 14.sp, color = C.muted, modifier = Modifier.width(64.dp))
         Text(value, fontSize = 14.sp, color = C.ink)
     }
+}
+
+/** Seconds in short, as the chat's activity says them: 45s, 3m 20s, 10m, 1h 5m. */
+private fun shortSpan(s: Long): String = when {
+    s < 60 -> "${s}s"
+    s < 3600 -> if (s % 60 != 0L) "${s / 60}m ${s % 60}s" else "${s / 60}m"
+    else -> if (s % 3600 / 60 != 0L) "${s / 3600}h ${s % 3600 / 60}m" else "${s / 3600}h"
 }

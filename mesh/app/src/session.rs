@@ -489,7 +489,7 @@ impl SessionActor {
         let store = deps.store();
         let turn = self.st().turn.take();
         if let Some(turn) = turn {
-            store.end_turn(&turn.id, "failed", Some(&format!("other: {message}")), None)?;
+            store.end_turn(&turn.id, "failed", Some(&format!("other: {message}")), None, None)?;
         }
         store.set_running(&self.key, false)?;
         self.done_working(deps);
@@ -626,7 +626,11 @@ impl SessionActor {
                 TurnOutcome::Failed { reason, message } => Some(format!("{}: {message}", reason.as_str())),
                 _ => None,
             };
-            store.end_turn(&turn.id, outcome.kind(), detail.as_deref(), turn.declared.map(DeclaredState::as_str))?;
+            let wait = match turn.declared {
+                Some(DeclaredState::Waiting(seconds)) => Some(seconds),
+                _ => None,
+            };
+            store.end_turn(&turn.id, outcome.kind(), detail.as_deref(), turn.declared.map(DeclaredState::as_str), wait)?;
         }
         match &outcome {
             TurnOutcome::Failed { .. } => {

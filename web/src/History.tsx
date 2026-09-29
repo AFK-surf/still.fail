@@ -2,7 +2,7 @@
 // (client/core/src/history.rs): messages in and out, state marks and the agent's words stand alone; the tool calls and
 // thinking between them fold into one group. Here it is only drawn.
 import { useToast } from "./toast.tsx";
-import { ChevronDown, ChevronRight, Received as ReceivedIcon, Send } from "./icons.tsx";
+import { ChevronDown, ChevronRight, Hourglass, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useApi, useHistory, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryView, type Place } from "./api.ts";
@@ -13,7 +13,7 @@ import { Prose } from "./Prose.tsx";
 import { ToolCall, ToolResult } from "./ToolStep.tsx";
 import * as toolCss from "./ToolStep.css.ts";
 import { useStickToBottom } from "./scroll.ts";
-import { useOlderOnScroll } from "./Chat.tsx";
+import { useOlderOnScroll, Waited } from "./Chat.tsx";
 import { Mark } from "./brand.tsx";
 import * as css from "./History.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
@@ -140,7 +140,10 @@ function HistoryItemView({ item, where }: { item: HistoryItem; where(place: Plac
         </div>
       );
     case "mark":
-      return <div className={css.hMark}>{body.content.text}</div>;
+      // A wait: how long it waited, said by the core once it is over; still waiting, it counts on here.
+      return body.content.wait
+        ? <div className={css.hLabel}><Hourglass {...ICON} size={14} />{body.content.wait.until == null ? <span>等待中 <Waited since={body.content.wait.since} seconds={body.content.wait.seconds} /></span> : body.content.text}</div>
+        : <div className={css.hMark}>{body.content.text}</div>;
     case "group":
       return <Group group={body.content} />;
   }

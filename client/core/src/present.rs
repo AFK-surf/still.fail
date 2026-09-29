@@ -33,6 +33,19 @@ pub fn session_status(s: &Value) -> &'static str {
     }
 }
 
+/// While a session waits on work it started (its last turn ended as waiting, nothing runs or is queued): since that
+/// turn ended, and at most how many seconds until it is asked again; null otherwise.
+pub fn waiting(s: &Value) -> Value {
+    let turn = s.get("lastTurn").filter(|t| t.is_object());
+    let since = turn.filter(|t| t.get("declared").and_then(Value::as_str) == Some("waiting")).and_then(|t| t.get("endedAt")).and_then(Value::as_i64);
+    match since {
+        Some(since) if session_status(s) == "running" && s.get("process").and_then(Value::as_str) != Some("running") => {
+            json!({ "since": since, "seconds": turn.and_then(|t| t.get("waitSeconds")).cloned().unwrap_or(Value::Null) })
+        }
+        _ => Value::Null,
+    }
+}
+
 /// A status as a client's small mark: run (at work), block, failed; none for the rest.
 pub fn badge(status: &str) -> Option<&'static str> {
     match status {
@@ -229,7 +242,10 @@ pub fn session(s: &mut Value) {
         return;
     }
     let status = session_status(s);
-    let (text, tone) = format::status_text(status);
+    let (mut text, tone) = format::status_text(status);
+    if !waiting(s).is_null() {
+        text = "等待中";
+    }
     let fields = s.clone();
     let str_of = |k: &str| fields.get(k).and_then(Value::as_str).map(str::to_string);
     let runtime = str_of("runtime").unwrap_or_else(|| "claude".into());
@@ -442,6 +458,11 @@ mod tests {
         assert_eq!(session_status(&json!({"lastTurn": {"declared": "block", "outcome": "completed"}})), "block");
         assert_eq!(session_status(&json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed"}})), "running");
         assert_eq!(session_status(&json!({"lastTurn": {"outcome": "completed"}})), "unexpected");
+        let waits = json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5, "waitSeconds": 600}});
+        assert_eq!(waiting(&waits), json!({"since": 5, "seconds": 600}));
+        assert_eq!(waiting(&json!({"process": "warm", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5}})), json!({"since": 5, "seconds": null}));
+        assert_eq!(waiting(&json!({"process": "running", "lastTurn": {"declared": "waiting", "outcome": "completed", "endedAt": 5}})), Value::Null);
+        assert_eq!(waiting(&json!({"process": "warm", "pending": 1, "lastTurn": {"declared": "waiting", "endedAt": 5}})), Value::Null);
         assert_eq!(session_status(&json!({})), "idle");
     }
 
