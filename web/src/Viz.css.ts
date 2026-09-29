@@ -13,9 +13,6 @@ export const vizOpen = style({
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 export const vizFrame = style({ display: "block", width: "100%", border: "0", background: "transparent" });
-/** A frame taking the room it is given (a side panel's tab, a phone's page). */
-export const vizFill = style({ display: "block", width: "100%", height: "100%", border: "0", background: "transparent" });
-export const vizPanel = style({ flex: "1", minHeight: 0, height: "100%", padding: "12px 16px", boxSizing: "border-box", overflow: "hidden" });
 /** Where a visualization comes while its file is fetched: its least height, quietly. */
 export const vizWait = style({ height: "120px", margin: "0 0 8px", borderRadius: `calc(12px * ${vars.cornerScale})`, background: vars.paper });
 export const vizNote = style({ padding: "24px", color: vars.muted, fontSize: vars.textSm });

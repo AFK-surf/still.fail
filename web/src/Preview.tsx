@@ -8,8 +8,9 @@
 // ember-preview://, which the app serves itself through its core; the bar
 // over it is the same.
 //
-// A visualization an agent posted (an HTML file placed in its message, Viz.tsx) opens the same way, beside its chat
-// or on a phone's page: its preview is the file, drawn in its sandboxed frame, under the same bar.
+// A visualization an agent posted (an HTML file placed in its message, Viz.tsx) opens the same way, in the same
+// frame (marking and all): only the frame's requests are answered here, with the file drawn in ember's stylesheet,
+// instead of by a port on the station.
 import { ArrowLeft, ArrowRight, External, Refresh, Web } from "./icons.tsx";
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
@@ -19,8 +20,7 @@ import * as css from "./Preview.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { useMarks } from "./annotate/Marks.tsx";
 import { Tip } from "./ui.tsx";
-import { DraftKey } from "./draft.ts";
-import { VizPanel } from "./Viz.tsx";
+import { useVizFile, useVizMessages, vizDocument } from "./Viz.tsx";
 
 declare const __PREVIEW_ORIGIN__: string;
 const ORIGIN = __PREVIEW_ORIGIN__;
@@ -83,20 +83,34 @@ export function ServiceFrame(shown: Shown) {
   return window.emberDesktop ? <DesktopPreview {...shown} port={port} /> : <WebPreview {...shown} port={port} />;
 }
 
-/** A visualization under the bar: its name where an address would be, reload drawing it anew (what it kept stays). */
-function FileFrame({ name, file, draftKey }: Shown & { file: FileSource }) {
-  const [drawn, setDrawn] = useState(0);
-  const reload = useCallback(() => setDrawn((n) => n + 1), []);
-  return (
-    <div className={css.preview}>
-      <PreviewBar name={name} at={null} go={() => {}} reload={reload} fixed />
-      <div className={css.previewStage}>
-        <DraftKey.Provider value={draftKey}>
-          <VizPanel key={drawn} sessionKey={file.session} file={{ name: file.name, path: file.path, size: 0 }} />
-        </DraftKey.Provider>
-      </div>
-    </div>
-  );
+/** One request of the frame's, answered. */
+interface Answer { status: number; headers: [string, string][]; body: Uint8Array }
+
+/**
+ * A visualization in the web frame (the desktop app's too: its own frames go to a station's port): the frame asks for
+ * its page and gets the file in ember's stylesheet, with what its widget kept; what the widget says comes from that
+ * page, the frame's own frame, straight to this one (Viz.tsx's useVizMessages).
+ */
+function FileFrame({ station, file, ...shown }: Shown & { file: FileSource }) {
+  const viz = useVizFile(file.session, { name: file.name, path: file.path, size: 0 });
+  const frame = useRef<HTMLIFrameElement>(null);
+  // What it keeps from now on, for its page asked for again (reload).
+  const kept = useRef<{ state: unknown } | null>(null);
+  const keep = viz && !viz.failed ? viz.keep : undefined;
+  // The page is a frame of the preview's frame (which holds no other of the file's).
+  const pages = () => { const outer = frame.current?.contentWindow; return outer ? Array.from({ length: outer.length }, (_, i) => outer[i]!) : []; };
+  useVizMessages(pages, { origin: ORIGIN, draftKey: shown.draftKey, onState: (state) => { kept.current = { state }; keep?.(state); } });
+  const html = viz && !viz.failed ? viz.html : null;
+  const state = viz && !viz.failed ? viz.state : null;
+  const serve = useCallback(async (asked: Asked): Promise<Answer> => {
+    const page = asked.method === "GET" && !/\.[a-z0-9]+$/i.test(asked.path.split("?")[0]!);
+    if (!page || html === null) return { status: 404, headers: [["content-type", "text/plain; charset=utf-8"]], body: new TextEncoder().encode("Not found") };
+    const doc = vizDocument(html, kept.current ? kept.current.state : state);
+    return { status: 200, headers: [["content-type", "text/html; charset=utf-8"], ["cache-control", "no-store"]], body: new TextEncoder().encode(doc) };
+  }, [html, state]);
+  if (viz?.failed) return <div className={css.preview}><p className={css.previewMissing}>读不到「{file.name}」。</p></div>;
+  if (!viz) return <div className={css.preview} />;
+  return <WebPreview {...shown} station={station} port={0} serve={serve} frame={frame} fixed />;
 }
 
 interface Bar {
@@ -165,8 +179,8 @@ function Restart({ name, restarting, reload }: { name: string; restarting: Resta
  * apps/desktop/src/main.ts): it says where the service is and whether it can go back or on (ember-preview-at), and is
  * told where to go (ember-preview-nav). `frame` is the frame at `origin`, loaded with `src`.
  */
-function Framed({ name, external, restarting, draftKey, origin, src, nonce, frame }:
-  Omit<Shown, "station" | "port" | "file"> & { origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null> }) {
+function Framed({ name, external, restarting, draftKey, origin, src, nonce, frame, fixed = false }:
+  Omit<Shown, "station" | "port" | "file"> & { origin: string | null; src: string | null; nonce: string; frame: RefObject<HTMLIFrameElement | null>; fixed?: boolean }) {
   const [at, setAt] = useState<string | null>(null);
   const [moves, setMoves] = useState({ back: false, forward: false });
   // A frame that can mark the page says so (an older one does not).
@@ -190,7 +204,7 @@ function Framed({ name, external, restarting, draftKey, origin, src, nonce, fram
   const reload = useCallback(() => nav("reload"), [nav]);
   return (
     <div className={css.preview}>
-      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={reload} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} extra={marks.button} instead={marks.address} />
+      <PreviewBar name={name} at={at} go={(path) => nav("go", path)} reload={reload} back={() => nav("back")} forward={() => nav("forward")} canBack={moves.back} canForward={moves.forward} external={external} extra={marks.button} instead={marks.address} fixed={fixed} />
       <div className={css.previewStage}>
         {src && <iframe ref={frame} className={css.previewFrame} title={name} src={src} />}
         <Restart name={name} restarting={restarting} reload={reload} />
@@ -213,12 +227,20 @@ function DesktopPreview({ station, port, file: _, ...shown }: Shown & { port: nu
   return <Framed {...shown} origin={origin} src={origin && `${origin}/_ember/frame?n=${nonce}&path=%2F`} nonce={nonce} frame={frame} />;
 }
 
-function WebPreview({ station, port, file: _, ...shown }: Shown & { port: number }) {
+/**
+ * `serve`: answers the frame's requests here (a visualization) instead of the station's port; `frame`: the frame, for
+ * whoever else speaks with its page; `fixed`: nowhere else to go, the bar only names it.
+ */
+function WebPreview({ station, port, file: _, serve, frame: given, fixed = false, ...shown }:
+  Shown & { port: number; serve?: (asked: Asked) => Promise<Answer>; frame?: RefObject<HTMLIFrameElement | null>; fixed?: boolean }) {
   const call = useCall();
   // One frame for as long as this shows: moving about (back, reload, a path) is the frame's own, told to it.
   const [nonce] = useState(() => crypto.randomUUID());
   const [first] = useState("/");
-  const frame = useRef<HTMLIFrameElement>(null);
+  const own = useRef<HTMLIFrameElement>(null);
+  const frame = given ?? own;
+  const served = useRef(serve);
+  served.current = serve;
   // The frame's requests of the service, handed here once it is ready: on to the station.
   useEffect(() => {
     const bridges: MessagePort[] = [];
@@ -229,6 +251,11 @@ function WebPreview({ station, port, file: _, ...shown }: Shown & { port: number
       bridges.push(port1);
       port1.onmessage = async ({ data }: MessageEvent<Asked>) => {
         try {
+          if (served.current) {
+            const answer = await served.current(data);
+            port1.postMessage({ id: data.id, status: answer.status, headers: answer.headers, body: answer.body }, [answer.body.buffer]);
+            return;
+          }
           const answer = await call("station.preview", {
             station, port, method: data.method, path: data.path, headers: data.headers, body: data.body ? toBase64(data.body) : "",
           }) as { status: number; headers: [string, string][]; body: string };
@@ -246,7 +273,7 @@ function WebPreview({ station, port, file: _, ...shown }: Shown & { port: number
       for (const bridge of bridges) bridge.close();
     };
   }, [nonce, station, port, call]);
-  return <Framed {...shown} origin={ORIGIN} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} nonce={nonce} frame={frame} />;
+  return <Framed {...shown} origin={ORIGIN} src={`${ORIGIN}/_ember/frame?n=${nonce}&path=${encodeURIComponent(first)}`} nonce={nonce} frame={frame} fixed={fixed} />;
 }
 
 /** A web service on a page of its own (its "open on its own"): the whole window with its bar, found by its job. */

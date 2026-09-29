@@ -6,7 +6,7 @@
 // The frame runs the file's scripts but has no origin of the page's: it cannot reach the page, its storage or the
 // station, and its CSP lets it load scripts and styles from a few public CDNs only, with no requests of its own. The
 // page hands it ember's tokens for the theme it shows (viz/ember-viz.css maps them to the names agents write against),
-// sizes it to its content, keeps what the widget asks to keep (widgetState, on the station, whose model part reaches
+// sizes it to its content (on its own, beside the chat, it is a web service's preview: Preview.tsx), keeps what the widget asks to keep (widgetState, on the station, whose model part reaches
 // the agent with the next message), and puts what it asks to send (sendFollowUpMessage, on a click) in the chat's
 // composer for the person to send.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -78,9 +78,9 @@ export function isFragment(html: string): boolean {
   return !/<!doctype|<html[\s>]/i.test(html.slice(0, 2048));
 }
 
-/** A fragment's document as a frame on its own shows it (a preview of the file): the stylesheet, the theme now, no state. */
-export function vizDocument(html: string): string {
-  return documentOf(html, null);
+/** A fragment's document as a frame of its own shows it (a preview of the file): the stylesheet, the theme now, what it kept. */
+export function vizDocument(html: string, state: unknown = null): string {
+  return documentOf(html, state);
 }
 
 /** Calls back when the page's theme changes: its own choice (data-theme) or the system's. */
@@ -98,29 +98,24 @@ function useThemeChange(onChange: () => void) {
 }
 
 /**
- * The sandboxed frame itself. `state`: what the widget kept, given to it as it loads; `onState` keeps what it keeps
- * next; `onError` hears a failure the content reports (a mermaid chart that would not parse). `fill`: it takes the
- * height it is given (a panel of its own) instead of its content's.
+ * What a visualization's page says to the page (viz/bridge.js), from one of the windows `wins` gives (checked against
+ * them, and `origin` when known): its height, what it keeps, a failure it reports, words to put in the composer (a click in it);
+ * and the page's theme, told to it as it changes.
  */
-function Frame({ html, title, state = null, onState, onError, fill = false }: {
-  html: string; title: string; state?: unknown; onState?: (state: unknown) => void; onError?: (message: string) => void; fill?: boolean;
+export function useVizMessages(wins: () => Window[], { origin = "*", draftKey: given, onHeight, onState, onError }: {
+  origin?: string; draftKey?: string | undefined; onHeight?: (height: number) => void; onState?: (state: unknown) => void; onError?: (message: string) => void;
 }) {
-  const [height, setHeight] = useState(0);
-  const frame = useRef<HTMLIFrameElement>(null);
-  const draftKey = useContext(DraftKey);
+  // The chat's draft, where its words go: the page's around it, else as given (a preview kept outside its chat).
+  const draftKey = useContext(DraftKey) ?? given;
   const toast = useToast();
-  // Made once per content: a new document would reload the frame and lose what it holds (its state, a chart drawn).
-  // The state is only what it starts with.
-  const srcDoc = useMemo(() => documentOf(html, state), [html]); // eslint-disable-line react-hooks/exhaustive-deps
-  const latest = useRef({ draftKey, toast, onState, onError });
-  latest.current = { draftKey, toast, onState, onError };
-
+  const latest = useRef({ wins, origin, draftKey, toast, onHeight, onState, onError });
+  latest.current = { wins, origin, draftKey, toast, onHeight, onState, onError };
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const data = event.data as { emberViz?: boolean; type?: string; [k: string]: unknown } | null;
-      if (event.source !== frame.current?.contentWindow || !data?.emberViz) return;
-      const { draftKey, toast, onState, onError } = latest.current;
-      if (data.type === "height" && typeof data.height === "number") setHeight(Math.min(MAX_HEIGHT, data.height));
+      const { wins, origin, draftKey, toast, onHeight, onState, onError } = latest.current;
+      if (!data?.emberViz || !wins().includes(event.source as Window) || (origin !== "*" && event.origin !== origin)) return;
+      if (data.type === "height" && typeof data.height === "number") onHeight?.(data.height);
       if (data.type === "state" && JSON.stringify(data.state ?? null).length <= MAX_STATE) onState?.(data.state ?? null);
       if (data.type === "failed" && typeof data.message === "string") onError?.(data.message);
       // A click in the widget asks to send words: they go in the composer, for the person to send (or not).
@@ -132,17 +127,30 @@ function Frame({ html, title, state = null, onState, onError, fill = false }: {
     addEventListener("message", onMessage);
     return () => removeEventListener("message", onMessage);
   }, []);
+  useThemeChange(() => { for (const win of latest.current.wins()) win.postMessage({ emberViz: true, type: "theme", tokens: tokens(), scheme: scheme() }, latest.current.origin); });
+}
 
-  useThemeChange(() => frame.current?.contentWindow?.postMessage({ emberViz: true, type: "theme", tokens: tokens(), scheme: scheme() }, "*"));
-
-  return <iframe ref={frame} className={fill ? css.vizFill : css.vizFrame} sandbox="allow-scripts" srcDoc={srcDoc} title={title} style={fill ? undefined : { height: height || 120 }} />;
+/**
+ * The sandboxed frame itself. `state`: what the widget kept, given to it as it loads; `onState` keeps what it keeps
+ * next; `onError` hears a failure the content reports (a mermaid chart that would not parse).
+ */
+function Frame({ html, title, state = null, onState, onError }: {
+  html: string; title: string; state?: unknown; onState?: (state: unknown) => void; onError?: (message: string) => void;
+}) {
+  const [height, setHeight] = useState(0);
+  const frame = useRef<HTMLIFrameElement>(null);
+  // Made once per content: a new document would reload the frame and lose what it holds (its state, a chart drawn).
+  // The state is only what it starts with.
+  const srcDoc = useMemo(() => documentOf(html, state), [html]); // eslint-disable-line react-hooks/exhaustive-deps
+  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight: (h) => setHeight(Math.min(MAX_HEIGHT, h)), ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
+  return <iframe ref={frame} className={css.vizFrame} sandbox="allow-scripts" srcDoc={srcDoc} title={title} style={{ height: height || 120 }} />;
 }
 
 /**
  * A visualization's file and what its widget kept (on the station, by the session that sent it and its path), loaded
  * together: it starts with both. Null while they come; `failed` when the file cannot be read.
  */
-function useVizFile(sessionKey: string, file: Attachment) {
+export function useVizFile(sessionKey: string, file: Attachment) {
   const api = useApi();
   const loaded = useFileText(sessionKey, file);
   const [state, setState] = useState<{ value: unknown } | null>(null);
@@ -179,14 +187,6 @@ export function VizFile({ sessionKey, file, failed }: { sessionKey: string; file
       )}
     </div>
   );
-}
-
-/** A visualization on its own, taking the room it is given: a side panel's tab, a page on a phone. */
-export function VizPanel({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
-  const viz = useVizFile(sessionKey, file);
-  if (viz?.failed) return <p className={css.vizNote}>读不到「{file.name}」。</p>;
-  if (!viz) return <div className={css.vizNote} aria-busy="true" />;
-  return <div className={css.vizPanel}><Frame html={viz.html} title={file.name} state={viz.state} onState={viz.keep} fill /></div>;
 }
 
 const MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

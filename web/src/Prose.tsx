@@ -58,7 +58,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   const language = /language-([\w+#-]+)/.exec(code?.props.className ?? "")?.[1];
   const text = textOf(code?.props.children ?? children).replace(/\n$/, "");
   // A mermaid block is a chart, drawn (Viz.tsx); anything else is code.
-  if (language?.toLowerCase() === "mermaid") return <Mermaid code={text} />;
+  if (language?.toLowerCase() === "mermaid" && text.trim()) return <Mermaid code={text} />;
   return <Code text={text} language={language} />;
 }
 
