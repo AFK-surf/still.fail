@@ -4,7 +4,7 @@
 // core takes JSON and answers JSON, which goes to the page as it is.
 import type { MessagePortMain } from "electron";
 
-/** client/node (ember_core.node). */
+/** client/node (stillfail_core.node). */
 interface NodeCore {
   connect(): number;
   receive(client: number, json: string): void;
@@ -69,7 +69,7 @@ process.parentPort.on("message", ({ ports }) => {
 
 // An error in this process's own code, handed to one page for error tracking as the worker does.
 process.on("uncaughtException", (error) => {
-  console.error("ember core:", error);
+  console.error("still.fail core:", error);
   const port = current.clients.values().next().value;
   port?.postMessage(JSON.stringify({ fault: { name: error.name, message: error.message, ...(error.stack ? { stack: error.stack } : {}) } }));
 });

@@ -2,7 +2,8 @@
 # Builds the still.fail station's releases (the layout of scripts/station-bundle.sh) and puts them in the cloud's releases
 # bucket, where install.sh (cloud/src/install.ts) gets them: this Mac's (darwin-arm64), and Linux's (linux-x64,
 # linux-arm64, built from here: scripts/linux-station.sh).
-# The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip and latest-mac.yml, in desktop/) and
+# The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip and stillfail-mac.yml, and the bridge
+# build's zip and latest-mac.yml, in desktop/) and
 # `android` (apps/android/build.py --release: ember-<n>.apk and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
 #   release.sh [PLATFORM…]   (default: the station's three; desktop and android only when named)
@@ -30,13 +31,19 @@ build=$(git -C "$root" rev-list --count HEAD)
 for platform in $platforms; do
   case $platform in
     desktop)
+      # The app (fail.still.desktop) on its feed, stillfail-mac.yml; then the same build under the bundle id from before
+      # the rename on the old feed, latest-mac.yml, for installed apps from before it (apps/desktop/src/bridge.ts).
       sh "$root/apps/desktop/build.sh"
+      zip="stillfail-0.1.$build-arm64-mac.zip"
+      put "$root/apps/desktop/out/$zip" "desktop/$zip" application/zip
+      put "$root/apps/desktop/out/stillfail-mac.yml" desktop/stillfail-mac.yml "text/yaml; charset=utf-8"
+      BRIDGE=1 SKIP_WEB=1 sh "$root/apps/desktop/build.sh"
       zip="ember-0.1.$build-arm64-mac.zip"
       put "$root/apps/desktop/out/$zip" "desktop/$zip" application/zip
       put "$root/apps/desktop/out/latest-mac.yml" desktop/latest-mac.yml "text/yaml; charset=utf-8"
       ;;
     android)
-      ORG_GRADLE_PROJECT_emberBuild=$build python3 "$root/apps/android/build.py" --release --tasks :app:assembleRelease
+      ORG_GRADLE_PROJECT_stillfailBuild=$build python3 "$root/apps/android/build.py" --release --tasks :app:assembleRelease
       apk="$root/apps/android/app/build/outputs/apk/release/app-release.apk"
       put "$apk" "android/ember-$build.apk" application/vnd.android.package-archive
       printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/ember-%s.apk","sha256":"%s","size":%s}\n' \

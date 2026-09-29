@@ -1,6 +1,6 @@
 {
-  "name": "@ember/desktop",
-  "productName": "ember",
+  "name": "@stillfail/desktop",
+  "productName": "still.fail",
   "version": "0.1.0",
   "description": "still.fail",
   "private": true,
@@ -19,8 +19,8 @@
     "typescript": "5.9.3"
   },
   "build": {
-    "appId": "dev.ember.desktop",
-    "productName": "ember",
+    "appId": "fail.still.desktop",
+    "productName": "still.fail",
     "directories": {
       "output": "out"
     },
@@ -34,18 +34,19 @@
         "to": "web"
       },
       {
-        "from": "build/ember_core.node",
-        "to": "ember_core.node"
+        "from": "build/stillfail_core.node",
+        "to": "stillfail_core.node"
       },
       {
-        "from": "build/station/ember",
+        "from": "build/station/stillfail",
         "to": "station"
       }
     ],
     "protocols": [
       {
-        "name": "ember",
+        "name": "still.fail",
         "schemes": [
+          "stillfail",
           "ember"
         ]
       }
@@ -61,14 +62,14 @@
         "NSLocalNetworkUsageDescription": "still.fail connects straight to your stations on the local network when it can.",
         "CFBundleName": "still.fail",
         "CFBundleDisplayName": "still.fail"
-      }
+      },
+      "artifactName": "stillfail-${version}-${arch}-mac.${ext}"
     },
-    "publish": [
-      {
-        "provider": "generic",
-        "url": "https://ember.3720.org/releases/desktop"
-      }
-    ],
+    "publish": {
+      "provider": "generic",
+      "url": "https://app.still.fail/releases/desktop",
+      "channel": "stillfail"
+    },
     "electronDist": "node_modules/electron/dist"
   },
   "packageManager": "pnpm@10.11.1"

@@ -1,17 +1,36 @@
 // This machine's station, run by the app (docs/station-rust.md, 1.5): the release the app carries in its Resources
 // (scripts/station-bundle.sh), started with the app, started again when it ends, stopped when the app quits. Its data
-// is ~/.ember, as an installed station's is, so the machine is one station whichever runs it; when one is installed
-// and running already (ember-station exits with HELD), the app leaves it be.
+// is ~/.stillfail, as an installed station's is, so the machine is one station whichever runs it; when one is installed
+// and running already (stillfail-station exits with HELD), the app leaves it be. A machine that ran it before the
+// rename has it in ~/.ember: the station moves it to ~/.stillfail as it starts (mesh/app/src/former.rs).
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, openSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, openSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-/** ember-station's exit when another station runs the data directory (mesh/station/src/main.rs). */
+/** stillfail-station's exit when another station runs the data directory (mesh/station/src/main.rs). */
 const HELD = 3;
 
+/** A directory with something in it (a link counts: ~/.ember once moved is one). */
+function inUse(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink() || readdirSync(path).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export class LocalStation {
-  readonly data = join(homedir(), ".ember");
+  /**
+   * The data directory: ~/.stillfail; ~/.ember while that is where the data still is (only there, not moved yet), so
+   * the log goes where the data is and the station, given it, moves it (nothing may be put in ~/.stillfail first: a
+   * directory with anything in it is taken for one in use, and the old one is then left where it is).
+   */
+  get data(): string {
+    const now = join(homedir(), ".stillfail");
+    const former = join(homedir(), ".ember");
+    return !inUse(now) && inUse(former) ? former : now;
+  }
   readonly #bin: string;
   #child: ChildProcess | null = null;
   #stopping = false;
@@ -19,9 +38,9 @@ export class LocalStation {
   /** Another station runs this machine's data: this one is not started again until the app is. */
   held = false;
 
-  /** `dir`: the release, ember/ of scripts/station-bundle.sh. */
+  /** `dir`: the release, stillfail/ of scripts/station-bundle.sh. */
   constructor(readonly dir: string) {
-    this.#bin = join(dir, "mesh", "target", "release", "ember-station");
+    this.#bin = join(dir, "mesh", "target", "release", "stillfail-station");
   }
 
   /** Whether the app carries a station (a build with SKIP_STATION=1 does not). */
@@ -36,13 +55,14 @@ export class LocalStation {
 
   start(): void {
     if (!this.carried || this.#child || this.#stopping || this.held) return;
-    mkdirSync(this.data, { recursive: true });
-    const log = openSync(join(this.data, "ember.log"), "a");
+    const data = this.data;
+    mkdirSync(data, { recursive: true });
+    const log = openSync(join(data, "stillfail.log"), "a");
     const started = Date.now();
-    const child = spawn(this.#bin, ["run", "--app", this.dir, "--data", this.data, "--with-parent"], {
+    const child = spawn(this.#bin, ["run", "--app", this.dir, "--data", data, "--with-parent"], {
       // Opened from Finder the app has launchd's short PATH; the agents it starts (Claude Code, Codex) are found on this
       // one, as an installed station's (cloud/src/install.ts).
-      env: { ...process.env, EMBER_DATA: this.data, PATH: `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin` },
+      env: { ...process.env, STILLFAIL_DATA: data, EMBER_DATA: data, PATH: `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin` },
       stdio: ["ignore", log, log],
     });
     this.#child = child;

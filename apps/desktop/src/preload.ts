@@ -3,13 +3,13 @@
 // to the page as a window message, tagged with the id the page asked with.
 import { contextBridge, ipcRenderer } from "electron";
 
-contextBridge.exposeInMainWorld("emberDesktop", {
+const desktop = {
   openCore: (id: number) => ipcRenderer.send("core:open", id),
-  /** The host a station's web service is shown at (ember-preview://<host>/): see main.ts, previews. */
+  /** The host a station's web service is shown at (stillfail-preview://<host>/): see main.ts, previews. */
   previewHost: (station: string, port: number): Promise<string | null> => ipcRenderer.invoke("preview:host", station, port),
   /** The page is in a workspace, reached as `account`: this machine's station may join it (see main.ts). */
   inWorkspace: (account: string, workspace: string) => ipcRenderer.send("station:workspace", account, workspace),
-  /** ember cloud's origin: its links (https://…/o/…) are the app's own. */
+  /** The cloud's origin: its links (https://…/o/…) are the app's own. */
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
   /** A newer build of the app: what there is of it now, each change after, and downloading and installing it (main.ts). */
   appUpdate: {
@@ -21,9 +21,13 @@ contextBridge.exposeInMainWorld("emberDesktop", {
     },
     start: () => ipcRenderer.send("update:start"),
   },
-});
+};
+contextBridge.exposeInMainWorld("stillfailDesktop", desktop);
+// Its name before the rename, while pages built before it may still look for it (a dev server's, dev.sh HMR=1).
+contextBridge.exposeInMainWorld("emberDesktop", desktop);
 
-ipcRenderer.on("core:port", (event, id: number) => window.postMessage({ emberCore: "port", id }, location.origin, event.ports));
-ipcRenderer.on("core:exit", (_event, reason: string) => window.postMessage({ emberCore: "exit", reason }, location.origin));
+// Tagged under both names too (emberCore, emberNavigate: what pages from before the rename read).
+ipcRenderer.on("core:port", (event, id: number) => window.postMessage({ stillfailCore: "port", emberCore: "port", id }, location.origin, event.ports));
+ipcRenderer.on("core:exit", (_event, reason: string) => window.postMessage({ stillfailCore: "exit", emberCore: "exit", reason }, location.origin));
 // An item's link opened from outside: the page goes there itself.
-ipcRenderer.on("app:navigate", (_event, path: string) => window.postMessage({ emberNavigate: path }, location.origin));
+ipcRenderer.on("app:navigate", (_event, path: string) => window.postMessage({ stillfailNavigate: path, emberNavigate: path }, location.origin));

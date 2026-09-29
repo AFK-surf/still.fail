@@ -1,46 +1,86 @@
-// ember's desktop app: the web app (`pnpm run build:cloud`'s dist/cloud-web)
+// still.fail's desktop app: the web app (`pnpm run build:cloud`'s dist/cloud-web)
 // in a window, with its client core in a utility process instead of the
 // browser's SharedWorker (docs/client-core.md). Only the host is different:
 // the page is served from app://ember, the core runs natively (client/node,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
-// the system browser comes back through ember://auth/callback.
+// the system browser comes back through stillfail://auth/callback.
 import { app, BrowserWindow, ipcMain, MessageChannelMain, net, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
 import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readlinkSync, renameSync, rmdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
 import { LocalStation } from "./station";
+import { Bridge, CHANNEL, FORMER_APP_ID, bundleIdOf, ownBundle } from "./bridge";
 
-const CLOUD_ORIGIN = (process.env.EMBER_CLOUD_ORIGIN ?? "https://ember.3720.org").replace(/\/+$/, "");
+const CLOUD_ORIGIN = (process.env.STILLFAIL_CLOUD_ORIGIN ?? process.env.EMBER_CLOUD_ORIGIN ?? "https://app.still.fail").replace(/\/+$/, "");
 /**
  * Where the page comes from: the web app packed with the app, at app://ember; or, run from the source with
  * `--dev-url=<a Vite dev server>` (dev.sh HMR=1), that server, so changes to the page show as they are saved.
  */
 const DEV_URL = process.argv.find((arg) => arg.startsWith("--dev-url="))?.slice("--dev-url=".length).replace(/\/+$/, "") ?? null;
+// app://ember keeps its name from before the rename: the page's storage (localStorage, IndexedDB) is the origin's.
 const APP_ORIGIN = DEV_URL ? new URL(DEV_URL).origin : "app://ember";
 // The dev server is plain http on the LAN: taken as secure, as app://ember is, so the page has what a secure page has
 // (the clipboard among it) and behaves as the packed one does.
 if (DEV_URL) app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-secure", APP_ORIGIN);
-/** Where ember cloud sends a native sign-in back to (cloud/src/auth.ts, APP_REDIRECT). */
-const AUTH_CALLBACK = "ember://auth/callback";
-/** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/, ember_core.node and station/. */
+/** The app's link schemes: stillfail://, and ember:// as before the rename (links made then, pages that still make them). */
+const SCHEMES = ["stillfail", "ember"];
+/** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/, stillfail_core.node and station/. */
 const resources = app.isPackaged ? process.resourcesPath : join(__dirname, "..");
 const web = join(resources, "web");
-const station = new LocalStation(join(resources, app.isPackaged ? "station" : "station/ember"));
+const station = new LocalStation(join(resources, app.isPackaged ? "station" : "station/stillfail"));
+
+/**
+ * The app's data (userData) from before the rename, when it was named ember: ~/Library/Application Support/ember.
+ * Named still.fail now, it would start from nothing (signed out); so the first start moves what is there to the new
+ * place and leaves a link at the old one. Not while the old app runs on it (its SingletonLock names a live process):
+ * then this start uses the old place, and a later one moves it.
+ */
+function carryOverUserData(): void {
+  const now = app.getPath("userData");
+  const former = join(app.getPath("appData"), "ember");
+  const there = (path: string) => { try { lstatSync(path); return true; } catch { return false; } };
+  if (now === former || !there(former) || lstatSync(former).isSymbolicLink()) return;
+  // The core's data (the sign-ins) already in the new place: it is in use, and the old one is left as it is.
+  if (there(join(now, "core"))) return;
+  try {
+    const pid = Number(/-(\d+)$/.exec(readlinkSync(join(former, "SingletonLock")))?.[1]);
+    if (pid && pid !== process.pid) {
+      process.kill(pid, 0);
+      app.setPath("userData", former);
+      return;
+    }
+  } catch { /* no lock, or its process is gone */ }
+  try {
+    if (!there(now)) renameSync(former, now);
+    else {
+      // Made already (by Electron, before this ran): what it lacks comes over, entry by entry.
+      for (const name of readdirSync(former)) if (!there(join(now, name))) renameSync(join(former, name), join(now, name));
+      rmdirSync(former);
+    }
+    symlinkSync(now, former);
+    console.info("moved the app's data from", former, "to", now);
+  } catch (error) {
+    console.warn("the app's data could not be moved from", former, error instanceof Error ? error.message : error);
+    if (!there(join(now, "core")) && there(join(former, "core"))) app.setPath("userData", former);
+  }
+}
+
+carryOverUserData();
 
 // A standard, secure origin: the page's absolute paths, storage and clipboard work as on https://.
 protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, codeCache: true } },
   // A web service on a station's machine, shown in a frame (see preview below): an origin of its own per station and port.
-  { scheme: "ember-preview", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+  { scheme: "stillfail-preview", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ]);
 
-/** A file of the web app, or for any other path (a client-side route) its index.html, as ember cloud serves it (cloud/src/index.ts). */
+/** A file of the web app, or for any other path (a client-side route) its index.html, as the cloud serves it (cloud/src/index.ts). */
 async function serve(request: Request): Promise<Response> {
   const file = join(web, normalize(decodeURIComponent(new URL(request.url).pathname)));
   const found = await stat(file).then((s) => s.isFile(), () => false);
@@ -52,7 +92,7 @@ let core: UtilityProcess | null = null;
 /** The core's process, started when a page first asks for it and again after it exited. */
 function coreProcess(): UtilityProcess {
   if (core) return core;
-  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "ember_core.node")], { serviceName: "ember core" });
+  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "stillfail_core.node")], { serviceName: "still.fail core" });
   child.on("exit", (code) => {
     if (core === child) core = null;
     dropOwnLink("核心进程退出了");
@@ -73,7 +113,7 @@ ipcMain.on("core:open", (event, id: unknown) => {
   event.sender.postMessage("core:port", id, [port2]);
 });
 
-// ember cloud's origin, for the page to know its links (web/src/core/client.ts, EmberDesktop.cloudOrigin).
+// The cloud's origin, for the page to know its links (web/src/core/client.ts, StillFailDesktop.cloudOrigin).
 ipcMain.on("app:cloud-origin", (event) => { event.returnValue = CLOUD_ORIGIN; });
 
 // The app's own way to the core, for what it serves itself (previews): a client of the core as a page is, making calls.
@@ -117,7 +157,7 @@ function coreCall(name: string, params: unknown, onProgress?: (value: unknown) =
   });
 }
 
-// Previews: a page asks for a station's port as a host of ember-preview:// (p<port>-<the station's hash>), puts that
+// Previews: a page asks for a station's port as a host of stillfail-preview:// (p<port>-<the station's hash>), puts that
 // host's /_ember/frame (FRAME below) in a frame, and every other request of the host comes here and goes to the station
 // through the core (station.preview), over the mesh like any other call. The service's scripts are on an origin of
 // their own, apart from the app's.
@@ -130,7 +170,7 @@ ipcMain.handle("preview:host", (event, station: unknown, port: unknown) => {
   return `p${port}-${id}`;
 });
 
-// The frame a page puts in its own (ember-preview://<host>/_ember/frame), as the preview host's is on the web
+// The frame a page puts in its own (stillfail-preview://<host>/_ember/frame), as the preview host's is on the web
 // (cloud/src/preview.ts): the service in a frame of its own, and a history of its own. The bar's back, forward and go
 // move along it with replace(), so they never step the page it sits in (a frame shares its window's history). Where it
 // is, and whether it can go back or on, is said back to the page as it loads and as a page moves itself.
@@ -153,7 +193,7 @@ const FRAME = `<!doctype html>
   const where = () => {
     try {
       // A redirect on its way (see preview below) is no place of its own.
-      if (inner.contentDocument.querySelector("meta[name=ember-redirect]")) return null;
+      if (inner.contentDocument.querySelector("meta[name=stillfail-redirect]")) return null;
       const at = inner.contentWindow.location;
       return at.protocol === "about:" ? null : at.pathname + at.search + at.hash;
     } catch { return null; }
@@ -169,7 +209,7 @@ const FRAME = `<!doctype html>
     const state = path + "|" + here + "|" + trail.length;
     if (state === said) return;
     said = state;
-    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1, annotate: !!window.emberAnnotate }, "*");
+    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1, annotate: !!(window.stillfailAnnotate || window.emberAnnotate) }, "*");
   };
   const replace = (path) => {
     moving = true;
@@ -188,7 +228,7 @@ const FRAME = `<!doctype html>
   addEventListener("DOMContentLoaded", () => {
     document.body.append(inner);
     // Marking the page for a chat (/_ember/annotate.js, web/src/annotate/frame.ts), when it loaded.
-    window.emberAnnotate?.attach(inner, nonce);
+    (window.stillfailAnnotate || window.emberAnnotate)?.attach(inner, nonce);
   });
   setInterval(report, 500);
 </script>
@@ -322,7 +362,7 @@ async function preview(request: Request): Promise<Response> {
       const next = new URL(location, `http://localhost:${host[1]}${path}`);
       if (next.hostname !== "localhost" && next.hostname !== "127.0.0.1") return plain(502, `这个网页跳到了别的地址：${location}`);
       path = next.pathname + next.search;
-      if (page) return new Response(`<!doctype html><meta charset="utf-8"><meta name="ember-redirect"><script>location.replace(${JSON.stringify(path)})</script>`, { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (page) return new Response(`<!doctype html><meta charset="utf-8"><meta name="stillfail-redirect"><script>location.replace(${JSON.stringify(path)})</script>`, { headers: { "content-type": "text/html; charset=utf-8" } });
     }
     if (!answer) return plain(508, "跳转太多次了");
     const empty = request.method === "HEAD" || [101, 204, 205, 304].includes(answer.status);
@@ -374,10 +414,10 @@ function machineName(): string {
   }
 }
 
-// Keeping the app current: ember cloud has the latest build (scripts/release.sh desktop puts it in /releases/desktop/),
-// looked for at start and every few hours. A newer one is said to the pages, which show 更新 beside the buddy
-// (web/src/brand.tsx); clicked, it is downloaded, and once it is the app quits (the station stopped first) and opens
-// as the new one.
+// Keeping the app current: the cloud has the latest build (scripts/release.sh desktop puts it in /releases/desktop/,
+// stillfail-mac.yml; latest-mac.yml is the old feed, for apps from before the rename: see bridge.ts), looked for at
+// start and every few hours. A newer one is said to the pages, which show 更新 beside the buddy (web/src/brand.tsx);
+// clicked, it is downloaded, and once it is the app quits (the station stopped first) and opens as the new one.
 const UPDATE_EVERY = 4 * 60 * 60 * 1000;
 
 /** What the pages are told of an update (web/src/core/client.ts, AppUpdate). */
@@ -397,15 +437,24 @@ function sayUpdate(next: UpdateState | null): void {
 
 ipcMain.handle("update:state", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? update : null);
 
+/** Downloads the update said to be there (set by keepUpdated). */
+let download = () => {};
+
 ipcMain.on("update:start", (event) => {
   if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || !update || update.phase === "downloading" || update.phase === "installing") return;
   sayUpdate({ phase: "downloading", version: update.version, percent: 0 });
-  autoUpdater.downloadUpdate().catch(() => {});
+  download();
 });
 
 function keepUpdated(): void {
   if (!app.isPackaged) return;
-  autoUpdater.setFeedURL({ provider: "generic", url: `${CLOUD_ORIGIN}/releases/desktop` });
+  const feed = `${CLOUD_ORIGIN}/releases/desktop`;
+  if (bundleIdOf(ownBundle()) === FORMER_APP_ID) {
+    moveToRenamedApp(new Bridge(feed));
+    return;
+  }
+  download = () => void autoUpdater.downloadUpdate().catch(() => {});
+  autoUpdater.setFeedURL({ provider: "generic", url: feed, channel: CHANNEL });
   autoUpdater.logger = null;
   autoUpdater.autoDownload = false;
   autoUpdater.on("update-available", ({ version }) => {
@@ -426,6 +475,32 @@ function keepUpdated(): void {
   const check = () => {
     if (update?.phase === "downloading" || update?.phase === "installing") return;
     void autoUpdater.checkForUpdates().catch((error: Error) => console.warn("looking for an update failed", error.message));
+  };
+  check();
+  setInterval(check, UPDATE_EVERY);
+}
+
+/**
+ * This build under the bundle id from before the rename (bridge.ts): its update is the app under the new id, whatever
+ * its version (the same build under the other id is the move).
+ */
+function moveToRenamedApp(bridge: Bridge): void {
+  download = () => {
+    void bridge.prepare((percent) => {
+      if (update?.phase === "downloading") sayUpdate({ ...update, percent });
+    }).then(() => {
+      if (update) sayUpdate({ phase: "installing", version: update.version });
+      void stopStation().then(() => app.quit());
+    }, (error: Error) => {
+      console.warn("moving to the renamed app failed", error.message);
+      if (update) sayUpdate({ phase: "failed", version: update.version, message: error.message });
+    });
+  };
+  const check = () => {
+    if (update?.phase === "downloading" || update?.phase === "installing") return;
+    bridge.check().then((version) => {
+      if (version && update?.version !== version) sayUpdate({ phase: "available", version });
+    }, (error: Error) => console.warn("looking for the renamed app failed", error.message));
   };
   check();
   setInterval(check, UPDATE_EVERY);
@@ -470,12 +545,13 @@ function open(path = "/", titled = false): BrowserWindow {
 
 /** The system browser finished a sign-in: the page's own /auth/callback completes it (web/src/cloud/gate.tsx). */
 /**
- * An ember:// URL handed to the app: the sign-in coming back (ember://auth/callback, loaded as the page), or an
- * item's link (ember://o/<workspace>/<station>/<session>, from the web's /o/ page), which the page opens in place.
+ * A stillfail:// (or ember://) URL handed to the app: the sign-in coming back (stillfail://auth/callback, loaded as the
+ * page), or an item's link (…://o/<workspace>/<station>/<session>, from the web's /o/ page), which the page opens in
+ * place.
  */
 function arrived(url: string): void {
-  const item = /^ember:\/\/o\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)/.exec(url);
-  if (!url.startsWith(AUTH_CALLBACK) && !item) return;
+  const item = /^(?:stillfail|ember):\/\/o\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)/.exec(url);
+  if (!/^(?:stillfail|ember):\/\/auth\/callback(?:[?#]|$)/.test(url) && !item) return;
   // An item's link may name a web service to open with it (?service=<job>).
   const path = item ? `/o/${item[1]}/${item[2]}/${item[3]}${new URL(url).search}` : `/auth/callback${new URL(url).search}`;
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
@@ -501,22 +577,24 @@ async function stopStation(): Promise<void> {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  // Run from the source (Electron's own app with this directory, dev.sh), ember:// opens it with the directory.
-  if (app.isPackaged) app.setAsDefaultProtocolClient("ember");
-  else app.setAsDefaultProtocolClient("ember", process.execPath, [app.getAppPath()]);
+  // Run from the source (Electron's own app with this directory, dev.sh), the links open it with the directory.
+  for (const scheme of SCHEMES) {
+    if (app.isPackaged) app.setAsDefaultProtocolClient(scheme);
+    else app.setAsDefaultProtocolClient(scheme, process.execPath, [app.getAppPath()]);
+  }
   // macOS hands the app its URLs here (possibly before it is ready); elsewhere they start a second instance.
   app.on("open-url", (event, url) => {
     event.preventDefault();
     void app.whenReady().then(() => arrived(url));
   });
   app.on("second-instance", (_event, argv) => {
-    const url = argv.find((arg) => arg.startsWith("ember://"));
+    const url = argv.find((arg) => SCHEMES.some((scheme) => arg.startsWith(`${scheme}://`)));
     if (url) arrived(url);
     else BrowserWindow.getAllWindows()[0]?.focus();
   });
   void app.whenReady().then(() => {
     protocol.handle("app", serve);
-    protocol.handle("ember-preview", preview);
+    protocol.handle("stillfail-preview", preview);
     open();
     station.start();
     keepUpdated();
