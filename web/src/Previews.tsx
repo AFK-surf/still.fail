@@ -78,7 +78,8 @@ export function PreviewSlot({ station, port, name, service, restarting, draftKey
 }
 
 /**
- * The small ones' cards (their page alone, its bar put away): this big, this far from the window's edges and apart.
+ * The small ones' cards (their page alone, its bar put away): this big (unless resized), this far from the window's
+ * edges and apart.
  * At rest the latest one shows, the ones behind it an edge each (`peek` apart, `shrink` smaller each, no more than
  * `behind`); pointed at, they are all laid out, in columns up from the corner. Tucked away, only a capsule is there.
  */
@@ -87,6 +88,47 @@ const MOVE = { duration: 280, easing: "cubic-bezier(.2, .8, .2, 1)" };
 /** How long the pointer can be off them (crossing the gap between two) before they go back to rest. */
 const LINGER = 250;
 const TUCKED = "ember.previewsTucked";
+/** The small ones' size, as dragged by their top and left edges; no smaller than MIN, no bigger than the window
+ * leaves room for. */
+const SIZE = "ember.previewsSize";
+const MIN = { width: 180, height: 112 };
+
+interface Size { width: number; height: number }
+function savedSize(): Size {
+  try {
+    const { width, height } = JSON.parse(localStorage.getItem(SIZE) ?? "null") ?? {};
+    if (typeof width === "number" && typeof height === "number") return { width, height };
+  } catch { /* the default */ }
+  return { width: SMALL.width, height: SMALL.height };
+}
+const fit = ({ width, height }: Size): Size => ({
+  width: Math.round(Math.max(MIN.width, Math.min(width, innerWidth - 2 * SMALL.margin))),
+  height: Math.round(Math.max(MIN.height, Math.min(height, innerHeight - 2 * SMALL.margin))),
+});
+/** The grip: GAP outside the card's corner, following it (the same shape, GAP more radius), its ends a little short
+ * of where the corner meets the straight edges. */
+const GRIP = { gap: 5, stroke: 4, trim: 0.26 };
+function shapeGrip(svg: SVGSVGElement | null): void {
+  const card = svg?.parentElement;
+  if (!svg || !card) return;
+  const style = getComputedStyle(card);
+  const radius = parseFloat(style.borderTopLeftRadius) + GRIP.gap;
+  // superellipse(k) is |x|^(2^k) + |y|^(2^k) = 1; round is k = 1.
+  const k = /superellipse\(([\d.]+)\)/.exec(style.getPropertyValue("corner-shape"))?.[1];
+  const n = 2 ** (k ? Number(k) : 1);
+  const pad = GRIP.stroke, size = radius + 2 * pad;
+  const points: string[] = [];
+  for (let i = 0; i <= 24; i++) {
+    const t = (Math.PI / 2) * (GRIP.trim + ((1 - 2 * GRIP.trim) * i) / 24);
+    const x = radius * (1 - Math.cos(t) ** (2 / n)), y = radius * (1 - Math.sin(t) ** (2 / n));
+    points.push(`${(x + pad).toFixed(2)} ${(y + pad).toFixed(2)}`);
+  }
+  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+  Object.assign(svg.style, { top: `${-GRIP.gap - pad}px`, left: `${-GRIP.gap - pad}px`, width: `${size}px`, height: `${size}px` });
+  svg.firstElementChild!.setAttribute("d", `M${points.join("L")}`);
+}
+type Edge = "top" | "left" | "corner";
+const EDGES: Edge[] = ["top", "left", "corner"];
 
 interface Box { x: number; y: number; w: number; h: number }
 type Mode = "full" | "small" | "hidden";
@@ -125,6 +167,7 @@ export function Previews() {
   const [tucked, setTucked] = useState(() => localStorage.getItem(TUCKED) === "1");
   const state = useRef({ spread, tucked });
   state.current = { spread, tucked };
+  const size = useRef(savedSize());
   const leaving = useRef(0);
   const enter = () => { clearTimeout(leaving.current); setSpread(true); };
   const leave = () => { clearTimeout(leaving.current); leaving.current = window.setTimeout(() => setSpread(false), LINGER); };
@@ -132,6 +175,37 @@ export function Previews() {
     localStorage.setItem(TUCKED, value ? "1" : "0");
     setTucked(value);
     setSpread(false);
+  };
+  // Dragged by an edge: the corner stays, the card grows or shrinks towards the pointer.
+  const resize = (edge: Edge) => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const from = { x: e.clientX, y: e.clientY, ...fit(size.current) };
+    document.documentElement.dataset.previewResizing = edge;
+    const move = (m: PointerEvent) => {
+      size.current = fit({
+        width: edge === "top" ? from.width : from.width + from.x - m.clientX,
+        height: edge === "left" ? from.height : from.height + from.y - m.clientY,
+      });
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      delete document.documentElement.dataset.previewResizing;
+      localStorage.setItem(SIZE, JSON.stringify(size.current));
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  };
+  // Back to the default size.
+  const unsize = () => {
+    size.current = { width: SMALL.width, height: SMALL.height };
+    localStorage.removeItem(SIZE);
   };
   useEffect(() => {
     for (const key of placed.current.keys()) if (!all.some((k) => k.key === key)) placed.current.delete(key);
@@ -157,10 +231,11 @@ export function Previews() {
         setDeck(small);
       }
       const { spread, tucked } = state.current;
+      const { width, height } = fit(size.current);
       const right = innerWidth - SMALL.margin;
       // Over the capsule while tucked away; else from the corner.
       const bottom = innerHeight - SMALL.margin - (tucked && capsule.current ? capsule.current.offsetHeight + SMALL.gap : 0);
-      const perColumn = Math.max(1, Math.floor((bottom - SMALL.margin + SMALL.gap) / (SMALL.height + SMALL.gap)));
+      const perColumn = Math.max(1, Math.floor((bottom - SMALL.margin + SMALL.gap) / (height + SMALL.gap)));
       for (const entry of all) {
         const frame = frames.current.get(entry.key);
         const card = cards.current.get(entry.key);
@@ -179,14 +254,14 @@ export function Previews() {
           const i = small.length - 1 - small.indexOf(entry.key);
           if (spread) {
             const column = Math.floor(i / perColumn), row = i % perColumn;
-            shell = { x: right - SMALL.width - column * (SMALL.width + SMALL.gap), y: bottom - SMALL.height - row * (SMALL.height + SMALL.gap), w: SMALL.width, h: SMALL.height };
+            shell = { x: right - width - column * (width + SMALL.gap), y: bottom - height - row * (height + SMALL.gap), w: width, h: height };
           } else {
             const d = Math.min(i, SMALL.behind);
             const k = 1 - SMALL.shrink * d;
-            shell = { x: right - SMALL.width * (1 + k) / 2, y: bottom - SMALL.height - SMALL.peek * d, w: SMALL.width * k, h: SMALL.height * k };
+            shell = { x: right - width * (1 + k) / 2, y: bottom - height - SMALL.peek * d, w: width * k, h: height * k };
             seen = !tucked && i <= SMALL.behind;
             // Tucked away: into the capsule.
-            if (tucked) shell = { x: right - SMALL.width * 0.3, y: innerHeight - SMALL.margin - SMALL.height * 0.3, w: SMALL.width * 0.3, h: SMALL.height * 0.3 };
+            if (tucked) shell = { x: right - width * 0.3, y: innerHeight - SMALL.margin - height * 0.3, w: width * 0.3, h: height * 0.3 };
           }
           layout = `small ${spread} ${tucked} ${i}`;
           // Laid out as a window of the card's shape (its bar put away): its page reflows to it, and all of it shows.
@@ -247,6 +322,11 @@ export function Previews() {
             <span className={css.nameText}>{entry.name}</span>
             {!spread && shown.length > 1 && <span className={css.count}>+{shown.length - 1}</span>}
           </span>
+          {EDGES.map((edge) => (
+            <div key={edge} className={css.edge} data-edge={edge} aria-hidden onPointerDown={resize(edge)}
+              onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => { e.stopPropagation(); unsize(); }} />
+          ))}
+          <svg ref={shapeGrip} className={css.grip} aria-hidden><path /></svg>
           <span className={css.actions}>
             {!tucked && (
               <Tip label="收起">

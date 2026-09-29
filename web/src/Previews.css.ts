@@ -55,6 +55,30 @@ export const card = style({
     "&:focus-visible": { boxShadow: `0 0 0 2px ${vars.fieldFocus}` },
   },
 });
+/** Its top and left edges and the corner between them: dragged, the small ones resize (the far corner stays). */
+export const edge = style({
+  position: "absolute", zIndex: "1",
+  selectors: {
+    "&[data-edge=top]": { top: "-3px", left: "10px", right: "0", height: "7px", cursor: "ns-resize" },
+    "&[data-edge=left]": { left: "-3px", top: "10px", bottom: "0", width: "7px", cursor: "ew-resize" },
+    "&[data-edge=corner]": { top: "-10px", left: "-10px", width: "24px", height: "24px", cursor: "nwse-resize" },
+  },
+});
+/** Where to take it: a short round-capped arc just outside its top-left corner, following it (Previews.tsx
+ * shapeGrip), shown on hover (stronger on the edges). */
+export const grip = style({
+  position: "absolute", overflow: "visible", pointerEvents: "none", fill: "none", stroke: vars.muted,
+  strokeWidth: "4px", strokeLinecap: "round", strokeLinejoin: "round", opacity: "0",
+  transition: `opacity ${vars.dur} ${vars.easeOut}`,
+  selectors: {
+    [`${card}:hover &`]: { opacity: ".55" },
+    [`${edge}:hover ~ &, :root[data-preview-resizing] &`]: { opacity: "1" },
+  },
+});
+/** While resizing, the cursor stays the edge's wherever the pointer goes, and nothing under it is selected. */
+globalStyle(":root[data-preview-resizing=top] *", { cursor: "ns-resize !important", userSelect: "none" });
+globalStyle(":root[data-preview-resizing=left] *", { cursor: "ew-resize !important", userSelect: "none" });
+globalStyle(":root[data-preview-resizing=corner] *", { cursor: "nwse-resize !important", userSelect: "none" });
 export const name = style({
   ...glass,
   position: "absolute", left: "8px", bottom: "8px", display: "flex", alignItems: "center", gap: "6px",
