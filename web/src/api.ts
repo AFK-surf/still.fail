@@ -235,6 +235,9 @@ export function stationApi(t: StationCall) {
     /** A chat into the archive or back: its thread (with its session when it is that session's own), or an agent with no chat yet. */
     archive: (of: { thread?: number | null; session: string }, archived: boolean) =>
       op<unknown>("chat.archive", { session: of.session, ...(of.thread == null ? {} : { thread: of.thread }), archived }),
+    /** Names a chat (its thread, or an agent with no chat yet); an empty name leaves it named by its first message. */
+    rename: (of: { thread?: number | null; session: string }, title: string) =>
+      op<unknown>("chat.rename", { session: of.session, ...(of.thread == null ? {} : { thread: of.thread }), title }),
     /** The archive's items; a station from before it answers its shown ones (none say `archived`), so none. */
     archivedChats: async () => (await op<ArchivedChat[]>("chats.archived")).filter((row) => row.archived),
     deleteSession: (key: string) => op<{ ok: true }>("session.delete", { key }),

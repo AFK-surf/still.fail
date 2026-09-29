@@ -6,6 +6,7 @@ export const mCenter = style({
   flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: "14px",
 });
 export const mInfoLabel = style({ width: "72px", flex: "none", color: "var(--m-muted)" });
+export const mInfoName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" });
 export const mInfoAgent = style({ display: "flex", flexDirection: "column" });
 export const mChatBar = style({
   position: "absolute", top: "0", left: "0", right: "0", zIndex: "3", display: "flex", alignItems: "center",

@@ -332,7 +332,8 @@ and what that changes (`ops.rs`; `scripts/check.sh` fails on a UI that asks
 for a request). Station operations take `station`: `session.stop`,
 `session.warm`, `session.evict`, `session.delete`, `session.settings`,
 `session.new`, `chat.archive` (by its thread, else its session; a station from
-before archiving threads archives the session), `chats.archived`,
+before archiving threads archives the session), `chat.rename` (by its thread,
+else its session), `chats.archived`,
 `chat.forSession`, `widget.state`, `widget.setState`, `machineSessions.list`,
 `machineSessions.read`, `machineSessions.continue`, `connect.create`,
 `connect.put`, `connect.delete`, `connect.reconnect`, `connect.bindSession`,

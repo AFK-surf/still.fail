@@ -16,6 +16,7 @@ import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, Copy, F
 import { stationBase, useStation } from "../station.tsx";
 import { PENDING } from "../lastChat.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
+import { ask } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
 import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
@@ -517,11 +518,22 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const now = useNow();
   const view = useChat(here.station, { session: here.key }).value ?? here.view;
   const thread = view.thread ?? first;
+  const call = useStationCall(here.station);
   return (
     <>
       <SheetGrab />
       <SheetHead title="对话信息" />
       <div className={`${sheetsCss.mSheetScroll} ${partsCss.mPad18}`}>
+        {!view.archived && !view.offline && (
+          <InfoList>
+            <InfoRow onClick={() => ask(app, {
+              title: "重命名对话", value: view.title, placeholder: "对话名称", action: "保存", empty: true, hint: "留空则用第一句话作名字",
+              run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
+            })}>
+              <span className={css.mInfoLabel}>名称</span><span className={`${partsCss.mGrow} ${css.mInfoName}`}>{view.title}</span><ChevronRight size={14} className={partsCss.mSubtle} />
+            </InfoRow>
+          </InfoList>
+        )}
         <InfoList>
           <InfoDetail label="来自" value={view.place ? `Slack · ${view.place}` : "ember 对话"} />
           <InfoDetail label="发起" value={thread.creator?.shown?.display ?? "未记录"} />

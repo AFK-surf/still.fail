@@ -6,7 +6,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 
 export type Action =
   | "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings"
-  | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.archive"
+  | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.archive" | "chat.rename"
   | "panel.close" | "shortcuts";
 
 /**
@@ -46,6 +46,7 @@ export const ACTIONS: Record<Action, Spec> = {
   "chat.jobs": { label: "服务和后台任务", group: "对话", keys: ["Mod+Shift+J"], typing: "yes" },
   "chat.latest": { label: "跳到最新", group: "对话", keys: ["Mod+Down"], typing: "empty" },
   "chat.archive": { label: "归档对话", group: "对话", keys: ["Mod+Shift+E"], typing: "yes" },
+  "chat.rename": { label: "重命名对话", group: "对话", keys: ["F2"], typing: "yes" },
   "panel.close": { label: "收起侧栏", group: "对话", keys: ["Escape"], typing: "yes" },
 };
 
@@ -104,7 +105,7 @@ const KEYS = Object.fromEntries(Object.entries(CODES).map(([key, code]) => [code
 
 /** The binding a key press makes (Mod+Shift+H), or null for a key that is none (a modifier alone, a key with no name here). */
 export function bindingOf(e: KeyboardEvent): Binding | null {
-  const key = KEYS[e.code] ?? (/^Key[A-Z]$/.test(e.code) ? e.code.slice(3) : /^Digit\d$/.test(e.code) ? e.code.slice(5) : null);
+  const key = KEYS[e.code] ?? (/^Key[A-Z]$/.test(e.code) ? e.code.slice(3) : /^Digit\d$/.test(e.code) ? e.code.slice(5) : /^F\d{1,2}$/.test(e.code) ? e.code : null);
   if (!key) return null;
   const mods = [MAC && e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", (MAC ? e.metaKey : e.ctrlKey) && "Mod"].filter(Boolean);
   return [...mods, key].join("+");

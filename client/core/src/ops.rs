@@ -87,6 +87,11 @@ fn station_op(name: &str, params: &Value) -> Option<Result<Request>> {
                 None => op(method, Ok(by_session), None),
             }
         })(),
+        // A chat named by hand (an empty name: named by its first message again): its thread, or an agent with no chat yet.
+        "chat.rename" => (|| match p.0.get("thread").and_then(Value::as_u64) {
+            Some(thread) => op("PUT", Ok(format!("/threads/{thread}/title")), Some(p.pick(&["title"]))),
+            None => op("POST", p.at("session").map(|k| format!("/sessions/{k}/title")), Some(p.pick(&["title"]))),
+        })(),
         // A new chat: its session and its thread, made before its first message (`chat.create` makes one behind the page).
         "session.new" => op("POST", Ok("/sessions".into()), Some(p.pick(&["runtime", "profile", "model", "effort"]))),
         "chats.archived" => op("GET", Ok("/chats?archived=1".into()), None),
@@ -214,6 +219,14 @@ mod tests {
         assert_eq!((r.method, r.path.as_str(), r.fallback), ("POST", "/threads/7/archive", Some(("POST", "/sessions/k/archive".to_string()))));
         let r = req("chat.archive", json!({ "station": "local", "session": "k", "archived": false }));
         assert_eq!((r.method, r.path.as_str(), r.fallback), ("DELETE", "/sessions/k/archive", None));
+    }
+
+    #[test]
+    fn renaming_a_chat_names_its_thread_or_its_session() {
+        let r = req("chat.rename", json!({ "station": "local", "thread": 7, "session": "k", "title": "值班" }));
+        assert_eq!((r.method, r.path.as_str(), r.body), ("PUT", "/threads/7/title", Some(json!({ "title": "值班" }))));
+        let r = req("chat.rename", json!({ "station": "local", "session": "k", "title": "" }));
+        assert_eq!((r.method, r.path.as_str(), r.body), ("POST", "/sessions/k/title", Some(json!({ "title": "" }))));
     }
 
     #[test]

@@ -4,7 +4,7 @@
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { useLink, useStation } from "../station.tsx";
 import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Boxes, Close, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
+import { Boxes, Close, Edit, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
 import { alarmOf, JobDot, JobsPopover, JobsTab, toneOf, useNow } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -25,6 +25,8 @@ import { chatOpening, track } from "../telemetry.ts";
 import { useToast } from "../toast.tsx";
 import { AgentMark, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
+import { TitleInput } from "../Rename.tsx";
+import * as renameCss from "../Rename.css.ts";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
 import * as sidebarCss from "../styles/sidebar.css.ts";
@@ -261,6 +263,15 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
     }
   } : null);
+  // The chat's name, changed where it is shown: double-click it, or F2.
+  const [renaming, setRenaming] = useState(false);
+  const renamable = !!(chatView.value && !chatView.value.archived && !chatView.value.offline && !chatView.value.pending && keeper);
+  useShortcut("chat.rename", renamable && !renaming ? () => setRenaming(true) : null);
+  const rename = (title: string | null) => {
+    setRenaming(false);
+    if (title === null || !keeper) return;
+    api.rename({ thread, session: keeper }, title).catch((error: unknown) => toast(`没能改名：${error instanceof Error ? error.message : String(error)}`));
+  };
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>读不到这个对话：{chatView.error.message}</p></Empty>;
     // Laid out as the chat will be, its composer already in its place: coming from another chat page, the composer
@@ -294,7 +305,10 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
         <MobileBack to={link("/chats")} label="对话" />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
         <div className={conversationCss.pageBarTitle}>
-          <h1>{chat.title}</h1>
+          {renaming
+            ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
+            : <h1 onDoubleClick={renamable ? () => setRenaming(true) : undefined}>{chat.title}</h1>}
+          {renamable && !renaming && <IconButton label="重命名" icon={Edit} shortcut="chat.rename" className={css.renameBtn} onClick={() => setRenaming(true)} />}
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
           {agents.map((a) => (
             <Tip key={a.session.key} label={`${a.session.agentText}${a.session.badgeText ? ` · ${a.session.badgeText}` : ""} · 执行历史`}>
