@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 use base64::Engine;
-use ember_shapes::{ConnectMode, RuntimeKind};
+use stillfail_shapes::{ConnectMode, RuntimeKind};
 use futures_util::future::BoxFuture;
 use serde_json::{Map, Value, json};
 use tokio::task::JoinHandle;
@@ -36,7 +36,7 @@ use crate::pool::{PoolSignals, ProfileHealth, pick_profile, serves, usable};
 use crate::runtime::AgentDriver;
 use crate::session::{DeclaredState, HandedSession, SessionActor, SessionDeps};
 use crate::store::{
-    AUTO, Attachment, AuthorKind, EMBER_SURFACE, MANUAL, NewMessage, NewSession, Post, Quote, SessionRow, SessionScope, SessionThread, Store, ThreadRow, now_ms,
+    AUTO, Attachment, AuthorKind, STILLFAIL_SURFACE, MANUAL, NewMessage, NewSession, Post, Quote, SessionRow, SessionScope, SessionThread, Store, ThreadRow, now_ms,
     slack_surface, write_compressed,
 };
 use crate::transcript::{TimelineEntry, iso, transcript_path};
@@ -140,7 +140,7 @@ pub struct HubOptions {
     pub mcp_url: String,
     /// The station's own chat on its pages; sessions can be talked to there too.
     pub internal: Option<Arc<InternalChat>>,
-    /// A session's page in ember (its /o/ link, which opens the app where there is one), when the station is in a
+    /// A session's page in still.fail (its /o/ link, which opens the app where there is one), when the station is in a
     /// workspace.
     pub link: Option<Box<dyn Fn(&str) -> Option<String> + Send + Sync>>,
 }
@@ -419,7 +419,7 @@ impl Hub {
             if let Some(link) = (!single).then(|| (self.link)(&key)).flatten() {
                 let (chat, here, key) = (chat.clone(), here.clone(), key.clone());
                 tokio::spawn(async move {
-                    if let Err(e) = chat.post(&here, &format!("<{link}|在 ember 里查看这个会话>"), &[]).await {
+                    if let Err(e) = chat.post(&here, &format!("<{link}|在 still.fail 里查看这个会话>"), &[]).await {
                         warn!(session = key, error = %e, "session link not posted");
                     }
                 });
@@ -570,7 +570,7 @@ impl Hub {
     /// Opens a chat on the station's pages with a session in it. More sessions can join it later (see add_to_thread).
     pub fn open_chat(&self, session: &str, created_by: &str, title: Option<&str>) -> Result<ThreadRow> {
         if self.internal.is_none() {
-            bail!("ember chat is not available");
+            bail!("still.fail chat is not available");
         }
         let Some(row) = self.store.get_session(session)? else {
             bail!("unknown session {session}");
@@ -579,14 +579,14 @@ impl Hub {
         let home = if self.store.home_chat(session)?.is_some() { None } else { Some(session) };
         // Its own chat keeps the name the session was given before it had one.
         let title = title.or(home.and(row.title.as_deref()));
-        let thread = self.store.open_thread_of(EMBER_SURFACE, INTERNAL_CHANNEL, &next_ts(), title, Some(created_by), home)?;
+        let thread = self.store.open_thread_of(STILLFAIL_SURFACE, INTERNAL_CHANNEL, &next_ts(), title, Some(created_by), home)?;
         self.store.join_thread(thread.id, session, INTERNAL_CONNECT)?;
         Ok(thread)
     }
 
     /// Brings another session into a chat on the station's pages; it hears what is said from then on.
     pub fn add_to_thread(&self, thread: i64, session: &str) -> Result<()> {
-        self.ember_chat(thread)?;
+        self.stillfail_chat(thread)?;
         if self.store.get_session(session)?.is_none() {
             bail!("unknown session {session}");
         }
@@ -594,14 +594,14 @@ impl Hub {
         Ok(())
     }
 
-    fn ember_chat(&self, thread: i64) -> Result<ThreadRow> {
-        self.store.get_thread(thread)?.filter(|t| t.surface == EMBER_SURFACE).ok_or_else(|| anyhow!("no ember chat {thread}"))
+    fn stillfail_chat(&self, thread: i64) -> Result<ThreadRow> {
+        self.store.get_thread(thread)?.filter(|t| t.surface == STILLFAIL_SURFACE).ok_or_else(|| anyhow!("no still.fail chat {thread}"))
     }
 
     /// A person's message in a chat on the station's pages: recorded with its quotes and files and delivered to every
     /// session in the chat, like a Slack message. Returns its entry number.
     pub fn say(&self, thread: i64, user: &str, text: &str, attachments: Vec<Attachment>, quotes: Vec<Quote>) -> Result<i64> {
-        self.ember_chat(thread)?;
+        self.stillfail_chat(thread)?;
         let message = NewMessage { attachments, quotes, ..NewMessage::new(thread, &next_ts(), AuthorKind::Person, user, text) };
         let (n, _) = self.store.insert_message(message)?;
         let sessions: Vec<String> = self.store.thread_sessions(thread)?.into_iter().map(|m| m.session).collect();
@@ -644,7 +644,7 @@ impl Hub {
     /// Archives a chat on the pages, or shows it again: a session's own chat goes with its session; a chat of its own
     /// goes alone, its sessions staying as they are.
     pub fn archive_chat(&self, thread: i64, archived: bool) -> Result<()> {
-        let chat = self.ember_chat(thread)?;
+        let chat = self.stillfail_chat(thread)?;
         match chat.home {
             Some(home) => self.archive(&home, archived),
             None => self.store.set_thread_hidden(thread, archived, MANUAL),
@@ -662,7 +662,7 @@ impl Hub {
         }
         let idle = |at: &[Option<i64>]| now - at.iter().flatten().copied().max().unwrap_or(0) >= after;
         let unread = |t: &ThreadRow| -> Result<bool> {
-            Ok(match (&t.created_by, t.surface == EMBER_SURFACE) {
+            Ok(match (&t.created_by, t.surface == STILLFAIL_SURFACE) {
                 (Some(starter), true) => self.store.unread_count(starter, t.id)? > 0,
                 _ => false,
             })
@@ -778,7 +778,7 @@ impl Hub {
         let model = new_model.clone().unwrap_or_else(|| row.model.clone());
         // Another spelling of its model is its model.
         let remodel = match (&model, &row.model) {
-            (Some(a), Some(b)) => !ember_shapes::model::same(a, b),
+            (Some(a), Some(b)) => !stillfail_shapes::model::same(a, b),
             (a, b) => a != b,
         };
         let model = if remodel { model } else { row.model.clone() };
@@ -1031,7 +1031,7 @@ impl Hub {
             "接着本机 {name} 在 {} 的会话，从这里发的消息会在那个目录里接着它。[查看之前的对话](?history={key}{at})",
             found.cwd
         );
-        self.store.insert_message(NewMessage::new(thread.id, &next_ts(), AuthorKind::Ember, "ember", &note))?;
+        self.store.insert_message(NewMessage::new(thread.id, &next_ts(), AuthorKind::StillFail, "ember", &note))?;
         self.store.set_read(created_by, thread.id, self.store.last_entry(thread.id)?)?;
         Ok((key, thread))
     }
@@ -1116,14 +1116,14 @@ impl Hub {
         vec![
             Tool {
                 name: "chat_post".into(),
-                description: "Post a message to one of your conversations: in Slack's formatting (mrkdwn) for a Slack thread, Markdown for an ember chat. Set kind to \"final\" when this message completes the work, or \"block\" when it asks a person for something you need.".into(),
+                description: "Post a message to one of your conversations: in Slack's formatting (mrkdwn) for a Slack thread, Markdown for a still.fail chat. Set kind to \"final\" when this message completes the work, or \"block\" when it asks a person for something you need.".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
                         "to": to.clone(),
                         "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written)." },
                         "kind": { "type": "string", "enum": ["final", "block"], "description": "Omit for a progress update." },
-                        "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they stay in ember and the post links there). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
+                        "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they stay in still.fail and the post links there). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
                     },
                     "required": ["to"],
                     "additionalProperties": false,
@@ -1201,7 +1201,7 @@ impl Hub {
             },
             Tool {
                 name: "chat_list".into(),
-                description: "List the conversations on this station (ember chats and Slack threads), the latest first: each with its address, title, agents (session keys) and last message. Use it to find a chat people refer to.".into(),
+                description: "List the conversations on this station (still.fail chats and Slack threads), the latest first: each with its address, title, agents (session keys) and last message. Use it to find a chat people refer to.".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -1281,10 +1281,10 @@ impl Hub {
         }
         let kind = state_arg(args.get("kind"))?;
         let thread = self.target(key, args.get("to"))?;
-        // Slack takes no files from here: they stay with the message in ember, and the post says where to see them.
-        let slack = thread.thread.surface != EMBER_SURFACE && !paths.is_empty();
+        // Slack takes no files from here: they stay with the message in still.fail, and the post says where to see them.
+        let slack = thread.thread.surface != STILLFAIL_SURFACE && !paths.is_empty();
         let link = if slack {
-            Some((self.link)(key).ok_or_else(|| anyhow!("files cannot be shown from Slack until this station is in an ember workspace; mention their paths in the text instead"))?)
+            Some((self.link)(key).ok_or_else(|| anyhow!("files cannot be shown from Slack until this station is in a still.fail workspace; mention their paths in the text instead"))?)
         } else {
             None
         };
@@ -1450,7 +1450,7 @@ impl Hub {
     /// Where a connect's threads live; the rule the v10 migration follows too.
     fn surface(&self, connect: &str) -> String {
         if connect == INTERNAL_CONNECT {
-            return EMBER_SURFACE.into();
+            return STILLFAIL_SURFACE.into();
         }
         slack_surface(connect, self.chat_of(connect).and_then(|c| c.workspace()).as_deref())
     }
@@ -1603,16 +1603,16 @@ fn state_arg(value: Option<&Value>) -> Result<Option<DeclaredState>> {
 }
 
 /// A post with files to a Slack thread (which takes none from here): what Slack is sent, the text with a link to the
-/// session in ember that opens its first figure (else its first file) on its own; and what ember keeps, the text with
+/// session in still.fail that opens its first figure (else its first file) on its own; and what still.fail keeps, the text with
 /// each HTML file not yet placed in it placed on a line of its own (drawn there as a visualization, as the agent would
-/// place it in an ember chat).
+/// place it in a still.fail chat).
 fn slack_with_files(text: &str, files: &[Attachment], link: &str) -> (String, String) {
     let html = |f: &&Attachment| f.name.to_lowercase().ends_with(".html") || f.name.to_lowercase().ends_with(".htm");
     let figure = files.iter().find(html);
     let what = match (figure, files.len()) {
-        (Some(_), 1) => "在 ember 里查看图表",
-        (Some(_), _) => "在 ember 里查看图表和附件",
-        (None, _) => "在 ember 里查看附件",
+        (Some(_), 1) => "在 still.fail 里查看图表",
+        (Some(_), _) => "在 still.fail 里查看图表和附件",
+        (None, _) => "在 still.fail 里查看附件",
     };
     let link = match figure.or(files.first()) {
         Some(f) => format!("{link}?file={}", crate::server::encode(&f.name)),

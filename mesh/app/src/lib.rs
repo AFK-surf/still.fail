@@ -1,4 +1,4 @@
-//! ember station's own work, in Rust: what the station's Node part did, on the same data on disk (config.json, the
+//! The still.fail station's own work, in Rust: what the station's Node part did, on the same data on disk (config.json, the
 //! SQLite store) and with the same admin API. The station binary (../station) runs it in its own process
 //! (docs/station-rust.md).
 
@@ -8,6 +8,7 @@ pub mod agent_home;
 pub mod chat;
 pub mod config;
 pub mod connections;
+pub mod former;
 pub mod handoff;
 pub mod host;
 pub mod hub;

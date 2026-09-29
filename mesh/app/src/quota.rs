@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{Result, bail};
-use ember_shapes::{AccessKind, RuntimeKind};
+use stillfail_shapes::{AccessKind, RuntimeKind};
 use futures_util::future::BoxFuture;
 use serde_json::Value;
 

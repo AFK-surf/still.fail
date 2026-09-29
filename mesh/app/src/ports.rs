@@ -1,4 +1,4 @@
-//! The agents' MCP endpoint's port (the admin page's is ember-station's: mesh/station/src/local.rs, alike). A port the
+//! The agents' MCP endpoint's port (the admin page's is stillfail-station's: mesh/station/src/local.rs, alike). A port the
 //! config names is the station's to keep: taken, starting fails and says by what. Unnamed, the usual one (4750) is
 //! taken if free, else any free one: another program on the machine (an old ssh tunnel, a second station) must not
 //! keep the station from starting.

@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 use super::{Hub, js_number, js_string};
 use crate::admin::percent_decode;
 use crate::instructions::{parse_thread_address, thread_address};
-use crate::store::{EMBER_SURFACE, ThreadRow};
+use crate::store::{STILLFAIL_SURFACE, ThreadRow};
 use crate::transcript::TimelineEntry;
 
 /// What an agent named: a conversation, or a session (maybe one entry of its execution history).
@@ -18,7 +18,7 @@ pub(super) enum Named {
 }
 
 /// A session key a reference holds, in whichever form people pass chats around: a chat's page
-/// (…/chats/<key>), an ember link (…/o/<workspace>/<station>/<key>), a link to execution history (?history=<key>&entry=<n>).
+/// (…/chats/<key>), a still.fail link (…/o/<workspace>/<station>/<key>), a link to execution history (?history=<key>&entry=<n>).
 fn linked_session(reference: &str) -> Option<(String, Option<usize>)> {
     let end = |s: &str| s.find(|c: char| matches!(c, '/' | '?' | '#' | ')' | '>' | '|' | '"' | '\'') || c.is_whitespace()).unwrap_or(s.len());
     if let Some(at) = reference.find("history=") {
@@ -137,7 +137,7 @@ impl Hub {
                 continue;
             }
             let address = thread_address(&t.thread.channel, &t.thread.thread_ts);
-            let place = if t.thread.surface == EMBER_SURFACE { "ember chat" } else { "Slack thread" };
+            let place = if t.thread.surface == STILLFAIL_SURFACE { "still.fail chat" } else { "Slack thread" };
             let title = titles.first().map(|t| line(t, 80)).unwrap_or_else(|| "(untitled)".into());
             let agents: Vec<String> = t
                 .sessions
@@ -244,6 +244,9 @@ mod tests {
         assert_eq!(key("[修 bug](https://ember.3720.org/w/ws1/s/st1/chats/cl%3AC1%3A1.2?x=1)"), Some(("cl:C1:1.2".into(), None)));
         assert_eq!(key("<https://ember.3720.org/o/ws1/st1/c-abc|在 ember 里查看>"), Some(("c-abc".into(), None)));
         assert_eq!(key("https://ember.3720.org/w/ws/s/st/chats/c-1?history=c-2&entry=41"), Some(("c-2".into(), Some(41))));
+        // Links of the new domain read the same.
+        assert_eq!(key("<https://app.still.fail/o/ws1/st1/c-abc|在 still.fail 里查看>"), Some(("c-abc".into(), None)));
+        assert_eq!(key("https://app.still.fail/w/ws1/s/st1/chats/c-2"), Some(("c-2".into(), None)));
         assert_eq!(key("C1/1.000001"), None);
         assert_eq!(key("c-abc"), None);
     }

@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// Claude Code asks with its item's name in the arguments, or (`security -i`) in the commands it writes to stdin.
 const STUB: &str = r#"#!/bin/sh
-# ember: profile logins are kept in files, not the keychain (src/no_keychain.rs); the rest goes to the real security.
+# still.fail: profile logins are kept in files, not the keychain (src/no_keychain.rs); the rest goes to the real security.
 case "$*" in *"Claude Code"*) exit 44 ;; esac
 if [ "$1" = "-i" ]; then
   input=$(cat)
@@ -33,7 +33,7 @@ exec /usr/bin/security "$@"
 fn stub_dir() -> PathBuf {
     // SAFETY: getuid has no preconditions.
     let uid = unsafe { libc::getuid() };
-    let dir = std::env::temp_dir().join(format!("ember-no-keychain-{uid}"));
+    let dir = std::env::temp_dir().join(format!("stillfail-no-keychain-{uid}"));
     let path = dir.join("security");
     if std::fs::read_to_string(&path).ok().as_deref() != Some(STUB) {
         use std::os::unix::fs::PermissionsExt;
@@ -62,8 +62,20 @@ fn keychain_item(home: &Path) -> String {
     format!("Claude Code-credentials-{}", &hash[..8])
 }
 
+/// The keychain items a home's login may be in: its own, then (a home under ~/.stillfail) the one of the path it had
+/// under ~/.ember, before the data directory moved (former.rs), with whether it is that older one.
+fn keychain_items(home: &Path) -> Vec<(String, bool)> {
+    let mut items = vec![(keychain_item(home), false)];
+    if let Some(before) = crate::former::former_path(&crate::former::home(), home) {
+        items.push((keychain_item(&before), true));
+    }
+    items
+}
+
 /// A profile's login that Claude Code moved into the keychain (a session that ran without the stand-in, before
-/// sessions had it), moved back into its home's file. Nothing when the file is there or the keychain cannot be read.
+/// sessions had it), moved back into its home's file; one under the home's name from before the data directory moved
+/// is copied (and left, for a release from before the rename). Nothing when the file is there or the keychain cannot
+/// be read.
 pub async fn take_back(home: &Path) {
     if !cfg!(target_os = "macos") {
         return;
@@ -72,24 +84,28 @@ pub async fn take_back(home: &Path) {
     if file.exists() {
         return;
     }
-    let item = keychain_item(home);
     let security = |args: &[&str]| {
         let mut cmd = tokio::process::Command::new("/usr/bin/security");
         cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
         async move { tokio::time::timeout(Duration::from_secs(5), cmd.output()).await.ok().and_then(Result::ok) }
     };
-    let Some(found) = security(&["find-generic-password", "-w", "-s", &item]).await.filter(|o| o.status.success()) else { return };
-    let text = String::from_utf8_lossy(&found.stdout).trim().to_string();
-    let is_login = serde_json::from_str::<serde_json::Value>(&text).ok().is_some_and(|v| v.get("claudeAiOauth").is_some());
-    if !is_login {
+    for (item, former) in keychain_items(home) {
+        let Some(found) = security(&["find-generic-password", "-w", "-s", &item]).await.filter(|o| o.status.success()) else { continue };
+        let text = String::from_utf8_lossy(&found.stdout).trim().to_string();
+        let is_login = serde_json::from_str::<serde_json::Value>(&text).ok().is_some_and(|v| v.get("claudeAiOauth").is_some());
+        if !is_login {
+            continue;
+        }
+        if let Err(e) = write_private(&file, &text) {
+            warn!(home = %home.display(), error = %e, "could not move a profile's login out of the keychain");
+            return;
+        }
+        if !former {
+            security(&["delete-generic-password", "-s", &item]).await;
+        }
+        info!(home = %home.display(), former, "a profile's login moved back from the keychain to its file");
         return;
     }
-    if let Err(e) = write_private(&file, &text) {
-        warn!(home = %home.display(), error = %e, "could not move a profile's login out of the keychain");
-        return;
-    }
-    security(&["delete-generic-password", "-s", &item]).await;
-    info!(home = %home.display(), "a profile's login moved back from the keychain to its file");
 }
 
 /// Written aside (readable by its owner only) and moved in.
@@ -123,10 +139,21 @@ mod tests {
         saving.stdin.take().unwrap().write_all(b"add-generic-password -U -a \"me\" -s \"Claude Code-credentials\" -X \"7b7d\"\n").unwrap();
         assert_eq!(saving.wait().unwrap().code(), Some(44));
         // Anything else is the real one's.
-        let other = std::process::Command::new(&stub).args(["find-generic-password", "-s", "ember-no-such-item"]).stderr(Stdio::null()).output().unwrap();
-        let real = std::process::Command::new("/usr/bin/security").args(["find-generic-password", "-s", "ember-no-such-item"]).stderr(Stdio::null()).output().unwrap();
+        let other = std::process::Command::new(&stub).args(["find-generic-password", "-s", "stillfail-no-such-item"]).stderr(Stdio::null()).output().unwrap();
+        let real = std::process::Command::new("/usr/bin/security").args(["find-generic-password", "-s", "stillfail-no-such-item"]).stderr(Stdio::null()).output().unwrap();
         assert_eq!(other.status.code(), real.status.code());
         assert_eq!(std::process::Command::new(&stub).args(["list-keychains", "-d", "user"]).stdout(Stdio::null()).status().unwrap().code(), Some(0));
+    }
+
+    #[test]
+    fn a_home_moved_with_the_data_directory_also_looks_under_its_old_name() {
+        let home = crate::former::home();
+        let moved = home.join(".stillfail").join("homes").join("cc");
+        assert_eq!(
+            keychain_items(&moved),
+            [(keychain_item(&moved), false), (keychain_item(&home.join(".ember").join("homes").join("cc")), true)]
+        );
+        assert_eq!(keychain_items(Path::new("/elsewhere/cc")), [(keychain_item(Path::new("/elsewhere/cc")), false)]);
     }
 
     #[test]

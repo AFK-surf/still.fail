@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use tracing::warn;
 
 pub fn agent_home_paths(agent_home: &Path) -> (PathBuf, PathBuf) {
@@ -15,14 +15,25 @@ pub fn agent_home_paths(agent_home: &Path) -> (PathBuf, PathBuf) {
 /// The skills the station brings, by directory name: about its own tools, so they are rewritten at every start and
 /// change with the station (the team's own skills sit beside them).
 const BUILTIN_SKILLS: &[(&str, &str)] = &[
-    ("ember-jobs", include_str!("skills/ember-jobs.md")),
-    ("ember-show", include_str!("skills/ember-show.md")),
-    ("ember-viz", include_str!("skills/ember-viz.md")),
+    ("stillfail-jobs", include_str!("skills/stillfail-jobs.md")),
+    ("stillfail-show", include_str!("skills/stillfail-show.md")),
+    ("stillfail-viz", include_str!("skills/stillfail-viz.md")),
 ];
+
+/// The station's own skills as they were named before the rename: gone once the new ones are written (they would be
+/// listed twice). A directory with more in it than the SKILL.md the station wrote is left.
+const FORMER_BUILTIN_SKILLS: &[&str] = &["ember-jobs", "ember-show", "ember-viz"];
 
 /// Writes the station's own skills into the shared skills directory.
 pub fn write_builtin_skills(agent_home: &Path) -> Result<()> {
     let (_, skills) = agent_home_paths(agent_home);
+    for name in FORMER_BUILTIN_SKILLS {
+        let dir = skills.join(name);
+        let only_skill = std::fs::read_dir(&dir).is_ok_and(|entries| entries.flatten().all(|e| e.file_name() == "SKILL.md"));
+        if only_skill && std::fs::symlink_metadata(&dir).is_ok_and(|m| m.is_dir()) {
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
     for (name, text) in BUILTIN_SKILLS {
         let dir = skills.join(name);
         std::fs::create_dir_all(&dir)?;
@@ -39,7 +50,7 @@ pub fn link_agent_home(agent_home: &Path, profiles: &[(&str, &[RuntimeKind], &Pa
     let (memory, skills) = agent_home_paths(agent_home);
     std::fs::create_dir_all(&skills)?;
     if !memory.exists() {
-        std::fs::write(&memory, "# ember memory\n")?;
+        std::fs::write(&memory, "# still.fail memory\n")?;
     }
     for (_, runtimes, home) in profiles {
         std::fs::create_dir_all(home)?;
@@ -184,8 +195,17 @@ mod tests {
         std::fs::create_dir_all(home.join("skills").join("team-skill")).unwrap();
         std::fs::write(home.join("skills").join("team-skill").join("SKILL.md"), "ours").unwrap();
         write_builtin_skills(&home).unwrap();
-        let path = home.join("skills").join("ember-jobs").join("SKILL.md");
-        assert!(std::fs::read_to_string(&path).unwrap().starts_with("---\nname: ember-jobs\n"));
+        // The same skills as the station wrote them before the rename: replaced; one someone added to is left.
+        for name in ["ember-jobs", "ember-viz"] {
+            std::fs::create_dir_all(home.join("skills").join(name)).unwrap();
+            std::fs::write(home.join("skills").join(name).join("SKILL.md"), format!("---\nname: {name}\n---\n")).unwrap();
+        }
+        std::fs::write(home.join("skills").join("ember-viz").join("notes.md"), "mine").unwrap();
+        write_builtin_skills(&home).unwrap();
+        assert!(!home.join("skills").join("ember-jobs").exists());
+        assert!(home.join("skills").join("ember-viz").join("notes.md").exists());
+        let path = home.join("skills").join("stillfail-jobs").join("SKILL.md");
+        assert!(std::fs::read_to_string(&path).unwrap().starts_with("---\nname: stillfail-jobs\n"));
         std::fs::write(&path, "edited by hand").unwrap();
         write_builtin_skills(&home).unwrap();
         assert!(std::fs::read_to_string(&path).unwrap().contains("job_start"), "the station's own, as it has it");
@@ -205,7 +225,7 @@ mod tests {
         write("pdf", "---\nname: pdf\ndescription: Reading PDFs.\n---\n");
         let skills = list_skills(&home);
         let names: Vec<(String, bool, bool)> = skills.iter().map(|s| (s.name.clone(), s.project, s.builtin)).collect();
-        assert_eq!(names, [("发版".into(), true, false), ("pdf".into(), false, false), ("ember-jobs".into(), false, true), ("ember-show".into(), false, true), ("ember-viz".into(), false, true)]);
+        assert_eq!(names, [("发版".into(), true, false), ("pdf".into(), false, false), ("stillfail-jobs".into(), false, true), ("stillfail-show".into(), false, true), ("stillfail-viz".into(), false, true)]);
         assert_eq!(skills[0].description, "项目记忆：每周发版时使用。");
     }
 }

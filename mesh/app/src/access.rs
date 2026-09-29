@@ -1,4 +1,4 @@
-//! Who may use the admin API. A request is local (trusted), came through the mesh from ember cloud (it carries the
+//! Who may use the admin API. A request is local (trusted), came through the mesh from still.fail cloud (it carries the
 //! viewer the station's mesh verified, and the secret proving it came that way), or came through a Cloudflare tunnel,
 //! which cloudflared also delivers from loopback. Cloudflare's edge always adds cf-connecting-ip, and a client cannot
 //! strip it; such requests must carry a valid Cloudflare Access JWT, verified here against the team's signing keys.
@@ -23,7 +23,7 @@ use crate::config::AdminAccess;
 pub enum Viewer {
     Local,
     Access { email: String },
-    /// A person reaching the station through ember cloud; the station's mesh verified their grant.
+    /// A person reaching the station through still.fail cloud; the station's mesh verified their grant.
     Mesh { sub: String, email: String, name: String, role: String, workspace: String, device: String },
 }
 
@@ -109,14 +109,16 @@ impl AccessGate {
     /// Resolves the viewer of a request, given its headers (by lowercase name) and whether it came from this machine
     /// (the admin socket, or loopback). A refusal is an AccessDenied; failing to fetch Access's keys is another error.
     pub async fn check(&self, header: impl Fn(&str) -> Option<String>, from_this_machine: bool) -> Result<Viewer> {
-        if let Some(supplied) = header("x-ember-mesh") {
-            return self.mesh(&supplied, header("x-ember-viewer").unwrap_or_default(), from_this_machine);
+        // Under the new names, else those of before the rename.
+        let named = |name: &str| header(&format!("x-stillfail-{name}")).or_else(|| header(&format!("x-ember-{name}")));
+        if let Some(supplied) = named("mesh") {
+            return self.mesh(&supplied, named("viewer").unwrap_or_default(), from_this_machine);
         }
         if header("cf-connecting-ip").is_none() && header("cf-ray").is_none() {
             return Ok(Viewer::Local);
         }
         let Some(config) = (self.config)() else {
-            return Err(denied("通过公网访问需要先在 ember 配置 Cloudflare Access（admin.access.teamDomain 和 aud）"));
+            return Err(denied("通过公网访问需要先在 still.fail 配置 Cloudflare Access（admin.access.teamDomain 和 aud）"));
         };
         let token = header("cf-access-jwt-assertion").unwrap_or_default();
         if token.is_empty() {
@@ -285,11 +287,13 @@ mod tests {
     async fn mesh_requests_need_the_secret_from_this_machine_and_a_viewer() {
         let g = gate(None);
         let viewer = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(json!({ "sub": "u1", "email": "a@b.c", "name": "A", "role": "member", "workspace": "w", "device": "d" }).to_string());
-        let ok = check(&g, &[("x-ember-mesh", "mesh-secret"), ("x-ember-viewer", &viewer)], true).await.unwrap();
+        let ok = check(&g, &[("x-stillfail-mesh", "mesh-secret"), ("x-stillfail-viewer", &viewer)], true).await.unwrap();
+        // The names of before the rename are read too.
+        assert!(check(&g, &[("x-ember-mesh", "mesh-secret"), ("x-ember-viewer", &viewer)], true).await.is_ok());
         assert_eq!((ok.id(), ok.name()), ("a@b.c".to_string(), "A".to_string()));
         assert_eq!(serde_json::to_value(&ok).unwrap()["via"], "mesh");
-        assert!(check(&g, &[("x-ember-mesh", "mesh-secret"), ("x-ember-viewer", &viewer)], false).await.unwrap_err().contains("无效"));
-        assert!(check(&g, &[("x-ember-mesh", "wrong-secret"), ("x-ember-viewer", &viewer)], true).await.unwrap_err().contains("无效"));
-        assert!(check(&g, &[("x-ember-mesh", "mesh-secret")], true).await.unwrap_err().contains("缺少身份"));
+        assert!(check(&g, &[("x-stillfail-mesh", "mesh-secret"), ("x-stillfail-viewer", &viewer)], false).await.unwrap_err().contains("无效"));
+        assert!(check(&g, &[("x-stillfail-mesh", "wrong-secret"), ("x-stillfail-viewer", &viewer)], true).await.unwrap_err().contains("无效"));
+        assert!(check(&g, &[("x-stillfail-mesh", "mesh-secret")], true).await.unwrap_err().contains("缺少身份"));
     }
 }

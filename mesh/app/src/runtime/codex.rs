@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::{Mutex as AsyncMutex, oneshot};
@@ -189,7 +189,7 @@ impl Host {
     async fn ensure_ready(&self) -> Result<()> {
         let mut ready = self.ready.lock().await;
         if !*ready {
-            self.request("initialize", json!({ "clientInfo": { "name": "ember", "version": "0" }, "capabilities": { "experimentalApi": true } })).await?;
+            self.request("initialize", json!({ "clientInfo": { "name": "stillfail", "version": "0" }, "capabilities": { "experimentalApi": true } })).await?;
             self.proc.write(&json!({ "method": "initialized", "params": {} }).to_string()).await;
             *ready = true;
         }
@@ -225,7 +225,7 @@ fn on_line(line: &str, pending: &Mutex<HashMap<i64, oneshot::Sender<Result<Value
         // Server->client requests (approvals) should not arrive with approvalPolicy "never"; refuse rather than hang.
         warn!(method, "codex asked the client something; refusing");
         if let Some(proc) = proc.lock().unwrap().clone() {
-            let refusal = json!({ "id": id, "error": { "code": -32601, "message": "ember does not answer client requests" } }).to_string();
+            let refusal = json!({ "id": id, "error": { "code": -32601, "message": "the station does not answer client requests" } }).to_string();
             tokio::spawn(async move { proc.write(&refusal).await });
         }
     } else if let Some(method) = method {

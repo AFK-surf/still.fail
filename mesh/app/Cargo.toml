@@ -1,15 +1,15 @@
 [package]
-name = "ember-app"
+name = "stillfail-app"
 version.workspace = true
 edition.workspace = true
-description = "ember station's own work, in Rust: its settings, store, agent runtimes, chat connects, hub and sessions, admin API and jobs"
+description = "still.fail station's own work, in Rust: its settings, store, agent runtimes, chat connects, hub and sessions, admin API and jobs"
 
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
 base64 = "0.22"
 bytes = "1"
-ember-shapes = { path = "../../client/shapes" }
+stillfail-shapes = { package = "ember-shapes", path = "../../client/shapes" }
 futures-util = "0.3"
 getrandom = "0.3"
 hex = "0.4"

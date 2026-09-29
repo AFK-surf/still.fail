@@ -20,8 +20,8 @@ use tokio::sync::broadcast;
 /// hand when the schema changes (no migrations are kept in the code).
 pub const SCHEMA_VERSION: i64 = 12;
 
-/// The page's own threads live on this surface, in this channel.
-pub const EMBER_SURFACE: &str = "ember";
+/// The page's own threads live on this surface, in this channel (stored under the name of before the rename).
+pub const STILLFAIL_SURFACE: &str = "ember";
 
 /// Archived threads whose entries are kept decompressed, the most recently read last.
 const ARCHIVE_CACHE: usize = 32;
@@ -66,7 +66,7 @@ pub struct SessionRow {
     pub scope: SessionScope,
     /// A name people gave it, for choosing among single-session sessions.
     pub title: Option<String>,
-    /// Who started it: "slack:<connect>:<user>" for a chat message, an email for someone on ember cloud, "local" for the
+    /// Who started it: "slack:<connect>:<user>" for a chat message, an email for someone on still.fail cloud, "local" for the
     /// station's own page; None if unknown.
     pub created_by: Option<String>,
     pub runtime: String,
@@ -79,7 +79,7 @@ pub struct SessionRow {
     pub effort: Option<String>,
     pub runtime_session_id: Option<String>,
     pub workspace: String,
-    /// Where its runtime runs when that is not the workspace: the project directory of a session begun outside ember
+    /// Where its runtime runs when that is not the workspace: the project directory of a session begun outside still.fail
     /// and continued here (Hub::continue_machine_session). The workspace stays the station's, for uploads and jobs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
@@ -172,7 +172,9 @@ pub struct Membership {
 pub enum AuthorKind {
     Person,
     Agent,
-    Ember,
+    /// The station itself (named, stored and sent as before the rename).
+    #[serde(rename = "ember")]
+    StillFail,
 }
 
 impl AuthorKind {
@@ -180,13 +182,13 @@ impl AuthorKind {
         match self {
             AuthorKind::Person => "person",
             AuthorKind::Agent => "agent",
-            AuthorKind::Ember => "ember",
+            AuthorKind::StillFail => "ember",
         }
     }
     fn parse(s: &str) -> AuthorKind {
         match s {
             "agent" => AuthorKind::Agent,
-            "ember" => AuthorKind::Ember,
+            "ember" => AuthorKind::StillFail,
             _ => AuthorKind::Person,
         }
     }
@@ -394,7 +396,7 @@ pub struct JobRow {
     pub command: String,
     pub cwd: String,
     pub port: Option<i64>,
-    /// What `ember-job notify` presents; not for the pages.
+    /// What `stillfail-job notify` presents; not for the pages.
     #[serde(skip)]
     pub token: String,
     /// running | exited (ended by itself) | stopped (by request) | failed (could not start)
@@ -854,7 +856,7 @@ impl Store {
         if has_tables {
             let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
             if version != SCHEMA_VERSION {
-                bail!("{path} has schema version {version}; this ember uses {SCHEMA_VERSION}. Move its data by hand, or move it aside.");
+                bail!("{path} has schema version {version}; this station uses {SCHEMA_VERSION}. Move its data by hand, or move it aside.");
             }
         }
         db.execute_batch(SCHEMA)?;
@@ -865,7 +867,7 @@ impl Store {
             None if memory => {
                 let mut bytes = [0u8; 8];
                 getrandom::fill(&mut bytes).map_err(|e| anyhow!("{e}"))?;
-                let dir = std::env::temp_dir().join(format!("ember-archive-{}", hex::encode(bytes)));
+                let dir = std::env::temp_dir().join(format!("stillfail-archive-{}", hex::encode(bytes)));
                 std::fs::create_dir_all(&dir)?;
                 (dir.clone(), Some(tempdir::TempDir(dir)))
             }
@@ -1025,7 +1027,7 @@ impl Store {
     pub fn chats_of_their_own(&self) -> Result<Vec<ThreadRow>> {
         self.with(|i, _| {
             let mut stmt = i.db.prepare("SELECT * FROM threads WHERE surface = ? AND home IS NULL AND hidden_at IS NULL")?;
-            Ok(stmt.query_map([EMBER_SURFACE], to_thread)?.collect::<rusqlite::Result<_>>()?)
+            Ok(stmt.query_map([STILLFAIL_SURFACE], to_thread)?.collect::<rusqlite::Result<_>>()?)
         })
     }
 
@@ -1484,7 +1486,7 @@ impl Store {
                 };
                 let refs = firsts.entry(key).or_default();
                 for (author, at) in authors {
-                    let reference = if surface == EMBER_SURFACE { author } else { format!("slack:{connect}:{author}") };
+                    let reference = if surface == STILLFAIL_SURFACE { author } else { format!("slack:{connect}:{author}") };
                     let first = refs.entry(reference).or_insert(at);
                     if at < *first {
                         *first = at;
@@ -1755,7 +1757,7 @@ impl Store {
         })
     }
 
-    /// What a job said (`ember-job notify`), kept for the pages: a job's latest words are how people see what it is up to.
+    /// What a job said (`stillfail-job notify`), kept for the pages: a job's latest words are how people see what it is up to.
     pub fn add_job_notice(&self, id: &str, text: &str) -> Result<()> {
         self.with(|i, changes| {
             i.db.execute("INSERT INTO job_notices (job_id, at, text) VALUES (?, ?, ?)", params![id, now_ms(), text])?;
@@ -1914,7 +1916,7 @@ impl Inner {
     }
 
     fn unread_count(&mut self, viewer: &str, thread: i64, read: i64) -> Result<i64> {
-        let slack = self.get_thread(thread)?.map(|t| t.surface != EMBER_SURFACE).unwrap_or(true);
+        let slack = self.get_thread(thread)?.map(|t| t.surface != STILLFAIL_SURFACE).unwrap_or(true);
         let mut selves = vec![viewer.to_string()];
         if slack {
             selves.extend(self.slack_identities(viewer)?);
@@ -1951,7 +1953,7 @@ impl Inner {
             )?;
             stmt.query_map([thread], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?
         };
-        if surface == EMBER_SURFACE {
+        if surface == STILLFAIL_SURFACE {
             return Ok(authors);
         }
         Ok(match connect {
@@ -2072,7 +2074,7 @@ impl Inner {
     /// Something new said in a thread brings what it is about back into lists: the chat, if it was archived alone, and
     /// the archived sessions that hear it (a person's message goes to every session of the thread) or said it.
     fn bring_back(&mut self, entry: &EntryRow, changes: &mut Changes) -> Result<()> {
-        if entry.kind != EntryKind::Message || entry.author_kind == AuthorKind::Ember {
+        if entry.kind != EntryKind::Message || entry.author_kind == AuthorKind::StillFail {
             return Ok(());
         }
         let Some(thread) = self.get_thread(entry.thread)? else { return Ok(()) };

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, anyhow, bail};
 use base64::Engine;
-use ember_shapes::{AccessKind, ConnectMode, RuntimeKind};
+use stillfail_shapes::{AccessKind, ConnectMode, RuntimeKind};
 use serde_json::{Value, json};
 use tracing::{info, warn};
 
@@ -180,7 +180,7 @@ impl AdminApi {
                     bail!("「{profile}」不能跑 {}", runtime_name(runtime));
                 }
                 if let (Some(model), Some(p)) = (&model, p) {
-                    if !p.models.as_deref().unwrap_or_default().iter().any(|m| ember_shapes::model::same(m, model)) {
+                    if !p.models.as_deref().unwrap_or_default().iter().any(|m| stillfail_shapes::model::same(m, model)) {
                         bail!("「{}」没有启用 {model}", p.name.clone().unwrap_or_else(|| profile.clone()));
                     }
                 }

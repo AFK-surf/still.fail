@@ -1,5 +1,5 @@
-//! Configuration comes from one JSON file: $EMBER_CONFIG, else <dataDir>/config.json with dataDir from $EMBER_DATA
-//! (default ~/.ember).
+//! Configuration comes from one JSON file: $STILLFAIL_CONFIG, else <dataDir>/config.json with dataDir from
+//! $STILLFAIL_DATA (default ~/.stillfail; the EMBER_* names too, and ~/.ember moved there: former.rs).
 //!
 //! A connect is one way in: today a Slack app. Each connect is bound to one model (runtime + account + model) and decides
 //! how conversations map to sessions. Profiles are the runtime accounts connects draw from; connects may share them.
@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
-use ember_shapes::{AccessKind, ConnectMode, RuntimeKind};
+use stillfail_shapes::{AccessKind, ConnectMode, RuntimeKind};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -204,7 +204,7 @@ pub struct RawProfileAccess {
     pub key: Option<String>,
 }
 
-/// A Slack app configuration token, a person's own (`by`), for one Slack workspace: ember makes and edits apps there.
+/// A Slack app configuration token, a person's own (`by`), for one Slack workspace: the station makes and edits apps there.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigToken {
@@ -214,7 +214,7 @@ pub struct ConfigToken {
     pub expires_at: i64,
     /// The Slack workspace it makes apps in.
     pub team_id: String,
-    /// The ember user who added it (an email, or "local"): only they see it and use it.
+    /// The still.fail user who added it (an email, or "local"): only they see it and use it.
     pub by: String,
     /// Whose token it is, and where, as Slack shows them (read when it is added): what tells tokens apart.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -232,8 +232,8 @@ pub struct ConfigTokenOwner {
     pub image: Option<String>,
 }
 
-/// A Slack app ember made with someone's configuration token (`by`), waiting for its connect. Made to be installed
-/// through Slack's OAuth (`oauth`: a station in ember cloud), Slack's code comes back here and becomes its bot token;
+/// A Slack app the station made with someone's configuration token (`by`), waiting for its connect. Made to be installed
+/// through Slack's OAuth (`oauth`: a station in still.fail cloud), Slack's code comes back here and becomes its bot token;
 /// else its tokens are copied from Slack by hand.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -298,9 +298,9 @@ pub struct Profile {
 
 impl Profile {
     /// Its own spelling of a model it has enabled, however the model is spelled (gpt-6-astra here may be
-    /// openai/gpt-6-astra there: ember_shapes::model::key).
+    /// openai/gpt-6-astra there: stillfail_shapes::model::key).
     pub fn spelling(&self, model: &str) -> Option<&str> {
-        self.models.iter().find(|m| *m == model).or_else(|| self.models.iter().find(|m| ember_shapes::model::same(m, model))).map(String::as_str)
+        self.models.iter().find(|m| *m == model).or_else(|| self.models.iter().find(|m| stillfail_shapes::model::same(m, model))).map(String::as_str)
     }
 
     /// Whether it has a model enabled, in any spelling.
@@ -384,7 +384,7 @@ pub struct Config {
     /// Cloudflare Access application guarding the public admin page; None refuses tunneled requests.
     pub admin_access: Option<AdminAccess>,
     pub slack_config_tokens: Vec<ConfigToken>,
-    /// Slack apps ember made that no connect has taken yet: kept until one does (or someone drops it).
+    /// Slack apps the station made that no connect has taken yet: kept until one does (or someone drops it).
     pub slack_apps: Vec<SlackAppMade>,
     /// Shared MEMORY.md and skills/ linked into every profile home.
     pub agent_home: PathBuf,
@@ -400,17 +400,18 @@ pub struct Config {
     pub max_warm_claude: u32,
     /// Chats idle this long, and done (Hub::auto_archive), are archived by the station; 0: never.
     pub auto_archive_ms: u64,
-    /// What this station sends ember: errors to PostHog; traces to ember cloud.
+    /// What this station sends still.fail: errors to PostHog; traces to still.fail cloud.
     pub telemetry_errors: bool,
     pub telemetry_traces: bool,
 }
 
-/// Where the station keeps its data and its config file, by the environment: $EMBER_DATA (default ~/.ember) and
-/// $EMBER_CONFIG (default <data>/config.json).
+/// Where the station keeps its data and its config file, by the environment: $STILLFAIL_DATA (default ~/.stillfail)
+/// and $STILLFAIL_CONFIG (default <data>/config.json), else their EMBER_* names. Where they are, not moving anything
+/// (former::data_dir does, as the station starts).
 pub fn paths(env: impl Fn(&str) -> Option<String>) -> (PathBuf, PathBuf) {
     let home = env("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
-    let data = env("EMBER_DATA").map(PathBuf::from).unwrap_or_else(|| home.join(".ember"));
-    let config = env("EMBER_CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
+    let data = crate::former::var_in(&env, "DATA").map(PathBuf::from).unwrap_or_else(|| home.join(crate::former::DATA_DIR));
+    let config = crate::former::var_in(&env, "CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
     (data, config)
 }
 
@@ -632,7 +633,7 @@ mod tests {
     }
 
     #[test]
-    fn what_ember_does_not_know_in_config_json_is_written_back() {
+    fn what_the_station_does_not_know_in_config_json_is_written_back() {
         let raw: RawConfig = serde_json::from_str(r#"{"future": {"x": 1}, "connects": [{"id": "c", "bind": {"runtime": "claude"}, "later": true}]}"#).unwrap();
         let back = serde_json::to_value(&raw).unwrap();
         assert_eq!(back["future"]["x"], 1);

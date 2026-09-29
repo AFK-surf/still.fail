@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 use base64::Engine;
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use futures_util::future::BoxFuture;
 use serde::Serialize;
 use serde_json::Value;

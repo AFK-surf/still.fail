@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use ember_shapes::{AccessKind, RuntimeKind};
+use stillfail_shapes::{AccessKind, RuntimeKind};
 
 /// The access kinds each runtime can use.
 pub fn access_kinds(runtime: RuntimeKind) -> &'static [AccessKind] {
@@ -36,6 +36,7 @@ pub fn access_env(runtime: RuntimeKind, kind: AccessKind, key: &str, model: Opti
                 ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1".to_string()),
             ]
         }
+        // The provider's session key keeps the name of before the rename: its sessions go on under it.
         (AccessKind::OpencodeGo, RuntimeKind::Codex) => vec![("OPENCODE_GO_KEY", key.to_string()), ("OPENCODE_SESSION", "ember-{route}".to_string())],
         (AccessKind::AnthropicApi, _) => vec![("ANTHROPIC_API_KEY", key.to_string())],
         _ => vec![],
@@ -43,7 +44,7 @@ pub fn access_env(runtime: RuntimeKind, kind: AccessKind, key: &str, model: Opti
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }
 
-/// Codex features ember's agents have no use for, off for every profile: apps starts the ChatGPT connectors' MCP server
+/// Codex features the station's agents have no use for, off for every profile: apps starts the ChatGPT connectors' MCP server
 /// (over the network, about 1.5 s of a new thread's start); recommended_plugins fetches and lists plugins that are not
 /// installed (several KB of prompt, and a request a turn can wait on).
 const CODEX_FEATURES_OFF: [(&str, &str); 2] = [("features.apps", "false"), ("features.recommended_plugins", "false")];
@@ -279,6 +280,6 @@ async fn check_inner(o: &CheckOptions<'_>) -> anyhow::Result<ProfileCheck> {
             }
             Ok(check("ok", text.lines().next().unwrap_or("已登录").to_string(), None))
         }
-        _ => Ok(check("unknown", "自定义环境变量，ember 无法自动检查", None)),
+        _ => Ok(check("unknown", "自定义环境变量，still.fail 无法自动检查", None)),
     }
 }

@@ -28,7 +28,7 @@ fn pending(m: MessageRow, surface: &str, channel: &str, thread_ts: &str) -> Pend
 #[test]
 fn a_session_continued_from_a_terminal_is_told_its_project_directory_before_its_workspace() {
     let text = session_instructions("/w/s", Some("/Users/me/app"), "/d/repos", "/d/agent/MEMORY.md");
-    assert!(text.contains("Where you work:\n- Project directory: /Users/me/app. This session began outside ember"));
+    assert!(text.contains("Where you work:\n- Project directory: /Users/me/app. This session began outside still.fail"));
     assert!(text.contains("scratch files only.\n- Session workspace: /w/s."));
 }
 
@@ -53,7 +53,7 @@ fn the_texts_are_the_ts_stations_word_for_word() {
             message(2, "101.0", "U1", true, AuthorKind::Person),
             message(2, "101.0", "me", false, AuthorKind::Agent),
             message(2, "101.0", "other", false, AuthorKind::Agent),
-            message(2, "101.0", "ember", false, AuthorKind::Ember),
+            message(2, "101.0", "ember", false, AuthorKind::StillFail),
         ],
         "ember",
         "EMBER/1.0",
@@ -71,8 +71,8 @@ fn hinted(n: i64, ts: &str, surface: &str, channel: &str, thread_ts: &str) -> bo
 #[test]
 fn a_thread_new_to_the_session_is_said_to_have_earlier_messages_only_when_it_has_them() {
     // A chat on the station's page: its id is its own, apart from its first message's; its first message has none.
-    assert!(!hinted(1, "100.2", EMBER_SURFACE, "EMBER", "99.5"));
-    assert!(hinted(3, "100.2", EMBER_SURFACE, "EMBER", "99.5"));
+    assert!(!hinted(1, "100.2", STILLFAIL_SURFACE, "EMBER", "99.5"));
+    assert!(hinted(3, "100.2", STILLFAIL_SURFACE, "EMBER", "99.5"));
     // Slack: a thread's first message has none; a reply does, whether the station saw them or not.
     assert!(!hinted(1, "100.0", "slack:T1", "C1", "100.0"));
     assert!(hinted(1, "101.0", "slack:T1", "C1", "100.0"));

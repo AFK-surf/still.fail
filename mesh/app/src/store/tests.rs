@@ -46,7 +46,7 @@ fn a_database_of_another_schema_version_is_refused() {
     db.execute_batch("CREATE TABLE sessions (key TEXT); PRAGMA user_version = 8;").unwrap();
     drop(db);
     let error = Store::open(path.to_str().unwrap(), None).err().unwrap().to_string();
-    assert!(error.contains("schema version 8; this ember uses 12"), "{error}");
+    assert!(error.contains("schema version 8; this station uses 12"), "{error}");
 }
 
 #[test]

@@ -12,7 +12,7 @@ use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use serde::Serialize;
 use serde_json::Value;
 

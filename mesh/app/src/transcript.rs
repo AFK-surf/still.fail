@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use serde::Serialize;
 use serde_json::{Map, Value};
 

@@ -83,6 +83,43 @@ async fn a_job_tells_its_agent_on_the_way_through_its_token() {
     assert_eq!(r.said().len(), 2, "a stop asked for is no news");
 }
 
+#[tokio::test]
+async fn a_job_has_its_command_under_the_new_name_and_the_old_and_its_variables_under_both() {
+    let r = rig();
+    let job = r.jobs.start("s1", "names", r#"stillfail-job 2>&1; ember-job 2>&1; [ "$STILLFAIL_JOB_ID" = "$EMBER_JOB_ID" ] && [ "$STILLFAIL_JOB_TOKEN" = "$EMBER_JOB_TOKEN" ] && echo same"#, &r.work, None).unwrap();
+    until("it ends", || r.state(&job.id) == "exited").await;
+    let ended = r.store.get_job(&job.id).unwrap().unwrap();
+    assert_eq!(tail(Path::new(&ended.log), 10), "usage: stillfail-job notify <words>\nusage: stillfail-job notify <words>\nsame");
+    // Made again (a station starting over the same directory), the link stays one.
+    let bin = r._dir.path().join("jobs").join("bin");
+    Jobs::new(r.store.clone(), r._dir.path(), Arc::new(|_, _| {}), Arc::new(|_, _| None)).unwrap();
+    assert_eq!(std::fs::read_link(bin.join("ember-job")).unwrap(), Path::new("stillfail-job"));
+    assert_eq!(std::fs::read_dir(&bin).unwrap().count(), 2);
+}
+
+/// A job started before the rename has only the old variables; the command reads them.
+#[tokio::test]
+async fn the_job_command_reads_the_old_variables_of_a_job_started_before_the_rename() {
+    use std::os::unix::fs::PermissionsExt;
+    let r = rig();
+    let bin = r._dir.path().join("jobs").join("bin");
+    // A curl that says what it was asked.
+    let fake = r._dir.path().join("fake");
+    std::fs::create_dir_all(&fake).unwrap();
+    std::fs::write(fake.join("curl"), "#!/bin/sh\ncat >/dev/null; echo \"$@\" >&2\n").unwrap();
+    std::fs::set_permissions(fake.join("curl"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let out = std::process::Command::new(bin.join("ember-job"))
+        .args(["notify", "hi"])
+        .env_clear()
+        .env("EMBER_JOB_TOKEN", "t0k")
+        .env("EMBER_JOB_NOTIFY", "http://127.0.0.1:9/jobs/notify")
+        .env("PATH", format!("{}:{}:/usr/bin:/bin", fake.display(), bin.display()))
+        .output()
+        .unwrap();
+    let asked = String::from_utf8_lossy(&out.stderr);
+    assert!(asked.contains("Authorization: Bearer t0k") && asked.contains("http://127.0.0.1:9/jobs/notify"), "{asked}");
+}
+
 /// A session whose agent was last at work `ago` ago.
 fn session_active(store: &Store, key: &str, ago: Duration) {
     let at = now_ms() - ago.as_millis() as i64;
@@ -108,7 +145,7 @@ async fn a_job_stopped_from_the_pages_tells_its_agent_who_did() {
     let job = r.jobs.start("s1", "watch", "sleep 5", &r.work, None).unwrap();
     let stopped = r.jobs.stop_for(&job.id, "ann@example.com").await.unwrap();
     assert_eq!(stopped.state, "stopped");
-    assert_eq!(r.said(), [format!("Job \"watch\" ({}) was stopped by ann@example.com from ember's page.", job.id)]);
+    assert_eq!(r.said(), [format!("Job \"watch\" ({}) was stopped by ann@example.com from still.fail's page.", job.id)]);
 }
 
 #[tokio::test]
@@ -121,7 +158,7 @@ async fn a_job_stopped_from_the_pages_does_not_wake_an_idle_agent() {
     let other = r.jobs.start("s1", "again", "sleep 5", &r.work, None).unwrap();
     r.store.set_running("s1", true).unwrap();
     r.jobs.stop_for(&other.id, "ann@example.com").await.unwrap();
-    assert_eq!(r.said(), [format!("Job \"again\" ({}) was stopped by ann@example.com from ember's page.", other.id)]);
+    assert_eq!(r.said(), [format!("Job \"again\" ({}) was stopped by ann@example.com from still.fail's page.", other.id)]);
 }
 
 #[tokio::test]

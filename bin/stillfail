@@ -1,0 +1,32 @@
+#!/bin/sh
+# still.fail's command line, from a clone or from an installed release (~/.stillfail/app, see cloud/src/install.ts).
+# `ember`, its name before the rename, is a link to it (bin/ember, ~/.local/bin/ember).
+#   stillfail start [--port N]                          runs the station (the release's service does this):
+#                                                       stillfail-station, which serves the admin page (4760, or a free
+#                                                       port when that is taken; --port insists on one)
+#   stillfail update                                    updates this station to its cloud's latest release
+#   stillfail station enroll <cloud-origin> <token>     joins a workspace in still.fail cloud
+#   stillfail station id
+# The data is in $STILLFAIL_DATA (else $EMBER_DATA), default ~/.stillfail; ~/.ember is the old default, which the
+# station moves there on its first start (mesh/app/src/former.rs).
+set -eu
+# Called through a link (~/.local/bin/stillfail): the app is where the link points.
+self=$(readlink -f "$0" 2>/dev/null || echo "$0")
+here=$(cd "$(dirname "$self")/.." && pwd)
+data=${STILLFAIL_DATA:-${EMBER_DATA:-$HOME/.stillfail}}
+[ "$data" = "$HOME/.ember" ] && data="$HOME/.stillfail"
+station=${STILLFAIL_STATION_BIN:-${EMBER_STATION_BIN:-$here/mesh/target/release/stillfail-station}}
+case "${1:-} ${2:-}" in
+  "start "*) shift; exec "$station" run --app "$here" --data "$data" "$@" ;;
+  "update "*)
+    # From the cloud the station is in (its installer, without a token, updates). Before the station first ran,
+    # its data may still be at the old place.
+    cloud="$data/mesh/cloud.json"
+    [ -f "$cloud" ] || cloud="$HOME/.ember/mesh/cloud.json"
+    origin=$(sed -n 's/.*"origin": *"\([^"]*\)".*/\1/p' "$cloud" 2>/dev/null | head -1)
+    [ -n "$origin" ] || { echo "这台 station 还没有加入 workspace，无从更新" >&2; exit 1; }
+    curl -fsSL "$origin/install.sh" | sh ;;
+  "station enroll") shift 2; exec "$station" enroll "$@" --data "$data" ;;
+  "station id") exec "$station" id --data "$data" ;;
+  *) echo "usage: stillfail start [--port N] | stillfail update | stillfail station enroll <cloud-origin> <token> | stillfail station id" >&2; exit 2 ;;
+esac

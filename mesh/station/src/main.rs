@@ -1,13 +1,15 @@
-//! ember-station: an ember station, as launchd (or the desktop app) runs it.
+//! stillfail-station: a still.fail station, as launchd (or the desktop app) runs it (ember-station before the rename,
+//! still a link to this in a release: docs/rename-still-fail.md).
 //!
-//! `run` runs the station: its app (ember-app) in this process; the admin page on a loopback port for a browser here
-//! (local.rs); and, once the station is in a workspace, its way into ember cloud. It holds a presence socket to ember
-//! cloud (connected is online) while the app is up — which also brings what ember cloud revokes — accepts iroh
-//! connections from clients that present a member's credential signed by ember cloud (checked offline: the cloud need
+//! `run` runs the station: its app (stillfail-app) in this process; the admin page on a loopback port for a browser here
+//! (local.rs); and, once the station is in a workspace, its way into still.fail cloud. It holds a presence socket to
+//! the cloud (connected is online) while the app is up — which also brings what the cloud revokes — accepts iroh
+//! connections from clients that present a member's credential signed by the cloud (checked offline: the cloud need
 //! not be reachable), and hands each stream's request to the app's admin API with the verified identity. `enroll`
 //! redeems a one-time token from a workspace admin, proving this station holds its iroh key.
 //!
-//! Wire format on ALPN `ember/admin/1`: the first bidirectional stream carries
+//! Wire format on ALPN `ember/admin/1` (clients from before the rename ask for it; `stillfail/admin/1` is the same): the
+//! first bidirectional stream carries
 //! credentials (`{"credential": …}`, one JSON line each, answered with one JSON line; a later line
 //! renews). Every other stream is one request: a JSON head line
 //! `{"method","path","headers"}`, then the body until the stream finishes;
@@ -41,25 +43,27 @@ use tracing::{info, warn};
 
 use crate::telemetry::{Parent, Telemetry, route};
 
-const ALPN: &[u8] = b"ember/admin/1";
+const ALPN: &[u8] = b"stillfail/admin/1";
+/// The ALPN clients from before the rename ask for: the same protocol.
+const FORMER_ALPN: &[u8] = b"ember/admin/1";
 /// Headers of one hop, not of what is relayed.
 const HOP: [&str; 9] = ["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host", "content-length"];
 const MAX_HEAD: usize = 16 * 1024;
 // Files sent to a session go through here; the station caps them at 50 MB.
 const MAX_BODY: usize = 64 * 1024 * 1024;
-/// This station's version, as ember cloud and `ember update` are told it: its release's (`0.1.<n>`, the BUILD beside
-/// the binary's mesh/target/release: ember_app::updates), else the crate's. Read once: an update puts the next
+/// This station's version, as still.fail cloud and `stillfail update` are told it: its release's (`0.1.<n>`, the BUILD beside
+/// the binary's mesh/target/release: stillfail_app::updates), else the crate's. Read once: an update puts the next
 /// release's in its place before this one hands over.
 fn version() -> &'static str {
     static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     VERSION.get_or_init(|| {
         let app = std::env::current_exe().ok().and_then(|exe| exe.ancestors().nth(4).map(Path::to_path_buf));
-        app.and_then(|app| ember_app::updates::station_version(&app)).unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
+        app.and_then(|app| stillfail_app::updates::station_version(&app)).unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
     })
 }
-/// ember cloud expects a "ping" this often and drops a station silent for three of them.
+/// still.fail cloud expects a "ping" this often and drops a station silent for three of them.
 const PING: Duration = Duration::from_secs(30);
-/// How ember cloud closes the socket of a station removed from its workspace.
+/// How still.fail cloud closes the socket of a station removed from its workspace.
 const CLOSE_REMOVED: u16 = 4004;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -71,7 +75,7 @@ struct CloudState {
     name: String,
     relay_url: String,
     grant_keys: Value,
-    /// What ember cloud took back (a member removed, a role changed, a session signed out): credentials of that
+    /// What the cloud took back (a member removed, a role changed, a session signed out): credentials of that
     /// account (`sub`) or session (`sid`) issued up to `at` are refused. Kept, so it holds with the cloud away.
     #[serde(default)]
     revocations: Vec<Revocation>,
@@ -132,12 +136,13 @@ fn http() -> reqwest::Client {
 async fn cloud_error(response: reqwest::Response) -> anyhow::Error {
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
-    anyhow!("ember cloud answered {status}: {body}")
+    anyhow!("still.fail cloud answered {status}: {body}")
 }
 
 async fn enroll(data: &Path, origin: &str, token: &str) -> Result<()> {
     let key = load_key(data)?;
     let station = hex::encode(key.public().as_bytes());
+    // The signed words keep the old name: the cloud checks them as they are (so do clouds from before the rename).
     let message = format!("ember-station-enroll-v1:{origin}:{token}:{station}");
     let signature = hex::encode(key.sign(message.as_bytes()).to_bytes());
     let response = http()
@@ -186,19 +191,24 @@ struct Admitted {
 }
 
 impl Admitted {
-    /// Whether ember cloud took it back since it was issued.
+    /// Whether the cloud took it back since it was issued.
     fn revoked(&self, revocations: &[Revocation]) -> bool {
         revocations.iter().any(|r| self.iat <= r.at && ((r.kind == "sub" && r.id == self.viewer.sub) || (r.kind == "sid" && r.id == self.sid)))
     }
 }
 
-/// Verifies a member's credential (ember cloud's, for this station's workspace, 30 days) for the connecting device,
+/// What a member's credential says it is, and who issued it: the cloud's names for them, and those of before the
+/// rename (credentials already out, clouds that still issue them).
+const MEMBER_TYPES: [&str; 2] = ["stillfail-member+jwt", "ember-member+jwt"];
+const ISSUERS: [&str; 2] = ["stillfail-cloud", "ember-cloud"];
+
+/// Verifies a member's credential (still.fail cloud's, for this station's workspace, 30 days) for the connecting device,
 /// offline: with the key pinned at enrollment, and what was revoked since.
 fn verify_member(credential: &str, keys: &Value, workspace: &str, device: &str, revocations: &[Revocation]) -> Result<Admitted> {
     let mut parts = credential.split('.');
     let (Some(head), Some(body), Some(sig), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else { bail!("malformed credential") };
     let header: Value = serde_json::from_slice(&B64.decode(head)?)?;
-    if header["alg"] != "EdDSA" || header["typ"] != "ember-member+jwt" {
+    if header["alg"] != "EdDSA" || !MEMBER_TYPES.contains(&header["typ"].as_str().unwrap_or_default()) {
         bail!("not a member's credential");
     }
     let kid = header["kid"].as_str();
@@ -212,8 +222,8 @@ fn verify_member(credential: &str, keys: &Value, workspace: &str, device: &str, 
     key.verify_strict(format!("{head}.{body}").as_bytes(), &signature).map_err(|_| anyhow!("credential signature invalid"))?;
     let claims: Value = serde_json::from_slice(&B64.decode(body)?)?;
     let text = |k: &str| claims[k].as_str().unwrap_or_default().to_string();
-    if text("iss") != "ember-cloud" {
-        bail!("credential not issued by ember cloud");
+    if !ISSUERS.contains(&text("iss").as_str()) {
+        bail!("credential not issued by still.fail cloud");
     }
     if text("ws") != workspace {
         bail!("credential is for another workspace");
@@ -286,13 +296,13 @@ struct Run {
     handoff: Option<PathBuf>,
 }
 
-/// What a station hands over to its next binary (ember_app::handoff), written to <data>/run/handoff.json.
+/// What a station hands over to its next binary (stillfail_app::handoff), written to <data>/run/handoff.json.
 #[derive(Serialize, Deserialize)]
 struct Handoff {
     version: u32,
     /// The admin page's listening socket.
     admin: Option<i32>,
-    app: ember_app::handoff::HandedApp,
+    app: stillfail_app::handoff::HandedApp,
 }
 
 /// How long a drain waits for running turns to end, and how long a drained station waits to be stopped before it
@@ -300,10 +310,10 @@ struct Handoff {
 const DRAIN_LIMIT: Duration = Duration::from_secs(600);
 const DRAINED_LIMIT: Duration = Duration::from_secs(300);
 
-/// Says who runs this data directory and what it can do, for `ember update` (cloud/src/install.ts): SIGUSR2 hands over
+/// Says who runs this data directory and what it can do, for `stillfail update` (cloud/src/install.ts): SIGUSR2 hands over
 /// to the binary now at this one's path (handoff), SIGUSR1 holds turns and says when none runs (drain).
 fn write_station_file(run: &Path, started_at: u64) {
-    let text = json!({ "pid": std::process::id(), "startedAt": started_at, "version": version(), "handoff": ember_app::handoff::VERSION, "drain": 1 }).to_string();
+    let text = json!({ "pid": std::process::id(), "startedAt": started_at, "version": version(), "handoff": stillfail_app::handoff::VERSION, "drain": 1 }).to_string();
     if let Err(error) = std::fs::write(run.join("station.json"), format!("{text}\n")) {
         warn!(%error, "station.json not written");
     }
@@ -320,7 +330,7 @@ async fn run(options: Run) -> Result<()> {
             let read = std::fs::read(path).map_err(anyhow::Error::from).and_then(|b| Ok(serde_json::from_slice::<Handoff>(&b)?));
             let _ = std::fs::remove_file(path);
             match read {
-                Ok(handoff) if handoff.version == ember_app::handoff::VERSION => {
+                Ok(handoff) if handoff.version == stillfail_app::handoff::VERSION => {
                     info!(sessions = handoff.app.hub.sessions.len(), "taking over from the previous binary");
                     Some(handoff)
                 }
@@ -343,11 +353,11 @@ async fn run(options: Run) -> Result<()> {
     let ready_tx = Arc::new(ready_tx);
     let backend = local::Backend::default();
     let ui = options.app.join("dist").join("admin");
-    let config = std::env::var_os("EMBER_CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
-    // Its errors to ember's error tracking, while the config says so.
+    let config = stillfail_app::former::var("CONFIG").map(PathBuf::from).unwrap_or_else(|| data.join("config.json"));
+    // Its errors to still.fail's error tracking, while the config says so.
     let (config_path, state_data) = (config.clone(), data.clone());
-    let _ = errors::REPORTS.set(ember_app::telemetry::ErrorReports::new(ember_app::telemetry::ErrorReportsOptions {
-        key: ember_app::telemetry::built_key(&ui),
+    let _ = errors::REPORTS.set(stillfail_app::telemetry::ErrorReports::new(stillfail_app::telemetry::ErrorReportsOptions {
+        key: stillfail_app::telemetry::built_key(&ui),
         enabled: Arc::new(move || {
             std::fs::read(&config_path).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).is_some_and(|c| c["telemetry"]["errors"] == true)
         }),
@@ -358,7 +368,7 @@ async fn run(options: Run) -> Result<()> {
         let (cell, data, ready_tx) = (backend.0.clone(), data.clone(), ready_tx.clone());
         let handed = handoff.as_mut().map(|h| std::mem::take(&mut h.app));
         tokio::spawn(async move {
-            match ember_app::server::App::start(ember_app::server::AppOptions { data, config, ui, handoff: handed }).await {
+            match stillfail_app::server::App::start(stillfail_app::server::AppOptions { data, config, ui, handoff: handed }).await {
                 Ok(app) => {
                     let _ = cell.set(app);
                     ready_tx.send_replace(true);
@@ -371,7 +381,7 @@ async fn run(options: Run) -> Result<()> {
         });
     }
     let handed_admin = handoff.as_ref().and_then(|h| h.admin).and_then(|fd| {
-        ember_app::handoff::claim_listener(fd).map_err(|error| warn!(%error, "the admin page's socket handed over could not be taken up")).ok()
+        stillfail_app::handoff::claim_listener(fd).map_err(|error| warn!(%error, "the admin page's socket handed over could not be taken up")).ok()
     });
     let listener = match handed_admin {
         Some(listener) => listener,
@@ -427,7 +437,7 @@ async fn run(options: Run) -> Result<()> {
 
 /// Holds turns until none runs (or DRAIN_LIMIT passes), then says so in <data>/run/drained, for whoever restarts the
 /// station to stop it now. Nobody does within DRAINED_LIMIT: turns go on again.
-async fn drain(app: Arc<ember_app::server::App>, run: PathBuf, draining: Arc<std::sync::atomic::AtomicBool>) {
+async fn drain(app: Arc<stillfail_app::server::App>, run: PathBuf, draining: Arc<std::sync::atomic::AtomicBool>) {
     info!("draining: no new turns; waiting for running ones to end");
     app.hold();
     let until = Instant::now() + DRAIN_LIMIT;
@@ -444,17 +454,17 @@ async fn drain(app: Arc<ember_app::server::App>, run: PathBuf, draining: Arc<std
     draining.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
-/// Hands over to the binary now at this one's path (`ember update` put the new release there): asks it whether it
-/// reads this binary's handoff, stops taking anything new, gives up what runs (ember_app::handoff) and execs it in this
+/// Hands over to the binary now at this one's path (`stillfail update` put the new release there): asks it whether it
+/// reads this binary's handoff, stops taking anything new, gives up what runs (stillfail_app::handoff) and execs it in this
 /// process. Fails, and goes on as before, as long as nothing was given up; once the runtimes were, it cannot fail back:
 /// a failed exec exits, and the next start resumes what was cut off the usual way.
-async fn hand_over(options: &Run, door: &ember_app::handoff::Door, app: &ember_app::server::App, ready_tx: &watch::Sender<bool>) -> Result<()> {
+async fn hand_over(options: &Run, door: &stillfail_app::handoff::Door, app: &stillfail_app::server::App, ready_tx: &watch::Sender<bool>) -> Result<()> {
     use std::os::unix::process::CommandExt;
     let exe = std::env::current_dir()?.join(std::env::args_os().next().ok_or_else(|| anyhow!("no argv[0]"))?);
     let answer = tokio::process::Command::new(&exe).arg("handoff-version").output().await.with_context(|| format!("{} did not run", exe.display()))?;
     let theirs = String::from_utf8_lossy(&answer.stdout).trim().parse::<u32>().ok();
-    if !answer.status.success() || theirs != Some(ember_app::handoff::VERSION) {
-        bail!("{} does not take this binary's handoff (it reads {:?}, this writes {})", exe.display(), theirs, ember_app::handoff::VERSION);
+    if !answer.status.success() || theirs != Some(stillfail_app::handoff::VERSION) {
+        bail!("{} does not take this binary's handoff (it reads {:?}, this writes {})", exe.display(), theirs, stillfail_app::handoff::VERSION);
     }
     info!(to = %exe.display(), "handing over to the next binary");
     // The page's requests under way finish; new ones wait in the backlog for the next binary.
@@ -469,7 +479,7 @@ async fn hand_over(options: &Run, door: &ember_app::handoff::Door, app: &ember_a
     ready_tx.send_replace(false);
     let admin = door.keep().map_err(|error| warn!(%error, "the admin page's socket is not handed over")).ok();
     let path = options.data.join("run").join("handoff.json");
-    let written = serde_json::to_vec(&Handoff { version: ember_app::handoff::VERSION, admin, app: handed }).map_err(anyhow::Error::from).and_then(|bytes| write_private(&path, &bytes));
+    let written = serde_json::to_vec(&Handoff { version: stillfail_app::handoff::VERSION, admin, app: handed }).map_err(anyhow::Error::from).and_then(|bytes| write_private(&path, &bytes));
     if let Err(error) = written {
         tracing::error!(%error, "handoff not written; exiting (the next start resumes what was cut off)");
         std::process::exit(1);
@@ -497,14 +507,14 @@ async fn orphaned() {
     }
 }
 
-/// Another ember-station runs the data directory. `run` then exits with HELD, which the desktop app takes for "this
+/// Another station runs the data directory. `run` then exits with HELD, which the desktop app takes for "this
 /// machine's station is already running" (apps/desktop/src/station.ts).
 #[derive(Debug)]
 struct Held(PathBuf);
 
 impl std::fmt::Display for Held {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "另一个 ember-station 正在运行这个数据目录（{}）；同一台机器上的一个数据目录只能运行一个 station", self.0.display())
+        write!(f, "另一个 still.fail station 正在运行这个数据目录（{}）；同一台机器上的一个数据目录只能运行一个 station", self.0.display())
     }
 }
 
@@ -527,7 +537,7 @@ fn traces_on(data: &Path) -> bool {
     std::fs::read(data.join("config.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).is_some_and(|c| c["telemetry"]["traces"] == true)
 }
 
-/// The station's way into ember cloud, once it is in a workspace (enrolled: `ember station enroll`).
+/// The station's way into still.fail cloud, once it is in a workspace (enrolled: `stillfail station enroll`).
 async fn mesh(data: PathBuf, backend: local::Backend, ready: watch::Receiver<bool>, telemetry: Arc<Telemetry>) {
     let state = loop {
         match load_state(&data) {
@@ -540,20 +550,21 @@ async fn mesh(data: PathBuf, backend: local::Backend, ready: watch::Receiver<boo
     }
 }
 
-/// The mDNS service this station announces itself under: ember's own, not iroh's shared `irohv1`, where any iroh
+/// The mDNS service this station announces itself under: ours (named before the rename, and kept: clients look for it
+/// by this name), not iroh's shared `irohv1`, where any iroh
 /// app's endpoints answer too and a query's answers stop after a few (client/core/src/mesh.rs asks for it).
 const MDNS_SERVICE: &str = "ember";
 
 async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, ready: watch::Receiver<bool>, telemetry: Arc<Telemetry>) -> Result<()> {
     let key = load_key(&data)?;
     let relay: RelayUrl = state.relay_url.parse().context("relay url")?;
-    // ember's relay (iroh's public ones only while it is down: `relay_fallback`); found without ember cloud: on the
+    // still.fail's relay (iroh's public ones only while it is down: `relay_fallback`); found without the cloud: on the
     // LAN by mDNS, and which relay it is on, published to the Mainline DHT (clients look both up:
     // client/core/src/mesh.rs).
     let relays = iroh::RelayMap::from(relay.clone());
     let endpoint = Endpoint::builder(Minimal)
         .secret_key(key.clone())
-        .alpns(vec![ALPN.to_vec()])
+        .alpns(vec![ALPN.to_vec(), FORMER_ALPN.to_vec()])
         .relay_mode(RelayMode::Custom(relays))
         .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE))
         .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key))
@@ -563,10 +574,10 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
     info!(station = %endpoint.id(), workspace = %state.workspace_name, "mesh listening");
     let traces = telemetry.enabled();
     let station = Arc::new(Station { data, state: Mutex::new(state), backend, ready, removed: Mutex::new(false), telemetry: telemetry.clone() });
-    // Online at ember cloud only once the relay can reach us: a device that saw "online" and connected before
+    // Online at still.fail cloud only once the relay can reach us: a device that saw "online" and connected before
     // our relay link was up had its first packets dropped and waited out QUIC's retransmits (~3 s).
     if tokio::time::timeout(std::time::Duration::from_secs(15), endpoint.online()).await.is_err() {
-        warn!("no relay link after 15 s; going online at ember cloud anyway");
+        warn!("no relay link after 15 s; going online at still.fail cloud anyway");
     }
     tokio::spawn(presence(station.clone(), endpoint.secret_key().clone()));
     tokio::spawn(relay_fallback(endpoint.clone(), relay));
@@ -589,11 +600,11 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
     Ok(())
 }
 
-/// How often ember's relay is checked (`relay_fallback`).
+/// How often still.fail's relay is checked (`relay_fallback`).
 const RELAY_CHECK: Duration = Duration::from_secs(30);
 
-/// Keeps the station's home relay ember's, which is the one browsers reach (relay-only, they know no other): iroh's
-/// public relays are added only while ember's does not answer, so the station can still be reached (the DHT says
+/// Keeps the station's home relay still.fail's, which is the one browsers reach (relay-only, they know no other): iroh's
+/// public relays are added only while ours does not answer, so the station can still be reached (the DHT says
 /// where), and taken away once it does again, so the station goes back home to it. With all of them in the map at once
 /// iroh would pick whichever is nearest, and browsers would lose the station.
 async fn relay_fallback(endpoint: Endpoint, ours: RelayUrl) {
@@ -611,13 +622,13 @@ async fn relay_fallback(endpoint: Endpoint, ours: RelayUrl) {
             }
         }
         if !up && !added {
-            warn!(relay = %ours, "ember's relay does not answer; adding iroh's public relays until it does");
+            warn!(relay = %ours, "still.fail's relay does not answer; adding iroh's public relays until it does");
             for config in &public {
                 endpoint.insert_relay(config.url.clone(), config.clone()).await;
             }
             added = true;
         } else if up && added {
-            info!(relay = %ours, "ember's relay answers again; back home to it");
+            info!(relay = %ours, "still.fail's relay answers again; back home to it");
             for config in &public {
                 endpoint.remove_relay(&config.url).await;
             }
@@ -640,8 +651,8 @@ async fn presence(station: Arc<Station>, key: SecretKey) {
         }
         let started = Instant::now();
         match connect(&station, &key).await {
-            Ok(()) => info!("ember cloud closed the presence socket"),
-            Err(error) => warn!(%error, "no presence socket to ember cloud"),
+            Ok(()) => info!("still.fail cloud closed the presence socket"),
+            Err(error) => warn!(%error, "no presence socket to still.fail cloud"),
         }
         // A socket that held a while starts over quickly; failing again and again backs off to a minute.
         if started.elapsed() > Duration::from_secs(60) {
@@ -659,13 +670,16 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
         (s.origin.clone(), s.station.clone())
     };
     let ts = now();
+    // As at enrollment, the signed words keep the old name.
     let signature = hex::encode(key.sign(format!("ember-station-connect-v1:{origin}:{id}:{ts}").as_bytes()).to_bytes());
     let mut request = format!("{}/v1/stations/connect", origin.replacen("http", "ws", 1)).into_client_request()?;
     let headers = request.headers_mut();
-    headers.insert("x-ember-station", id.parse()?);
-    headers.insert("x-ember-ts", ts.to_string().parse()?);
-    headers.insert("x-ember-signature", signature.parse()?);
-    headers.insert("x-ember-version", version().parse()?);
+    // Under both names: the cloud reads the new ones first, one from before the rename only the old.
+    for (name, value) in [("station", id.clone()), ("ts", ts.to_string()), ("signature", signature), ("version", version().to_string())] {
+        for prefix in ["x-stillfail-", "x-ember-"] {
+            headers.insert(tungstenite::http::HeaderName::from_bytes(format!("{prefix}{name}").as_bytes())?, value.parse()?);
+        }
+    }
     let (mut socket, _) = match tokio::time::timeout(Duration::from_secs(20), tokio_tungstenite::connect_async(request)).await.context("connect timed out")? {
         Ok(connected) => connected,
         Err(tungstenite::Error::Http(response)) if response.status().as_u16() == 404 => {
@@ -675,7 +689,7 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
         Err(error) => return Err(error.into()),
     };
     *station.removed.lock().unwrap() = false;
-    info!("online at ember cloud");
+    info!("online at still.fail cloud");
     let mut ping = tokio::time::interval(PING);
     ping.tick().await;
     let mut answered = true;
@@ -684,7 +698,7 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
         tokio::select! {
             // Its app is not up: offline until it is.
             _ = async { let _ = ready.wait_for(|up| !*up).await; } => {
-                info!("station not answering; going offline at ember cloud");
+                info!("station not answering; going offline at still.fail cloud");
                 let _ = socket.close(None).await;
                 return Ok(());
             }
@@ -704,7 +718,7 @@ async fn connect(station: &Station, key: &SecretKey) -> Result<()> {
             _ = ping.tick() => {
                 // No pong since the last ping: the connection is gone even if the socket has not noticed.
                 if !answered {
-                    bail!("ember cloud stopped answering");
+                    bail!("still.fail cloud stopped answering");
                 }
                 answered = false;
                 socket.send(Message::Text("ping".into())).await?;
@@ -718,7 +732,7 @@ fn removed(station: &Station) {
     *station.removed.lock().unwrap() = true;
 }
 
-/// ember cloud says where the station is and what it is called (on connect and whenever that changes, with every
+/// still.fail cloud says where the station is and what it is called (on connect and whenever that changes, with every
 /// revocation it keeps), and what it takes back as it does.
 fn apply_state(station: &Station, text: &str) {
     let Ok(body) = serde_json::from_str::<Value>(text) else { return };
@@ -861,12 +875,12 @@ impl Traced<'_> {
             ("http.request.body.size", json!(outcome.received)),
         ];
         if stream {
-            attributes.push(("ember.stream", json!(true)));
+            attributes.push(("stillfail.stream", json!(true)));
         } else {
             attributes.push(("http.response.body.size", json!(outcome.sent)));
         }
         if let Some(via) = self.via {
-            attributes.push(("ember.path", json!(via)));
+            attributes.push(("stillfail.path", json!(via)));
         }
         if let Some(error) = error {
             attributes.push(("error.type", json!(error.to_string())));
@@ -927,12 +941,12 @@ async fn answer(
         }
     }
     outcome.received = body.len();
-    let mut request = hyper::Request::builder().method(method).uri(path).header("host", "ember");
+    let mut request = hyper::Request::builder().method(method).uri(path).header("host", "stillfail");
     // The caller's headers go on (a preview's page needs its cookies and what it accepts), but not those of the hop,
-    // nor any of ember's own: who is asking is only what this process says.
+    // nor any of the station's own (under either name): who is asking is only what this process says.
     for (name, value) in head["headers"].as_object().into_iter().flatten() {
         let lower = name.to_ascii_lowercase();
-        if HOP.contains(&lower.as_str()) || lower.starts_with("x-ember-") || lower == "traceparent" || lower == "tracestate" {
+        if HOP.contains(&lower.as_str()) || lower.starts_with("x-stillfail-") || lower.starts_with("x-ember-") || lower == "traceparent" || lower == "tracestate" {
             continue;
         }
         if let Some(value) = value.as_str() {
@@ -945,7 +959,7 @@ async fn answer(
     let request = request.body(Full::new(Bytes::from(body)))?;
     let unreachable = |error: String| json!({ "error": format!("station unreachable: {error}") });
     let up = *station.ready.borrow();
-    let seen = ember_app::access::Viewer::Mesh {
+    let seen = stillfail_app::access::Viewer::Mesh {
         sub: viewer.sub.clone(),
         email: viewer.email.clone(),
         name: viewer.name.clone(),
@@ -1037,7 +1051,7 @@ async fn socket(station: &Station, head: &Value, carry: Vec<u8>, send: &mut Send
 }
 
 fn usage() -> ! {
-    eprintln!("usage:\n  ember-station run --app DIR [--port N] [--data DIR] [--with-parent]\n  ember-station enroll <ember-cloud-origin> <token> [--data DIR]\n  ember-station id [--data DIR]\n\nrun: --app holds the admin page (dist/admin); --port the admin page's (default 4760, a free one when it is taken); --with-parent: end when the parent does.");
+    eprintln!("usage:\n  stillfail-station run --app DIR [--port N] [--data DIR] [--with-parent]\n  stillfail-station enroll <cloud-origin> <token> [--data DIR]\n  stillfail-station id [--data DIR]\n\n--data: default ~/.stillfail ($STILLFAIL_DATA, else $EMBER_DATA); ~/.ember is moved there on the first start.\nrun: --app holds the admin page (dist/admin); --port the admin page's (default 4760, a free one when it is taken); --with-parent: end when the parent does.");
     std::process::exit(2);
 }
 
@@ -1061,7 +1075,10 @@ async fn main() -> Result<()> {
         args.drain(i..(i + 2).min(args.len()));
         value
     };
-    let data = PathBuf::from(take("--data").unwrap_or_else(|| format!("{}/.ember", std::env::var("HOME").unwrap_or_default())));
+    // ~/.stillfail, moved from ~/.ember the first time (given as --data by launchers from before the rename too).
+    let home = stillfail_app::former::home();
+    let data = stillfail_app::former::data_dir(&home, take("--data").or_else(|| stillfail_app::former::var("DATA")).map(PathBuf::from));
+    stillfail_app::former::link_claude_projects(&data, &home.join(stillfail_app::former::FORMER_DATA_DIR));
     let app = take("--app");
     // What the Node part ran on, from launchers written before it went (older desktop apps): taken and let be.
     let _ = take("--node");
@@ -1083,7 +1100,7 @@ async fn main() -> Result<()> {
         }
         // Which handoff this binary reads: asked by the running station before it execs this one.
         Some("handoff-version") => {
-            println!("{}", ember_app::handoff::VERSION);
+            println!("{}", stillfail_app::handoff::VERSION);
             Ok(())
         }
         Some("id") => {
@@ -1120,7 +1137,7 @@ mod tests {
         json!({ "keys": [{ "kid": "k", "x": B64.encode(key().verifying_key().as_bytes()) }] })
     }
 
-    /// A credential as ember cloud signs one (cloud/src/grants.ts), with `claims` over the usual ones.
+    /// A credential as the cloud signs one (cloud/src/grants.ts), with `claims` over the usual ones.
     fn credential(typ: &str, claims: Value) -> String {
         let mut body = json!({ "iss": "ember-cloud", "sub": "bob", "email": "bob@x", "name": "Bob", "ws": WS, "role": "member", "device": DEVICE, "sid": "s1", "iat": now() - 10, "exp": now() + 3600 });
         for (k, v) in claims.as_object().unwrap() {
@@ -1156,7 +1173,15 @@ mod tests {
     }
 
     #[test]
-    fn what_ember_cloud_revoked_is_refused_and_what_came_after_is_not() {
+    fn credentials_under_the_new_names_and_the_old_are_both_members() {
+        let issued_new = credential("stillfail-member+jwt", json!({ "iss": "stillfail-cloud" }));
+        assert_eq!(check(&issued_new, &[]).unwrap().viewer.sub, "bob");
+        assert!(check(&credential("ember-member+jwt", json!({})), &[]).is_ok());
+        assert!(check(&credential("stillfail-member+jwt", json!({ "iss": "someone-else" })), &[]).is_err());
+    }
+
+    #[test]
+    fn what_the_cloud_revoked_is_refused_and_what_came_after_is_not() {
         let issued = now() - 10;
         let old = credential("ember-member+jwt", json!({ "iat": issued }));
         let revoked_account = [Revocation { kind: "sub".into(), id: "bob".into(), at: issued }];

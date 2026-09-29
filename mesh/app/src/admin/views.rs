@@ -10,7 +10,7 @@ use crate::access::Viewer;
 use crate::chat::internal::INTERNAL_CONNECT;
 use crate::config::runtime_name;
 use crate::pool::serves;
-use crate::store::{AuthorKind, EMBER_SURFACE, EntryRow, MessageRow, SessionStats, ThreadSummary};
+use crate::store::{AuthorKind, STILLFAIL_SURFACE, EntryRow, MessageRow, SessionStats, ThreadSummary};
 
 /// How much of a chat's last message the sidebar gets.
 const LAST_CHARS: usize = 200;
@@ -77,7 +77,7 @@ pub fn chat_title(t: &ThreadSummary, channel_name: Option<&str>) -> String {
     if let Some(name) = channel_name.map(str::trim).filter(|s| !s.is_empty()) {
         return format!("#{name}");
     }
-    if t.thread.surface != EMBER_SURFACE && t.thread.channel.starts_with('D') {
+    if t.thread.surface != STILLFAIL_SURFACE && t.thread.channel.starts_with('D') {
         return "私信".into();
     }
     NO_WORDS.into()
@@ -123,7 +123,7 @@ impl AdminApi {
                     "connection": self.deps.connections.state(c),
                     "createdBy": c.created_by,
                     "sessions": sessions.iter().filter(|s| s.connect == c.id).count(),
-                    "session": if c.mode == ember_shapes::ConnectMode::SingleSession { store.binding(&c.id).ok().flatten() } else { None },
+                    "session": if c.mode == stillfail_shapes::ConnectMode::SingleSession { store.binding(&c.id).ok().flatten() } else { None },
                 })
             })
             .collect();
@@ -249,7 +249,7 @@ impl AdminApi {
             .collect()
     }
 
-    /// A creator reference in words: who, and their email where known (to match an ember cloud account).
+    /// A creator reference in words: who, and their email where known (to match a still.fail cloud account).
     pub(super) fn creator(&self, reference: Option<&str>) -> Option<Value> {
         let reference = reference?;
         if reference == "local" {
@@ -331,7 +331,7 @@ impl AdminApi {
     fn thread_view(&self, t: &ThreadSummary) -> Value {
         let chat = self.thread_chat(t.thread.id);
         let mut names = self.author_names(t.thread.id);
-        let channel_name = if t.thread.surface == EMBER_SURFACE { None } else { chat.as_ref().and_then(|c| c.known_channel(&t.thread.channel)) };
+        let channel_name = if t.thread.surface == STILLFAIL_SURFACE { None } else { chat.as_ref().and_then(|c| c.known_channel(&t.thread.channel)) };
         let mut v = serde_json::to_value(&t.thread).unwrap_or_else(|_| json!({}));
         v["sessions"] = serde_json::to_value(&t.sessions).unwrap_or(Value::Null);
         v["last"] = json!(t.last);
@@ -384,7 +384,7 @@ impl AdminApi {
         let mut chatted = HashSet::new();
         for t in &threads {
             for m in &t.sessions {
-                if t.thread.surface == EMBER_SURFACE {
+                if t.thread.surface == STILLFAIL_SURFACE {
                     if listed(t) {
                         chatted.insert(m.session.clone());
                     }
@@ -394,7 +394,7 @@ impl AdminApi {
             }
         }
         let mut rows = Vec::new();
-        for t in threads.iter().filter(|t| t.thread.surface == EMBER_SURFACE && listed(t) && !in_chat(t).is_empty()) {
+        for t in threads.iter().filter(|t| t.thread.surface == STILLFAIL_SURFACE && listed(t) && !in_chat(t).is_empty()) {
             let from = t.sessions.iter().find_map(|m| origins.get(&m.session).copied());
             let agents: Vec<Value> = in_chat(t).iter().map(|key| agent(key)).collect();
             let origin = from.map(|f| self.origin(f));
@@ -553,7 +553,7 @@ impl AdminApi {
                 return known.clone();
             }
             let name = match kind {
-                AuthorKind::Ember => Some("ember".to_string()),
+                AuthorKind::StillFail => Some("still.fail".to_string()),
                 AuthorKind::Agent => {
                     // An agent goes by the name of the connect it posts through (on the page, of the connect that
                     // started it).
@@ -568,7 +568,7 @@ impl AdminApi {
                         None => session.and_then(|s| s.title),
                     }
                 }
-                AuthorKind::Person if t.as_ref().is_some_and(|t| t.surface == EMBER_SURFACE) => {
+                AuthorKind::Person if t.as_ref().is_some_and(|t| t.surface == STILLFAIL_SURFACE) => {
                     Some(if author == "local" { "管理员".to_string() } else { self.deps.names.lock().unwrap().get(author).cloned().unwrap_or_else(|| author.to_string()) })
                 }
                 AuthorKind::Person => chat.as_ref().and_then(|c| c.known_person(author)).map(|p| p.name).filter(|n| !n.is_empty()),
@@ -615,6 +615,6 @@ pub fn message_view(m: &MessageRow, names: &mut impl FnMut(AuthorKind, &str) -> 
 }
 
 #[allow(dead_code)]
-fn runtime_label(runtime: ember_shapes::RuntimeKind) -> &'static str {
+fn runtime_label(runtime: stillfail_shapes::RuntimeKind) -> &'static str {
     runtime_name(runtime)
 }

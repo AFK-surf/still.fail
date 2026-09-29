@@ -1,7 +1,7 @@
-//! The station as one piece, as ember-station runs it in its own process: the settings, store, chat connections, hub
+//! The station as one piece, as stillfail-station runs it in its own process: the settings, store, chat connections, hub
 //! and runtimes, the admin API and page, and the agents' MCP endpoint.
 //!
-//! ember-station hands it requests: its local page's (a browser here: the viewer is this machine, or Cloudflare
+//! stillfail-station hands it requests: its local page's (a browser here: the viewer is this machine, or Cloudflare
 //! Access's through a tunnel) and ember cloud members' through the mesh (the viewer it verified).
 
 use std::collections::HashMap;
@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use bytes::Bytes;
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use futures_util::future::BoxFuture;
 use http_body_util::BodyExt;
 use hyper::{Request, Response};
@@ -51,8 +51,12 @@ pub struct AppOptions {
     pub handoff: Option<HandedApp>,
 }
 
-/// This station's place in ember cloud, as <data>/mesh/cloud.json says (written by `ember station enroll`, kept up to
-/// date by ember cloud); looked at every couple of seconds, so an enrollment or a rename shows at once.
+/// The station's store in the data directory: named as before the rename, so a release from before it still opens
+/// it (through the link ~/.ember).
+pub const DB_FILE: &str = "ember.db";
+
+/// This station's place in still.fail cloud, as <data>/mesh/cloud.json says (written by `stillfail station enroll`, kept
+/// up to date by the cloud); looked at every couple of seconds, so an enrollment or a rename shows at once.
 pub struct MeshFile {
     path: PathBuf,
     changes: watch::Sender<u64>,
@@ -132,7 +136,7 @@ impl App {
     pub async fn start(options: AppOptions) -> Result<Arc<App>> {
         let settings = Settings::open(&options.config, &options.data)?;
         let config = settings.config();
-        let store = Arc::new(Store::open(&options.data.join("ember.db").to_string_lossy(), None)?);
+        let store = Arc::new(Store::open(&options.data.join(DB_FILE).to_string_lossy(), None)?);
         link_homes(&config);
         let mut handoff = options.handoff;
         let kept = handoff.as_ref().map(|h| h.pgids().into_iter().collect()).unwrap_or_default();
@@ -161,7 +165,7 @@ impl App {
         }
         let mcp_url = format!("http://{}:{port}/mcp", config.http.host);
 
-        // Display names of people who reached this station through ember cloud, by email.
+        // Display names of people who reached this station through still.fail cloud, by email.
         let names: Arc<Mutex<HashMap<String, String>>> = Arc::default();
         // Slack's names for people and channels, kept on disk; learning new ones refreshes what shows them.
         let book = NameBook::open(config.data_dir.join("slack-names.json"));
@@ -198,7 +202,7 @@ impl App {
             internal: Some(Arc::new(InternalChat::new(move |user| {
                 people.lock().unwrap().get(user).cloned().unwrap_or_else(|| if user == "local" { "管理员".into() } else { user.to_string() })
             }))),
-            // A session's /o/ link on ember cloud (it opens the app where there is one, else the web), once this
+            // A session's /o/ link on still.fail cloud (it opens the app where there is one, else the web), once this
             // station is in a workspace.
             link: Some(Box::new(move |session: &str| {
                 let status = link.status();
@@ -213,7 +217,7 @@ impl App {
         if let Some(handoff) = handoff.take() {
             hub.adopt(handoff.hub).await;
         }
-        // Background jobs and web services (jobs.rs): their agents told through the hub; a service's link is ember
+        // Background jobs and web services (jobs.rs): their agents told through the hub; a service's link is still.fail
         // cloud's /o/ link of its session, with its port.
         let (told, linked) = (Arc::downgrade(&hub), mesh.clone());
         let jobs = crate::jobs::Jobs::new(
@@ -290,7 +294,7 @@ impl App {
             check_on_start: true,
             machine_logins: Some(machine_logins),
             updates: Some(updates),
-            dev: std::env::var("EMBER_DEV").as_deref() == Ok("1"),
+            dev: crate::former::var("DEV").as_deref() == Some("1"),
             jobs: Some(jobs.clone()),
         });
         let access = settings.clone();
@@ -320,7 +324,7 @@ impl App {
                 reconnect.reconcile(&config).await;
             }
         });
-        info!(port, "ember listening");
+        info!(port, "station listening");
         connections.reconcile(&config).await;
         if connections.ids().is_empty() {
             warn!("no connect is connected; add or enable one on the admin page");
@@ -346,7 +350,7 @@ impl App {
         self.up.load(Ordering::SeqCst)
     }
 
-    /// One request of the station's page or admin API. `viewer`: who ember-station verified (the mesh); None for this
+    /// One request of the station's page or admin API. `viewer`: who stillfail-station verified (the mesh); None for this
     /// machine's own page, whose viewer the Access gate says.
     pub async fn handle<B>(&self, req: Request<B>, viewer: Option<Viewer>) -> Response<Body>
     where
@@ -358,7 +362,7 @@ impl App {
             return plain(if self.up() { 200 } else { 503 }, "");
         }
         if !self.up() {
-            return plain(503, "ember station is starting");
+            return plain(503, "still.fail station is starting");
         }
         if path.starts_with("/admin/api/") {
             let viewer = match viewer {
@@ -496,7 +500,7 @@ pub(crate) fn encode(s: &str) -> String {
         .collect()
 }
 
-/// The agents' MCP endpoint, and what their jobs say (`ember-job notify`): loopback only, /mcp, /jobs/notify and
+/// The agents' MCP endpoint, and what their jobs say (`stillfail-job notify`): loopback only, /mcp, /jobs/notify and
 /// /health.
 fn serve_mcp(listener: tokio::net::TcpListener, mcp: Arc<McpEndpoint>, jobs: Arc<crate::jobs::Jobs>) -> Arc<Door> {
     let cell: Arc<OnceLock<std::sync::Weak<Door>>> = Arc::default();

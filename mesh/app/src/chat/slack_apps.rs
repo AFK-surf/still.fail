@@ -1,7 +1,7 @@
-//! Managing a connect's Slack app from ember: its name, description, colour, icon and permissions live in the app's
+//! Managing a connect's Slack app from still.fail: its name, description, colour, icon and permissions live in the app's
 //! manifest, which Slack lets a workspace member change with an app configuration token. The token lasts 12 hours; its
-//! refresh token (single use) yields the next pair, so ember keeps both and rotates as needed. Permission changes still
-//! need a person to approve them in Slack; ember hands them the link. Also the manifest a new app starts from, and the
+//! refresh token (single use) yields the next pair, so the station keeps both and rotates as needed. Permission changes still
+//! need a person to approve them in Slack; the station hands them the link. Also the manifest a new app starts from, and the
 //! link that opens Slack's "create app" page with it filled in.
 
 use std::collections::{BTreeMap, HashMap};
@@ -194,14 +194,17 @@ fn set_or_delete(target: &mut Value, key: &str, value: &str) {
     }
 }
 
-/// Applies form edits to a manifest. Turning a group off removes only what no group that stays on needs; scopes ember
-/// does not know about are kept.
+/// What a Slack app the station makes is called when nobody named it.
+pub const DEFAULT_APP_NAME: &str = "still.fail";
+
+/// Applies form edits to a manifest. Turning a group off removes only what no group that stays on needs; scopes the
+/// station does not know about are kept.
 pub fn apply_settings(manifest: &Value, edit: &SlackAppEdit) -> Value {
     let mut next = manifest.clone();
     object(&mut next, "display_information");
     let features = object(&mut next, "features");
     if features.get("bot_user").is_none_or(Value::is_null) {
-        let name = edit.display_name.as_deref().or(edit.name.as_deref()).unwrap_or("ember");
+        let name = edit.display_name.as_deref().or(edit.name.as_deref()).unwrap_or(DEFAULT_APP_NAME);
         features["bot_user"] = json!({ "display_name": name, "always_online": true });
     }
     // People can always message the bot directly (an app made before this is fixed by any change to it).
@@ -277,9 +280,9 @@ pub fn bot_scopes() -> Vec<String> {
     unique(known_scopes().into_iter().map(String::from))
 }
 
-/// The Slack app manifest for an ember connect. Every permission group is on, so later features (file upload, reactions
+/// The Slack app manifest for a still.fail connect. Every permission group is on, so later features (file upload, reactions
 /// as status, co-author lookup) do not need a reinstall; people can turn groups off on the connect page.
-/// `redirect_url`: where Slack sends a person who installed it (ember cloud's page that hands the code to the station),
+/// `redirect_url`: where Slack sends a person who installed it (still.fail cloud's page that hands the code to the station),
 /// so the bot token is not copied by hand.
 pub fn slack_manifest(name: &str, description: Option<&str>, redirect_url: Option<&str>) -> Value {
     let mut oauth = json!({ "scopes": { "bot": bot_scopes() } });
@@ -287,7 +290,7 @@ pub fn slack_manifest(name: &str, description: Option<&str>, redirect_url: Optio
         oauth["redirect_urls"] = json!([url]);
     }
     json!({
-        "display_information": { "name": name, "description": description.unwrap_or("Coding agent in your threads (ember)"), "background_color": "#7a2e0e" },
+        "display_information": { "name": name, "description": description.unwrap_or("Coding agent in your threads (still.fail)"), "background_color": "#7a2e0e" },
         // The Messages tab lets people message the bot directly; without it Slack says messaging the app is turned off.
         "features": {
             "bot_user": { "display_name": name, "always_online": true },
@@ -367,7 +370,7 @@ pub fn slack_error(error: &anyhow::Error) -> String {
 }
 
 fn api_base() -> String {
-    std::env::var("EMBER_SLACK_API").unwrap_or_else(|_| "https://slack.com/api".into())
+    crate::former::var("SLACK_API").unwrap_or_else(|| "https://slack.com/api".into())
 }
 
 fn client() -> &'static reqwest::Client {
@@ -511,7 +514,7 @@ pub type LoadTokens = Arc<dyn Fn() -> Vec<ConfigToken> + Send + Sync>;
 pub type SaveToken = Arc<dyn Fn(ConfigToken) + Send + Sync>;
 
 /// The Slack app API with the configuration tokens: a person's own (`by`), one per Slack workspace; nobody uses
-/// another's. `load` and `save` keep them in ember's config, so a rotation survives restarts. An app is made with the
+/// another's. `load` and `save` keep them in the station's config, so a rotation survives restarts. An app is made with the
 /// token of the workspace chosen; an app already made is read and changed with whichever of the person's tokens owns
 /// it (found once, by asking).
 pub struct SlackApps {

@@ -4,35 +4,35 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::store::{AuthorKind, EMBER_SURFACE, MessageRow, PendingMessage, WidgetModel};
+use crate::store::{AuthorKind, STILLFAIL_SURFACE, MessageRow, PendingMessage, WidgetModel};
 
-/// `project`: the directory the runtime runs in, for a session begun outside ember (in a terminal) and continued here.
+/// `project`: the directory the runtime runs in, for a session begun outside still.fail (in a terminal) and continued here.
 pub fn session_instructions(workspace: &str, project: Option<&str>, repos_dir: &str, memory_path: &str) -> String {
     let project = match project {
         Some(dir) => format!(
-            "- Project directory: {dir}. This session began outside ember (in a terminal on this machine) and goes on here: you run in that directory and keep working on it as before. The session workspace below is for scratch files only.\n"
+            "- Project directory: {dir}. This session began outside still.fail (in a terminal on this machine) and goes on here: you run in that directory and keep working on it as before. The session workspace below is for scratch files only.\n"
         ),
         None => String::new(),
     };
     format!(
-        r#"Messages reach you from chat conversations (Slack threads, and chats on ember's web page); you work on this machine and answer in those conversations.
+        r#"Messages reach you from chat conversations (Slack threads, and chats on still.fail's web page); you work on this machine and answer in those conversations.
 
-Who you are: you have no name of your own. ember is the system that brings you messages and carries your answers, not you — do not call yourself ember. Where a message says what you are called there (`you` below), that is your name in that conversation; elsewhere (web chats) you are simply the model you run as. Asked who you are, say that: the name you have where you were asked, or your model and runtime.
+Who you are: you have no name of your own. still.fail (called ember before) is the system that brings you messages and carries your answers, not you — do not call yourself still.fail or ember. Where a message says what you are called there (`you` below), that is your name in that conversation; elsewhere (web chats) you are simply the model you run as. Asked who you are, say that: the name you have where you were asked, or your model and runtime.
 
 Messages and where they come from:
 - Each message reaches you as <message via="slack" connect="…" you="…" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message>. `you` is what you are called where that message was said — your name there and how you are mentioned (e.g. "ds-helper (<@U123>)"); it belongs to that connect only, so answer to it there and do not take it as your name elsewhere. Web chats give none. The thread attribute says which conversation it belongs to. Messages from different threads can arrive in the same session; keep them apart and answer each where it was asked.
-- via="web" messages come from a chat on ember's own admin page (thread EMBER/…), usually an operator looking at this session. Treat them like any other conversation and answer there with chat_post.
+- via="web" messages come from a chat on still.fail's own admin page (thread EMBER/…), usually an operator looking at this session. Treat them like any other conversation and answer there with chat_post.
 - Not every message is addressed to you; read it in context before acting.
 - Other agents may take part in a conversation too, each with its own session. What they post reaches you like what people say, marked bot, from the name they go by there (with their mention in Slack). Work with them: do what is asked of you, leave or hand over what another agent is doing or better placed to do, build on what they found instead of repeating it, and mention them when you need something from them.
 - Messages via="ember" come from the station itself: a background job you started (job_start) telling you something, or that it ended. They belong to no conversation; act on them, and tell the people who asked for the work when it matters to them.
-- A message can reach you while you wait on a command or subagent: what you wait on is then moved to the background (its result says the user backgrounded it — no one asked; ember did it so you read the message now). It goes on and tells you when it ends; answer the message, then carry on with the work.
+- A message can reach you while you wait on a command or subagent: what you wait on is then moved to the background (its result says the user backgrounded it — no one asked; the station did it so you read the message now). It goes on and tells you when it ends; answer the message, then carry on with the work.
 - A message does not need a reply. Post when you were asked something or have something to add; an acknowledgement ("got it", "thanks", "agreed") needs none, and neither does another agent's message that does not concern you. When there is nothing to say, end the turn with chat_state "final" without posting.
 
 How you answer:
-- Nothing you write as ordinary assistant output reaches anyone. Use the ember MCP tools:
+- Nothing you write as ordinary assistant output reaches anyone. Use the station's MCP tools (its server is still named `ember`):
   - chat_post posts a message to="CHANNEL/THREAD_TS": always the thread attribute of the message you are answering. There is no default conversation.
   - Its arguments are all here, so call it directly without looking the tool up first: to (required), text (formatted for where it goes, below), kind ("final" or "block"; omit for a progress update), files (optional).
-  - In ember chats (EMBER/…) chat_post can also attach files: files=[absolute paths on this machine]. Images show inline, so send a screenshot or chart as a file rather than describing it. Attached files show below the text; to place one within it, refer to it in the text by its file name: ![](shot.png) shows an image there, [the report](report.pdf) on a line of its own shows a file there (within a sentence it is a link that opens the file). Slack threads take no files: attached there, they stay in ember and the post links to them.
+  - In still.fail chats (EMBER/…) chat_post can also attach files: files=[absolute paths on this machine]. Images show inline, so send a screenshot or chart as a file rather than describing it. Attached files show below the text; to place one within it, refer to it in the text by its file name: ![](shot.png) shows an image there, [the report](report.pdf) on a line of its own shows a file there (within a sentence it is a link that opens the file). Slack threads take no files: attached there, they stay in still.fail and the post links to them.
   - chat_state records a final or block state without posting, or waiting (below).
   - chat_history reads earlier messages of the thread given as to="CHANNEL/THREAD_TS", your own posts included.
   - chat_read, session_history and chat_list read the station's other conversations. When a message refers to another chat (its link: …/chats/<key>, …/o/<workspace>/<station>/<key>, or an execution history link with ?history=<key>&entry=<n>), read what was said there with chat_read chat=<the link> and what its agent did with session_history chat=<the link>; chat_list finds a chat by words.
@@ -43,15 +43,15 @@ How you answer:
 How your text looks where it goes:
 - Slack threads show Slack's own formatting (mrkdwn), not Markdown. Write it: *bold* (one asterisk each side), _italic_, ~strike~, `code`, ```code blocks``` (no language after the fence), "> " at the start of a line to quote, <https://example.com|link text> for a link (a bare URL links itself), <@USER_ID> to mention someone, <#CHANNEL_ID> for a channel, and lists as lines starting with "• " or "1. ". It is posted exactly as you write it: nothing converts Markdown, so **double asterisks**, [text](url) links and # headings show as typed. A literal <, > or & is written &lt;, &gt;, &amp;.
 - Slack has no headings, tables, nested lists or inline images. For a heading write a *bold* line; for rows and columns use a short list, or a code block when alignment matters; keep lists one level deep. Short paragraphs read better than long ones.
-- ember chats (EMBER/…) show standard Markdown: headings, tables and nested lists work there. An HTML file you attach and place there is drawn as a small page in ember's look, for a diagram, chart or widget (the ember-viz skill says how).
-- Work whose result is seen (a UI, a page, an animation, a picture) is shown, not described: images, a video, an inline page or a web service (the ember-show skill says which and how).
+- still.fail chats (EMBER/…) show standard Markdown: headings, tables and nested lists work there. An HTML file you attach and place there is drawn as a small page in still.fail's look, for a diagram, chart or widget (the stillfail-viz skill says how).
+- Work whose result is seen (a UI, a page, an animation, a picture) is shown, not described: images, a video, an inline page or a web service (the stillfail-show skill says which and how).
 
 Where you work:
 {project}- Session workspace: {workspace}. Scratch files, clones and git worktrees belong here.
 - Shared repository cache: {repos_dir}. Keep canonical clones there and create git worktrees from them in the session workspace; do not edit the canonical clones directly.
 
 Memory and skills:
-- Memory is shared by every ember session on both runtimes, in two layers. Keep both short, and never put credentials or one-off task details in them.
+- Memory is shared by every still.fail session on both runtimes, in two layers. Keep both short, and never put credentials or one-off task details in them.
   - The global memory, {memory_path}, is loaded at session start: only lasting lessons that hold across projects (how the team works, how to answer).
   - Each project's memory is a skill in the skills directory next to it (a project is any lasting piece of work — a product, a customer, a recurring duty — not necessarily a code repository): skills/<project>/SKILL.md, whose description starts with "项目记忆：" and says when it applies. What holds only for one project goes there, not in the global memory; make one when a project has none.
 - Other shared skills are in the same directory; use them when a task matches their description."#
@@ -111,7 +111,7 @@ pub fn message_for_agent(m: &MessageRow) -> String {
 }
 
 fn via(surface: &str) -> &'static str {
-    if surface == EMBER_SURFACE { "web" } else { "slack" }
+    if surface == STILLFAIL_SURFACE { "web" } else { "slack" }
 }
 
 /// Messages handed to a session, each with its source and sender, and a hint where a thread is new to it.
@@ -123,7 +123,7 @@ pub fn format_inbound(messages: &[PendingMessage], new_threads: &HashSet<i64>, n
         let address = thread_address(&p.channel, &p.thread_ts);
         // Something was said before it: earlier entries of the thread, or (Slack) a reply rather than the thread's first
         // message. A chat on the station's page gets its own id apart from its first message's, so only its entries tell.
-        let before = m.n > 1 || (p.surface != EMBER_SURFACE && m.ts != p.thread_ts);
+        let before = m.n > 1 || (p.surface != STILLFAIL_SURFACE && m.ts != p.thread_ts);
         if new_threads.contains(&m.thread) && before && hinted.insert(m.thread) {
             lines.push(format!("(Thread {address} had messages before you were brought in; read them with chat_history to=\"{address}\" if they matter.)"));
         }
@@ -175,7 +175,7 @@ pub fn format_history(messages: &[MessageRow], surface: &str, address: &str, sel
         .map(|m| {
             let from = if m.author_kind == AuthorKind::Agent && m.author == self_key {
                 "you".to_string()
-            } else if m.author_kind == AuthorKind::Ember {
+            } else if m.author_kind == AuthorKind::StillFail {
                 "ember".to_string()
             } else {
                 match names.get(&m.author) {
@@ -206,12 +206,12 @@ pub fn wait_over(seconds: u64) -> String {
     )
 }
 
-pub const RESUME_AFTER_RESTART: &str = r#"ember restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know."#;
+pub const RESUME_AFTER_RESTART: &str = r#"The station restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know."#;
 
-/// The first turn in ember of a session begun in a terminal: from now on it works as ember's sessions do.
+/// The first turn in still.fail of a session begun in a terminal: from now on it works as still.fail's sessions do.
 pub fn continued_here(instructions: &str) -> String {
     format!(
-        "This session began in a terminal and now goes on in ember: what people say comes as messages below, and nothing you write as ordinary output reaches them any more; answer with the ember tools. How ember works, from now on:\n\n<ember-instructions>\n{instructions}\n</ember-instructions>"
+        "This session began in a terminal and now goes on in still.fail: what people say comes as messages below, and nothing you write as ordinary output reaches them any more; answer with the station's tools. How still.fail works, from now on:\n\n<stillfail-instructions>\n{instructions}\n</stillfail-instructions>"
     )
 }
 

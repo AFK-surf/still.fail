@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, info};
@@ -28,7 +28,7 @@ use crate::config::expand_route;
 use crate::machine_logins::{CLAUDE_TOKEN_MARGIN_MS, machine_claude_token, process_env};
 use crate::store::{Store, now_ms};
 
-const MCP_TOKEN_VAR: &str = "EMBER_MCP_TOKEN";
+const MCP_TOKEN_VAR: &str = "STILLFAIL_MCP_TOKEN";
 /// Inherited variables that would let a session authenticate as something other than its profile.
 const SCRUBBED: [&str; 7] =
     ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"];
@@ -186,7 +186,9 @@ impl AgentDriver for ClaudeDriver {
         env.insert("CLAUDE_CONFIG_DIR".into(), home.display().to_string());
         env.insert(MCP_TOKEN_VAR.into(), options.mcp_token.clone());
         // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
-        env.insert("EMBER_RUNTIME_SESSION_ID".into(), session_id.clone());
+        for name in crate::former::both("RUNTIME_SESSION_ID") {
+            env.insert(name, session_id.clone());
+        }
         // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).
         let machine = if options.profile.machine { Some(machine_claude_token(&process_env()).await?) } else { None };
         match &machine {

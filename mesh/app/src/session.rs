@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
 use anyhow::{Result, anyhow};
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use futures_util::FutureExt;
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ use crate::config::Profile;
 use crate::instructions::{NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continued_here, format_inbound, format_widget_models, session_instructions, wait_over};
 use crate::live::LiveHub;
 use crate::runtime::{AgentDriver, AgentSession, LiveEvent, LivePhase, LiveStepKind, OpenOptions, RuntimeEvent, TurnOutcome, uuid};
-use crate::store::{AuthorKind, EMBER_SURFACE, NewMessage, PendingMessage, Store, now_ms};
+use crate::store::{AuthorKind, STILLFAIL_SURFACE, NewMessage, PendingMessage, Store, now_ms};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeclaredState {
@@ -454,7 +454,7 @@ impl SessionActor {
 
     // ── internals (always inside the queue) ────────────────────────────────
 
-    /// The notices waiting, as the agent reads them: each a message from ember.
+    /// The notices waiting, as the agent reads them: each a message from the station (via="ember", as before the rename).
     fn take_notices(&self) -> Option<String> {
         let notices = std::mem::take(&mut self.st().notices);
         if notices.is_empty() {
@@ -512,7 +512,7 @@ impl SessionActor {
     fn work_for(&self, deps: &Arc<dyn SessionDeps>, messages: &[PendingMessage]) {
         {
             let mut st = self.st();
-            for m in messages.iter().filter(|m| m.surface != EMBER_SURFACE) {
+            for m in messages.iter().filter(|m| m.surface != STILLFAIL_SURFACE) {
                 let thread = ThreadRef::new(&m.channel, &m.thread_ts);
                 match st.working_for.iter_mut().find(|w| w.connect == m.connect && w.thread == thread) {
                     Some(at) => at.ts = Some(m.message.ts.clone()),
@@ -644,7 +644,7 @@ impl SessionActor {
                 live.event(&self.key, LiveEvent::Phase { phase: LivePhase::Starting });
             }
             let mut agent = self.ensure_agent(deps).await?;
-            // A session begun in a terminal and continued here: its first turn here says so, with how ember works (its
+            // A session begun in a terminal and continued here: its first turn here says so, with how still.fail works (its
             // system prompt is left as it began).
             let continued = match deps.store().get_session(&self.key)? {
                 Some(row) if row.cwd.is_some() && !deps.store().has_turns(&self.key)? => Some(continued_here(
@@ -718,7 +718,7 @@ impl SessionActor {
             model,
             effort: row.effort.clone(),
             // A session continued from a terminal keeps the system prompt it began with (its cache holds); its first turn
-            // here brings ember's instructions instead (start_turn).
+            // here brings the station's instructions instead (start_turn).
             instructions: if row.cwd.is_some() {
                 String::new()
             } else {
@@ -926,7 +926,7 @@ impl SessionActor {
         let thread = ThreadRef::new(&latest.thread.channel, &latest.thread.thread_ts);
         let posted = async {
             let ts = chat.post(&thread, text, &[]).await?;
-            store.insert_message(NewMessage::new(latest.thread.id, &ts, AuthorKind::Ember, "ember", text))?;
+            store.insert_message(NewMessage::new(latest.thread.id, &ts, AuthorKind::StillFail, "ember", text))?;
             Ok::<_, anyhow::Error>(())
         };
         if let Err(e) = posted.await {

@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 

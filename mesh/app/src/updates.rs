@@ -1,8 +1,8 @@
 //! Which versions this station and the machine's runtimes (Claude Code, Codex) are, whether newer ones are out, and
 //! updating them from the pages.
 //! - The station: its release says its version in BUILD (scripts/station-bundle.sh: `0.1.<commits>`, as the apps are
-//!   numbered); the latest is what ember cloud serves as releases/station.json (scripts/release.sh). It is updated as
-//!   `ember update` does, by ember cloud's installer (cloud/src/install.ts), run apart from the station (its own
+//!   numbered); the latest is what still.fail cloud serves as releases/station.json (scripts/release.sh). It is updated as
+//!   `stillfail update` does, by the cloud's installer (cloud/src/install.ts), run apart from the station (its own
 //!   process group, not waited for): the installer hands the running station over to the new release, or drains and
 //!   restarts it, so this process is gone (or another binary) by the time it ends. Only a release installed by that
 //!   installer (<data>/app) is: the desktop app's station comes with the desktop app, a clone's with the clone.
@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
-use ember_shapes::SoftwareVersion;
+use stillfail_shapes::SoftwareVersion;
 use serde_json::Value;
 use tokio::process::Command;
 use tokio::sync::watch;
@@ -79,7 +79,7 @@ impl Kind {
 
     fn name(self) -> &'static str {
         match self {
-            Kind::Station => "ember station",
+            Kind::Station => "still.fail station",
             Kind::Claude => "Claude Code",
             Kind::Codex => "Codex",
         }
@@ -87,7 +87,7 @@ impl Kind {
 
     fn command(self) -> &'static str {
         match self {
-            Kind::Station => "ember-station",
+            Kind::Station => "stillfail-station",
             Kind::Claude => "claude",
             Kind::Codex => "codex",
         }
@@ -145,7 +145,7 @@ pub struct Updates {
 }
 
 impl Updates {
-    /// `app`: the release this station runs from; `origin`: the ember cloud it is in, when it is.
+    /// `app`: the release this station runs from; `origin`: the still.fail cloud it is in, when it is.
     pub fn new(app: PathBuf, data: PathBuf, env: Env, origin: Box<dyn Fn() -> Option<String> + Send + Sync>) -> Arc<Updates> {
         let items = Default::default();
         Arc::new(Updates { app, data, env, origin, items: Mutex::new(items), checked: Mutex::new((None, false)), changes: watch::channel(0).0 })
@@ -230,7 +230,7 @@ impl Updates {
         let note = if installed(&self.app).is_some_and(|a| Some(a) == installed(&self.data.join("app"))) {
             None
         } else if self.app.to_string_lossy().contains(".app/Contents") {
-            Some("随 ember 桌面端一起更新".to_string())
+            Some("随 still.fail 桌面端一起更新".to_string())
         } else {
             Some("不是用安装脚本装的，没法在这里更新".to_string())
         };
@@ -313,7 +313,7 @@ impl Updates {
         Ok(())
     }
 
-    /// Runs ember cloud's installer apart from the station, as `ember update` does; it says how it ended in
+    /// Runs the cloud's installer apart from the station, as `stillfail update` does; it says how it ended in
     /// run/update.exit (and what it said in run/update.log), read here while this process is still the one running.
     fn update_station(self: &Arc<Self>) -> Result<()> {
         let origin = (self.origin)().ok_or_else(|| anyhow!("还没加入 workspace，无从更新"))?;
@@ -328,7 +328,8 @@ impl Updates {
             .args(["-c", script, "sh", &origin, &run_dir.to_string_lossy()])
             .env_clear()
             .envs(&self.env)
-            .env("EMBER_DATA", &self.data)
+            // Under both names: the cloud's installer from before the rename reads the old one.
+            .envs(crate::former::both("DATA").map(|name| (name, self.data.clone())))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -352,7 +353,7 @@ impl Updates {
                 let failed = match std::fs::read_to_string(&exit) {
                     Ok(code) if code.trim() == "0" => None,
                     Ok(code) => Some(tail(&std::fs::read_to_string(&log).unwrap_or_else(|_| format!("安装脚本退出码 {}", code.trim())))),
-                    Err(_) if now_ms() - started > STATION_LIMIT_MS => Some("安装脚本 20 分钟没有结束，看 ~/.ember/run/update.log".to_string()),
+                    Err(_) if now_ms() - started > STATION_LIMIT_MS => Some("安装脚本 20 分钟没有结束，看 ~/.stillfail/run/update.log".to_string()),
                     Err(_) => continue,
                 };
                 me.set(Kind::Station, |i| {
@@ -376,7 +377,7 @@ fn tail(said: &str) -> String {
 
 async fn fetch_json(url: &str) -> Result<Value> {
     let http = reqwest::Client::builder().timeout(Duration::from_secs(15)).build()?;
-    let response = http.get(url).header("user-agent", "ember-station").send().await?;
+    let response = http.get(url).header("user-agent", "stillfail-station").send().await?;
     if !response.status().is_success() {
         bail!("{url}: {}", response.status());
     }

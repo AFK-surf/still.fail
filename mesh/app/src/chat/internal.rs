@@ -70,7 +70,7 @@ impl ChatSurface for InternalChat {
     /// Nothing to send anywhere: the message is recorded under the ts this returns, and the page reads it from there.
     async fn post(&self, thread: &ThreadRef, _message: &str, _files: &[Attachment]) -> Result<String> {
         if thread.channel != INTERNAL_CHANNEL {
-            bail!("no ember chat {}/{}", thread.channel, thread.thread_ts);
+            bail!("no still.fail chat {}/{}", thread.channel, thread.thread_ts);
         }
         Ok(next_ts())
     }

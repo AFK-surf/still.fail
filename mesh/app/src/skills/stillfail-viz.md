@@ -1,16 +1,16 @@
 ---
-name: ember-viz
-description: Inline visualizations in ember chats (EMBER/…) — an HTML file attached with chat_post and placed in the text is drawn in the message as a small sandboxed page in ember's own look. Use when a diagram, chart, table, comparison, state machine, flow, or small interactive widget explains something better than prose, instead of rendering a PNG or describing it in words. In Slack threads the file stays in ember and the post links there.
+name: stillfail-viz
+description: Inline visualizations in still.fail chats (EMBER/…) — an HTML file attached with chat_post and placed in the text is drawn in the message as a small sandboxed page in still.fail's own look. Use when a diagram, chart, table, comparison, state machine, flow, or small interactive widget explains something better than prose, instead of rendering a PNG or describing it in words. In Slack threads the file stays in still.fail and the post links there.
 ---
 
 # Inline visualizations
 
-In an ember chat (EMBER/…) an HTML file you attach and place in your message is drawn there as a page of its own,
+In a still.fail chat (EMBER/…) an HTML file you attach and place in your message is drawn there as a page of its own,
 sized to its content, with a link to open the file itself. Nothing else is drawn as a page: an ```html code block
 shows as code, and an HTML file you attach without placing it shows as a file to open.
 
 For a plain diagram (a flow, a sequence, a state machine, a timeline) a ```mermaid block in the text is enough: it is
-drawn as a chart in ember's colours, no file needed. Use a file when you need layout, data or interaction.
+drawn as a chart in still.fail's colours, no file needed. Use a file when you need layout, data or interaction.
 
 ## Posting one
 
@@ -20,14 +20,14 @@ drawn as a chart in ember's colours, no file needed. Use a file when you need la
    Put the words that explain it around that line; the figure is not read aloud, and a phone app may show only the file.
 
 In a Slack thread, attach the file the same way but do not place it (Slack would show the link as typed): Slack
-takes no files, so ember keeps it with the message, adds a link to see it in ember at the end of the post, and draws
+takes no files, so still.fail keeps it with the message, adds a link to see it in still.fail at the end of the post, and draws
 it there. Say in the text what the figure shows, for those who stay in Slack.
 
 ## Writing one
 
 - Write a fragment, not a document: no `<html>`, `<head>` or `<body>`. `<style>` and `<script>` inside it are fine.
   Order it style, then markup, then script. Keep it well under 1 MB.
-- ember's stylesheet is already loaded (below): use its variables and classes, and add only the layout your figure
+- still.fail's stylesheet is already loaded (below): use its variables and classes, and add only the layout your figure
   needs.
 - It runs in a sandbox with no network: no fetch, XHR or WebSocket, and no access to the page, the station or files.
   Scripts and styles may come from cdnjs.cloudflare.com, esm.sh, cdn.jsdelivr.net and unpkg.com (a charting library,
@@ -38,7 +38,7 @@ it there. Say in the text what the figure shows, for those who stay in Slack.
 
 ## Talking back
 
-`window.ember` (also named `window.openai`, as Codex's Visualize has it):
+`window.ember` (the name it had before still.fail; also named `window.openai`, as Codex's Visualize has it):
 
 - `ember.widgetState` — what the widget kept last time it was shown (or null); `ember.setWidgetState(value)` keeps a
   JSON value of up to 16 KiB on the station, restored whenever and wherever the message is shown again. Put what you
@@ -53,7 +53,7 @@ it there. Say in the text what the figure shows, for those who stay in Slack.
 Light and dark follow the viewer's theme. Never hard-code colours (no `#fff`, `black`, `slate-500`): use the variables.
 
 - Surfaces and text: `--background`, `--foreground`, `--card`, `--muted`, `--muted-foreground`, `--border`,
-  `--border-strong`, `--primary` / `--primary-foreground` (ink buttons), `--accent` / `--accent-foreground` (ember's
+  `--border-strong`, `--primary` / `--primary-foreground` (ink buttons), `--accent` / `--accent-foreground` (still.fail's
   orange, tinted ground and text), `--brand` (the orange itself), `--destructive`.
 - Status and series: `--blue`, `--green`, `--orange`, `--red`, `--purple`, `--yellow`, each of the first five with a
   `-bg` ground (`--blue-bg`…); `--chart-1` … `--chart-6` in order for chart series. Tell series apart by label or

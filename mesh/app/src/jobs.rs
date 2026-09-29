@@ -1,6 +1,6 @@
 //! Background jobs: commands a session's agent starts that the station runs and keeps, apart from the agent's turns.
 //! Each runs in a process group of its own with its output in a log file; the agent hears when it ends, and whatever
-//! the job says on the way (`ember-job notify …`). A job with a port is a web service: kept up (started again when it
+//! the job says on the way (`stillfail-job notify …`). A job with a port is a web service: kept up (started again when it
 //! ends, with a growing pause), and seen by the workspace's members through the station's /preview. Jobs outlive the
 //! station: a restart takes up what still runs, and starts again what does not (the machine restarted).
 
@@ -38,18 +38,23 @@ const AWAKE: Duration = Duration::from_secs(5 * 60);
 /// start it (it outlived the one that did) still learns how it ended.
 const WRAPPER: &str = r#"/bin/sh -c "$1"; code=$?; printf '%s' "$code" > "$2"; exit "$code""#;
 
-/// What `ember-job` is, in each job's PATH: `ember-job notify <words>` (or the words on stdin) tells the agent.
-const EMBER_JOB: &str = r#"#!/bin/sh
-# ember-job notify <words>: tells the agent that started this job (the words, or stdin's).
+/// What `stillfail-job` is, in each job's PATH: `stillfail-job notify <words>` (or the words on stdin) tells the agent.
+/// `ember-job`, its name before the rename, is a link to it; a job started then has only the EMBER_JOB_* variables.
+const JOB_COMMAND: &str = r#"#!/bin/sh
+# stillfail-job notify <words>: tells the agent that started this job (the words, or stdin's).
+token=${STILLFAIL_JOB_TOKEN:-${EMBER_JOB_TOKEN:-}}
+notify=${STILLFAIL_JOB_NOTIFY:-${EMBER_JOB_NOTIFY:-}}
 case "$1" in
   notify)
     shift
     if [ "$#" -gt 0 ]; then printf '%s' "$*"; else cat; fi |
-      curl -fsS -X POST -H "Authorization: Bearer $EMBER_JOB_TOKEN" -H "content-type: text/plain; charset=utf-8" --data-binary @- "$EMBER_JOB_NOTIFY" >/dev/null
+      curl -fsS -X POST -H "Authorization: Bearer $token" -H "content-type: text/plain; charset=utf-8" --data-binary @- "$notify" >/dev/null
     ;;
-  *) echo "usage: ember-job notify <words>" >&2; exit 2 ;;
+  *) echo "usage: stillfail-job notify <words>" >&2; exit 2 ;;
 esac
 "#;
+const JOB_COMMAND_NAME: &str = "stillfail-job";
+const FORMER_JOB_COMMAND_NAME: &str = "ember-job";
 
 /// Tells a session's agent something (Hub::notify).
 pub type Notify = Arc<dyn Fn(&str, String) + Send + Sync>;
@@ -68,7 +73,7 @@ pub struct Jobs {
     dir: PathBuf,
     notify: Notify,
     link: Link,
-    /// Where `ember-job notify` posts (the MCP endpoint's /jobs/notify).
+    /// Where `stillfail-job notify` posts (the MCP endpoint's /jobs/notify).
     notify_url: Mutex<String>,
     running: Mutex<HashMap<String, Running>>,
     /// Shutting down: jobs go on without the station and stay recorded as running, to be taken up by the next one.
@@ -117,12 +122,20 @@ impl Jobs {
         std::fs::create_dir_all(dir.join("logs"))?;
         std::fs::create_dir_all(dir.join("bin"))?;
         std::fs::create_dir_all(dir.join("exit"))?;
-        let script = dir.join("bin").join("ember-job");
-        std::fs::write(&script, EMBER_JOB)?;
+        let script = dir.join("bin").join(JOB_COMMAND_NAME);
+        std::fs::write(&script, JOB_COMMAND)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))?;
+        }
+        // The old name, for jobs and agents used to it: a link to the new one (in place of the script it was).
+        let former = dir.join("bin").join(FORMER_JOB_COMMAND_NAME);
+        if std::fs::read_link(&former).ok().as_deref() != Some(Path::new(JOB_COMMAND_NAME)) {
+            let aside = dir.join("bin").join(format!(".{FORMER_JOB_COMMAND_NAME}.{}", std::process::id()));
+            let _ = std::fs::remove_file(&aside);
+            std::os::unix::fs::symlink(JOB_COMMAND_NAME, &aside)?;
+            std::fs::rename(&aside, &former)?;
         }
         Ok(Arc::new_cyclic(|me| Jobs {
             store,
@@ -136,7 +149,7 @@ impl Jobs {
         }))
     }
 
-    /// Where `ember-job notify` posts, once the endpoint listens.
+    /// Where `stillfail-job notify` posts, once the endpoint listens.
     pub fn set_notify_url(&self, url: String) {
         *self.notify_url.lock().unwrap() = url;
     }
@@ -216,14 +229,15 @@ impl Jobs {
         command
             .arg("-c")
             .arg(WRAPPER)
-            .arg("ember-job")
+            .arg(JOB_COMMAND_NAME)
             .arg(&job.command)
             .arg(&exit)
             .current_dir(&job.cwd)
             .env("PATH", path)
-            .env("EMBER_JOB_ID", &job.id)
-            .env("EMBER_JOB_TOKEN", &job.token)
-            .env("EMBER_JOB_NOTIFY", self.notify_url.lock().unwrap().clone())
+            // Under both names: scripts written against the old ones go on working.
+            .envs(crate::former::both("JOB_ID").map(|name| (name, job.id.clone())))
+            .envs(crate::former::both("JOB_TOKEN").map(|name| (name, job.token.clone())))
+            .envs(crate::former::both("JOB_NOTIFY").map(|name| (name, self.notify_url.lock().unwrap().clone())))
             .stdin(std::process::Stdio::null())
             .stdout(log.try_clone()?)
             .stderr(log)
@@ -350,7 +364,7 @@ impl Jobs {
     pub async fn stop_for(&self, id: &str, who: &str) -> Result<JobRow> {
         let job = self.stop(id).await?;
         if self.awake(&job.session_key) {
-            self.tell(&job, format!("{} was stopped by {who} from ember's page.", Self::named(&job)));
+            self.tell(&job, format!("{} was stopped by {who} from still.fail's page.", Self::named(&job)));
         }
         Ok(job)
     }
@@ -438,7 +452,7 @@ impl Jobs {
         self.closing.store(true, Ordering::SeqCst);
     }
 
-    /// `ember-job notify`: the job with this token tells its agent something.
+    /// `stillfail-job notify`: the job with this token tells its agent something.
     pub fn notified(&self, token: &str, text: &str) -> Result<()> {
         let job = self.store.job_by_token(token)?.ok_or_else(|| anyhow!("unknown job token"))?;
         let text: String = text.trim().chars().take(4000).collect();

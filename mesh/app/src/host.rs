@@ -42,8 +42,9 @@ pub struct HostInfo {
     pub uptime_sec: u64,
     pub memory: HostMemory,
     pub disk: HostDisk,
-    /// The station's own process.
-    pub ember_rss_bytes: u64,
+    /// The station's own process (named on the wire as before the rename).
+    #[serde(rename = "emberRssBytes")]
+    pub stillfail_rss_bytes: u64,
     pub checked_at: i64,
 }
 
@@ -178,7 +179,7 @@ pub async fn host_info(data_dir: &Path) -> HostInfo {
     if let Some(cached) = CACHED.lock().unwrap().clone().filter(|c| now_ms() - c.checked_at < 10_000) {
         return cached;
     }
-    let (memory, os, cpu_model, uptime_sec, ember_rss_bytes) = tokio::join!(memory(), os_name(), cpu_model(), uptime_sec(), own_rss());
+    let (memory, os, cpu_model, uptime_sec, stillfail_rss_bytes) = tokio::join!(memory(), os_name(), cpu_model(), uptime_sec(), own_rss());
     let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
     let value = HostInfo {
         hostname: hostname(),
@@ -190,7 +191,7 @@ pub async fn host_info(data_dir: &Path) -> HostInfo {
         uptime_sec,
         memory,
         disk: disk(data_dir),
-        ember_rss_bytes,
+        stillfail_rss_bytes,
         checked_at: now_ms(),
     };
     *CACHED.lock().unwrap() = Some(value.clone());
@@ -207,7 +208,7 @@ mod tests {
         let info = host_info(dir.path()).await;
         assert!(info.cpus >= 1 && !info.os.is_empty() && !info.hostname.is_empty());
         assert!(info.memory.total_bytes > 0 && info.memory.used_bytes <= info.memory.total_bytes);
-        assert!(info.disk.total_bytes > 0 && info.ember_rss_bytes > 0 && info.uptime_sec > 0);
+        assert!(info.disk.total_bytes > 0 && info.stillfail_rss_bytes > 0 && info.uptime_sec > 0);
         let json = serde_json::to_value(&info).unwrap();
         assert!(json["memory"]["totalBytes"].is_u64() && json["cpuModel"].is_string());
         assert_eq!(host_info(dir.path()).await.checked_at, info.checked_at, "read again within ten seconds: the same");

@@ -37,7 +37,7 @@ pub struct SlackIdentity {
 
 /// Where Slack's Web API is (tests point it elsewhere).
 fn api_base() -> String {
-    std::env::var("EMBER_SLACK_API").unwrap_or_else(|_| "https://slack.com/api".into())
+    crate::former::var("SLACK_API").unwrap_or_else(|| "https://slack.com/api".into())
 }
 
 fn client() -> &'static reqwest::Client {
@@ -378,7 +378,7 @@ impl ChatSurface for SlackSurface {
         self.profile(user).await.map(|p| p.name).filter(|n| !n.is_empty())
     }
 
-    /// The person's email (users:read.email), which ties a Slack user to an ember cloud account.
+    /// The person's email (users:read.email), which ties a Slack user to a still.fail cloud account.
     async fn user_email(&self, user: &str) -> Option<String> {
         self.profile(user).await.map(|p| p.email).filter(|e| !e.is_empty())
     }

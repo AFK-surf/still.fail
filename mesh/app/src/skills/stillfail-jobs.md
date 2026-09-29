@@ -1,6 +1,6 @@
 ---
-name: ember-jobs
-description: Background jobs and web services on the ember station (job_start, job_list, job_log, job_stop, ember-job notify). Use when work outlives a turn (long builds, test suites, data jobs, watchers) or when people should see or use something in a browser (a page, prototype, chart, report, dashboard, tool UI) — instead of blocking a turn, pasting walls of output, or describing a UI in words.
+name: stillfail-jobs
+description: Background jobs and web services on the still.fail station (job_start, job_list, job_log, job_stop, stillfail-job notify). Use when work outlives a turn (long builds, test suites, data jobs, watchers) or when people should see or use something in a browser (a page, prototype, chart, report, dashboard, tool UI) — instead of blocking a turn, pasting walls of output, or describing a UI in words.
 ---
 
 # Background jobs and web services
@@ -26,8 +26,8 @@ Not for quick commands: run those directly. Not for work that must finish before
   workspace as the place for clones and outputs.
 - Tell the people waiting that it runs and what you will tell them, then end the turn (`chat_post` kind "final", or
   "block" only if they must act). You do not need to stay in the turn: you are woken when the job ends.
-- For a long job, have it report milestones or trouble with `ember-job notify "<words>"` from inside the command (for
-  example `make all && ember-job notify "build done, running tests" && make test`). Each notice reaches you as a message
+- For a long job, have it report milestones or trouble with `stillfail-job notify "<words>"` from inside the command (for
+  example `make all && stillfail-job notify "build done, running tests" && make test`; `ember-job` is the same command). Each notice reaches you as a message
   via="ember"; act on it (relay what matters to people, fix and restart on failure). Do not notify for every line.
 - When it ends you get its exit code and last lines. Read more with `job_log` (`lines` up to 1000). `job_list` shows this
   session's jobs and their states; `job_stop` ends one.
@@ -56,7 +56,7 @@ need to reach (a plain background job is enough).
 - Give it a name people will recognise (`name`): the pages show services by their names, never their ports. When you
   speak of it, use that name and the link; the port is the station's business, not theirs.
 - Post the returned `link` where people asked, saying what it is (in Slack: `<link|what it is>`). The link opens the
-  service beside this session in ember, for the workspace's members only: it is not a public URL; do not hand it out as
+  service beside this session in still.fail, for the workspace's members only: it is not a public URL; do not hand it out as
   one.
 - One service per port. To restart after changes, `job_stop` it and start it again (or use a dev server that reloads by
   itself). If it keeps crashing, the station restarts it with growing pauses and tells you each time: read `job_log`,

@@ -1,4 +1,4 @@
-//! The station's app (ember-app), run in this process, and its admin page on a loopback port for a browser here. The
+//! The station's app (stillfail-app), run in this process, and its admin page on a loopback port for a browser here. The
 //! port is the usual 4760 unless something else holds it (then any free one), or the one asked for with --port (then
 //! taken is an error); it is written to <data>/run/ports.json.
 
@@ -8,18 +8,18 @@ use anyhow::{Result, bail};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full, combinators::UnsyncBoxBody};
 use hyper::{Request, Response, StatusCode, body::Incoming, service::service_fn};
-use ember_app::handoff::{Door, serve_http1};
+use stillfail_app::handoff::{Door, serve_http1};
 use tokio::{net::TcpListener, sync::watch};
 use tracing::{info, warn};
 
 pub type Body = UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 
 /// Who a request is from, when the mesh verified them (a local request says nothing of itself).
-pub type MeshViewer = ember_app::access::Viewer;
+pub type MeshViewer = stillfail_app::access::Viewer;
 
 /// Where requests go: the app in this process, once it has started.
 #[derive(Clone, Default)]
-pub struct Backend(pub Arc<OnceLock<Arc<ember_app::server::App>>>);
+pub struct Backend(pub Arc<OnceLock<Arc<stillfail_app::server::App>>>);
 
 impl Backend {
     /// One request, on behalf of `viewer` (the mesh's) or of this machine (None).
@@ -84,14 +84,15 @@ pub fn serve(listener: TcpListener, backend: Backend, ready: watch::Receiver<boo
 
 async fn pass(backend: &Backend, ready: bool, mut req: Request<Incoming>) -> Response<Body> {
     if !ready {
-        return plain(StatusCode::SERVICE_UNAVAILABLE, "ember station is starting");
+        return plain(StatusCode::SERVICE_UNAVAILABLE, "still.fail station is starting");
     }
     // Only the mesh says who a remote viewer is; a local request never does.
-    req.headers_mut().remove("x-ember-mesh");
-    req.headers_mut().remove("x-ember-viewer");
+    for name in ["x-stillfail-mesh", "x-stillfail-viewer", "x-ember-mesh", "x-ember-viewer"] {
+        req.headers_mut().remove(name);
+    }
     match backend.call(req, None).await {
         Ok(response) => response,
-        Err(error) => plain(StatusCode::BAD_GATEWAY, &format!("ember station is not answering: {error}")),
+        Err(error) => plain(StatusCode::BAD_GATEWAY, &format!("still.fail station is not answering: {error}")),
     }
 }
 

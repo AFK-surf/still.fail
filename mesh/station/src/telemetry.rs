@@ -1,7 +1,7 @@
 //! The station's traces: the mesh's own spans (a request stream from
 //! accepted to fully answered). Batched, and sent at most every
-//! EXPORT to ember cloud's `/v1/telemetry/traces`, signed with the station's
-//! key like the presence socket; ember cloud forwards them to Axiom. A batch
+//! EXPORT to still.fail cloud's `/v1/telemetry/traces`, signed with the station's
+//! key like the presence socket; the cloud forwards them to Axiom. A batch
 //! that cannot be sent is dropped. Off unless the station's config turns
 //! traces on (telemetry.traces).
 
@@ -22,7 +22,7 @@ use crate::{Station, http, now};
 const EXPORT: Duration = Duration::from_secs(3);
 /// Spans kept while waiting; beyond this they are dropped.
 const MAX_BUFFER: usize = 2_000;
-/// At most this many spans in one batch (ember cloud caps a batch's size).
+/// At most this many spans in one batch (the cloud caps a batch's size).
 const MAX_BATCH: usize = 500;
 
 /// A W3C trace context: the trace, the caller's span, whether it is recorded.
@@ -101,7 +101,7 @@ impl Telemetry {
             "attributes": attributes.iter().map(|(k, v)| attribute(k, v)).collect::<Vec<_>>(),
             "status": { "code": if failed { 2 } else { 1 } },
         });
-        self.record("ember-mesh", value);
+        self.record("stillfail-mesh", value);
     }
 
     fn record(&self, service: &'static str, span: Value) {
@@ -144,7 +144,8 @@ impl Telemetry {
     }
 }
 
-/// Posts one batch, signed over "ember-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>".
+/// Posts one batch, signed over "ember-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>" (the
+/// signed words keep the old name, as the presence socket's do), its headers under both names.
 async fn send(client: &reqwest::Client, station: &Station, key: &SecretKey, batch: Vec<(&'static str, Value)>) -> anyhow::Result<()> {
     let (origin, id) = {
         let s = station.state.lock().unwrap();
@@ -159,7 +160,7 @@ async fn send(client: &reqwest::Client, station: &Station, key: &SecretKey, batc
     }
     let body = serde_json::to_vec(&json!({
         "resourceSpans": services.into_iter().map(|(service, spans)| json!({
-            "resource": { "attributes": [attribute("service.name", &json!(service)), attribute("ember.station", &json!(id))] },
+            "resource": { "attributes": [attribute("service.name", &json!(service)), attribute("stillfail.station", &json!(id))] },
             "scopeSpans": [{ "scope": { "name": service }, "spans": spans }],
         })).collect::<Vec<_>>(),
     }))?;
@@ -169,6 +170,9 @@ async fn send(client: &reqwest::Client, station: &Station, key: &SecretKey, batc
     let response = client
         .post(format!("{origin}/v1/telemetry/traces"))
         .header("content-type", "application/json")
+        .header("x-stillfail-station", &id)
+        .header("x-stillfail-ts", ts.to_string())
+        .header("x-stillfail-signature", &signature)
         .header("x-ember-station", &id)
         .header("x-ember-ts", ts.to_string())
         .header("x-ember-signature", signature)
@@ -176,7 +180,7 @@ async fn send(client: &reqwest::Client, station: &Station, key: &SecretKey, batc
         .send()
         .await?;
     if !response.status().is_success() {
-        anyhow::bail!("ember cloud answered {}", response.status());
+        anyhow::bail!("still.fail cloud answered {}", response.status());
     }
     info!("traces sent");
     Ok(())
@@ -244,7 +248,7 @@ mod tests {
         on.end(span, "GET /admin/api/threads".into(), &[("http.response.status_code", json!(200))], false);
         let spans = on.spans.lock().unwrap();
         let (service, span) = &spans[0];
-        assert_eq!(*service, "ember-mesh");
+        assert_eq!(*service, "stillfail-mesh");
         assert_eq!(span["parentSpanId"], "00f067aa0ba902b7");
         assert_eq!(span["attributes"][0]["value"]["intValue"], "200");
         assert_eq!(&traceparent[36..52], span["spanId"].as_str().unwrap());

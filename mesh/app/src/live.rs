@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use serde::Serialize;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;

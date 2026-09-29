@@ -1,5 +1,5 @@
 //! The admin API behind /admin/api. Who asks is decided before it gets here: the station verifies people coming
-//! through ember cloud, and the local server lets this machine in and checks Cloudflare Access for the tunnel
+//! through still.fail cloud, and the local server lets this machine in and checks Cloudflare Access for the tunnel
 //! (access.rs).
 //!
 //! Clients follow GET /events instead of asking again on a timer: every change to what the API shows is announced
@@ -42,11 +42,11 @@ pub use events::Events;
 /// What a response carries: a whole body, or one that streams (events, files, previews).
 pub type Body = UnsyncBoxBody<Bytes, std::io::Error>;
 
-/// This station's link to ember cloud, as the pages show it.
+/// This station's link to still.fail cloud, as the pages show it.
 #[derive(serde::Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MeshStatus {
-    /// off: not in a workspace; running: in one, reachable through ember cloud while this station runs.
+    /// off: not in a workspace; running: in one, reachable through still.fail cloud while this station runs.
     pub state: String,
     pub origin: Option<String>,
     pub station: Option<String>,
@@ -56,7 +56,7 @@ pub struct MeshStatus {
     pub name: Option<String>,
 }
 
-/// The station's side of ember cloud, for the pages: its state, and when it changes.
+/// The station's side of still.fail cloud, for the pages: its state, and when it changes.
 pub trait Mesh: Send + Sync {
     fn status(&self) -> MeshStatus;
     fn changes(&self) -> watch::Receiver<u64>;
@@ -123,7 +123,7 @@ pub struct AdminDeps {
     pub hub: Arc<Hub>,
     pub connections: Arc<Connections>,
     pub logins: Arc<LoginManager>,
-    /// Display names of people seen through ember cloud, by email; shared with the station's own chat.
+    /// Display names of people seen through still.fail cloud, by email; shared with the station's own chat.
     pub names: Arc<Mutex<HashMap<String, String>>>,
     pub mesh: Option<Arc<dyn Mesh>>,
     /// A profile's allowance; None where nobody can ask (tests).
@@ -141,7 +141,7 @@ pub struct AdminDeps {
     pub machine_logins: Option<Arc<MachineLogins>>,
     /// The station's and its runtimes' versions, and updating them; None where nothing is to be updated (tests).
     pub updates: Option<Arc<crate::updates::Updates>>,
-    /// Development only (EMBER_DEV=1): POST /dev/inject.
+    /// Development only (STILLFAIL_DEV=1): POST /dev/inject.
     pub dev: bool,
     /// Background jobs, for the pages to stop one; None where there are none (tests).
     pub jobs: Option<Arc<crate::jobs::Jobs>>,
@@ -161,7 +161,7 @@ pub fn http_error(status: u16, message: impl Into<String>) -> anyhow::Error {
 
 /// A sign-in with no profile yet: its runtime, its home while signing in, who started it, what it made.
 struct Pending {
-    runtime: ember_shapes::RuntimeKind,
+    runtime: stillfail_shapes::RuntimeKind,
     home: std::path::PathBuf,
     by: Viewer,
     created: Option<String>,
@@ -452,8 +452,8 @@ impl AdminApi {
                 // first message.
                 let input = read_json(body).await?;
                 let runtime = match input.text("runtime").as_str() {
-                    "claude" => ember_shapes::RuntimeKind::Claude,
-                    "codex" => ember_shapes::RuntimeKind::Codex,
+                    "claude" => stillfail_shapes::RuntimeKind::Claude,
+                    "codex" => stillfail_shapes::RuntimeKind::Codex,
                     _ => return Err(http_error(400, "runtime 必须是 claude 或 codex")),
                 };
                 let given = |k: &str| input.str(k).filter(|s| !s.is_empty()).map(String::from);
@@ -488,8 +488,8 @@ impl AdminApi {
             ("POST", "/machine-sessions") => {
                 let input = read_json(body).await?;
                 let runtime = match input.text("runtime").as_str() {
-                    "claude" => ember_shapes::RuntimeKind::Claude,
-                    "codex" => ember_shapes::RuntimeKind::Codex,
+                    "claude" => stillfail_shapes::RuntimeKind::Claude,
+                    "codex" => stillfail_shapes::RuntimeKind::Codex,
                     _ => return Err(http_error(400, "runtime 必须是 claude 或 codex")),
                 };
                 let id = input.text("id");
@@ -728,8 +728,8 @@ impl AdminApi {
                     (None, "GET") => return ok(self.thread(thread_id, viewer)?),
                     (Some("entries"), "GET") => return ok(self.entries(thread_id, asked)?),
                     (Some("messages"), "POST") => {
-                        if thread.surface != crate::store::EMBER_SURFACE {
-                            return Err(http_error(400, "只能在 ember 自己的对话里发消息"));
+                        if thread.surface != crate::store::STILLFAIL_SURFACE {
+                            return Err(http_error(400, "只能在 still.fail 自己的对话里发消息"));
                         }
                         let input = read_json(body).await?;
                         let text = input.text("text").trim().to_string();
@@ -757,7 +757,7 @@ impl AdminApi {
                     }
                     // A chat named by hand; no name (or an empty one) names it by its first message again.
                     (Some("title"), "PUT") => {
-                        if thread.surface != crate::store::EMBER_SURFACE {
+                        if thread.surface != crate::store::STILLFAIL_SURFACE {
                             return Err(http_error(400, "只能给 ember 自己的对话改名"));
                         }
                         let input = read_json(body).await?;
@@ -825,7 +825,7 @@ impl AdminApi {
                         return ok(json!({ "job": self.deps.logins.get(id) }));
                     }
                     "POST" => {
-                        if profile.access_kind != ember_shapes::AccessKind::Subscription {
+                        if profile.access_kind != stillfail_shapes::AccessKind::Subscription {
                             return Err(http_error(400, "只有订阅账号需要登录"));
                         }
                         if profile.machine {

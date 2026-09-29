@@ -1,4 +1,4 @@
-//! The station's errors, as its log says them, sent to ember's error tracking (ember-app's ErrorReports) while the
+//! The station's errors, as its log says them, sent to still.fail's error tracking (stillfail-app's ErrorReports) while the
 //! config turns that on (`telemetry.errors`).
 
 use std::sync::{Arc, OnceLock};
@@ -8,7 +8,7 @@ use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::layer::{Context, Layer};
 
 /// Where errors go, once the app has made it.
-pub static REPORTS: OnceLock<Arc<ember_app::telemetry::ErrorReports>> = OnceLock::new();
+pub static REPORTS: OnceLock<Arc<stillfail_app::telemetry::ErrorReports>> = OnceLock::new();
 
 /// An error-level event's words: its message, and its `error` field when it has one.
 #[derive(Default)]

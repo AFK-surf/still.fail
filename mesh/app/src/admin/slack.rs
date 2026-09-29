@@ -221,14 +221,14 @@ impl AdminApi {
         }
     }
 
-    /// Makes a Slack app for a connect to come. On a station in ember cloud it is made to be installed through Slack's
-    /// OAuth: `install` is the link, and Slack sends the person back to ember cloud's page, which hands the code to this
+    /// Makes a Slack app for a connect to come. On a station in still.fail cloud it is made to be installed through Slack's
+    /// OAuth: `install` is the link, and Slack sends the person back to still.fail cloud's page, which hands the code to this
     /// station (POST /slack/installs), which takes the bot token for it. Elsewhere the token is copied.
     pub(super) async fn make_slack_app(&self, input: &Input, viewer: &Viewer) -> Result<Value> {
         let by = viewer.id();
         let team = self.team_for(input, viewer)?;
         let mut edit: SlackAppEdit = input.get("settings").filter(|s| s.is_object()).and_then(|s| serde_json::from_value(s.clone()).ok()).unwrap_or_default();
-        let name = edit.name.as_deref().map(str::trim).filter(|n| !n.is_empty()).unwrap_or("ember").to_string();
+        let name = edit.name.as_deref().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(crate::chat::slack_apps::DEFAULT_APP_NAME).to_string();
         if edit.background_color.as_deref().is_some_and(|c| !c.is_empty() && !color_ok(c)) {
             return Err(http_error(400, "背景色要写成 #RRGGBB"));
         }
@@ -248,7 +248,7 @@ impl AdminApi {
         let mut made = SlackAppMade { app_id: app.app_id.clone(), name: shown, team_id: team, by, created: crate::store::now_ms(), oauth: None };
         if let (Some(redirect), Some(mesh)) = (&redirect, &mesh) {
             if !app.client_id.is_empty() && !app.client_secret.is_empty() {
-                // Which station it is for goes with it, so ember cloud's page knows where to hand the code.
+                // Which station it is for goes with it, so still.fail cloud's page knows where to hand the code.
                 let state = format!("{}/{}~{}", mesh.workspace_id.clone().unwrap_or_default(), mesh.station.clone().unwrap_or_default(), random_hex(16));
                 let scopes: Vec<String> = manifest["oauth_config"]["scopes"]["bot"].as_array().into_iter().flatten().filter_map(Value::as_str).map(String::from).collect();
                 let install = format!(
@@ -341,7 +341,7 @@ impl AdminApi {
         if let Some(made) = &made {
             self.socket_mode_on(made).await?;
         }
-        let name = if identity.bot_name.is_empty() { "ember".to_string() } else { identity.bot_name.clone() };
+        let name = if identity.bot_name.is_empty() { crate::chat::slack_apps::DEFAULT_APP_NAME.to_string() } else { identity.bot_name.clone() };
         let taken: HashSet<String> = self.config().connects.iter().map(|c| c.id.clone()).collect();
         let base = connect_slug(&name);
         let mut id = base.clone();
@@ -398,7 +398,7 @@ impl AdminApi {
         Ok(json!({ "appId": app.app_id, "links": slack_app_links(&app.app_id, Some(&team)) }))
     }
 
-    /// The Slack workspaces ember makes apps in: a configuration token each, added by its refresh token.
+    /// The Slack workspaces the station makes apps in: a configuration token each, added by its refresh token.
     pub(super) async fn add_config_token(&self, input: &Input, viewer: &Viewer) -> Result<Value> {
         let refresh = input.text("refreshToken").trim().to_string();
         if !refresh.starts_with("xoxe-") {
@@ -430,7 +430,7 @@ impl AdminApi {
     }
 
     /// The people of the Slack workspaces this station's connects are in, once each by email, for adding them to the
-    /// ember workspace: bots and deactivated accounts left out; guests marked. Needs users:read.email to see emails.
+    /// still.fail workspace: bots and deactivated accounts left out; guests marked. Needs users:read.email to see emails.
     pub(super) async fn slack_people(&self) -> Value {
         let mut people: Vec<Value> = vec![];
         let mut seen = HashSet::new();

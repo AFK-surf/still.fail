@@ -375,7 +375,7 @@ async fn a_new_session_first_says_where_it_can_be_followed_multi_session_connect
     settle().await;
     let posts = r.chat.posts.lock().unwrap().clone();
     assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].1, format!("<https://ember.test/o/ws/st/cl%3AC1%3A{}|在 ember 里查看这个会话>", m.thread_ts));
+    assert_eq!(posts[0].1, format!("<https://ember.test/o/ws/st/cl%3AC1%3A{}|在 still.fail 里查看这个会话>", m.thread_ts));
     assert_eq!(posts[0].0, ThreadRef::new("C1", &m.thread_ts));
     // Its next message is the same session: nothing more.
     r.accept(&InboundMessage { thread_ts: m.thread_ts.clone(), ..say("<@UBOT> and the tests") }).await;
@@ -1349,7 +1349,7 @@ async fn a_session_the_machine_kept_goes_on_in_a_chat_run_in_its_own_directory_w
     let said = r.said(thread.id);
     // Only a note of where it came from, linking to what was said before: nothing of it is copied into the chat.
     assert_eq!(said.len(), 1);
-    assert_eq!(said[0].author_kind, AuthorKind::Ember);
+    assert_eq!(said[0].author_kind, AuthorKind::StillFail);
     assert!(said[0].text.starts_with("接着本机 Claude Code 在"), "{}", said[0].text);
     // At its history's last entry as it came: the transcript's timeline (user, assistant, tool call and result, …).
     let mut tail = crate::transcript::TranscriptTail::new(RuntimeKind::Claude, found.path.clone());
@@ -1367,15 +1367,15 @@ async fn a_session_the_machine_kept_goes_on_in_a_chat_run_in_its_own_directory_w
     assert_eq!(opened.options.instructions, "", "its system prompt is left as it began");
     assert_eq!(opened.prompts().len(), 1);
     let first = &opened.prompts()[0];
-    assert!(first.starts_with("This session began in a terminal and now goes on in ember"), "{first}");
-    assert!(first.contains("<ember-instructions>") && first.contains("and the tests"));
+    assert!(first.starts_with("This session began in a terminal and now goes on in still.fail"), "{first}");
+    assert!(first.contains("<stillfail-instructions>") && first.contains("and the tests"));
     assert!(first.contains(&format!("- Project directory: {}.", project.display())));
     opened.complete();
     settle().await;
     r.hub.say(thread.id, "local", "one more", vec![], vec![]).unwrap();
     settle().await;
     let next = r.claude.last().prompts().last().cloned().unwrap();
-    assert!(!next.contains("<ember-instructions>"), "said once: {next}");
+    assert!(!next.contains("<stillfail-instructions>"), "said once: {next}");
 
     // Going on with it again is the same chat.
     let again = crate::machine_sessions::find(&roots, RuntimeKind::Claude, &found.id).unwrap();
@@ -1401,12 +1401,12 @@ async fn a_session_whose_directory_is_gone_is_not_continued() {
 }
 
 #[test]
-fn files_posted_to_slack_stay_in_ember_and_the_post_links_there() {
+fn files_posted_to_slack_stay_in_still_fail_and_the_post_links_there() {
     let file = |name: &str| Attachment { name: name.into(), path: format!("/w/uploads/{name}"), size: 1, width: None, height: None, thumbhash: None };
     let (posted, kept) = slack_with_files("这周的天气", &[file("weather.html"), file("shot.png")], "https://e/o/w/s/k");
-    assert_eq!(posted, "这周的天气\n\n<https://e/o/w/s/k?file=weather.html|在 ember 里查看图表和附件>", "the link opens the figure");
-    assert_eq!(kept, "这周的天气\n\n[weather.html](weather.html)", "the HTML placed so ember draws it; an image shows below as ever");
+    assert_eq!(posted, "这周的天气\n\n<https://e/o/w/s/k?file=weather.html|在 still.fail 里查看图表和附件>", "the link opens the figure");
+    assert_eq!(kept, "这周的天气\n\n[weather.html](weather.html)", "the HTML placed so still.fail draws it; an image shows below as ever");
     let (posted, kept) = slack_with_files("看图：[天气](weather.html)", &[file("weather.html")], "L");
-    assert_eq!((posted.as_str(), kept.as_str()), ("看图：[天气](weather.html)\n\n<L?file=weather.html|在 ember 里查看图表>", "看图：[天气](weather.html)"), "placed already: kept as written");
-    assert_eq!(slack_with_files("", &[file("a b.pdf")], "L"), ("<L?file=a%20b.pdf|在 ember 里查看附件>".into(), String::new()));
+    assert_eq!((posted.as_str(), kept.as_str()), ("看图：[天气](weather.html)\n\n<L?file=weather.html|在 still.fail 里查看图表>", "看图：[天气](weather.html)"), "placed already: kept as written");
+    assert_eq!(slack_with_files("", &[file("a b.pdf")], "L"), ("<L?file=a%20b.pdf|在 still.fail 里查看附件>".into(), String::new()));
 }

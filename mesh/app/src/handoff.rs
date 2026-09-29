@@ -1,4 +1,4 @@
-//! Handing the station over to its next binary without stopping its agents (`ember update`).
+//! Handing the station over to its next binary without stopping its agents (`stillfail update`).
 //!
 //! The station execs the new binary in its own process: the pid stays, so the runtimes and jobs it started stay its
 //! children, and whatever it keeps open across exec goes on. Before that it stops taking anything new: its listening

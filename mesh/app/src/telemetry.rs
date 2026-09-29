@@ -1,8 +1,8 @@
-//! This station's errors, reported to ember's PostHog project (docs/telemetry.md). Off unless the
+//! This station's errors, reported to still.fail's PostHog project (docs/telemetry.md). Off unless the
 //! station's operator turns it on in config.json (`"telemetry": { "errors": true }`). Only errors leave: error-level
 //! log lines, each with its error's message, the station's id and the build. Never a log line's fields, which may hold
 //! what people wrote; paths under home directories lose the home, and quoted text in error messages (a JSON parser's,
-//! for one, quotes its input) is cut. The station's traces are ember-station's (mesh/station/src/telemetry.rs); what
+//! for one, quotes its input) is cut. The station's traces are stillfail-station's (mesh/station/src/telemetry.rs); what
 //! turns a log line into a report is the station's logging (it calls `report` for its error events).
 
 use std::path::Path;
@@ -128,7 +128,7 @@ impl ErrorReports {
                 "station": station,
                 "release": self.options.key.as_ref().map(|k| k.release.clone()),
                 "$process_person_profile": false,
-                "$lib": "ember-station",
+                "$lib": "stillfail-station",
             },
         });
         if let Some((tx, _)) = self.sender.lock().unwrap().as_ref() {

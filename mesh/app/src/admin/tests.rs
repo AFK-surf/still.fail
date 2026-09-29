@@ -11,7 +11,7 @@ use std::time::Duration;
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use bytes::Bytes;
-use ember_shapes::RuntimeKind;
+use stillfail_shapes::RuntimeKind;
 use futures_util::future::BoxFuture;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response};
@@ -1206,7 +1206,7 @@ async fn a_chat_is_renamed_by_hand_and_named_by_its_first_message_again_when_the
     assert_eq!(t.call("PUT", "/threads/99999/title", Some(json!({ "title": "x" }))).await.0, 404);
     t.hub.accept("ds", at("12.000001", "12.000001", "U42", "<@UBOT> hi", true)).await.unwrap();
     settle().await;
-    let slack = t.store.list_threads("local", None, None).unwrap().into_iter().find(|x| x.thread.surface != crate::store::EMBER_SURFACE).unwrap().thread.id;
+    let slack = t.store.list_threads("local", None, None).unwrap().into_iter().find(|x| x.thread.surface != crate::store::STILLFAIL_SURFACE).unwrap().thread.id;
     assert_eq!(t.call("PUT", &format!("/threads/{slack}/title"), Some(json!({ "title": "x" }))).await.0, 400, "a Slack thread is named in Slack");
 }
 
@@ -1495,13 +1495,13 @@ async fn a_profile_on_the_machines_own_login_made_from_a_login_kept_in_a_file_it
     let profile = |s: &Rig| s.config().profiles.iter().find(|p| p.id == "machine-claude").cloned().unwrap();
     assert!(profile(&s).machine);
     assert_eq!(profile(&s).name, "b@x.com（本机）");
-    assert_eq!(profile(&s).access_kind, ember_shapes::AccessKind::Subscription);
+    assert_eq!(profile(&s).access_kind, stillfail_shapes::AccessKind::Subscription);
     assert_eq!(s.call("POST", "/profiles/machine", Some(json!({ "runtime": "claude" }))).await.0, 409);
     // Only its models are chosen here.
     assert_eq!(s.call("PUT", "/profiles/machine-claude", Some(json!({ "name": "renamed", "models": ["claude-x"], "access": { "kind": "opencode-go", "key": "k" } }))).await.0, 200);
     assert_eq!(profile(&s).name, "b@x.com（本机）");
     assert_eq!(profile(&s).models, ["claude-x"]);
-    assert_eq!(profile(&s).access_kind, ember_shapes::AccessKind::Subscription);
+    assert_eq!(profile(&s).access_kind, stillfail_shapes::AccessKind::Subscription);
     assert!(profile(&s).machine);
     let body = s.get("/overview").await;
     assert_eq!(body["profiles"].as_array().unwrap().iter().find(|p| p["id"] == "machine-claude").unwrap()["machine"], true);

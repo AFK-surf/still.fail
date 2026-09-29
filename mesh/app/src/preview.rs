@@ -58,7 +58,7 @@ pub async fn proxy_preview(method: &str, headers: &[(String, String)], body: req
     };
     let mut request = CLIENT.request(method, format!("http://localhost:{port}{path}"));
     for (name, value) in headers {
-        if !HOP.contains(&name.as_str()) && !name.starts_with("x-ember-") && name != "accept-encoding" {
+        if !HOP.contains(&name.as_str()) && !name.starts_with("x-stillfail-") && !name.starts_with("x-ember-") && name != "accept-encoding" {
             request = request.header(name, value);
         }
     }
@@ -292,6 +292,7 @@ mod tests {
         let (port, task) = service().await;
         let asked = vec![
             ("traceparent".to_string(), "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01".to_string()),
+            ("x-stillfail-mesh".to_string(), "secret".to_string()),
             ("x-ember-mesh".to_string(), "secret".to_string()),
             ("content-type".to_string(), "text/plain".to_string()),
         ];
