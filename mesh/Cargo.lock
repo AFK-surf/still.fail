@@ -792,38 +792,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
-name = "ember-app"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.22.1",
- "bytes",
- "ember-shapes",
- "futures-util",
- "getrandom 0.3.4",
- "hex",
- "http-body-util",
- "hyper",
- "hyper-util",
- "image",
- "libc",
- "reqwest 0.12.28",
- "ring",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.21",
- "thumbhash",
- "tokio",
- "tokio-tungstenite",
- "tracing",
- "zstd",
-]
-
-[[package]]
 name = "ember-shapes"
 version = "0.1.0"
 dependencies = [
@@ -832,36 +800,6 @@ dependencies = [
  "serde_path_to_error",
  "serde_with",
  "typeshare",
-]
-
-[[package]]
-name = "ember-station"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "bytes",
- "ed25519-dalek 2.2.0",
- "ember-app",
- "futures-util",
- "getrandom 0.3.4",
- "hex",
- "http-body-util",
- "hyper",
- "hyper-util",
- "iroh",
- "iroh-mainline-address-lookup",
- "iroh-mdns-address-lookup",
- "libc",
- "noq-proto",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tokio",
- "tokio-tungstenite",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -3666,6 +3604,68 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+
+[[package]]
+name = "stillfail-app"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "ember-shapes",
+ "futures-util",
+ "getrandom 0.3.4",
+ "hex",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "image",
+ "libc",
+ "reqwest 0.12.28",
+ "ring",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.21",
+ "thumbhash",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "zstd",
+]
+
+[[package]]
+name = "stillfail-station"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bytes",
+ "ed25519-dalek 2.2.0",
+ "futures-util",
+ "getrandom 0.3.4",
+ "hex",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "iroh",
+ "iroh-mainline-address-lookup",
+ "iroh-mdns-address-lookup",
+ "libc",
+ "noq-proto",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "stillfail-app",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "strsim"
