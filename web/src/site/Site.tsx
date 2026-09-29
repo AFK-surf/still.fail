@@ -152,10 +152,12 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
         <div className={css.wrap}>
           {/* The two domains, what the user keeps saying to the agent: the one the page was opened on is lit (data-host, set
               before the first paint by site/index.html; still.fail when neither). */}
+          <div className={css.zhBubble}><span data-for="still.fail">还是不行</span><span data-for="youdid.wtf">干的什么 jb</span></div>
           <h1 className={css.title}>
-            <span className={css.titleDomain} data-domain="still.fail">still.fail</span><br />
-            <span className={css.titleDomain} data-domain="youdid.wtf">youdid.wtf</span>
+            <span className={css.titleLine}><span className={css.titleDomain} data-domain="still.fail">still.fail</span><span className={css.zhSide} data-for="still.fail">还是不行</span></span><br />
+            <span className={css.titleLine}><span className={css.titleDomain} data-domain="youdid.wtf">youdid.wtf</span><span className={css.zhSide} data-for="youdid.wtf">干的什么 jb</span></span>
           </h1>
+          <p className={css.zhSub}><span data-for="still.fail">还是不行。</span><span data-for="youdid.wtf">你干的什么 jb？</span></p>
           <div className={`${css.actions} ${css.heroActions}`}>
             <Button href={APP} kind="primary" large>免费开始</Button>
             <Button href="#start" kind="ghost" large>安装 station</Button>

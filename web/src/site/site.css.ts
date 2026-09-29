@@ -144,6 +144,35 @@ export const titleDomain = style({
     [`:root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: lit,
   },
 });
+// ---- Exploring how Chinese goes with the title: ?zh=a|b|c picks one (data-zh on the root); none shows without it. ----
+const LIT_HOST = (d: string) => d === "still.fail" ? `:root:not([data-host="youdid.wtf"])` : `:root[data-host="youdid.wtf"]`;
+export const titleLine = style({ display: "inline-flex", alignItems: "flex-start" });
+/** a: each line's Chinese standing upright beside it, lit or dim with it. */
+export const zhSide = style({
+  display: "none", writingMode: "vertical-rl", fontSize: ".13em", letterSpacing: ".12em", fontWeight: "700", lineHeight: "1",
+  margin: ".18em 0 0 .12em", color: "color-mix(in srgb, var(--s-title) 22%, var(--s-bg))",
+  selectors: {
+    [`:root[data-zh="a"] &`]: { display: "block" },
+    [`${LIT_HOST("still.fail")} &[data-for="still.fail"], ${LIT_HOST("youdid.wtf")} &[data-for="youdid.wtf"]`]: { color: EMBER },
+  },
+});
+/** b: one line under the title, what the lit domain says in Chinese. */
+export const zhSub = style({
+  display: "none", margin: "36px 0 0", fontSize: "clamp(22px, 2.6vw, 36px)", fontWeight: "600", letterSpacing: ".04em", color: "var(--s-fg)",
+  animation: `${fadeUp} .9s .16s ${vars.easeOut} both`,
+  selectors: { [`:root[data-zh="b"] &`]: { display: "block" } },
+});
+/** c: a chat bubble above the title, the user saying it. */
+export const zhBubble = style({
+  display: "none", width: "fit-content", margin: "0 auto 28px", padding: "12px 22px", borderRadius: "22px 22px 22px 6px",
+  fontSize: "clamp(18px, 2vw, 26px)", fontWeight: "600", color: "#fff", background: EMBER,
+  boxShadow: `0 10px 40px color-mix(in srgb, ${EMBER} 35%, transparent)`, animation: `${fadeUp} .9s ${vars.easeOut} both`,
+  selectors: { [`:root[data-zh="c"] &`]: { display: "block" } },
+});
+globalStyle(`${zhSub} > span, ${zhBubble} > span`, { display: "none" });
+globalStyle(`${LIT_HOST("still.fail")} ${zhSub} > [data-for="still.fail"], ${LIT_HOST("youdid.wtf")} ${zhSub} > [data-for="youdid.wtf"]`, { display: "inline" });
+globalStyle(`${LIT_HOST("still.fail")} ${zhBubble} > [data-for="still.fail"], ${LIT_HOST("youdid.wtf")} ${zhBubble} > [data-for="youdid.wtf"]`, { display: "inline" });
+
 export const heroActions = style({ marginTop: "44px", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
 
 /** The demo's stage: it rises out of a tilt as the page opens, a beam of light running round its edge. */
