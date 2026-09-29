@@ -9,13 +9,22 @@
 // sizes it to its content, keeps what the widget asks to keep (widgetState, on the station, whose model part reaches
 // the agent with the next message), and puts what it asks to send (sendFollowUpMessage, on a click) in the chat's
 // composer for the person to send.
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import bridge from "./viz/bridge.js?raw";
 import stylesheet from "./viz/ember-viz.css?raw";
+import { useApi, type Attachment } from "./api.ts";
+import { useFileText } from "./FilePreview.tsx";
+import { PanelOpen } from "./icons.tsx";
 import { Code } from "./Prose.tsx";
 import { DraftKey, offerToDraft } from "./draft.ts";
 import { useToast } from "./toast.tsx";
 import * as css from "./Viz.css.ts";
+
+/**
+ * Where a visualization opens on its own, beside its chat: the chat page's side panel (a tab of its own) on a wide
+ * screen, a page over the chat on a narrow one. None: the chat is shown where nothing can open it.
+ */
+export const OpenFile = createContext<((sessionKey: string, file: Attachment) => void) | null>(null);
 
 /** ember's tokens a frame is given, as --e-<name> (tokens.css.ts names them). */
 const TOKENS = [
@@ -90,10 +99,11 @@ function useThemeChange(onChange: () => void) {
 
 /**
  * The sandboxed frame itself. `state`: what the widget kept, given to it as it loads; `onState` keeps what it keeps
- * next; `onError` hears a failure the content reports (a mermaid chart that would not parse).
+ * next; `onError` hears a failure the content reports (a mermaid chart that would not parse). `fill`: it takes the
+ * height it is given (a panel of its own) instead of its content's.
  */
-function Frame({ html, title, state = null, onState, onError }: {
-  html: string; title: string; state?: unknown; onState?: (state: unknown) => void; onError?: (message: string) => void;
+function Frame({ html, title, state = null, onState, onError, fill = false }: {
+  html: string; title: string; state?: unknown; onState?: (state: unknown) => void; onError?: (message: string) => void; fill?: boolean;
 }) {
   const [height, setHeight] = useState(0);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -125,21 +135,58 @@ function Frame({ html, title, state = null, onState, onError }: {
 
   useThemeChange(() => frame.current?.contentWindow?.postMessage({ emberViz: true, type: "theme", tokens: tokens(), scheme: scheme() }, "*"));
 
-  return <iframe ref={frame} className={css.vizFrame} sandbox="allow-scripts" srcDoc={srcDoc} title={title} style={{ height: height || 120 }} />;
+  return <iframe ref={frame} className={fill ? css.vizFill : css.vizFrame} sandbox="allow-scripts" srcDoc={srcDoc} title={title} style={fill ? undefined : { height: height || 120 }} />;
 }
 
-/** A placed HTML file, drawn; `onOpen` opens the file itself (whole screen, its source, a download). */
-export function Viz({ html, name, state, onState, onOpen }: {
-  html: string; name: string; state: unknown; onState(state: unknown): void; onOpen(): void;
-}) {
+/**
+ * A visualization's file and what its widget kept (on the station, by the session that sent it and its path), loaded
+ * together: it starts with both. Null while they come; `failed` when the file cannot be read.
+ */
+function useVizFile(sessionKey: string, file: Attachment) {
+  const api = useApi();
+  const loaded = useFileText(sessionKey, file);
+  const [state, setState] = useState<{ value: unknown } | null>(null);
+  useEffect(() => {
+    let current = true;
+    // What the station cannot say (an older one) is nothing kept.
+    void api.widgetState(sessionKey, file.path).then((r) => r.state, () => null).then((value) => { if (current) setState({ value }); });
+    return () => { current = false; };
+  }, [api, sessionKey, file.path]);
+  const keep = (value: unknown) => void api.setWidgetState(sessionKey, file.path, value).catch(() => {});
+  if (loaded.state === "error") return { failed: true as const };
+  if (loaded.state !== "ready" || !state) return null;
+  return { failed: false as const, html: loaded.text, state: state.value, keep };
+}
+
+/**
+ * A placed HTML file, drawn in its message, with a way to open it on its own beside the chat (OpenFile). `failed`:
+ * what shows instead when the file cannot be read (its card).
+ */
+export function VizFile({ sessionKey, file, failed }: { sessionKey: string; file: Attachment; failed: ReactNode }) {
+  const viz = useVizFile(sessionKey, file);
+  const open = useContext(OpenFile);
+  if (viz?.failed) return failed;
+  if (!viz) return <div className={css.vizWait} aria-busy="true" />;
   return (
     <div className={css.viz}>
-      <Frame html={html} title={name} state={state} onState={onState} />
-      <div className={css.vizBar}>
-        <button type="button" className={css.vizToggle} onClick={onOpen}>打开文件</button>
-      </div>
+      <Frame html={viz.html} title={file.name} state={viz.state} onState={viz.keep} />
+      {open && (
+        <div className={css.vizBar}>
+          <button type="button" className={css.vizOpen} onClick={() => open(sessionKey, file)}>
+            <PanelOpen size={13} strokeWidth={1.75} />在侧边打开
+          </button>
+        </div>
+      )}
     </div>
   );
+}
+
+/** A visualization on its own, taking the room it is given: a side panel's tab, a page on a phone. */
+export function VizPanel({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
+  const viz = useVizFile(sessionKey, file);
+  if (viz?.failed) return <p className={css.vizNote}>读不到「{file.name}」。</p>;
+  if (!viz) return <div className={css.vizNote} aria-busy="true" />;
+  return <div className={css.vizPanel}><Frame html={viz.html} title={file.name} state={viz.state} onState={viz.keep} fill /></div>;
 }
 
 const MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

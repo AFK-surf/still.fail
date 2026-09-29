@@ -4,9 +4,10 @@
 // words rather than out in a margin. Long-press quotes or copies a message; ＋ adds files.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { stationApi, useApi, useChat, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { stationApi, useApi, useChat, useLives, useStationCall, type Attachment, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
+import { OpenFile } from "../Viz.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
@@ -75,6 +76,11 @@ export const openedAs = (address: string) => renamed.get(address) ?? address;
 
 /** What the page knows of an agent: its chat entry and its live view. */
 interface Here { station: string; key: string; view: ChatView }
+
+/** A visualization on its own (./Preview.tsx's FileScreen), over its chat: the session that sent it, and its path. */
+export function filePath(station: string, key: string, session: string, file: Attachment): string {
+  return `${stationBase(station)}/chats/${encodeURIComponent(key)}/file?${new URLSearchParams({ session, path: file.path, name: file.name })}`;
+}
 
 /** A web service's page (./Preview.tsx), over its chat. */
 function servicePath(station: string, key: string, job: string): string {
@@ -152,7 +158,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
   // Words selected with a mouse inside one message offer to quote them; a finger holds a message for its menu.
   const quoting = useSelectionQuote(list, stable.quote);
   const hold = useHold(list, rows.messages, stable.quote);
-  const askedFile = useAskedFile(rows.messages, (f) => ownerIn(view, f));
+  const askedFile = useAskedFile(list, rows.messages, (f) => ownerIn(view, f));
   // ember's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
   // chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
   // link to an agent's execution history opens it.
@@ -175,7 +181,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
     }
   };
   return (
-    <>
+    <OpenFile.Provider value={(session, file) => app.push(filePath(here.station, here.key, session, file))}>
       {quoting.pop}
       {askedFile}
       <Gallery.Provider value={stable.images}>
@@ -189,7 +195,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
       {/* Over the send button, in line with it; it comes up growing and goes the way it came. */}
       <button type="button" className={`${css.mJump} ${pagesCss.mFloating}`} data-shown={rows.away || undefined} aria-label="跳到最新"
         onClick={() => list.current?.dispatchEvent(new Event("to-bottom"))}><ArrowDown size={18} /></button>
-    </>
+    </OpenFile.Provider>
   );
 }
 

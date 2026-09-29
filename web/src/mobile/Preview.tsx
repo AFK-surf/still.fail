@@ -3,11 +3,13 @@
 // changes (a restart is said over the page, and it loads again once the service is back); read once by itself until the
 // chat has it.
 import { useEffect, useState } from "react";
-import { useParams } from "react-router";
+import { useLocation, useParams } from "react-router";
 import { useChat } from "../api.ts";
 import { useCall } from "../core/react.ts";
 import type { Job } from "../core/shapes.ts";
 import { StationPreview } from "../Preview.tsx";
+import { VizPanel } from "../Viz.tsx";
+import { DraftKey } from "../draft.ts";
 import { useStation } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { draftKeyOf } from "./ChatHost.tsx";
@@ -41,6 +43,23 @@ export function PreviewScreen() {
         <StationPreview station={station.address} port={job.port!} name={job.name} service={service} alone
           restarting={job.state === "exited" ? { restarts: job.restarts ?? 0 } : null} draftKey={draftKeyOf(station.address, chat)} />
       )}
+    </div>
+  );
+}
+
+/** A visualization an agent posted (../Viz.tsx), full screen on a narrow screen, under a bar that goes back to its chat. */
+export function FileScreen() {
+  const app = useApp();
+  const station = useStation();
+  const { chat = "" } = useParams();
+  const asked = new URLSearchParams(useLocation().search);
+  const session = asked.get("session") ?? chat, path = asked.get("path") ?? "", name = asked.get("name") ?? path.split("/").at(-1) ?? "";
+  return (
+    <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
+      <NavBar back="对话" onBack={app.pop} title={name} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+      <DraftKey.Provider value={draftKeyOf(station.address, chat)}>
+        <VizPanel sessionKey={session} file={{ name, path, size: 0 }} />
+      </DraftKey.Provider>
     </div>
   );
 }

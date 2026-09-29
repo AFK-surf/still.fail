@@ -4,7 +4,7 @@
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { useSearchParams } from "react-router";
 import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
@@ -13,8 +13,8 @@ import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { useShortcut } from "./keymap.ts";
-import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileText, useFileUrl, useNear } from "./FilePreview.tsx";
-import { Viz } from "./Viz.tsx";
+import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileUrl, useNear } from "./FilePreview.tsx";
+import { OpenFile, VizFile } from "./Viz.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { DraftKey, useDraft, useDraftInbox, type Draft, type DraftQuote } from "./draft.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -72,7 +72,7 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
   latest.current = { ownerOf, onOpenHistory, images };
   const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key), images: () => latest.current.images() }));
   useShortcut("chat.latest", () => { list.current?.dispatchEvent(new Event("to-bottom")); });
-  const askedFile = useAskedFile(rows.messages, ownerOf);
+  const askedFile = useAskedFile(list, rows.messages, ownerOf);
   // Selecting text inside one message offers to quote it.
   const quoting = useSelectionQuote(list, (q) => {
     const quote = { ...q, comment: "", id: `${Date.now()}` };
@@ -616,50 +616,38 @@ function ProseWithFiles({ owner, text, files }: { owner: (file: Attachment) => s
  * one is the ember-viz skill), any other shows as below the text.
  */
 function PlacedFile({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
-  if (sessionKey !== null && kindOf(file.name).kind === "html") return <VizFile sessionKey={sessionKey} file={file} />;
+  if (sessionKey !== null && kindOf(file.name).kind === "html") return <VizFile sessionKey={sessionKey} file={file} failed={<FileItem sessionKey={sessionKey} file={file} />} />;
   return <FileItem sessionKey={sessionKey} file={file} />;
 }
 
-function VizFile({ sessionKey, file }: { sessionKey: string; file: Attachment }) {
-  const api = useApi();
-  const loaded = useFileText(sessionKey, file);
-  // What the widget kept, from the station (null when it kept nothing, or the station cannot say): it starts with it.
-  const [state, setState] = useState<{ value: unknown } | null>(null);
-  useEffect(() => {
-    let current = true;
-    void api.widgetState(sessionKey, file.path).then((r) => r.state, () => null).then((value) => { if (current) setState({ value }); });
-    return () => { current = false; };
-  }, [api, sessionKey, file.path]);
-  const [open, setOpen] = useState(false);
-  if (loaded.state === "error") return <FileItem sessionKey={sessionKey} file={file} />;
-  if (loaded.state !== "ready" || !state) return <div className={css.msgVizWait} aria-busy="true" />;
-  return (
-    <>
-      <Viz html={loaded.text} name={file.name} state={state.value} onOpen={() => setOpen(true)}
-        onState={(value) => void api.setWidgetState(sessionKey, file.path, value).catch(() => {})} />
-      <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />
-    </>
-  );
-}
-
 /**
- * A link that names one of the chat's files (`?file=<name>`: what a post to Slack attached, which stays here) opens it
- * on its own, over the chat; the latest one of that name. Closing it leaves the chat.
+ * A link that names one of the chat's files (`?file=<name>`: what a post to Slack attached, which stays here): the
+ * latest one of that name opens on its own (OpenFile: beside the chat, or over it on a phone), its message brought
+ * into view. Anything else that name opens in a preview.
  */
-export function useAskedFile(messages: ChatMessage[], owner: (file: Attachment) => string | null): ReactNode {
+export function useAskedFile(list: RefObject<HTMLDivElement | null>, messages: ChatMessage[], owner: (file: Attachment) => string | null): ReactNode {
   const [search, setSearch] = useSearchParams();
+  const open = useContext(OpenFile);
   const asked = search.get("file");
   const found = useMemo(() => {
     if (!asked) return null;
     for (let i = messages.length - 1; i >= 0; i--) {
       const file = messages[i]!.attachments?.find((f) => f.name === asked);
-      if (file) return file;
+      const key = file ? owner(file) : null;
+      if (file && key !== null) return { file, key, ts: messages[i]!.ts };
     }
     return null;
-  }, [asked, messages]);
-  const key = found ? owner(found) : null;
-  if (!found || key === null) return null;
-  return <FilePreview open onClose={() => setSearch((now) => { now.delete("file"); return now; }, { replace: true })} sessionKey={key} file={found} />;
+  }, [asked, messages]); // eslint-disable-line react-hooks/exhaustive-deps
+  const drawn = !!found && !!open && kindOf(found.file.name).kind === "html";
+  const done = () => setSearch((now) => { now.delete("file"); return now; }, { replace: true });
+  useEffect(() => {
+    if (!found || !drawn) return;
+    open!(found.key, found.file);
+    list.current?.querySelector(`[data-ts="${CSS.escape(found.ts)}"]`)?.scrollIntoView({ block: "center" });
+    done();
+  }, [found, drawn]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!found || drawn) return null;
+  return <FilePreview open onClose={done} sessionKey={found.key} file={found.file} />;
 }
 
 /** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */

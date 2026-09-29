@@ -10,7 +10,7 @@ import { ConnectRunScreen, ConnectScreen, NewConnectScreen } from "./Connects.ts
 import { RunSettingsScreen } from "./History.tsx";
 import { Home } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
-import { PreviewScreen } from "./Preview.tsx";
+import { FileScreen, PreviewScreen } from "./Preview.tsx";
 import { Loading } from "./parts.tsx";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
 import { NewProfileScreen, ProfileScreen } from "./Profiles.tsx";
@@ -35,6 +35,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="s/:station/chats/:chat" element={<ChatHost stations={stations} />} />
       <Route path="s/:station/chats/:chat/run/:agent" element={<InStation stations={stations}><RunSettingsScreen /></InStation>} />
       <Route path="s/:station/chats/:chat/services/:service" element={<InStation stations={stations}><PreviewScreen /></InStation>} />
+      <Route path="s/:station/chats/:chat/file" element={<InStation stations={stations}><FileScreen /></InStation>} />
       <Route path="s/:station/overview" element={<InStation stations={stations}><StationScreen /></InStation>} />
       <Route path="s/:station/connects/new" element={<InStation stations={stations}><NewConnectScreen /></InStation>} />
       <Route path="s/:station/connects/:id" element={<InStation stations={stations}><ConnectScreen /></InStation>} />
