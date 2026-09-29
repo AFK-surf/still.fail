@@ -30,8 +30,9 @@
 2. **station 升级时自己搬家**：新版第一次启动，如果只有 `~/.ember` 没有 `~/.stillfail`，就把目录整个挪过去，在旧位置留一个指向新目录的软链接；两个都在就用新的，不动旧的。环境变量先读 `STILLFAIL_*`，没有再读 `EMBER_*`。launchd / systemd 服务换成新 label，装新的时卸掉旧的。钥匙串 / 凭据条目读不到新名字时从旧名字复制一份。旧命令名（`ember`、`ember-job` 等）留成指向新程序的软链接，给老脚本和 agent 的习惯用。
 3. **客户端**：存储 key 先读新 key，没有再读旧 key 并写到新 key。桌面端 `productName` 改了以后，userData 目录也跟着变，第一次启动时把旧目录的内容搬过来。安卓换包名等于新 app，要重新安装、重新登录，这个躲不掉。`stillfail://` 为主，`ember://` 继续认。
 4. 默认连接的 cloud 地址改成 `https://app.still.fail`。
+5. 例外：预览的流式请求头客户端仍发旧名 `x-ember-stream`（两个名字都认）。它会经 station 转给本地服务，改名前的 station 只去掉 `x-ember-*`，发新名字会漏过去。
 
-## 上线清单（按顺序，等用户号令）
+## 上线清单（按顺序）
 
 1. **合进 main**：`rename-still-fail` rebase 到最新 main，冲突解掉，studio 上重跑 `sh scripts/check.sh full origin/main..HEAD`，再 fast-forward 推 main。
 2. **Google 登录**：studio 上 `~/ember-deploy/google-oauth.json` 备份成 `google-oauth.ember.json`，把 `google-oauth.still-fail.json` 换上去（新 OAuth 客户端，只登记了 `https://app.still.fail/v1/auth/google/callback`；旧域名上的 Google 登录会先跳到新域名）。
@@ -45,4 +46,12 @@
 
 ## 现在的状态
 
-在分支 `rename-still-fail` 上做，**不合进 main、不部署，等用户号令**。
+已上线（2026-09-30）。以后新写的代码直接用新名字，上面「新旧并存」的兼容长期保留。
+
+## 上线经过（2026-09-30）
+
+- main `d9b03e1`；station 安装包 `stillfail-station-*` 已上传；cloud 全部部署，`app` / `admin` / `preview.still.fail` 都已生效；Google 登录换成新的 OAuth 客户端。
+- station：claude-mac（mini2 虚拟机）、Studio（从检出目录跑，`~/bin/ember-deploy` 改用 `~/bin/stillfail-restart-station.sh` 重启）、bft/Office-VM-1 都已搬到 `~/.stillfail`。
+- 安卓 0.1.1123 已发（包名 `fail.still.android`）。
+- 桌面端 0.1.1123 在 studio 本机终端签名发布：约 957 个文件带时间戳签名，要 15 分钟左右；那个终端里的上传没进 bucket，后来从 ssh 重新上传。
+- MBA 和 mini1 装上新的 still.fail.app 后切换。
