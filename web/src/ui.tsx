@@ -64,7 +64,8 @@ function TipKeys({ action }: { action: Action }) {
 export function Tip({ label, children, side = "bottom", shortcut }: { label: ReactNode; children: ReactNode; side?: "top" | "bottom" | "left" | "right"; shortcut?: Action }) {
   return (
     <Tooltip.Root {...(label == null || label === "" ? { open: false } : {})}>
-      <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
+      {/* Focus the browser does not show (a click, or a popover focusing its first item or handing focus back) opens none. */}
+      <Tooltip.Trigger asChild onFocus={(e) => { if (!e.currentTarget.matches(":focus-visible")) e.preventDefault(); }}>{children}</Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content className={css.tooltip} side={side} sideOffset={6} collisionPadding={8}>{label}{shortcut && <TipKeys action={shortcut} />}</Tooltip.Content>
       </Tooltip.Portal>
