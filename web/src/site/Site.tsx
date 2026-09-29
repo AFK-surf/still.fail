@@ -19,11 +19,11 @@ function Themed({ name, className, alt = "", life }: { name: string; className?:
   );
 }
 
-function Button({ href, kind, large, children, className }: { href: string; kind: "primary" | "ghost"; large?: boolean; children: ReactNode; className?: string }) {
-  // Its words twice, one under the other: on hover they roll up, the second taking the first's place (site.css.ts).
+/** A link as a button; with `then`, its words roll up on hover and those take their place (site.css.ts). */
+function Button({ href, kind, large, then, children, className }: { href: string; kind: "primary" | "ghost"; large?: boolean; then?: string; children: ReactNode; className?: string }) {
   return (
     <a className={`${css.button} ${className ?? ""}`} data-kind={kind} data-size={large ? "large" : undefined} href={href}>
-      <span className={css.roll}><span>{children}</span><span aria-hidden>{children}</span></span>
+      {then ? <span className={css.roll}><span>{children}</span><span aria-hidden>{then}</span></span> : children}
     </a>
   );
 }
@@ -94,7 +94,7 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
             </h1>
           </div>
           <div className={`${css.actions} ${css.heroActions}`}>
-            <Button href={APP} kind="primary" large>我来指挥</Button>
+            <Button href={APP} kind="primary" large then="开喷">我来指挥</Button>
           </div>
           <div className={css.stage}>
             <div className={css.stageGlow} />

@@ -106,8 +106,8 @@ export const button = style({
 });
 export const actions = style({ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" });
 
-/** A button's words and their twin under them, in a window a line high: rolled up a line on hover. */
-export const roll = style({ display: "grid", overflow: "hidden", height: "1.3em", lineHeight: "1.3em" });
+/** A button's words and what they turn into under them, in a window a line high: rolled up a line on hover. */
+export const roll = style({ display: "grid", justifyItems: "center", overflow: "hidden", height: "1.3em", lineHeight: "1.3em" });
 globalStyle(`${roll} > span`, { transition: `transform .45s cubic-bezier(.7, 0, .2, 1)` });
 globalStyle(`${button}:hover ${roll} > span`, { transform: "translateY(-100%)" });
 globalStyle(`${button}:hover ${roll} > span + span`, { transitionDelay: ".03s" });
