@@ -223,6 +223,9 @@ pub struct Attachment {
     pub width: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub height: Option<u32>,
+    /// An image's ThumbHash (base64), made by the station as it keeps it: shown blurred until the image loads.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub thumbhash: Option<String>,
 }
 
 /// One entry of a thread's log (as the archive files hold them, one per line). Entries are only ever appended; they go

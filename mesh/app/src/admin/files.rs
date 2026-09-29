@@ -111,7 +111,7 @@ where
         let _ = tokio::fs::remove_file(&path).await;
         return Err(e);
     }
-    Ok(Attachment { name: safe, path: path.to_string_lossy().into_owned(), size, width: None, height: None })
+    Ok(Attachment { name: safe, path: path.to_string_lossy().into_owned(), size, width: None, height: None, thumbhash: None })
 }
 
 /// Quotes as the page sends them, bounded.
@@ -224,6 +224,7 @@ impl AdminApi {
                     size: a.get("size").and_then(Value::as_f64).map(|s| s as u64).unwrap_or(0),
                     width,
                     height,
+                    thumbhash: None,
                 })
             })
             .collect()

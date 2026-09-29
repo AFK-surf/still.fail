@@ -51,6 +51,8 @@ export interface Attachment {
 	size: number;
 	width?: number;
 	height?: number;
+	/** An image's ThumbHash (base64): a blurred likeness of it, shown until it loads. */
+	thumbhash?: string;
 }
 
 /** How full something is. */

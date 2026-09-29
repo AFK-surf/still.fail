@@ -248,6 +248,15 @@ const blots = [
   { color: "light-dark(oklch(85% .09 75), oklch(42% .07 70))", place: { right: "-20%", top: "10%" }, time: "7s" },
   { color: "light-dark(oklch(78% .08 20), oklch(40% .08 20))", place: { left: "15%", bottom: "-35%" }, time: "8s" },
 ];
+// The image's ThumbHash, sent with it: a small picture of it blurred, filling its box as the image will.
+globalStyle(`${msgImageWait}[data-likeness]`, { backgroundSize: "cover", backgroundPosition: "center" });
+// Not to be had (fetching it failed): the box stays as it waited, still, and says so.
+globalStyle(`${msgImage}[data-failed]`, { cursor: "pointer" });
+globalStyle(`${msgImage}[data-failed] ${msgImageWait} i`, { animation: "none" });
+export const msgImageUnavailable = style({
+  position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+  gap: "6px", fontSize: "12px", color: vars.muted, background: `color-mix(in oklab, ${vars.neutralBg} 70%, transparent)`,
+});
 globalStyle(`${msgImageWait} i`, {
   position: "absolute", width: "70%", aspectRatio: "1", borderRadius: "50%", filter: "blur(28px)", opacity: ".75",
 });

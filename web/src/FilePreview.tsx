@@ -161,8 +161,13 @@ export function useFileText(sessionKey: string, file: Attachment): { state: "loa
 
 /** A chat attachment as a blob URL. Images use thumbnails; video stills need the original file. */
 export function useFileUrl(sessionKey: string, file: Attachment, enabled: boolean, thumb = true): string | null {
+  return useFileShown(sessionKey, file, enabled, thumb).url;
+}
+
+/** As useFileUrl, and whether fetching it failed (a chat's image then says so rather than waiting on). */
+export function useFileShown(sessionKey: string, file: Attachment, enabled: boolean, thumb = true): { url: string | null; failed: boolean } {
   const loaded = useFile(sessionKey, file, enabled, thumb);
-  return loaded.state === "ready" ? loaded.url : null;
+  return { url: loaded.state === "ready" ? loaded.url : null, failed: loaded.state === "error" };
 }
 
 /**

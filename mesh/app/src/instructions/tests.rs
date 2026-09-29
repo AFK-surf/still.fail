@@ -13,7 +13,7 @@ fn message(n: i64, ts: &str, author: &str, rich: bool, kind: AuthorKind) -> Mess
         author_kind: kind,
         author: author.into(),
         text: "hi \"there\" & you".into(),
-        attachments: if rich { vec![Attachment { name: "a.png".into(), path: "/w/uploads/a.png".into(), size: 3, width: None, height: None }] } else { vec![] },
+        attachments: if rich { vec![Attachment { name: "a.png".into(), path: "/w/uploads/a.png".into(), size: 3, width: None, height: None, thumbhash: None }] } else { vec![] },
         quotes: if rich { vec![Quote { author: "U2".into(), text: "line1\nline2".into(), comment: "see".into(), ts: Some("99.0".into()), role: Some("person".into()) }] } else { vec![] },
         declared: None,
         created_at: 1,

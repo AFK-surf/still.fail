@@ -880,6 +880,7 @@ impl Hub {
                     size: meta.len(),
                     width: size.map(|s| s.0),
                     height: size.map(|s| s.1),
+                    thumbhash: None,
                 })
             })
             .collect()
@@ -1266,7 +1267,7 @@ impl Hub {
             None
         };
         let files = if paths.is_empty() { vec![] } else { self.attach(key, &paths)? };
-        crate::thumbs::make_later(files.iter().map(|f| f.path.clone().into()).collect(), crate::thumbs::dir(&self.config().data_dir));
+        let files = crate::thumbs::keep(files, crate::thumbs::dir(&self.config().data_dir)).await;
         let here = ThreadRef::new(&thread.thread.channel, &thread.thread.thread_ts);
         let (posted, text) = match &link {
             Some(link) => slack_with_files(&text, &files, link),

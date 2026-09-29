@@ -13,7 +13,8 @@ import { Avatar, ModelLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { placeFiles, Prose } from "./Prose.tsx";
 import { useShortcut } from "./keymap.ts";
-import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileUrl, useNear } from "./FilePreview.tsx";
+import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear } from "./FilePreview.tsx";
+import { thumbhashRatio, thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useStickToBottom } from "./scroll.ts";
 import { DraftKey, useDraft, useDraftInbox, type Draft, type DraftQuote } from "./draft.ts";
@@ -666,7 +667,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   const [videoFailed, setVideoFailed] = useState(false);
   const box = useRef<HTMLButtonElement>(null);
   const near = useNear(box, image || video);
-  const url = useFileUrl(sessionKey ?? "", file, (image || video) && sessionKey !== null && near, !video);
+  const { url, failed } = useFileShown(sessionKey ?? "", file, (image || video) && sessionKey !== null && near, !video);
   const [open, setOpen] = useState(false);
   // An image seen before, or that comes at once, just shows; one that takes a while is brushed in from the top.
   const born = useRef(performance.now());
@@ -694,9 +695,10 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <Tip label={file.path}><button ref={box} type="button" className={look.image} onClick={() => url && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
-          data-loaded={loaded ?? undefined}>
-          {loaded !== "instant" && <span className={look.wait} aria-hidden="true"><i /><i /><i /></span>}
+        <Tip label={file.path}><button ref={box} type="button" className={look.image} onClick={() => (url || failed) && setOpen(true)} aria-label={`查看 ${file.name}`} style={look.box(file)}
+          data-loaded={loaded ?? undefined} data-failed={failed || undefined}>
+          {loaded !== "instant" && <Waiting hash={file.thumbhash} />}
+          {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>暂时无法预览</span></span>}
           {url && <img src={url} alt={file.name} onLoad={shown} />}
         </button></Tip>
         {preview}
@@ -712,19 +714,30 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   );
 }
 
+/** What an image's box shows until it loads: its ThumbHash drawn, sent with it; else the blots drifting. */
+function Waiting({ hash }: { hash: string | undefined }) {
+  const likeness = thumbhashUrl(hash);
+  return likeness
+    ? <span className={look.wait} style={{ backgroundImage: `url(${likeness})` }} data-likeness="" aria-hidden="true" />
+    : <span className={look.wait} aria-hidden="true"><i /><i /><i /></span>;
+}
+
 /** How the chat draws a file: an image's button, the box it takes before it loads and what shows until then; a file's card and its button. */
 const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment) => imageBox(f), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
 
 /**
  * The box an image takes in the chat, known before it loads: its own
- * proportions (sent with it) within 360×300, or a fixed box for images sent
- * before sizes were recorded. A narrower chat shrinks it (max-width), the
+ * proportions (sent with it, or read from its ThumbHash) within 360×300, or a
+ * fixed box for images sent before sizes were recorded. A narrower chat shrinks it (max-width), the
  * proportions kept.
  */
 export function imageBox(file: Attachment): { width: number; aspectRatio: string } {
-  if (!file.width || !file.height) return { width: 240, aspectRatio: "240 / 160" };
-  const scale = Math.min(1, 360 / file.width, 300 / file.height);
-  const width = Math.max(40, Math.round(file.width * scale)), height = Math.max(40, Math.round(file.height * scale));
+  // No size sent, but a ThumbHash: its proportions, at the fixed box's height.
+  const ratio = thumbhashRatio(file.thumbhash);
+  const [w, h] = file.width && file.height ? [file.width, file.height] : ratio ? [Math.round(160 * ratio), 160] : [0, 0];
+  if (!w || !h) return { width: 240, aspectRatio: "240 / 160" };
+  const scale = Math.min(1, 360 / w, 300 / h);
+  const width = Math.max(40, Math.round(w * scale)), height = Math.max(40, Math.round(h * scale));
   return { width, aspectRatio: `${width} / ${height}` };
 }
 

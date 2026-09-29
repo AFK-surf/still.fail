@@ -396,7 +396,7 @@ fn a_widgets_state_is_kept_by_session_and_path_its_model_told_once_until_it_chan
     store.join_thread(thread.id, "a", "ember").unwrap();
     let path = "/w/a/uploads/pick.html";
     let mut posted = NewMessage::new(thread.id, "3.2", AuthorKind::Agent, "a", "![](pick.html)");
-    posted.attachments = vec![Attachment { name: "pick.html".into(), path: path.into(), size: 9, width: None, height: None }];
+    posted.attachments = vec![Attachment { name: "pick.html".into(), path: path.into(), size: 9, width: None, height: None, thumbhash: None }];
     store.insert_message(posted).unwrap();
     assert_eq!(store.widget_state("a", path).unwrap(), None);
     store.put_widget_state("a", path, r#"{"modelContent":"red"}"#, Some("red")).unwrap();

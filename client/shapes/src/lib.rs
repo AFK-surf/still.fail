@@ -282,6 +282,8 @@ pub struct Attachment {
     pub width: Option<i64>,
     #[typeshare(serialized_as = "Option<I54>")]
     pub height: Option<i64>,
+    /// An image's ThumbHash (base64): a blurred likeness of it, shown until it loads.
+    pub thumbhash: Option<String>,
 }
 
 #[typeshare]

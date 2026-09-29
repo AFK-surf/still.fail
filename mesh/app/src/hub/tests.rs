@@ -1398,7 +1398,7 @@ async fn a_session_whose_directory_is_gone_is_not_continued() {
 
 #[test]
 fn files_posted_to_slack_stay_in_ember_and_the_post_links_there() {
-    let file = |name: &str| Attachment { name: name.into(), path: format!("/w/uploads/{name}"), size: 1, width: None, height: None };
+    let file = |name: &str| Attachment { name: name.into(), path: format!("/w/uploads/{name}"), size: 1, width: None, height: None, thumbhash: None };
     let (posted, kept) = slack_with_files("这周的天气", &[file("weather.html"), file("shot.png")], "https://e/o/w/s/k");
     assert_eq!(posted, "这周的天气\n\n<https://e/o/w/s/k?file=weather.html|在 ember 里查看图表和附件>", "the link opens the figure");
     assert_eq!(kept, "这周的天气\n\n[weather.html](weather.html)", "the HTML placed so ember draws it; an image shows below as ever");
