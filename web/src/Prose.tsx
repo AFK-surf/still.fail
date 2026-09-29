@@ -91,6 +91,8 @@ export function Code({ text, language }: { text: string; language?: string | und
 
 const components: Components = {
   pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+  // A table wider than the message scrolls sideways within it, its cells keeping their words whole.
+  table: ({ node: _, ...props }) => <div className={css.tableScroll}><table {...props} /></div>,
   // A link to another chat: a reference to it, drawn as the composer showed it.
   a: ({ node: _, ...props }) => (isChatLink(props.href) ? <RefChip title={props.children} href={props.href!} /> : <Tip label={props.title}><a {...props} title={undefined} /></Tip>),
 };
