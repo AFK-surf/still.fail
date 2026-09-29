@@ -23,6 +23,11 @@ export function applyAppearance(value: Appearance = readAppearance()): void {
   else root.dataset.theme = value;
 }
 
+/** Tells the page's parts that follow the appearance to read it again: a page that sets it itself (the official site). */
+export function announceAppearance(): void {
+  window.dispatchEvent(new Event(EVENT));
+}
+
 export function setAppearance(value: Appearance): void {
   if (value === "system") localStorage.removeItem(KEY);
   else localStorage.setItem(KEY, value);

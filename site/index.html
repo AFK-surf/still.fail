@@ -11,9 +11,10 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<!-- The site is dark whatever the system's theme, the demo in it too (the app's palette follows data-theme). -->
-<script>document.documentElement.dataset.theme="dark"</script>
-<meta name="color-scheme" content="dark">
+<!-- The theme chosen in the site's bar (web/src/site/ThemeSwitch.tsx), before the first paint: dark when none was;
+     "system" leaves it to the system. The demo's app follows the same data-theme. -->
+<script>try{var t=localStorage.getItem("ember.site.theme");if(t!=="system")document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
+<meta name="color-scheme" content="light dark">
 </head>
 <body>
 <!-- The page, built to HTML here by web/site-prerender.mjs (pnpm build:site); the browser takes it over (web/src/site/main.tsx). -->

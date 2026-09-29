@@ -3,13 +3,19 @@
 // reads the window while it renders.
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import * as css from "./site.css.ts";
+import { ThemeSwitch } from "./ThemeSwitch.tsx";
 
 const APP = "https://ember.3720.org";
 const INSTALL = "curl -fsSL https://ember.3720.org/install.sh | sh -s -- <token>";
 
-/** A picture of web/public as drawn for a dark ground (its -dark twin): the site is dark whatever the system's theme. */
+/** A picture of web/public and its -dark twin: the one for the page's theme shows (site.css.ts), with no script. */
 function Themed({ name, className, alt = "", life }: { name: string; className?: string; alt?: string; life?: string }) {
-  return <img className={className} src={`/${name}-dark.svg`} alt={alt} data-life={life} />;
+  return (
+    <>
+      <span className={css.lightOnly}><img className={className} src={`/${name}.svg`} alt={alt} data-life={life} /></span>
+      <span className={css.darkOnly}><img className={className} src={`/${name}-dark.svg`} alt={alt} data-life={life} /></span>
+    </>
+  );
 }
 
 function Button({ href, kind, large, children, className }: { href: string; kind: "primary" | "ghost"; large?: boolean; children: ReactNode; className?: string }) {
@@ -115,7 +121,8 @@ function Mesh({ tall }: { tall?: boolean }) {
         <g key={s.name}>
           <circle className={css.ring} cx={s.x} cy={s.y} r="52" style={{ animationDelay: `${i * 0.9}s` }} />
           <circle className={css.hub} cx={s.x} cy={s.y} r="50" />
-          <image href="/mark-dark.svg" x={s.x - 30} y={s.y - 34} width="60" height="60" />
+          <g className={css.lightOnly}><image href="/mark.svg" x={s.x - 30} y={s.y - 34} width="60" height="60" /></g>
+          <g className={css.darkOnly}><image href="/mark-dark.svg" x={s.x - 30} y={s.y - 34} width="60" height="60" /></g>
           <text className={css.nodeLabel} x={s.x} y={s.y + 76} textAnchor="middle">{s.name}</text>
           <text className={css.nodeNote} x={s.x} y={s.y + 94} textAnchor="middle">{s.note}</text>
         </g>
@@ -152,6 +159,7 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
             <a className={css.navLink} href="#models">模型</a>
             <a className={css.navLink} href="#start">安装</a>
           </div>
+          <ThemeSwitch />
           <Button href={APP} kind="primary" className={css.navButton}>打开 ember</Button>
         </div>
       </nav>
@@ -161,7 +169,6 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
         <div className={css.wrap}>
           <span className={css.eyebrow}>Claude Code · Codex · 跑在你自己的机器上</span>
           <h1 className={css.title}>Local-first<br /><em className={css.titleAccent}>agent mesh</em></h1>
-          <p className={css.lead}>每台机器都是一个 station，agent 就跑在上面；设备点对点直连，ember cloud 只管账号，不碰你的代码和对话。</p>
           <div className={`${css.actions} ${css.heroActions}`}>
             <Button href={APP} kind="primary" large>免费开始</Button>
             <Button href="#start" kind="ghost" large>安装 station</Button>

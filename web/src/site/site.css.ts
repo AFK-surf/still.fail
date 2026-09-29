@@ -1,18 +1,33 @@
-// The official site's page (Site.tsx): dark whatever the system's theme (site/index.html fixes it, the demo's app with
-// it), near black, big white type, a thin grid and a beam of ember's orange. What moves is CSS (no script runs for it),
-// still for those who ask for less motion.
+// The official site's page (Site.tsx): big type, a thin grid and a beam of ember's orange, near black by default and
+// light when chosen (the switch in its bar: ThemeSwitch.tsx; the demo's app follows the same data-theme). What moves is
+// CSS (no script runs for it), still for those who ask for less motion.
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 
 const NARROW = "screen and (max-width: 860px)";
 const STILL = "(prefers-reduced-motion: reduce)";
 const EMBER = "#E5704A";
-const BG = "#09090B";
-const FG = "#F4F4F5";
-const MUTED = "#A1A1AA";
-const DIM = "#71717A";
-const LINE = "rgba(255,255,255,.09)";
-const CARD = "rgba(255,255,255,.035)";
+const BG = "var(--s-bg)";
+const FG = "var(--s-fg)";
+const MUTED = "var(--s-muted)";
+const DIM = "var(--s-dim)";
+/** The page's ink at a strength: white on dark, black on light. */
+const ink = (percent: number) => `color-mix(in srgb, var(--s-ink) ${percent}%, transparent)`;
+const LINE = ink(9);
+const CARD = ink(3.5);
+
+// The palette, dark (the site's own look, and its default) and light; "system" (no data-theme) follows the system.
+const DARK = {
+  "--s-bg": "#09090B", "--s-fg": "#F4F4F5", "--s-muted": "#A1A1AA", "--s-dim": "#71717A", "--s-faint": "#52525B", "--s-ink": "#FFFFFF",
+  "--s-node": "#111114", "--s-primary": "#FAFAFA", "--s-on-primary": "#09090B", "--s-title": "#FFFFFF", "--s-mono": "invert(1)",
+};
+const LIGHT = {
+  "--s-bg": "#FAFAF9", "--s-fg": "#18181B", "--s-muted": "#52525B", "--s-dim": "#71717A", "--s-faint": "#A1A1AA", "--s-ink": "#000000",
+  "--s-node": "#FFFFFF", "--s-primary": "#18181B", "--s-on-primary": "#FAFAFA", "--s-title": "#09090B", "--s-mono": "none",
+};
+globalStyle(":root", { vars: LIGHT });
+globalStyle(":root:not([data-theme=\"light\"])", { "@media": { "(prefers-color-scheme: dark)": { vars: DARK } } });
+globalStyle(":root[data-theme=\"dark\"]", { vars: DARK });
 
 // The page's own type; the app's (14px) is the demo's (demo/demo.css.ts).
 globalStyle("body", { font: `16px/1.6 ${vars.fontBody}`, background: BG });
@@ -42,7 +57,7 @@ const gridLines = {
   backgroundImage: `linear-gradient(${LINE} 1px, transparent 1px), linear-gradient(90deg, ${LINE} 1px, transparent 1px)`,
   backgroundSize: "64px 64px",
 };
-const white = { backgroundImage: `linear-gradient(180deg, #FFFFFF 30%, ${MUTED})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" };
+const white = { backgroundImage: `linear-gradient(180deg, var(--s-title) 30%, ${MUTED})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" };
 
 // ---- Nav ----
 
@@ -53,10 +68,24 @@ export const nav = style({
 export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px" });
 export const logo = style({ display: "block", height: "28px", width: "auto" });
 export const navLinks = style({
-  display: "flex", gap: "26px", marginLeft: "auto", fontSize: "15px", color: MUTED,
+  display: "flex", gap: "26px", marginLeft: "auto", marginRight: "4px", fontSize: "15px", color: MUTED,
   "@media": { [NARROW]: { display: "none" } },
 });
 export const navLink = style({ transition: "color .2s", selectors: { "&:hover": { color: FG } } });
+/** The theme switch (ThemeSwitch.tsx): three small buttons in a pill. */
+export const themeSwitch = style({ display: "flex", gap: "2px", padding: "3px", borderRadius: "999px", background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });
+export const themeChoice = style({
+  display: "grid", placeItems: "center", width: "30px", height: "30px", padding: "0", border: "0", borderRadius: "999px",
+  background: "transparent", color: DIM, cursor: "pointer", transition: "color .2s, background .2s",
+  selectors: { "&:hover": { color: FG }, "&[aria-checked=\"true\"]": { background: ink(10), color: FG } },
+});
+/** Pictures drawn for a light ground and for a dark one (web/public's -dark twins): the one for the page's theme shows. */
+export const lightOnly = style({ display: "contents" });
+export const darkOnly = style({ display: "none" });
+globalStyle(`:root[data-theme="dark"] ${lightOnly}`, { display: "none" });
+globalStyle(`:root[data-theme="dark"] ${darkOnly}`, { display: "contents" });
+globalStyle(`:root:not([data-theme="light"]) ${lightOnly}`, { "@media": { "(prefers-color-scheme: dark)": { display: "none" } } });
+globalStyle(`:root:not([data-theme="light"]) ${darkOnly}`, { "@media": { "(prefers-color-scheme: dark)": { display: "contents" } } });
 export const navButton = style({ "@media": { [NARROW]: { marginLeft: "auto" } } });
 
 // ---- Buttons ----
@@ -66,10 +95,10 @@ export const button = style({
   fontSize: "15px", fontWeight: "550", whiteSpace: "nowrap", transition: `transform .2s ${vars.easeOut}, box-shadow .2s, background .2s`,
   selectors: {
     "&:hover": { transform: "translateY(-2px)" },
-    "&[data-kind=\"primary\"]": { background: "#FAFAFA", color: BG },
+    "&[data-kind=\"primary\"]": { background: "var(--s-primary)", color: "var(--s-on-primary)" },
     "&[data-kind=\"primary\"]:hover": { boxShadow: `0 10px 34px -8px color-mix(in srgb, ${EMBER} 80%, transparent)` },
-    "&[data-kind=\"ghost\"]": { color: FG, boxShadow: "inset 0 0 0 1px rgba(255,255,255,.18)" },
-    "&[data-kind=\"ghost\"]:hover": { background: "rgba(255,255,255,.06)" },
+    "&[data-kind=\"ghost\"]": { color: FG, boxShadow: `inset 0 0 0 1px ${ink(18)}` },
+    "&[data-kind=\"ghost\"]:hover": { background: `${ink(6)}` },
     "&[data-size=\"large\"]": { height: "50px", padding: "0 28px", fontSize: "16px" },
   },
 });
@@ -102,11 +131,7 @@ export const title = style({
   ...white, animation: `${fadeUp} .9s .06s ${vars.easeOut} both`,
 });
 export const titleAccent = style({ fontStyle: "normal", backgroundImage: `linear-gradient(180deg, #FFB08C, ${EMBER})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" });
-export const lead = style({
-  margin: "30px auto 40px", maxWidth: "640px", fontSize: "19px", color: MUTED, textWrap: "balance",
-  animation: `${fadeUp} .9s .14s ${vars.easeOut} both`, "@media": { [NARROW]: { fontSize: "16px" } },
-});
-export const heroActions = style({ animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
+export const heroActions = style({ marginTop: "44px", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
 
 /** The demo's stage: it rises out of a tilt as the page opens, a beam of light running round its edge. */
 export const stage = style({
@@ -120,7 +145,7 @@ export const stageGlow = style({
 });
 /** The edge the beam is seen through: a hairline of a turning light around the box. */
 export const edge = style({
-  position: "relative", padding: "1px", borderRadius: "20px", overflow: "hidden", background: "rgba(255,255,255,.14)",
+  position: "relative", padding: "1px", borderRadius: "20px", overflow: "hidden", background: `${ink(14)}`,
   "@media": { [NARROW]: { borderRadius: "14px" } },
   selectors: {
     "&::before": {
@@ -141,7 +166,7 @@ const PHONE_BOX = "screen and (max-width: 747px)";
 export const frameWide = style({ height: "100%", "@media": { [PHONE_BOX]: { display: "none" } } });
 export const framePhone = style({ height: "100%", display: "none", "@media": { [PHONE_BOX]: { display: "block" } } });
 export const demoNote = style({ margin: "26px auto 0", maxWidth: "640px", fontSize: "14px", color: DIM });
-export const key = style({ padding: "2px 8px", borderRadius: "6px", background: "rgba(255,255,255,.08)", color: "#E4E4E7", fontWeight: "550", whiteSpace: "nowrap" });
+export const key = style({ padding: "2px 8px", borderRadius: "6px", background: `${ink(8)}`, color: FG, fontWeight: "550", whiteSpace: "nowrap" });
 
 // ---- Sections ----
 
@@ -157,7 +182,7 @@ export const sectionTitle = style({
   ...white, "@media": { [NARROW]: { marginBottom: "48px" } },
 });
 /** A title's second line, dimmer. */
-export const faint = style({ display: "block", backgroundImage: `linear-gradient(180deg, ${MUTED}, #52525B)`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" });
+export const faint = style({ display: "block", backgroundImage: `linear-gradient(180deg, ${MUTED}, var(--s-faint))`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" });
 
 // The mesh: stations linked to each other and to the devices people talk from; ember cloud apart, for accounts only.
 export const network = style({
@@ -166,16 +191,16 @@ export const network = style({
   "@media": { [NARROW]: { selectors: { "&[data-shape=\"wide\"]": { display: "none" }, "&[data-shape=\"tall\"]": { display: "block" } } } },
 });
 export const wire = style({
-  fill: "none", stroke: "rgba(255,255,255,.18)", strokeWidth: "1.5", strokeDasharray: "4 6",
+  fill: "none", stroke: `${ink(18)}`, strokeWidth: "1.5", strokeDasharray: "4 6",
   selectors: {
     "&[data-kind=\"mesh\"]": { stroke: `color-mix(in srgb, ${EMBER} 55%, transparent)`, strokeWidth: "2", strokeDasharray: "none" },
-    "&[data-kind=\"cloud\"]": { stroke: "rgba(255,255,255,.1)", strokeDasharray: "2 6" },
+    "&[data-kind=\"cloud\"]": { stroke: `${ink(10)}`, strokeDasharray: "2 6" },
   },
 });
 export const packet = style({ fill: EMBER, filter: `drop-shadow(0 0 6px ${EMBER})`, selectors: { "&[data-kind=\"mesh\"]": { fill: "#FFD2BC" } } });
 export const node = style({
-  fill: "#111114", stroke: "rgba(255,255,255,.14)", strokeWidth: "1.2",
-  selectors: { "&[data-kind=\"cloud\"]": { fill: "transparent", strokeDasharray: "4 5", stroke: "rgba(255,255,255,.22)" } },
+  fill: "var(--s-node)", stroke: `${ink(14)}`, strokeWidth: "1.2",
+  selectors: { "&[data-kind=\"cloud\"]": { fill: "transparent", strokeDasharray: "4 5", stroke: `${ink(22)}` } },
 });
 // Words over the lines keep a margin of the page's dark around them.
 const halo = { paintOrder: "stroke", stroke: BG, strokeWidth: "5px", strokeLinejoin: "round" } as const;
@@ -234,7 +259,7 @@ export const model = style({
   display: "inline-flex", alignItems: "center", gap: "12px", padding: "16px 26px", borderRadius: "16px",
   border: `1px solid ${LINE}`, background: CARD, fontSize: "18px", fontWeight: "600", whiteSpace: "nowrap", color: FG,
 });
-export const modelLogo = style({ width: "26px", height: "26px", selectors: { "&[data-mono]": { filter: "invert(1)" } } });
+export const modelLogo = style({ width: "26px", height: "26px", selectors: { "&[data-mono]": { filter: "var(--s-mono)" } } });
 
 // Installing.
 export const terminal = style({

@@ -27,7 +27,6 @@ export function RealEmber() {
       <div className={css.card} role="dialog" aria-modal="true" aria-labelledby="real-ember-title">
         <img className={css.mark} src="/mark-dark.svg" alt="" />
         <h2 id="real-ember-title" className={css.title}>这一步要在真实的 Ember 里做</h2>
-        <p className={css.text}>这里是官网上的演示，背后没有真的 station，连不到 Slack、模型账号这些外部服务。</p>
         <div className={css.actions}>
           <button type="button" className={css.button} onClick={() => set(false)}>知道了</button>
           <a className={css.button} data-primary="" href={APP}>打开 Ember</a>
