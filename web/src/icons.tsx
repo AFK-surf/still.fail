@@ -117,6 +117,10 @@ export function Edit(props: IconProps) {
   return <Svg {...props}><path d="M5 14.5L15.2 4.3Q16.7 2.8 18.2 4.3L19.7 5.8Q21.2 7.3 19.7 8.8L9.5 19L3.5 20.5Z M13.5 6L18 10.5 M5 14.5L9.5 19" /></Svg>;
 }
 
+export function Expand(props: IconProps) {
+  return <Svg {...props}><path d="M14.5 5H19V9.5 M18.5 5.5L13.5 10.5 M9.5 19H5V14.5 M5.5 18.5L10.5 13.5" /></Svg>;
+}
+
 export function External(props: IconProps) {
   return <Svg {...props}><path d="M11 4H8Q3.5 4 3.5 8.5V16Q3.5 20.5 8 20.5H15.5Q20 20.5 20 16V13 M11 13L20 4 M14.5 3.5H20.5V9.5" /></Svg>;
 }
@@ -329,6 +333,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "devices": Devices,
   "download": Download,
   "edit": Edit,
+  "expand": Expand,
   "external": External,
   "file": File,
   "filter": Filter,

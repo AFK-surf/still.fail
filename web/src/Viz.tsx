@@ -13,11 +13,12 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import bridge from "./viz/bridge.js?raw";
 import stylesheet from "./viz/ember-viz.css?raw";
 import { useApi, type Attachment } from "./api.ts";
-import { useFileText } from "./FilePreview.tsx";
-import { PanelOpen } from "./icons.tsx";
+import { FilePreview, useFileText } from "./FilePreview.tsx";
+import { Expand, PanelOpen } from "./icons.tsx";
 import { Code } from "./Prose.tsx";
 import { DraftKey, offerToDraft } from "./draft.ts";
 import { useToast } from "./toast.tsx";
+import { Tip } from "./ui.tsx";
 import * as css from "./Viz.css.ts";
 
 /**
@@ -167,24 +168,30 @@ export function useVizFile(sessionKey: string, file: Attachment) {
 }
 
 /**
- * A placed HTML file, drawn in its message, with a way to open it on its own beside the chat (OpenFile). `failed`:
- * what shows instead when the file cannot be read (its card).
+ * A placed HTML file, drawn in its message, with ways to open it on its own: beside the chat (OpenFile), over the
+ * whole window (the file's preview, which also downloads it). `failed`: what shows instead when the file cannot be read
+ * (its card).
  */
 export function VizFile({ sessionKey, file, failed }: { sessionKey: string; file: Attachment; failed: ReactNode }) {
   const viz = useVizFile(sessionKey, file);
   const open = useContext(OpenFile);
+  const [previewing, setPreviewing] = useState(false);
   if (viz?.failed) return failed;
   if (!viz) return <div className={css.vizWait} aria-busy="true" />;
   return (
     <div className={css.viz}>
       <Frame html={viz.html} title={file.name} state={viz.state} onState={viz.keep} />
-      {open && (
-        <div className={css.vizBar}>
-          <button type="button" className={css.vizOpen} onClick={() => open(sessionKey, file)}>
-            <PanelOpen size={13} strokeWidth={1.75} />在侧边打开
-          </button>
-        </div>
-      )}
+      <div className={css.vizBar}>
+        <Tip label="全屏打开"><button type="button" className={css.vizOpen} aria-label="全屏打开" onClick={() => setPreviewing(true)}>
+          <Expand size={14} strokeWidth={1.75} />
+        </button></Tip>
+        {open && (
+          <Tip label="在侧边打开"><button type="button" className={css.vizOpen} aria-label="在侧边打开" onClick={() => open(sessionKey, file)}>
+            <PanelOpen size={14} strokeWidth={1.75} />
+          </button></Tip>
+        )}
+      </div>
+      <FilePreview open={previewing} onClose={() => setPreviewing(false)} sessionKey={sessionKey} file={file} />
     </div>
   );
 }

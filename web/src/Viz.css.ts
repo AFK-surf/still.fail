@@ -4,11 +4,11 @@ import { vars } from "./styles/tokens.css.ts";
 /** An inline visualization: the frame on the message's own ground, a small link to the file below it. */
 export const viz = style({ width: "100%", minWidth: 0, margin: "0 0 4px", selectors: { "&:last-child": { marginBottom: 0 } } });
 /** Under the frame, out of its way (the figure's own controls sit in its corners): the way to open it on its own. */
-export const vizBar = style({ display: "flex", justifyContent: "flex-end", height: "22px", marginTop: "2px" });
-/** 在侧边打开: quiet under the figure, the chat's own grey, clearer on hover. */
+export const vizBar = style({ display: "flex", justifyContent: "flex-end", gap: "2px", height: "22px", marginTop: "2px" });
+/** 全屏打开, 在侧边打开: icons quiet under the figure, the chat's own grey, clearer on hover (what they do is their tip). */
 export const vizOpen = style({
-  display: "inline-flex", alignItems: "center", gap: "4px",
-  height: "22px", padding: "0 8px", border: "0", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px",
+  width: "22px", height: "22px", padding: "0", border: "0", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "none", color: vars.subtle, fontSize: "11px", cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
