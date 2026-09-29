@@ -5,9 +5,10 @@
 // which only the console's host routes to (index.ts).
 import { isAdmin } from "./admin";
 import { bearerToken, denied, readJson, reply, verifyToken, type Claims } from "./auth";
-import { EVENTS_PROTOCOL, ROLES, type Role } from "./directory";
+import { header, publicOrigins, signedMessages } from "./compat";
+import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
-import { grantKeys, signCredential, validKeyHex, verifyKeySignature } from "./grants";
+import { grantKeys, signCredential, validKeyHex, verifyAnySignature } from "./grants";
 import { receiveTraces } from "./tracing";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
@@ -41,16 +42,19 @@ async function account(token: string | null, env: Env): Promise<Claims | null> {
 const isUpgrade = (request: Request) => request.headers.get("upgrade")?.toLowerCase() === "websocket";
 
 /**
- * The access token of an events socket. Browsers cannot set headers on a
- * WebSocket, so it comes as a second subprotocol, `ember-token.<token>`, next
- * to `ember-events` (the one the answer selects). A header, unlike a query
- * string, stays out of URLs and so out of request logs.
+ * The access token of an events socket, and the subprotocol the answer
+ * selects. Browsers cannot set headers on a WebSocket, so it comes as a second
+ * subprotocol, `stillfail-token.<token>`, next to `stillfail-events` (the one
+ * the answer selects); clients from before the rename say `ember-token.` and
+ * `ember-events`. A header, unlike a query string, stays out of URLs and so
+ * out of request logs.
  */
-function socketToken(request: Request): string | null {
+function socketToken(request: Request): { token: string; protocol: string } | null {
   const offered = (request.headers.get("sec-websocket-protocol") ?? "").split(",").map((p) => p.trim());
-  if (!offered.includes(EVENTS_PROTOCOL)) return null;
-  const match = offered.map((p) => /^ember-token\.([A-Za-z0-9._-]{1,4096})$/.exec(p)).find(Boolean);
-  return match?.[1] ?? null;
+  const protocol = EVENTS_PROTOCOLS.find((p) => offered.includes(p));
+  if (!protocol) return null;
+  const match = offered.map((p) => /^(?:stillfail|ember)-token\.([A-Za-z0-9._-]{1,4096})$/.exec(p)).find(Boolean);
+  return match?.[1] ? { token: match[1], protocol } : null;
 }
 
 async function body(request: Request): Promise<Record<string, unknown>> {
@@ -62,14 +66,14 @@ async function body(request: Request): Promise<Record<string, unknown>> {
 export async function api(request: Request, env: Env, url: URL): Promise<Response | null> {
   const path = url.pathname;
   const method = request.method;
-  if (path === "/.well-known/ember-grant-keys" && method === "GET") return reply(grantKeys(env), 200, { "cache-control": "public, max-age=300" });
+  if ((path === "/.well-known/stillfail-grant-keys" || path === "/.well-known/ember-grant-keys") && method === "GET") return reply(grantKeys(env), 200, { "cache-control": "public, max-age=300" });
 
   // ── stations, authenticated by their own key ────────────────────────────
   if (path === "/v1/stations/enroll" && method === "POST") {
     const input = await readJson(request).catch(() => null);
     if (!input || typeof input.token !== "string" || !validKeyHex(input.station) || typeof input.signature !== "string") return reply({ error: "invalid_request" }, 400);
-    const message = `ember-station-enroll-v1:${env.PUBLIC_ORIGIN}:${input.token}:${input.station}`;
-    if (!(await verifyKeySignature(input.station, input.signature, message))) return reply({ error: "invalid_signature" }, 401);
+    const messages = signedMessages("station-enroll-v1", publicOrigins(env), `${input.token}:${input.station}`);
+    if (!(await verifyAnySignature(input.station, input.signature, messages))) return reply({ error: "invalid_signature" }, 401);
     const version = typeof input.version === "string" ? input.version.slice(0, 40) : null;
     return directory(async () => ({
       ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version)),
@@ -79,19 +83,21 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     }));
   }
   // The station's presence: a WebSocket it keeps open. Signed at connect in
-  // headers: x-ember-station (its key), x-ember-ts (unix seconds, within 5
-  // minutes), x-ember-signature over "ember-station-connect-v1:<origin>:<station>:<ts>",
-  // and x-ember-version.
+  // headers: x-stillfail-station (its key), x-stillfail-ts (unix seconds,
+  // within 5 minutes), x-stillfail-signature over
+  // "stillfail-station-connect-v1:<origin>:<station>:<ts>", and
+  // x-stillfail-version. (Stations from before the rename: x-ember-* and
+  // "ember-station-connect-v1:…"; the origin is any of the cloud's.)
   if (path === "/v1/stations/connect" && method === "GET") {
     if (!isUpgrade(request)) return reply({ error: "websocket_required" }, 426);
-    const station = request.headers.get("x-ember-station");
-    const signature = request.headers.get("x-ember-signature") ?? "";
-    const ts = Number(request.headers.get("x-ember-ts"));
+    const station = header(request, "station");
+    const signature = header(request, "signature") ?? "";
+    const ts = Number(header(request, "ts"));
     if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - Date.now() / 1000) > 300) return reply({ error: "invalid_request" }, 400);
-    if (!(await verifyKeySignature(station, signature, `ember-station-connect-v1:${env.PUBLIC_ORIGIN}:${station}:${ts}`))) return reply({ error: "invalid_signature" }, 401);
-    const headers = new Headers({ upgrade: "websocket", "x-ember-station": station });
-    const version = request.headers.get("x-ember-version");
-    if (version) headers.set("x-ember-version", version.slice(0, 40));
+    if (!(await verifyAnySignature(station, signature, signedMessages("station-connect-v1", publicOrigins(env), `${station}:${ts}`)))) return reply({ error: "invalid_signature" }, 401);
+    const headers = new Headers({ upgrade: "websocket", "x-stillfail-station": station });
+    const version = header(request, "version");
+    if (version) headers.set("x-stillfail-version", version.slice(0, 40));
     return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
   }
 
@@ -105,9 +111,10 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
 
   if (path === "/v1/events" && method === "GET") {
     if (!isUpgrade(request)) return reply({ error: "websocket_required" }, 426);
-    const claims = await account(socketToken(request), env);
-    if (!claims) return denied();
-    return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-ember-sub": claims.sub } }));
+    const socket = socketToken(request);
+    const claims = await account(socket?.token ?? null, env);
+    if (!claims || !socket) return denied();
+    return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-protocol": socket.protocol } }));
   }
 
   // ── accounts ────────────────────────────────────────────────────────────
@@ -161,8 +168,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (kind === "enrollments" && !target && method === "POST") {
     return directory(async () => {
       const made = await dir.createEnrollment(sub, ws, text("name"));
-      // A machine without ember installs it and joins at once; one with ember joins.
-      return { ...made, install: `curl -fsSL ${env.PUBLIC_ORIGIN}/install.sh | sh -s -- ${made.token}`, command: `ember station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
+      // A machine without still.fail installs it and joins at once; one with it joins.
+      return { ...made, install: `curl -fsSL ${env.PUBLIC_ORIGIN}/install.sh | sh -s -- ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
     });
   }
   // A member's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).

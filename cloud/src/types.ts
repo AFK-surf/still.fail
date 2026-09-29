@@ -3,7 +3,7 @@ export type Role = "owner" | "admin" | "member";
 
 export interface UserView { sub: string; email: string; name: string; picture: string }
 export interface WorkspaceSummary { id: string; name: string; role: Role; created_at: number; stations: number; members: number }
-/** last_seen: when it last connected to ember cloud or left it (whether it is up, each device finds out over the mesh). */
+/** last_seen: when it last connected to still.fail cloud or left it (whether it is up, each device finds out over the mesh). */
 export interface StationView { id: string; name: string; enrolled_at: number; enrolled_by: string; last_seen: number | null; version: string | null }
 export interface MemberView extends UserView { role: Role; added_at: number }
 export interface InvitationView { id: string; role: Role; email: string | null; created_by: string; expires_at: number }
@@ -24,7 +24,7 @@ export type AccountEvent =
 export type Admission = "admin" | "code" | "invitation" | "early";
 export interface AdminUser extends UserView {
   created_at: number;
-  /** When they last signed in or opened ember (its events socket); null before this was recorded. */
+  /** When they last signed in or opened still.fail (its events socket); null before this was recorded. */
   last_seen: number | null;
   /** null: signed in but not let in yet (no workspace, no code, no invitation). */
   admission: Admission | null;

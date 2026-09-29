@@ -9,7 +9,7 @@ import { previewFiles } from "./src/preview.ts";
 const root = join(import.meta.dirname, "..");
 const bundled = await build({
   configFile: false, logLevel: "warn",
-  build: { write: false, minify: true, lib: { entry: join(root, "web/src/annotate/frame.ts"), formats: ["iife"], name: "emberAnnotateBundle" } },
+  build: { write: false, minify: true, lib: { entry: join(root, "web/src/annotate/frame.ts"), formats: ["iife"], name: "stillfailAnnotateBundle" } },
 });
 const annotate = (Array.isArray(bundled) ? bundled[0]! : bundled as { output: { type: string; code?: string }[] }).output.find((o) => o.type === "chunk")!.code!;
 const out = join(root, "dist", "cloud-preview");

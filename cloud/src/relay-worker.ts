@@ -1,12 +1,14 @@
-// ember's relay, a Worker of its own (ember-relay): deployed only when the relay changes, so the rest of ember cloud
-// is deployed without dropping every device's and station's relay connection. It answers, on PUBLIC_ORIGIN's host
-// (routes that take precedence over the web app's Custom Domain: wrangler.relay.jsonc):
+// still.fail's relay, a Worker of its own (ember-relay): deployed only when the relay changes, so the rest of
+// still.fail cloud is deployed without dropping every device's and station's relay connection. It answers, on
+// PUBLIC_ORIGIN's host and its old ones (routes that take precedence over the web app's Custom Domain:
+// wrangler.relay.jsonc):
 //   /relay            the iroh relay (a WebSocket), through the service budget (relay.ts) to the relay process
 //   /ping             iroh's latency probe (net_report)
 //   /generate_204     iroh's captive portal check
 //   /v1/admin/relay/* for operators: restart the relay process, where it runs
 import { Container } from "@cloudflare/containers";
 import { bearerToken, denied, digest, reply } from "./auth";
+import { publicOrigins } from "./compat";
 import type { RelayBudget } from "./relay";
 export { RelayBudget } from "./relay";
 
@@ -14,6 +16,8 @@ export interface RelayEnv {
   RELAY_BUDGET: DurableObjectNamespace<RelayBudget>;
   RELAY: DurableObjectNamespace<Relay>;
   PUBLIC_ORIGIN: string;
+  /** Its older origins, comma-separated (compat.ts): stations from before the rename have one as their relay. */
+  PUBLIC_ORIGIN_ALIASES?: string;
   ADMIN_TOKEN?: string;
 }
 
@@ -30,7 +34,7 @@ export default {
   async fetch(request: Request, env: RelayEnv): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
-    if (url.origin !== env.PUBLIC_ORIGIN) return reply({ error: "invalid_origin" }, 421);
+    if (!publicOrigins(env).includes(url.origin)) return reply({ error: "invalid_origin" }, 421);
     if (path === "/ping" && request.method === "GET") return reply({ service: "ember-relay", relay: "iroh-relay-1.1.0" });
     if (path === "/generate_204" && request.method === "GET") {
       const challenge = request.headers.get("x-iroh-challenge");

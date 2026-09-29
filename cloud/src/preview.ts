@@ -1,17 +1,17 @@
 // The preview host (PREVIEW_ORIGIN): where a client shows a web service
 // running on a station's machine, framed, on an origin of its own so the
-// service's scripts reach nothing of ember's (no login, no storage). A static
+// service's scripts reach nothing of still.fail's (no login, no storage). A static
 // Worker of its own (ember-preview): these files, written out by
 // build-static.ts, with the headers in its _headers.
 //
-// It serves three files and nothing else. /_ember/frame is the frame a client
-// puts in its page; it registers /_ember/sw.js for the whole host, then shows
+// It serves four files and nothing else. /_stillfail/frame is the frame a client
+// puts in its page; it registers /_stillfail/sw.js for the whole host, then shows
 // the service in a frame of its own at the service's own paths. The service
 // worker answers every request of that inner frame by handing it to the
 // outer frame, which hands it (over a MessagePort) to the client that made
 // it; the client sends it to the station through its core — over the mesh,
 // like any other call — and the answer comes back the same way. Nothing of
-// the service passes through here. /_ember/annotate.js, which the frame
+// the service passes through here. /_stillfail/annotate.js, which the frame
 // loads, marks the service's page for a chat (web/src/annotate/frame.ts).
 //
 // A service's WebSockets are not requests a service worker sees: /_ember/socket.js,
@@ -19,6 +19,15 @@
 // those to the preview's own host the same way (a dev server's live reload),
 // through the frame. Answers come as they are sent (an event stream, a long
 // poll), and a request its page gave up is stopped at the station.
+//
+// Clients from before the rename open /_ember/frame: the same files are
+// under /_ember/ too, and the frame loads its script and service worker from
+// beside itself, so each stays under the prefix it was opened with. The
+// messages between the frame, its service worker and the client keep their
+// "ember-preview-*" types (clients and service workers of either age are
+// running at once); the frame and the service worker also take
+// "stillfail-preview-*" ones. The tag the service worker puts in a page stays
+// /_ember/socket.js (the desktop app answers that path too).
 //
 // Its limits: cookies the service sets are not sent back (the service
 // worker's requests carry none).
@@ -34,8 +43,10 @@ const FRAME = `<!doctype html>
   iframe { display: block; width: 100%; height: 100%; border: 0; }
   p { margin: 0; padding: 24px; font: 14px system-ui, sans-serif; color: #777; }
 </style>
-<script src="/_ember/annotate.js"></script>
+<script src="annotate.js"></script>
 <script>
+  const is = (data, name) => data?.type === "stillfail-preview-" + name || data?.type === "ember-preview-" + name;
+  const annotator = () => window.stillfailAnnotate || window.emberAnnotate;
   const params = new URLSearchParams(location.search);
   const nonce = params.get("n") || "";
   let port = null;
@@ -77,7 +88,7 @@ const FRAME = `<!doctype html>
   // A request of the service's frame, from the service worker: on to the client. Given up (its page left, its reader
   // cancelled), the client is told to stop it.
   navigator.serviceWorker.addEventListener("message", (event) => {
-    if (event.data?.type !== "ember-preview-fetch" || !port) return;
+    if (!is(event.data, "fetch") || !port) return;
     const id = ++next;
     const reply = event.ports[0];
     // Whether this service worker takes an answer as it comes (one from before takes it whole).
@@ -89,8 +100,9 @@ const FRAME = `<!doctype html>
     port.postMessage({ id, method, path, headers, body }, body ? [body.buffer] : []);
   });
   // A WebSocket of the service's page (/_ember/socket.js, same origin: it calls this): through the client to the
-  // station. \`on\` hears it open, its messages and its close; what is returned sends and closes.
-  window.emberPreviewSocket = (path, protocols, on) => {
+  // station. \`on\` hears it open, its messages and its close; what is returned sends and closes. Under both names, as
+  // annotate.js is: a page's socket.js from before the rename looks for \`emberPreviewSocket\`.
+  window.stillfailPreviewSocket = window.emberPreviewSocket = (path, protocols, on) => {
     const sid = crypto.randomUUID();
     if (!port || !streams) {
       setTimeout(() => on.close(1006, "", true));
@@ -106,7 +118,7 @@ const FRAME = `<!doctype html>
     };
   };
   window.addEventListener("message", (event) => {
-    if (event.source !== parent || event.data?.type !== "ember-preview-port" || port || !event.ports[0]) return;
+    if (event.source !== parent || !is(event.data, "port") || port || !event.ports[0]) return;
     port = event.ports[0];
     streams = event.data.streams === true;
     port.onmessage = fromClient;
@@ -134,14 +146,14 @@ const FRAME = `<!doctype html>
     const state = path + "|" + here + "|" + trail.length;
     if (state === said) return;
     said = state;
-    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1, annotate: !!window.emberAnnotate }, "*");
+    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1, annotate: !!annotator() }, "*");
   };
   const replace = (path) => {
     moving = true;
     inner.contentWindow.location.replace(path);
   };
   window.addEventListener("message", (event) => {
-    if (event.source !== parent || event.data?.type !== "ember-preview-nav" || !inner) return;
+    if (event.source !== parent || !is(event.data, "nav") || !inner) return;
     const { action, path } = event.data;
     if (action === "back" && here > 0) replace(trail[--here]);
     else if (action === "forward" && here < trail.length - 1) replace(trail[++here]);
@@ -149,15 +161,15 @@ const FRAME = `<!doctype html>
     else if (action === "go" && typeof path === "string" && path.startsWith("/")) inner.contentWindow.location.replace(path);
   });
   async function start() {
-    await navigator.serviceWorker.register("/_ember/sw.js", { scope: "/" });
+    await navigator.serviceWorker.register("sw.js", { scope: "/" });
     const worker = (await navigator.serviceWorker.ready).active;
     worker.postMessage({ type: "ember-preview-frame", nonce });
     inner = document.createElement("iframe");
     inner.src = params.get("path") || "/";
     inner.addEventListener("load", () => { report(); moving = false; });
     document.body.append(inner);
-    // Marking the page for a chat (/_ember/annotate.js, web/src/annotate/frame.ts), when it loaded.
-    window.emberAnnotate?.attach(inner, nonce);
+    // Marking the page for a chat (annotate.js, web/src/annotate/frame.ts), when it loaded.
+    annotator()?.attach(inner, nonce);
     setInterval(report, 500);
   }
   parent.postMessage({ type: "ember-preview-ready", nonce, streams: true }, "*");
@@ -166,24 +178,28 @@ const FRAME = `<!doctype html>
 `;
 
 const WORKER = `
+// The frame, under the prefix of either name; the host's own files are under them.
+const FRAMES = ["/_stillfail/frame", "/_ember/frame"];
+const OWN = /^\\/_(stillfail|ember)\\//;
+const is = (data, name) => data?.type === "stillfail-preview-" + name || data?.type === "ember-preview-" + name;
 // Which outer frame each of the service's frames belongs to (by client id), and the last frame that started.
 const owners = new Map();
 let latest = null;
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 self.addEventListener("message", (event) => {
-  if (event.data?.type === "ember-preview-frame") latest = event.data.nonce;
+  if (is(event.data, "frame")) latest = event.data.nonce;
 });
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (url.origin !== location.origin || url.pathname.startsWith("/_ember/")) return;
+  if (url.origin !== location.origin || OWN.test(url.pathname)) return;
   event.respondWith(relay(event, url));
 });
 function nonceOf(event) {
   let nonce = null;
   try {
     const from = new URL(event.request.referrer);
-    if (from.origin === location.origin && from.pathname === "/_ember/frame") nonce = from.searchParams.get("n");
+    if (from.origin === location.origin && FRAMES.includes(from.pathname)) nonce = from.searchParams.get("n");
   } catch {}
   nonce = nonce || owners.get(event.clientId) || latest;
   if (nonce && event.resultingClientId) owners.set(event.resultingClientId, nonce);
@@ -191,13 +207,13 @@ function nonceOf(event) {
   return nonce;
 }
 async function frameOf(nonce) {
-  const frames = (await self.clients.matchAll({ type: "window", includeUncontrolled: true })).filter((c) => new URL(c.url).pathname === "/_ember/frame");
+  const frames = (await self.clients.matchAll({ type: "window", includeUncontrolled: true })).filter((c) => FRAMES.includes(new URL(c.url).pathname));
   return frames.find((c) => new URL(c.url).searchParams.get("n") === nonce) || frames.at(-1) || null;
 }
 function plain(status, text) {
   return new Response(text, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 }
-// What puts the service's pages' WebSockets through ember (/_ember/socket.js) into them: previewSocket.ts's.
+// What puts the service's pages' WebSockets through still.fail (/_ember/socket.js) into them: previewSocket.ts's.
 ${SOCKET_TAG_JS}
 async function relay(event, url) {
   const frame = await frameOf(nonceOf(event));
@@ -252,23 +268,30 @@ const SOCKET = socketScript(`(() => {
   try {
     for (let w = window; w !== w.parent; ) {
       w = w.parent;
-      if (w.location.pathname === "/_ember/frame" && typeof w.emberPreviewSocket === "function") return w.emberPreviewSocket;
+      if (!["/_stillfail/frame", "/_ember/frame"].includes(w.location.pathname)) continue;
+      const link = w.stillfailPreviewSocket || w.emberPreviewSocket;
+      if (typeof link === "function") return link;
     }
   } catch {}
   return null;
 })()`);
 
+/** Where the host's own files are: the new prefix, and the one clients from before the rename open. */
+export const PREVIEW_PREFIXES = ["_stillfail", "_ember"] as const;
+
 /** The preview host's files, by path under its assets directory. */
 export function previewFiles(annotate = ""): Record<string, string> {
   return {
-    "_ember/frame.html": FRAME,
-    "_ember/sw.js": WORKER,
-    // Marking the page for a chat (web/src/annotate/frame.ts), bundled by build-static.ts.
-    "_ember/annotate.js": annotate,
-    "_ember/socket.js": SOCKET,
+    ...Object.fromEntries(PREVIEW_PREFIXES.flatMap((prefix) => [
+      [`${prefix}/frame.html`, FRAME],
+      [`${prefix}/sw.js`, WORKER],
+      // Marking the page for a chat (web/src/annotate/frame.ts), bundled by build-static.ts.
+      [`${prefix}/annotate.js`, annotate],
+      [`${prefix}/socket.js`, SOCKET],
+    ])),
     // Only reached before the service worker runs, or when a frame opens this host by itself.
     "404.html": `<!doctype html><meta charset="utf-8"><title>still.fail preview</title><p>这是 still.fail 的预览地址：在 still.fail 里打开一个预览。</p>`,
-    // The service worker is the whole host's, from under /_ember/.
-    "_headers": "/_ember/sw.js\n  Service-Worker-Allowed: /\n  Cache-Control: no-cache\n/_ember/frame\n  Cache-Control: no-cache\n/_ember/annotate.js\n  Cache-Control: no-cache\n/_ember/socket.js\n  Cache-Control: no-cache\n",
+    // The service worker is the whole host's, from under either prefix.
+    "_headers": PREVIEW_PREFIXES.map((prefix) => `/${prefix}/sw.js\n  Service-Worker-Allowed: /\n  Cache-Control: no-cache\n/${prefix}/frame\n  Cache-Control: no-cache\n/${prefix}/annotate.js\n  Cache-Control: no-cache\n/${prefix}/socket.js\n  Cache-Control: no-cache\n`).join(""),
   };
 }

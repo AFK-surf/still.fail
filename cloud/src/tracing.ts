@@ -1,12 +1,13 @@
 // Traces (docs/telemetry.md). Clients and stations send their spans here, to
-// POST /v1/telemetry/traces, and ember cloud passes them on to Axiom with its
+// POST /v1/telemetry/traces, and still.fail cloud passes them on to Axiom with its
 // own token, which never leaves the Worker. It records spans of its own for
 // the /v1/* calls that carry a recorded W3C traceparent, sent straight to
 // Axiom once the answer is out.
 import { DurableObject } from "cloudflare:workers";
 import { readText, reply } from "./auth";
+import { header, publicOrigins, signedMessages } from "./compat";
 import type { Env } from "./env";
-import { validKeyHex, verifyKeySignature } from "./grants";
+import { validKeyHex, verifyAnySignature } from "./grants";
 import { TELEMETRY_BATCHES_PER_MINUTE } from "./limits";
 
 const AXIOM = "https://api.axiom.co/v1/traces";
@@ -70,16 +71,17 @@ const hex = (bytes: ArrayBuffer | Uint8Array) => [...new Uint8Array(bytes)].map(
 
 /**
  * Who sends a batch: an account (`sub`, checked by the caller from its access token), or a station signing
- * "ember-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>" with its key, like its presence
- * socket (x-ember-station, x-ember-ts within 5 minutes, x-ember-signature), that is still enrolled.
+ * "stillfail-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>" with its key, like its presence
+ * socket (x-stillfail-station, x-stillfail-ts within 5 minutes, x-stillfail-signature), that is still enrolled.
+ * (Stations from before the rename: "ember-station-telemetry-v1:…" and x-ember-*; the origin is any of the cloud's.)
  */
 async function stationSender(request: Request, env: Env, body: string): Promise<string | null> {
-  const station = request.headers.get("x-ember-station");
-  const ts = Number(request.headers.get("x-ember-ts"));
+  const station = header(request, "station");
+  const ts = Number(header(request, "ts"));
   if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - Date.now() / 1000) > 300) return null;
   const digest = hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)));
-  const message = `ember-station-telemetry-v1:${env.PUBLIC_ORIGIN}:${station}:${ts}:${digest}`;
-  if (!(await verifyKeySignature(station, request.headers.get("x-ember-signature") ?? "", message))) return null;
+  const messages = signedMessages("station-telemetry-v1", publicOrigins(env), `${station}:${ts}:${digest}`);
+  if (!(await verifyAnySignature(station, header(request, "signature") ?? "", messages))) return null;
   return (await env.DIRECTORY.getByName("primary").isStation(station)) ? station : null;
 }
 
@@ -131,6 +133,7 @@ export async function recordCall(env: Env, parent: TraceParent, request: Request
     ],
     status: { code: response.status >= 500 ? 2 : 1 },
   };
+  // Named after the Worker (ember-cloud, which keeps its name), as the queries in docs/telemetry.md know it.
   const body = JSON.stringify({ resourceSpans: [{ resource: { attributes: [attribute("service.name", "ember-cloud")] }, scopeSpans: [{ scope: { name: "ember-cloud" }, spans: [span] }] }] });
   await toAxiom(env, body).catch(() => false);
 }

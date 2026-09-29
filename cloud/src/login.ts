@@ -193,7 +193,7 @@ export class LoginAttempt extends DurableObject<Env> {
         finish.searchParams.set("error", "login_cancelled");
       } else {
         try {
-          attempt.identity = await googleIdentity(this.env, code, attempt.googleVerifier, attempt.nonce);
+          attempt.identity = await googleIdentity(this.env, code, attempt.googleVerifier, attempt.nonce, url.origin);
           const secret = randomSecret();
           if (!attempt.device) attempt.codeHash = await digest(secret);
           attempt.phase = "complete";

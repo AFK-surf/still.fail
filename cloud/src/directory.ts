@@ -6,7 +6,7 @@
 // It also holds the sockets that make this live (hibernatable, so idle ones
 // cost nothing): each device's `/v1/events` socket, tagged `sub:<account>`,
 // to which every change is pushed as the accounts it affects; and each
-// station's socket, tagged `station:<id>`: what ember cloud tells the station
+// station's socket, tagged `station:<id>`: what still.fail cloud tells the station
 // (its name and workspace, the credential keys, what is revoked). Whether a
 // station is up is not decided here: each device finds it out, reaching the
 // station over the mesh.
@@ -14,6 +14,7 @@ import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import { CODE_TTL_DAYS, isAdmin, newCode, normalizeCode } from "./admin";
 import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
+import { header } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
 import type { AccountEvent, AddedView, Admission, AdminUser, AdminWorkspace, InvitationView, InviteCodeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
@@ -26,7 +27,8 @@ export const INVITATION_TTL_SEC = 7 * 24 * 60 * 60;
 export const ENROLLMENT_TTL_SEC = 60 * 60;
 const LIMITS = { workspacesPerUser: 32, membersPerWorkspace: 200, stationsPerWorkspace: 64, openInvitations: 50 };
 
-export const EVENTS_PROTOCOL = "ember-events";
+/** The events socket's subprotocols (api.ts socketToken), the new one first: clients from before the rename say "ember-events". */
+export const EVENTS_PROTOCOLS = ["stillfail-events", "ember-events"] as const;
 /** How long a revocation is kept and told: a day more than a credential lasts (grants.ts). */
 const REVOCATION_DAYS = 31;
 
@@ -229,7 +231,7 @@ export class Directory extends DurableObject<Env> {
   }
 
   /**
-   * ember is invite-only: the admin may create workspaces, and so may anyone
+   * still.fail is invite-only: the admin may create workspaces, and so may anyone
    * let in before — through an invitation they accepted or a code they
    * redeemed (or, from before codes existed, by being a member somewhere).
    * Anyone else redeems a code, which is used up by this workspace. Nothing
@@ -607,26 +609,29 @@ export class Directory extends DurableObject<Env> {
 
   /**
    * Upgrades reach here only through the Worker, which has authenticated
-   * them: `/events` names the account in `x-ember-sub`, `/stations/connect`
-   * the station (whose signature it checked) in `x-ember-station`.
+   * them: `/events` names the account in `x-stillfail-sub` (and the
+   * subprotocol to select in `x-stillfail-protocol`), `/stations/connect` the
+   * station (whose signature it checked) in `x-stillfail-station`. (The
+   * x-ember-* ones are read too: a Worker from before the rename may still be
+   * passing a request on while this object already runs the new code.)
    */
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname;
     const pair = new WebSocketPair();
     if (path === "/events") {
-      const sub = request.headers.get("x-ember-sub")!;
+      const sub = header(request, "sub")!;
       // Every device opens this when it starts: the nearest thing to "last seen" that costs no write per request.
       this.#run("UPDATE users SET last_seen = ? WHERE sub = ?", nowSeconds(), sub);
       this.ctx.acceptWebSocket(pair[1], [`sub:${sub}`]);
       pair[1].serializeAttachment({ sub } satisfies Attachment);
-      return new Response(null, { status: 101, webSocket: pair[0], headers: { "sec-websocket-protocol": EVENTS_PROTOCOL } });
+      return new Response(null, { status: 101, webSocket: pair[0], headers: { "sec-websocket-protocol": header(request, "protocol") ?? EVENTS_PROTOCOLS[1] } });
     }
-    const station = request.headers.get("x-ember-station")!;
+    const station = header(request, "station")!;
     const row = this.#one("SELECT workspace FROM stations WHERE id = ?", station);
     if (!row) return Response.json({ error: "station_removed" }, { status: 404 });
     // One socket per station: a reconnect replaces the one it gave up on.
     for (const old of this.#presence(station)) this.#drop(old, CLOSE.replaced, "replaced");
-    this.#run("UPDATE stations SET last_seen = ?, version = COALESCE(?, version) WHERE id = ?", nowSeconds(), request.headers.get("x-ember-version"), station);
+    this.#run("UPDATE stations SET last_seen = ?, version = COALESCE(?, version) WHERE id = ?", nowSeconds(), header(request, "version"), station);
     this.ctx.acceptWebSocket(pair[1], [`station:${station}`]);
     pair[1].serializeAttachment({ station, at: Date.now() } satisfies Attachment);
     this.#sendState(station);

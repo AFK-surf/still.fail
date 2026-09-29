@@ -1,11 +1,13 @@
-// ember cloud's API (the Worker ember-cloud): accounts and sign-in, workspaces and their stations, the operator's
+// still.fail cloud's API (the Worker ember-cloud): accounts and sign-in, workspaces and their stations, the operator's
 // console API, and installing a station. It answers only the paths routed to it (wrangler.jsonc) on PUBLIC_ORIGIN's
 // and ADMIN_ORIGIN's hosts; the web apps are static Workers of their own on those hosts' Custom Domains (routes take
 // precedence over them), and the relay is a Worker of its own (relay-worker.ts), so deploying this one drops no relay
-// connection and serves no page.
+// connection and serves no page. Each host has an old name too (ember.3720.org, admin.ember.3720.org: the
+// *_ORIGIN_ALIASES, compat.ts), answered the same; links, and signing in with Google, use the new ones.
 import { installScript, releaseType } from "./install.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
+import { adminOrigins, publicOrigins } from "./compat";
 import type { Env } from "./env";
 import { adminApi, api } from "./api";
 import { parseTraceparent, recordCall } from "./tracing";
@@ -21,6 +23,9 @@ export { LoginAttempt, LoginLimiter } from "./login";
 const CONSOLE_CALLS = new Set(["/v1/auth/token", "/v1/auth/refresh", "/v1/auth/logout", "/v1/me"]);
 
 const notFound = () => new Response("Not found", { status: 404 });
+
+/** The same request on PUBLIC_ORIGIN: where a browser's sign-in goes, so its cookie is on the host Google calls back. */
+const toPublic = (env: Env, url: URL) => new Response(null, { status: 302, headers: { location: `${env.PUBLIC_ORIGIN}${url.pathname}${url.search}`, "cache-control": "no-store" } });
 
 export default {
   // A /v1/* call in a recorded trace (a client core's) is a span of it, sent once the answer is out.
@@ -38,10 +43,12 @@ async function handle(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
   if (path === "/healthz" && request.method === "GET") {
+    // The Worker's name, which it keeps (Cloudflare knows it by it).
     return Response.json({ service: "ember-cloud", google_login: authConfigured(env) });
   }
+  const onPublic = publicOrigins(env).includes(url.origin);
   // Installing a station: the installer, and the releases it gets; the apps' builds, for their updaters.
-  if (url.origin === env.PUBLIC_ORIGIN && request.method === "GET") {
+  if (onPublic && request.method === "GET") {
     if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
     const release = /^\/releases\/(.+)$/.exec(path)?.[1];
     const type = release ? releaseType(release) : null;
@@ -51,18 +58,18 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return new Response(object.body, { headers: { "content-type": type, "content-length": String(object.size), "cache-control": "no-store" } });
     }
   }
-  const onConsole = url.origin === env.ADMIN_ORIGIN;
+  const onConsole = adminOrigins(env).includes(url.origin);
   if (path.startsWith("/v1/")) {
-    if (url.origin !== env.PUBLIC_ORIGIN && !onConsole) return reply({ error: "invalid_origin" }, 421);
+    if (!onPublic && !onConsole) return reply({ error: "invalid_origin" }, 421);
     if (path.startsWith("/v1/auth/") && !authConfigured(env)) return reply({ error: "login_not_configured" }, 503);
   }
   if (onConsole) {
-    if (path === "/v1/auth/google/start" && request.method === "GET") {
-      return new Response(null, { status: 302, headers: { location: `${env.PUBLIC_ORIGIN}${path}${url.search}`, "cache-control": "no-store" } });
-    }
+    if (path === "/v1/auth/google/start" && request.method === "GET") return toPublic(env, url);
     if (path.startsWith("/v1/admin/")) return adminApi(request, env, path);
     if (!CONSOLE_CALLS.has(path)) return notFound();
   }
+  // A browser signing in on an old host goes on to the new one, which Google calls back.
+  if (url.origin !== env.PUBLIC_ORIGIN && request.method === "GET" && (path === "/v1/auth/google/start" || /^\/v1\/auth\/device\/[A-Za-z0-9_-]{43}$/.test(path))) return toPublic(env, url);
   if (path === "/v1/auth/google/start" && request.method === "GET") {
     return googleStart(env, request);
   }
@@ -155,12 +162,16 @@ async function handle(request: Request, env: Env): Promise<Response> {
   return notFound();
 }
 
-/** Android App Links: dev.ember.android, signed with this certificate, opens https://ember.3720.org/o/… itself. */
-const ASSET_LINKS = [{
+/**
+ * Android App Links: the app, signed with this certificate, opens https://<its host>/o/… itself. Both the app from
+ * before the rename (dev.ember.android) and the new one (fail.still.android), on every host: each says in its
+ * manifest which hosts it opens.
+ */
+const ASSET_LINKS = ["fail.still.android", "dev.ember.android"].map((package_name) => ({
   relation: ["delegate_permission/common.handle_all_urls"],
   target: {
     namespace: "android_app",
-    package_name: "dev.ember.android",
+    package_name,
     sha256_cert_fingerprints: ["A0:1A:48:B5:E1:A6:D2:AB:FB:EA:34:57:B6:C7:1D:12:57:BC:42:97:93:BD:8B:3E:BE:F6:BE:8E:E1:55:B5:6A"],
   },
-}];
+}));
