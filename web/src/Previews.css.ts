@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { fadeInKeyframes } from "./styles/keyframes.css.ts";
-import { previewBar } from "./Preview.css.ts";
+import { previewBar, previewFrame } from "./Preview.css.ts";
 import * as stageCss from "./PreviewStage.css.ts";
 
 /** A web service's place in its chat's side panel: the frame is drawn over it (Previews.tsx). */
@@ -126,3 +126,6 @@ globalStyle(`${frame}[data-mode=small] ${stageCss.stage}`, { padding: "0", backg
 globalStyle(`${frame}[data-mode=small] :is(${stageCss.edge}, ${stageCss.shade}, ${stageCss.size}, ${stageCss.hold})`, { display: "none" });
 /** Its corners are the card's (its own screen's are drawn in the preview beside its chat). */
 globalStyle(`${frame}[data-mode=small] ${stageCss.device}`, { borderRadius: "0 !important" });
+/** Nor its page's white ground under it: scaled and cut to the corners, it shows round the page's edges as a thin light
+ * line (over a dark page); what is behind it is the frame's, the theme's own. */
+globalStyle(`${frame}[data-mode=small] ${previewFrame}`, { background: "none" });
