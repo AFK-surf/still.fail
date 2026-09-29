@@ -111,7 +111,17 @@ export function useDraft({ key, station, carry, upload, quotes: held }: {
     if (before === key) return;
     shown.current = key;
     if (carry && key !== undefined && carry.current === key) { carry.current = null; return; }
-    if (before === undefined) return;
+    // The first key: what was written before it goes on into it; with nothing written, its own draft comes back (the
+    // page knew its chat only once its station was known).
+    if (before === undefined) {
+      const next = key === undefined ? undefined : kept.get(key);
+      const { text, files, quotes } = now.current;
+      if (next && !text && !files.length && !quotes.length) {
+        kept.delete(key!);
+        setText(next.text); setFiles(next.files); if (!held) setOwnQuotes(next.quotes);
+      }
+      return;
+    }
     // A new chat moved to another station: what is written goes with it; files stay with the station they went up to.
     if (before.startsWith("new:") && key?.startsWith("new:")) {
       const { files } = now.current;
