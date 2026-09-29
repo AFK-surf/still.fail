@@ -97,14 +97,14 @@ export function ModelTriple({ options, value, onPick, current, runtimeFixed, sid
         <Tip label={title}><Popover.Trigger className={css2.modelTriple} disabled={options.length === 0} data-drop={DROPS[drop]}>
           {options.length === 0 ? <span className={css2.tripleModel}>没有可用模型</span> : (
             <>
-              <span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><Tip label={value.model || undefined}><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></Tip></span>
+              <span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : "选模型"}</span></span>
               {!runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={14} />{RUNTIME_LABEL[value.runtime]}</span>}
               <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={value.effort === null || undefined}>{value.effort ?? "默认深度"}</span>
               <span className={`${css2.triplePart} ${css2.tripleAccount}`}>
                 {shown && <ProviderLogo runtime={value.runtime} kind={shown.kind ?? "env"} size={14} />}
                 <span className={css2.tripleAccountName}>{value.profile ? shown?.name ?? value.profile : shown ? `自动 · ${shown.name}` : "自动分配"}</span>
                 {!value.profile && <span className={css2.tripleAccountShort}>自动</span>}
-                {shown && <span className={css2.tripleRings}><QuotaBars quota={shown.quota} compact small /></span>}
+                {shown && <span className={css2.tripleRings}><QuotaBars quota={shown.quota} compact small bare /></span>}
               </span>
             </>
           )}

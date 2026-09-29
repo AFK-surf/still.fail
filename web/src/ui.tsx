@@ -515,10 +515,13 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
 /** Makers whose marks are one colour (drawn in the text's). Marks from Zork's provider set and lobehub icons (MIT). */
 const MONO = new Set(["anthropic", "openai", "kimi", "xai"]);
 
-/** The mark of the company that made a model (the core says which); the runtime's mark when it does not know. */
+/**
+ * The mark of the company that made a model (the core says which); the runtime's mark when it does not know. No tip of
+ * its own: it sits in tabs, rows and buttons that have theirs, and one thing shows one tip.
+ */
 export function ModelLogo({ maker, runtime, size = 14 }: { maker: Maker | null | undefined; runtime: "claude" | "codex"; size?: number }) {
   if (!maker) return <RuntimeLogo runtime={runtime} size={size} />;
-  return <Tip label={maker.name}><img className={css.modelLogo} src={`${import.meta.env.BASE_URL}models/${maker.id}.svg`} alt={maker.name} width={size} height={size} data-mono={MONO.has(maker.id) || undefined} /></Tip>;
+  return <img className={css.modelLogo} src={`${import.meta.env.BASE_URL}models/${maker.id}.svg`} alt={maker.name} width={size} height={size} data-mono={MONO.has(maker.id) || undefined} />;
 }
 
 /** OpenCode's mark: a hollow square, drawn to match the 1.7 stroke icons. */

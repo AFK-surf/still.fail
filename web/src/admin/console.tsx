@@ -10,7 +10,7 @@ import { Navigate, NavLink, Route, Routes, useLocation } from "react-router";
 import { Lockup } from "../brand.tsx";
 import { stamp } from "../api.ts";
 import { useToast } from "../toast.tsx";
-import { About, Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, Tip, Time, ICON, type Tone } from "../ui.tsx";
+import { About, Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Section, Select, Time, ICON, type Tone } from "../ui.tsx";
 import { signOut, useAccounts, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type Admission, type AdminUser, type AdminWorkspace, type InviteCodeView } from "../cloud/api.ts";
 import { Avatar } from "../cloud/gate.tsx";
@@ -58,7 +58,7 @@ export function Console({ account }: { account: Account }) {
         </div>
         <div className={`${nav.navFootRow} ${css.adminFoot}`}>
           <span className={css.adminAccount}><Avatar account={account} size={20} /><span className={css.accountEmail}>{account.email}</span></span>
-          <Tip label="退出登录" side="top"><IconButton label="退出登录" icon={LogOut} onClick={() => void signOut(account.sub)} /></Tip>
+          <IconButton label="退出登录" icon={LogOut} onClick={() => void signOut(account.sub)} />
         </div>
       </nav>
       <main className={shellCss.main}>

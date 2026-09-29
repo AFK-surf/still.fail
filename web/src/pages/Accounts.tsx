@@ -479,7 +479,7 @@ function QuotaSection({ profile }: { profile: Profile }) {
   const refresh = useAction(() => api.refreshQuota(profile.id));
   const quota = profile.quota;
   return (
-    <Section title={<>额度{quota?.time?.checkedAt && <About><Time stamp={quota.time.checkedAt} />查询，每几分钟自动更新</About>}</>}
+    <Section title={<>额度{quota?.time?.checkedAt && <About>{quota.time.checkedAt.ago}查询，每几分钟自动更新</About>}</>}
       actions={<Button variant="ghost" icon={Refresh} busy={refresh.busy} onClick={() => void refresh.run()}>刷新</Button>}>
       <QuotaBars quota={quota} />
     </Section>

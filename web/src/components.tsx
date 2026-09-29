@@ -76,24 +76,26 @@ export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown
  * with what is left written in it (its mark too when there is more than one), its edge drawn as far as is left.
  * `small`: where a line is lower than a row (the model control).
  */
-export function QuotaBars({ quota, compact, small }: { quota: Quota | null | undefined; compact?: boolean; small?: boolean }) {
+export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null | undefined; compact?: boolean; small?: boolean; bare?: boolean }) {
   if (!quota) return compact ? null : <p className={`${shellCss.muted} ${css.quotaNote}`}>还没查过额度。</p>;
   if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className={`${shellCss.muted} ${css.quotaNote}`}>{quota.detail ?? "查不到额度。"}</p>;
   if (compact) {
     const lone = quota.windows.length === 1;
     return (
       <span className={css.quotaChips}>
-        {quota.windows.map((w) => (
-          <Tip key={w.label} label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>
-            <span className={css.quotaChip} data-level={w.level} data-small={small || undefined} tabIndex={0} role="img" aria-label={`${w.label}剩余 ${w.left}%`}>
+        {quota.windows.map((w) => {
+          const chip = (
+            <span key={w.label} className={css.quotaChip} data-level={w.level} data-small={small || undefined} tabIndex={bare ? undefined : 0} role="img" aria-label={`${w.label}剩余 ${w.left}%`}>
               <svg className={css.quotaChipEdge} aria-hidden="true">
                 <rect className={css.quotaChipTrack} pathLength={100} />
                 {w.left > 0 && <rect className={css.quotaChipLeft} pathLength={100} strokeDasharray={`${w.left} 100`} />}
               </svg>
               <span className={css.quotaChipText}>{!lone && <span className={css.quotaChipMark}>{w.mark}</span>}{w.left}%</span>
             </span>
-          </Tip>
-        ))}
+          );
+          // Bare: inside a control with its own tip, so none of their own.
+          return bare ? chip : <Tip key={w.label} label={<>{w.label}剩余 {w.left}%{w.refills && <><br />{w.refills}</>}</>}>{chip}</Tip>;
+        })}
       </span>
     );
   }
