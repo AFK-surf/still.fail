@@ -2,8 +2,10 @@
 // everything else is a page pushed over it (no tab bar), or a sheet from the bottom. Pages move side by side: the new
 // one pushes in whole from the right and the old goes out to the left (and back the other way); the viewer's own page
 // comes from the left instead, a new chat rises from the bottom. Each page is an address, so the browser's back and a
-// link work as the desktop's do; pages under the top one stay as they were left (their scroll, what was typed).
+// link work as the desktop's do; pages under the top one stay as they were left (their scroll, what was typed). What
+// lies over a page (a sheet, the menu, the reader) is closed by back first.
 import { transitionTo } from "../ui.tsx";
+import { afterBack, useBackClose } from "../backClose.ts";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
@@ -99,12 +101,13 @@ export function MobileShell({ entry, routes }: { entry: Entry; routes: (location
   const app: MobileApp = {
     entry,
     at: (path) => `${home}${path}`,
-    push: (path) => navigate(path),
+    // Each after the back that a sheet or menu closed just before takes (../backClose.ts), or that back would undo it.
+    push: (path) => afterBack(() => navigate(path)),
     // Back through the pages opened here; from the first one (opened by a link), to the list.
-    pop: () => (pages.length > 1 ? navigate(-1) : navigate(home, { replace: true })),
+    pop: () => afterBack(() => (pages.length > 1 ? navigate(-1) : navigate(home, { replace: true }))),
     // One page becoming another (a new chat its chat): crossfaded, what both have (the composer) moving between them.
-    replace: (path) => transitionTo(() => navigate(path, { replace: true })),
-    home: () => navigate(home),
+    replace: (path) => afterBack(() => transitionTo(() => navigate(path, { replace: true }))),
+    home: () => afterBack(() => navigate(home)),
     sheet: setSheet,
     menu: setMenu,
     toast: (text) => setToast({ text, n: Date.now() }),
@@ -189,6 +192,7 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
   const [height, setHeight] = useState(0);
   const [dragging, setDragging] = useState(false);
   const total = () => window.innerHeight;
+  useBackClose(!!spec, close);
   useEffect(() => {
     if (spec) {
       // A sheet comes up in the keyboard's place: what was being typed into lets go of it first.
@@ -298,6 +302,7 @@ function MenuHost({ spec, close }: { spec: MenuSpec | null; close: () => void })
   // Only a press that starts on the scrim closes it: the click a browser sends as the long-pressing finger lifts lands
   // on the scrim that has just appeared under it.
   const pressed = useRef(false);
+  useBackClose(!!spec, close);
   useEffect(() => {
     if (spec) { setShown(spec); requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true))); return; }
     setOpen(false);
@@ -338,6 +343,7 @@ function ToastHost({ toast }: { toast: { text: string; n: number } | null }) {
 function ReaderHost({ spec, close }: { spec: ReaderSpec | null; close: () => void }) {
   const [shown, setShown] = useState<ReaderSpec | null>(null);
   const [open, setOpen] = useState(false);
+  useBackClose(!!spec, close);
   useEffect(() => {
     if (spec) { setShown(spec); requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true))); return; }
     setOpen(false);

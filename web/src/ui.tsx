@@ -3,6 +3,7 @@
 // instead of styling their own buttons, fields or menus.
 import { Mark } from "./brand.tsx";
 import { shortcutOf, useKeymap, type Action } from "./keymap.ts";
+import { useBackClose } from "./backClose.ts";
 import type { Badge, Maker, Stamp } from "./api.ts";
 import { Chat, Check, ChevronDown, ChevronLeft, Close, Copy, Info, More, Sliders } from "./icons.tsx";
 import {
@@ -224,6 +225,7 @@ export function Avatar({ id, name, size = 20 }: { id: string; name: string; size
 
 export function Dialog({ open, title, description, onClose, children, footer, wide }:
   { open: boolean; title: ReactNode; description?: ReactNode; onClose(): void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+  useBackClose(open, onClose);
   return (
     <RDialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <RDialog.Portal>
@@ -248,6 +250,7 @@ export function Dialog({ open, title, description, onClose, children, footer, wi
 /** Asks before something that cannot be undone. `error`: why it did not work, said where it was asked (it stays open). */
 export function Confirm({ open, title, description, action, onConfirm, onClose, busy, error }:
   { open: boolean; title: ReactNode; description: ReactNode; action: string; onConfirm(): void; onClose(): void; busy?: boolean | undefined; error?: string | null | undefined }) {
+  useBackClose(open, onClose);
   return (
     <RAlert.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <RAlert.Portal>

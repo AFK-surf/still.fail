@@ -12,6 +12,7 @@ import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
 import { VideoViewer } from "./VideoViewer.tsx";
+import { useBackClose } from "./backClose.ts";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";
@@ -212,6 +213,7 @@ export function chatImages(messages: { authorKind?: string; text: string; attach
 
 /** A file over the whole window, a bar with its name and tools on top; Esc closes it. */
 export function FilePreview({ open, onClose, sessionKey, file }: { open: boolean; onClose(): void; sessionKey: string; file: Attachment }) {
+  useBackClose(open, onClose);
   return (
     <RDialog.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <RDialog.Portal>
