@@ -137,7 +137,7 @@ function pickStation(app: MobileApp, stations: StationView[], current: string, o
   app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab /><SheetHead title="在哪台 station 上跑" />
-      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.station); app.sheet(null); }} />)}</div>
+      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.id); app.sheet(null); }} />)}</div>
     </>
   ) });
 }

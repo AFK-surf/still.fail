@@ -2,14 +2,14 @@
 // agent's execution history as a sheet opened from its mark or name. The messages are the wide screen's own (../Chat.tsx:
 // the same rows, avatars, names, quotes, files, activity and list behaviour), with the avatar and name in line with the
 // words rather than out in a margin. Long-press quotes or copies a message; ＋ adds files.
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { useApi, useChat, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { stationApi, useApi, useChat, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { useHost, type HostComposer } from "./ChatHost.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
 import { chatImages, Gallery } from "../FilePreview.tsx";
 import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
-import { ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
+import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, Copy, File, More, Photo, Plus, Quote as QuoteIcon, Stop, Web } from "../icons.tsx";
 import { stationBase, useStation } from "../station.tsx";
 import { PENDING } from "../lastChat.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
@@ -546,7 +546,34 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             </InfoList>
           </>
         )}
+        {!view.archived && !view.offline && <ArchiveRow here={here} view={view} thread={thread} />}
       </div>
+    </>
+  );
+}
+
+/** Puts the chat in the archive (its first agent's session with it when it is that session's own), as the wide screen's row button does; back to the list at once. */
+function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread: ChatThread }) {
+  const app = useApp();
+  // A sheet lies over the page, outside its station's context: the API by the station's address.
+  const call = useStationCall(here.station);
+  const api = useMemo(() => stationApi(call), [call]);
+  const archive = async () => {
+    app.sheet(null);
+    app.pop();
+    try {
+      await api.archive({ thread: thread.id, session: view.agents[0]?.session.key ?? here.key }, true);
+      app.toast("已归档");
+    } catch (error) {
+      app.toast(`没能归档：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+  return (
+    <>
+      <GroupLabel>归档</GroupLabel>
+      <InfoList>
+        <InfoRow onClick={() => void archive()}><Archive size={16} /><span className={partsCss.mGrow}>归档对话</span></InfoRow>
+      </InfoList>
     </>
   );
 }
