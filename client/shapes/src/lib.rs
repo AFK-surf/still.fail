@@ -763,6 +763,8 @@ pub struct PendingLogin {
     pub runtime: RuntimeKind,
     pub job: Option<LoginJob>,
     pub created: Option<String>,
+    /// Why a sign-in that succeeded made no profile.
+    pub error: Option<String>,
 }
 
 /// Who the station machine's own Claude Code or Codex is signed in as (only read: ember never takes the login over).

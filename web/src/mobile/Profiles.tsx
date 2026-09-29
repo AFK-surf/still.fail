@@ -382,9 +382,9 @@ export function NewProfileScreen() {
       <NavBar back="取消" onBack={leave} title="添加 Profile" sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
         {login ? (
-          job?.state === "failed" || job?.state === "cancelled" ? (
+          pending?.error || job?.state === "failed" || job?.state === "cancelled" ? (
             <>
-              <p className={partsCss.mError}>{job.error ?? "登录没有完成。"}</p>
+              <p className={partsCss.mError}>{pending?.error ?? job?.error ?? "登录没有完成。"}</p>
               <Button label="重新开始" primary={false} onClick={() => { void api.dropLogin(login).catch(() => {}); setLogin(null); }} />
             </>
           ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login, code)} />

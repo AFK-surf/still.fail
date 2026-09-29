@@ -1154,7 +1154,9 @@ data class PendingLogin (
 	val id: String,
 	val runtime: RuntimeKind,
 	val job: LoginJob? = null,
-	val created: String? = null
+	val created: String? = null,
+	/// Why a sign-in that succeeded made no profile.
+	val error: String? = null
 )
 
 /// A piece of software on a station and whether a newer one is out (updates.rs): the station itself (`station`) or a

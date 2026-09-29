@@ -1073,6 +1073,8 @@ export interface PendingLogin {
 	runtime: RuntimeKind;
 	job?: LoginJob;
 	created?: string;
+	/** Why a sign-in that succeeded made no profile. */
+	error?: string;
 }
 
 /**
