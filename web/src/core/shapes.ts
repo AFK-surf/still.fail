@@ -1057,6 +1057,31 @@ export interface MeshStatus {
 	name?: string;
 }
 
+/**
+ * A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
+ * new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
+ * `url` opens it.
+ */
+export interface Notice {
+	id: string;
+	kind: string;
+	station: string;
+	workspace: string;
+	stationId: string;
+	session: string;
+	thread?: number;
+	title: string;
+	body: string;
+	tag: string;
+	url: string;
+	at: number;
+}
+
+/** What a person hears about while the client runs (the `notices` topic; docs/notifications.md), oldest first. */
+export interface NoticesView {
+	items: Notice[];
+}
+
 /** Who is looking: local | access (`email`) | mesh (`email`, `name`, `sub`, `role`, `workspace`, `device`). */
 export interface Viewer {
 	via: string;

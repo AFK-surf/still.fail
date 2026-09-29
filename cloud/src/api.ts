@@ -1,14 +1,16 @@
 // The account-facing API: workspaces, members, invitations, stations and
-// grants, and each device's event socket; plus the two things stations do
-// with their own key (enroll, and hold their presence socket). `api` returns
-// null for paths it does not own. The admin's console has its own, `adminApi`,
-// which only the console's host routes to (index.ts).
+// grants, each device's event socket and push registration; plus what
+// stations do with their own key (enroll, hold their presence socket, send
+// traces and notices). `api` returns null for paths it does not own. The
+// admin's console has its own, `adminApi`, which only the console's host
+// routes to (index.ts).
 import { isAdmin } from "./admin";
 import { bearerToken, denied, readJson, reply, verifyToken, type Claims } from "./auth";
 import { header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature } from "./grants";
+import { pushKey, registration, stationNotify } from "./push";
 import { receiveTraces } from "./tracing";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
@@ -107,6 +109,16 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     const claims = token ? await account(token, env) : null;
     if (token && !claims) return denied();
     return receiveTraces(request, env, claims?.sub ?? null);
+  }
+
+  // Notices of a station's chats, signed with its key like its spans, pushed to the people they are for (push.ts).
+  if (path === "/v1/stations/notify" && method === "POST") return stationNotify(request, env);
+  if (path === "/v1/push/key" && method === "GET") return pushKey(env);
+  // This device's push subscription or token, registered with the signed-in account's session, or taken off it.
+  if (path === "/v1/push" && (method === "POST" || method === "DELETE")) {
+    const claims = await account(bearerToken(request), env);
+    if (!claims) return denied();
+    return registration(request, env, claims.sub, claims.sid);
   }
 
   if (path === "/v1/events" && method === "GET") {

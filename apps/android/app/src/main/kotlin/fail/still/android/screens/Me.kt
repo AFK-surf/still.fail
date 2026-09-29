@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.BuildConfig
 import fail.still.android.LocalApp
+import fail.still.android.Push
+import fail.still.android.rememberNotificationAsk
 import fail.still.android.data.Account
 import fail.still.android.data.AccountWorkspaces
 import fail.still.android.data.Auth
@@ -76,6 +78,23 @@ fun MeScreen(current: WorkspaceEntry) {
         val themes = listOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色")
         Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },
             Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth(), height = 36.dp, fill = true)
+        // Local notices and pushes alike, on this device (Notices.kt, Push.kt); turned on, the system is asked too.
+        SectionHeader("通知", start = 24.dp)
+        val ask = rememberNotificationAsk(app, once = false)
+        ListCard {
+            ListRow(onClick = {
+                val on = !app.notify
+                app.useNotify(on)
+                if (on) ask()
+                scope.launch { Push.sync(context.applicationContext, app.core, on) }
+            }) {
+                Column(Modifier.weight(1f)) {
+                    Text("通知", fontSize = 15.sp, color = C.ink)
+                    Text(if (app.notify) "你参与的会话有新消息、需要处理或出错时通知你。" else "不会收到通知。", fontSize = 13.sp, color = C.muted)
+                }
+                Switch(app.notify)
+            }
+        }
         SectionHeader("登录的地方", start = 24.dp)
         Devices(current)
         // Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added.

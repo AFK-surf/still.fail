@@ -297,6 +297,8 @@ impl App {
             dev: crate::former::var("DEV").as_deref() == Some("1"),
             jobs: Some(jobs.clone()),
         });
+        // What the chats' people hear about while no client of theirs runs (the station process posts it on).
+        crate::admin::notify::Notifier::start(&admin);
         let access = settings.clone();
         let gate = AccessGate::new(move || access.config().admin_access.clone(), None, || None);
         let mcp_door = serve_mcp(listener, mcp, jobs.clone());

@@ -1079,6 +1079,38 @@ pub struct StatusView {
     pub items: Vec<StatusItem>,
 }
 
+/// What a person hears about while the client runs (the `notices` topic; docs/notifications.md), oldest first.
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticesView {
+    pub items: Vec<Notice>,
+}
+
+/// A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
+/// new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
+/// `url` opens it.
+#[typeshare]
+#[skip_serializing_none]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Notice {
+    pub id: String,
+    pub kind: String,
+    pub station: String,
+    pub workspace: String,
+    pub station_id: String,
+    pub session: String,
+    #[typeshare(serialized_as = "Option<I54>")]
+    pub thread: Option<i64>,
+    pub title: String,
+    pub body: String,
+    pub tag: String,
+    pub url: String,
+    #[typeshare(serialized_as = "I54")]
+    pub at: i64,
+}
+
 /// One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble.
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

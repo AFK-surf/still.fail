@@ -32,4 +32,11 @@ export interface Env {
   /** Axiom's ingest token and dataset for traces (tracing.ts); without a token nothing is sent. */
   AXIOM_TOKEN?: string;
   AXIOM_DATASET?: string;
+  /** still.fail cloud's VAPID key for Web Push (webpush.ts): the P-256 public point and private scalar, base64url. Without them there is no Web Push. */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  /** Who push services may write to about it (a mailto:); PUBLIC_ORIGIN if unset. */
+  VAPID_SUBJECT?: string;
+  /** The Firebase project's service account (its JSON) that sends to the Android app (fcm.ts). Without it there is no FCM. */
+  FCM_SERVICE_ACCOUNT?: string;
 }

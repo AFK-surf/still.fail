@@ -4,6 +4,14 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
 
+/** A request the Worker made to somewhere outside (a push service, say), as a stand-in sees it. */
+export interface OutboundRequest {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body: Uint8Array;
+}
+
 export async function harness(
   options: {
     relay?: string;
@@ -26,6 +34,11 @@ export async function harness(
     assets?: (request: Request) => Promise<Response> | Response;
     /** Axiom: a stand-in answering its requests, or "real" to reach it (with AXIOM_TOKEN from the environment). */
     axiom?: ((request: Request) => Promise<Response> | Response) | "real";
+    /** Push notifications: the VAPID key (base64url point and scalar), the FCM service account's JSON. */
+    vapid?: { publicKey: string; privateKey: string };
+    fcm?: string;
+    /** Push services, FCM and its token endpoint: a stand-in answering every other outbound request. */
+    push?: (request: OutboundRequest) => Promise<{ status: number; body?: string }> | { status: number; body?: string };
   } = {},
 ) {
   const origin = options.origin ?? "https://relay.example";
@@ -101,6 +114,8 @@ export async function harness(
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
+        ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
+        ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
         ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
       },
       durableObjects: Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS"][i], { className, useSQLite: true }])),
@@ -139,6 +154,10 @@ export async function harness(
           // Workerd networking to the real local relay uses a separate service
           // binding in the native harness; JS fetch does not proxy WebSockets.
           throw new Error("native relay requires network binding");
+        }
+        if (options.push) {
+          const answer = await options.push({ url: url.href, method: request.method, headers: Object.fromEntries(request.headers), body: new Uint8Array(await request.arrayBuffer()) });
+          return new MFResponse(answer.body ?? null, { status: answer.status, headers: answer.body ? { "content-type": "application/json" } : {} });
         }
         throw new Error("unexpected outbound request: " + url.origin + url.pathname);
       },

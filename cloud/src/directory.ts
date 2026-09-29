@@ -25,7 +25,7 @@ const MANAGERS: readonly Role[] = ["owner", "admin"];
 
 export const INVITATION_TTL_SEC = 7 * 24 * 60 * 60;
 export const ENROLLMENT_TTL_SEC = 60 * 60;
-const LIMITS = { workspacesPerUser: 32, membersPerWorkspace: 200, stationsPerWorkspace: 64, openInvitations: 50 };
+const LIMITS = { workspacesPerUser: 32, membersPerWorkspace: 200, stationsPerWorkspace: 64, openInvitations: 50, pushPerUser: 32 };
 
 /** The events socket's subprotocols (api.ts socketToken), the new one first: clients from before the rename say "ember-events". */
 export const EVENTS_PROTOCOLS = ["stillfail-events", "ember-events"] as const;
@@ -57,6 +57,10 @@ const fail = (status: number, code: string): never => {
 
 type Row = Record<string, SqlStorageValue>;
 
+/** A device to push to, as registered (POST /v1/push). */
+export type PushDevice = { kind: "web"; endpoint: string; p256dh: string; auth: string } | { kind: "fcm"; token: string };
+export type PushRegistration = PushDevice & { id: string };
+
 export class Directory extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -73,6 +77,10 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS added (workspace TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, added_by TEXT NOT NULL, added_at INTEGER NOT NULL, PRIMARY KEY (workspace, email));
       CREATE INDEX IF NOT EXISTS added_by_email ON added (email);
       CREATE TABLE IF NOT EXISTS invite_codes (code TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER, used_by TEXT, used_at INTEGER, workspace TEXT);
+      CREATE TABLE IF NOT EXISTS push (id TEXT PRIMARY KEY, sub TEXT NOT NULL, sid TEXT NOT NULL, kind TEXT NOT NULL, endpoint TEXT, p256dh TEXT, auth TEXT, token TEXT, created INTEGER NOT NULL);
+      CREATE UNIQUE INDEX IF NOT EXISTS push_by_endpoint ON push (sub, endpoint);
+      CREATE UNIQUE INDEX IF NOT EXISTS push_by_token ON push (sub, token);
+      CREATE INDEX IF NOT EXISTS push_by_user ON push (sub, sid);
     `);
     // users had neither column before invite codes; the table in production gains them here.
     const columns = new Set(this.#rows("PRAGMA table_info(users)").map((r) => r.name as string));
@@ -521,6 +529,8 @@ export class Directory extends DurableObject<Env> {
 
   /** Sessions signed out (all of an account's with none named): their credentials go, in every workspace of the account. */
   revokeSessions(sub: string, sids: string[] | null): void {
+    if (sids === null) this.#run("DELETE FROM push WHERE sub = ?", sub);
+    else for (const sid of sids) this.#run("DELETE FROM push WHERE sub = ? AND sid = ?", sub, sid);
     for (const row of this.#rows("SELECT workspace FROM members WHERE sub = ?", sub)) {
       const workspace = row.workspace as string;
       if (sids === null) this.#revoke(workspace, "sub", sub);
@@ -528,6 +538,56 @@ export class Directory extends DurableObject<Env> {
     }
   }
 
+  // ── push registrations (docs/notifications.md) ──────────────────────────
+  // A device's push subscription (Web Push) or token (FCM) is registered with each account signed in on it, one row
+  // each, which belongs to the sign-in session that registered it last; signing that session out takes it
+  // (revokeSessions).
+
+  /** Registers a device's push subscription or token to an account's session (moving it there from the account's other). */
+  registerPush(sub: string, sid: string, device: PushDevice): void {
+    const [column, value] = device.kind === "web" ? ["endpoint", device.endpoint] : ["token", device.token];
+    this.#run(`DELETE FROM push WHERE sub = ? AND ${column} = ?`, sub, value);
+    if (device.kind === "web") {
+      this.#run("INSERT INTO push (id, sub, sid, kind, endpoint, p256dh, auth, created) VALUES (?, ?, ?, 'web', ?, ?, ?, ?)", ulid(), sub, sid, device.endpoint, device.p256dh, device.auth, nowSeconds());
+    } else {
+      this.#run("INSERT INTO push (id, sub, sid, kind, token, created) VALUES (?, ?, ?, 'fcm', ?, ?)", ulid(), sub, sid, device.token, nowSeconds());
+    }
+    // An account's oldest go past a few dozen devices.
+    this.#run("DELETE FROM push WHERE sub = ? AND id NOT IN (SELECT id FROM push WHERE sub = ? ORDER BY id DESC LIMIT ?)", sub, sub, LIMITS.pushPerUser);
+  }
+
+  /** Takes a device's registration off an account (another account's is left alone). */
+  unregisterPush(sub: string, device: { endpoint: string } | { token: string }): void {
+    if ("endpoint" in device) this.#run("DELETE FROM push WHERE sub = ? AND endpoint = ?", sub, device.endpoint);
+    else this.#run("DELETE FROM push WHERE sub = ? AND token = ?", sub, device.token);
+  }
+
+  /** Devices whose push service said they are gone: their registrations with every account. */
+  dropPush(devices: PushDevice[]): void {
+    for (const device of devices) {
+      if (device.kind === "web") this.#run("DELETE FROM push WHERE endpoint = ?", device.endpoint);
+      else this.#run("DELETE FROM push WHERE token = ?", device.token);
+    }
+  }
+
+  /**
+   * Where a station's notices go: its workspace, and for each email (lowercased) the registrations of the workspace's
+   * members signed in with it. Null for a station not enrolled.
+   */
+  pushTargets(station: string, emails: string[]): { workspace: string; devices: Record<string, PushRegistration[]> } | null {
+    const row = this.#one("SELECT workspace FROM stations WHERE id = ?", station);
+    if (!row) return null;
+    const workspace = row.workspace as string;
+    const devices: Record<string, PushRegistration[]> = {};
+    for (const email of new Set(emails.map((e) => e.toLowerCase()))) {
+      devices[email] = this.#rows(
+        `SELECT p.id, p.kind, p.endpoint, p.p256dh, p.auth, p.token FROM push p JOIN users u ON u.sub = p.sub JOIN members m ON m.sub = p.sub AND m.workspace = ?
+         WHERE lower(u.email) = ? ORDER BY p.id LIMIT ?`,
+        workspace, email, LIMITS.pushPerUser,
+      ).map((r): PushRegistration => (r.kind === "web" ? { id: r.id as string, kind: "web", endpoint: r.endpoint as string, p256dh: r.p256dh as string, auth: r.auth as string } : { id: r.id as string, kind: "fcm", token: r.token as string }));
+    }
+    return { workspace, devices };
+  }
 
   // ── the admin's console ─────────────────────────────────────────────────
   // The caller has checked that the account is the admin's (admin.ts).

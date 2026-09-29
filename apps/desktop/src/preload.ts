@@ -21,6 +21,11 @@ const desktop = {
     },
     start: () => ipcRenderer.send("update:start"),
   },
+  /** Whether the app tells about the chats (its main process shows the notices: main.ts). */
+  notify: {
+    get: (): Promise<boolean | null> => ipcRenderer.invoke("notify:get"),
+    set: (on: boolean): Promise<void> => ipcRenderer.invoke("notify:set", on),
+  },
 };
 contextBridge.exposeInMainWorld("stillfailDesktop", desktop);
 // Its name before the rename, while pages built before it may still look for it (a dev server's, dev.sh HMR=1).

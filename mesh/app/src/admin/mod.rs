@@ -8,6 +8,7 @@
 mod edits;
 mod events;
 mod files;
+pub mod notify;
 mod slack;
 mod views;
 

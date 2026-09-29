@@ -5,6 +5,7 @@
 // Android). In the desktop app (apps/desktop) the core runs in a utility
 // process instead, reached through a MessagePort; the protocol is the same.
 import { BUILT_AT } from "./built.ts";
+import { applyDelta, type DeltaOp } from "./delta.ts";
 import { captureException } from "../telemetry.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core/src/protocol.rs). */
@@ -34,7 +35,9 @@ export type Topic =
   // An agent's execution history, read for people.
   | { topic: "history"; station: string; key: string }
   // What the core is waiting on, when it is worth saying (a core from before it answers an error: nothing to say).
-  | { topic: "status" };
+  | { topic: "status" }
+  // What a person hears about while the client runs (docs/notifications.md).
+  | { topic: "notices" };
 
 export interface ErrorBody {
   code: string;
@@ -89,40 +92,7 @@ interface Subscription {
   value?: unknown;
 }
 
-/** One change in a delta (`Op` in client/core/src/delta.rs): the place, and what happens there. */
-export type DeltaOp = { path: (string | number)[] } & ({ set: unknown } | { append: unknown[] } | { remove: true });
-
-/**
- * A delta applied to a value without changing it: only the objects and arrays
- * along each op's path are copied, so unchanged parts keep their identity and
- * React skips them.
- */
-export function applyDelta(value: unknown, ops: DeltaOp[]): unknown {
-  return ops.reduce((current, op) => applyOp(current, op, 0), value);
-}
-
-function applyOp(node: unknown, op: DeltaOp, depth: number): unknown {
-  if (depth === op.path.length) {
-    if ("set" in op) return op.set;
-    if ("append" in op) return Array.isArray(node) ? [...node, ...op.append] : node;
-    return node;
-  }
-  const key = op.path[depth]!;
-  if (Array.isArray(node)) {
-    if (typeof key !== "number" || key >= node.length) return node;
-    const copy = node.slice();
-    copy[key] = applyOp(node[key], op, depth + 1);
-    return copy;
-  }
-  if (typeof node !== "object" || node === null || typeof key !== "string") return node;
-  const object = node as Record<string, unknown>;
-  if ("remove" in op && depth === op.path.length - 1) {
-    const rest = { ...object };
-    delete rest[key];
-    return rest;
-  }
-  return { ...object, [key]: applyOp(object[key], op, depth + 1) };
-}
+export { applyDelta, type DeltaOp } from "./delta.ts";
 
 export interface ClientOptions {
   /** Waits before reopening a failed worker; tests pass their own. */
@@ -390,6 +360,11 @@ export interface StillFailDesktop {
     watch(listener: (state: AppUpdate | null) => void): () => void;
     /** Downloads it; once it is, the app restarts as the new one. */
     start(): void;
+  };
+  /** Whether the app tells about the chats (it shows them from its main process); an app from before them has none. */
+  notify?: {
+    get(): Promise<boolean | null>;
+    set(on: boolean): Promise<void>;
   };
 }
 

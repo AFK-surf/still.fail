@@ -2,6 +2,7 @@
 // and how it looks (workspaces are switched from their name on Home, ./Workspaces.tsx).
 import { signIn, signOut, useAccounts } from "../cloud/accounts.ts";
 import { useAppearance, type Appearance } from "../theme.ts";
+import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
 import { useApp } from "./app.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, TopBack } from "./parts.tsx";
 import { Devices } from "./WorkspacePage.tsx";
@@ -9,6 +10,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Me.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
+import * as connectsCss from "./Connects.css.ts";
 
 const THEMES: [Appearance, string][] = [["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]];
 
@@ -31,6 +33,7 @@ export function MeScreen() {
       <div className={`${css.mPadX12} ${css.mSegBlock}`}>
         <Seg options={THEMES.map(([, label]) => label)} selected={Math.max(0, THEMES.findIndex(([v]) => v === appearance))} onSelect={(i) => setAppearance(THEMES[i]![0])} height={36} fill />
       </div>
+      <Notify />
       <SectionHeader title="登录的地方" start={24} />
       <Devices />
       {/* Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added. */}
@@ -48,5 +51,30 @@ export function MeScreen() {
       </ListCard>
       <div style={{ height: 30 }} />
     </div>
+  );
+}
+
+/** Whether this browser tells about the chats (notify.ts). */
+function Notify() {
+  const app = useApp();
+  const state = useNotifyState();
+  if (!CAN_NOTIFY) return null;
+  const note = state === "denied" ? "浏览器拦下了通知，要在浏览器的网站设置里打开" : "agent 做完、需要处理、出错，或者有人说话时提醒你";
+  return (
+    <>
+      <SectionHeader title="通知" start={24} />
+      <ListCard>
+        <ListRow onClick={() => {
+          if (state === "denied" || state === "unsupported") return;
+          void setNotify(state !== "on").then((now) => { if (now === "denied") app.toast("浏览器没有允许通知"); });
+        }}>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+            <span className={listsCss.mRowTitle}>通知</span>
+            <span className={listsCss.mRowNote}>{note}</span>
+          </span>
+          <span className={connectsCss.mSwitch} data-on={state === "on" || undefined} />
+        </ListRow>
+      </ListCard>
+    </>
   );
 }

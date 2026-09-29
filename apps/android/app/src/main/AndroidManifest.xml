@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- mDNS: stations on the LAN are found without still.fail cloud (MainActivity's multicast lock). -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- The app installs its own newer builds (Updates.kt). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Notices of the chats one takes part in (Notices.kt). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:label="still.fail"
@@ -60,6 +63,18 @@
         </activity>
         <!-- What the installer says of an update (Updates.kt). -->
         <receiver android:name=".InstallResult" android:exported="false" />
+        <!-- FCM's pushes (Push.kt). Firebase is set up by hand from BuildConfig (no google-services.json): its own
+             start-up provider is taken out, and no token is made before Push.sync asks for one. -->
+        <service android:name=".PushService" android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
     </application>
 
     <queries>

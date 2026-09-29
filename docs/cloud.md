@@ -85,6 +85,20 @@ station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
 几处 iroh 相关库的修补（多网卡、mDNS 反射、macOS 回包源地址、晚到的地址立即补发握手包）在 `vendor/`，原因见 `vendor/README.md`。
 
+## 推送通知
+
+设备（浏览器的 Web Push 订阅、安卓的 FCM token）登记在登录的账号和会话下（`POST/DELETE /v1/push`，会话退出时一起删掉）；station 把自己 chat 的通知签名后发到 `POST /v1/stations/notify`，still.fail cloud 只推给通知里点名、并且是这台 station 所在 workspace 成员的人。接口、签名和推送内容见 [notifications.md](notifications.md)，代码在 `cloud/src/push.ts`、`webpush.ts`、`fcm.ts`。
+
+API Worker 的密钥（都可以不设：没有 VAPID 就没有 Web Push，`/v1/push/key` 回 404；没有服务账号就不推安卓）：
+
+- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`：`deploy.py` 从 studio 的 `~/ember-deploy/vapid.json`（`{public, private, subject}`）读。生成一次，之后别换（换了浏览器的订阅全部作废，要重新订阅）：
+
+  ```sh
+  node -e 'const j=require("crypto").generateKeyPairSync("ec",{namedCurve:"P-256"}).privateKey.export({format:"jwk"});console.log(JSON.stringify({public:Buffer.concat([Buffer.from([4]),Buffer.from(j.x,"base64url"),Buffer.from(j.y,"base64url")]).toString("base64url"),private:j.d,subject:"mailto:<运维邮箱>"}))' > ~/ember-deploy/vapid.json
+  ```
+
+- `FCM_SERVICE_ACCOUNT`：Firebase 项目的服务账号 JSON（Firebase 控制台 → 项目设置 → 服务账号 → 生成新的私钥），原样放在 `~/ember-deploy/fcm-service-account.json`。
+
 ## 部署
 
 still.fail cloud 是五个 Worker（`cloud/wrangler*.jsonc`）：

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -11,6 +13,12 @@ val stillfailBuild = providers.gradleProperty("stillfailBuild")
     .orElse(providers.gradleProperty("emberBuild"))
     .orElse(providers.exec { commandLine("git", "rev-list", "--count", "HEAD"); isIgnoreExitValue = true }.standardOutput.asText.map { it.trim() })
     .get().toIntOrNull() ?: 1
+
+// Firebase Cloud Messaging (Push.kt), without google-services.json: -PfcmProjectId=… -PfcmAppId=… -PfcmApiKey=…
+// -PfcmSenderId=…, or the same keys in apps/android/firebase.properties (not secrets: they are in every APK). Any one
+// missing leaves FCM off; notices are still shown while the app is in front.
+val firebase = Properties().apply { rootProject.file("firebase.properties").takeIf { it.exists() }?.reader()?.use { load(it) } }
+fun fcm(key: String): String = providers.gradleProperty(key).orNull ?: firebase.getProperty(key) ?: ""
 
 android {
     namespace = "fail.still.android"
@@ -27,6 +35,10 @@ android {
         // ports); -PemberCloud (the name before the rename) is still read.
         val cloud = providers.gradleProperty("stillfailCloud").orElse(providers.gradleProperty("emberCloud")).getOrElse("https://app.still.fail")
         buildConfigField("String", "CLOUD_ORIGIN", "\"$cloud\"")
+        buildConfigField("String", "FCM_PROJECT_ID", "\"${fcm("fcmProjectId")}\"")
+        buildConfigField("String", "FCM_APP_ID", "\"${fcm("fcmAppId")}\"")
+        buildConfigField("String", "FCM_API_KEY", "\"${fcm("fcmApiKey")}\"")
+        buildConfigField("String", "FCM_SENDER_ID", "\"${fcm("fcmSenderId")}\"")
     }
     buildTypes {
         // What goes on a phone: optimized (R8), signed with the debug key for now so it installs over a debug build.
@@ -62,4 +74,7 @@ dependencies {
     implementation(libs.commonmark.ext.task.list.items)
     // Frosted bars: what scrolls under them shows through, blurred (Android 12+; tinted glass before).
     implementation(libs.haze)
+    // Pushes while the app is not in front (Push.kt); set up by hand, without the google-services plugin.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 }

@@ -62,6 +62,9 @@ DEPLOY = deploy_dir()
 KEYS = DEPLOY / "keys.json"
 POSTHOG = DEPLOY / "posthog.json"
 AXIOM = DEPLOY / "axiom.json"
+# Push notifications (docs/notifications.md): the VAPID key ({public, private, subject}) and Firebase's service account.
+VAPID = DEPLOY / "vapid.json"
+FCM = DEPLOY / "fcm-service-account.json"
 
 
 def write_private(path: Path, value) -> None:
@@ -130,6 +133,20 @@ def axiom() -> dict:
     return {"AXIOM_TOKEN": value["token"], "AXIOM_DATASET": value["dataset"]}
 
 
+def push() -> dict:
+    value = {}
+    if VAPID.exists():
+        vapid = json.loads(VAPID.read_text())
+        value |= {"VAPID_PUBLIC_KEY": vapid["public"], "VAPID_PRIVATE_KEY": vapid["private"], "VAPID_SUBJECT": vapid["subject"]}
+    else:
+        print(f"note: {VAPID} is missing; no Web Push")
+    if FCM.exists():
+        value["FCM_SERVICE_ACCOUNT"] = FCM.read_text()
+    else:
+        print(f"note: {FCM} is missing; no pushes to Android")
+    return value
+
+
 @contextmanager
 def docker_env():
     """A throwaway Docker config: an SSH session cannot unlock the macOS keychain Docker's default helper uses."""
@@ -170,6 +187,8 @@ def main() -> None:
         print("keys", "present" if KEYS.exists() else "will be created")
         print("posthog", "present" if POSTHOG.exists() else "missing: the web app will have no analytics")
         print("axiom", "present" if AXIOM.exists() else f"missing: no traces without {AXIOM}")
+        print("vapid", "present" if VAPID.exists() else f"missing: no Web Push without {VAPID}")
+        print("fcm", "present" if FCM.exists() else f"missing: no pushes to Android without {FCM}")
         return
 
     account = account_id()
@@ -182,7 +201,7 @@ def main() -> None:
     if not args.skip_build and "site" in parts:
         subprocess.run(["pnpm", "run", "build:site"], cwd=REPO, check=True)
     secrets_of = {
-        "api": {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom()},
+        "api": {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push()},
         "relay": {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:

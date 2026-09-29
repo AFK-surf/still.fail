@@ -22,6 +22,7 @@ import fail.still.android.ui.StillFailTheme
 import fail.still.android.ui.Loading
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -41,14 +42,27 @@ class MainActivity : ComponentActivity() {
     /** Since when the app has been off screen (elapsedRealtime: it counts deep sleep too); null while on it. */
     private var hidden: Long? = null
 
+    /** The core's `notices`, shown while the app is in front (Notices.kt); FCM's pushes are shown the rest of the time. */
+    private var notices: Job? = null
+
+    private fun listen() {
+        val app = app ?: return
+        if (notices == null && Notifier.inFront) notices = lifecycleScope.launch { showNotices(applicationContext, app) }
+    }
+
     override fun onStart() {
         super.onStart()
         multicast?.acquire()
+        Notifier.inFront = true
+        listen()
         app?.let { lifecycleScope.launch { it.checkUpdates() } }
         wake()
     }
 
     override fun onStop() {
+        Notifier.inFront = false
+        notices?.cancel()
+        notices = null
         multicast?.release()
         if (hidden == null) hidden = SystemClock.elapsedRealtime()
         super.onStop()
@@ -82,6 +96,8 @@ class MainActivity : ComponentActivity() {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN)
             app = AppState(core, getSharedPreferences("stillfail", Context.MODE_PRIVATE), BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN))
             handle(intent)
+            listen()
+            app?.let { launch { Push.sync(applicationContext, core, it.notify) } }
             app?.checkUpdates()
         }
         setContent {
@@ -117,7 +133,8 @@ class MainActivity : ComponentActivity() {
         val uri = intent?.data ?: return
         val app = app ?: return
         val parts = uri.pathSegments
-        if (uri.scheme == "https" && parts.size == 4 && parts[0] == "o") {
+        // http too: a notification opens its chat on a dev cloud's origin (Notifier.show).
+        if ((uri.scheme == "https" || uri.scheme == "http") && parts.size == 4 && parts[0] == "o") {
             setIntent(Intent())
             app.openItem(parts[1], parts[2], parts[3], uri.getQueryParameter("service")?.takeIf { it.isNotEmpty() })
             return

@@ -29,16 +29,22 @@ pub struct Sync {
     /// What is kept, each held by a watch; dropping one lets the topic go.
     kept: RefCell<HashMap<Topic, Watch>>,
     scheduled: Cell<bool>,
+    /// Told the stations kept, each time it looks (what changed has settled): notices.rs looks at their rows.
+    on_look: RefCell<Option<Rc<dyn Fn(&[String])>>>,
 }
 
 impl Sync {
     pub fn new(store: Rc<Store>, host: Rc<dyn Host>) -> Rc<Sync> {
-        Rc::new_cyclic(|me| Sync { store, host, me: me.clone(), kept: RefCell::default(), scheduled: Cell::new(false) })
+        Rc::new_cyclic(|me| Sync { store, host, me: me.clone(), kept: RefCell::default(), scheduled: Cell::new(false), on_look: RefCell::default() })
     }
 
     /// Starts keeping things in sync (again: it is idempotent).
     pub fn start(&self) {
         self.recompute();
+    }
+
+    pub fn on_look(&self, look: Rc<dyn Fn(&[String])>) {
+        *self.on_look.borrow_mut() = Some(look);
     }
 
     /// What should be kept, from what is known now.
@@ -80,6 +86,11 @@ impl Sync {
     fn recompute(&self) {
         self.scheduled.set(false);
         let want = self.wanted();
+        let look = self.on_look.borrow().clone();
+        if let Some(look) = look {
+            let stations: Vec<String> = want.iter().filter_map(|t| match t { Topic::ChatRows { station } => Some(station.clone()), _ => None }).collect();
+            look(&stations);
+        }
         let fresh: Vec<Topic> = {
             let mut kept = self.kept.borrow_mut();
             kept.retain(|topic, _| want.contains(topic));

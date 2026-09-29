@@ -74,13 +74,14 @@ const hex = (bytes: ArrayBuffer | Uint8Array) => [...new Uint8Array(bytes)].map(
  * "stillfail-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>" with its key, like its presence
  * socket (x-stillfail-station, x-stillfail-ts within 5 minutes, x-stillfail-signature), that is still enrolled.
  * (Stations from before the rename: "ember-station-telemetry-v1:…" and x-ember-*; the origin is any of the cloud's.)
+ * Its notices (push.ts) are signed the same way, tagged "station-notify-v1".
  */
-async function stationSender(request: Request, env: Env, body: string): Promise<string | null> {
+export async function stationSender(request: Request, env: Env, body: string, tag = "station-telemetry-v1"): Promise<string | null> {
   const station = header(request, "station");
   const ts = Number(header(request, "ts"));
   if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - Date.now() / 1000) > 300) return null;
   const digest = hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)));
-  const messages = signedMessages("station-telemetry-v1", publicOrigins(env), `${station}:${ts}:${digest}`);
+  const messages = signedMessages(tag, publicOrigins(env), `${station}:${ts}:${digest}`);
   if (!(await verifyAnySignature(station, header(request, "signature") ?? "", messages))) return null;
   return (await env.DIRECTORY.getByName("primary").isStation(station)) ? station : null;
 }

@@ -37,6 +37,7 @@ use crate::protocol::{ClientId, ClientMessage, CoreMessage, RequestId, Topic};
 use crate::station::{self, MeshSource, StationAddr, StationCredentials, Stations, TopicSink};
 use crate::status::{Place, Status};
 use crate::store::{Source, Store};
+use crate::notices::Notices;
 use crate::sync::Sync;
 use crate::trace::{self, Kind, Span, Tracer};
 use crate::views::{EmailOf, Views};
@@ -168,8 +169,17 @@ impl Core {
             let kept = Kept::new(host.clone());
             let stations = Stations::new(host.clone(), center.clone() as Rc<dyn TopicSink>, wire, tracer.clone(), kept.clone(), status.clone());
             let views = Views::new(host.clone(), store.clone(), email_of(me.clone()));
-            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), status: status.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
             let sync = Sync::new(store.clone(), host.clone());
+            let notices = Notices::new(store.clone(), host.clone(), email_of(me.clone()));
+            store.set_source(Rc::new(Router { core: me.clone(), stations: stations.clone(), views: views.clone(), status: status.clone(), notices: notices.clone(), tracer: tracer.clone(), opening: RefCell::default() }));
+            sync.on_look({
+                let notices = Rc::downgrade(&notices);
+                Rc::new(move |stations: &[String]| {
+                    if let Some(notices) = notices.upgrade() {
+                        notices.look(stations);
+                    }
+                })
+            });
             Inner {
                 sync,
                 views,
@@ -302,6 +312,7 @@ struct Router {
     stations: Rc<Stations>,
     views: Rc<Views>,
     status: Rc<Status>,
+    notices: Rc<Notices>,
     tracer: Rc<Tracer>,
     /// Views opening: each is a trace (`chat.open`, …) until its first value goes out.
     opening: RefCell<HashMap<Topic, Span>>,
@@ -317,6 +328,10 @@ impl Source for Router {
         // Always kept (status.rs): only computed while shown.
         if *topic == Topic::Status {
             self.status.changed();
+            return;
+        }
+        if *topic == Topic::Notices {
+            self.notices.changed();
             return;
         }
         if topic.is_view() {
@@ -342,7 +357,7 @@ impl Source for Router {
     }
 
     fn stop(&self, topic: &Topic) {
-        if *topic == Topic::Status {
+        if *topic == Topic::Status || *topic == Topic::Notices {
             return;
         }
         if topic.is_view() {
@@ -361,6 +376,9 @@ impl Source for Router {
     fn compute(&self, topic: &Topic) -> Option<Result<Value>> {
         if *topic == Topic::Status {
             return Some(Ok(self.status.value()));
+        }
+        if *topic == Topic::Notices {
+            return Some(Ok(self.notices.value()));
         }
         let Some(context) = self.opening.borrow().get(topic).map(Span::context) else { return self.views.compute(topic) };
         // Still opening: what it starts now (a chat's agents) is part of it too.
@@ -422,6 +440,16 @@ fn credentials(core: Weak<Inner>) -> StationCredentials {
 const CREDENTIAL_KEY: &str = "credential";
 const CREDENTIAL_FOR_S: f64 = 24.0 * 60.0 * 60.0;
 
+/// Where this device's push registration is kept (docs/notifications.md), and the accounts that have it.
+const PUSH_KEY: &str = "push";
+
+#[derive(Serialize, Deserialize)]
+struct KeptPush {
+    registration: Value,
+    #[serde(default)]
+    with: Vec<String>,
+}
+
 /// A credential as kept, with the device it names: one for another device key (the page's, taken over) is no use.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct KeptCredential {
@@ -473,6 +501,36 @@ impl Inner {
             }
             Call::SignOut { account } => {
                 self.accounts.sign_out(&account).await?;
+                Ok(Value::Null)
+            }
+            Call::PushKey => {
+                let request = crate::host::HttpRequest { method: "GET".into(), url: format!("{}/v1/push/key", self.host.cloud_origin()), headers: Vec::new(), body: None };
+                let response = self.host.fetch(request).await?;
+                let data: Value = serde_json::from_slice(&response.body).unwrap_or_else(|_| json!({}));
+                match data.get("vapid").and_then(Value::as_str) {
+                    Some(key) if response.status == 200 => Ok(json!({ "vapid": key })),
+                    _ => Err(CoreError::new("push_unavailable", "still.fail cloud 还不能推送")),
+                }
+            }
+            Call::PushRegister { registration } => {
+                let kept = KeptPush { registration, with: Vec::new() };
+                let _ = self.host.storage_set(PUSH_KEY, serde_json::to_vec(&kept).unwrap_or_default()).await;
+                self.push_registered().await
+            }
+            Call::PushUnregister => {
+                let kept = self.host.storage_get(PUSH_KEY).await.ok().flatten().and_then(|b| serde_json::from_slice::<KeptPush>(&b).ok());
+                let _ = self.host.storage_delete(PUSH_KEY).await;
+                if let Some(kept) = kept {
+                    let mut gone = json!({});
+                    for k in ["endpoint", "token"] {
+                        if let Some(v) = kept.registration.get(k) {
+                            gone[k] = v.clone();
+                        }
+                    }
+                    for account in self.accounts.list() {
+                        let _ = self.cloud.request(&account.sub, "DELETE", "/v1/push", Some(gone.clone())).await;
+                    }
+                }
                 Ok(Value::Null)
             }
             Call::Op(op) => match op.target {
@@ -1011,6 +1069,28 @@ impl Inner {
         }
     }
 
+    /// Gives this device's push registration (as kept) to the signed-in accounts that do not have it yet.
+    async fn push_registered(&self) -> Result<Value> {
+        let Some(mut kept) = self.host.storage_get(PUSH_KEY).await.ok().flatten().and_then(|b| serde_json::from_slice::<KeptPush>(&b).ok()) else {
+            return Ok(Value::Null);
+        };
+        let accounts = self.accounts.list();
+        kept.with.retain(|sub| accounts.iter().any(|a| &a.sub == sub));
+        let mut failed = None;
+        let missing: Vec<&AccountView> = accounts.iter().filter(|a| !kept.with.contains(&a.sub)).collect();
+        for account in missing {
+            match self.cloud.request(&account.sub, "POST", "/v1/push", Some(kept.registration.clone())).await {
+                Ok(_) => kept.with.push(account.sub.clone()),
+                Err(error) => failed = Some(error),
+            }
+        }
+        let _ = self.host.storage_set(PUSH_KEY, serde_json::to_vec(&kept).unwrap_or_default()).await;
+        match failed {
+            Some(error) => Err(error),
+            None => Ok(Value::Null),
+        }
+    }
+
     /// The accounts as UIs see them changed (a token refresh alone changes nothing here).
     fn accounts_changed(&self) {
         let list = self.accounts.list();
@@ -1027,6 +1107,8 @@ impl Inner {
         self.host.spawn(
             async move {
                 if let Some(core) = core.upgrade() {
+                    // Someone signed in: their devices hear pushes too.
+                    let _ = core.push_registered().await;
                     core.refresh_all().await;
                 }
             }
@@ -1278,6 +1360,12 @@ enum Call {
     /// A message (or the close) for the socket this client named `socket`.
     PreviewSocketSend { socket: String, frame: station::SocketFrame },
     Migrate { accounts: Option<Value>, device: Option<Vec<u8>> },
+    /// still.fail cloud's VAPID key, for a browser to subscribe to pushes with (docs/notifications.md).
+    PushKey,
+    /// This device's push registration (`{kind: "web", endpoint, keys}` or `{kind: "fcm", token}`): given to every
+    /// signed-in account, and to each signed in later.
+    PushRegister { registration: Value },
+    PushUnregister,
 }
 
 impl Call {
@@ -1298,6 +1386,7 @@ impl Call {
             Call::ChatOlder { station, .. } | Call::ChatRead { station, .. } | Call::StationUpload { station, .. } | Call::StationFile { station, .. } => Some(station),
             Call::StationPreview { station, .. } | Call::HistoryOlder { station, .. } | Call::PreviewSocket { station, .. } => Some(station),
             Call::AuthBegin { .. } | Call::AuthComplete { .. } | Call::SignOut { .. } | Call::Migrate { .. } | Call::ClientError { .. } | Call::Wake { .. } | Call::PreviewSocketSend { .. } => None,
+            Call::PushKey | Call::PushRegister { .. } | Call::PushUnregister => None,
         }
     }
 }
@@ -1464,6 +1553,23 @@ fn parse_call(name: &str, params: Value) -> Result<Call> {
             Call::ClientError { source: p.source, message: p.message }
         }
         "client.wake" => Call::Wake { away: read::<WakeParams>(params)?.away },
+        "push.key" => Call::PushKey,
+        "push.register" => {
+            let registration = params_or_empty(params);
+            let kind = registration.get("kind").and_then(Value::as_str);
+            let text = |k: &str| registration.get(k).and_then(Value::as_str).is_some_and(|v| !v.is_empty());
+            let keys = |k: &str| registration.get("keys").and_then(|keys| keys.get(k)).and_then(Value::as_str).is_some_and(|v| !v.is_empty());
+            let ok = match kind {
+                Some("web") => text("endpoint") && keys("p256dh") && keys("auth"),
+                Some("fcm") => text("token"),
+                _ => false,
+            };
+            if !ok {
+                return Err(CoreError::invalid("要么是 {kind: \"web\", endpoint, keys: {p256dh, auth}}，要么是 {kind: \"fcm\", token}"));
+            }
+            Call::PushRegister { registration }
+        }
+        "push.unregister" => Call::PushUnregister,
         "chat.create" => {
             let p: Create = read(params)?;
             let mut ask = json!({ "runtime": p.runtime });

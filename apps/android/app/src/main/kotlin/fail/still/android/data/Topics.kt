@@ -97,6 +97,8 @@ object Topics {
     fun jobs(station: String) = buildJsonObject { put("topic", "jobs"); put("station", station) }
     /** What the core has been waiting on for a while (a slow request, a link down), said under a page's "loading…". */
     val status = buildJsonObject { put("topic", "status") }
+    /** What wants the viewer in the chats they take part in, the last 20 (docs/notifications.md; Notices.kt). */
+    val notices = buildJsonObject { put("topic", "notices") }
 
     /** A connect's Slack app as Slack has it (read through the station; again after a write to the connect). */
     fun slackApp(station: String, connect: String) = buildJsonObject { put("topic", "slackApp"); put("station", station); put("connect", connect) }

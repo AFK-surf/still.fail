@@ -4,16 +4,17 @@
 // the page is served from app://ember, the core runs natively (client/node,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
-import { app, BrowserWindow, ipcMain, MessageChannelMain, net, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
+import { app, BrowserWindow, ipcMain, MessageChannelMain, net, Notification, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess } from "electron";
 import { autoUpdater } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
+import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
 import { LocalStation } from "./station";
 import { moveUserData } from "./moves.mts";
 
@@ -96,7 +97,13 @@ ipcMain.on("core:open", (event, id: unknown) => {
 ipcMain.on("app:cloud-origin", (event) => { event.returnValue = CLOUD_ORIGIN; });
 
 // The app's own way to the core, for what it serves itself (previews): a client of the core as a page is, making calls.
-interface OwnLink { port: MessagePortMain; next: number; waiting: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; onProgress?: ((value: unknown) => void) | undefined }> }
+interface OwnLink {
+  port: MessagePortMain;
+  next: number;
+  waiting: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; onProgress?: ((value: unknown) => void) | undefined }>;
+  /** Topics it holds: each value as it is now, deltas applied. */
+  topics: Map<number, { value: unknown; onValue: (value: unknown) => void }>;
+}
 let own: OwnLink | null = null;
 
 function dropOwnLink(reason: string): void {
@@ -104,16 +111,26 @@ function dropOwnLink(reason: string): void {
   for (const { reject } of own.waiting.values()) reject(new Error(reason));
   own.port.close();
   own = null;
+  // What it held goes on on a new link, once the core is back.
+  setTimeout(followNotices, 1000);
 }
 
-/** A call of the core's; `onProgress` hears the values it sends before its answer, `signal` cancels it. */
-function coreCall(name: string, params: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal): Promise<unknown> {
+/** The app's own link to the core, opened when first needed. */
+function ownLink(): OwnLink {
   if (!own) {
     const { port1, port2 } = new MessageChannelMain();
     coreProcess().postMessage(null, [port1]);
-    const link: OwnLink = { port: port2, next: 1, waiting: new Map() };
+    const link: OwnLink = { port: port2, next: 1, waiting: new Map(), topics: new Map() };
     port2.on("message", ({ data }) => {
-      const message = JSON.parse(String(data)) as { id?: number; ok?: unknown; value?: unknown; error?: { message?: string } };
+      const message = JSON.parse(String(data)) as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: { message?: string } };
+      const topic = message.id === undefined ? undefined : link.topics.get(message.id);
+      if (topic) {
+        if ("value" in message) topic.value = message.value;
+        else if (message.delta) topic.value = applyDelta(topic.value, message.delta);
+        else return;
+        topic.onValue(topic.value);
+        return;
+      }
       const waiting = message.id === undefined ? undefined : link.waiting.get(message.id);
       if (!waiting) return;
       if ("value" in message && !message.error) {
@@ -127,7 +144,12 @@ function coreCall(name: string, params: unknown, onProgress?: (value: unknown) =
     port2.start();
     own = link;
   }
-  const link = own;
+  return own;
+}
+
+/** A call of the core's; `onProgress` hears the values it sends before its answer, `signal` cancels it. */
+function coreCall(name: string, params: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal): Promise<unknown> {
+  const link = ownLink();
   const id = link.next++;
   return new Promise((resolve, reject) => {
     link.waiting.set(id, { resolve, reject, onProgress });
@@ -496,6 +518,62 @@ function open(path = "/", titled = false): BrowserWindow {
   return window;
 }
 
+// The chats' notices (docs/notifications.md), shown by the app itself, so also with no window open. Whether they are on
+// is kept in userData/notify.json; the system's own settings for the app come on top.
+const NOTIFY_FILE = () => join(app.getPath("userData"), "notify.json");
+let notifyOn = true;
+let noticesHeld: number | null = null;
+/** The notification shown for each chat (by its tag): a newer one takes its place. */
+const shownNotices = new Map<string, Notification>();
+
+interface Notice { id: string; title: string; body: string; tag: string; url: string; workspace: string; stationId: string; session: string }
+
+function followNotices(): void {
+  if (noticesHeld !== null && own?.topics.has(noticesHeld)) return;
+  const link = ownLink();
+  const id = link.next++;
+  let seen: Set<string> | null = null;
+  link.topics.set(id, {
+    value: undefined,
+    onValue: (value) => {
+      const items = (value as { items?: Notice[] } | undefined)?.items ?? [];
+      // What was there when the app started holding them is old news.
+      if (!seen) { seen = new Set(items.map((n) => n.id)); return; }
+      for (const n of items) {
+        if (seen.has(n.id)) continue;
+        seen.add(n.id);
+        if (notifyOn && Notification.isSupported() && !looking(n)) show(n);
+      }
+    },
+  });
+  noticesHeld = id;
+  link.port.postMessage({ id, subscribe: { topic: "notices" } });
+}
+
+/** The focused window shows that chat. */
+function looking(n: Notice): boolean {
+  const window = BrowserWindow.getFocusedWindow();
+  if (!window) return false;
+  const path = decodeURIComponent(new URL(window.webContents.getURL()).pathname);
+  return path.startsWith(`/w/${n.workspace}/`) && path.endsWith(`/s/${n.stationId}/chats/${n.session}`);
+}
+
+function show(n: Notice): void {
+  shownNotices.get(n.tag)?.close();
+  const notification = new Notification({ title: n.title, body: n.body });
+  notification.on("click", () => { shownNotices.delete(n.tag); openPath(n.url); });
+  notification.on("close", () => { if (shownNotices.get(n.tag) === notification) shownNotices.delete(n.tag); });
+  shownNotices.set(n.tag, notification);
+  notification.show();
+}
+
+ipcMain.handle("notify:get", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? notifyOn : null);
+ipcMain.handle("notify:set", (event, on: unknown) => {
+  if (typeof on !== "boolean" || !event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)) return;
+  notifyOn = on;
+  writeFileSync(NOTIFY_FILE(), JSON.stringify({ on }));
+});
+
 /** The system browser finished a sign-in: the page's own /auth/callback completes it (web/src/cloud/gate.tsx). */
 /**
  * A stillfail:// (or ember://) URL handed to the app: the sign-in coming back (stillfail://auth/callback, loaded as the
@@ -507,13 +585,28 @@ function arrived(url: string): void {
   if (!/^(?:stillfail|ember):\/\/auth\/callback(?:[?#]|$)/.test(url) && !item) return;
   // An item's link may name a web service to open with it (?service=<job>).
   const path = item ? `/o/${item[1]}/${item[2]}/${item[3]}${new URL(url).search}` : `/auth/callback${new URL(url).search}`;
+  if (item) {
+    openPath(path);
+    return;
+  }
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   if (!window) {
     open(path);
     return;
   }
-  if (item) window.webContents.send("app:navigate", path);
-  else void window.loadURL(`${APP_ORIGIN}${path}`);
+  void window.loadURL(`${APP_ORIGIN}${path}`);
+  if (window.isMinimized()) window.restore();
+  window.focus();
+}
+
+/** A page of the app (an item's /o/… link) in the window in front, which goes there itself; in a new one with none. */
+function openPath(path: string): void {
+  const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  if (!window) {
+    open(path);
+    return;
+  }
+  window.webContents.send("app:navigate", path);
   if (window.isMinimized()) window.restore();
   window.focus();
 }
@@ -551,6 +644,8 @@ if (!app.requestSingleInstanceLock()) {
     open();
     station.start();
     keepUpdated();
+    try { notifyOn = JSON.parse(readFileSync(NOTIFY_FILE(), "utf8")).on !== false; } catch { /* on, as it starts */ }
+    followNotices();
   });
   // The station stops with the app, its runtimes first; the app quits once it has.
   app.on("before-quit", (event) => {

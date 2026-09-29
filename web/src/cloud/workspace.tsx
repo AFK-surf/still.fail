@@ -21,6 +21,7 @@ import { ShortcutsPage } from "../Shortcuts.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
+import { NotificationsPage } from "../pages/Notifications.tsx";
 import { AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
@@ -88,6 +89,7 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route index element={<WorkspaceHome id={entry.id} stations={found.value && stations} />} />
             <Route path="settings" element={<Navigate to="stations" replace />} />
             <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
+            <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} />} />
             {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
             <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />

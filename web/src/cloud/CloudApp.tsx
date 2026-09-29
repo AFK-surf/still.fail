@@ -19,6 +19,7 @@ import { MobileSignIn } from "../mobile/SignIn.tsx";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspaces } from "./api.ts";
 import { Illustration } from "../brand.tsx";
 import { PageViews, track } from "../telemetry.ts";
+import { useNotices } from "../notify.ts";
 import { stationApi, useStationCall } from "../api.ts";
 import * as controlsCss from "../styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -83,8 +84,14 @@ function Home() {
     return () => window.removeEventListener("message", onMessage);
   }, [navigate]);
   if (!list) return <Splash />;
-  if (list.length === 0 && narrow) return <MobileSignIn />;
-  if (list.length === 0) return <SignInPage lead={inviteCode() ? "你拿到了 still.fail 的邀请码。用 Google 账号登录，就能建一个自己的 workspace。" : undefined} />;
+  if (list.length > 0) return <SignedIn />;
+  if (narrow) return <MobileSignIn />;
+  return <SignInPage lead={inviteCode() ? "你拿到了 still.fail 的邀请码。用 Google 账号登录，就能建一个自己的 workspace。" : undefined} />;
+}
+
+/** Signed in: the workspaces, and the notices of their chats (notify.ts). */
+function SignedIn() {
+  useNotices();
   return (
     <Routes>
       <Route path="/" element={<Landing />} />

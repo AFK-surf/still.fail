@@ -41,6 +41,10 @@ export function ArrowUp(props: IconProps) {
   return <Svg {...props}><path d="M12 20V4 M6 10L12 4L18 10" /></Svg>;
 }
 
+export function Bell(props: IconProps) {
+  return <Svg {...props}><path d="M12 3V5 M6.5 17V11Q6.5 5 12 5Q17.5 5 17.5 11V17 M4.5 17H19.5 M10 20.5H14" /></Svg>;
+}
+
 export function Bot(props: IconProps) {
   return <Svg {...props}><path d="M12 3.5V6 M12 6C18 6 20.5 8 20.5 12V16C20.5 19 17.5 20.5 12 20.5C6.5 20.5 3.5 19 3.5 16L4 12C4 8 6.5 6 12 6Z M9.5 17H14.5" /><circle cx="8.5" cy="12" r="1.25" fill="currentColor" stroke="none" /><circle cx="15.5" cy="12" r="1.25" fill="currentColor" stroke="none" /></Svg>;
 }
@@ -338,6 +342,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "arrow-right": ArrowRight,
   "arrow-up-right": ArrowUpRight,
   "arrow-up": ArrowUp,
+  "bell": Bell,
   "bot": Bot,
   "boxes": Boxes,
   "brain": Brain,

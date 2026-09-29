@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The notification's small icon: still.fail's mark (stillfail_mark.xml) as one flat shape, its face cut out. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="32" android:viewportHeight="32">
+    <path android:pathData="M15.5 3A1.5 1.5 0 1 0 18.5 3A1.5 1.5 0 1 0 15.5 3Z M16.2 3.5H17.8V5.5H16.2Z"
+        android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M 5 12 C 5 7 9 5 16 5 C 24 5 28 8 28 13 V 23 C 28 27 24 29 16 29 C 9 29 4 27 4 23 Z M12 10H20A5 5 0 0 1 25 15V18A5 5 0 0 1 20 23H12A5 5 0 0 1 7 18V15A5 5 0 0 1 12 10Z"
+        android:fillType="evenOdd"
+        android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M10.65 16A1.35 1.35 0 1 0 13.35 16A1.35 1.35 0 1 0 10.65 16Z M18.65 16A1.35 1.35 0 1 0 21.35 16A1.35 1.35 0 1 0 18.65 16Z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

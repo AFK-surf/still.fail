@@ -116,6 +116,7 @@ for its member credential (30 days, kept on the device: docs/cloud.md).
 | `thread` | `station`, `thread` (id) | `{ first, last, entries, thread }`: the thread's entries `first ..= last` (`EntryView`s, never changed once read): its latest page, older pages in front as `chat.older` loads them; `thread` is its summary as kept on the device (null when read from the station) |
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
+| `notices` | — | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md) |
 
 ```jsonc
 // live
@@ -333,6 +334,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `preview.socket` | `station`, `port`, `path`, `headers?`, `socket` (a name the UI gives it) | a WebSocket of that service, over the mesh only: values `{ open: { protocol } }`, then `{ text }` or `{ binary }` for each message; the answer is its close, `{ code, reason }`. Cancelling the call drops it |
 | `preview.socket.send` | `socket`, one of `text`, `binary`, `close: [code, reason]` | — ; what the page sends on the socket it named so |
 | `migrate` | `accounts`, `device` | — (web only: what localStorage held before the core existed) |
+| `push.key` / `push.register` / `push.unregister` | see docs/notifications.md | this device's push registration, with every signed-in account |
 
 A UI never makes a request of a station or still.fail cloud itself (no method, no
 path): it names what it wants done, and the core knows the request that does it
@@ -396,6 +398,7 @@ client/
 - `entries.rs` — a thread's entries merged into messages (edits applied): the one place that does it.
 - `data.rs` — the data center (docs/core-db.md): what still.fail cloud and the stations said, held as records.
 - `sync.rs` — what the core keeps in sync by itself, whatever the UI shows.
+- `notices.rs` — what a person hears about while the client runs (the `notices` topic), from how the chat rows change.
 - `status.rs` — what the core is waiting on (the `status` topic): slow requests and links, sockets that are down.
 - `activity.rs`, `history.rs`, `present.rs`, `format.rs` — what the clients show (an agent's current activity, its execution history, sessions' and rows' state, words and times), decided once for every client.
 - `error.rs` — the one error type calls and topics report.

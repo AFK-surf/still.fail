@@ -18,6 +18,7 @@
 
 mod errors;
 mod local;
+mod notify;
 mod telemetry;
 
 use std::{
@@ -581,6 +582,8 @@ async fn serve_mesh(data: PathBuf, state: CloudState, backend: local::Backend, r
     }
     tokio::spawn(presence(station.clone(), endpoint.secret_key().clone()));
     tokio::spawn(relay_fallback(endpoint.clone(), relay));
+    // What the chats' people hear about, pushed through still.fail cloud.
+    tokio::spawn(notify::forward(station.clone(), endpoint.secret_key().clone()));
     if traces {
         tokio::spawn(telemetry.export(station.clone(), endpoint.secret_key().clone()));
     }

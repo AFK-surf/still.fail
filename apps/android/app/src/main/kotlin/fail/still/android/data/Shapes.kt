@@ -1136,6 +1136,31 @@ data class MeshStatus (
 	val name: String? = null
 )
 
+/// A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
+/// new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
+/// `url` opens it.
+@Serializable
+data class Notice (
+	val id: String,
+	val kind: String,
+	val station: String,
+	val workspace: String,
+	val stationId: String,
+	val session: String,
+	val thread: Long? = null,
+	val title: String,
+	val body: String,
+	val tag: String,
+	val url: String,
+	val at: Long
+)
+
+/// What a person hears about while the client runs (the `notices` topic; docs/notifications.md), oldest first.
+@Serializable
+data class NoticesView (
+	val items: List<Notice>
+)
+
 /// Who is looking: local | access (`email`) | mesh (`email`, `name`, `sub`, `role`, `workspace`, `device`).
 @Serializable
 data class Viewer (

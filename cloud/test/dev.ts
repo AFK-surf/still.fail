@@ -10,6 +10,9 @@
 //   /__dev/login?user=alice  signs that account into the browser (on that origin) and goes to /
 //   /__dev/account?user=alice  that account as JSON, for the core's `migrate` (native apps)
 //   /__dev/credential?device=hex  a member's credential for alice's first workspace
+// With PUSH_LOG=<file>, pushes work with a VAPID key made at start, and what the cloud pushes (to browsers, to FCM)
+// is written there, a JSON line each (its body base64), instead of reaching a push service.
+import { appendFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect } from "node:net";
@@ -40,8 +43,24 @@ async function assets(request: Request): Promise<Response> {
   }
 }
 
+/** A VAPID key made now: its public point and private scalar, base64url. */
+async function vapidKey(): Promise<{ publicKey: string; privateKey: string }> {
+  const pair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]) as CryptoKeyPair;
+  const jwk = await crypto.subtle.exportKey("jwk", pair.privateKey) as JsonWebKey;
+  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey) as ArrayBuffer);
+  return { publicKey: Buffer.from(raw).toString("base64url"), privateKey: jwk.d! };
+}
+const pushLog = process.env.PUSH_LOG;
+const pushes = pushLog ? {
+  vapid: await vapidKey(),
+  push: (r: { url: string; method: string; headers: Record<string, string>; body: Uint8Array }) => {
+    appendFileSync(pushLog, JSON.stringify({ ...r, body: Buffer.from(r.body).toString("base64") }) + "\n");
+    return { status: 201 };
+  },
+} : {};
+
 // With AXIOM_TOKEN (and AXIOM_DATASET) in the environment, traces go to Axiom as they would from Cloudflare.
-const h = await harness({ origin, adminOrigin, previewOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}) });
+const h = await harness({ ...pushes, origin, adminOrigin, previewOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}) });
 const alice = h.as(await h.login("alice"));
 const workspace = await (await alice("POST", "/v1/workspaces", { name: "Dev" })).json() as { id: string };
 for (const name of ["studio", "mac-mini"]) {

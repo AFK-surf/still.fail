@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.runtime.LaunchedEffect
@@ -124,6 +125,10 @@ class AppState(val core: StillFailCore, private val prefs: SharedPreferences, va
 
     var onlyMine by mutableStateOf(prefs.getBoolean("onlyMine", false)); private set
     fun showOnlyMine(on: Boolean) { onlyMine = on; prefs.edit().putBoolean("onlyMine", on).apply() }
+
+    /** 我 → 通知: local notices and pushes, on by default (Notices.kt, Push.kt). */
+    var notify by mutableStateOf(prefs.getBoolean(Notifier.FLAG, true)); private set
+    fun useNotify(on: Boolean) { notify = on; prefs.edit().putBoolean(Notifier.FLAG, on).apply() }
 
     /** Looks for a newer build of the app: one found shows 更新 in the home page's top bar (and in 我). */
     suspend fun checkUpdates() { updates.check() }
@@ -239,6 +244,7 @@ fun StillFailApp(app: AppState) {
                     }
                     else Landing(signedIn, all)
                 } else {
+                    rememberNotificationAsk(app, once = true)
                     Pages(app, current)
                 }
             }
@@ -246,6 +252,9 @@ fun StillFailApp(app: AppState) {
         // Pages scroll under the status bar; it keeps the paper behind its icons (the list and a chat have frosted bars
         // there instead, which show what runs under them).
         val top = app.stack.lastOrNull()
+        // A chat opened: its notification is read (its tag, as Notices.kt shows it).
+        val context = LocalContext.current
+        LaunchedEffect(top) { if (top is Screen.Chat && top.of is ChatOf.Session) Notifier.cancel(context, "${top.station}/${top.of.key}") }
         if (top !is Screen.Home && top !is Screen.Chat) Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
         SheetHost(app)
         ReaderHost(app)
