@@ -13,6 +13,11 @@ export const vizOpen = style({
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 export const vizFrame = style({ display: "block", width: "100%", border: "0", background: "transparent" });
+/** A whole page placed in a message: a 16:9 window of the message's width, its corners the card's. */
+export const vizPage = style({
+  display: "block", width: "100%", aspectRatio: "16 / 9", maxHeight: "80vh", border: "0",
+  borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: vars.paper,
+});
 /** Where a visualization comes while its file is fetched: its least height, quietly. */
 export const vizWait = style({ height: "120px", margin: "0 0 8px", borderRadius: `calc(12px * ${vars.cornerScale})`, background: vars.paper });
 export const vizNote = style({ padding: "24px", color: vars.muted, fontSize: vars.textSm });

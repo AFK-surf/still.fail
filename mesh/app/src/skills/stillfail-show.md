@@ -61,6 +61,8 @@ words what the evidence shows.
   the choice back (`ember.sendFollowUpMessage`) makes picking between designs one click.
 - It is not the way to show a real UI: it runs in a sandbox in still.fail's stylesheet, not your app's. Screenshot or serve
   the app itself.
+- A page made to fill a screen (a promo, a player, a slideshow) is not a figure either: attach it unplaced, as a file
+  to open full screen, or serve it; with it, send a screenshot or a video so it can be seen in the chat.
 
 ## Making the evidence
 

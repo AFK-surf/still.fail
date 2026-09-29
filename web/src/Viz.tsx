@@ -74,6 +74,17 @@ function documentOf(html: string, state: unknown): string {
     + `<script>${bridge}</script></head><body>${html}</body></html>`;
 }
 
+/**
+ * A whole page's document (a file that is not a fragment: a player, an app, a page made to fill a window), drawn as
+ * written, not in the stylesheet: only the sandbox's CSP and the bridge go into its head, after its doctype so it
+ * keeps its mode.
+ */
+function pageDocument(html: string): string {
+  const head = `<meta http-equiv="Content-Security-Policy" content="${CSP}"><script>${bridge}</script>`;
+  const at = /<head[^>]*>/i.exec(html) ?? /<html[^>]*>/i.exec(html) ?? /<!doctype[^>]*>/i.exec(html);
+  return at ? html.slice(0, at.index + at[0].length) + head + html.slice(at.index + at[0].length) : head + html;
+}
+
 /** Whether an HTML file is a fragment (as the ember-viz skill has agents write them), to be drawn in the stylesheet. */
 export function isFragment(html: string): boolean {
   return !/<!doctype|<html[\s>]/i.test(html.slice(0, 2048));
@@ -140,11 +151,15 @@ function Frame({ html, title, state = null, onState, onError }: {
 }) {
   const [height, setHeight] = useState(0);
   const frame = useRef<HTMLIFrameElement>(null);
+  // A whole page sizes itself to its window (height:100%, a stage scaled to fit), so it has no height of its own to
+  // be sized to: it gets a screen-shaped window instead (2026-09-30 a 1920×1080 player drawn 120 px tall, its
+  // controls over all of it).
+  const page = !isFragment(html);
   // Made once per content: a new document would reload the frame and lose what it holds (its state, a chart drawn).
   // The state is only what it starts with.
-  const srcDoc = useMemo(() => documentOf(html, state), [html]); // eslint-disable-line react-hooks/exhaustive-deps
-  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight: (h) => setHeight(Math.min(MAX_HEIGHT, h)), ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
-  return <iframe ref={frame} className={css.vizFrame} sandbox="allow-scripts" srcDoc={srcDoc} title={title} style={{ height: height || 120 }} />;
+  const srcDoc = useMemo(() => (page ? pageDocument(html) : documentOf(html, state)), [html]); // eslint-disable-line react-hooks/exhaustive-deps
+  useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight: (h) => { if (!page) setHeight(Math.min(MAX_HEIGHT, h)); }, ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
+  return <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" srcDoc={srcDoc} title={title} style={page ? undefined : { height: height || 120 }} />;
 }
 
 /**

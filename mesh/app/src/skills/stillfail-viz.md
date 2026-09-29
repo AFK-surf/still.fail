@@ -35,6 +35,11 @@ it there. Say in the text what the figure shows, for those who stay in Slack.
 - Width is the message's: design for about 736 px and keep it working down to 320 px (a phone). No fixed widths or
   viewport heights; wrap with `.viz-grid` / `.viz-row`, and give wide content `.table-responsive`.
 - Fonts are the system's (`--font-sans`); weights 400 to 600.
+- A whole page (a file with `<!doctype>` or `<html>`: a player, an animation, an app made to fill a window) is not a
+  figure. Placed, it is drawn as written in a 16:9 window of the message's width (about 736×414, as small as 320×180
+  on a phone), not sized to its content, without the stylesheet. Everything in it, its own controls too, must scale
+  with that window (a stage scaled to fit with fixed-pixel controls on top ends up covered by them). Better: attach it
+  without placing it, as a file to open full screen, or serve it (the stillfail-jobs skill).
 
 ## Talking back
 
