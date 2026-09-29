@@ -198,11 +198,11 @@ move_data() {
   [ -n "$migrate" ] || return 0
   if [ -d "$data" ] && [ ! -L "$data" ]; then rmdir "$data" 2>/dev/null || true; fi
   if mv "$old_data" "$data" 2>/dev/null; then
-    ln -s "$data" "$old_data" || echo "数据已经搬到 $data，但没能在 $old_data 留下链接。" >&2
-    echo "数据目录从 $old_data 搬到了 $data（旧位置留了一个指向它的链接）。"
+    ln -s "$data" "$old_data" || echo "数据已经搬到 \${data}，但没能在 \${old_data} 留下链接。" >&2
+    echo "数据目录从 \${old_data} 搬到了 \${data}（旧位置留了一个指向它的链接）。"
   else
     ln -s "$old_data" "$data"
-    echo "没能把 $old_data 搬到 $data，改为让 $data 指向它。" >&2
+    echo "没能把 \${old_data} 搬到 \${data}，改为让 \${data} 指向它。" >&2
   fi
   migrate=""
 }
