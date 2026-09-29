@@ -133,22 +133,9 @@ function Mesh({ tall }: { tall?: boolean }) {
 
 // ---- The rest ----
 
-const LIVES = [
-  { pose: "push", life: "work", name: "干活" },
-  { pose: "hop", life: "warm", name: "待命" },
-  { pose: "rest", life: "rest", name: "休息" },
-  { pose: "rest", life: "archived", name: "归档" },
-];
 
-const MODELS: [string, string, boolean?][] = [
-  ["anthropic", "Claude", true], ["openai", "GPT", true], ["deepseek", "DeepSeek"], ["kimi", "Kimi", true], ["zhipu", "GLM"],
-  ["qwen", "Qwen"], ["minimax", "MiniMax"], ["gemini", "Gemini"], ["xai", "Grok", true],
-];
 
 export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => void; demo?: { wide: string; phone: string } }) {
-  const models = MODELS.map(([id, name, mono]) => (
-    <span key={id} className={css.model}><img className={css.modelLogo} src={`/models/${id}.svg`} alt="" data-mono={mono || undefined} />{name}</span>
-  ));
   return (
     <div className={css.page}>
       <nav className={css.nav}>
@@ -156,7 +143,6 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
           <a href="/"><Themed name="lockup" className={css.logo} alt="ember" /></a>
           <div className={css.navLinks}>
             <a className={css.navLink} href="#mesh">mesh</a>
-            <a className={css.navLink} href="#models">模型</a>
             <a className={css.navLink} href="#start">安装</a>
           </div>
           <ThemeSwitch />
@@ -189,31 +175,6 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
           <h2 className={`${css.sectionTitle} ${css.reveal}`}>你的机器连成一张网<span className={css.faint}>哪台都能叫它干活</span></h2>
           <Mesh />
           <Mesh tall />
-        </div>
-      </section>
-
-      <section className={css.section}>
-        <div className={css.sectionLight} />
-        <div className={css.wrap}>
-          <h2 className={`${css.sectionTitle} ${css.reveal}`}>会休息<span className={css.faint}>不会忘</span></h2>
-          <div className={css.lives}>
-            {LIVES.map((l) => (
-              <div key={l.life} className={`${css.life} ${css.reveal}`}>
-                {l.life === "rest" && <span className={css.sleep}>z</span>}
-                <Themed name={`buddy/${l.pose}`} className={css.buddy} life={l.life} />
-                <span className={css.lifeName}>{l.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="models" className={css.section}>
-        <div className={css.sectionLight} />
-        <h2 className={`${css.sectionTitle} ${css.reveal}`}>模型<span className={css.faint}>随你挑</span></h2>
-        <div className={css.marquee}>
-          {/* Twice over, so the strip runs on without a seam. */}
-          <div className={css.track}>{models}{models}</div>
         </div>
       </section>
 

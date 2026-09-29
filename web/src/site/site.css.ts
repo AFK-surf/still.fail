@@ -213,54 +213,6 @@ export const ring = style({
   animation: `${pulse} 2.8s ease-out infinite`, "@media": { [STILL]: { animation: "none", opacity: "0" } },
 });
 
-// The sessions' life.
-export const lives = style({
-  display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", maxWidth: "1000px", margin: "0 auto",
-  "@media": { [NARROW]: { gridTemplateColumns: "repeat(2, 1fr)" } },
-});
-export const life = style({
-  position: "relative", display: "grid", justifyItems: "center", gap: "18px", padding: "48px 16px 32px", borderRadius: "20px",
-  background: `linear-gradient(180deg, ${CARD}, transparent)`, border: `1px solid ${LINE}`, overflow: "hidden",
-});
-const push = keyframes({ "0%,100%": { transform: "translateX(0) rotate(0)" }, "50%": { transform: "translateX(6px) rotate(3deg)" } });
-const hop = keyframes({ "0%,60%,100%": { transform: "translateY(0)" }, "30%": { transform: "translateY(-26px) rotate(-6deg)" }, "45%": { transform: "translateY(0) scale(1.08,.92)" } });
-const breathe = keyframes({ "0%,100%": { transform: "scale(1)" }, "50%": { transform: "scale(1.06)" } });
-const float = keyframes({ "0%,100%": { transform: "translateY(0)", opacity: ".4" }, "50%": { transform: "translateY(-8px)", opacity: ".25" } });
-export const buddy = style({
-  width: "96px", height: "96px",
-  selectors: {
-    "&[data-life=\"work\"]": { animation: `${push} .9s ease-in-out infinite` },
-    "&[data-life=\"warm\"]": { animation: `${hop} 1.8s ease-in-out infinite` },
-    "&[data-life=\"rest\"]": { animation: `${breathe} 3.2s ease-in-out infinite` },
-    "&[data-life=\"archived\"]": { animation: `${float} 4s ease-in-out infinite`, filter: "grayscale(1)" },
-  },
-  "@media": { [STILL]: { animation: "none" } },
-});
-export const lifeName = style({ fontSize: "18px", fontWeight: "650", color: FG });
-const zz = keyframes({ "0%": { opacity: 0, transform: "translate(0, 0) scale(.6)" }, "30%": { opacity: 1 }, "100%": { opacity: 0, transform: "translate(18px, -34px) scale(1.1)" } });
-export const sleep = style({
-  position: "absolute", top: "30px", right: "30%", color: MUTED, fontWeight: "800", fontSize: "18px",
-  animation: `${zz} 2.6s ease-out infinite`, "@media": { [STILL]: { display: "none" } },
-});
-
-// The models.
-export const marquee = style({
-  display: "flex", overflow: "hidden", padding: "12px 0",
-  maskImage: "linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent)",
-  WebkitMaskImage: "linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent)",
-});
-const slide = keyframes({ to: { transform: "translateX(-50%)" } });
-export const track = style({
-  display: "flex", flex: "none", gap: "14px", paddingRight: "14px", animation: `${slide} 40s linear infinite`,
-  selectors: { [`${marquee}:hover &`]: { animationPlayState: "paused" } },
-  "@media": { [STILL]: { animation: "none" } },
-});
-export const model = style({
-  display: "inline-flex", alignItems: "center", gap: "12px", padding: "16px 26px", borderRadius: "16px",
-  border: `1px solid ${LINE}`, background: CARD, fontSize: "18px", fontWeight: "600", whiteSpace: "nowrap", color: FG,
-});
-export const modelLogo = style({ width: "26px", height: "26px", selectors: { "&[data-mono]": { filter: "var(--s-mono)" } } });
-
 // Installing.
 export const terminal = style({
   position: "relative", maxWidth: "840px", margin: "0 auto", borderRadius: "18px", overflow: "hidden",
@@ -299,6 +251,7 @@ export const finalGlow = style({
   position: "absolute", left: "50%", bottom: "-240px", width: "900px", height: "520px", transform: "translateX(-50%)", zIndex: "-1",
   borderRadius: "50%", filter: "blur(90px)", opacity: ".55", background: `radial-gradient(ellipse, ${EMBER}, transparent 65%)`,
 });
+const hop = keyframes({ "0%,60%,100%": { transform: "translateY(0)" }, "30%": { transform: "translateY(-26px) rotate(-6deg)" }, "45%": { transform: "translateY(0) scale(1.08,.92)" } });
 export const finalMark = style({ display: "block", width: "112px", height: "112px", margin: "0 auto 40px", animation: `${hop} 2.4s ease-in-out infinite`, "@media": { [STILL]: { animation: "none" } } });
 
 // ---- Footer ----
