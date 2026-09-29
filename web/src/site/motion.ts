@@ -64,11 +64,13 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   // Each glyph on the dots (still.fail's, then youdid.wtf's above and below) and where it stands in the large layout.
   const large = [...overlay.querySelectorAll<HTMLElement>(`.${css.introChar}`)];
   const glyphs = [...title.querySelectorAll<HTMLElement>(`.${css.dotGlyph}`)].map((el, i) => {
-    const big = large[i]!, from = big.getBoundingClientRect(), box = el.getBoundingClientRect(), look = getComputedStyle(big), rest = getComputedStyle(el);
+    const big = large[i]!, from = big.getBoundingClientRect(), box = el.getBoundingClientRect(), look = getComputedStyle(big);
+    // Read now: a computed style is live, and it is about to be drawn large.
+    const now = getComputedStyle(el), rest = { fontSize: now.fontSize, fontWeight: now.fontWeight, color: now.color };
     const x = from.left + from.width / 2 - (box.left + box.width / 2), y = from.top + from.height / 2 - (box.top + box.height / 2);
     // Drawn large where the intro has it: its own box stays put, the glyph (centred in it) is moved and sized.
     Object.assign(el.style, { fontSize: look.fontSize, fontWeight: look.fontWeight, color: look.color, textShadow: look.textShadow, translate: `${x}px ${y}px` });
-    return { el, line: big.closest<HTMLElement>(`.${css.introLine}`)!, x, y, rest: { fontSize: rest.fontSize, fontWeight: rest.fontWeight, color: rest.color } };
+    return { el, line: big.closest<HTMLElement>(`.${css.introLine}`)!, x, y, rest };
   });
 
   // 1. The Chinese slams in, a character at a time, each spun and blurred in from far too big and shaking the page as
