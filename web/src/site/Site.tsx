@@ -37,7 +37,9 @@ function Demo({ mount, frame }: { mount?: (root: HTMLElement) => void; frame?: {
 
 /** A domain's dot, with what the domain says in Chinese hanging off it on a line: above the first, below the second. */
 function Dot({ say, up }: { say: string; up?: boolean }) {
-  return <span className={css.dot}>.<span className={css.dotNote} data-up={up ? "" : undefined} aria-hidden><span className={css.dotLine} /><span className={css.dotSay}>{say}</span></span></span>;
+  // The dot stays plain text of its line (text in a positioned box would drop out of the line's text clip); the note
+  // hangs from an empty anchor just after it.
+  return <>.<span className={css.dot}><span className={css.dotNote} data-up={up ? "" : undefined} aria-hidden><span className={css.dotLine} /><span className={css.dotSay}>{say}</span></span></span></>;
 }
 
 // ---- The mesh ----

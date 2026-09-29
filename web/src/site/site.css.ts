@@ -150,27 +150,27 @@ export const titleDomain = style({
  * A domain's dot and what the domain says in Chinese, led off it by a line: up from the first line's dot, down from the
  * second's. Lit with its line. Its own colour, not the line's text clip, which ends at the line's box.
  */
-export const dot = style({ position: "relative" });
+export const dot = style({ position: "relative", display: "inline-block", width: "0" });
 export const dotNote = style({
-  position: "absolute", left: "50%", top: ".78em", display: "flex", flexDirection: "column", alignItems: "center",
+  position: "absolute", left: "-.12em", top: ".1em", display: "flex", flexDirection: "column", alignItems: "center",
   transform: "translateX(-50%)", color: "color-mix(in srgb, var(--s-title) 30%, var(--s-bg))", WebkitTextFillColor: "currentColor",
   pointerEvents: "none", animation: `${fadeIn} .6s .7s ${vars.easeOut} both`,
   selectors: {
-    "&[data-up]": { top: "auto", bottom: ".3em", flexDirection: "column-reverse" },
+    "&[data-up]": { top: "auto", bottom: ".22em", flexDirection: "column-reverse" },
     [`:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"] &, :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"] &`]: { color: EMBER },
   },
 });
 export const dotLine = style({
-  width: "2px", height: ".62em", background: "currentColor", opacity: ".8", transformOrigin: "50% 0",
+  width: "2px", height: ".36em", background: "currentColor", opacity: ".8", transformOrigin: "50% 0",
   animation: `${grow} .6s .7s ${vars.easeOut} both`, "@media": { [STILL]: { animation: "none" } },
-  selectors: { [`${dotNote}[data-up] &`]: { transformOrigin: "50% 100%" } },
+  selectors: { [`${dotNote}[data-up] &`]: { height: ".74em", transformOrigin: "50% 100%" } },
 });
 export const dotSay = style({
   marginTop: "12px", fontSize: "max(.11em, 14px)", fontWeight: "700", letterSpacing: ".08em", lineHeight: "1", whiteSpace: "nowrap",
   selectors: { [`${dotNote}[data-up] &`]: { marginTop: "0", marginBottom: "12px" } },
 });
 
-export const heroActions = style({ marginTop: "44px", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
+export const heroActions = style({ marginTop: "clamp(88px, 10vw, 150px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
 
 /** The demo's stage: it rises out of a tilt as the page opens, a beam of light running round its edge. */
 export const stage = style({
