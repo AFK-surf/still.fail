@@ -510,7 +510,7 @@ export function NewConnectScreen() {
         {step === "app" && (
           <>
             <b className={sheetsCss.mFormLabel}>名字</b>
-            <Field value={appSettings.name} onChange={(v) => setAppSettings({ ...appSettings, name: v, displayName: v })} placeholder="ember" />
+            <Field value={appSettings.name} onChange={(v) => setAppSettings({ ...appSettings, name: v, displayName: v })} placeholder="still.fail" />
             <b className={sheetsCss.mFormLabel}>描述</b>
             <Field value={appSettings.description} onChange={(v) => setAppSettings({ ...appSettings, description: v })} placeholder="Coding agent in your threads" />
             <AppLook settings={appSettings} onChange={setAppSettings} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
@@ -540,7 +540,7 @@ export function NewConnectScreen() {
         {step === "manual" && (
           <>
             <ol className={css.mStepsList}>
-              <li><button type="button" className={partsCss.mLink} onClick={() => void api.createAppUrl("ember").then(({ url }) => window.open(url, "_blank", "noopener"))}>用 still.fail 的配置在 Slack 新建一个 app</button>。</li>
+              <li><button type="button" className={partsCss.mLink} onClick={() => void api.createAppUrl("still.fail").then(({ url }) => window.open(url, "_blank", "noopener"))}>用 still.fail 的配置在 Slack 新建一个 app</button>。</li>
               <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>
               <li>在 Install App 页安装到工作区，复制 Bot User OAuth Token。</li>
               <li>把两个 token 填在下面。</li>

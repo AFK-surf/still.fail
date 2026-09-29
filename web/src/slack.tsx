@@ -10,11 +10,11 @@ import * as shellCss from "./styles/shell.css.ts";
 
 export function CreateAppSteps({ name }: { name: string }) {
   const api = useApi();
-  const open = useAction(() => api.createAppUrl(name.trim() || "ember"), ({ url }) => window.open(url, "_blank", "noopener"));
+  const open = useAction(() => api.createAppUrl(name.trim() || "still.fail"), ({ url }) => window.open(url, "_blank", "noopener"));
   return (
     <ol className={controlsCss.steps}>
       <li>
-        <span>用 still.fail 的配置在 Slack 新建一个 app，名字是「{name.trim() || "ember"}」。</span>
+        <span>用 still.fail 的配置在 Slack 新建一个 app，名字是「{name.trim() || "still.fail"}」。</span>
         <Button icon={External} onClick={() => void open.run()} busy={open.busy}>在 Slack 创建 app</Button>
       </li>
       <li>在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。</li>

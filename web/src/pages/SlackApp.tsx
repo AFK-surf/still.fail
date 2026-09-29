@@ -252,7 +252,7 @@ export function edgeColour(dataUrl: string): Promise<string> {
 
 /** What a new app starts as: every permission on; its colour and icon come from its first avatar. */
 export const NEW_APP: SlackAppSettings = {
-  name: "ember", displayName: "ember", description: "Coding agent in your threads (ember)", longDescription: "", backgroundColor: "#F3E3D3",
+  name: "still.fail", displayName: "still.fail", description: "Coding agent in your threads (still.fail)", longDescription: "", backgroundColor: "#F3E3D3",
   groups: Object.fromEntries((Object.keys(GROUPS) as SlackGroup[]).map((g) => [g, true])) as Record<SlackGroup, boolean>,
 };
 

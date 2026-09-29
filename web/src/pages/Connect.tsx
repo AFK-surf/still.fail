@@ -483,7 +483,7 @@ export function NewConnectDialog({ open, onClose, resume }: { open: boolean; onC
       )}
       {step === "manual" && (
         <>
-          <CreateAppSteps name="ember" />
+          <CreateAppSteps name="still.fail" />
           <TokenFields value={tokens} onChange={setTokens} check={check} />
         </>
       )}

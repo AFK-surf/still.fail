@@ -537,9 +537,9 @@ fun NewConnectScreen(station: String) {
     val resume = remember { app.strings(RESUME + station).firstOrNull().also { app.setStrings(RESUME + station, emptyList()) } }
     var step by remember { mutableStateOf(if (resume != null) "install" else "team") }
     var team by remember { mutableStateOf<String?>(null) }
-    // The Slack app's default name stays "ember" (what people mention in Slack), across the product.
-    var name by remember { mutableStateOf("ember") }
-    var description by remember { mutableStateOf("Coding agent in your threads (ember)") }
+    // The Slack app's default name, across the product (a bot user's display name takes a-z 0-9 - _ and .).
+    var name by remember { mutableStateOf("still.fail") }
+    var description by remember { mutableStateOf("Coding agent in your threads (still.fail)") }
     // The app made, as the station keeps it (it outlives this page until a connect takes it; a station yet to update has none).
     var madeId by remember { mutableStateOf(resume) }
     val made = madeId?.let { id -> overview.value?.slackApps?.firstOrNull { it.appId == id } }
@@ -598,7 +598,7 @@ fun NewConnectScreen(station: String) {
                 }
                 "app" -> {
                     Text("名字", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                    Field(name, { name = it }, "ember")
+                    Field(name, { name = it }, "still.fail")
                     Text("描述", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                     Field(description, { description = it }, "Coding agent in your threads")
                     Text("头像、颜色和权限用默认的；建好以后可以在电脑上改。", fontSize = 12.sp, color = C.muted)
@@ -625,7 +625,7 @@ fun NewConnectScreen(station: String) {
                 }
                 "manual" -> {
                     Steps(listOf(
-                        "用 still.fail 的配置在 Slack 新建一个 app。" to { scope.launch { try { open(api.createAppUrl("ember")) } catch (e: CoreException) { error = e.message } }; Unit },
+                        "用 still.fail 的配置在 Slack 新建一个 app。" to { scope.launch { try { open(api.createAppUrl("still.fail")) } catch (e: CoreException) { error = e.message } }; Unit },
                         "在 app 的 Socket Mode 页生成 App-Level Token（权限已经选好）。" to null,
                         "在 Install App 页安装到工作区，复制 Bot User OAuth Token。" to null,
                         "把两个 token 填在下面。" to null,
