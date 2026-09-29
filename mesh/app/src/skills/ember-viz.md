@@ -1,6 +1,6 @@
 ---
 name: ember-viz
-description: Inline visualizations in ember chats (EMBER/…) — an HTML file attached with chat_post and placed in the text is drawn in the message as a small sandboxed page in ember's own look. Use when a diagram, chart, table, comparison, state machine, flow, or small interactive widget explains something better than prose, instead of rendering a PNG or describing it in words. Not for Slack threads (they take no files).
+description: Inline visualizations in ember chats (EMBER/…) — an HTML file attached with chat_post and placed in the text is drawn in the message as a small sandboxed page in ember's own look. Use when a diagram, chart, table, comparison, state machine, flow, or small interactive widget explains something better than prose, instead of rendering a PNG or describing it in words. In Slack threads the file stays in ember and the post links there.
 ---
 
 # Inline visualizations
@@ -18,6 +18,10 @@ drawn as a chart in ember's colours, no file needed. Use a file when you need la
 2. Attach it: `chat_post(to=…, text=…, files=["/abs/path/session-lifecycle.html"])`.
 3. Place it: in the text, a line of its own that links to it by its file name: `[Session lifecycle](session-lifecycle.html)`.
    Put the words that explain it around that line; the figure is not read aloud, and a phone app may show only the file.
+
+In a Slack thread, attach the file the same way but do not place it (Slack would show the link as typed): Slack
+takes no files, so ember keeps it with the message, adds a link to see it in ember at the end of the post, and draws
+it there. Say in the text what the figure shows, for those who stay in Slack.
 
 ## Writing one
 

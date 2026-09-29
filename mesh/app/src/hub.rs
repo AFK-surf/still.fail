@@ -943,7 +943,7 @@ impl Hub {
                         "to": to.clone(),
                         "text": { "type": "string", "description": "The message, formatted for where it goes (posted as written)." },
                         "kind": { "type": "string", "enum": ["final", "block"], "description": "Omit for a progress update." },
-                        "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (ember chat only; images show inline). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
+                        "files": { "type": "array", "items": { "type": "string" }, "description": "Absolute paths of files on this machine to attach (images show inline; in a Slack thread they stay in ember and the post links there). Shown below the text unless the text refers to one by its file name, as ![](shot.png) or [report](report.pdf), which places it there. Up to 10, 50 MB each." },
                     },
                     "required": ["to"],
                     "additionalProperties": false,
@@ -1101,10 +1101,21 @@ impl Hub {
         }
         let kind = state_arg(args.get("kind"))?;
         let thread = self.target(key, args.get("to"))?;
+        // Slack takes no files from here: they stay with the message in ember, and the post says where to see them.
+        let slack = thread.thread.surface != EMBER_SURFACE && !paths.is_empty();
+        let link = if slack {
+            Some((self.link)(key).ok_or_else(|| anyhow!("files cannot be shown from Slack until this station is in an ember workspace; mention their paths in the text instead"))?)
+        } else {
+            None
+        };
         let files = if paths.is_empty() { vec![] } else { self.attach(key, &paths)? };
         crate::thumbs::make_later(files.iter().map(|f| f.path.clone().into()).collect(), crate::thumbs::dir(&self.config().data_dir));
         let here = ThreadRef::new(&thread.thread.channel, &thread.thread.thread_ts);
-        let ts = self.chat(&thread.connect)?.post(&here, &text, &files).await?;
+        let (posted, text) = match &link {
+            Some(link) => slack_with_files(&text, &files, link),
+            None => (text.clone(), text),
+        };
+        let ts = self.chat(&thread.connect)?.post(&here, &posted, if slack { &[] } else { &files }).await?;
         let (n, _) = self.store.insert_message(NewMessage {
             attachments: files,
             declared: kind.map(|k| k.as_str().to_string()),
@@ -1406,6 +1417,25 @@ fn state_arg(value: Option<&Value>) -> Result<Option<DeclaredState>> {
         Some(Value::String(s)) if s == "block" => Ok(Some(DeclaredState::Block)),
         Some(other) => bail!("kind must be \"final\" or \"block\", got {other}"),
     }
+}
+
+/// A post with files to a Slack thread (which takes none from here): what Slack is sent, the text with a link to the
+/// session in ember where they show; and what ember keeps, the text with each HTML file not yet placed in it placed on
+/// a line of its own (drawn there as a visualization, as the agent would place it in an ember chat).
+fn slack_with_files(text: &str, files: &[Attachment], link: &str) -> (String, String) {
+    let what = if files.iter().any(|f| f.name.to_lowercase().ends_with(".html") || f.name.to_lowercase().ends_with(".htm")) {
+        "在 ember 里查看图表和附件"
+    } else {
+        "在 ember 里查看附件"
+    };
+    let posted = if text.is_empty() { format!("<{link}|{what}>") } else { format!("{text}\n\n<{link}|{what}>") };
+    let mut kept = text.to_string();
+    for f in files.iter().filter(|f| f.name.to_lowercase().ends_with(".html") || f.name.to_lowercase().ends_with(".htm")) {
+        if !kept.contains(&format!("]({})", f.name)) {
+            kept = if kept.is_empty() { format!("[{0}]({0})", f.name) } else { format!("{kept}\n\n[{0}]({0})", f.name) };
+        }
+    }
+    (posted, kept)
 }
 
 /// What an agent posted, as its execution history shows a post: the call (to the thread, its text, files and state)

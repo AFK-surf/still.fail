@@ -1299,3 +1299,14 @@ async fn a_session_whose_directory_is_gone_is_not_continued() {
     assert!(error.contains("已经不在了"), "{error}");
     assert!(r.store.list_sessions().unwrap().is_empty());
 }
+
+#[test]
+fn files_posted_to_slack_stay_in_ember_and_the_post_links_there() {
+    let file = |name: &str| Attachment { name: name.into(), path: format!("/w/uploads/{name}"), size: 1, width: None, height: None };
+    let (posted, kept) = slack_with_files("这周的天气", &[file("weather.html"), file("shot.png")], "https://e/o/w/s/k");
+    assert_eq!(posted, "这周的天气\n\n<https://e/o/w/s/k|在 ember 里查看图表和附件>");
+    assert_eq!(kept, "这周的天气\n\n[weather.html](weather.html)", "the HTML placed so ember draws it; an image shows below as ever");
+    let (posted, kept) = slack_with_files("看图：[天气](weather.html)", &[file("weather.html")], "L");
+    assert_eq!((posted.as_str(), kept.as_str()), ("看图：[天气](weather.html)\n\n<L|在 ember 里查看图表和附件>", "看图：[天气](weather.html)"), "placed already: kept as written");
+    assert_eq!(slack_with_files("", &[file("a.pdf")], "L"), ("<L|在 ember 里查看附件>".into(), String::new()));
+}
