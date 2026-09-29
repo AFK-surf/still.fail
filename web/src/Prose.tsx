@@ -13,6 +13,7 @@ import * as css from "./Prose.css.ts";
 import { RefChip } from "./ChatRef.tsx";
 import { isChatLink } from "./chatRefs.ts";
 import { Tip } from "./ui.tsx";
+import { Viz } from "./Viz.tsx";
 
 let highlighter: Promise<HighlighterCore> | null = null;
 const THEME = "vitesse-light";
@@ -55,7 +56,10 @@ function textOf(node: ReactNode): string {
 function CodeBlock({ children }: { children?: ReactNode }) {
   const code = isValidElement<{ className?: string; children?: ReactNode }>(children) ? children : null;
   const language = /language-([\w+#-]+)/.exec(code?.props.className ?? "")?.[1];
-  return <Code text={textOf(code?.props.children ?? children).replace(/\n$/, "")} language={language} />;
+  const text = textOf(code?.props.children ?? children).replace(/\n$/, "");
+  // An html block is a visualization, drawn in place (Viz.tsx); its source is a switch away.
+  if (language?.toLowerCase() === "html") return <Viz html={text} />;
+  return <Code text={text} language={language} />;
 }
 
 /** A block of code as markdown shows one: highlighted when its language is known (a name or a file extension Shiki knows), with a copy button. */
