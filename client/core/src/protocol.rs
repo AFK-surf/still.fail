@@ -18,7 +18,8 @@ pub enum ClientMessage {
     Call { id: RequestId, call: String, #[serde(default)] params: Value },
     Subscribe { id: RequestId, subscribe: Topic },
     Unsubscribe { id: RequestId, unsubscribe: bool },
-    /// Stops a call still under way (a preview's request or socket nobody wants any more); it answers `cancelled`.
+    /// Stops a streamed preview or a preview socket still under way (nobody wants it any more); it answers
+    /// `cancelled`. Any other call runs to its end.
     Cancel { id: RequestId, cancel: bool },
 }
 

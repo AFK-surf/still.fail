@@ -13,6 +13,8 @@ export function socketScript(link: string): string {
   const link = ${link};
   if (!link) return;
   const Native = window.WebSocket;
+  // The sockets still open: a page that goes (reloaded, left) closes them, as the browser's own would be.
+  const live = new Set();
   class PreviewSocket extends EventTarget {
     static CONNECTING = 0;
     static OPEN = 1;
@@ -53,10 +55,12 @@ export function socketScript(link: string): string {
         close: (code, reason, failed) => {
           if (this.readyState === 3) return;
           this.readyState = 3;
+          live.delete(this);
           if (failed) this._fire(new Event("error"));
           this._fire(new CloseEvent("close", { code, reason, wasClean: !failed }));
         },
       });
+      live.add(this);
     }
     _fire(event) {
       const handler = this["on" + event.type];
@@ -80,6 +84,8 @@ export function socketScript(link: string): string {
       this._link.close(code ?? 1000, reason ?? "");
     }
   }
+  Object.assign(PreviewSocket.prototype, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+  addEventListener("pagehide", () => { for (const socket of [...live]) socket.close(1001, ""); });
   window.WebSocket = PreviewSocket;
 
   // Workers the page makes from its own code (a blob: URL: a dev server's check that it is back up, in a shared
@@ -217,6 +223,7 @@ const WORKER_SOCKET = `(() => {
       post({ id: this._id, close: [code ?? 1000, reason ?? ""] });
     }
   }
+  Object.assign(WorkerSocket.prototype, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
   self.WebSocket = WorkerSocket;
 })();
 `;
@@ -275,45 +282,72 @@ export const FETCH_LINK = `(path, protocols, on) => {
       }
     })
     .catch(() => end(1006, "", true));
-  // One after another, in the order sent.
+  // One after another, in the order sent; kept alive, so a close sent as the page goes still gets there.
   let sending = Promise.resolve();
-  const post = (bytes) => { sending = sending.then(() => fetch(at, { method: "POST", body: bytes }).then(() => undefined, () => undefined)); };
+  const post = (bytes, failed = () => {}) => {
+    sending = sending.then(() => fetch(at, { method: "POST", body: bytes, keepalive: true }).then((r) => { if (!r.ok) failed(); }, failed));
+  };
   return {
     send: (data) => post(typeof data === "string" ? frame(1, utf8.encode(data)) : frame(2, data)),
-    close: (code, reason) => post(frame(8, new Uint8Array([code >> 8, code & 255, ...utf8.encode(reason)]))),
+    // A close that did not get there stops the socket's stream instead: nothing is left open.
+    close: (code, reason) => post(frame(8, new Uint8Array([code >> 8, code & 255, ...utf8.encode(reason)])), () => stop.abort()),
   };
 }`;
 
-/** What goes into a page of the service, first in its <head>: socketScript, as the host serves it. */
-export const SOCKET_TAG = new TextEncoder().encode('<script src="/_ember/socket.js"></script>');
-
 /**
- * Where in a page's first bytes SOCKET_TAG goes: after the <head> tag, else after <html>, else after the doctype, else
- * first. Tags are ASCII, so the bytes are searched as they are, whatever the page's encoding.
+ * What puts socketScript into a page of the service, first in its <head>: `withSocketTag(body)`, a page's body with the
+ * script's tag in it. JavaScript, for the web's service worker (cloud/src/preview.ts) to carry as it is; the desktop app
+ * runs it in its main process. The tag goes after the <head> tag, else after <html>, else after the doctype, else
+ * first; the page's first bytes wait until <head> or <html> is there (or 4 KB, or the end), so it never goes before a
+ * doctype cut in two. Tags are ASCII: the bytes are searched as they are, whatever the page's encoding.
  */
-export function socketTagAt(bytes: Uint8Array): number {
+export const SOCKET_TAG_JS = `
+const SOCKET_TAG = new TextEncoder().encode('<script src="/_ember/socket.js"></script>');
+function socketTagAt(bytes, whole) {
   const text = String.fromCharCode(...bytes.subarray(0, 4096)).toLowerCase();
-  for (const tag of [/<head[\s>]/, /<html[\s>]/, /<!doctype[\s>]/]) {
+  // All there is to wait for: the doctype, or the very start, will do.
+  const last = whole || bytes.length >= 4096;
+  for (const tag of last ? [/<head[\\s>]/, /<html[\\s>]/, /<!doctype[\\s>]/] : [/<head[\\s>]/, /<html[\\s>]/]) {
     const at = text.search(tag);
     if (at >= 0) {
       const end = text.indexOf(">", at);
       if (end >= 0) return end + 1;
     }
   }
-  return 0;
+  return last ? 0 : -1;
 }
-
-/** A page's body with SOCKET_TAG put in its first piece. */
-export function withSocketTag(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+function withSocketTag(body) {
+  let head = new Uint8Array(0);
   let placed = false;
-  return body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+  const place = (out, whole) => {
+    const at = socketTagAt(head, whole);
+    if (at < 0) return;
+    placed = true;
+    out.enqueue(head.subarray(0, at));
+    out.enqueue(SOCKET_TAG);
+    out.enqueue(head.subarray(at));
+  };
+  return body.pipeThrough(new TransformStream({
     transform(chunk, out) {
       if (placed) return out.enqueue(chunk);
-      placed = true;
-      const at = socketTagAt(chunk);
-      out.enqueue(chunk.subarray(0, at));
-      out.enqueue(SOCKET_TAG);
-      out.enqueue(chunk.subarray(at));
+      const joined = new Uint8Array(head.length + chunk.length);
+      joined.set(head);
+      joined.set(chunk, head.length);
+      head = joined;
+      place(out, false);
+    },
+    flush(out) {
+      if (!placed && head.length) place(out, true);
     },
   }));
+}
+`;
+
+type WithSocketTag = (body: ReadableStream<Uint8Array>) => ReadableStream<Uint8Array>;
+let made: WithSocketTag | null = null;
+
+/** SOCKET_TAG_JS's `withSocketTag`, here (the desktop app's main process; made when first used). */
+export function withSocketTag(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  made ??= new Function(`${SOCKET_TAG_JS}\nreturn withSocketTag;`)() as WithSocketTag;
+  return made(body);
 }

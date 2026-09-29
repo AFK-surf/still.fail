@@ -223,10 +223,14 @@ where
         }
         let _ = to_client.shutdown().await;
     };
-    // Either side ending ends both: the other half is dropped (the service's socket closes, the stream is reset).
+    // The service's side ending ends both: the client's half is dropped (its stream is reset). The client's ending (its
+    // close sent on, or its page gone) leaves the service a moment to answer its close, which goes back as it would.
+    tokio::pin!(up, down);
     tokio::select! {
-        _ = up => {}
-        _ = down => {}
+        _ = &mut up => {
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(5), &mut down).await;
+        }
+        _ = &mut down => {}
     }
 }
 
@@ -373,6 +377,21 @@ mod tests {
         reading.read_to_end(&mut rest).await.unwrap();
         assert!(rest.is_empty(), "then the stream ends");
         pump.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_close_from_the_client_is_answered_by_the_services_own() {
+        let port = socket_service().await;
+        let (socket, _) = open_socket(&[], port, "/").await.unwrap();
+        let (client, station) = tokio::io::duplex(1024);
+        let (from_client, to_client) = tokio::io::split(station);
+        let pump = tokio::spawn(pump_socket(socket, from_client, to_client));
+        let (mut reading, mut writing) = tokio::io::split(client);
+        use tokio::io::AsyncWriteExt;
+        writing.write_all(&frame(FRAME_CLOSE, &[&4002u16.to_be_bytes()[..], b"leaving"].concat())).await.unwrap();
+        let (kind, payload) = read_frame(&mut reading).await.unwrap().unwrap();
+        assert_eq!((kind, u16::from_be_bytes([payload[0], payload[1]])), (FRAME_CLOSE, 4002), "the service's close comes back");
+        tokio::time::timeout(std::time::Duration::from_secs(5), pump).await.expect("then it ends").unwrap();
     }
 
     #[tokio::test]
