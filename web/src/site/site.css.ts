@@ -9,7 +9,6 @@ const STILL = "(prefers-reduced-motion: reduce)";
 const EMBER = "#E5704A";
 const BG = "var(--s-bg)";
 const FG = "var(--s-fg)";
-const MUTED = "var(--s-muted)";
 const DIM = "var(--s-dim)";
 /** The page's ink at a strength: white on dark, black on light. */
 const ink = (percent: number) => `color-mix(in srgb, var(--s-ink) ${percent}%, transparent)`;
@@ -65,10 +64,8 @@ export const nav = style({
 });
 export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px" });
 export const logo = style({ display: "block", height: "28px", width: "auto" });
-export const navLinks = style({
-  display: "flex", gap: "26px", marginLeft: "auto", marginRight: "4px", fontSize: "15px", color: MUTED,
-  "@media": { [NARROW]: { display: "none" } },
-});
+// The logo on the left, the rest of the bar on the right.
+globalStyle(`${navRow} > :first-child`, { marginRight: "auto" });
 export const navLink = style({ transition: "color .2s", selectors: { "&:hover": { color: FG } } });
 /** The theme switch (ThemeSwitch.tsx): three small buttons in a pill. */
 export const themeSwitch = style({ "@media": { [NARROW]: { marginLeft: "auto" } }, display: "flex", gap: "2px", padding: "3px", borderRadius: "999px", background: CARD, boxShadow: `inset 0 0 0 1px ${LINE}` });

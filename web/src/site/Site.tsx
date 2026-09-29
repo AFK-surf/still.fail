@@ -72,9 +72,6 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
       <nav className={css.nav}>
         <div className={`${css.wrap} ${css.navRow}`}>
           <a href="/"><Themed name="lockup" className={css.logo} alt="ember" /></a>
-          <div className={css.navLinks}>
-            <a className={css.navLink} href="#start">安装</a>
-          </div>
           <ThemeSwitch />
           <Button href={APP} kind="primary" className={css.navButton}>打开 ember</Button>
         </div>
@@ -97,8 +94,7 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
             </h1>
           </div>
           <div className={`${css.actions} ${css.heroActions}`}>
-            <Button href={APP} kind="primary" large>免费开始</Button>
-            <Button href="#start" kind="ghost" large>安装 station</Button>
+            <Button href={APP} kind="primary" large>我来指挥</Button>
           </div>
           <div className={css.stage}>
             <div className={css.stageGlow} />
