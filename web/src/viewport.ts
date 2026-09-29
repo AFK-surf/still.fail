@@ -16,7 +16,7 @@ export const LIMIT = { min: 240, max: 3840 };
 /** A web service kept or shown: its station, then its job. */
 export const previewKey = (station: string, service: string) => `${station}\n${service}`;
 
-const STORE = "ember.previewViewport.";
+const STORE = "stillfail.previewViewport.";
 const cache = new Map<string, Viewport | null>();
 const listeners = new Set<() => void>();
 

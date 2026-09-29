@@ -19,7 +19,7 @@ const FIXED: { group: string; rows: [string, string][] }[] = [
 
 /** A group's actions here: those only the desktop app has are not shown elsewhere. */
 const actionsOf = (group: string) => (Object.keys(ACTIONS) as Action[])
-  .filter((a) => ACTIONS[a].group === group && (window.emberDesktop || ACTIONS[a].keys.length > 0));
+  .filter((a) => ACTIONS[a].group === group && (window.stillfailDesktop || ACTIONS[a].keys.length > 0));
 
 /** What an action's keys are here, in words. */
 function keysText(action: Action): string {

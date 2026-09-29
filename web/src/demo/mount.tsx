@@ -16,7 +16,7 @@ import { CoreClient, type Topic } from "../core/client.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
-import { RealEmber, askForReal } from "./real.tsx";
+import { RealStillFail, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
 
 /** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
@@ -205,7 +205,7 @@ export function DemoApp({ phone }: { phone: boolean }) {
           <MemoryRouter key="phone" initialEntries={[`/w/${ENTRY.id}`, `/w/${ENTRY.id}/s/local/chats/${key}`]} initialIndex={1}>
             <Director phone />
             <Routes><Route path="/w/:ws/*" element={<MobileWorkspace entry={ENTRY} />} /></Routes>
-            <RealEmber />
+            <RealStillFail />
           </MemoryRouter>
         </Tooltip.Provider>
       </ToastProvider>
@@ -214,7 +214,7 @@ export function DemoApp({ phone }: { phone: boolean }) {
       <MemoryRouter key="wide" initialEntries={[`/chats/${key}`]}>
         <Director phone={false} />
         <App />
-        <RealEmber />
+        <RealStillFail />
       </MemoryRouter>
     );
 }
@@ -249,7 +249,7 @@ export function mountDemo(element: HTMLElement): void {
   };
   // A link out of the demo (Slack, a web service, an app's settings) opens nothing: it too needs a real ember. Only the
   // app's own links count, in its box or its dialogs and menus on the page; the page's own, and the note's, go.
-  const inApp = (el: Element) => !el.closest("[data-real-ember]") && (root.contains(el) || !!el.closest("[role=dialog], [role=menu], [data-radix-popper-content-wrapper]"));
+  const inApp = (el: Element) => !el.closest("[data-real-stillfail]") && (root.contains(el) || !!el.closest("[role=dialog], [role=menu], [data-radix-popper-content-wrapper]"));
   document.addEventListener("click", (event) => {
     const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
     if (!link || !inApp(link)) return;

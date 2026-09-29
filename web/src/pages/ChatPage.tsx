@@ -225,7 +225,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       if (service && opens.current.agents.some((a) => a.session.key === session)) {
         event.preventDefault();
         opens.current.openTab(`service:${service}`);
-      } else if (url.origin === location.origin || url.origin === window.emberDesktop?.cloudOrigin) {
+      } else if (url.origin === location.origin || url.origin === window.stillfailDesktop?.cloudOrigin) {
         event.preventDefault();
         navigate(`/w/${item[1]}/s/${item[2]}/chats/${encodeURIComponent(session)}${url.search}`);
       }

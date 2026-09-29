@@ -4,9 +4,9 @@
 // once; the core keeps them in IndexedDB from then on.
 import type { CoreClient } from "./client.ts";
 
-const ACCOUNTS = "ember.accounts";
-const DEVICE = "ember.device";
-const DONE = "ember.core.migrated";
+const ACCOUNTS = "stillfail.accounts";
+const DEVICE = "stillfail.device";
+const DONE = "stillfail.core.migrated";
 
 export async function migrateLegacy(client: Pick<CoreClient, "call">, storage: Storage = localStorage): Promise<void> {
   if (storage.getItem(DONE)) return;
@@ -23,6 +23,6 @@ export async function migrateLegacy(client: Pick<CoreClient, "call">, storage: S
     storage.setItem(DONE, String(Date.now()));
   } catch (error) {
     // Tried again on the next start; the old values stay where they are.
-    console.error("ember core: migrating localStorage failed", error);
+    console.error("still.fail core: migrating localStorage failed", error);
   }
 }

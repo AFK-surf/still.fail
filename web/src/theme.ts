@@ -4,8 +4,8 @@
 import { useEffect, useState } from "react";
 
 export type Appearance = "system" | "light" | "dark";
-const KEY = "ember.appearance";
-const EVENT = "ember-appearance";
+const KEY = "stillfail.appearance";
+const EVENT = "stillfail-appearance";
 
 export function readAppearance(): Appearance {
   // What the page shows, when it says: set from the choice before the first paint (index.html), or fixed by a page

@@ -182,7 +182,7 @@ function WorkspaceItem({ workspace: w }: { workspace: AdminWorkspace }) {
           // Whether a station is up is for the devices to find out over the mesh; ember cloud only knows when it last
           // came to it (or left).
           <div key={s.id} className={css.adminLine}>
-            <span className={css.adminLineText}>{s.name}<span className={shellCss.muted}>{s.version ? `ember-mesh ${s.version}` : ""}</span></span>
+            <span className={css.adminLineText}>{s.name}<span className={shellCss.muted}>{s.version ? `stillfail-mesh ${s.version}` : ""}</span></span>
             <span className={shellCss.muted}>{s.last_seen ? <>上次连 still.fail cloud：<Time stamp={stamp(s, "last_seen")} /></> : "还没连过 still.fail cloud"}</span>
           </div>
         ))}

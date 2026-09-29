@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router";
 
-const KEY = "ember.lastChat";
+const KEY = "stillfail.lastChat";
 /** How the keys the core gives chats made here, before their station has made them, begin (views.rs, PENDING_PREFIX). */
 export const PENDING = "new:";
 

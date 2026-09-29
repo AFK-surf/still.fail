@@ -1,5 +1,5 @@
 // Back closes what lies over the page, on a touch screen as a phone's apps do: each open layer (a sheet, a menu, a file
-// over everything, a dialog) holds an entry of the browser's history of its own, the page's address with `emberLayer`
+// over everything, a dialog) holds an entry of the browser's history of its own, the page's address with `stillfailLayer`
 // (how many layers deep) added to the router's state, so the router sees the same page. Back leaves that entry and the
 // layers over where it lands close; a layer closed another way (its ×, the scrim) goes back off its entry itself.
 import { useEffect, useRef } from "react";
@@ -12,7 +12,8 @@ let last = { idx: 0, layer: 0 };
 /** A back of our own on its way (a layer closed by hand): navigations wait for it, or it would undo them. */
 let pending: { done: Promise<void>; settle: () => void } | null = null;
 
-const layerOf = (state: unknown) => (state as { emberLayer?: number } | null)?.emberLayer ?? 0;
+// `emberLayer`: an entry made before the rename (a reload keeps the history).
+const layerOf = (state: unknown) => { const s = state as { stillfailLayer?: number; emberLayer?: number } | null; return s?.stillfailLayer ?? s?.emberLayer ?? 0; };
 const idxOf = (state: unknown) => (state as { idx?: number } | null)?.idx ?? 0;
 const touch = () => window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 
@@ -58,7 +59,7 @@ function hold(close: () => void): Layer {
   listen();
   const layer: Layer = { depth: layers.length + 1, close, gone: false };
   layers.push(layer);
-  const state = { ...(history.state as object | null), emberLayer: layer.depth };
+  const state = { ...(history.state as object | null), stillfailLayer: layer.depth };
   // The entry of a layer just closed by hand, not yet gone back off (a menu giving way to the sheet it opened): reused.
   if (layerOf(history.state) >= layer.depth) history.replaceState(state, "");
   else history.pushState(state, "");

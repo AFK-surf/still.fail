@@ -385,7 +385,7 @@ function Edges({ stage, box }: { stage: Stage; box: { left: number; top: number;
   );
 }
 
-const FOLDED = "ember.previewToolbarFolded";
+const FOLDED = "stillfail.previewToolbarFolded";
 
 /**
  * A touch screen's toolbar, a floating capsule under the page: the sizes (the one chosen marked; "自定义" opens them

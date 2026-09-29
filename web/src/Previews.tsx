@@ -98,10 +98,10 @@ export function PreviewSlot({ station, port, file, name, service: job, restartin
 const SMALL = { width: 280, height: 176, margin: 16, gap: 12, peek: 7, shrink: 0.06, behind: 2 };
 /** How long the pointer can be off them (crossing the gap between two) before they go back to rest. */
 const LINGER = 250;
-const TUCKED = "ember.previewsTucked";
+const TUCKED = "stillfail.previewsTucked";
 /** The small ones' size, as dragged by their top and left edges; no smaller than MIN, no bigger than the window
  * leaves room for. */
-const SIZE = "ember.previewsSize";
+const SIZE = "stillfail.previewsSize";
 const MIN = { width: 180, height: 112 };
 
 interface Size { width: number; height: number }

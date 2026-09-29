@@ -88,8 +88,8 @@ function StationCard({ s, menu, manager }: { s: StationView; menu: ReactNode; ma
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
       <div className={css.cardFoot}>
         {s.online && <span>{machine(s.host) || "正在读取设备信息…"}</span>}
-        {/* A station that says its versions says the station's among them; one older, only what ember cloud knows. */}
-        <span className={css.ident}>{s.version && !s.overview?.updates?.length ? `ember-station ${s.version} · ` : ""}<span className={css.mono}>{s.id.slice(0, 12)}</span></span>
+        {/* A station that says its versions says the station's among them; one older, only what the cloud knows. */}
+        <span className={css.ident}>{s.version && !s.overview?.updates?.length ? `stillfail-station ${s.version} · ` : ""}<span className={css.mono}>{s.id.slice(0, 12)}</span></span>
       </div>
       {s.online && <div className={css.cardVersions}><Versions station={s.station} updates={s.overview?.updates} manager={manager} /></div>}
     </div>

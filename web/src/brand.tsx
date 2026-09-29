@@ -38,8 +38,8 @@ export function Lockup({ height = 30, alt = "still.fail" }: { height?: number; a
 export function SidebarBrand() {
   return (
     <>
-      {!window.emberDesktop && <Themed name="wordmark" width={81} height={22} alt="still.fail" className={css.brandWordmark} />}
-      {!window.emberDesktop && <span className={css.brandPhone}><Lockup /></span>}
+      {!window.stillfailDesktop && <Themed name="wordmark" width={81} height={22} alt="still.fail" className={css.brandWordmark} />}
+      {!window.stillfailDesktop && <span className={css.brandPhone}><Lockup /></span>}
       <SidebarBuddy />
       <UpdateButton />
     </>
@@ -48,11 +48,11 @@ export function SidebarBrand() {
 
 /** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app, whose window has its title bar there. */
 export function PageBrand() {
-  return window.emberDesktop ? null : <Themed name="wordmark" width={81} height={22} alt="still.fail" className={css.brandWordmark} />;
+  return window.stillfailDesktop ? null : <Themed name="wordmark" width={81} height={22} alt="still.fail" className={css.brandWordmark} />;
 }
 
 type Pose = "push" | "hop" | "rest";
-const SIDEBAR = "ember.sidebar";
+const SIDEBAR = "stillfail.sidebar";
 
 /** Whether the sidebar is closed: on the page's root (so the layout follows), and kept on this device. */
 function closeSidebar(closed: boolean) {
@@ -113,7 +113,7 @@ function SidebarBuddy() {
  * button says how far) and the app restarts as it.
  */
 function UpdateButton() {
-  const updates = window.emberDesktop?.appUpdate;
+  const updates = window.stillfailDesktop?.appUpdate;
   const [state, setState] = useState<AppUpdate | null>(null);
   useEffect(() => {
     if (!updates) return;

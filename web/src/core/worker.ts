@@ -2,7 +2,7 @@
 // tab connects a port; as a dedicated Worker (no SharedWorker, e.g. Chrome on
 // Android) the global scope is the one port. Each port is one core client.
 import { BUILT_AT } from "./built.ts";
-import init, { start, type EmberCore } from "./pkg/ember_core_wasm.js";
+import init, { start, type StillFailCore } from "./pkg/stillfail_core_wasm.js";
 import type { WorkerFault } from "./client.ts";
 
 // Typed by hand: the web tsconfig has the DOM lib, not the worker's.
@@ -20,7 +20,7 @@ const scope = globalThis as unknown as Port & {
 
 const clients = new Map<number, Port>();
 const ports = new Set<Port>();
-let core: EmberCore | null = null;
+let core: StillFailCore | null = null;
 let dead = false;
 
 function emit(client: number, message: unknown): void {
@@ -47,7 +47,7 @@ function gone(client: number): void {
 function fatal(reason: string): void {
   if (dead) return;
   dead = true;
-  console.error("ember core: fatal:", reason);
+  console.error("still.fail core: fatal:", reason);
   for (const port of ports) {
     try {
       port.postMessage({ fatal: reason });
@@ -62,7 +62,7 @@ function fatal(reason: string): void {
  * several tabs do not report it several times; the page reports the fatal ones itself.
  */
 function fault(error: unknown): void {
-  console.error("ember core:", error);
+  console.error("still.fail core:", error);
   const port = clients.values().next().value;
   if (!port) return;
   const fault: WorkerFault = error instanceof Error
@@ -87,6 +87,7 @@ function guard(run: () => void): void {
  * worker), and two cores on the same storage would race each other (a login refreshed twice is taken for theft). So
  * the workers of this origin say which build they are; an older one retires, and its pages reload onto this build.
  */
+// The channel keeps its name from before the rename: a worker of a build from before it must hear of this one and retire.
 const builds = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("ember-core-builds");
 if (builds) {
   builds.onmessage = (event: MessageEvent) => {
@@ -111,7 +112,7 @@ function retire(): void {
   scope.close();
 }
 
-const ready: Promise<EmberCore> = (async () => {
+const ready: Promise<StillFailCore> = (async () => {
   await init();
   core = await start(emit);
   return core;

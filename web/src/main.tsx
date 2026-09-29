@@ -1,3 +1,4 @@
+import "./renamed.ts";
 import "./styles/index.ts";
 import { applyAppearance } from "./theme.ts";
 import { startScrollbars } from "./scrollbars.ts";

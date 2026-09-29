@@ -24,7 +24,7 @@ import { OVER_DOCK } from "./Chat.tsx";
 
 /** What a new chat runs on, kept per station (its id) for next time, on either screen (the phone's, mobile/NewChat.tsx). */
 export interface Choice { runtime: RuntimeKind | ""; model: string; effort: string; profile?: string }
-const LAST = "ember.newChat";
+const LAST = "stillfail.newChat";
 
 export function lastChoice(station: string): Partial<Choice> {
   try {

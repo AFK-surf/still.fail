@@ -1,7 +1,8 @@
-// The admin's console as an app of its own, on its own host (admin.ember.3720.org).
+// The admin's console as an app of its own, on its own host (admin.still.fail).
 // Its origin gives it its own client core and so its own signed-in accounts:
 // signing in here signs in nowhere else. Sign-in goes through ember cloud like
 // the web app's and comes back to this host's /auth/callback.
+import "../renamed.ts";
 import "../styles/index.ts";
 import { applyAppearance } from "../theme.ts";
 import { startScrollbars } from "../scrollbars.ts";

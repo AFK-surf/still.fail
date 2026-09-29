@@ -74,10 +74,10 @@ function Home() {
   const list = useAccounts();
   const narrow = useNarrow();
   const navigate = useNavigate();
-  // In the desktop app: an item's link opened from outside (ember://o/…) comes here, and the page goes there.
+  // In the desktop app: an item's link opened from outside (stillfail://o/… or ember://o/…) comes here, and the page goes there.
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (event.origin === location.origin && typeof event.data?.emberNavigate === "string") navigate(event.data.emberNavigate);
+      if (event.origin === location.origin && typeof event.data?.stillfailNavigate === "string") navigate(event.data.stillfailNavigate);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -260,7 +260,7 @@ function OpenItem() {
   // `?preview=<port>`: a web service of the session's, opened beside its chat.
   const { search } = useLocation();
   const target = `/w/${ws}/s/${station}/chats/${encodeURIComponent(session)}${search}`;
-  const inDesktop = "emberDesktop" in window;
+  const inDesktop = "stillfailDesktop" in window;
   const phone = /Android|iPhone|iPad/i.test(navigator.userAgent);
   const [here, setHere] = useState(inDesktop || phone);
   useEffect(() => {
@@ -269,6 +269,7 @@ function OpenItem() {
     // If the desktop app takes it, this page loses focus: it stays as it is, for a second look.
     const away = () => clearTimeout(timer);
     window.addEventListener("blur", away, { once: true });
+    // ember://, not stillfail://: desktop apps from before the rename know only it, and the new ones take both.
     window.location.href = `ember://o/${ws}/${station}/${encodeURIComponent(session)}${search}`;
     return () => { clearTimeout(timer); window.removeEventListener("blur", away); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

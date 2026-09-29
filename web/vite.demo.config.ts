@@ -16,12 +16,12 @@ export default defineConfig({
   define: {
     __POSTHOG__: "null",
     __BUILT_AT__: JSON.stringify(Date.now()),
-    __PREVIEW_ORIGIN__: JSON.stringify("https://preview.ember.3720.org"),
+    __PREVIEW_ORIGIN__: JSON.stringify("https://preview.still.fail"),
   },
   resolve: {
     alias: [
       { find: /^\.\/pkg\/built\.js$/, replacement: here("src/demo/stubs/built.js") },
-      { find: /^\.\/pkg\/ember_core_wasm\.js$/, replacement: here("src/demo/stubs/ember_core_wasm.js") },
+      { find: /^\.\/pkg\/stillfail_core_wasm\.js$/, replacement: here("src/demo/stubs/stillfail_core_wasm.js") },
     ],
   },
   server: {

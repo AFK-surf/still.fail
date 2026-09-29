@@ -6,7 +6,7 @@ export const REF_MARK = /@\[([^\]\n]{1,120})\]/g;
 /** A reference as sent: a link to a chat's page. */
 export const REF_LINK = /\[([^\]\n]{1,120})\]\((\S*?\/chats\/[^\s)]+)\)/g;
 
-const KEY = "ember.chatRefs";
+const KEY = "stillfail.chatRefs";
 const KEPT = 200;
 /** Characters of a title a reference shows. */
 const TITLE = 24;

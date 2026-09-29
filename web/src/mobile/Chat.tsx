@@ -22,7 +22,7 @@ import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, Seg, SlackMark, Sp
 import { AgentMark } from "../ui.tsx";
 import { PeopleStack } from "../components.tsx";
 import { ago, alarmOf, clock, isCurrent, isEnded, isService, JobDot, metaOf, sorted, toneOf, useClearEnded, useJobLog, useNow, useStopJob, type Tone } from "../Jobs.tsx";
-import { emberLinkClicked } from "../emberLink.ts";
+import { stillfailLinkClicked } from "../stillfailLink.ts";
 import type { Job } from "../core/shapes.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as css from "./Chat.css.ts";
@@ -166,7 +166,7 @@ function Messages({ view, lives, list, floor, draft, here }: {
       openHistory(app, here.station, here.key, history.key);
       return;
     }
-    const link = emberLinkClicked(event);
+    const link = stillfailLinkClicked(event);
     if (!link) return;
     if (link.service && view.agents.some((a) => a.session.key === link.session)) {
       event.preventDefault();

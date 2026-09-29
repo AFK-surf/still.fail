@@ -248,7 +248,7 @@ export class CoreClient {
     } catch (error) {
       this.#channel = null;
       this.#retry();
-      console.error("ember core: could not start the worker", error);
+      console.error("still.fail core: could not start the worker", error);
       return;
     }
     this.#channel = channel;
@@ -260,7 +260,7 @@ export class CoreClient {
   }
 
   #restart(reason: string): void {
-    console.error("ember core: worker failed:", reason);
+    console.error("still.fail core: worker failed:", reason);
     this.#onFault(Object.assign(new Error(reason), { name: "CoreFailed" }));
     this.#channel?.close();
     this.#channel = null;
@@ -361,12 +361,12 @@ export function workerOpener(): Opener {
     // Both constructors spelled out: Vite bundles a worker only from a literal
     // `new (Shared)Worker(new URL(…, import.meta.url))`.
     if (typeof SharedWorker !== "undefined") {
-      const worker = new SharedWorker(new URL("./worker.ts", import.meta.url), { type: "module", name: `ember-core-${BUILT_AT}` });
+      const worker = new SharedWorker(new URL("./worker.ts", import.meta.url), { type: "module", name: `stillfail-core-${BUILT_AT}` });
       worker.port.onmessage = receive;
       worker.onerror = () => onFail("共享 worker 没有启动");
       return { post: (message) => worker.port.postMessage(message), close: () => worker.port.close() };
     }
-    const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: `ember-core-${BUILT_AT}` });
+    const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: `stillfail-core-${BUILT_AT}` });
     worker.onmessage = receive;
     worker.onerror = (event) => onFail(event.message || "worker 出错");
     return { post: (message) => worker.postMessage(message), close: () => worker.terminate() };
@@ -374,14 +374,14 @@ export function workerOpener(): Opener {
 }
 
 /** What the desktop app's preload (apps/desktop/src/preload.ts) gives the page. */
-export interface EmberDesktop {
-  /** Asks for a port to the core; it arrives as a window message `{ emberCore: "port", id }`. */
+export interface StillFailDesktop {
+  /** Asks for a port to the core; it arrives as a window message `{ stillfailCore: "port", id }`. */
   openCore(id: number): void;
-  /** The host a station's web service is shown at, ember-preview://<host>/ (apps/desktop/src/main.ts, previews). */
+  /** The host a station's web service is shown at, stillfail-preview://<host>/ (apps/desktop/src/main.ts, previews). */
   previewHost(station: string, port: number): Promise<string | null>;
   /** The page is in a workspace, reached as `account`: the app's station joins it when it is in none yet. */
   inWorkspace(account: string, workspace: string): void;
-  /** ember cloud's origin (https://ember.3720.org): its links are the app's own, though the app is at app://ember. */
+  /** The cloud's origin (https://app.still.fail): its links are the app's own, though the app is at app://ember. */
   cloudOrigin?: string;
   /** A newer build of the app (apps/desktop/src/main.ts, keepUpdated); an app from before updates has none. */
   appUpdate?: {
@@ -401,7 +401,7 @@ export type AppUpdate =
 
 declare global {
   interface Window {
-    emberDesktop?: EmberDesktop;
+    stillfailDesktop?: StillFailDesktop;
   }
 }
 
@@ -412,7 +412,7 @@ let nextPort = 1;
  * channel is a port of its own. Messages go out as objects and come back as
  * the core's JSON. The core's process exiting is announced to every page.
  */
-export function desktopOpener(desktop: EmberDesktop): Opener {
+export function desktopOpener(desktop: StillFailDesktop): Opener {
   return (onMessage, onFail) => {
     const id = nextPort++;
     let port: MessagePort | null = null;
@@ -420,10 +420,10 @@ export function desktopOpener(desktop: EmberDesktop): Opener {
     const early: unknown[] = [];
     const arrive = (event: MessageEvent) => {
       if (event.source !== window) return;
-      const data = event.data as { emberCore?: string; id?: number; reason?: string } | null;
-      if (data?.emberCore === "exit") {
+      const data = event.data as { stillfailCore?: string; id?: number; reason?: string } | null;
+      if (data?.stillfailCore === "exit") {
         onFail(data.reason ?? "核心进程退出了");
-      } else if (data?.emberCore === "port" && data.id === id && !port && event.ports[0]) {
+      } else if (data?.stillfailCore === "port" && data.id === id && !port && event.ports[0]) {
         port = event.ports[0];
         port.onmessage = (message) => onMessage(JSON.parse(message.data as string));
         for (const message of early.splice(0)) port.postMessage(message);
@@ -451,7 +451,7 @@ export function desktopOpener(desktop: EmberDesktop): Opener {
 
 /** Starts (or joins) the core and keeps the page's client in step with the page's lifecycle. */
 export function connectCore(): CoreClient {
-  const open = window.emberDesktop ? desktopOpener(window.emberDesktop) : workerOpener();
+  const open = window.stillfailDesktop ? desktopOpener(window.stillfailDesktop) : workerOpener();
   const client = new CoreClient(open, { onFault: (error) => captureException(error, { source: "core" }) });
   addEventListener("pagehide", () => client.suspend());
   // Hidden since when (wall clock: a frozen page's monotonic clock may stand still).

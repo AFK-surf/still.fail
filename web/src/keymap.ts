@@ -51,10 +51,10 @@ export const ACTIONS: Record<Action, Spec> = {
 };
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-const STORE = "ember.keys";
+const STORE = "stillfail.keys";
 
 /** Keys are changed only in the desktop app; the web pages keep the app's own. */
-export const CHANGEABLE = !!window.emberDesktop;
+export const CHANGEABLE = !!window.stillfailDesktop;
 
 function overrides(): Partial<Record<Action, Binding[]>> {
   if (!CHANGEABLE) return {};
@@ -66,7 +66,7 @@ export function keysOf(action: Action): Binding[] {
   const changed = overrides()[action];
   if (changed) return changed;
   const spec = ACTIONS[action];
-  return window.emberDesktop && spec.desktop ? [...spec.desktop, ...spec.keys] : spec.keys;
+  return window.stillfailDesktop && spec.desktop ? [...spec.desktop, ...spec.keys] : spec.keys;
 }
 
 /** Changes an action's keys on this device; null goes back to its own. */

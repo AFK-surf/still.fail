@@ -195,7 +195,7 @@ function LastOutput({ station, job, now }: { station: string; job: Job; now: num
 /** What a job said, newest first, each with when. */
 function Notices({ job, now, limit, clockTimes = false }: { job: Job; now: number; limit?: number; clockTimes?: boolean }) {
   const notices = (job.notices ?? []).slice(0, limit);
-  if (notices.length === 0) return <p className={css.jobNoticesNone}>还没有通知。它用 <code>ember-job notify</code> 说的话会列在这里。</p>;
+  if (notices.length === 0) return <p className={css.jobNoticesNone}>还没有通知。它用 <code>stillfail-job notify</code> 说的话会列在这里。</p>;
   return (
     <ol className={css.jobNotices} data-clock={clockTimes || undefined}>
       {notices.map((n, i) => <li key={`${n.at}-${i}`}><time dateTime={new Date(n.at).toISOString()}>{clockTimes ? clock(n.at, now) : ago(n.at, now)}</time><span>{n.text}</span></li>)}

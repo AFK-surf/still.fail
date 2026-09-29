@@ -5,7 +5,7 @@
 // the service to this page, which sends it to the station through the core,
 // like any other call, and hands the answer back. No port on the station is
 // open to anyone. The desktop app needs none of that: the frame is at
-// ember-preview://, which the app serves itself through its core; the bar
+// stillfail-preview://, which the app serves itself through its core; the bar
 // over it is the same.
 //
 // A visualization an agent posted (an HTML file placed in its message, Viz.tsx) opens the same way, in the same
@@ -77,7 +77,7 @@ export function StationPreview({ station, port, file, name, service, alone = fal
 export function ServiceFrame(shown: Shown) {
   if (shown.file) return <FileFrame {...shown} file={shown.file} />;
   const port = shown.port ?? 0;
-  return window.emberDesktop ? <DesktopPreview {...shown} port={port} /> : <WebPreview {...shown} port={port} />;
+  return window.stillfailDesktop ? <DesktopPreview {...shown} port={port} /> : <WebPreview {...shown} port={port} />;
 }
 
 
@@ -222,10 +222,10 @@ function DesktopPreview({ station, port, file: _, ...shown }: Shown & { port: nu
   const frame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     let live = true;
-    void window.emberDesktop!.previewHost(station, port).then((h) => { if (live) setHost(h); });
+    void window.stillfailDesktop!.previewHost(station, port).then((h) => { if (live) setHost(h); });
     return () => { live = false; };
   }, [station, port]);
-  const origin = host && `ember-preview://${host}`;
+  const origin = host && `stillfail-preview://${host}`;
   return <Framed {...shown} viewKey={shown.service && previewKey(station, shown.service)} origin={origin} src={origin && `${origin}/_ember/frame?n=${nonce}&path=%2F`} nonce={nonce} frame={frame} />;
 }
 

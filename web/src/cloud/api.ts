@@ -85,7 +85,7 @@ export const needsInviteCode = (error: Error | null): boolean => codeOf(error) i
 
 export const errorText = (error: Error): string => INVITE_ERRORS[codeOf(error)] ?? error.message;
 
-const INVITE_KEY = "ember.invite";
+const INVITE_KEY = "stillfail.invite";
 
 /**
  * The invite code this tab arrived with (`/?invite=CODE`), kept for the tab's

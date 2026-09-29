@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import * as css from "./real.css.ts";
 
-const APP = "https://ember.3720.org";
+const APP = "https://app.still.fail";
 
 let open = false;
 const listeners = new Set<() => void>();
@@ -18,15 +18,15 @@ export function askForReal(): void {
   set(true);
 }
 
-export function RealEmber() {
+export function RealStillFail() {
   const shown = useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => open, () => false);
   if (!shown) return null;
   // On the page itself, over whatever the app has open (its dialogs are on the page too, and hold the pointer).
   return createPortal(
-    <div className={css.veil} data-real-ember="" onClick={(e) => { if (e.target === e.currentTarget) set(false); }}>
-      <div className={css.card} role="dialog" aria-modal="true" aria-labelledby="real-ember-title">
+    <div className={css.veil} data-real-stillfail="" onClick={(e) => { if (e.target === e.currentTarget) set(false); }}>
+      <div className={css.card} role="dialog" aria-modal="true" aria-labelledby="real-stillfail-title">
         <img className={css.mark} src="/mark-dark.svg" alt="" />
-        <h2 id="real-ember-title" className={css.title}>这一步要在真实的 still.fail 里做</h2>
+        <h2 id="real-stillfail-title" className={css.title}>这一步要在真实的 still.fail 里做</h2>
         <div className={css.actions}>
           <button type="button" className={css.button} onClick={() => set(false)}>知道了</button>
           <a className={css.button} data-primary="" href={APP}>打开 still.fail</a>

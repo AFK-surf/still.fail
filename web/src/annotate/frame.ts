@@ -15,7 +15,10 @@
 import { domToCanvas } from "modern-screenshot";
 
 declare global {
-  interface Window { emberAnnotate?: { attach(inner: HTMLIFrameElement, nonce: string): void } }
+  interface Window {
+    stillfailAnnotate?: { attach(inner: HTMLIFrameElement, nonce: string): void };
+    emberAnnotate?: { attach(inner: HTMLIFrameElement, nonce: string): void };
+  }
 }
 
 export interface Picked {
@@ -43,7 +46,8 @@ const MARK = "#ef6a3c";
 const MAX_HEIGHT = 12000;
 const MAX_PIXELS = 36e6;
 
-window.emberAnnotate = { attach };
+// Under both names: frames from before the rename (the preview host's, the desktop app's) look for `emberAnnotate`.
+window.stillfailAnnotate = window.emberAnnotate = { attach };
 
 function attach(inner: HTMLIFrameElement, nonce: string) {
   let on = false;

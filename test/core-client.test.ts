@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CoreClient, CoreError, WAKE_ANSWER_MS, desktopOpener, type Channel, type Opener } from "../web/src/core/client.ts";
 import { migrateLegacy } from "../web/src/core/migrate.ts";
+import { carryOver } from "../web/src/renamed.ts";
 
 /** A worker stand-in: records what the client posts and answers on demand. */
 class FakeWorkers {
@@ -175,8 +176,8 @@ test("desktop: posts wait for the core's port, go out as objects and come back a
       resolve();
     };
   });
-  message({ emberCore: "port", id: asked[0]! + 1 }, [other.port1]);
-  message({ emberCore: "port", id: asked[0] }, [core.port1]);
+  message({ stillfailCore: "port", id: asked[0]! + 1 }, [other.port1]);
+  message({ stillfailCore: "port", id: asked[0] }, [core.port1]);
   await arrived;
   assert.deepEqual(atCore, [{ id: 1, call: "migrate", params: { accounts: [] } }]);
 
@@ -187,18 +188,18 @@ test("desktop: posts wait for the core's port, go out as objects and come back a
   await answered;
   assert.deepEqual(received, [{ id: 1, ok: null }]);
 
-  message({ emberCore: "exit", reason: "核心进程退出了（9）" });
+  message({ stillfailCore: "exit", reason: "核心进程退出了（9）" });
   assert.deepEqual(failed, ["核心进程退出了（9）"]);
   channel.close();
   core.port2.close();
   other.port1.close();
   other.port2.close();
-  message({ emberCore: "exit", reason: "again" });
+  message({ stillfailCore: "exit", reason: "again" });
   assert.equal(failed.length, 1);
 });
 
 test("localStorage is handed to the core once", async () => {
-  const store = new Map<string, string>([["ember.accounts", JSON.stringify([{ sub: "s" }])], ["ember.device", "AAEC"]]);
+  const store = new Map<string, string>([["stillfail.accounts", JSON.stringify([{ sub: "s" }])], ["stillfail.device", "AAEC"]]);
   const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) } as Storage;
   const calls: unknown[] = [];
   let failing = true;
@@ -212,7 +213,28 @@ test("localStorage is handed to the core once", async () => {
   await migrateLegacy(client, storage);
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[1], ["migrate", { accounts: [{ sub: "s" }], device: "AAEC" }]);
-  assert.ok(store.get("ember.core.migrated"));
+  assert.ok(store.get("stillfail.core.migrated"));
+});
+
+test("keys from before the rename are copied to the new names once, the old ones kept", () => {
+  const store = new Map<string, string>([["ember.appearance", "dark"], ["ember.width.--side", "300"], ["stillfail.sidebar", "open"], ["ember.sidebar", "closed"], ["other", "x"]]);
+  const storage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+    key: (i: number) => [...store.keys()][i] ?? null,
+    get length() { return store.size; },
+  } as Storage;
+  carryOver(storage);
+  assert.equal(store.get("stillfail.appearance"), "dark");
+  assert.equal(store.get("stillfail.width.--side"), "300");
+  // What the new name has already stays.
+  assert.equal(store.get("stillfail.sidebar"), "open");
+  assert.equal(store.get("ember.appearance"), "dark");
+  assert.equal(store.has("stillfail.other"), false);
+  // Once: a setting removed under the new name is not brought back from the old one.
+  store.delete("stillfail.appearance");
+  carryOver(storage);
+  assert.equal(store.has("stillfail.appearance"), false);
 });
 
 test("deltas apply to the subscription's value, copying only along their paths", () => {

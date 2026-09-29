@@ -3,10 +3,10 @@
 // (pages/ChatPage.tsx); the narrow pages (mobile/Chat.tsx) open them in the app instead of loading the page again.
 import type { MouseEvent as ReactMouseEvent } from "react";
 
-export interface EmberLink { workspace: string; station: string; session: string; service: string | null; search: string; sameOrigin: boolean }
+export interface StillFailLink { workspace: string; station: string; session: string; service: string | null; search: string; sameOrigin: boolean }
 
 /** What an ember link names, or null when it is not one. */
-export function emberLink(href: string): EmberLink | null {
+export function stillfailLink(href: string): StillFailLink | null {
   let url: URL;
   try { url = new URL(href, location.href); } catch { return null; }
   const item = /^\/o\/([^/]+)\/([^/]+)\/([^/]+)\/?$/.exec(url.pathname);
@@ -18,8 +18,8 @@ export function emberLink(href: string): EmberLink | null {
 }
 
 /** The ember link a click (a plain one: no modifier, the main button) lands on, or null. */
-export function emberLinkClicked(event: MouseEvent | ReactMouseEvent): EmberLink | null {
+export function stillfailLinkClicked(event: MouseEvent | ReactMouseEvent): StillFailLink | null {
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null;
   const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
-  return anchor ? emberLink(anchor.href) : null;
+  return anchor ? stillfailLink(anchor.href) : null;
 }

@@ -57,7 +57,7 @@
   ],
   "mesh": {
    "name": "Studio",
-   "origin": "https://ember.3720.org",
+   "origin": "https://app.still.fail",
    "state": "running",
    "station": "5f1c0b7d2a9e4c83b6d1f0a2e7c94b58d3a61f0e9c2b7d4a8e5f1c3b9a0d6e2f",
    "workspace": "Acme",
@@ -117,10 +117,10 @@
     "checkText": "可用",
     "checkTone": "green",
     "env": [],
-    "home": "/Users/lin/.ember/homes/machine-claude",
+    "home": "/Users/lin/.stillfail/homes/machine-claude",
     "homeExists": true,
     "id": "machine-claude",
-    "loginCommand": "CLAUDE_CONFIG_DIR=/Users/lin/.ember/homes/machine-claude claude auth login",
+    "loginCommand": "CLAUDE_CONFIG_DIR=/Users/lin/.stillfail/homes/machine-claude claude auth login",
     "machine": true,
     "makers": {
      "claude-fable-5": {
@@ -277,11 +277,11 @@
   "cpus": 16,
   "disk": {
    "freeBytes": 657129996288,
-   "path": "/Users/lin/.ember",
+   "path": "/Users/lin/.stillfail",
    "totalBytes": 1067299373056
   },
   "emberRssBytes": 39845888,
-  "emberText": "ember 38 MB",
+  "emberText": "still.fail 38 MB",
   "facts": [
    "studio",
    "macOS 26.6.2",
@@ -332,11 +332,11 @@
    "cpus": 16,
    "disk": {
     "freeBytes": 657129996288,
-    "path": "/Users/lin/.ember",
+    "path": "/Users/lin/.stillfail",
     "totalBytes": 1067299373056
    },
    "emberRssBytes": 39845888,
-   "emberText": "ember 38 MB",
+   "emberText": "still.fail 38 MB",
    "facts": [
     "studio",
     "macOS 26.6.2",
@@ -563,7 +563,7 @@
    ],
    "mesh": {
     "name": "Studio",
-    "origin": "https://ember.3720.org",
+    "origin": "https://app.still.fail",
     "state": "running",
     "station": "5f1c0b7d2a9e4c83b6d1f0a2e7c94b58d3a61f0e9c2b7d4a8e5f1c3b9a0d6e2f",
     "workspace": "Acme",
@@ -623,10 +623,10 @@
      "checkText": "可用",
      "checkTone": "green",
      "env": [],
-     "home": "/Users/lin/.ember/homes/machine-claude",
+     "home": "/Users/lin/.stillfail/homes/machine-claude",
      "homeExists": true,
      "id": "machine-claude",
-     "loginCommand": "CLAUDE_CONFIG_DIR=/Users/lin/.ember/homes/machine-claude claude auth login",
+     "loginCommand": "CLAUDE_CONFIG_DIR=/Users/lin/.stillfail/homes/machine-claude claude auth login",
      "machine": true,
      "makers": {
       "claude-fable-5": {
@@ -790,8 +790,8 @@
  },
  "memory": {
   "global": {
-   "path": "/Users/lin/.ember/agent/MEMORY.md",
-   "text": "# ember memory\n\n- 回复先说结论，细节放后面；改了界面就发截图。\n- 合进 main 前先 rebase，提交信息用中文写清楚改了什么。\n- 线上问题先看监控和日志，再动代码。\n"
+   "path": "/Users/lin/.stillfail/agent/MEMORY.md",
+   "text": "# still.fail memory\n\n- 回复先说结论，细节放后面；改了界面就发截图。\n- 合进 main 前先 rebase，提交信息用中文写清楚改了什么。\n- 线上问题先看监控和日志，再动代码。\n"
   },
   "skills": [
    {
@@ -810,10 +810,10 @@
    },
    {
     "builtin": true,
-    "description": "Background jobs and web services on the ember station (job_start, job_list, job_log, job_stop, ember-job notify). Use when work outlives a turn (long builds, test suites, data jobs, watchers) or when people should see or use something in a browser (a page, prototype, chart, report, dashboard, tool UI) — instead of blocking a turn, pasting walls of output, or describing a UI in words.",
-    "name": "ember-jobs",
+    "description": "Background jobs and web services on the still.fail station (job_start, job_list, job_log, job_stop, stillfail-job notify). Use when work outlives a turn (long builds, test suites, data jobs, watchers) or when people should see or use something in a browser (a page, prototype, chart, report, dashboard, tool UI) — instead of blocking a turn, pasting walls of output, or describing a UI in words.",
+    "name": "stillfail-jobs",
     "project": false,
-    "text": "---\nname: ember-jobs\ndescription: Background jobs and web services on the ember station (job_start, job_list, job_log, job_stop, ember-job notify). Use when work outlives a turn (long builds, test suites, data jobs, watchers) or when people should see or use something in a browser (a page, prototype, chart, report, dashboard, tool UI) — instead of blocking a turn, pasting walls of output, or describing a UI in words.\n---\n\n# Background jobs and web services\n\nThe station runs jobs for you apart from your turns: each in its own process group, its output in a log, kept across your\nturns and started again when the station restarts. You hear when one ends, and whatever it says on the way. A job with a\nport is a web service: kept up (started again if it ends) and opened by the workspace's members through its link.\n\n## Background jobs: when\n\nUse `job_start` (no port) for work that takes longer than a turn should, or that you want to keep an eye on:\n\n- builds, full test suites, benchmarks, migrations, data processing, downloads, anything over a minute or two;\n- watchers and loops (poll something, retry until it works, re-run on change);\n- several independent pieces of work at once.\n\nNot for quick commands: run those directly. Not for work that must finish before you can answer: wait for it in the turn.\n\n## Background jobs: how\n\n- `job_start` with `command` (run by `sh -c`), a short `name`, and `cwd` (default: this session's workspace). Keep the\n  workspace as the place for clones and outputs.\n- Tell the people waiting that it runs and what you will tell them, then end the turn (`chat_post` kind \"final\", or\n  \"block\" only if they must act). You do not need to stay in the turn: you are woken when the job ends.\n- For a long job, have it report milestones or trouble with `ember-job notify \"<words>\"` from inside the command (for\n  example `make all && ember-job notify \"build done, running tests\" && make test`). Each notice reaches you as a message\n  via=\"ember\"; act on it (relay what matters to people, fix and restart on failure). Do not notify for every line.\n- When it ends you get its exit code and last lines. Read more with `job_log` (`lines` up to 1000). `job_list` shows this\n  session's jobs and their states; `job_stop` ends one.\n- A job's end is not the people's news unless it matters to them: tell them results, failures they must know about, and\n  what happens next.\n\n## Web services: when\n\nUse `job_start` with a `port` when what you made should be looked at or used in a browser, rather than read as text:\n\n- a front-end page, prototype or design you built or changed;\n- interactive charts, reports, dashboards or data explorers;\n- a docs site, a storybook, a preview build;\n- a small tool with a UI, or the admin/debug page of a service you are running;\n- something people will open again or keep watching.\n\nNot for a one-off answer (reply with text or a file), a single static image (send the image file), or a service only you\nneed to reach (a plain background job is enough).\n\n## Web services: how\n\n- `job_start` with `command`, `name`, `port` (1024–65535). The command must listen on that port; `$PORT` holds it, and\n  127.0.0.1 is enough (for example `python3 -m http.server $PORT`, `npm run dev -- --port $PORT --host 127.0.0.1`).\n- Check it answers before telling anyone: `curl -sf http://127.0.0.1:<port>/` (retry a few seconds while it starts);\n  look at `job_log` if it does not.\n- Give it a name people will recognise (`name`): the pages show services by their names, never their ports. When you\n  speak of it, use that name and the link; the port is the station's business, not theirs.\n- Post the returned `link` where people asked, saying what it is (in Slack: `<link|what it is>`). The link opens the\n  service beside this session in ember, for the workspace's members only: it is not a public URL; do not hand it out as\n  one.\n- One service per port. To restart after changes, `job_stop` it and start it again (or use a dev server that reloads by\n  itself). If it keeps crashing, the station restarts it with growing pauses and tells you each time: read `job_log`,\n  fix, restart.\n- Stop services nobody needs any more with `job_stop`.\n- How people see it: in a frame beside the chat, on an origin of its own, with requests relayed through the station\n  (each answer passed on whole). So the service must work at its own root paths (`/`, not under a prefix), and\n  WebSockets (a dev server's live reload) and streamed answers (server-sent events, long polls) do not get through:\n  turn hot reload off, and expect a page that relies on a live stream to show only what it reads.\n"
+    "text": "---\nname: stillfail-jobs\ndescription: Background jobs and web services on the still.fail station (job_start, job_list, job_log, job_stop, stillfail-job notify). Use when work outlives a turn (long builds, test suites, data jobs, watchers) or when people should see or use something in a browser (a page, prototype, chart, report, dashboard, tool UI) — instead of blocking a turn, pasting walls of output, or describing a UI in words.\n---\n\n# Background jobs and web services\n\nThe station runs jobs for you apart from your turns: each in its own process group, its output in a log, kept across your\nturns and started again when the station restarts. You hear when one ends, and whatever it says on the way. A job with a\nport is a web service: kept up (started again if it ends) and opened by the workspace's members through its link.\n\n## Background jobs: when\n\nUse `job_start` (no port) for work that takes longer than a turn should, or that you want to keep an eye on:\n\n- builds, full test suites, benchmarks, migrations, data processing, downloads, anything over a minute or two;\n- watchers and loops (poll something, retry until it works, re-run on change);\n- several independent pieces of work at once.\n\nNot for quick commands: run those directly. Not for work that must finish before you can answer: wait for it in the turn.\n\n## Background jobs: how\n\n- `job_start` with `command` (run by `sh -c`), a short `name`, and `cwd` (default: this session's workspace). Keep the\n  workspace as the place for clones and outputs.\n- Tell the people waiting that it runs and what you will tell them, then end the turn (`chat_post` kind \"final\", or\n  \"block\" only if they must act). You do not need to stay in the turn: you are woken when the job ends.\n- For a long job, have it report milestones or trouble with `stillfail-job notify \"<words>\"` from inside the command (for\n  example `make all && stillfail-job notify \"build done, running tests\" && make test`). Each notice reaches you as a message\n  via=\"ember\"; act on it (relay what matters to people, fix and restart on failure). Do not notify for every line.\n- When it ends you get its exit code and last lines. Read more with `job_log` (`lines` up to 1000). `job_list` shows this\n  session's jobs and their states; `job_stop` ends one.\n- A job's end is not the people's news unless it matters to them: tell them results, failures they must know about, and\n  what happens next.\n\n## Web services: when\n\nUse `job_start` with a `port` when what you made should be looked at or used in a browser, rather than read as text:\n\n- a front-end page, prototype or design you built or changed;\n- interactive charts, reports, dashboards or data explorers;\n- a docs site, a storybook, a preview build;\n- a small tool with a UI, or the admin/debug page of a service you are running;\n- something people will open again or keep watching.\n\nNot for a one-off answer (reply with text or a file), a single static image (send the image file), or a service only you\nneed to reach (a plain background job is enough).\n\n## Web services: how\n\n- `job_start` with `command`, `name`, `port` (1024–65535). The command must listen on that port; `$PORT` holds it, and\n  127.0.0.1 is enough (for example `python3 -m http.server $PORT`, `npm run dev -- --port $PORT --host 127.0.0.1`).\n- Check it answers before telling anyone: `curl -sf http://127.0.0.1:<port>/` (retry a few seconds while it starts);\n  look at `job_log` if it does not.\n- Give it a name people will recognise (`name`): the pages show services by their names, never their ports. When you\n  speak of it, use that name and the link; the port is the station's business, not theirs.\n- Post the returned `link` where people asked, saying what it is (in Slack: `<link|what it is>`). The link opens the\n  service beside this session in ember, for the workspace's members only: it is not a public URL; do not hand it out as\n  one.\n- One service per port. To restart after changes, `job_stop` it and start it again (or use a dev server that reloads by\n  itself). If it keeps crashing, the station restarts it with growing pauses and tells you each time: read `job_log`,\n  fix, restart.\n- Stop services nobody needs any more with `job_stop`.\n- How people see it: in a frame beside the chat, on an origin of its own, with requests relayed through the station\n  (each answer passed on whole). So the service must work at its own root paths (`/`, not under a prefix), and\n  WebSockets (a dev server's live reload) and streamed answers (server-sent events, long polls) do not get through:\n  turn hot reload off, and expect a page that relies on a live stream to show only what it reads.\n"
    }
   ]
  },

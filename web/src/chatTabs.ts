@@ -1,7 +1,7 @@
 // Which history tabs each chat has open, and which one is in front: each chat keeps its own (the latest 200 chats),
 // by `station:session` (or `station:thread`), as its page names it.
 
-const TABS = "ember.chatTabs";
+const TABS = "stillfail.chatTabs";
 export type Kept = { tabs: string[]; active: string | null };
 
 export function keptTabs(chat: string): Kept | undefined {

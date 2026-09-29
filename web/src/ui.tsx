@@ -478,7 +478,7 @@ export function RuntimeLogo({ runtime, size = 16 }: { runtime: "claude" | "codex
  * localStorage; a double click goes back to the default.
  */
 export function ResizeHandle({ variable, edge, min, max, label }: { variable: string; edge: "left" | "right"; min: number; max: number; label: string }) {
-  const storage = `ember.width.${variable}`;
+  const storage = `stillfail.width.${variable}`;
   const set = (px: number | null) => {
     if (px === null) {
       document.documentElement.style.removeProperty(variable);
@@ -562,18 +562,18 @@ export function AgentMark({ maker, runtime, badge, badgeText, size = 20 }: { mak
   );
 }
 
-const TIME_MODE = "ember.absoluteTime";
+const TIME_MODE = "stillfail.absoluteTime";
 /** Every relative time on the page follows one switch: a click on any of them flips all between "3 分钟前" and the date. */
 function useAbsoluteTime(): [boolean, () => void] {
   const [absolute, setAbsolute] = useState(() => localStorage.getItem(TIME_MODE) === "1");
   useEffect(() => {
     const sync = () => setAbsolute(localStorage.getItem(TIME_MODE) === "1");
-    window.addEventListener("ember-time", sync);
-    return () => window.removeEventListener("ember-time", sync);
+    window.addEventListener("stillfail-time", sync);
+    return () => window.removeEventListener("stillfail-time", sync);
   }, []);
   return [absolute, () => {
     localStorage.setItem(TIME_MODE, absolute ? "0" : "1");
-    window.dispatchEvent(new Event("ember-time"));
+    window.dispatchEvent(new Event("stillfail-time"));
   }];
 }
 

@@ -8,12 +8,12 @@ import { defineConfig, type Plugin } from "vite";
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 /**
- * PostHog's project key (docs/telemetry.md), from the file $EMBER_POSTHOG
- * names ({host, key}; ~/ember-deploy/posthog.json on studio), with this
+ * PostHog's project key (docs/telemetry.md), from the file $STILLFAIL_POSTHOG
+ * ($EMBER_POSTHOG before the rename) names ({host, key}; ~/ember-deploy/posthog.json on studio), with this
  * build's commit as the release. Without it the build has no analytics.
  */
 function posthogKey(): { host: string; key: string; release: string } | null {
-  const path = process.env.EMBER_POSTHOG;
+  const path = process.env.STILLFAIL_POSTHOG ?? process.env.EMBER_POSTHOG;
   if (!path) return null;
   const { host, key } = JSON.parse(readFileSync(path, "utf8")) as { host: string; key: string };
   let release = "unknown";
@@ -26,7 +26,7 @@ function posthogKey(): { host: string; key: string; release: string } | null {
 /** The station's own error reports (src/telemetry.ts) use the same key: it goes next to the page it came with. */
 function stationKeyFile(posthog: { host: string; key: string; release: string }): Plugin {
   return {
-    name: "ember-posthog-key",
+    name: "stillfail-posthog-key",
     generateBundle() {
       this.emitFile({ type: "asset", fileName: "posthog.json", source: `${JSON.stringify(posthog)}\n` });
     },
@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => {
       // When this build was made: the core's worker of a newer build takes over from an older one (src/core/worker.ts).
       __BUILT_AT__: JSON.stringify(Date.now()),
       // Where a station's web services are shown (cloud/src/preview.ts); the dev rig gives its own.
-      __PREVIEW_ORIGIN__: JSON.stringify(process.env.EMBER_PREVIEW_ORIGIN ?? "https://preview.ember.3720.org"),
+      __PREVIEW_ORIGIN__: JSON.stringify(process.env.STILLFAIL_PREVIEW_ORIGIN ?? process.env.EMBER_PREVIEW_ORIGIN ?? "https://preview.still.fail"),
     },
     // The core's worker (src/core/worker.ts) is a module worker that loads its wasm.
     worker: { format: "es" },
@@ -60,6 +60,6 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       target: "es2022",
     },
-    server: { proxy: { "/admin/api": { target: `http://127.0.0.1:${process.env.EMBER_ADMIN_PORT ?? 4760}`, changeOrigin: false } } },
+    server: { proxy: { "/admin/api": { target: `http://127.0.0.1:${process.env.STILLFAIL_ADMIN_PORT ?? process.env.EMBER_ADMIN_PORT ?? 4760}`, changeOrigin: false } } },
   };
 });

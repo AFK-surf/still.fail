@@ -55,22 +55,22 @@ export function useLink(): (path: string) => string {
 /** Who is looking: on a station's own page "local"; in ember cloud the account's email. */
 export interface Me { id: string; email: string | null }
 
-const FILTER = "ember.onlyMine";
+const FILTER = "stillfail.onlyMine";
 /** The "only mine" filter, remembered across pages. */
 export function readOnlyMine(): boolean {
   return localStorage.getItem(FILTER) === "1";
 }
 export function writeOnlyMine(value: boolean): void {
   localStorage.setItem(FILTER, value ? "1" : "0");
-  window.dispatchEvent(new Event("ember-filter"));
+  window.dispatchEvent(new Event("stillfail-filter"));
 }
 
 export function useOnlyMine(): [boolean, (value: boolean) => void] {
   const [value, setValue] = useState(readOnlyMine);
   useEffect(() => {
     const update = () => setValue(readOnlyMine());
-    window.addEventListener("ember-filter", update);
-    return () => window.removeEventListener("ember-filter", update);
+    window.addEventListener("stillfail-filter", update);
+    return () => window.removeEventListener("stillfail-filter", update);
   }, []);
   return [value, writeOnlyMine];
 }
