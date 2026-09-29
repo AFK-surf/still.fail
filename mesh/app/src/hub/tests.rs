@@ -949,7 +949,9 @@ async fn a_chat_opened_on_the_admin_page_reaches_the_session_like_slack_and_the_
     r.call(&key, "chat_post", json!({ "to": format!("C1/{}", m.thread_ts), "text": "done", "kind": "final" })).await.unwrap();
     r.claude.last().complete();
     settle().await;
-    let thread = r.hub.open_chat(&key, "local", Some("排查")).unwrap();
+    r.store.set_title(&key, Some("排查")).unwrap();
+    let thread = r.hub.open_chat(&key, "local", None).unwrap();
+    assert_eq!(thread.title.as_deref(), Some("排查"), "its own chat keeps the name the session was given");
     r.hub.say(thread.id, "local", "现在进展如何？", vec![], vec![]).unwrap();
     settle().await;
     let prompt = r.claude.last().prompts().pop().unwrap();
@@ -1104,8 +1106,10 @@ async fn idle_chats_that_are_done_are_archived_by_the_station_busy_blocked_unrea
     assert_eq!(r.session(&idle).archived_at, None);
     // A chat opened with a session that has one is a chat of its own, archived alone.
     r.hub.archive(&web, false).unwrap();
+    r.store.set_title(&web, Some("值班")).unwrap();
     let second = r.hub.open_chat(&web, "local", None).unwrap();
     assert_eq!(second.home, None);
+    assert_eq!(second.title, None, "a chat of its own does not take the session's name");
     r.hub.archive_chat(second.id, true).unwrap();
     assert_eq!(r.session(&web).archived_at, None);
     assert!(r.store.get_thread(second.id).unwrap().unwrap().hidden_at.is_some());
