@@ -180,10 +180,8 @@ export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory }: {
 function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; locked: boolean; owner: (file: Attachment) => string | null }) {
   const sending = useChatSend();
   return (
-    <div className={`${conversationCss.msg} ${chatCss2.msgMine}`} data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
-      <Quotes quotes={o.quotes} files={o.attachments} owner={owner} />
-      {o.text && <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}>{o.text}</div></div>}
-      <Files owner={owner} files={besideQuotes(o.quotes, o.attachments)} />
+    <MineMessage data-author="你" data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
+      <MineWords message={o} owner={owner} />
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
@@ -194,7 +192,7 @@ function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; l
             <button type="button" className={css.msgUnsentBtn} onClick={() => void (to !== null && sending.discard(to, o.id))}><Trash size={12} strokeWidth={2} />删除</button>
           </div>
         : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`}><span className={waitingCss.spinner} aria-hidden="true" />正在发送</span>}
-    </div>
+    </MineMessage>
   );
 }
 
@@ -471,9 +469,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
   if (m.mine) {
     return (
       <MineMessage data-author="你" data-ts={m.ts} data-role="person" data-enter={enter}>
-        <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
-        <MineBubble text={m.text} />
-        <Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} />
+        <MineWords message={m} owner={owner} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting
           ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />等待 agent 接收</span>
@@ -504,7 +500,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
       {m.authorKind === "person"
-        ? <>{m.text && <div className={chatCss2.msgPlain}>{m.text}</div>}<Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} /></>
+        ? <>{m.text && <PersonWords text={m.text} />}<Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} /></>
         : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} />}
     </OthersMessage>
   );
@@ -517,9 +513,27 @@ export function MineMessage({ children, ...data }: Data & { children: ReactNode 
   return <div className={`${conversationCss.msg} ${chatCss2.msgMine}`} {...data}>{children}</div>;
 }
 
+/** What a viewer's own message says, its quotes and files with it: the same whether the station has it yet (a
+ * MessageRow) or it is still on its way (an OutboxRow), so it does not change as the one takes the other's place. */
+function MineWords({ message: m, owner }: { message: Pick<ChatMessage, "text" | "quotes" | "attachments">; owner: (file: Attachment) => string | null }) {
+  return (
+    <>
+      <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
+      <MineBubble text={m.text} />
+      <Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} />
+    </>
+  );
+}
+
 /** The words of a viewer's own message, in their bubble. */
 export function MineBubble({ text }: { text: string }) {
-  return text ? <div className={conversationCss.msgBubble}><div className={chatCss2.msgPlain}><WithRefs text={text} /></div></div> : null;
+  return text ? <div className={conversationCss.msgBubble}><PersonWords text={text} /></div> : null;
+}
+
+/** What a person wrote, as every message of a person's draws it (their own in its bubble, someone else's as it is):
+ * plain text, its references to chats as chips. */
+function PersonWords({ text }: { text: string }) {
+  return <div className={chatCss2.msgPlain}><WithRefs text={text} /></div>;
 }
 
 /** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says. */
