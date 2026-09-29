@@ -17,7 +17,7 @@ export const pageBar = style({
     "(min-width: 701px)": {
       selectors: {
         "[data-sidebar=\"closed\"] &": { paddingLeft: "52px" },
-        "[data-desktop][data-sidebar=\"closed\"] &": { paddingLeft: "124px" },
+        "[data-desktop]:not([data-fullscreen])[data-sidebar=\"closed\"] &": { paddingLeft: "124px" },
       },
     },
   },

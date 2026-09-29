@@ -23,7 +23,7 @@ export const sidebarBuddy = style({
   selectors: {
     "[data-sidebar=\"closed\"] &": { left: "14px" },
     "[data-desktop] &": { top: "8px" },
-    "[data-desktop][data-sidebar=\"closed\"] &": { left: "84px" },
+    "[data-desktop]:not([data-fullscreen])[data-sidebar=\"closed\"] &": { left: "84px" },
   },
   "@media": {
     "(max-width: 700px)": {
@@ -42,7 +42,7 @@ export const sidebarUpdate = style({
     "&:disabled": { cursor: "progress" },
     "[data-sidebar=\"closed\"] &": { left: "50px", transform: "none" },
     "[data-desktop] &": { top: "11px" },
-    "[data-desktop][data-sidebar=\"closed\"] &": { left: "120px" },
+    "[data-desktop]:not([data-fullscreen])[data-sidebar=\"closed\"] &": { left: "120px" },
   },
   "@media": {
     "(max-width: 700px)": {

@@ -473,6 +473,11 @@ function open(path = "/", titled = false): BrowserWindow {
     webPreferences: { preload: join(__dirname, "preload.js"), sandbox: true, contextIsolation: true },
   });
   window.once("ready-to-show", () => window.show());
+  // Full screen, the window's buttons are gone: the page's top row stops keeping room for them (preload.ts).
+  const fullScreen = () => { if (!window.isDestroyed()) window.webContents.send("window:fullscreen", window.isFullScreen()); };
+  window.on("enter-full-screen", fullScreen);
+  window.on("leave-full-screen", fullScreen);
+  window.webContents.on("did-finish-load", fullScreen);
   // A new window of the app's own pages opens in the app, as another window like this one; anything else is outside.
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith(`${APP_ORIGIN}/`)) {

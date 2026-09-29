@@ -36,6 +36,8 @@ export const brand = style({
     // The desktop app has no title bar: the top row holds the window's buttons (apps/desktop/src/main.ts puts them in
     // it), the buddy beside them, and drags the window.
     "[data-desktop] &": { height: 44, paddingLeft: 86, WebkitAppRegion: "drag" },
+    // Full screen, the window's buttons are gone.
+    "[data-desktop][data-fullscreen] &": { paddingLeft: 16 },
   },
 });
 /** 云端侧边栏：lockup 在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */

@@ -29,5 +29,7 @@ contextBridge.exposeInMainWorld("emberDesktop", desktop);
 // Tagged under both names too (emberCore, emberNavigate: what pages from before the rename read).
 ipcRenderer.on("core:port", (event, id: number) => window.postMessage({ stillfailCore: "port", emberCore: "port", id }, location.origin, event.ports));
 ipcRenderer.on("core:exit", (_event, reason: string) => window.postMessage({ stillfailCore: "exit", emberCore: "exit", reason }, location.origin));
+// Whether the window is full screen, on the page's root (data-fullscreen): no window buttons to keep room for then.
+ipcRenderer.on("window:fullscreen", (_event, on: boolean) => document.documentElement.toggleAttribute("data-fullscreen", on));
 // An item's link opened from outside: the page goes there itself.
 ipcRenderer.on("app:navigate", (_event, path: string) => window.postMessage({ stillfailNavigate: path, emberNavigate: path }, location.origin));
