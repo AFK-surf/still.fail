@@ -48,7 +48,7 @@ export const mScrim = style({
 });
 export const mSheet = style({
   position: "absolute", left: "0", right: "0", bottom: "0", display: "flex", flexDirection: "column",
-  boxSizing: "border-box", maxHeight: "94vh", paddingBottom: "var(--m-foot)", borderRadius: "26px 26px 0 0",
+  boxSizing: "border-box", maxHeight: "94vh", maxWidth: "720px", marginInline: "auto", paddingBottom: "var(--m-foot)", borderRadius: "26px 26px 0 0",
   background: "color-mix(in srgb, var(--m-surface) 80%, transparent)", WebkitBackdropFilter: "blur(28px)",
   backdropFilter: "blur(28px)", boxShadow: "0 -6px 36px rgba(0, 0, 0, .18)", transform: "translateY(100%)",
   transition: "transform 300ms var(--m-ease), height 320ms var(--m-ease)",
