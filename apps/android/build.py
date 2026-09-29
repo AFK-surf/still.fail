@@ -25,7 +25,7 @@ TARGET = "aarch64-linux-android"
 ABI = "arm64-v8a"
 API = 29
 NDK_VERSION = "28.2.13676358"
-LIBRARY = "libember_core_ffi.so"
+LIBRARY = "libstillfail_core_ffi.so"
 
 
 def run(command, env, cwd=ROOT):
@@ -69,9 +69,9 @@ def main():
     target_dir = Path(env.get("CARGO_TARGET_DIR", CLIENT / "target"))
     # The app's shapes are what the core declares it sends (client/shapes): a stale Shapes.kt stops the build.
     run(["sh", "scripts/shapes.sh", "--check"], env, cwd=ROOT)
-    # And its icons are ember's set as drawn (design/icons).
+    # And its icons are still.fail's set as drawn (design/icons).
     run(["python3", "scripts/icons.py", "--check"], env, cwd=ROOT)
-    run(["cargo", "build", "-p", "ember-core-ffi", "--lib", "--target", TARGET, *(["--release"] if args.release else [])], env, cwd=CLIENT)
+    run(["cargo", "build", "-p", "stillfail-core-ffi", "--lib", "--target", TARGET, *(["--release"] if args.release else [])], env, cwd=CLIENT)
     built = target_dir / TARGET / profile / LIBRARY
 
     generated = APP / "core/build/generated"
@@ -83,7 +83,7 @@ def main():
     shutil.copy2(built, jni / LIBRARY)
     run([str(llvm / "llvm-strip"), "--strip-unneeded", str(jni / LIBRARY)], env)
     # The bindings come from the library's own metadata, so they always match it.
-    run(["cargo", "run", "-q", "-p", "ember-core-ffi", "--features", "bindgen", "--bin", "uniffi-bindgen", "--",
+    run(["cargo", "run", "-q", "-p", "stillfail-core-ffi", "--features", "bindgen", "--bin", "uniffi-bindgen", "--",
          "generate", "--library", str(built), "--language", "kotlin", "--no-format", "--out-dir", str(bindings)], env, cwd=CLIENT)
 
     if args.tasks:

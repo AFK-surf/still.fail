@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.ember.core"
+    namespace = "fail.still.core"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
     defaultConfig {
@@ -16,7 +16,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    // EmberCore logs through android.util.Log, which the JVM tests do not have.
+    // StillFailCore logs through android.util.Log, which the JVM tests do not have.
     testOptions { unitTests.isReturnDefaultValues = true }
     sourceSets.getByName("main") {
         kotlin.srcDir("build/generated/uniffi")

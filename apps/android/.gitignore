@@ -3,4 +3,5 @@
 **/build/
 local.properties
 # The root ignores data/ (the station's); here it is a source package.
-!/app/src/main/kotlin/dev/ember/android/data/
+!/app/src/main/kotlin/fail/still/android/data/
+__pycache__/

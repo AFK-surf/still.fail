@@ -4,25 +4,29 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// The build's number: -PemberBuild=<n>, or the commits in the history (scripts/release.sh publishes by it). Each
-// release is higher than the one before it, so the app sees it as newer (Updates.kt) and Android installs it over.
-val emberBuild = providers.gradleProperty("emberBuild")
+// The build's number: -PstillfailBuild=<n> (-PemberBuild, the name before the rename, still read), or the commits in
+// the history (scripts/release.sh publishes by it). Each release is higher than the one before it, so the app sees it
+// as newer (Updates.kt) and Android installs it over.
+val stillfailBuild = providers.gradleProperty("stillfailBuild")
+    .orElse(providers.gradleProperty("emberBuild"))
     .orElse(providers.exec { commandLine("git", "rev-list", "--count", "HEAD"); isIgnoreExitValue = true }.standardOutput.asText.map { it.trim() })
     .get().toIntOrNull() ?: 1
 
 android {
-    namespace = "dev.ember.android"
+    namespace = "fail.still.android"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.ember.android"
+        applicationId = "fail.still.android"
         minSdk = 29
         targetSdk = 36
-        versionCode = emberBuild
-        versionName = "0.1.$emberBuild"
+        versionCode = stillfailBuild
+        versionName = "0.1.$stillfailBuild"
         ndk { abiFilters += "arm64-v8a" }
-        // Where the core finds ember cloud: -PemberCloud=http://127.0.0.1:8787 for a dev cloud (adb reverse its ports).
-        buildConfigField("String", "CLOUD_ORIGIN", "\"${providers.gradleProperty("emberCloud").getOrElse("https://ember.3720.org")}\"")
+        // Where the core finds still.fail cloud: -PstillfailCloud=http://127.0.0.1:8787 for a dev cloud (adb reverse its
+        // ports); -PemberCloud (the name before the rename) is still read.
+        val cloud = providers.gradleProperty("stillfailCloud").orElse(providers.gradleProperty("emberCloud")).getOrElse("https://app.still.fail")
+        buildConfigField("String", "CLOUD_ORIGIN", "\"$cloud\"")
     }
     buildTypes {
         // What goes on a phone: optimized (R8), signed with the debug key for now so it installs over a debug build.

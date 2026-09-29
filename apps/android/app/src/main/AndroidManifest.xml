@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- mDNS: stations on the LAN are found without ember cloud (MainActivity's multicast lock). -->
+    <!-- mDNS: stations on the LAN are found without still.fail cloud (MainActivity's multicast lock). -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- The app installs its own newer builds (Updates.kt). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -10,7 +10,7 @@
         android:label="still.fail"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:theme="@style/Theme.Ember"
+        android:theme="@style/Theme.StillFail"
         android:supportsRtl="true"
         android:allowBackup="false">
         <!-- Frame stats and profiles from the shell, on an optimized build too. -->
@@ -24,18 +24,22 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- ember cloud's sign-in returns here (auth.begin's redirect_uri). -->
+            <!-- still.fail cloud's sign-in returns here (auth.begin's redirect_uri): stillfail://, and ember:// from before
+                 the rename (still accepted). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="stillfail" android:host="auth" android:path="/callback" />
                 <data android:scheme="ember" android:host="auth" android:path="/callback" />
             </intent-filter>
-            <!-- An item's link (a session's link in Slack): the app opens it, verified by ember cloud's assetlinks.json. -->
+            <!-- An item's link (a session's link in Slack): the app opens it, verified by still.fail cloud's assetlinks.json
+                 (served on both hosts: app.still.fail, and ember.3720.org from before the rename). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPrefix="/o/" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPrefix="/o/" />
             </intent-filter>
         </activity>
