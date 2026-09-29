@@ -176,7 +176,7 @@ impl AdminApi {
             .lock()
             .unwrap()
             .iter()
-            .map(|(id, p)| json!({ "id": id, "runtime": p.runtime, "job": self.deps.logins.get(id), "created": p.created }))
+            .map(|(id, p)| json!({ "id": id, "runtime": p.runtime, "job": self.deps.logins.get(id), "created": p.created, "error": p.error }))
             .collect();
         json!({
             "viewer": viewer,

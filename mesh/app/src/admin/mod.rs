@@ -165,6 +165,8 @@ struct Pending {
     home: std::path::PathBuf,
     by: Viewer,
     created: Option<String>,
+    /// Why a sign-in that succeeded made no profile.
+    error: Option<String>,
 }
 
 pub struct AdminApi {

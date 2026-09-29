@@ -152,8 +152,8 @@ export function AddAccountDialog({ open, onClose, initial = "claude-sub" }: { op
           : <Button variant="primary" disabled={KEYED.has(kind) && !key.trim()} busy={add.busy} onClick={() => void add.run()}>{KEYED.has(kind) ? "验证并添加" : "添加"}</Button>)}
       </>}>
       {signing ? (
-        job?.state === "failed" || job?.state === "cancelled"
-          ? <div className={pagesCss.card}><p className={controlsCss.fieldError}>{job.error ?? "登录没有完成。"}</p><Button onClick={() => { void api.dropLogin(login!).catch(() => {}); setLogin(null); }}>重新开始</Button></div>
+        pending?.error || job?.state === "failed" || job?.state === "cancelled"
+          ? <div className={pagesCss.card}><p className={controlsCss.fieldError}>{pending?.error ?? job?.error ?? "登录没有完成。"}</p><Button onClick={() => { void api.dropLogin(login!).catch(() => {}); setLogin(null); }}>重新开始</Button></div>
           : <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
       ) : (
         <>

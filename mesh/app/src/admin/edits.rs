@@ -70,6 +70,13 @@ fn unique(base: &str, taken: &HashSet<String>) -> String {
     id
 }
 
+/// Ids a new profile may not take: the profiles' own, and every home already on disk (a deleted profile's home stays,
+/// and a new one cannot be moved onto it).
+fn taken_ids(config: &crate::config::Config) -> HashSet<String> {
+    let homes = std::fs::read_dir(config.data_dir.join("homes")).into_iter().flatten().flatten();
+    config.profiles.iter().map(|p| p.id.clone()).chain(homes.filter_map(|e| e.file_name().into_string().ok())).collect()
+}
+
 /// The account a subscription home is signed in as, when its files say: Codex's id token, Claude's account record.
 fn account_email(runtime: RuntimeKind, home: &Path) -> Option<String> {
     if runtime == RuntimeKind::Codex {
@@ -382,7 +389,7 @@ impl AdminApi {
         let runtime = runtime_of(input.get("runtime")).ok_or_else(|| http_error(400, format!("unknown runtime {}", input.text("runtime"))))?;
         let id = format!("login-{}", random_hex(4));
         let home = self.config().data_dir.join("homes").join(&id);
-        self.pending.lock().unwrap().insert(id.clone(), Pending { runtime, home: home.clone(), by: viewer.clone(), created: None });
+        self.pending.lock().unwrap().insert(id.clone(), Pending { runtime, home: home.clone(), by: viewer.clone(), created: None, error: None });
         info!(login = id, runtime = runtime_name(runtime), by = viewer.id(), "sign-in for a new profile started");
         let job = self.deps.logins.start(&bare_profile(&id, runtime, AccessKind::Subscription, "", &home))?;
         Ok(json!({ "id": id, "job": job }))
@@ -390,24 +397,25 @@ impl AdminApi {
 
     /// A sign-in for a new profile moved on: once it succeeds the profile is made, named by the account signed in.
     pub(super) fn pending_changed(self: &Arc<Self>, id: &str) {
-        let Some((runtime, home, by, created)) = self.pending.lock().unwrap().get(id).map(|p| (p.runtime, p.home.clone(), p.by.clone(), p.created.clone())) else { return };
+        let Some((runtime, home, by, done)) = self.pending.lock().unwrap().get(id).map(|p| (p.runtime, p.home.clone(), p.by.clone(), p.created.is_some() || p.error.is_some())) else { return };
         let state = self.deps.logins.get(id).map(|j| j.state);
         if matches!(state, Some(LoginState::Failed | LoginState::Cancelled)) {
             let _ = std::fs::remove_dir_all(&home);
             return;
         }
-        if state != Some(LoginState::Done) || created.is_some() {
+        if state != Some(LoginState::Done) || done {
             return;
         }
         let email = account_email(runtime, &home);
         let config = self.config();
-        let taken: HashSet<String> = config.profiles.iter().map(|p| p.id.clone()).collect();
+        let taken = taken_ids(&config);
         let base = slug(email.as_deref().unwrap_or(&format!("{}-subscription", runtime_name(runtime))), 40);
         let base = if base.is_empty() { runtime_name(runtime).to_string() } else { base };
         let profile_id = unique(&base, &taken);
         let target: PathBuf = config.data_dir.join("homes").join(&profile_id);
         if let Err(e) = std::fs::rename(&home, &target) {
             warn!(login = id, error = %e, "could not move a new profile's home");
+            self.pending_failed(id, format!("登录成功了，但没能建好 Profile 的目录：{e}"));
             return;
         }
         let name = email.clone().unwrap_or_else(|| if runtime == RuntimeKind::Claude { "Claude 订阅" } else { "ChatGPT 订阅" }.to_string());
@@ -428,6 +436,8 @@ impl AdminApi {
         });
         if let Err(e) = made {
             warn!(login = id, error = %e, "the signed-in profile was not saved");
+            let _ = std::fs::rename(&target, &home);
+            self.pending_failed(id, format!("登录成功了，但没能保存 Profile：{e}"));
             return;
         }
         if let Some(p) = self.pending.lock().unwrap().get_mut(id) {
@@ -442,6 +452,14 @@ impl AdminApi {
                 api.drop_login(&id);
             }
         });
+    }
+
+    /// A sign-in that succeeded but made no profile: said on the page that started it, which would otherwise wait on.
+    fn pending_failed(&self, id: &str, error: String) {
+        if let Some(p) = self.pending.lock().unwrap().get_mut(id) {
+            p.error = Some(error);
+        }
+        self.events.overview_changed();
     }
 
     pub(super) fn drop_login(&self, id: &str) {
@@ -484,7 +502,7 @@ impl AdminApi {
             AccessKind::AnthropicApi => "Anthropic API".to_string(),
             _ => format!("环境变量（{}）", if runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" }),
         };
-        let taken: HashSet<String> = config.profiles.iter().map(|p| p.id.clone()).collect();
+        let taken = taken_ids(&config);
         let base = if kind == AccessKind::Env { format!("{}-env", runtime_name(runtime)) } else { serde_json::to_value(kind)?.as_str().unwrap_or("profile").to_string() };
         let id = unique(&base, &taken);
         std::fs::rename(&trial, config.data_dir.join("homes").join(&id))?;

@@ -868,6 +868,30 @@ async fn a_subscription_sign_in_runs_on_the_ember_host_and_relays_the_link_the_c
 }
 
 #[tokio::test]
+async fn a_sign_in_after_its_profile_was_deleted_makes_a_profile_beside_the_home_left_behind() {
+    let t = setup().await;
+    async fn signed_in(t: &Rig) -> String {
+        let id = t.call("POST", "/logins", Some(json!({ "runtime": "codex" }))).await.1["id"].as_str().unwrap().to_string();
+        for _ in 0..500 {
+            let body = t.get("/overview").await;
+            let login = body["logins"].as_array().unwrap().iter().find(|l| l["id"] == id.as_str()).cloned().unwrap();
+            assert_eq!(login["error"], Value::Null, "{login}");
+            if let Some(created) = login["created"].as_str() {
+                return created.to_string();
+            }
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+        panic!("the sign-in {id} made no profile");
+    }
+    let first = signed_in(&t).await;
+    assert_eq!(t.call("DELETE", &format!("/profiles/{first}"), None).await.0, 200);
+    assert!(t.data.join("homes").join(&first).is_dir(), "a deleted profile's home stays");
+    let second = signed_in(&t).await;
+    assert_ne!(second, first);
+    assert!(t.config().profiles.iter().any(|p| p.id == second));
+}
+
+#[tokio::test]
 async fn a_connects_slack_app_is_edited_through_its_manifest_new_permissions_need_approval_in_slack() {
     let t = setup().await;
     let app = t.get("/connects/ds/slack-app").await;
