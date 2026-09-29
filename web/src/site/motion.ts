@@ -1,7 +1,7 @@
 // The first screen's motion, from script (the `motion` library, as the app's ../motion.ts): what moves because of
 // something else. The page opens with the Chinese, large, which then flies onto the domains' dots as the English grows
-// out of them; the two domains lean after the pointer at their own depths, and the buttons are drawn to it. Nothing here when the system asks for less motion; the page
-// built to HTML shows everything where it rests.
+// out of them; the two domains lean after the pointer at their own depths, and the buttons are drawn to it. Nothing
+// here when the system asks for less motion; the page built to HTML shows everything where it rests.
 import { animate, stagger } from "motion";
 import { follower, reducedMotion } from "../motion.ts";
 import * as css from "./site.css.ts";
