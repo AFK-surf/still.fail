@@ -1,7 +1,7 @@
 // The official site's page (Site.tsx): big type, a thin grid and a beam of ember's orange, near black by default and
 // light when chosen (the switch in its bar: ThemeSwitch.tsx; the demo's app follows the same data-theme). What moves is
 // CSS (no script runs for it), still for those who ask for less motion.
-import { globalStyle, keyframes, style } from "@vanilla-extract/css";
+import { createVar, globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 
 const NARROW = "screen and (max-width: 860px)";
@@ -44,7 +44,6 @@ export const reveal = style({
   animation: `${rise} linear both`, animationTimeline: "view()", animationRange: "entry 0% cover 28%",
   "@media": { [STILL]: { animation: "none" } },
 });
-const spin = keyframes({ to: { transform: "rotate(1turn)" } });
 const enter = keyframes({
   from: { opacity: 0, transform: "perspective(1800px) rotateX(22deg) translateY(60px) scale(.9)" },
   to: { opacity: 1, transform: "none" },
@@ -178,17 +177,18 @@ export const stageGlow = style({
   position: "absolute", inset: "12% 8% -4%", zIndex: "-1", borderRadius: "40px", filter: "blur(70px)",
   background: `color-mix(in srgb, ${EMBER} 40%, transparent)`, opacity: ".45",
 });
-/** The edge the beam is seen through: a hairline of a turning light around the box. */
+/**
+ * The edge the beam is seen through: a hairline of a turning light around the box. The light is the edge's own
+ * background, turned by animating the gradient's angle (a registered property), not a huge spinning layer behind it:
+ * the browser left parts of that layer unpainted at times, and the beam went missing along the edge.
+ */
+const beamAngle = createVar({ syntax: "<angle>", inherits: false, initialValue: "0deg" });
+const turn = keyframes({ to: { vars: { [beamAngle]: "360deg" } } });
 export const edge = style({
-  position: "relative", padding: "1px", borderRadius: "20px", overflow: "hidden", background: `${ink(14)}`,
-  "@media": { [NARROW]: { borderRadius: "14px" } },
-  selectors: {
-    "&::before": {
-      content: "\"\"", position: "absolute", left: "50%", top: "50%", width: "200vmax", height: "200vmax", marginLeft: "-100vmax", marginTop: "-100vmax",
-      background: `conic-gradient(transparent 0 72%, ${EMBER} 84%, #FFE2D2 89%, transparent 95%)`,
-      animation: `${spin} 7s linear infinite`, "@media": { [STILL]: { animation: "none" } },
-    },
-  },
+  position: "relative", padding: "1px", borderRadius: "20px",
+  background: `conic-gradient(from ${beamAngle}, transparent 0 72%, ${EMBER} 84%, #FFE2D2 89%, transparent 95%), ${ink(14)}`,
+  animation: `${turn} 7s linear infinite`,
+  "@media": { [NARROW]: { borderRadius: "14px" }, [STILL]: { animation: "none" } },
 });
 /** The demo's box (demo/): the app in it, at its size. */
 export const demo = style({
