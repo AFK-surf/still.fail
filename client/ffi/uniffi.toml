@@ -1,3 +1,3 @@
 [bindings.kotlin]
-package_name = "dev.ember.core.ffi"
-cdylib_name = "ember_core_ffi"
+package_name = "fail.still.core.ffi"
+cdylib_name = "stillfail_core_ffi"

@@ -1,4 +1,4 @@
-//! ember-core: the logic every ember client shares. See docs/client-core.md.
+//! stillfail-core: the logic every still.fail client shares. See docs/client-core.md.
 //!
 //! Single-threaded and async: futures are `!Send`, shared state is
 //! `Rc<RefCell<…>>`. The platform comes in through [`host::Host`].

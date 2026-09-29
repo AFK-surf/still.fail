@@ -1,7 +1,7 @@
-//! ember-core in a native app. `start(data_dir, cloud_origin, listener)`
+//! stillfail-core in a native app. `start(data_dir, cloud_origin, listener)`
 //! starts the core on a thread of its own — a tokio current-thread runtime
 //! with a `LocalSet`, since the core is `!Send` — and returns an
-//! [`EmberCoreFfi`] the app feeds with each UI's messages. Those calls only
+//! [`StillFailCoreFfi`] the app feeds with each UI's messages. Those calls only
 //! post to the core thread, so they never block the caller; everything the
 //! core says comes back on the core thread through
 //! `listener.on_message(client, json)`. Messages cross as JSON strings.
@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use ember_core::{ClientId, ClientMessage, Core, CoreError, CoreMessage, Host};
+use stillfail_core::{ClientId, ClientMessage, Core, CoreError, CoreMessage, Host};
 use serde_json::{Value, json};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
@@ -49,30 +49,30 @@ pub(crate) enum Command {
 }
 
 #[derive(uniffi::Object)]
-pub struct EmberCoreFfi {
+pub struct StillFailCoreFfi {
     commands: UnboundedSender<Command>,
     /// Held while a connect is posted, so the ids given out reach the core in their order.
     next_client: Mutex<ClientId>,
 }
 
 /// Starts a core. `data_dir` is where it keeps accounts and the device key
-/// (created if missing); `cloud_origin` is ember cloud, e.g. https://ember.3720.org.
+/// (created if missing); `cloud_origin` is still.fail cloud, e.g. https://app.still.fail.
 #[uniffi::export]
-pub fn start(data_dir: String, cloud_origin: String, listener: Box<dyn CoreListener>) -> Result<Arc<EmberCoreFfi>, StartError> {
+pub fn start(data_dir: String, cloud_origin: String, listener: Box<dyn CoreListener>) -> Result<Arc<StillFailCoreFfi>, StartError> {
     let data_dir = PathBuf::from(data_dir);
     std::fs::create_dir_all(&data_dir).map_err(|e| StartError::Io(format!("无法创建数据目录 {}：{e}", data_dir.display())))?;
     let (commands, queue) = mpsc::unbounded_channel();
     let listener: Arc<dyn CoreListener> = Arc::from(listener);
     let host_commands = commands.clone();
     std::thread::Builder::new()
-        .name("ember-core".into())
+        .name("stillfail-core".into())
         .spawn(move || run(data_dir, cloud_origin.trim_end_matches('/').to_string(), listener, host_commands, queue))
         .map_err(|e| StartError::Io(format!("无法启动核心线程：{e}")))?;
-    Ok(Arc::new(EmberCoreFfi { commands, next_client: Mutex::new(1) }))
+    Ok(Arc::new(StillFailCoreFfi { commands, next_client: Mutex::new(1) }))
 }
 
 #[uniffi::export]
-impl EmberCoreFfi {
+impl StillFailCoreFfi {
     /// A UI connected; its messages and emissions use the id returned.
     pub fn connect(&self) -> u64 {
         let mut next = self.next_client.lock().unwrap_or_else(|e| e.into_inner());

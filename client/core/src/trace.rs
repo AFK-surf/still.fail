@@ -1,5 +1,5 @@
 //! Distributed tracing: one trace per user action, spans for what it asks of
-//! stations and ember cloud, exported as OTLP JSON to ember cloud's
+//! stations and still.fail cloud, exported as OTLP JSON to still.fail cloud's
 //! `/v1/telemetry/traces` (which forwards to Axiom). See docs/telemetry.md.
 //!
 //! The core is single-threaded, so the trace an operation belongs to travels
@@ -8,7 +8,7 @@
 //! inside it), [`Tracer::instrument`] around every poll of a future. Tasks
 //! spawned by the station module take the context they were spawned in.
 //!
-//! Every station request carries a W3C `traceparent`; ember-mesh and the
+//! Every station request carries a W3C `traceparent`; stillfail-mesh and the
 //! admin API record their spans under it. Spans are batched and sent at most
 //! every [`EXPORT_MS`]; a batch that cannot be sent is dropped.
 
@@ -206,7 +206,7 @@ impl Tracer {
         let body = json!({
             "resourceSpans": [{
                 "resource": { "attributes": [attribute("service.name", SERVICE.into())] },
-                "scopeSpans": [{ "scope": { "name": "ember-core" }, "spans": spans }],
+                "scopeSpans": [{ "scope": { "name": "stillfail-core" }, "spans": spans }],
             }],
         });
         // Outside every trace: sending spans makes none.
@@ -215,7 +215,7 @@ impl Tracer {
 }
 
 /// Which client this core is, for Axiom's `service.name`.
-const SERVICE: &str = if cfg!(target_arch = "wasm32") { "ember-web" } else { "ember-native" };
+const SERVICE: &str = if cfg!(target_arch = "wasm32") { "stillfail-web" } else { "stillfail-native" };
 
 /// A future with a context current while it is polled.
 struct Instrumented<'a, T> {
@@ -298,7 +298,7 @@ impl Span {
 impl Drop for Span {
     fn drop(&mut self) {
         if !self.ended {
-            self.set("ember.cancelled", true);
+            self.set("stillfail.cancelled", true);
             self.finish();
         }
     }
@@ -376,7 +376,7 @@ mod tests {
             let tracer = Tracer::new(host.clone(), 1.0);
             let bodies = capture(&tracer);
             let mut root = tracer.root("chat.open", Kind::Internal);
-            root.set("ember.station", "st");
+            root.set("stillfail.station", "st");
             let context = root.context();
             // A future instrumented with the root makes its spans children of it, even after an await.
             let inner = tracer.clone();
@@ -406,7 +406,7 @@ mod tests {
             assert_ne!(other["traceId"], root["traceId"]);
             assert!(root.get("parentSpanId").is_none());
             assert_eq!(child["attributes"][0], json!({ "key": "http.response.status_code", "value": { "intValue": "200" } }));
-            assert_eq!(root["attributes"][0], json!({ "key": "ember.station", "value": { "stringValue": "st" } }));
+            assert_eq!(root["attributes"][0], json!({ "key": "stillfail.station", "value": { "stringValue": "st" } }));
             let (start, end): (u64, u64) = (root["startTimeUnixNano"].as_str().unwrap().parse().unwrap(), root["endTimeUnixNano"].as_str().unwrap().parse().unwrap());
             assert!(end >= start && start > 1_700_000_000_000_000_000);
             assert_eq!(context.traceparent(), format!("00-{}-{}-01", root["traceId"].as_str().unwrap(), root["spanId"].as_str().unwrap()));
@@ -434,7 +434,7 @@ mod tests {
             drop(on.root("chat.open", Kind::Internal));
             tokio::time::sleep(std::time::Duration::from_millis(EXPORT_MS / 100 + 20)).await;
             let spans = exported(&bodies);
-            assert_eq!(spans[0]["attributes"][0], json!({ "key": "ember.cancelled", "value": { "boolValue": true } }));
+            assert_eq!(spans[0]["attributes"][0], json!({ "key": "stillfail.cancelled", "value": { "boolValue": true } }));
         });
     }
 }

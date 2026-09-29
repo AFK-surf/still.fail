@@ -5,8 +5,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use ember_core::host::{Host, HostError, HttpRequest, HttpResponse, SocketFrames, StreamResponse};
-use ember_core::{ClientId, CoreError, CoreMessage};
+use stillfail_core::host::{Host, HostError, HttpRequest, HttpResponse, SocketFrames, StreamResponse};
+use stillfail_core::{ClientId, CoreError, CoreMessage};
 use futures::channel::{mpsc, oneshot};
 use futures::future::LocalBoxFuture;
 use futures::stream::{self, StreamExt};
@@ -217,12 +217,12 @@ impl Host for WebHost {
         Box::pin(async move { storage.set(key, value).await })
     }
 
-    fn db_read(&self, range: ember_core::host::DbRange) -> LocalBoxFuture<'static, Result<Vec<(String, Vec<u8>)>, HostError>> {
+    fn db_read(&self, range: stillfail_core::host::DbRange) -> LocalBoxFuture<'static, Result<Vec<(String, Vec<u8>)>, HostError>> {
         let storage = self.storage.clone();
         Box::pin(async move { storage.records(range.table, range.from, range.to).await })
     }
 
-    fn db_write(&self, ops: Vec<ember_core::host::DbOp>) -> LocalBoxFuture<'static, Result<(), HostError>> {
+    fn db_write(&self, ops: Vec<stillfail_core::host::DbOp>) -> LocalBoxFuture<'static, Result<(), HostError>> {
         let storage = self.storage.clone();
         Box::pin(async move { storage.write_records(ops).await })
     }

@@ -63,7 +63,7 @@ pub enum Topic {
     Jobs { station: String },
     /// An account's signed-in devices (`/v1/auth/sessions`).
     LoginSessions { account: String },
-    /// ember cloud's operator lists for an admin account: `users`, `workspaces` or `invite-codes` (`/v1/admin/…`).
+    /// still.fail cloud's operator lists for an admin account: `users`, `workspaces` or `invite-codes` (`/v1/admin/…`).
     Admin { account: String, list: String },
     // Views: put together from the topics above (see views.rs). `scope` is a workspace id or "local".
     Chats { scope: String, #[serde(default)] mine: bool },

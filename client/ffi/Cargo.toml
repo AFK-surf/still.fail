@@ -1,13 +1,13 @@
 [package]
-name = "ember-core-ffi"
-description = "ember-core natively (Android, later iOS): a Host over reqwest and files on a core thread, exported with uniffi."
+name = "stillfail-core-ffi"
+description = "stillfail-core natively (Android, later iOS): a Host over reqwest and files on a core thread, exported with uniffi."
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "ember_core_ffi"
+name = "stillfail_core_ffi"
 
 [[bin]]
 # Generates the Kotlin bindings from the built library (apps/android/build.py).
@@ -18,7 +18,7 @@ required-features = ["bindgen"]
 bindgen = ["uniffi/cli"]
 
 [dependencies]
-ember-core = { path = "../core" }
+stillfail-core = { path = "../core" }
 uniffi = "=0.31.0"
 tokio = { version = "1", features = ["rt", "time", "sync"] }
 futures = "0.3"
@@ -29,7 +29,7 @@ thiserror = "2"
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "stream"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "1"
-# ember cloud's /v1/events socket; the TLS config is the one reqwest gets.
+# still.fail cloud's /v1/events socket; the TLS config is the one reqwest gets.
 tokio-tungstenite = { version = "0.26", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
 getrandom = "0.3"
 # The core's database (docs/core-db.md), built in: the same SQLite on every platform.

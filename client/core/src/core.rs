@@ -46,8 +46,8 @@ use crate::wake::{self, Wake, Wakes, WakingHost};
 /// over once a socket held for a minute.
 pub const SOCKET_RETRY_MS: u64 = 1_000;
 pub const SOCKET_RETRY_MAX_MS: u64 = 60_000;
-/// The subprotocol ember cloud's `/v1/events` answers with; the token travels as a second one.
-pub const EVENTS_PROTOCOL: &str = "ember-events";
+/// The subprotocol still.fail cloud's `/v1/events` answers with; the token travels as a second one.
+pub const EVENTS_PROTOCOL: &str = "stillfail-events";
 
 pub struct Core {
     inner: Rc<Inner>,
@@ -89,7 +89,7 @@ struct Inner {
     me_fetches: RefCell<HashMap<String, u64>>,
     /// The live `workspaces` / `workspace` topics, each with the number of its newest fetch.
     live: RefCell<HashMap<Topic, u64>>,
-    /// Per account, its ember cloud events socket while an account topic is live.
+    /// Per account, its still.fail cloud events socket while an account topic is live.
     sockets: RefCell<HashMap<String, Socket>>,
     /// What is waited on, for the `status` topic.
     status: Rc<Status>,
@@ -209,7 +209,7 @@ impl Core {
             let me = me.clone();
             async move {
                 let Some(core) = me.upgrade() else { return };
-                // Any signed-in account will do: ember cloud only needs to know that someone of ours sends them.
+                // Any signed-in account will do: still.fail cloud only needs to know that someone of ours sends them.
                 let Some(account) = core.accounts.list().into_iter().next() else { return };
                 let _ = core.cloud.traces(&account.sub, body).await;
             }
@@ -246,11 +246,11 @@ impl Core {
             ClientMessage::Call { id, call: name, params } => match parse_call(&name, params) {
                 Err(error) => self.inner.host.emit(client, answer(id, Err(error))),
                 Ok(call) => {
-                    // Each call is a trace: what it asks of stations and ember cloud are its spans.
+                    // Each call is a trace: what it asks of stations and still.fail cloud are its spans.
                     let tracer = &self.inner.tracer;
                     let mut span = tracer.root(name, Kind::Internal);
                     if let Some(station) = call.station() {
-                        span.set("ember.station", station_id(station).to_string());
+                        span.set("stillfail.station", station_id(station).to_string());
                     }
                     let inner = self.inner.clone();
                     // How far a call has got, for a UI that asked to hear it: values under the call's id, before its answer.
@@ -328,7 +328,7 @@ impl Source for Router {
             };
             let mut span = self.tracer.root(name, Kind::Internal);
             if let Some(station) = station {
-                span.set("ember.station", station_id(station).to_string());
+                span.set("stillfail.station", station_id(station).to_string());
             }
             let context = span.context();
             self.opening.borrow_mut().insert(topic.clone(), span);
@@ -463,7 +463,7 @@ impl Inner {
                 };
                 if fresh {
                     let mut span = self.tracer.always("client.error", Kind::Internal);
-                    span.set("ember.source", source);
+                    span.set("stillfail.source", source);
                     span.set("error.type", "client");
                     span.set("exception.message", message.chars().take(1000).collect::<String>());
                     span.fail();
@@ -723,8 +723,8 @@ impl Inner {
     }
 
     /// This device's member credential for a workspace, kept on the device: what gets it into the workspace's
-    /// stations with no ember cloud on the way (on a LAN, or the cloud down). Kept, it serves for a day; then, or when
-    /// a station refused it (`fresh`), a new one is asked for — and if ember cloud cannot be reached, the kept one goes
+    /// stations with no still.fail cloud on the way (on a LAN, or the cloud down). Kept, it serves for a day; then, or when
+    /// a station refused it (`fresh`), a new one is asked for — and if still.fail cloud cannot be reached, the kept one goes
     /// on serving until it runs out (30 days).
     async fn credential(&self, workspace: &str, device: &str, fresh: bool) -> Result<Credential> {
         let sub = self.owner(workspace).await?;
@@ -750,7 +750,7 @@ impl Inner {
         if let Some(url) = self.relay_url.borrow().clone() {
             return Ok(url);
         }
-        // As last heard (kept on the device): the mesh comes up without ember cloud.
+        // As last heard (kept on the device): the mesh comes up without still.fail cloud.
         for account in self.accounts.list() {
             if let Some(url) = self.data.record("me", &account.sub).and_then(|me| me.get("relay_url")?.as_str().map(str::to_string)) {
                 return Ok(url);
@@ -1044,7 +1044,7 @@ impl Inner {
         join_all(topics.iter().map(|topic| self.refresh_with(topic, true))).await;
     }
 
-    // ── ember cloud's events ──
+    // ── still.fail cloud's events ──
 
     /// One socket per signed-in account while any account topic is live; none otherwise.
     fn sync_sockets(&self) {
@@ -1082,7 +1082,7 @@ impl Inner {
             Some(rest) => format!("wss://{rest}/v1/events"),
             None => format!("ws://{}/v1/events", origin.strip_prefix("http://").unwrap_or(&origin)),
         };
-        Ok(self.host.websocket(url, vec![EVENTS_PROTOCOL.into(), format!("ember-token.{token}")]).await?)
+        Ok(self.host.websocket(url, vec![EVENTS_PROTOCOL.into(), format!("stillfail-token.{token}")]).await?)
     }
 
     fn on_cloud_event(&self, sub: &str, text: &str) {
@@ -1703,7 +1703,7 @@ mod tests {
         assert_eq!(code(parse_call("migrate", json!({"device": BASE64.encode([1u8; 16])}))), "invalid_params");
     }
 
-    // ── ember cloud's events ──
+    // ── still.fail cloud's events ──
 
     use crate::accounts::{STORAGE_KEY, StoredAccount};
     use crate::testing::{FakeHost, json_response, run};
@@ -1716,7 +1716,7 @@ mod tests {
     }
 
     /// A core with one signed-in account whose token expires in 30 s (so every socket opens with a fresh one),
-    /// ember cloud answering `/v1/me`, the workspace and token refreshes.
+    /// still.fail cloud answering `/v1/me`, the workspace and token refreshes.
     async fn cloud_core() -> (Rc<FakeHost>, Core) {
         let host = FakeHost::new();
         host.speed_up(SPEEDUP);
@@ -1724,7 +1724,7 @@ mod tests {
         host.store(STORAGE_KEY, serde_json::to_vec(&vec![account]).unwrap());
         let refreshes = Cell::new(0);
         host.on_fetch(move |req| {
-            let path = req.url.trim_start_matches("https://ember.test");
+            let path = req.url.trim_start_matches("https://stillfail.test");
             match path {
                 "/v1/me" => json_response(200, json!({"workspaces": [{"id": "ws", "name": "W"}], "invitations": [], "relay_url": "https://relay.test"})),
                 "/v1/workspaces/ws" => json_response(200, json!({"id": "ws", "stations": [{"id": "st", "name": "studio", "online": false, "last_seen": 1}]})),
@@ -1751,7 +1751,7 @@ mod tests {
             let asked = Rc::new(Cell::new(0));
             let (cloud_up, times) = (up.clone(), asked.clone());
             host.on_fetch(move |req| {
-                let path = req.url.trim_start_matches("https://ember.test");
+                let path = req.url.trim_start_matches("https://stillfail.test");
                 if !cloud_up.get() {
                     return Err(crate::host::HostError("offline".into()));
                 }
@@ -1774,17 +1774,17 @@ mod tests {
             assert_eq!(asked.get(), 1);
             // A station refused it: a new one.
             assert_eq!(credential(true).await.unwrap().credential, "c2");
-            // A day old, with ember cloud unreachable: the kept one serves on.
+            // A day old, with still.fail cloud unreachable: the kept one serves on.
             let old = Credential { credential: "old".into(), issued_at: now_s() - 2.0 * 86400.0, expires_at: now_s() + 28.0 * 86400.0, relay_url: "https://relay.test".into() };
             host.store(&format!("{CREDENTIAL_KEY}/s1/ws"), serde_json::to_vec(&kept(&old)).unwrap());
             up.set(false);
             assert_eq!(credential(false).await.unwrap().credential, "old");
-            // Refused, or run out, and no ember cloud: none.
+            // Refused, or run out, and no still.fail cloud: none.
             assert!(credential(true).await.is_err());
             let spent = Credential { expires_at: now_s() - 1.0, ..old.clone() };
             host.store(&format!("{CREDENTIAL_KEY}/s1/ws"), serde_json::to_vec(&kept(&spent)).unwrap());
             assert!(credential(false).await.is_err());
-            // A day old, ember cloud back: a new one.
+            // A day old, still.fail cloud back: a new one.
             host.store(&format!("{CREDENTIAL_KEY}/s1/ws"), serde_json::to_vec(&kept(&old)).unwrap());
             up.set(true);
             assert_eq!(credential(false).await.unwrap().credential, "c3");
@@ -1880,7 +1880,7 @@ mod tests {
             host.settle().await;
             // One socket, the token as a subprotocol (refreshed first: it was about to expire).
             let sockets: Vec<(String, Vec<String>)> = host.sockets.borrow().iter().map(|(u, p, _)| (u.clone(), p.clone())).collect();
-            assert_eq!(sockets, vec![("wss://ember.test/v1/events".to_string(), vec!["ember-events".to_string(), "ember-token.fresh-1".to_string()])]);
+            assert_eq!(sockets, vec![("wss://stillfail.test/v1/events".to_string(), vec!["stillfail-events".to_string(), "stillfail-token.fresh-1".to_string()])]);
             // Read once, when the socket opened.
             assert_eq!((count(&host, "/v1/me"), count(&host, "/v1/workspaces/ws")), (1, 1));
             apply(&host, &mut values);
@@ -1958,7 +1958,7 @@ mod tests {
         let account = StoredAccount { sub: "s1".into(), email: "a@x.com".into(), name: String::new(), picture: String::new(), access: "tok".into(), refresh: "r0".into(), access_expires: now_s() + 3600.0 };
         host.store(STORAGE_KEY, serde_json::to_vec(&vec![account]).unwrap());
         host.on_fetch(|req| {
-            let path = req.url.trim_start_matches("https://ember.test");
+            let path = req.url.trim_start_matches("https://stillfail.test");
             match path.split('?').next().unwrap() {
                 "/admin/api/threads" => json_response(200, json!([{
                     "id": 7, "surface": "ember", "channel": "EMBER", "channelName": null, "threadTs": "7.0", "title": null, "createdBy": null,
@@ -2082,7 +2082,7 @@ mod tests {
             host.settle().await;
             assert!(host.take_emitted().iter().any(|(_, m)| matches!(m, CoreMessage::Value { id: 1, .. })));
             let admin: Vec<_> = host.requests.borrow().iter().filter(|r| r.url.contains("/admin/api/")).cloned().collect();
-            let paths: Vec<&str> = admin.iter().map(|r| r.url.trim_start_matches("https://ember.test/admin/api")).collect();
+            let paths: Vec<&str> = admin.iter().map(|r| r.url.trim_start_matches("https://stillfail.test/admin/api")).collect();
             assert_eq!(paths.len(), 7, "{paths:?}");
             assert!(paths.contains(&"/chats"), "the title as the sidebar has it: {paths:?}");
             assert!(paths.contains(&"/sessions/k1"), "the agent read as the chat opens: {paths:?}");
@@ -2152,7 +2152,7 @@ mod tests {
             let up = Rc::new(Cell::new(false));
             let station_up = up.clone();
             host.on_fetch(move |req| {
-                let path = req.url.trim_start_matches("https://ember.test");
+                let path = req.url.trim_start_matches("https://stillfail.test");
                 match (req.method.as_str(), path) {
                     ("POST", "/admin/api/sessions") if !station_up.get() => json_response(400, json!({"error": "no claude profile configured"})),
                     ("POST", "/admin/api/sessions") => json_response(200, json!({"key": "ember:c-1", "thread": {
@@ -2180,7 +2180,7 @@ mod tests {
             core.receive(ui, ClientMessage::Call { id: 3, call: "chat.send".into(), params: json!({"station": "local", "session": key, "text": "修一下登录"}) });
             host.settle().await;
             let asked: Vec<(String, String)> = host.requests.borrow().iter().filter(|r| r.method == "POST" && r.url.contains("/admin/api/"))
-                .map(|r| (r.url.trim_start_matches("https://ember.test/admin/api").to_string(), String::from_utf8(r.body.clone().unwrap_or_default()).unwrap())).collect();
+                .map(|r| (r.url.trim_start_matches("https://stillfail.test/admin/api").to_string(), String::from_utf8(r.body.clone().unwrap_or_default()).unwrap())).collect();
             assert_eq!(asked.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), ["/sessions", "/sessions", "/threads/9/messages"]);
             // It carries the key given here: the station's rows say it of the chat made.
             assert_eq!(serde_json::from_str::<Value>(&asked[0].1).unwrap(), json!({"runtime": "claude", "model": "opus", "clientKey": key}));

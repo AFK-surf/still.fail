@@ -9,7 +9,7 @@ anyhow = "1"
 async-trait = "0.1"
 base64 = "0.22"
 bytes = "1"
-stillfail-shapes = { package = "ember-shapes", path = "../../client/shapes" }
+stillfail-shapes = { path = "../../client/shapes" }
 futures-util = "0.3"
 getrandom = "0.3"
 hex = "0.4"

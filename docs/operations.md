@@ -104,7 +104,7 @@ still.fail 会校验每个经过 tunnel 的请求所带的 Access JWT（签名�
 ## 开发
 
 - station：在 mesh/ 里 `cargo test --workspace`。
-- client core：在 client/ 里 `cargo test --workspace --exclude ember-core-wasm`。
+- client core：在 client/ 里 `cargo test --workspace --exclude stillfail-core-wasm`。
 - `pnpm test`（web 里的 TypeScript 部分，需要先构建 wasm core）、`pnpm typecheck`。
 - `pnpm check`：跑全部检查（scripts/check.sh all）。
 - `pnpm dev:web`：管理页的热更新开发服务器，API 代理到本机 4760。

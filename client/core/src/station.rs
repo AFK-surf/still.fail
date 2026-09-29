@@ -646,7 +646,7 @@ fn failed(span: &mut Span, error: &CoreError) {
 fn answered(span: &mut Span, reply: &WireReply) {
     span.set("http.response.status_code", reply.status);
     if let Some(via) = reply.via {
-        span.set("ember.path", via);
+        span.set("stillfail.path", via);
     }
     if reply.status >= 500 {
         span.fail();
@@ -804,7 +804,7 @@ impl Stations {
         let mut span = self.tracer.span(format!("{method} {}", route(&path)), Kind::Client);
         span.set("http.request.method", method.to_string());
         span.set("url.path", route(&path));
-        span.set("ember.station", match station {
+        span.set("stillfail.station", match station {
             StationAddr::Local => "local".to_string(),
             StationAddr::Remote { station, .. } => station.clone(),
         });
@@ -870,7 +870,7 @@ impl Stations {
     /// Opens an event stream; a non-2xx answer is an error. Its span ends when the stream is open.
     async fn open_stream(&self, station: &StationAddr, path: &str) -> Result<LocalBoxStream<'static, Result<Vec<u8>>>> {
         let (mut span, waiting, reply) = self.send(station, "GET", path, vec![("accept".into(), EVENT_STREAM.into())], Vec::new(), false);
-        span.set("ember.stream", true);
+        span.set("stillfail.stream", true);
         let reply = match reply.await {
             Ok(reply) => reply,
             Err(error) => {
@@ -1263,10 +1263,10 @@ impl Stations {
             }
             let name = if std::mem::replace(&mut first, false) { "station.connect" } else { "station.reconnect" };
             let mut span = self.tracer.enter(parent.take(), || self.tracer.span(name, Kind::Internal));
-            span.set("ember.station", station.clone());
+            span.set("stillfail.station", station.clone());
             if let Some((why, lasted)) = previous.take() {
-                span.set("ember.previous.end", why);
-                span.set("ember.previous.lasted_ms", lasted.round() as i64);
+                span.set("stillfail.previous.end", why);
+                span.set("stillfail.previous.lasted_ms", lasted.round() as i64);
             }
             // Asked anew each time: a session is followed from what its topic has by then.
             let path = self.events_path(&station, &wants);
@@ -3135,7 +3135,7 @@ mod tests {
             let mut parser = SseParser::default();
             assert_eq!(parser.feed(&reply.bytes().await.unwrap()), vec![("config".to_string(), "{}".to_string())]);
             let urls: Vec<String> = host.requests.borrow().iter().map(|r| r.url.clone()).collect();
-            assert_eq!(urls, vec!["https://ember.test/admin/api/overview", "https://ember.test/admin/api/events"]);
+            assert_eq!(urls, vec!["https://stillfail.test/admin/api/overview", "https://stillfail.test/admin/api/events"]);
             assert!(host.requests.borrow()[0].body.is_none());
             host.on_fetch(|_| Err(HostError("down".into())));
             let head = RequestHead { method: "GET".into(), path: "/admin/api/host".into(), headers: vec![] };

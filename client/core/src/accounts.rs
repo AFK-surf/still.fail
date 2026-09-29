@@ -1,4 +1,4 @@
-//! The accounts signed in on this device. Each keeps its own ember cloud
+//! The accounts signed in on this device. Each keeps its own still.fail cloud
 //! session: a short access token and a rotating refresh token. Tokens are
 //! refreshed at most once at a time per account (every caller waits on the
 //! same refresh), which is what several tabs sharing one core gets right.
@@ -388,7 +388,7 @@ fn challenge(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
 }
 
-/// A ULID, which ember cloud wants as the id of each refresh request.
+/// A ULID, which still.fail cloud wants as the id of each refresh request.
 fn ulid(host: &dyn Host) -> String {
     const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
     let mut time = host.now_ms() as u64;
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn query_encoding_round_trips() {
-        let text = "ember 网页版 · Chrome & co=1/2+3%";
+        let text = "still.fail 网页版 · Chrome & co=1/2+3%";
         let encoded = encode_component(text);
         assert!(encoded.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.~%".contains(&b)));
         assert_eq!(decode_component(&encoded), text);
@@ -570,8 +570,8 @@ mod tests {
         run(async {
             let host = FakeHost::new();
             let accounts = Accounts::load(host.clone()).await;
-            let url = accounts.begin_sign_in("https://ember.test/auth/callback", "/w/ws1", "ember 网页版 · Chrome").await.unwrap();
-            assert!(url.starts_with("https://ember.test/v1/auth/google/start?state="));
+            let url = accounts.begin_sign_in("https://stillfail.test/auth/callback", "/w/ws1", "still.fail 网页版 · Chrome").await.unwrap();
+            assert!(url.starts_with("https://stillfail.test/v1/auth/google/start?state="));
             let pending: PendingLogin = serde_json::from_slice(&host.stored(LOGIN_KEY).unwrap()).unwrap();
             assert_eq!(pending.verifier.len(), 43);
             assert_ne!(pending.verifier, pending.state);
@@ -580,8 +580,8 @@ mod tests {
             assert_eq!(q["state"], pending.state);
             assert_eq!(q["code_challenge"], challenge(&pending.verifier));
             assert_eq!(q["code_challenge_method"], "S256");
-            assert_eq!(q["redirect_uri"], "https://ember.test/auth/callback");
-            assert_eq!(q["name"], "ember 网页版 · Chrome");
+            assert_eq!(q["redirect_uri"], "https://stillfail.test/auth/callback");
+            assert_eq!(q["name"], "still.fail 网页版 · Chrome");
         });
     }
 
@@ -591,15 +591,15 @@ mod tests {
             let host = FakeHost::new();
             let expires = now() + 3600.0;
             host.on_fetch(move |req| match req.url.as_str() {
-                "https://ember.test/v1/auth/token" => json_response(200, tokens("acc", "ref", expires)),
-                "https://ember.test/v1/me" => json_response(200, json!({ "user": { "picture": "https://pic/1" } })),
+                "https://stillfail.test/v1/auth/token" => json_response(200, tokens("acc", "ref", expires)),
+                "https://stillfail.test/v1/me" => json_response(200, json!({ "user": { "picture": "https://pic/1" } })),
                 other => panic!("unexpected {other}"),
             });
             let accounts = Accounts::load(host.clone()).await;
             let changes = Rc::new(Cell::new(0));
             let counter = changes.clone();
             accounts.on_change(Rc::new(move || counter.set(counter.get() + 1)));
-            let url = accounts.begin_sign_in("https://ember.test/auth/callback", "/w/ws1", "dev").await.unwrap();
+            let url = accounts.begin_sign_in("https://stillfail.test/auth/callback", "/w/ws1", "dev").await.unwrap();
             let state = query_of(&url)["state"].clone();
             let pending: PendingLogin = serde_json::from_slice(&host.stored(LOGIN_KEY).unwrap()).unwrap();
 
@@ -611,7 +611,7 @@ mod tests {
 
             let requests = host.requests.borrow().clone();
             assert_eq!(requests[0].method, "POST");
-            assert_eq!(body(&requests[0]), json!({ "code": "id.secret", "code_verifier": pending.verifier, "redirect_uri": "https://ember.test/auth/callback" }));
+            assert_eq!(body(&requests[0]), json!({ "code": "id.secret", "code_verifier": pending.verifier, "redirect_uri": "https://stillfail.test/auth/callback" }));
             assert_eq!(header(&requests[1], "authorization"), Some("Bearer acc"));
 
             // Stored, and a fresh token is handed out without a refresh.
@@ -633,7 +633,7 @@ mod tests {
                     if req.url.ends_with("/v1/me") { Err(HostError("offline".into())) } else { json_response(200, tokens("acc", "ref", expires)) }
                 });
                 let accounts = Accounts::load(host.clone()).await;
-                let url = accounts.begin_sign_in("https://ember.test/auth/callback", return_to, "dev").await.unwrap();
+                let url = accounts.begin_sign_in("https://stillfail.test/auth/callback", return_to, "dev").await.unwrap();
                 let state = query_of(&url)["state"].clone();
                 let (view, to) = accounts.complete_sign_in(&format!("code=c&state={state}")).await.unwrap();
                 assert_eq!(view.picture, "");
@@ -648,7 +648,7 @@ mod tests {
             let host = FakeHost::new();
             host.on_fetch(|_| json_response(400, json!({ "error": "invalid_grant" })));
             let accounts = Accounts::load(host.clone()).await;
-            let begin = || accounts.begin_sign_in("https://ember.test/auth/callback", "/", "dev");
+            let begin = || accounts.begin_sign_in("https://stillfail.test/auth/callback", "/", "dev");
 
             begin().await.unwrap();
             let e = accounts.complete_sign_in("error=login_cancelled").await.unwrap_err();
@@ -783,7 +783,7 @@ mod tests {
             assert!(accounts.list().is_empty());
             assert_eq!(changes.get(), 1);
             let request = host.requests.borrow()[0].clone();
-            assert_eq!(request.url, "https://ember.test/v1/auth/logout");
+            assert_eq!(request.url, "https://stillfail.test/v1/auth/logout");
             assert_eq!(header(&request, "authorization"), Some("Bearer old-refresh"));
             assert_eq!(body(&request), json!({ "all": false }));
         });

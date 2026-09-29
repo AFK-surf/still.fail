@@ -860,11 +860,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
-name = "ember-core"
+name = "stillfail-core"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
- "ember-shapes",
+ "stillfail-shapes",
  "futures",
  "hex",
  "iroh",
@@ -879,10 +879,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ember-core-ffi"
+name = "stillfail-core-ffi"
 version = "0.1.0"
 dependencies = [
- "ember-core",
+ "stillfail-core",
  "futures",
  "getrandom 0.3.4",
  "libc",
@@ -899,10 +899,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ember-core-node"
+name = "stillfail-core-node"
 version = "0.1.0"
 dependencies = [
- "ember-core-ffi",
+ "stillfail-core-ffi",
  "napi",
  "napi-build",
  "napi-derive",
@@ -910,11 +910,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "ember-core-wasm"
+name = "stillfail-core-wasm"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
- "ember-core",
+ "stillfail-core",
  "futures",
  "js-sys",
  "serde",
@@ -925,7 +925,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ember-shapes"
+name = "stillfail-shapes"
 version = "0.1.0"
 dependencies = [
  "serde",

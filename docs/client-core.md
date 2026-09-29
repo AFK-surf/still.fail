@@ -2,7 +2,7 @@
 
 The logic of a still.fail client — accounts, still.fail cloud, the mesh links to
 stations, requests and live streams, the cache of what has been read — lives in
-one Rust crate, `ember-core`, shared by every client:
+one Rust crate, `stillfail-core`, shared by every client:
 
 | Client | Where the core runs | Binding |
 | --- | --- | --- |
@@ -375,13 +375,13 @@ account topics again. The station's events bring the same a moment later.
 
 ```
 client/
-  core/    ember-core      the core: host trait, protocol, store, accounts, cloud, mesh, station, views
-  wasm/    ember-core-wasm web host (IndexedDB, fetch) + SharedWorker entry
-  ffi/     ember-core-ffi  native host (reqwest, files) on a core thread, exported with uniffi
-  node/    ember-core-node client/ffi's core thread for Node, exported with napi-rs (the desktop app)
+  core/    stillfail-core  the core: host trait, protocol, store, accounts, cloud, mesh, station, views
+  wasm/    stillfail-core-wasm web host (IndexedDB, fetch) + SharedWorker entry
+  ffi/     stillfail-core-ffi  native host (reqwest, files) on a core thread, exported with uniffi
+  node/    stillfail-core-node client/ffi's core thread for Node, exported with napi-rs (the desktop app)
 ```
 
-`ember-core` modules:
+`stillfail-core` modules:
 
 - `host.rs` — the `Host` trait and its request/response types.
 - `protocol.rs` — the messages above (serde).
@@ -418,7 +418,7 @@ client gets `{"fatal": "…"}` and the app starts a new one.
 
 `apps/android` is the app (Gradle; `build.py` builds the core with the NDK,
 generates the uniffi Kotlin bindings from the built library, then runs
-Gradle). Its `:core` module is `dev.ember.core.EmberCore`: `call(name, params)`
+Gradle). Its `:core` module is `fail.still.core.StillFailCore`: `call(name, params)`
 and `topic(topic)` as a `Flow<TopicState>` — shared by everyone who collects
 the same topic, deltas applied as on the web, unsubscribed 2 s after the last
 collector leaves.
@@ -469,7 +469,7 @@ In development the core can also run on the page itself, for debugging.
 
 ## Order of work
 
-1. `ember-core` with a fake host in tests: protocol, store, accounts, cloud, mesh, station.
-2. `ember-core-wasm` and `web/src/core`; the web app moves onto the core.
+1. `stillfail-core` with a fake host in tests: protocol, store, accounts, cloud, mesh, station.
+2. `stillfail-core-wasm` and `web/src/core`; the web app moves onto the core.
 3. Electron shell (`client/node`).
 4. Native apps (`client/ffi`; Android first), with push notifications through still.fail cloud.

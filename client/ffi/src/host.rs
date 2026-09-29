@@ -8,8 +8,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use ember_core::host::{DbOp, DbRange, Host, HostError, HttpRequest, HttpResponse, SocketFrames, StreamResponse};
-use ember_core::{ClientId, CoreError, CoreMessage};
+use stillfail_core::host::{DbOp, DbRange, Host, HostError, HttpRequest, HttpResponse, SocketFrames, StreamResponse};
+use stillfail_core::{ClientId, CoreError, CoreMessage};
 use futures::future::LocalBoxFuture;
 use futures::stream;
 use futures::{FutureExt, StreamExt};
@@ -57,7 +57,7 @@ fn tls_config() -> rustls::ClientConfig {
 }
 
 /// Opens a WebSocket that only listens; resolves once it is open. `protocols`
-/// are its subprotocols (ember cloud reads the token from one of them).
+/// are its subprotocols (still.fail cloud reads the token from one of them).
 fn websocket(tls: Arc<rustls::ClientConfig>, url: String, protocols: Vec<String>) -> LocalBoxFuture<'static, Result<SocketFrames, HostError>> {
     Box::pin(async move {
         let mut request = url.as_str().into_client_request().map_err(ws_error)?;
@@ -319,7 +319,7 @@ impl Storage {
     fn new(dir: PathBuf) -> Storage {
         let (jobs, queue) = mpsc::channel::<Job>();
         std::thread::Builder::new()
-            .name("ember-storage".into())
+            .name("stillfail-storage".into())
             .spawn(move || {
                 for job in queue {
                     job();
@@ -385,7 +385,7 @@ mod tests {
                 let mut asked = None;
                 let mut socket = tokio_tungstenite::accept_hdr_async(tcp, |request: &Request, mut response: Response| {
                     asked = request.headers().get("sec-websocket-protocol").map(|v| v.to_str().unwrap().to_string());
-                    response.headers_mut().insert("sec-websocket-protocol", "ember-events".parse().unwrap());
+                    response.headers_mut().insert("sec-websocket-protocol", "stillfail-events".parse().unwrap());
                     Ok(response)
                 })
                 .await
@@ -397,11 +397,11 @@ mod tests {
                 socket.close(None).await.unwrap();
                 asked
             });
-            let protocols = vec!["ember-events".to_string(), "ember-token.abc".to_string()];
+            let protocols = vec!["stillfail-events".to_string(), "stillfail-token.abc".to_string()];
             let frames = websocket(Arc::new(tls_config()), format!("ws://127.0.0.1:{port}/v1/events"), protocols).await.unwrap();
             let frames: Vec<_> = frames.collect().await;
             assert_eq!(frames, vec![Ok("one".to_string()), Ok("two".to_string())]);
-            assert_eq!(server.await.unwrap().as_deref(), Some("ember-events, ember-token.abc"));
+            assert_eq!(server.await.unwrap().as_deref(), Some("stillfail-events, stillfail-token.abc"));
 
             let refused = websocket(Arc::new(tls_config()), "ws://127.0.0.1:9/".into(), vec![]).await;
             assert!(refused.is_err());

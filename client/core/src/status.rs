@@ -1,5 +1,5 @@
 //! What the core is waiting on, for the one place a UI says so (the `status` topic): the requests under way to the
-//! stations and to ember cloud, the connections being opened (the relay, a station's link), ember cloud's events
+//! stations and to still.fail cloud, the connections being opened (the relay, a station's link), still.fail cloud's events
 //! sockets that are down, and how fast bytes come in. Only what has taken a while ([`SLOW_MS`]) or is down is worth a
 //! word: while all goes as it should the topic says nothing, so a UI shows nothing.
 //!
@@ -24,7 +24,7 @@ const RATE_WINDOW_MS: f64 = 3_000.0;
 /// How often what is shown is computed again while anything is waited on.
 const TICK_MS: u64 = 1_000;
 
-/// Where a wait is: ember cloud, or a station by its address (`"<workspace>/<station>"`, `local`).
+/// Where a wait is: still.fail cloud, or a station by its address (`"<workspace>/<station>"`, `local`).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Place {
     Cloud,
@@ -51,7 +51,7 @@ struct Inner {
     waits: BTreeMap<u64, Wait>,
     /// When bytes came and how many, the last RATE_WINDOW_MS of them.
     received: VecDeque<(f64, u64)>,
-    /// ember cloud's events socket per account, while it is down: since when, when it is tried again, why, how many
+    /// still.fail cloud's events socket per account, while it is down: since when, when it is tried again, why, how many
     /// tries in a row failed.
     sockets: BTreeMap<String, Down>,
     ticking: bool,
@@ -220,7 +220,7 @@ impl Status {
     /// Where a wait is, in words; `None` for a station with no name (the page's own).
     fn place_name(&self, place: &Place) -> Option<String> {
         match place {
-            Place::Cloud => Some("ember cloud".into()),
+            Place::Cloud => Some("still.fail cloud".into()),
             Place::Relay => Some("relay".into()),
             Place::Station(address) => {
                 let name_of = self.name_of.borrow().clone();
@@ -235,7 +235,7 @@ impl Status {
         let now = self.now();
         let inner = self.inner.borrow();
         let mut items: Vec<Value> = Vec::new();
-        // ember cloud's socket, once down for a while (a socket dropped and open again at once is how things go): one
+        // still.fail cloud's socket, once down for a while (a socket dropped and open again at once is how things go): one
         // line whatever the number of accounts, by the one tried again first.
         let down = inner.sockets.values().filter(|d| now - d.since >= SLOW_MS).min_by(|a, b| a.retry_at.total_cmp(&b.retry_at));
         if let Some(d) = down {
@@ -243,7 +243,7 @@ impl Status {
             let when = if wait > 0 { format!("{wait} 秒后重试") } else { "正在重试".to_string() };
             let tries = if d.tries > 1 { format!("（第 {} 次）", d.tries) } else { String::new() };
             let why = if d.message.is_empty() { String::new() } else { format!("：{}", d.message) };
-            items.push(json!({ "state": "trouble", "text": format!("连不上 ember cloud，{when}{tries}"), "detail": format!("实时更新暂停{why}") }));
+            items.push(json!({ "state": "trouble", "text": format!("连不上 still.fail cloud，{when}{tries}"), "detail": format!("实时更新暂停{why}") }));
         }
         // What has been waited on for a while: the connections first (the requests wait on them), the oldest first.
         let mut slow: Vec<&Wait> = inner.waits.values().filter(|w| now - w.since >= SLOW_MS).collect();
@@ -323,7 +323,7 @@ pub fn station_what(method: &str, path: &str) -> &'static str {
     }
 }
 
-/// What an ember cloud request does, in words.
+/// What an still.fail cloud request does, in words.
 pub fn cloud_what(method: &str, path: &str) -> &'static str {
     let path = path.split('?').next().unwrap_or("");
     let get = method.eq_ignore_ascii_case("GET");
@@ -383,9 +383,9 @@ mod tests {
         status.skew.set(status.skew.get() + 2_000.0);
         let v = status.value();
         assert_eq!(v["state"], "trouble");
-        assert_eq!(v["text"], "连不上 ember cloud，2 秒后重试 · 共 3 项");
+        assert_eq!(v["text"], "连不上 still.fail cloud，2 秒后重试 · 共 3 项");
         status.socket_down("a", "网络错误", now + 8_000.0);
-        assert_eq!(status.value()["items"][0]["text"], "连不上 ember cloud，6 秒后重试（第 2 次）");
+        assert_eq!(status.value()["items"][0]["text"], "连不上 still.fail cloud，6 秒后重试（第 2 次）");
         status.socket_up("a");
         assert_eq!(status.value()["state"], "slow");
         });

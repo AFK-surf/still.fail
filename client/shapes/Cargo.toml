@@ -1,5 +1,5 @@
 [package]
-name = "ember-shapes"
+name = "stillfail-shapes"
 description = "What the core gives its clients, declared once: the web's and Android's types are generated from here (scripts/shapes.sh), and the core's values pass through these before they go out."
 edition.workspace = true
 version.workspace = true

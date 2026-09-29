@@ -1,4 +1,4 @@
-//! ember-core in Node, for the desktop app's utility process (apps/desktop).
+//! stillfail-core in Node, for the desktop app's utility process (apps/desktop).
 //! A thin layer over client/ffi: the same core thread, host and JSON
 //! messages; only the listener differs, a JS function that the core thread
 //! reaches through a threadsafe function, so it runs on Node's own thread.
@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use ember_core_ffi::{CoreListener, EmberCoreFfi};
+use stillfail_core_ffi::{CoreListener, StillFailCoreFfi};
 use napi::bindgen_prelude::{FnArgs, Function};
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
@@ -29,27 +29,27 @@ impl CoreListener for Listener {
 }
 
 #[napi]
-pub struct EmberCore {
-    inner: Arc<EmberCoreFfi>,
+pub struct StillFailCore {
+    inner: Arc<StillFailCoreFfi>,
 }
 
 /// Starts a core (client/ffi's `start`): `data_dir` holds accounts and the device key;
-/// `cloud_origin` is ember cloud; `listener(client, json)` gets what the core says to each client.
-/// With `EMBER_LOG` set (a tracing filter, e.g. `iroh=debug`), what the core and iroh log goes to stderr.
+/// `cloud_origin` is still.fail cloud; `listener(client, json)` gets what the core says to each client.
+/// With `STILLFAIL_LOG` (or `EMBER_LOG`) set (a tracing filter, e.g. `iroh=debug`), what the core and iroh log goes to stderr.
 #[napi]
-pub fn start(data_dir: String, cloud_origin: String, listener: Function<Message, ()>) -> napi::Result<EmberCore> {
-    if let Ok(filter) = std::env::var("EMBER_LOG") {
+pub fn start(data_dir: String, cloud_origin: String, listener: Function<Message, ()>) -> napi::Result<StillFailCore> {
+    if let Ok(filter) = std::env::var("STILLFAIL_LOG").or_else(|_| std::env::var("EMBER_LOG")) {
         // Once per process: a second core (after a panic) keeps the first one's.
         let _ = tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::new(filter)).with_writer(std::io::stderr).try_init();
     }
     let listener = listener.build_threadsafe_function().callee_handled::<false>().build()?;
-    let inner = ember_core_ffi::start(data_dir, cloud_origin, Box::new(Listener(listener)))
+    let inner = stillfail_core_ffi::start(data_dir, cloud_origin, Box::new(Listener(listener)))
         .map_err(|error| napi::Error::from_reason(error.to_string()))?;
-    Ok(EmberCore { inner })
+    Ok(StillFailCore { inner })
 }
 
 #[napi]
-impl EmberCore {
+impl StillFailCore {
     /// A UI connected; its messages and emissions use the id returned.
     #[napi]
     pub fn connect(&self) -> u32 {

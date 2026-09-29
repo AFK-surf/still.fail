@@ -6,7 +6,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use ember_core::host::HostError;
+use stillfail_core::host::HostError;
 use futures::FutureExt;
 use futures::future::{LocalBoxFuture, Shared};
 use js_sys::{Promise, Reflect, Uint8Array};
@@ -16,7 +16,9 @@ use web_sys::{IdbDatabase, IdbFactory, IdbRequest, IdbTransaction, IdbTransactio
 
 use crate::host::js_error;
 
-const DATABASE: &str = "ember-core";
+const DATABASE: &str = "stillfail-core";
+/// Its name before the rename: what a browser that ran the core then has, copied over on the first open.
+const FORMER_DATABASE: &str = "ember-core";
 const VERSION: u32 = 2;
 const STORE: &str = "values";
 const RECORDS: &str = "records";
@@ -78,16 +80,16 @@ impl Storage {
     }
 
     /// A batch of changes, all or none.
-    pub async fn write_records(&self, ops: Vec<ember_core::host::DbOp>) -> Result<(), HostError> {
+    pub async fn write_records(&self, ops: Vec<stillfail_core::host::DbOp>) -> Result<(), HostError> {
         let tx = self.transaction_on(RECORDS, IdbTransactionMode::Readwrite).await?;
         let store = tx.object_store(RECORDS).map_err(js_error)?;
         for op in ops {
             match op {
-                ember_core::host::DbOp::Put { table, key, value } => {
+                stillfail_core::host::DbOp::Put { table, key, value } => {
                     let at = js_sys::Array::of2(&JsValue::from_str(&table), &JsValue::from_str(&key));
                     store.put_with_key(&Uint8Array::from(value.as_slice()), &at).map_err(js_error)?;
                 }
-                ember_core::host::DbOp::Delete { table, key } => {
+                stillfail_core::host::DbOp::Delete { table, key } => {
                     let at = js_sys::Array::of2(&JsValue::from_str(&table), &JsValue::from_str(&key));
                     store.delete(&at).map_err(js_error)?;
                 }
@@ -123,9 +125,48 @@ async fn open() -> Result<IdbDatabase, HostError> {
         .filter(|f| !f.is_undefined() && !f.is_null())
         .ok_or_else(|| HostError("这个浏览器没有 IndexedDB".into()))?
         .unchecked_into();
-    let request = factory.open_with_u32(DATABASE, VERSION).map_err(js_error)?;
+    // The first open under the new name fills it with what the former one has (read first: the upgrade that makes
+    // the stores puts the rows in the same transaction, so no other tab sees it made and empty).
+    let db = match open_at(&factory, DATABASE, Some(VERSION), Vec::new(), false).await? {
+        Some(db) => db,
+        None => {
+            let rows = former_rows(&factory).await.unwrap_or_else(|error| {
+                web_sys::console::warn_1(&JsValue::from_str(&format!("reading {FORMER_DATABASE} failed: {}", error.0)));
+                Vec::new()
+            });
+            open_at(&factory, DATABASE, Some(VERSION), rows, true).await?.ok_or_else(|| HostError("IndexedDB 打不开".into()))?
+        }
+    };
+    // Another tab upgrading the schema later must not be blocked by us.
+    let closing = db.clone();
+    let on_version_change = Closure::<dyn FnMut()>::new(move || closing.close());
+    db.set_onversionchange(Some(on_version_change.as_ref().unchecked_ref()));
+    on_version_change.forget();
+    Ok(db)
+}
+
+/// Rows of a store: (its name, [(key, value)]).
+type Rows = Vec<(&'static str, Vec<(JsValue, JsValue)>)>;
+
+/// Opens `name` (at `version`, or at the one it has). One that is not there yet is made (its stores, filled with
+/// `rows`) only when `create`; otherwise the upgrade is aborted, which leaves no database behind, and it is None.
+async fn open_at(factory: &IdbFactory, name: &str, version: Option<u32>, rows: Rows, create: bool) -> Result<Option<IdbDatabase>, HostError> {
+    let request = match version {
+        Some(version) => factory.open_with_u32(name, version),
+        None => factory.open(name),
+    }
+    .map_err(js_error)?;
     let upgrade_request = request.clone();
-    let upgrade = Closure::<dyn FnMut()>::new(move || {
+    let absent = Rc::new(std::cell::Cell::new(false));
+    let absent_in = absent.clone();
+    let mut rows = Some(rows);
+    let upgrade = Closure::<dyn FnMut(web_sys::IdbVersionChangeEvent)>::new(move |event: web_sys::IdbVersionChangeEvent| {
+        let Some(tx) = upgrade_request.transaction() else { return };
+        if event.old_version() == 0.0 && !create {
+            absent_in.set(true);
+            let _ = tx.abort();
+            return;
+        }
         // Version 1 made `values`; version 2 adds `records`. Each store is made if it is not there yet.
         if let Ok(db) = upgrade_request.result() {
             let db = db.unchecked_into::<IdbDatabase>();
@@ -136,18 +177,45 @@ async fn open() -> Result<IdbDatabase, HostError> {
                 }
             }
         }
+        if event.old_version() == 0.0 {
+            for (store, rows) in rows.take().unwrap_or_default() {
+                let Ok(store) = tx.object_store(store) else { continue };
+                for (key, value) in rows {
+                    let _ = store.put_with_key(&value, &key);
+                }
+            }
+        }
     });
     request.set_onupgradeneeded(Some(upgrade.as_ref().unchecked_ref()));
     let db = done(&request).await;
     request.set_onupgradeneeded(None);
     drop(upgrade);
-    let db: IdbDatabase = db?.unchecked_into();
-    // Another tab upgrading the schema later must not be blocked by us.
-    let closing = db.clone();
-    let on_version_change = Closure::<dyn FnMut()>::new(move || closing.close());
-    db.set_onversionchange(Some(on_version_change.as_ref().unchecked_ref()));
-    on_version_change.forget();
-    Ok(db)
+    if absent.get() {
+        return Ok(None);
+    }
+    Ok(Some(db?.unchecked_into()))
+}
+
+/// What the database had under its name from before the rename (`ember-core`), if this browser has it: every row
+/// of each store. It is left as it was (a tab of an older build may still use it).
+async fn former_rows(factory: &IdbFactory) -> Result<Rows, HostError> {
+    let Some(db) = open_at(factory, FORMER_DATABASE, None, Vec::new(), false).await? else { return Ok(Vec::new()) };
+    let names = db.object_store_names();
+    let mut rows = Vec::new();
+    for store in [STORE, RECORDS] {
+        if !names.contains(store) {
+            continue;
+        }
+        let tx = db.transaction_with_str(store).map_err(js_error)?;
+        let object_store = tx.object_store(store).map_err(js_error)?;
+        let keys = object_store.get_all_keys().map_err(js_error)?;
+        let values = object_store.get_all().map_err(js_error)?;
+        let keys: js_sys::Array = done(&keys).await?.unchecked_into();
+        let values: js_sys::Array = done(&values).await?.unchecked_into();
+        rows.push((store, keys.iter().zip(values.iter()).collect()));
+    }
+    db.close();
+    Ok(rows)
 }
 
 /// The result of one request.

@@ -140,14 +140,14 @@ pub fn last_by(row: &Value, me: &Value, slack_users: &[String], members: &[Value
             let model = agent.and_then(|a| a.get("model")).and_then(Value::as_str);
             json!({
                 "kind": "agent",
-                "name": model.map(ember_shapes::model::name).or(said_name.map(str::to_string)).unwrap_or_else(|| "agent".into()),
+                "name": model.map(stillfail_shapes::model::name).or(said_name.map(str::to_string)).unwrap_or_else(|| "agent".into()),
                 "model": model,
                 "runtime": agent.and_then(|a| a.get("runtime")).cloned().unwrap_or(json!("claude")),
                 "mine": false,
                 "state": agent.and_then(|a| badge(session_status(a))),
             })
         }
-        "ember" => json!({ "kind": "ember", "name": "ember", "mine": false }),
+        "ember" => json!({ "kind": "ember", "name": "still.fail", "mine": false }),
         _ => {
             let mine = is_viewer(me, author, slack_users);
             let member = members.iter().find(|m| m.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(author)));
@@ -184,7 +184,7 @@ pub fn stamp(ms: f64, c: Clock) -> Value {
     })
 }
 
-/// Times kept in seconds (ember cloud's) and in milliseconds (the station's).
+/// Times kept in seconds (still.fail cloud's) and in milliseconds (the station's).
 const SECONDS: [&str; 6] = ["created_at", "expires_at", "used_at", "revoked_at", "last_seen", "lastSeen"];
 const MILLIS: [&str; 4] = ["createdAt", "lastActiveAt", "checkedAt", "resetsAt"];
 
@@ -262,7 +262,7 @@ pub fn session(s: &mut Value) {
     let effort = str_of("effort");
     let process = str_of("process");
     s["agentText"] = json!(format::agent_label(model.as_deref(), effort.as_deref()));
-    s["modelName"] = json!(model.as_deref().filter(|m| !m.is_empty()).map(ember_shapes::model::name));
+    s["modelName"] = json!(model.as_deref().filter(|m| !m.is_empty()).map(stillfail_shapes::model::name));
     s["maker"] = maker(model.as_deref());
     s["runtimeText"] = json!(format::runtime_label(&runtime));
     s["processText"] = json!(process.map(|p| format::process_text(&p)));
@@ -304,7 +304,7 @@ pub fn connect(c: &mut Value) {
     c["modeShort"] = json!(mode_short);
     c["runtimeText"] = json!(format::runtime_label(runtime));
     c["runText"] = json!(format!("{} · {label}", format::runtime_label(runtime)));
-    c["modelName"] = json!(bind.get("model").and_then(Value::as_str).filter(|m| !m.is_empty()).map(ember_shapes::model::name));
+    c["modelName"] = json!(bind.get("model").and_then(Value::as_str).filter(|m| !m.is_empty()).map(stillfail_shapes::model::name));
 }
 
 /// A profile with its last check in words, and the makers of its models and of those its check found (`makers`, by model).
@@ -330,21 +330,21 @@ pub fn profile(p: &mut Value) {
     let by_series = series(&all);
     let names: serde_json::Map<String, Value> = p.get("models").and_then(Value::as_array).into_iter().flatten().chain(found.iter())
         .chain(p.get("model").into_iter())
-        .filter_map(Value::as_str).filter(|m| !m.is_empty()).map(|m| (m.to_string(), json!(ember_shapes::model::name(m)))).collect();
+        .filter_map(Value::as_str).filter(|m| !m.is_empty()).map(|m| (m.to_string(), json!(stillfail_shapes::model::name(m)))).collect();
     p["makers"] = Value::Object(makers);
     p["names"] = Value::Object(names);
     p["series"] = by_series;
     p["modelsText"] = json!(text);
 }
 
-/// Models by series, newest first (ember_shapes::model::order), those of no known series last as 其他:
+/// Models by series, newest first (stillfail_shapes::model::order), those of no known series last as 其他:
 /// `[{ name, models }]`.
 pub fn series(models: &[&str]) -> Value {
     let mut sorted: Vec<&str> = models.to_vec();
-    sorted.sort_by_cached_key(|m| ember_shapes::model::order(m));
+    sorted.sort_by_cached_key(|m| stillfail_shapes::model::order(m));
     let mut out: Vec<(String, Vec<&str>)> = Vec::new();
     for m in sorted {
-        let family = ember_shapes::model::family(m).unwrap_or_else(|| "其他".into());
+        let family = stillfail_shapes::model::family(m).unwrap_or_else(|| "其他".into());
         match out.iter_mut().find(|(f, _)| *f == family) {
             Some((_, list)) => list.push(m),
             None => out.push((family, vec![m])),
@@ -387,7 +387,7 @@ pub fn host(h: &mut Value) {
             (swap > 0.0).then(|| format!("swap {}", format::gb1(swap)))),
         meter("磁盘", "磁盘", if disk_total > 0.0 { (disk_total - disk_free) / disk_total * 100.0 } else { 0.0 }, format!("剩 {} / {}", format::gb1(disk_free), format::gb1(disk_total)), None),
     ]);
-    h["emberText"] = json!(format!("ember {} MB", (n(&["emberRssBytes"]) / 1024f64.powi(2)).round()));
+    h["emberText"] = json!(format!("still.fail {} MB", (n(&["emberRssBytes"]) / 1024f64.powi(2)).round()));
 }
 
 /// Whether what goes out of a topic shows times in words (sent again each minute).
@@ -399,7 +399,7 @@ pub fn ticks(topic: &Topic) -> bool {
 /// dropped, and a value it does not allow (a fractional time, a field missing) is an error naming the field. Topics
 /// with no shape yet go as they are.
 pub fn conform(topic: &Topic, value: Value) -> Result<Value, String> {
-    use ember_shapes as s;
+    use stillfail_shapes as s;
     match topic {
         Topic::Chats { .. } => s::conform::<s::ChatsView>(value),
         Topic::Chat { .. } => s::conform::<s::ChatView>(value),
@@ -544,7 +544,7 @@ mod tests {
         host(&mut h);
         assert!(h["meters"][0]["percent"].is_i64() && v["quota"]["windows"][0]["left"].is_i64(), "whole numbers: clients read them as such");
         assert_eq!((h["summary"].as_str(), h["facts"][3].as_str()), (Some("8 核 · 32 GB"), Some("已运行 1 天 1 小时")));
-        assert_eq!((h["meters"][2]["level"].as_str(), h["meters"][2]["value"].as_str(), h["emberText"].as_str()), (Some("red"), Some("剩 50.0 GB / 1000 GB"), Some("ember 100 MB")));
+        assert_eq!((h["meters"][2]["level"].as_str(), h["meters"][2]["value"].as_str(), h["emberText"].as_str()), (Some("red"), Some("剩 50.0 GB / 1000 GB"), Some("still.fail 100 MB")));
     }
 
 }

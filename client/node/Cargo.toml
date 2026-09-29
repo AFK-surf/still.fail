@@ -1,6 +1,6 @@
 [package]
-name = "ember-core-node"
-description = "ember-core in Node (the desktop app's utility process): client/ffi's core thread and host, exported with napi-rs."
+name = "stillfail-core-node"
+description = "stillfail-core in Node (the desktop app's utility process): client/ffi's core thread and host, exported with napi-rs."
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ license.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-ember-core-ffi = { path = "../ffi" }
+stillfail-core-ffi = { path = "../ffi" }
 napi = "3"
 napi-derive = "3"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

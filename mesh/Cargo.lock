@@ -792,7 +792,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
-name = "ember-shapes"
+name = "stillfail-shapes"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -3613,7 +3613,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bytes",
- "ember-shapes",
+ "stillfail-shapes",
  "futures-util",
  "getrandom 0.3.4",
  "hex",

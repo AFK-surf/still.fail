@@ -2,11 +2,11 @@
 //!
 //! One endpoint per core (its secret key is the device key, kept in storage
 //! under [`DEVICE_KEY`]). A link to a station is opened with this device's
-//! member credential for the station's workspace (ember cloud's, 30 days, kept
+//! member credential for the station's workspace (still.fail cloud's, 30 days, kept
 //! on the device: see `core.rs`) and presented again every [`RENEW_MS`] on the
 //! control stream, so a new one reaches stations already linked; a closed link
 //! is reopened on the next request. Wire format: mesh/station/src/main.rs — ALPN
-//! `ember/admin/1`; the first bi-stream carries `{"credential": …}` lines, each
+//! `stillfail/admin/1` (or `ember/admin/1`, its name before the rename); the first bi-stream carries `{"credential": …}` lines, each
 //! further bi-stream one request: a JSON head line `{method, path, headers}`
 //! then the body; the reply is a JSON head line `{status, headers}` then the
 //! body, streamed. The web build is relay-only (browsers have no UDP).
@@ -23,7 +23,7 @@ use futures::future::{Either, LocalBoxFuture, Shared};
 use futures::lock::Mutex;
 use futures::{FutureExt, pin_mut};
 
-use iroh::endpoint::{ConnectionError, QuicTransportConfig, RecvStream, SendStream, presets::Minimal};
+use iroh::endpoint::{ConnectOptions, ConnectionError, QuicTransportConfig, RecvStream, SendStream, presets::Minimal};
 use iroh::{Endpoint, EndpointAddr, PublicKey, RelayMode, RelayUrl, SecretKey};
 use serde_json::{Value, json};
 
@@ -37,7 +37,10 @@ use crate::trace::{Kind, Tracer};
 const MDNS_SERVICE: &str = "ember";
 
 pub const DEVICE_KEY: &str = "device";
-pub const ALPN: &[u8] = b"ember/admin/1";
+pub const ALPN: &[u8] = b"stillfail/admin/1";
+/// The same protocol under its name from before the rename, which stations from before it only know: offered too, so
+/// a new client reaches an old station (a new one takes either and picks ALPN).
+pub const FORMER_ALPN: &[u8] = b"ember/admin/1";
 pub const RENEW_MS: u64 = 5 * 60_000;
 /// How long a link is tried before the station is taken for not there.
 pub const CONNECT_TIMEOUT_MS: u64 = 10_000;
@@ -45,7 +48,7 @@ pub const CONNECT_TIMEOUT_MS: u64 = 10_000;
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD: usize = 64 * 1024;
 
-/// This device's credential for a station's workspace, for its id (hex); `fresh` asks ember cloud for a new one
+/// This device's credential for a station's workspace, for its id (hex); `fresh` asks still.fail cloud for a new one
 /// rather than the one kept (the station refused that one).
 pub type CredentialSource = Rc<dyn Fn(String, bool) -> LocalBoxFuture<'static, Result<Credential>>>;
 
@@ -105,7 +108,7 @@ impl Mesh {
     /// The link to a station, opening it (or reopening a closed one) with a credential from `credentials`.
     pub async fn link(&self, station_id: &str, credentials: CredentialSource) -> Result<Rc<Link>> {
         let existing = self.links.borrow().get(station_id).cloned();
-        // Opening anew after the station refused the credential: a new one is asked of ember cloud.
+        // Opening anew after the station refused the credential: a new one is asked of still.fail cloud.
         let mut fresh = false;
         if let Some(opening) = existing {
             match opening.peek() {
@@ -116,16 +119,16 @@ impl Mesh {
                 Some(Err(error)) => fresh = error.code == "credential_refused",
             }
         }
-        // A span of the request that needed the link; the credential it asks ember cloud for is part of it.
+        // A span of the request that needed the link; the credential it asks still.fail cloud for is part of it.
         let mut span = self.tracer.span("mesh.connect", Kind::Internal);
-        span.set("ember.station", station_id.to_string());
+        span.set("stillfail.station", station_id.to_string());
         let opening = self.tracer.instrument(Some(span.context()), open(self.host.clone(), self.endpoint(), self.relay_url.clone(), station_id.to_string(), credentials, fresh));
         let opening = async move {
             let link = opening.await;
             match &link {
                 Ok(link) => {
                     if let Some(path) = link.path() {
-                        span.set("ember.path", path);
+                        span.set("stillfail.path", path);
                     }
                 }
                 Err(error) => {
@@ -178,7 +181,7 @@ impl Mesh {
 
 /// The endpoint for a device key. On wasm iroh has no IP transports, so this
 /// is relay-only like mesh/web, through ember's relay. Natively it also binds
-/// UDP and goes direct, and finds stations without ember cloud: on the LAN by
+/// UDP and goes direct, and finds stations without still.fail cloud: on the LAN by
 /// mDNS (no relay needed at all), and which relay a station is on by the
 /// Mainline DHT (a station whose relay is not ember's, ember's being down); the
 /// relays are ember's and iroh's public ones (see `relays`).
@@ -244,7 +247,9 @@ async fn open(host: Rc<dyn Host>, endpoint: Endpoint, relay_url: String, station
             let relay: RelayUrl = relay_url.parse().map_err(|e| mesh_error(format!("中继地址不对：{e}")))?;
             addr = addr.with_relay_url(relay);
         }
-        endpoint.connect(addr, ALPN).await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))
+        let options = ConnectOptions::new().with_additional_alpns(vec![FORMER_ALPN.to_vec()]);
+        let connecting = endpoint.connect_with_opts(addr, ALPN, options).await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))?;
+        connecting.await.map_err(|e| mesh_error(format!("连不上这台 station：{e}")))
     };
     // A station that is not there is never said to be gone (a relay drops what is sent to someone not on it): the
     // try gives up after CONNECT_TIMEOUT_MS rather than QUIC's idle 30 s, so it is known to be down soon.
@@ -586,8 +591,13 @@ mod tests {
 
     impl Station {
         async fn start() -> Station {
+            Station::speaking(vec![ALPN.to_vec(), FORMER_ALPN.to_vec()]).await
+        }
+
+        /// One that takes only these ALPNs (a station from before the rename: `FORMER_ALPN`).
+        async fn speaking(alpns: Vec<Vec<u8>>) -> Station {
             let endpoint = Endpoint::builder(Minimal)
-                .alpns(vec![ALPN.to_vec()])
+                .alpns(alpns)
                 .relay_mode(RelayMode::Disabled)
                 .bind_addr("127.0.0.1:0".parse::<std::net::SocketAddr>().unwrap())
                 .unwrap()
@@ -677,7 +687,10 @@ mod tests {
     }
 
     async fn setup(host: Rc<dyn Host>) -> (Rc<Mesh>, Station) {
-        let station = Station::start().await;
+        setup_with(host, Station::start().await).await
+    }
+
+    async fn setup_with(host: Rc<dyn Host>, station: Station) -> (Rc<Mesh>, Station) {
         let mesh = Mesh::new(host.clone(), Tracer::new(host, 1.0), "").await.unwrap();
         mesh.endpoint().address_lookup().unwrap().add(MemoryLookup::from_endpoint_info([station.addr()]));
         (mesh, station)
@@ -709,6 +722,19 @@ mod tests {
             let rest = String::from_utf8(reply.body().await.unwrap()).unwrap();
             assert!(rest.ends_with("|one|two|three"), "{rest}");
             assert_eq!(link.closed(), None);
+        });
+    }
+
+    #[test]
+    fn reaches_stations_from_before_and_after_the_rename() {
+        run(async {
+            for (alpns, spoken) in [(vec![FORMER_ALPN.to_vec()], FORMER_ALPN), (vec![ALPN.to_vec(), FORMER_ALPN.to_vec()], ALPN)] {
+                let (mesh, station) = setup_with(FakeHost::new(), Station::speaking(alpns).await).await;
+                let link = mesh.link(&station.id(), grants("ok", Rc::default())).await.unwrap();
+                let reply = link.request(head("/admin/api/overview"), Vec::new()).await.unwrap();
+                assert_eq!(reply.status, 200);
+                assert_eq!(station.conns.borrow()[0].alpn(), spoken);
+            }
         });
     }
 

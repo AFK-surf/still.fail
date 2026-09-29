@@ -1,4 +1,4 @@
-//! ember cloud's account API, called as one of the signed-in accounts.
+//! still.fail cloud's account API, called as one of the signed-in accounts.
 //! Errors come back as {error: code}; the codes and their Chinese messages
 //! mirror web/src/cloud/api.ts.
 
@@ -36,7 +36,7 @@ impl Cloud {
     }
 
     /// One call as `sub`: adds the token (refreshing it), parses JSON, maps errors to CoreError with the cloud's code.
-    /// Inside a trace it is a span of it, and says so to ember cloud with a `traceparent`.
+    /// Inside a trace it is a span of it, and says so to still.fail cloud with a `traceparent`.
     pub async fn request(&self, sub: &str, method: &str, path: &str, body: Option<Value>) -> Result<Value> {
         let token = self.accounts.access_token(sub).await?;
         let mut headers = vec![("authorization".to_string(), format!("Bearer {token}"))];
@@ -84,7 +84,7 @@ impl Cloud {
         Ok(data)
     }
 
-    /// POST /v1/telemetry/traces as `sub`: a batch of spans (OTLP JSON), which ember cloud passes on to Axiom.
+    /// POST /v1/telemetry/traces as `sub`: a batch of spans (OTLP JSON), which still.fail cloud passes on to Axiom.
     pub async fn traces(&self, sub: &str, body: Vec<u8>) -> Result<()> {
         let token = self.accounts.access_token(sub).await?;
         let request = HttpRequest {
@@ -108,7 +108,7 @@ impl Cloud {
     pub async fn credential(&self, sub: &str, workspace: &str, device: &str) -> Result<Credential> {
         let path = format!("/v1/workspaces/{}/credential", encode_component(workspace));
         let answer = self.request(sub, "POST", &path, Some(json!({ "device": device }))).await?;
-        serde_json::from_value(answer).map_err(|e| CoreError::new("bad_response", format!("ember cloud 的回复无法解析：{e}")))
+        serde_json::from_value(answer).map_err(|e| CoreError::new("bad_response", format!("still.fail cloud 的回复无法解析：{e}")))
     }
 }
 
@@ -126,7 +126,7 @@ fn message(code: &str) -> Option<&'static str> {
         "invitation_for_other_email" => "这个邀请是发给另一个邮箱的，请换对应的账号接受",
         "forbidden" => "你在这个 workspace 里没有这个权限",
         "invalid_name" => "名字不能为空，最长 80 个字",
-        "invalid_email" => "要填对方登录 ember 用的邮箱",
+        "invalid_email" => "要填对方登录 still.fail 用的邮箱",
         "already_member" => "这个邮箱的主人已经在 workspace 里了",
         "last_owner" => "workspace 至少要保留一个 owner",
         "too_many_workspaces" => "你创建的 workspace 太多了",
@@ -173,7 +173,7 @@ mod tests {
             assert_eq!(cloud.me("s").await.unwrap(), json!({ "ok": true }));
             cloud.request("s", "PATCH", "/v1/workspaces/w", Some(json!({ "name": "新" }))).await.unwrap();
             let requests = host.requests.borrow().clone();
-            assert_eq!((requests[0].method.as_str(), requests[0].url.as_str()), ("GET", "https://ember.test/v1/me"));
+            assert_eq!((requests[0].method.as_str(), requests[0].url.as_str()), ("GET", "https://stillfail.test/v1/me"));
             assert_eq!(header(&requests[0], "authorization").as_deref(), Some("Bearer tok"));
             assert_eq!(header(&requests[0], "content-type"), None);
             assert!(requests[0].body.is_none());
@@ -213,7 +213,7 @@ mod tests {
             let credential = cloud.credential("s", "ws 1", "dev-key").await.unwrap();
             assert_eq!((credential.credential.as_str(), credential.expires_at), ("c", 10.0));
             let request = host.requests.borrow()[0].clone();
-            assert_eq!((request.method.as_str(), request.url.as_str()), ("POST", "https://ember.test/v1/workspaces/ws%201/credential"));
+            assert_eq!((request.method.as_str(), request.url.as_str()), ("POST", "https://stillfail.test/v1/workspaces/ws%201/credential"));
             assert_eq!(serde_json::from_slice::<Value>(request.body.as_deref().unwrap()).unwrap(), json!({ "device": "dev-key" }));
         });
     }

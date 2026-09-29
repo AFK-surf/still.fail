@@ -1,5 +1,5 @@
 //! The one error type calls and topics report. `code` is stable and
-//! machine-readable (ember cloud's error codes pass through as they are);
+//! machine-readable (still.fail cloud's error codes pass through as they are);
 //! `message` is for people, in Chinese like the rest of the UI.
 
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct CoreError {
     pub code: String,
     pub message: String,
-    /// The HTTP status when the error came from ember cloud or a station.
+    /// The HTTP status when the error came from still.fail cloud or a station.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<u16>,
 }

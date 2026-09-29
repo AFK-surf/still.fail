@@ -48,20 +48,20 @@ deps() { (cd "$1" && pnpm install --frozen-lockfile --prefer-offline > /dev/null
 # checks the web against stand-ins for the two modules it imports from there; main's deploy checks the real ones.
 wasm_pkg() {
   pkg=web/src/core/pkg
-  [ -f "$pkg/ember_core_wasm.d.ts" ] && [ ! -f "$pkg/.stand-in" ] && return 0
+  [ -f "$pkg/stillfail_core_wasm.d.ts" ] && [ ! -f "$pkg/.stand-in" ] && return 0
   if has cargo && has wasm-bindgen && sh client/wasm/build.sh > /dev/null 2>&1; then return 0; fi
   mkdir -p "$pkg"
-  cat > "$pkg/ember_core_wasm.d.ts" <<'TS'
+  cat > "$pkg/stillfail_core_wasm.d.ts" <<'TS'
 // A stand-in written by scripts/check.sh where the wasm core cannot be built (client/wasm/build.sh replaces it):
 // what web/src/core/worker.ts uses of client/wasm's exports.
-export class EmberCore {
+export class StillFailCore {
   private constructor();
   free(): void;
   connect(): number;
   disconnect(client: number): void;
   receive(client: number, message: any): void;
 }
-export function start(emit: Function): Promise<EmberCore>;
+export function start(emit: Function): Promise<StillFailCore>;
 export default function init(module_or_path?: any): Promise<unknown>;
 TS
   printf 'export declare const BUILT_AT: number;\n' > "$pkg/built.d.ts"
@@ -109,7 +109,7 @@ if [ $full = 1 ]; then
     if has cargo; then step "Rust: station" sh -c 'cd mesh && cargo test --workspace -q'; else later "Rust: station"; fi
   fi
   if touches '^client/'; then
-    if has cargo; then step "Rust: client core" sh -c 'cd client && cargo test --workspace --exclude ember-core-wasm -q'; else later "Rust: client core"; fi
+    if has cargo; then step "Rust: client core" sh -c 'cd client && cargo test --workspace --exclude stillfail-core-wasm -q'; else later "Rust: client core"; fi
   fi
   if touches '^(apps/android|client)/'; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}

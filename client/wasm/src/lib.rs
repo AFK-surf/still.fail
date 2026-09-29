@@ -1,5 +1,5 @@
-//! ember-core on the web. `start(emit)` builds the core over a [`WebHost`] and
-//! returns an [`EmberCore`] the worker (web/src/core/worker.ts) feeds with the
+//! stillfail-core on the web. `start(emit)` builds the core over a [`WebHost`] and
+//! returns an [`StillFailCore`] the worker (web/src/core/worker.ts) feeds with the
 //! messages of its ports; everything the core says to a UI comes back through
 //! `emit(clientId, message)`.
 
@@ -8,14 +8,14 @@ mod idb;
 
 use std::rc::Rc;
 
-use ember_core::{ClientId, ClientMessage, Core, CoreError, CoreMessage, Host};
+use stillfail_core::{ClientId, ClientMessage, Core, CoreError, CoreMessage, Host};
 use js_sys::{Function, Reflect};
 use wasm_bindgen::prelude::*;
 
 use crate::host::WebHost;
 
 #[wasm_bindgen]
-pub struct EmberCore {
+pub struct StillFailCore {
     core: Rc<Core>,
     host: Rc<WebHost>,
 }
@@ -23,17 +23,17 @@ pub struct EmberCore {
 /// Starts the core (loads accounts, the device key, …). `emit` is called as
 /// `emit(clientId: number, message: object)`.
 #[wasm_bindgen]
-pub async fn start(emit: Function) -> Result<EmberCore, JsValue> {
+pub async fn start(emit: Function) -> Result<StillFailCore, JsValue> {
     console_error_panic_hook::set_once();
     let host = Rc::new(WebHost::new(emit));
     let core = Core::new(host.clone() as Rc<dyn Host>).await;
     core.keep_time();
-    Ok(EmberCore { core: Rc::new(core), host })
+    Ok(StillFailCore { core: Rc::new(core), host })
 }
 
 // Client ids cross as plain numbers: a u64 would become a BigInt in JS.
 #[wasm_bindgen]
-impl EmberCore {
+impl StillFailCore {
     pub fn connect(&self) -> f64 {
         self.core.connect() as f64
     }

@@ -902,7 +902,7 @@ impl Views {
                         "runtime": session.and_then(|s| s.get("runtime")).cloned(),
                     })
                 }
-                "ember" => json!({ "name": "ember" }),
+                "ember" => json!({ "name": "still.fail" }),
                 _ => {
                     let member = members.iter().find(|x| x.get("email").and_then(Value::as_str).is_some_and(|e| e.eq_ignore_ascii_case(&author)));
                     let name = crate::present::member_name(&members, &author).map(str::to_string).or(said_name)
@@ -1334,16 +1334,16 @@ fn choices(overview: Option<&Value>, session: &Value, now: f64) -> Value {
         .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
     {
         for model in p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
-            by_key.entry(ember_shapes::model::key(model)).or_default().insert(model);
+            by_key.entry(stillfail_shapes::model::key(model)).or_default().insert(model);
         }
     }
     let mut by_key: Vec<(String, BTreeSet<&str>)> = by_key.into_iter().collect();
-    by_key.sort_by_cached_key(|(key, _)| ember_shapes::model::order(key));
+    by_key.sort_by_cached_key(|(key, _)| stillfail_shapes::model::order(key));
     Value::Array(by_key.into_iter()
         .map(|(key, ids)| {
             let (model, ids) = spellings(&key, ids);
             json!({
-                "model": model, "name": ember_shapes::model::name(model), "family": ember_shapes::model::family(model), "ids": ids,
+                "model": model, "name": stillfail_shapes::model::name(model), "family": stillfail_shapes::model::family(model), "ids": ids,
                 "maker": crate::present::maker(Some(model)), "runtimes": [runtime],
                 "efforts": { runtime: crate::format::efforts(runtime) },
                 "accounts": { runtime: profiles_running(overview, runtime, Some(model), current, now) },
@@ -1363,7 +1363,7 @@ fn profiles_running(overview: Option<&Value>, runtime: &str, model: Option<&str>
     Value::Array(overview.and_then(|o| o.get("profiles")).and_then(Value::as_array).into_iter().flatten()
         .filter(|p| p.get("runtimes").and_then(Value::as_array).is_some_and(|r| r.iter().any(|r| r.as_str() == Some(runtime))))
         // With a model chosen, only those that have it enabled can run it.
-        .filter(|p| model.is_none_or(|m| p.get("models").and_then(Value::as_array).is_some_and(|ms| ms.iter().filter_map(Value::as_str).any(|x| ember_shapes::model::same(x, m)))))
+        .filter(|p| model.is_none_or(|m| p.get("models").and_then(Value::as_array).is_some_and(|ms| ms.iter().filter_map(Value::as_str).any(|x| stillfail_shapes::model::same(x, m)))))
         .map(|p| {
             let id = p.get("id").and_then(Value::as_str).unwrap_or("");
             let spent = spent_until(p);
@@ -1389,7 +1389,7 @@ fn models(overview: Option<&Value>, now: f64) -> Value {
         let back = spent_until(p);
         let mut keys = BTreeSet::new();
         for model in p.get("models").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
-            let key = ember_shapes::model::key(model);
+            let key = stillfail_shapes::model::key(model);
             let entry = on.entry(key.clone()).or_default();
             entry.0.extend(runtimes.iter().copied());
             entry.2.insert(model);
@@ -1401,9 +1401,9 @@ fn models(overview: Option<&Value>, now: f64) -> Value {
     }
     // Claude Code first where both run it: it is the one most chats use.
     let order = |r: &&str| RUNTIMES.iter().position(|x| x == r).unwrap_or(usize::MAX);
-    // By series, newest first (ember_shapes::model::order).
+    // By series, newest first (stillfail_shapes::model::order).
     let mut on: Vec<_> = on.into_iter().collect();
-    on.sort_by_cached_key(|(key, _)| ember_shapes::model::order(key));
+    on.sort_by_cached_key(|(key, _)| stillfail_shapes::model::order(key));
     Value::Array(on.into_iter().map(|(key, (runtimes, backs, ids))| {
         let (model, ids) = spellings(&key, ids);
         let mut runtimes: Vec<&str> = runtimes.into_iter().collect();
@@ -1414,7 +1414,7 @@ fn models(overview: Option<&Value>, now: f64) -> Value {
         let efforts: serde_json::Map<String, Value> = runtimes.iter().map(|r| (r.to_string(), json!(crate::format::efforts(r)))).collect();
         let accounts: serde_json::Map<String, Value> = runtimes.iter().map(|r| (r.to_string(), profiles_running(overview, r, Some(model), None, now))).collect();
         json!({
-            "model": model, "name": ember_shapes::model::name(model), "family": ember_shapes::model::family(model), "ids": ids,
+            "model": model, "name": stillfail_shapes::model::name(model), "family": stillfail_shapes::model::family(model), "ids": ids,
             "runtimes": runtimes, "maker": crate::present::maker(Some(model)),
             "efforts": efforts, "accounts": accounts,
             "spent": spent.map(|until| spent_view(until, now)),
@@ -1607,7 +1607,7 @@ mod tests {
         topics
     }
 
-    /// The workspace's three stations: `a` and `b` seen by ember cloud a while ago, `c` never. Whether each is up is
+    /// The workspace's three stations: `a` and `b` seen by still.fail cloud a while ago, `c` never. Whether each is up is
     /// the device's own finding: their `link` topics.
     fn stations(now_s: f64) -> Value {
         json!({"id": "ws", "stations": [

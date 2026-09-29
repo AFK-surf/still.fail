@@ -1,6 +1,6 @@
 [package]
-name = "ember-core-wasm"
-description = "ember-core on the web: a Host over fetch and IndexedDB in a (Shared)Worker, exported with wasm-bindgen."
+name = "stillfail-core-wasm"
+description = "stillfail-core on the web: a Host over fetch and IndexedDB in a (Shared)Worker, exported with wasm-bindgen."
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ license.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-ember-core = { path = "../core" }
+stillfail-core = { path = "../core" }
 # Must match the wasm-bindgen CLI that build.sh runs.
 wasm-bindgen = "=0.2.129"
 wasm-bindgen-futures = "0.4"
@@ -17,8 +17,8 @@ js-sys = "0.3"
 web-sys = { version = "0.3", features = [
   "AbortController", "AbortSignal", "Crypto", "Headers", "Request", "RequestInit", "Response",
   "ReadableStream", "ReadableStreamDefaultReader",
-  "IdbDatabase", "IdbFactory", "IdbKeyRange", "IdbObjectStore", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode",
-  "DomException", "DomStringList", "WebSocket", "MessageEvent", "CloseEvent",
+  "IdbDatabase", "IdbFactory", "IdbKeyRange", "IdbObjectStore", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode", "IdbVersionChangeEvent",
+  "DomException", "DomStringList", "console", "WebSocket", "MessageEvent", "CloseEvent",
 ] }
 serde = "1"
 serde-wasm-bindgen = "0.6"

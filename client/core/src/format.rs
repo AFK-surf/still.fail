@@ -196,7 +196,7 @@ pub fn thread_name(threads: &[Value], channel: &str, thread_ts: &str, offset_min
             title.to_string()
         } else {
             let first = clean_text(text("firstText"));
-            if first.is_empty() { "ember 对话".into() } else { first }
+            if first.is_empty() { "still.fail 对话".into() } else { first }
         }
     } else if channel.starts_with('D') {
         "私信".into()
@@ -276,7 +276,7 @@ pub fn maker_of(model: &str) -> Option<(&'static str, &'static str)> {
 
 /// How an agent is named: it has no name, only its model as people call it and its effort (GPT-6 Astra · medium).
 pub fn agent_label(model: Option<&str>, effort: Option<&str>) -> String {
-    let model = model.filter(|m| !m.is_empty()).map_or_else(|| "默认模型".to_string(), ember_shapes::model::name);
+    let model = model.filter(|m| !m.is_empty()).map_or_else(|| "默认模型".to_string(), stillfail_shapes::model::name);
     match effort.filter(|e| !e.is_empty()) {
         Some(effort) => format!("{model} · {effort}"),
         None => model.to_string(),

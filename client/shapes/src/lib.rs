@@ -738,7 +738,7 @@ pub struct MadeSlackApp {
     #[typeshare(serialized_as = "I54")]
     pub created: i64,
     pub links: SlackAppLinks,
-    /// The link that installs it through Slack's OAuth (a station in ember cloud); none when its tokens are copied by hand.
+    /// The link that installs it through Slack's OAuth (a station in still.fail cloud); none when its tokens are copied by hand.
     pub install: Option<String>,
     /// Its install's state, what a connect names it by.
     pub state: Option<String>,
@@ -1466,7 +1466,7 @@ pub struct StationView {
     /// Its line in a list: offline since when, or what it is and whether its agents work.
     pub summary: String,
     pub online: bool,
-    /// Seconds, from ember cloud.
+    /// Seconds, from still.fail cloud.
     #[typeshare(serialized_as = "Option<I54>")]
     pub last_seen: Option<i64>,
     pub version: Option<String>,

@@ -3,7 +3,7 @@
 //! runtime inside a `LocalSet` (see `run`), since the core's futures are !Send.
 //!
 //! ```ignore
-//! ember_core::testing::run(async {
+//! stillfail_core::testing::run(async {
 //!     let host = FakeHost::new();
 //!     host.on_fetch(|req| json_response(200, serde_json::json!({"ok": true})));
 //!     let core = Core::new(host.clone()).await;
@@ -50,7 +50,7 @@ pub struct FakeHost {
 impl FakeHost {
     pub fn new() -> Rc<FakeHost> {
         Rc::new(FakeHost {
-            origin: "https://ember.test".into(),
+            origin: "https://stillfail.test".into(),
             storage: RefCell::default(),
             db: RefCell::default(),
             responder: RefCell::default(),

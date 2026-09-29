@@ -4,7 +4,7 @@
 //! timeouts to end those, so a UI says when it is back (`core.wake`), and then:
 //!
 //! - a request still unanswered that was sent before the UI went away fails, for its caller to ask again;
-//! - a stream (an event stream, ember cloud's events socket) that heard nothing while the UI was away ends, and
+//! - a stream (an event stream, still.fail cloud's events socket) that heard nothing while the UI was away ends, and
 //!   is opened again;
 //! - what waits to reconnect stops waiting (`Host::woken`).
 //!

@@ -64,12 +64,12 @@ pub enum DbOp {
 }
 
 pub trait Host {
-    /// Where ember cloud is: the page's origin on the web, https://ember.3720.org natively.
+    /// Where still.fail cloud is: the page's origin on the web, https://app.still.fail natively.
     fn cloud_origin(&self) -> String;
 
     fn fetch(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<HttpResponse, HostError>>;
     fn fetch_stream(&self, request: HttpRequest) -> LocalBoxFuture<'static, Result<StreamResponse, HostError>>;
-    /// Opens a WebSocket that only listens (ember cloud's `/v1/events`); resolves once it is open.
+    /// Opens a WebSocket that only listens (still.fail cloud's `/v1/events`); resolves once it is open.
     fn websocket(&self, url: String, protocols: Vec<String>) -> LocalBoxFuture<'static, Result<SocketFrames, HostError>>;
 
     /// Small persistent values by key: accounts, the device key, preferences.
