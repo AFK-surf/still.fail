@@ -65,9 +65,10 @@ function WorkspacesSheet() {
           </>
         )}
         {others.length > 0 && <div className={css.mSheetLabel}>切换到</div>}
-        {/* With more than one account signed in, each workspace says whose it is in its own line: a heading per account read as something to tap. */}
+        {/* With more than one account signed in, each workspace says whose it is under its name (a heading per account read as something to tap); what it holds goes at the row's end. */}
         {others.flatMap(({ account, workspaces }) => workspaces.map((w) => (
-          <PickRow key={w.id} label={w.name} sub={`${byAccount.length > 1 ? `${account.email} · ` : ""}${w.stations} 台 station · ${w.members} 人`}
+          <PickRow key={w.id} label={w.name} sub={byAccount.length > 1 ? account.email : undefined}
+            aside={[`${w.stations} 台 station`, `${w.members} 人`]}
             onClick={() => { app.sheet(null); app.replace(`/w/${w.id}`); }} />
         )))}
         <PickRow label="＋ 新建 workspace" accent onClick={() => app.sheet({ height: 0.8, content: () => <NewWorkspaceSheet /> })} />

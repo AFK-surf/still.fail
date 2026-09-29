@@ -244,14 +244,21 @@ export function ListRow({ onClick, children }: { onClick?: (() => void) | undefi
     : <div className={css.mListRow}>{children}</div>;
 }
 
-/** A row of a picking sheet: what, a line under it, and a check on the chosen one. */
-export function PickRow({ label, sub, checked = false, enabled = true, accent = false, leading, onClick }: {
-  label: string; sub?: string | undefined; checked?: boolean; enabled?: boolean; accent?: boolean; leading?: ReactNode; onClick: () => void;
+/** A row of a picking sheet: what, a line under it, two short notes at its end (each by one of those lines), and a check on the chosen one. */
+export function PickRow({ label, sub, aside, checked = false, enabled = true, accent = false, leading, onClick }: {
+  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; accent?: boolean; leading?: ReactNode; onClick: () => void;
 }) {
   return (
     <button type="button" className={css.mPickRow} disabled={!enabled} data-accent={accent || undefined} onClick={onClick}>
       {leading}
-      <span className={css.mPickText}><span>{label}</span>{sub !== undefined && <small>{sub}</small>}</span>
+      {aside === undefined
+        ? <span className={css.mPickText}><span>{label}</span>{sub !== undefined && <small>{sub}</small>}</span>
+        : (
+          <span className={`${css.mPickText} ${css.mPickGrid}`}>
+            <span>{label}</span><small className={css.mPickAside}>{aside[0]}</small>
+            {sub !== undefined ? <small>{sub}</small> : <span />}<small className={css.mPickAside}>{aside[1]}</small>
+          </span>
+        )}
       {checked && <Check size={14} className={partsCss.mAccent} />}
     </button>
   );

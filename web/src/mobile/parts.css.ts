@@ -118,6 +118,9 @@ export const mPickRow = style({
   },
 });
 export const mPickText = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column" });
+/** A row with notes at its end: its lines and the notes in two columns, each note on the baseline of its line. */
+export const mPickGrid = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", columnGap: "12px", alignItems: "baseline" });
+export const mPickAside = style({ textAlign: "right" });
 export const mInfoList = style({
   borderRadius: "14px", background: "color-mix(in srgb, var(--m-ink) 5%, transparent)", overflow: "hidden",
 });

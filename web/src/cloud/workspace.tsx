@@ -2,7 +2,7 @@
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
-import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
+import { ChevronRight, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
 import { NewChat } from "../NewChat.tsx";
 import { lastChat, useRememberChat } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
@@ -21,7 +21,7 @@ import { ShortcutsPage } from "../Shortcuts.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
-import { AccountSettings, ConnectsSettings, FirstStation, MemorySettings, RuntimeSettings, SettingsNav, StationsSettings, WorkspaceSettings } from "./settings.tsx";
+import { AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
@@ -30,7 +30,6 @@ import { ComposerDock } from "../dock.tsx";
 import { Previews } from "../Previews.tsx";
 import { signIn, useAccounts, type Account } from "./accounts.ts";
 import { cloud, errorText, forgetInviteCode, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
-import { Avatar } from "./gate.tsx";
 import { Illustration, PageBrand, SidebarBrand } from "../brand.tsx";
 import { identify, track } from "../telemetry.ts";
 import * as nav from "../Sidebar.css.ts";
@@ -220,6 +219,9 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
     },
   );
   const pending = byAccount.flatMap((a) => a.invitations.map((i): InvitationEntry => ({ ...i, account: a.account })));
+  const isCurrent = (sub: string, id: string) => id === current.id && sub === current.account.sub;
+  const shown = byAccount.find((a) => a.account.sub === current.account.sub)?.workspaces.find((w) => w.id === current.id);
+  const others = byAccount.flatMap(({ account, workspaces: items }) => items.filter((w) => !isCurrent(account.sub, w.id)).map((w) => ({ account, w })));
   return (
     <>
       <DropdownMenu.Root modal={false}>
@@ -234,6 +236,17 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.accountMenu}`} side="top" align="start" sideOffset={6}>
+            {/* The workspace in use first, as what the menu is about (as on the phone): its settings open from it. */}
+            {shown && (
+              <DropdownMenu.Item className={`${controlsCss.menuItem} ${css.menuCurrent}`} onSelect={() => navigate(`/w/${current.id}/settings/workspace`)}>
+                <span className={css.menuCurrentText}>
+                  <b>{shown.name}</b>
+                  <span className={shellCss.muted}>你是{ROLE_LABEL[shown.role]} · {shown.stations} 台 station · {shown.members} 人</span>
+                  {byAccount.length > 1 && <span className={shellCss.muted}>{current.account.email}</span>}
+                </span>
+                <span className={css.menuCurrentGo}>设置<ChevronRight {...ICON} size={14} /></span>
+              </DropdownMenu.Item>
+            )}
             {pending.length > 0 && (
               <>
                 <DropdownMenu.Label className={controlsCss.menuLabel}>邀请</DropdownMenu.Label>
@@ -252,18 +265,15 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
                 <DropdownMenu.Separator className={controlsCss.menuSep} />
               </>
             )}
-            {byAccount.map(({ account, workspaces: items }, i) => (
-              <div key={account.sub}>
-                {i > 0 && <DropdownMenu.Separator className={controlsCss.menuSep} />}
-                <DropdownMenu.Label className={`${controlsCss.menuLabel} ${css.menuAccount}`}><Avatar account={account} size={16} />{account.email}</DropdownMenu.Label>
-                {items.length === 0 && <div className={css.menuEmpty}>没有 workspace</div>}
-                {items.map((w) => (
-                  <DropdownMenu.Item key={w.id} className={controlsCss.menuItem} onSelect={() => navigate(`/w/${w.id}`)}>
-                    <span className={css.threadItem}><span>{w.name}</span><span className={shellCss.muted}>{w.stations} 台 station · {w.members} 人</span></span>
-                    {w.id === current.id && account.sub === current.account.sub && <Check {...ICON} size={14} className={css.menuCheck} />}
-                  </DropdownMenu.Item>
-                ))}
-              </div>
+            {others.length > 0 && <DropdownMenu.Label className={controlsCss.menuLabel}>切换到</DropdownMenu.Label>}
+            {/* Each workspace says whose it is under its name (a heading per account read as something to pick), what it holds at its end. */}
+            {others.map(({ account, w }) => (
+              <DropdownMenu.Item key={w.id} className={controlsCss.menuItem} onSelect={() => navigate(`/w/${w.id}`)}>
+                <span className={css.menuWorkspace}>
+                  <span>{w.name}</span><span className={css.menuStat}>{w.stations} 台 station</span>
+                  {byAccount.length > 1 ? <span className={shellCss.muted}>{account.email}</span> : <span />}<span className={css.menuStat}>{w.members} 人</span>
+                </span>
+              </DropdownMenu.Item>
             ))}
             <DropdownMenu.Separator className={controlsCss.menuSep} />
             <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setCreating(true)}><Plus {...ICON} />新建 workspace</DropdownMenu.Item>
