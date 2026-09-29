@@ -39,16 +39,15 @@ globalStyle(`${mNewBody} > p`, { fontSize: "14px" });
 // The pictures hang off the document, not the phone's root: its easing variables are not theirs, so written out.
 const made = ":root[data-made]";
 const sceneOut = keyframes({ to: { opacity: 0, transform: "translateY(-32px) scale(.96)" } });
-const choosersOut = keyframes({ to: { opacity: 0, transform: "translateY(44px)" } });
+const choosersOut = keyframes({ to: { opacity: 0 } });
 globalStyle(`${made}::view-transition-old(root)`, { display: "none" });
 globalStyle(`${made}::view-transition-new(root)`, { animation: "none" });
 // The composer stays on the page, not pictured apart: what arrives passes over it.
 globalStyle(`${made} ${mComposerCapsule}`, { viewTransitionName: "none" });
 // Out of the way before what comes passes where they were.
 globalStyle(`${made}::view-transition-old(m-made-scene)`, { animation: `${sceneOut} 160ms cubic-bezier(.3, 0, .5, 1) both` });
-globalStyle(`${made}::view-transition-old(m-made-choosers)`, { animation: `${choosersOut} 100ms cubic-bezier(.3, 0, .5, 1) both` });
-// The choices sink into the composer's top edge (their own box's foot), not over it.
-globalStyle(`${made}::view-transition-group(m-made-choosers)`, { overflow: "clip" });
+// The choices fade where they are, before the words pass them.
+globalStyle(`${made}::view-transition-old(m-made-choosers)`, { animation: `${choosersOut} 80ms cubic-bezier(.3, 0, .5, 1) both` });
 // The message sent is drawn on its way by a copy of it.
 globalStyle(`${made} ${mMessages}:not([data-ghost]) ${msgMine}`, { visibility: "hidden" });
 // The composer's hint is gone as the words are sent, and comes in where it is once they have left the composer (only

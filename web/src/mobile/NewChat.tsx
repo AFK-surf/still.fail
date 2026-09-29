@@ -250,7 +250,7 @@ function textAt(el: Element): Typed {
 
 /**
  * A new chat becoming its chat, around what stays: the bar and the composer do not move (the composer is the one live
- * box throughout, not pictured twice); the scene above it rises out of view and the choices sink behind the composer.
+ * box throughout, not pictured twice); the scene above it rises out of view and the choices fade where they are.
  * What comes is drawn where it arrives and moved from where it comes from: the words just sent float up out of the
  * composer to where the chat has its first message, their bubble forming around them, and what follows rises out of
  * the composer's top edge. Nothing is crossfaded over anything.
