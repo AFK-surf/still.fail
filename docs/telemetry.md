@@ -1,6 +1,6 @@
 # 遥测：PostHog
 
-ember 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分析、错误追踪和会话回放。这是我们对自己用户的第一方分析：用 ember 的就是团队自己，所以没有同意弹窗。链路追踪另走 Axiom，不在这里。
+still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分析、错误追踪和会话回放。这是我们对自己用户的第一方分析：用 still.fail 的就是团队自己，所以没有同意弹窗。链路追踪另走 Axiom，不在这里。
 
 **什么都不带内容**：聊天文字、引用、文件名、提示词、agent 的输出、对话标题，一样都不发。发出去的只有动作、计数、耗时和错误（带调用栈）。
 
@@ -8,7 +8,7 @@ ember 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分析、�
 
 `web/src/telemetry.ts`，在 `web/src/main.tsx` 里启动。构建时没有 key 的话，这些函数什么都不做，bundle 里也没有 posthog-js。管理后台（`admin.ember.3720.org`）什么都不发。
 
-- **身份**：看着哪个 workspace，就以那个 workspace 所用的已登录账号标识（ember 账号 id，即 Google `sub`），邮箱作为人的属性；退出这个账号时 reset。station 自己的管理页不标识人。
+- **身份**：看着哪个 workspace，就以那个 workspace 所用的已登录账号标识（still.fail 账号 id，即 Google `sub`），邮箱作为人的属性；退出这个账号时 reset。station 自己的管理页不标识人。
 - **错误**：页面上未捕获的异常和 promise 拒绝；核心 worker（SharedWorker / Worker）里捕获到的错误由 worker 转给一个页面上报；worker 崩溃（`{fatal}`）或起不来也上报。每个事件都带 `release`（构建时的 git 提交）和 `app`（`cloud` / `station`）。
 - **会话回放**：所有文字、所有输入框都打码；图片、视频、canvas 整块挡掉；`title`、`alt`、`aria-label`、`placeholder`、`href`、`src` 等可能带人名、文件名、对话名的属性打码。回放里只有布局和操作。控制台日志不录。登录回调页（URL 里有 Google 的 code）不录。是否录制还取决于 PostHog 项目设置里的 Session replay 开关。
 - **事件**（不按键入发）：
@@ -50,7 +50,7 @@ ember 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分析、�
 ## Tracing
 
 When something is slow, one trace per user action shows where the time went,
-hop by hop: the client core (the web's SharedWorker or a native app), ember
+hop by hop: the client core (the web's SharedWorker or a native app), still.fail
 cloud, and ember-mesh on the station. Spans are
 OpenTelemetry (OTLP JSON) and end up in Axiom, dataset `ember`.
 
@@ -71,9 +71,9 @@ Inside a trace:
   ending when the whole answer is read — an event stream's when it is open
   (`ember.stream`); `station.connect` for the events stream a view asked for;
   `mesh.connect` when a request has to open the link first (credential, iroh
-  connection), with the ember cloud requests it made; ember cloud requests
+  connection), with the still.fail cloud requests it made; still.fail cloud requests
   made inside the trace (`/v1/me`, credentials, workspaces).
-- **ember cloud**: a span of each `/v1/*` call that carries a recorded
+- **still.fail cloud**: a span of each `/v1/*` call that carries a recorded
   `traceparent`.
 - **ember-mesh**: a span per request stream, from the stream accepted to the
   answer's last byte written (an event stream's: to its head). The station's
@@ -85,7 +85,7 @@ trace of its own, one span per hop.
 
 Every station request carries a W3C `traceparent`; ember-mesh records its span
 under it, so the hops nest. Requests to
-ember cloud carry one only inside a trace.
+still.fail cloud carry one only inside a trace.
 
 Attributes: `http.request.method`, `url.path` (the route with ids as `:id`,
 no query), `http.response.status_code`, sizes (`http.request.body.size`,
@@ -105,9 +105,9 @@ as their clocks; durations are exact.
 
 ### Where spans go
 
-Nothing ships Axiom's token: it lives only in ember cloud (`AXIOM_TOKEN`,
+Nothing ships Axiom's token: it lives only in still.fail cloud (`AXIOM_TOKEN`,
 `AXIOM_DATASET`, which `cloud/deploy.py` uploads from
-`~/ember-deploy/axiom.json`). Clients and stations send their spans to ember
+`~/ember-deploy/axiom.json`). Clients and stations send their spans to still.fail
 cloud's `POST /v1/telemetry/traces` (OTLP JSON, at most 512 KB and 1000 spans a
 batch), which forwards them to `https://api.axiom.co/v1/traces`:
 
@@ -119,10 +119,10 @@ batch), which forwards them to `https://api.axiom.co/v1/traces`:
   5 minutes) and `x-ember-signature` over
   `ember-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>`;
   the station must be enrolled.
-- ember cloud sends its own spans to Axiom directly, after answering
+- still.fail cloud sends its own spans to Axiom directly, after answering
   (`ctx.waitUntil`).
 
-A batch that cannot be sent is dropped, never retried. ember cloud allows each
+A batch that cannot be sent is dropped, never retried. still.fail cloud allows each
 sender (an account, a station) 60 batches a minute (`429` beyond), answers
 `503` while it has no Axiom token and `502` when Axiom refuses.
 
@@ -140,7 +140,7 @@ sender (an account, a station) 60 batches a minute (`429` beyond), answers
   in `config.json` (off by default; read when `ember-station` starts, so
   restart the station after changing it). Off, ember-mesh records nothing but
   still passes the `traceparent` on.
-- ember cloud records a span only for a call whose `traceparent` is sampled.
+- still.fail cloud records a span only for a call whose `traceparent` is sampled.
 
 ### Looking in Axiom
 

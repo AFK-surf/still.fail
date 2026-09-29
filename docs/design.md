@@ -1,6 +1,6 @@
-# ember 设计
+# still.fail 设计
 
-ember 是一个团队聊天里的 coding agent 服务：人在 Slack 或 ember 自己的网页对话里找它，每个对话落到一个持久的 agent 会话，agent 由 Claude Code 或 Codex 驱动。它面向内存和磁盘都紧张的机器，会话在 hot / warm / cold / 归档之间流转，归档后有新消息就自动恢复。
+still.fail 是一个团队聊天里的 coding agent 服务：人在 Slack 或 still.fail 自己的网页对话里找它，每个对话落到一个持久的 agent 会话，agent 由 Claude Code 或 Codex 驱动。它面向内存和磁盘都紧张的机器，会话在 hot / warm / cold / 归档之间流转，归档后有新消息就自动恢复。
 
 本文记录已确定的设计和约束。实现细节以源码为准，不在这里重复。
 
@@ -8,8 +8,8 @@ ember 是一个团队聊天里的 coding agent 服务：人在 Slack 或 ember �
 
 - **station（宿主）负责**：聊天接入、会话身份与状态、入站消息持久化、结束状态约定、后台任务、账号池、进程数量、会话 workspace 与归档、可观测性。
 - **运行时驱动负责**：启动 / 恢复 / 结束一个 agent 进程，把输入送进去，把事件流读出来。
-- 运行时的 agent loop、上下文压缩、内置工具都属于 Claude Code / Codex 本身，ember 不改写。
-- **ember cloud 只管人**：账号、workspace、成员和成员凭证；客户端（网页、桌面、Android）通过 iroh 直接连 station，不经过业务服务器。见 [cloud.md](cloud.md)、[client-core.md](client-core.md)。
+- 运行时的 agent loop、上下文压缩、内置工具都属于 Claude Code / Codex 本身，still.fail 不改写。
+- **still.fail cloud 只管人**：账号、workspace、成员和成员凭证；客户端（网页、桌面、Android）通过 iroh 直接连 station，不经过业务服务器。见 [cloud.md](cloud.md)、[client-core.md](client-core.md)。
 
 ## 2. 进程结构
 
@@ -45,7 +45,7 @@ Jobs   账号池   空闲进程回收   自动归档
 
 ## 5. 运行时驱动
 
-ember 定义自己的接口（mesh/app/src/runtime/mod.rs），其余部分只依赖这层：`AgentDriver` 按 profile、cwd、要 resume 的 id、model、effort、附加指令和 MCP 地址 / token 打开一个 `AgentSession`；会话提供 `prompt` / `steer` / `abort` / `dispose`（Claude 另有把工具调用挪到后台），运行时发生的事按顺序作为事件（turn 开始 / 结束及结果、进程关闭、实时步骤）送回会话自己的任务，而不是回调。
+still.fail 定义自己的接口（mesh/app/src/runtime/mod.rs），其余部分只依赖这层：`AgentDriver` 按 profile、cwd、要 resume 的 id、model、effort、附加指令和 MCP 地址 / token 打开一个 `AgentSession`；会话提供 `prompt` / `steer` / `abort` / `dispose`（Claude 另有把工具调用挪到后台），运行时发生的事按顺序作为事件（turn 开始 / 结束及结果、进程关闭、实时步骤）送回会话自己的任务，而不是回调。
 
 - 两个驱动都自己实现，共用一套进程管理（进程组、stdin）。不依赖 `@botiverse/oar`：它只结束直接子进程、不解析 `api_retry` / `rate_limit_event`，也没有按账号的 env。它的 Claude / Codex 文档和实验脚本作为需求清单和参考，升级 CLI 版本时对照其上游。
 - **账号相关全部自己实现**。
@@ -60,7 +60,7 @@ ember 定义自己的接口（mesh/app/src/runtime/mod.rs），其余部分只�
 
 ## 6. 给 agent 的工具（MCP）
 
-ember 直接提供 HTTP MCP，不为每个会话额外起进程：
+still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 
 | 工具 | 作用 |
 |---|---|
@@ -88,7 +88,7 @@ ember 直接提供 HTTP MCP，不为每个会话额外起进程：
 
 - agent 用 `job_start` 让 station 执行 shell 命令，agent 不自己跑 sleep 循环。每个任务在独立进程组里跑，输出写日志文件。
 - 任务结束时通知 agent；任务里可以用 `ember-job notify <文字>` 随时给 agent 发消息。通知作为输入注入会话，唤醒 agent。
-- 带 `port` 的是 web 服务：一直保持运行（退出后按递增间隔重启），workspace 成员经 ember cloud 的链接打开。
+- 带 `port` 的是 web 服务：一直保持运行（退出后按递增间隔重启），workspace 成员经 still.fail cloud 的链接打开。
 - station 重启后，原来在跑的任务重新启动，并告诉 agent。
 
 ## 9. 账号池
@@ -112,7 +112,7 @@ ember 直接提供 HTTP MCP，不为每个会话额外起进程：
 ## 11. 磁盘
 
 **少写**
-- 不重复存储运行时的原始事件；运行时自己已经存了完整会话记录。ember 只存 thread 里的消息和精简的 turn 记录（起止时间、结果、声明的状态）。
+- 不重复存储运行时的原始事件；运行时自己已经存了完整会话记录。still.fail 只存 thread 里的消息和精简的 turn 记录（起止时间、结果、声明的状态）。
 - 仓库共享：规范 clone 放在 `<数据目录>/repos`，会话在自己的 workspace 里从它建 git worktree。
 
 **归档**
@@ -138,8 +138,8 @@ ember 直接提供 HTTP MCP，不为每个会话额外起进程：
 ## 13. 可观测性
 
 - 管理页：本机 `127.0.0.1:4760/admin`，或网页版 / 桌面端 / Android 经 iroh 连到 station。能看会话、执行历史（运行时会话记录 + 进行中 turn 的实时步骤）、进程和后台任务，并做管理操作。
-- 多会话连接在 Slack 里新开的会话，先在 thread 里贴一个"在 ember 里查看这个会话"的链接（station 加入 workspace 之后）。
-- 错误上报（PostHog）和链路追踪（经 ember cloud 转到 Axiom）都可选，默认关闭，见 [telemetry.md](telemetry.md)。
+- 多会话连接在 Slack 里新开的会话，先在 thread 里贴一个"在 still.fail 里查看这个会话"的链接（station 加入 workspace 之后）。
+- 错误上报（PostHog）和链路追踪（经 still.fail cloud 转到 Axiom）都可选，默认关闭，见 [telemetry.md](telemetry.md)。
 - 原计划第一版做 `ember status`、`ember session <key>` 这样的 CLI 加一个只读本地页面，已改为上面的管理页和客户端。
 
 ## 14. 计划中、尚未实现
@@ -147,7 +147,7 @@ ember 直接提供 HTTP MCP，不为每个会话额外起进程：
 原设计里有、目前还没做的部分。保留原意，实现时再细化。
 
 - **内存预算**：软上限超出时回收空闲进程，新 turn 照常启动；硬上限（swap 或内存压力超过阈值）才让新 turn 排队，并在 thread 里说明原因，一有余量马上启动。每个进程按 runtime 给初始估值，之后每 30 秒采样整个进程树的真实占用修正。现在：只按 `maxWarmClaude` / `warmMinutes` 回收空闲的 Claude 进程，不看内存。
-- **孤儿进程对账**：每分钟检查一次，带 ember 实例标记但在会话表里找不到主人的进程直接结束。现在：只在启动时清理上一轮遗留。
+- **孤儿进程对账**：每分钟检查一次，带 still.fail 实例标记但在会话表里找不到主人的进程直接结束。现在：只在启动时清理上一轮遗留。
 - **Slack 漏消息补查**：每 5 分钟对活跃 thread 补查一次漏掉的消息。现在：靠先写库再 ack、Slack 重投。
 - **后台任务心跳超时**：任务超时没有心跳就判定失败。现在：只看进程是否结束。
 - **按磁盘预算回收**：数据目录有总预算和最低空闲空间，超出时依次回收：调试日志 → 空闲会话 slim → 最久未用的会话归档 → 删除最老的归档 → 共享仓库 `git gc`、删除长期不用的仓库。单个文件清理失败只记告警，不阻塞其他清理。现在：只有按空闲天数的自动归档。

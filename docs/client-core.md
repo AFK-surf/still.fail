@@ -1,6 +1,6 @@
-# ember client core
+# still.fail client core
 
-The logic of an ember client — accounts, ember cloud, the mesh links to
+The logic of a still.fail client — accounts, still.fail cloud, the mesh links to
 stations, requests and live streams, the cache of what has been read — lives in
 one Rust crate, `ember-core`, shared by every client:
 
@@ -10,7 +10,7 @@ one Rust crate, `ember-core`, shared by every client:
 | Desktop (Electron) | a `utilityProcess` | `client/node` (napi-rs) over `client/ffi` |
 | Android (iOS later) | a core thread in the app | `client/ffi` (uniffi) |
 
-The UI never talks to ember cloud or a station itself. It sends **calls** and
+The UI never talks to still.fail cloud or a station itself. It sends **calls** and
 holds **subscriptions** to the core over one message channel, and renders the
 snapshots the core pushes. Several UIs (tabs, windows) share one core: one
 device key, one link per station, one token refresh, one cache.
@@ -27,9 +27,9 @@ current-thread runtime with a `LocalSet`. Nothing in the core blocks.
 What differs per platform comes in through one trait, `Host`
 (`client/core/src/host.rs`):
 
-- `fetch` — one HTTP request to ember cloud, whole body; `fetch_stream` — a
+- `fetch` — one HTTP request to still.fail cloud, whole body; `fetch_stream` — a
   streamed response (the local station's `/admin/api` event streams, web only);
-  `websocket` — a receive-only WebSocket (ember cloud's `/v1/events`) with the
+  `websocket` — a receive-only WebSocket (still.fail cloud's `/v1/events`) with the
   subprotocols given, resolving once it is open; its text frames end when it
   closes, and dropping them closes it.
 - `storage_get` / `storage_set` / `storage_delete` — small persistent values by
@@ -134,7 +134,7 @@ that only notifications change it:
 
 - `accounts`, `workspaces` and `workspace`: while `workspaces` or any
   `workspace` is live (a view resting on one counts), each signed-in account
-  holds ember cloud's `/v1/events` socket (subprotocols `ember-events` and
+  holds still.fail cloud's `/v1/events` socket (subprotocols `ember-events` and
   `ember-token.<access token>`, a token good now asked of the accounts module
   at every (re)connect; auth, events and shapes in `docs/station-storage.md`).
   `{"type":"workspaces"}` reads that account's `/v1/me` again (the
@@ -198,7 +198,7 @@ subscriber and hears each change); a change only marks the view stale, and it
 is computed once, when its coalesced emission goes out, however many of them
 changed. A workspace view watches the `chatRows` / `link` (for `stations`:
 `link` / `overview` / `host`; for `connects`: `overview`) of the stations that
-are online — connected to ember cloud right now, as the `workspace` topic says —
+are online — connected to still.fail cloud right now, as the `workspace` topic says —
 and follows the workspace's station list as it changes. It has no value until
 the `workspace` topic has one; a failed `workspace` is the view's error, while
 a failing station only shows in that station's state. `chat` watches the
@@ -389,19 +389,19 @@ client/
 - `store.rs` — topics: values, subscribers and watches, coalesced emission as deltas, eviction.
 - `delta.rs` — the ops between two values of a topic.
 - `accounts.rs` — sign-in (PKCE), token refresh (single flight per account), persistence.
-- `cloud.rs` — ember cloud API: errors, `/v1/me`, workspaces, member credentials. (Its events socket is held in `core.rs`, with the account topics.)
+- `cloud.rs` — still.fail cloud API: errors, `/v1/me`, workspaces, member credentials. (Its events socket is held in `core.rs`, with the account topics.)
 - `mesh.rs` — the device endpoint (mDNS and the DHT to find stations, ember's and iroh's relays) and station links: the credential, reconnection, requests and streamed replies (wire format: `mesh/station/src/main.rs`).
 - `station.rs` — the admin API over a link (or over HTTP for `local`): the station topics kept current from its events and live streams, threads (entries by number, gaps, paging, posting, read positions), uploads.
 - `kept.rs` — threads' entries and transcripts kept on the device in 256-entry chunks through `Host` storage, bounded (least recently opened go first), forgotten for stations out of reach.
 - `entries.rs` — a thread's entries merged into messages (edits applied): the one place that does it.
-- `data.rs` — the data center (docs/core-db.md): what ember cloud and the stations said, held as records.
+- `data.rs` — the data center (docs/core-db.md): what still.fail cloud and the stations said, held as records.
 - `sync.rs` — what the core keeps in sync by itself, whatever the UI shows.
 - `status.rs` — what the core is waiting on (the `status` topic): slow requests and links, sockets that are down.
 - `activity.rs`, `history.rs`, `present.rs`, `format.rs` — what the clients show (an agent's current activity, its execution history, sessions' and rows' state, words and times), decided once for every client.
 - `error.rs` — the one error type calls and topics report.
 - `views.rs` — the view topics, put together from the others.
 - `testing.rs` — a host for tests.
-- `trace.rs` — traces of user actions: spans, the `traceparent` every station request carries, batched export to ember cloud (docs/telemetry.md).
+- `trace.rs` — traces of user actions: spans, the `traceparent` every station request carries, batched export to still.fail cloud (docs/telemetry.md).
 
 ## Native (Android)
 
@@ -427,7 +427,7 @@ collector leaves.
 
 `apps/desktop` is the web app running natively: the window loads the cloud
 build (`pnpm run build:cloud`'s `dist/cloud-web`, bundled into the app) from
-`app://ember`, served as ember cloud serves it (a file, else `index.html`).
+`app://ember`, served as still.fail cloud serves it (a file, else `index.html`).
 Nothing in the pages differs but the host underneath:
 
 - The core runs in a `utilityProcess` (`src/core.ts`) through `client/node`,
@@ -446,7 +446,7 @@ Nothing in the pages differs but the host underneath:
   the core process start a new core for the channels that follow.
 - Sign-in: `auth.begin` with `redirect_uri` `ember://auth/callback` (a scheme
   the app registers). Leaving `app://ember` opens the system browser instead
-  (so does `window.open`); ember cloud sends the browser back to
+  (so does `window.open`); still.fail cloud sends the browser back to
   `ember://auth/callback?…`, which the OS hands to the app (`open-url` on
   macOS, `second-instance` elsewhere), and the app loads the page's own
   `/auth/callback` with that query, which calls `auth.complete` as on the web.
@@ -456,7 +456,7 @@ Nothing in the pages differs but the host underneath:
   `~/.ember` like an installed station; when one is running already
   (`ember-station` exits with HELD) it leaves it be.
 
-ember cloud defaults to https://ember.3720.org; `EMBER_CLOUD_ORIGIN`
+still.fail cloud defaults to https://ember.3720.org; `EMBER_CLOUD_ORIGIN`
 overrides it. `apps/desktop/build.sh` builds the core and the station for
 macOS arm64 and packages an unsigned `.app` with electron-builder.
 
@@ -472,4 +472,4 @@ In development the core can also run on the page itself, for debugging.
 1. `ember-core` with a fake host in tests: protocol, store, accounts, cloud, mesh, station.
 2. `ember-core-wasm` and `web/src/core`; the web app moves onto the core.
 3. Electron shell (`client/node`).
-4. Native apps (`client/ffi`; Android first), with push notifications through ember cloud.
+4. Native apps (`client/ffi`; Android first), with push notifications through still.fail cloud.

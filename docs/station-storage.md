@@ -5,9 +5,9 @@ Two rules shape this:
 - **One place for every message.** Whatever is said in a conversation — by a
   person on Slack or on ember's page, or by an agent — is one entry in its
   thread's log, and entries are only ever appended (an edit is an entry of its
-  own; nothing said is taken back — ember has no delete). Clients read "the
+  own; nothing said is taken back — still.fail has no delete). Clients read "the
   entries after n", never the whole thing again, and keep what they read.
-- **No polling inside ember.** A station tells its clients what changed; ember
+- **No polling inside still.fail.** A station tells its clients what changed; still.fail
   cloud tells devices what changed; the client core refetches nothing on a
   timer. The only timers left sample things that cannot notify (host load,
   provider quotas while someone looks, idle-process eviction deadlines).
@@ -21,7 +21,7 @@ Two rules shape this:
   session takes part in many threads; a chat on ember's page may have several
   agents) and any number of people.
 - **Message**: something said in a thread, by a person, an agent (a session),
-  or ember itself (a notice).
+  or still.fail itself (a notice).
 
 ## Tables (ember.db, schema v12)
 
@@ -145,7 +145,7 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   Several connects in one channel share the thread row and its messages;
   whichever sees a message first delivers it to every session in the thread,
   and a later connect only brings in its own session.
-- **Joining mid-thread**: when ember starts following a Slack thread at a
+- **Joining mid-thread**: when still.fail starts following a Slack thread at a
   reply, what Slack has before that reply is recorded first (no deliveries),
   so the thread is complete and its log keeps Slack's order.
 - **Person on ember's page**: the same, with surface `ember`; quotes and
@@ -165,7 +165,7 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   with the same words — Slack sends those for thread roots as replies come —
   changes nothing. A message still pending reaches the agent as it reads at
   delivery (merged).
-- **Slack deletes** (`message_deleted`) are ignored: ember has no
+- **Slack deletes** (`message_deleted`) are ignored: still.fail has no
   retraction, and the message stays as it was said.
 - Every entry takes its thread's next n in the same transaction.
 
@@ -189,11 +189,11 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
 - `PUT /threads/:id/read {n}` — the viewer's read position; it only moves
   forward, and the answer says where it is.
 - `POST /threads/:id/messages {text, attachments, quotes}` — a person's
-  message in an ember chat (Slack threads are written in Slack), answered
+  message in a still.fail chat (Slack threads are written in Slack), answered
   with its `{ n }`; attachments must be uploads of a session in the thread
   (`POST /sessions/:key/files`). `POST /threads {session, title?}` opens
   another chat on a session; `POST /threads/:id/sessions {session}` brings
-  another session into an ember chat. `POST /sessions` (a new chat) makes the
+  another session into a still.fail chat. `POST /sessions` (a new chat) makes the
   session and its chat and answers `{ key, thread }`. A `clientKey` given
   (the key the asking client shows the chat by until it is made) is said by
   the chat's sidebar item for ten minutes (in memory only): its `chat` event
@@ -367,7 +367,7 @@ transcript writes for live watchers, a sign-in's 15-minute deadline, the
 profile checks a few seconds after start, the hourly auto-archive, and a look
 at `mesh/cloud.json` every 2 s (enrollment and renames; `MeshFile`).
 
-### ember cloud → devices: `GET /v1/events` (WebSocket)
+### still.fail cloud → devices: `GET /v1/events` (WebSocket)
 
 A device keeps one WebSocket per account to the directory (hibernatable, so
 idle sockets cost nothing).
@@ -395,7 +395,7 @@ reconnect the device refetches what it shows.
 
 ### Station control channel: `GET /v1/stations/connect` (WebSocket)
 
-The station keeps a WebSocket open to ember cloud for what ember cloud has to
+The station keeps a WebSocket open to still.fail cloud for what still.fail cloud has to
 tell it: its name and workspace, the keys member credentials are signed with,
 revocations, and its removal. It is not presence: whether a station is up,
 each device finds out by connecting to it (the client core's `link`), and a

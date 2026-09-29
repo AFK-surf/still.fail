@@ -4,7 +4,7 @@ station 是一个 Rust 程序：`ember-station`（mesh/station）一个进程运
 
 ## 现在的结构
 
-- **`ember-station`（mesh/station）**：连着 ember cloud，接受 mesh 连接，在 127.0.0.1 提供本机管理页（默认 4760，被占时自动换），也负责 `enroll`（加入 workspace）和 `id`。
+- **`ember-station`（mesh/station）**：连着 still.fail cloud，接受 mesh 连接，在 127.0.0.1 提供本机管理页（默认 4760，被占时自动换），也负责 `enroll`（加入 workspace）和 `id`。
 - **ember-app（mesh/app）**：station 自己的活——SQLite 存储（`store`）、管理 API（`admin`）、运行时驱动（`runtime`：Codex app-server、Claude Code stream-json）、会话 / Hub / live 转写、agent 的 MCP 端点（`mcp`）、Slack（`chat`）。
 - **发布包**：只有 `bin/ember`、`dist/admin`（管理页和 posthog.json）、`mesh/target/release/ember-station` 和 `VERSION`（scripts/station-bundle.sh）。
 
@@ -14,7 +14,7 @@ station 是一个 Rust 程序：`ember-station`（mesh/station）一个进程运
 
 station 原来是 Node/TypeScript，由它启动 ember-mesh。迁移逐块进行，不做一次性重写，每一步结束时 station 都能完整工作、可以部署；最后去掉 Node（d7232dd）。
 
-迁移期间的结构：Rust 的 `ember-station` 是主进程（launchd 启动），连着 ember cloud、接受 mesh 连接、提供本机管理页，并启动、看护 Node 子进程；Node 只负责还没迁走的部分，管理接口不再监听 TCP，改听数据目录里的 Unix socket（`run/admin.sock`）；Rust 收到 `/admin/api/...` 请求，已迁的路径自己处理，其余转给 Node；在线状态以 Node 是否就绪为准。
+迁移期间的结构：Rust 的 `ember-station` 是主进程（launchd 启动），连着 still.fail cloud、接受 mesh 连接、提供本机管理页，并启动、看护 Node 子进程；Node 只负责还没迁走的部分，管理接口不再监听 TCP，改听数据目录里的 Unix socket（`run/admin.sock`）；Rust 收到 `/admin/api/...` 请求，已迁的路径自己处理，其余转给 Node；在线状态以 Node 是否就绪为准。
 
 步骤（都已完成）：
 
