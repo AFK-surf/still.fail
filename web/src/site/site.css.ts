@@ -131,7 +131,14 @@ export const title = style({
   margin: "0 auto", fontSize: "clamp(52px, 10vw, 136px)", lineHeight: "1", letterSpacing: "-.055em", fontWeight: "700",
   ...white, animation: `${fadeUp} .9s .06s ${vars.easeOut} both`,
 });
-export const titleAccent = style({ fontStyle: "normal", backgroundImage: `linear-gradient(180deg, #FFB08C, ${EMBER})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" });
+const accent = { backgroundImage: `linear-gradient(180deg, #FFB08C, ${EMBER})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" };
+/** A line of the title that is a domain: lit when the page was opened on it (data-host on the root), still.fail otherwise. */
+export const titleDomain = style({
+  selectors: {
+    [`:root:not([data-host="youdid.wtf"]) &[data-domain="still.fail"]`]: accent,
+    [`:root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: accent,
+  },
+});
 export const heroActions = style({ marginTop: "44px", animation: `${fadeUp} .9s .24s ${vars.easeOut} both` });
 
 /** The demo's stage: it rises out of a tilt as the page opens, a beam of light running round its edge. */

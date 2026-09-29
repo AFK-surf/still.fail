@@ -151,7 +151,12 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
         <div className={css.grid} /><div className={css.beam} />
         <div className={css.wrap}>
           <span className={css.eyebrow}>Claude Code · Codex · 跑在你自己的机器上</span>
-          <h1 className={css.title}>Local-first<br /><em className={css.titleAccent}>agent mesh</em></h1>
+          {/* The two domains, what the user keeps saying to the agent: the one the page was opened on is lit (data-host, set
+              before the first paint by site/index.html; still.fail when neither). */}
+          <h1 className={css.title}>
+            <span className={css.titleDomain} data-domain="still.fail">still.fail</span><br />
+            <span className={css.titleDomain} data-domain="youdid.wtf">youdid.wtf</span>
+          </h1>
           <div className={`${css.actions} ${css.heroActions}`}>
             <Button href={APP} kind="primary" large>免费开始</Button>
             <Button href="#start" kind="ghost" large>安装 station</Button>
