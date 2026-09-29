@@ -1028,7 +1028,7 @@ impl Hub {
         let at = last.map(|n| format!("&entry={n}")).unwrap_or_default();
         let name = if found.runtime == RuntimeKind::Claude { "Claude Code" } else { "Codex" };
         let note = format!(
-            "接着本机 {name} 在 {} 的会话，从这里发的消息会在那个目录里接着它。[查看之前的对话](?history={key}{at})",
+            "接着本机 {name} 在 {} 的会话 · [查看之前的对话](?history={key}{at})",
             found.cwd
         );
         self.store.insert_message(NewMessage::new(thread.id, &next_ts(), AuthorKind::StillFail, "ember", &note))?;

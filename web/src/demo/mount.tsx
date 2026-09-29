@@ -65,7 +65,7 @@ function publish() {
 
 // What the visitor sends is answered as an account its provider has banned would be: the turn fails, ember says why in
 // the chat, and the agent is marked failed — the station's own words (session.rs failure_notice, quota.rs).
-const BANNED = `⚠️ 运行时认证失败，需要管理员检查账号：${station.BAN_DETAIL}`;
+const BANNED = `⚠️ 认证失败，需要管理员检查账号：${station.BAN_DETAIL}`;
 
 function answer(name: string, params: Record<string, unknown>): unknown {
   if (name === "chat.create") {

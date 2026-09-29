@@ -51,12 +51,18 @@ export const offlineNotice = style({
     [`${chat}[data-under-composer] > &`]: { marginBottom: "calc(8px + var(--composer-height))" },
   },
 });
-/** What ember itself says in a chat: a notice across it, apart from people's and agents' messages. */
-export const msgSystem = style({ display: "flex", justifyContent: "center" });
+/**
+ * What ember itself says in a chat: a pill across it, apart from people's and agents' messages, in one line. The grey
+ * of the offline notice; a failure in red (the accent is the names'). Opened, it shows all its words, and its time.
+ */
+export const msgSystem = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" });
 export const msgSystemBox = style({
-  display: "flex", alignItems: "flex-start", gap: "8px", maxWidth: "min(560px, 100%)", padding: "8px 12px",
-  borderRadius: "12px", background: `color-mix(in oklch, ${vars.amber} 10%, ${vars.canvas})`,
-  border: `1px solid color-mix(in srgb, ${vars.amber} 22%, transparent)`, fontSize: vars.textSm, color: vars.text,
+  minWidth: "0", maxWidth: "100%", padding: "6px 14px", borderRadius: "999px", background: vars.hover, color: vars.text,
+  fontSize: vars.textSm, cursor: "pointer",
+  selectors: {
+    "&[data-failed]": { background: vars.redBg, color: vars.red },
+    "&[data-open]": { borderRadius: "16px" },
+  },
 });
 /**
  * A draft past its three lines scrolls: what is cut above or below fades out over a line's height, not at a hard edge.
@@ -474,11 +480,11 @@ export const composerThumbRemove = style({
   },
 });
 export const msgWaitingLate = style({});
-globalStyle(`${msgSystemBox} > img`, { flex: "none", marginTop: "2px" });
 globalStyle(`${msgSystemBox} ${markdown}`, { minWidth: "0" });
 globalStyle(`${msgSystemBox} ${markdown} > :first-child`, { marginTop: "0" });
 globalStyle(`${msgSystemBox} ${markdown} > :last-child`, { marginBottom: "0" });
-globalStyle(`${msgSystemBox} ${msgTime}`, { flex: "none", marginTop: "1px" });
+globalStyle(`${msgSystemBox}:not([data-open]) ${markdown} > *`, { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
+globalStyle(`${msgSystemBox}:not([data-open]) ${markdown} > :not(:first-child)`, { display: "none" });
 globalStyle(`${sendBtn} ${spinner}`, {
   width: "14px", height: "14px", borderColor: `color-mix(in srgb, ${vars.onPrimary} 35%, transparent)`,
   borderTopColor: vars.onPrimary,

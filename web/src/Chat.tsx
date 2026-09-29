@@ -478,17 +478,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, agentH
     );
   }
   // What ember itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) {
-    return (
-      <div className={`${conversationCss.msg} ${css.msgSystem}`} data-ts={m.ts} data-role="system" data-enter={enter} role="note">
-        <div className={css.msgSystemBox}>
-          <Mark size={14} />
-          <div className={conversationCss.markdown}><Prose>{m.text}</Prose></div>
-          <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />
-        </div>
-      </div>
-    );
-  }
+  if (m.system) return <SystemNotice text={m.text} time={m.time?.createdAt} ts={m.ts} enter={enter} />;
   const who = m.by.name;
   const agent = agentHere ? m.by.agent : undefined;
   return (
@@ -534,6 +524,31 @@ export function MineBubble({ text }: { text: string }) {
  * plain text, its references to chats as chips. */
 function PersonWords({ text }: { text: string }) {
   return <div className={chatCss2.msgPlain}><WithRefs text={text} /></div>;
+}
+
+/**
+ * What ember itself says: a pill across the chat, in one line and no time. A click opens it: all its words, wrapped,
+ * and its time under it. The station begins its failures with ⚠️ (Slack shows it so); here a failure is the pill in
+ * red instead.
+ */
+function SystemNotice({ text, time, ts, enter }: { text: string; time: Stamp | undefined; ts: string | undefined; enter: true | undefined }) {
+  const failed = /^⚠️\s*/u.exec(text);
+  const words = failed ? text.slice(failed[0].length) : text;
+  // A notice is a line of the UI, not prose: no 。 at its end (stations before 2026-09-30 wrote them as sentences).
+  const said = words.replace(/。\s*$/u, "");
+  const [open, setOpen] = useState(false);
+  const toggle = () => setOpen((o) => !o);
+  return (
+    <div className={`${conversationCss.msg} ${css.msgSystem}`} data-ts={ts} data-role="system" data-enter={enter} role="note">
+      <div className={css.msgSystemBox} data-failed={failed ? "" : undefined} data-open={open || undefined}
+        role="button" tabIndex={0} aria-expanded={open}
+        onClick={(e) => { if (!(e.target as Element).closest("a")) toggle(); }}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
+        <div className={conversationCss.markdown}><Prose>{said}</Prose></div>
+      </div>
+      {open && <Time className={conversationCss.msgTime} stamp={time} />}
+    </div>
+  );
 }
 
 /** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says. */

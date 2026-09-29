@@ -832,7 +832,7 @@ impl SessionActor {
             TurnOutcome::Aborted => {
                 self.st().nudges = 0;
                 if stop_requested {
-                    self.notice(&deps, "已停止当前任务。").await;
+                    self.notice(&deps, "已停止当前任务").await;
                 }
             }
             TurnOutcome::Completed => {}
@@ -875,7 +875,7 @@ impl SessionActor {
                 self.start_turn(&deps, "nudge", NUDGE).await
             }
             None => {
-                self.notice(&deps, "⚠️ 我停下来了，但没有给出明确结果。如果还需要继续，请直接回复我。").await;
+                self.notice(&deps, "⚠️ 这一轮没有给出结果就停了，回复可继续").await;
                 Ok(())
             }
         }
@@ -938,9 +938,9 @@ impl SessionActor {
 fn failure_notice(outcome: &TurnOutcome) -> String {
     let TurnOutcome::Failed { reason, message } = outcome else { return String::new() };
     match reason.as_str() {
-        "auth" => format!("⚠️ 运行时认证失败，需要管理员检查账号：{message}"),
-        "rate_limit" => format!("⚠️ 触发了额度或限流，请稍后再回复我继续：{message}"),
-        "exited" => format!("⚠️ agent 进程意外退出（{message}）。再回复一条消息会自动恢复会话。"),
-        _ => format!("⚠️ 这一轮出错了：{message}"),
+        "auth" => format!("⚠️ 认证失败，需要管理员检查账号：{message}"),
+        "rate_limit" => format!("⚠️ 触发额度或限流，稍后回复可继续：{message}"),
+        "exited" => format!("⚠️ agent 进程意外退出，回复可恢复：{message}"),
+        _ => format!("⚠️ 这一轮出错：{message}"),
     }
 }

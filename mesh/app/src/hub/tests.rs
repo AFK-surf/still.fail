@@ -479,7 +479,7 @@ async fn a_turn_ending_without_final_or_block_is_nudged_then_reported_after_max_
     r.claude.last().complete();
     settle().await;
     assert_eq!(r.claude.last().prompts().len(), 2);
-    assert!(r.chat.last_text().contains("没有给出明确结果"));
+    assert!(r.chat.last_text().contains("没有给出结果"));
 }
 
 #[tokio::test(start_paused = true)]
@@ -626,7 +626,7 @@ async fn stop_aborts_the_running_turn_and_confirms_once_it_ends() {
     assert!(session.steers().is_empty(), "-stop is not forwarded to the agent");
     session.end(TurnOutcome::Aborted);
     settle().await;
-    assert_eq!(r.chat.last_text(), "已停止当前任务。");
+    assert_eq!(r.chat.last_text(), "已停止当前任务");
     assert_eq!(session.prompts().len(), 1, "no nudge after a stop");
 }
 
