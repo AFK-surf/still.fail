@@ -52,15 +52,25 @@ export function heroMotion(hero: HTMLElement): (() => void) | undefined {
 
 const wait = (s: number) => new Promise((done) => setTimeout(done, s * 1000));
 
-/** The opening: the Chinese slams in, holds, and goes to the dots while the English grows out of them. */
+/**
+ * The opening: the Chinese slams in, holds, and goes to the dots while the English grows out of them. The characters
+ * are the very ones on the dots all along: each is drawn first at the size and place it has in the large layout (the
+ * unseen intro), then goes to its own; at the end nothing is swapped, only its inline styles let go.
+ */
 async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: () => boolean): Promise<void> {
   const title = hero.querySelector<HTMLElement>(`.${css.title}`), overlay = hero.querySelector<HTMLElement>(`.${css.intro}`);
   if (!title || !overlay) return;
   const play = <T extends { stop(): void; finished: Promise<unknown> }>(run: T) => { running.push(run); return run.finished.catch(() => {}); };
-  const big = [...overlay.querySelectorAll<HTMLElement>(`.${css.introChar}`)];
-  // Where each goes: the characters on the dots, in the same order (still.fail's, then youdid.wtf's above and below).
-  const small = [...title.querySelectorAll<HTMLElement>(`.${css.dotChar}`)];
-  const domains = [...title.querySelectorAll<HTMLElement>("[data-domain]")];
+  // Each glyph on the dots (still.fail's, then youdid.wtf's above and below) and where it stands in the large layout.
+  const large = [...overlay.querySelectorAll<HTMLElement>(`.${css.introChar}`)];
+  const glyphs = [...title.querySelectorAll<HTMLElement>(`.${css.dotGlyph}`)].map((el, i) => {
+    const big = large[i]!, from = big.getBoundingClientRect(), box = el.getBoundingClientRect(), look = getComputedStyle(big), rest = getComputedStyle(el);
+    const x = from.left + from.width / 2 - (box.left + box.width / 2), y = from.top + from.height / 2 - (box.top + box.height / 2);
+    // Drawn large where the intro has it: its own box stays put, the glyph (centred in it) is moved and sized.
+    Object.assign(el.style, { fontSize: look.fontSize, fontWeight: look.fontWeight, color: look.color, textShadow: look.textShadow });
+    void animate(el, { x, y }, { duration: 0 });
+    return { el, line: big.closest<HTMLElement>(`.${css.introLine}`)!, x, y, rest: { fontSize: rest.fontSize, fontWeight: rest.fontWeight, color: rest.color } };
+  });
 
   // 1. The Chinese slams in, a character at a time, each spun and blurred in from far too big and shaking the page as
   //    it lands; a beat between the two lines. The second line (the angrier one) keeps trembling, and its JB hits
@@ -68,11 +78,11 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
   const stage = title.parentElement!;
   const shake = (hard: number) => play(animate(stage, { x: [0, -hard, hard * 0.8, -hard * 0.5, hard * 0.25, 0], y: [0, hard * 0.4, -hard * 0.3, 0, 0, 0] }, { duration: 0.28, ease: "easeOut" }));
   for (const line of overlay.querySelectorAll<HTMLElement>(`.${css.introLine}`)) {
-    const chars = [...line.querySelectorAll<HTMLElement>(`.${css.introChar}`)];
-    for (const [i, c] of chars.entries()) {
+    const own = glyphs.filter((g) => g.line === line);
+    for (const [i, g] of own.entries()) {
       if (stopped()) return;
-      const last = i === chars.length - 1, hard = line.dataset.line === "youdid.wtf" && i >= chars.length - 2;
-      void play(animate(c, { opacity: [0, 1], scale: [hard ? 4.5 : 3, 1], rotate: [(Math.random() - 0.5) * (hard ? 70 : 40), 0], filter: ["blur(14px)", "blur(0px)"] },
+      const last = i === own.length - 1, hard = line.dataset.line === "youdid.wtf" && i >= own.length - 2;
+      void play(animate(g.el, { opacity: [0, 1], scale: [hard ? 4.5 : 3, 1], rotate: [(Math.random() - 0.5) * (hard ? 70 : 40), 0], filter: ["blur(14px)", "blur(0px)"] },
         { type: "spring", visualDuration: 0.26, bounce: 0.45 }));
       setTimeout(() => void shake(hard ? 14 : 5), 170);
       await wait(last ? 0.2 : hard ? 0.24 : 0.14);
@@ -80,35 +90,32 @@ async function intro(hero: HTMLElement, running: { stop(): void }[], stopped: ()
     await wait(0.55);
   }
   // Still fuming while it holds.
-  const fume = overlay.querySelector<HTMLElement>(`.${css.introLine}[data-line="youdid.wtf"]`)!;
-  void play(animate(fume, { x: [0, -2, 2, -1.5, 1.5, 0], rotate: [0, -0.6, 0.6, -0.4, 0.4, 0] }, { duration: 0.4, repeat: 1 }));
+  const fuming = glyphs.filter((g) => g.line.dataset.line === "youdid.wtf").map((g) => g.el);
+  void play(animate(fuming, { rotate: [0, -3, 3, -2, 2, 0] }, { duration: 0.4, repeat: 1 }));
   await wait(0.35);
   if (stopped()) return;
 
-  // 2. The English grows out of each dot, and each character flies to its place on it, taking its size and colour.
-  title.style.opacity = "1";
-  const reveal = domains.map((el) => {
-    const dot = el.querySelector<HTMLElement>(`.${css.dot}`)!.getBoundingClientRect(), box = el.getBoundingClientRect();
-    const at = `${dot.left - box.left}px ${dot.top - box.top - box.height * 0.08}px`;
-    return play(animate(el, { clipPath: [`circle(0px at ${at})`, `circle(${box.width * 1.2}px at ${at})`] }, { duration: 1.1, ease: [0.5, 0, 0.2, 1], delay: 0.35 }))
-      .then(() => { el.style.removeProperty("clip-path"); });
+  // 2. The English grows out of each dot, and each character goes to its place on it, taking its size and colour.
+  const reveal = [...title.querySelectorAll<HTMLElement>("[data-domain]")].flatMap((line) => {
+    const dot = line.querySelector<HTMLElement>(`.${css.dot}`)!.getBoundingClientRect();
+    return [...line.querySelectorAll<HTMLElement>(`.${css.word}`)].map((el) => {
+      const box = el.getBoundingClientRect(), at = `${dot.left - box.left}px ${dot.top - box.top - box.height * 0.08}px`;
+      el.style.clipPath = `circle(0px at ${at})`;
+      el.style.opacity = "1";
+      const far = Math.hypot(Math.max(Math.abs(dot.left - box.left), Math.abs(box.right - dot.left)), box.height);
+      return play(animate(el, { clipPath: `circle(${far}px at ${at})` }, { duration: 1.1, ease: [0.5, 0, 0.2, 1], delay: 0.35 }))
+        .then(() => { el.style.removeProperty("clip-path"); });
+    });
   });
-  const fly = big.map((b, i) => {
-    const to = small[i];
-    if (!to) return Promise.resolve();
-    const from = b.getBoundingClientRect(), there = to.getBoundingClientRect();
-    const x = there.left + there.width / 2 - (from.left + from.width / 2), y = there.top + there.height / 2 - (from.top + from.height / 2);
-    return play(animate(b, { x, y, scale: there.height / from.height, rotate: [0, (i % 2 ? 1 : -1) * 360], color: getComputedStyle(to).color, textShadow: "0 0 0 transparent" },
-      { duration: 0.9, ease: [0.7, 0, 0.2, 1], delay: (big.length - 1 - i) * 0.035 }));
-  });
+  const fly = glyphs.map((g, i) => play(animate(g.el, { x: 0, y: 0, fontSize: g.rest.fontSize, fontWeight: g.rest.fontWeight, color: g.rest.color, textShadow: "0 0 0 rgba(0,0,0,0)", rotate: [0, (i % 2 ? 1 : -1) * 360] },
+    { duration: 0.9, ease: [0.7, 0, 0.2, 1], delay: (glyphs.length - 1 - i) * 0.035 })));
   await Promise.all(fly);
   if (stopped()) return;
-  // Where they land, the flown characters give way to the ones on the dots over a moment, not at once: they are drawn
-  // a little differently (weight, size, the line's glow), and a swap would flash.
-  await Promise.all([
-    play(animate(small, { opacity: [0, 1] }, { duration: 0.35, ease: "easeOut" })),
-    play(animate(big, { opacity: 0 }, { duration: 0.35, ease: "easeIn" })),
-  ]);
+  // Where they rest they are drawn as the page draws them: what the motion held, let go of (it held just those values).
+  for (const g of glyphs) {
+    for (const p of ["font-size", "font-weight", "color", "text-shadow", "transform", "filter"]) g.el.style.removeProperty(p);
+    g.el.style.opacity = "1";
+  }
   overlay.style.display = "none";
   await Promise.all(reveal);
   // The demo under it waits for this to start playing (demo/mount.tsx), and for the stage it rises on (site.css.ts).

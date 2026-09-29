@@ -133,14 +133,17 @@ export const beam = style({
 export const title = style({
   margin: "0 auto", fontSize: "clamp(64px, 15vw, 232px)", lineHeight: ".92", letterSpacing: "-.06em", fontWeight: "800",
   animation: `${fadeUp} .9s .06s ${vars.easeOut} both`,
-  // Script opens the page with the Chinese (intro) and shows the title itself.
-  selectors: { ":root[data-motion] &": { animation: "none", opacity: 0 } },
+  // Script opens the page with the Chinese and brings the English in itself (motion.ts).
+  selectors: { ":root[data-motion] &": { animation: "none" } },
 });
 /** The title and, over it, the intro. */
 export const titleStage = style({ position: "relative" });
-/** The intro: the two lines in Chinese, large, over where the title will be; only when script plays it. */
+/**
+ * The intro: the two lines in Chinese, large, over where the title will be. Never seen: it only lays out where each
+ * character stands while large; the characters on the dots are the ones drawn there (motion.ts).
+ */
 export const intro = style({
-  position: "absolute", inset: "0", display: "none", flexDirection: "column", alignItems: "center", justifyContent: "center",
+  position: "absolute", inset: "0", display: "none", visibility: "hidden", flexDirection: "column", alignItems: "center", justifyContent: "center",
   fontSize: "clamp(56px, 12.5vw, 196px)", fontWeight: "900", lineHeight: "1.08", letterSpacing: ".02em", pointerEvents: "none",
   selectors: { ":root[data-motion] &": { display: "flex" } },
 });
@@ -160,16 +163,22 @@ export const introChar = style({ display: "inline-block", opacity: 0 });
  */
 const lit = {
   backgroundImage: `linear-gradient(180deg, #FFC2A3, ${EMBER} 70%)`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
-  filter: `drop-shadow(0 0 48px color-mix(in srgb, ${EMBER} 45%, transparent))`,
 };
+const LIT = `:root:not([data-host="youdid.wtf"]) [data-domain="still.fail"], :root[data-host="youdid.wtf"] [data-domain="youdid.wtf"]`;
 export const titleDomain = style({
-  display: "inline-block", padding: ".04em .1em .16em", margin: "-.04em -.1em -.16em",
-  color: "color-mix(in srgb, var(--s-title) 16%, var(--s-bg))",
+  display: "inline-block", color: "color-mix(in srgb, var(--s-title) 16%, var(--s-bg))",
   selectors: {
-    [`:root:not([data-host="youdid.wtf"]) &[data-domain="still.fail"]`]: lit,
-    [`:root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: lit,
+    [`:root:not([data-host="youdid.wtf"]) &[data-domain="still.fail"], :root[data-host="youdid.wtf"] &[data-domain="youdid.wtf"]`]: {
+      filter: `drop-shadow(0 0 48px color-mix(in srgb, ${EMBER} 45%, transparent))`,
+    },
   },
 });
+/** The English of a line, painted on its own (so that it can be brought in apart from the Chinese on its dot). */
+export const word = style({
+  // Unseen until the opening brings it in, when script plays one.
+  selectors: { ":root[data-motion] &": { opacity: 0 } },
+});
+globalStyle(`:is(${LIT}) ${word}`, lit);
 /**
  * A domain's dot and what the domain says in Chinese, written upright on it (above, and below when it goes on), lit
  * with its line. Its own colour, not the line's text clip, which does not reach positioned boxes.
@@ -188,11 +197,19 @@ export const dotSay = style({
 });
 export const dotWords = style({
   display: "block", writingMode: "vertical-rl", textOrientation: "upright",
-  fontSize: "max(.1em, 8px)", fontWeight: "700", letterSpacing: ".12em", lineHeight: "1", whiteSpace: "nowrap",
+  fontSize: "max(.1em, 8px)", fontWeight: "700", lineHeight: "1", whiteSpace: "nowrap",
 });
 
 /** A character of those words: they land one at a time (motion.ts), unseen till then when script will move them. */
-export const dotChar = style({ display: "inline-block", selectors: { ":root[data-motion] &": { opacity: 0 } } });
+/**
+ * A character of those words: a box of its own size, the glyph centred in it, so that the glyph can fly in at another
+ * size and place (motion.ts) and end exactly where it rests, the same element drawn the same way.
+ */
+export const dotChar = style({ position: "relative", display: "inline-block", inlineSize: "1em", blockSize: "1em", marginInlineEnd: ".12em", verticalAlign: "top" });
+export const dotGlyph = style({
+  position: "absolute", inset: "0", display: "flex", alignItems: "center", justifyContent: "center", whiteSpace: "nowrap",
+  selectors: { ":root[data-motion] &": { opacity: 0 } },
+});
 
 export const heroActions = style({
   marginTop: "clamp(64px, 7vw, 100px)", animation: `${fadeUp} .9s .24s ${vars.easeOut} both`,

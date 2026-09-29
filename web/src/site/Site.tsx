@@ -46,19 +46,19 @@ function Demo({ mount, frame }: { mount?: (root: HTMLElement) => void; frame?: {
  * on through it underneath, the dot parting the two.
  */
 /** Words a character to a span, for the characters to land one by one (motion.ts). */
-const chars = (words: string) => [...words].map((c, i) => <span key={i} className={css.dotChar}>{c}</span>);
+const chars = (words: string) => [...words].map((c, i) => <span key={i} className={css.dotChar}><span className={css.dotGlyph}>{c}</span></span>);
 
 /** The intro's characters, each its own box to fly to its place on a dot; spaces only keep their room. */
 const bigChars = (words: string) => [...words].map((c, i) => c === " " ? <span key={i}>&nbsp;</span> : <span key={i} className={css.introChar}>{c}</span>);
 
 function Dot({ above, below }: { above: string; below?: string }) {
-  // The dot stays plain text of its line (text in a positioned box would drop out of the line's text clip); the words
-  // hang from an empty anchor just after it.
+  // Hangs just after the dot (the end of the word before): the words are outside the line's words, so the English can
+  // be brought in (motion.ts) while they are already there.
   return (
-    <>.<span className={css.dot} aria-hidden>
+    <span className={css.dot} aria-hidden>
       <span className={css.dotSay} data-at="above"><span className={css.dotWords}>{chars(above)}</span></span>
       {below && <span className={css.dotSay} data-at="below"><span className={css.dotWords}>{chars(below)}</span></span>}
-    </span></>
+    </span>
   );
 }
 
@@ -89,8 +89,8 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
               <span className={css.introLine} data-line="youdid.wtf">{bigChars("干的什么 JB")}</span>
             </div>
             <h1 className={css.title}>
-              <span className={css.titleDomain} data-domain="still.fail">still<Dot above="还是不行" />fail</span><br />
-              <span className={css.titleDomain} data-domain="youdid.wtf">youdid<Dot above="干的什么" below="JB" />wtf</span>
+              <span className={css.titleDomain} data-domain="still.fail"><span className={css.word}>still.</span><Dot above="还是不行" /><span className={css.word}>fail</span></span><br />
+              <span className={css.titleDomain} data-domain="youdid.wtf"><span className={css.word}>youdid.</span><Dot above="干的什么" below="JB" /><span className={css.word}>wtf</span></span>
             </h1>
           </div>
           <div className={`${css.actions} ${css.heroActions}`}>
