@@ -29,7 +29,31 @@ export const runPickerFoot = style({
 export const runPickerColumn = style({
   display: "flex", flexDirection: "column", gap: "1px", minWidth: "110px", overflowY: "auto",
 });
-export const runPickerAccounts = style({ minWidth: "260px" });
+/** The accounts, in a panel beside the model control's. */
+export const runPickerAccounts = style({
+  display: "flex", flexDirection: "column", gap: "1px", minWidth: "220px", maxWidth: "320px", maxHeight: "420px", overflowY: "auto",
+});
+globalStyle(`${runPickerAccounts} h4`, { margin: "4px 8px 6px", fontSize: vars.textXs, lineHeight: "18px", fontWeight: "500", color: vars.muted });
+/** Under an account's name: what is left of it, gray unless running low. */
+export const runAccountNote = style({
+  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textXs, fontWeight: 400, color: vars.muted,
+  selectors: { "&[data-level=amber]": { color: vars.amber }, "&[data-level=red]": { color: vars.red } },
+});
+/** The room the foot's line has: what the columns leave beside the buttons, never more. */
+export const runPickerWhoRoom = style({ flex: "1 1 0", width: 0, minWidth: 0, display: "flex" });
+/** The foot's line that says who runs it, and opens the accounts. */
+export const runPickerWho = style({
+  display: "inline-flex", alignItems: "center", gap: "4px", minWidth: 0, maxWidth: "100%", height: "28px", padding: "0 8px",
+  border: 0, borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none",
+  color: vars.muted, font: "inherit", fontSize: vars.textXs, cursor: "pointer",
+  selectors: {
+    "&:hover, &[data-state=open]": { background: vars.hover, color: vars.text },
+    "&[data-level=amber]": { color: vars.amber }, "&[data-level=red]": { color: vars.red },
+  },
+});
+export const runPickerWhoChevron = style({
+  flex: "none",
+});
 export const runPickerEfforts = style({ minWidth: "80px" });
 export const runPickerOption = style({
   display: "flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: "4px 8px", border: "0",
@@ -40,7 +64,7 @@ export const runPickerOption = style({
     "&[aria-pressed=\"true\"]": { background: vars.hover, fontWeight: "600" },
   },
 });
-export const runPickerNote = style({ margin: "0 8px 6px", maxWidth: "240px", fontSize: vars.textXs, color: vars.amber });
+export const runPickerNote = style({ margin: "0 8px 6px", fontSize: vars.textXs, color: vars.amber });
 export const btnSm = style({ height: "28px", padding: "0 10px", fontSize: vars.textXs });
 export const modelTriple = style({
   display: "inline-flex", alignItems: "center", gap: "6px", maxWidth: "100%", justifySelf: "start", alignSelf: "start",
@@ -96,6 +120,8 @@ export const tripleAccountName = style({
 export const tripleAccount = style({
   selectors: {
     [`${modelTriple}[data-drop~="account"] &`]: { display: "none" },
+    [`${modelTriple} &[data-level=amber]`]: { color: vars.amber },
+    [`${modelTriple} &[data-level=red]`]: { color: vars.red },
   },
 });
 export const tripleRuntime = style({
@@ -112,7 +138,7 @@ export const runPickerSpent = style({ fontSize: vars.textXs, color: vars.amber }
 /** As wide as its models when the panel opens, within bounds (100–280px); a filter then leaves it as it is (ModelTriple keeps it). */
 export const runPickerModels = style({ minWidth: "100px", maxWidth: "280px", flex: "none" });
 /** A model's name too long for the column is cut short. */
-export const runOptionName = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const runOptionName = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const runPickerFilter = style({ height: "30px", margin: "0 4px 6px", fontSize: vars.textSm });
 export const runPickerGroup = style({});
 export const runPickerEmpty = style({ margin: "4px 8px", fontSize: vars.textXs });
